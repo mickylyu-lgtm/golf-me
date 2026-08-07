@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { SlidersHorizontal } from "lucide-react";
+import { ArrowRight, Flag, SlidersHorizontal } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { GolferCard } from "../components/golfer/GolferCard";
 import { EmptyState } from "../components/ui/EmptyState";
@@ -10,7 +10,11 @@ import type { GolfVibe } from "../types";
 
 type SortMode = "compatibility" | "distance" | "reputation";
 
-export function Discover() {
+interface DiscoverProps {
+  embedded?: boolean;
+}
+
+export function Discover({ embedded = false }: DiscoverProps) {
   const { currentUser, visibleGolfers } = useData();
   const navigate = useNavigate();
   const [activeVibes, setActiveVibes] = useState<GolfVibe[]>([]);
@@ -40,10 +44,23 @@ export function Discover() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div>
-        <h1 className="text-xl font-bold text-slate-900">Discover golfers</h1>
-        <p className="text-sm text-slate-500">Matched on schedule, skill, budget, and vibe — not looks.</p>
-      </div>
+      {!embedded && (
+        <div>
+          <h1 className="text-xl font-bold text-slate-900">Discover golfers</h1>
+          <p className="text-sm text-slate-500">Matched on schedule, skill, budget, and vibe — not looks.</p>
+        </div>
+      )}
+
+      <button
+        onClick={() => navigate("/golf-calls")}
+        className="flex items-center justify-between gap-3 rounded-2xl border border-fairway-200 bg-fairway-50 px-4 py-3 text-left transition hover:border-fairway-300"
+      >
+        <span className="flex items-center gap-2">
+          <Flag size={15} className="text-fairway-600" />
+          <span className="text-sm font-semibold text-fairway-800">Looking for a round instead? Browse Golf Calls</span>
+        </span>
+        <ArrowRight size={15} className="shrink-0 text-fairway-600" />
+      </button>
 
       <div className="flex flex-wrap gap-1.5">
         {GOLF_VIBES.map((v) => (

@@ -17,7 +17,11 @@ function isSameCalendarDay(iso: string, ref: Date): boolean {
   return d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth() && d.getDate() === ref.getDate();
 }
 
-export function GolfCalls() {
+interface GolfCallsProps {
+  embedded?: boolean;
+}
+
+export function GolfCalls({ embedded = false }: GolfCallsProps) {
   const { currentUser, golfCalls } = useData();
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -96,10 +100,14 @@ export function GolfCalls() {
   return (
     <div className="flex flex-col gap-5">
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">Golf Calls</h1>
-          <p className="text-sm text-slate-500">Open rounds looking for players, right now.</p>
-        </div>
+        {embedded ? (
+          <div />
+        ) : (
+          <div>
+            <h1 className="text-xl font-bold text-slate-900">Golf Calls</h1>
+            <p className="text-sm text-slate-500">Open rounds looking for players, right now.</p>
+          </div>
+        )}
         <Button size="sm" icon={<Plus size={15} />} onClick={() => navigate("/golf-calls/new")}>
           Host
         </Button>

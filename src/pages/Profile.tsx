@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Car,
   Check,
@@ -9,6 +10,7 @@ import {
   ShieldCheck,
   ShieldOff,
   Sparkles,
+  Users,
   Wallet,
 } from "lucide-react";
 import { useData } from "../context/DataContext";
@@ -28,9 +30,21 @@ import { memberSinceLabel } from "../lib/format";
 const WALK_OPTIONS: WalkOrCart[] = ["Either", "Walking", "Cart"];
 
 export function Profile() {
-  const { currentUser, golfers, blockedIds, getGolfer, unblockUser, updateCurrentUserProfile, setPhoneVerified, setEmailVerified, requestVerifiedGolfer, resetDemoData } =
-    useData();
+  const {
+    currentUser,
+    golfers,
+    blockedIds,
+    getGolfer,
+    unblockUser,
+    updateCurrentUserProfile,
+    setPhoneVerified,
+    setEmailVerified,
+    requestVerifiedGolfer,
+    resetDemoData,
+    circleGolfers,
+  } = useData();
   const { showToast } = useToast();
+  const navigate = useNavigate();
 
   const [editing, setEditing] = useState(false);
   const [verifyChannel, setVerifyChannel] = useState<"phone" | "email" | null>(null);
@@ -123,6 +137,33 @@ export function Profile() {
       <div className="rounded-2xl border border-slate-100 bg-white p-4">
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Golf Reputation</p>
         <ReputationRow golfer={currentUser} />
+      </div>
+
+      <div className="rounded-2xl border border-slate-100 bg-white p-4">
+        <p className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
+          <Users size={12} /> Your Golf Circle · {circleGolfers.length} golfer{circleGolfers.length === 1 ? "" : "s"}
+        </p>
+        {circleGolfers.length === 0 ? (
+          <p className="text-sm text-slate-500">
+            Play a round and review your group to start building your Circle — golfers you've actually played with and would play with again.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {circleGolfers.map((g) => (
+              <button
+                key={g.id}
+                onClick={() => navigate(`/golfer/${g.id}`)}
+                className="flex items-center gap-3 rounded-xl px-1 py-1 text-left transition hover:bg-slate-50"
+              >
+                <Avatar golfer={g} size="sm" />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-slate-800">{g.name}</p>
+                  <p className="text-xs text-slate-500">{g.handicap !== null ? `${g.handicap} handicap` : "No handicap yet"}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="rounded-2xl border border-slate-100 bg-white p-4">

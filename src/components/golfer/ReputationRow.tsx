@@ -11,10 +11,8 @@ export function ReputationRow({ golfer, compact }: ReputationRowProps) {
 
   if (isNew) {
     return (
-      <p className={`text-slate-500 ${compact ? "text-xs" : "text-sm"}`}>
-        {golfer.reputation.completedRounds === 0
-          ? "No completed rounds yet · limited history"
-          : `${golfer.reputation.completedRounds} completed round${golfer.reputation.completedRounds === 1 ? "" : "s"} · limited history`}
+      <p className={`font-medium text-slate-500 ${compact ? "text-xs" : "text-sm"}`}>
+        New Golfer · {golfer.reputation.completedRounds} Completed Round{golfer.reputation.completedRounds === 1 ? "" : "s"}
       </p>
     );
   }

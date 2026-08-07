@@ -22,8 +22,10 @@ import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 import { GroupChat } from "../components/chat/GroupChat";
 import { ReviewModal } from "../components/review/ReviewModal";
 import { TrustBadgeRow } from "../components/golfer/TrustBadges";
+import { CompatibilityBadge } from "../components/golfer/CompatibilityBadge";
 import { formatDate, formatMoney } from "../lib/format";
 import { VIBE_TONE } from "../lib/theme";
+import { computeCallCompatibility } from "../lib/compatibility";
 
 export function GolfCallDetail() {
   const { id } = useParams<{ id: string }>();
@@ -68,7 +70,9 @@ export function GolfCallDetail() {
   const isFull = call.status === "full" || openSpots <= 0;
   const isCompleted = call.status === "completed";
   const isCancelled = call.status === "cancelled";
+  const isUrgent = !isFull && !isCompleted && !isCancelled && openSpots === 1;
   const chatUnlocked = isHost || isJoined;
+  const matchScore = computeCallCompatibility(currentUser, call).overall;
 
   function handleJoin() {
     joinGolfCall(call!.id);
@@ -82,15 +86,22 @@ export function GolfCallDetail() {
       </button>
 
       <div>
-        <div className="mb-1.5 flex flex-wrap items-center gap-2">
-          {isCancelled && <Badge tone="rose">Cancelled</Badge>}
-          {isCompleted && <Badge tone="slate">Completed</Badge>}
-          {!isCompleted && !isCancelled && <Badge tone={isFull ? "slate" : "fairway"}>{isFull ? "Full" : `${openSpots} spot${openSpots === 1 ? "" : "s"} open`}</Badge>}
-          <Badge tone="outline">{call.joinMode === "instant" ? "Instant join" : "Request to join"}</Badge>
+        <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {isCancelled && <Badge tone="rose">Cancelled</Badge>}
+            {isCompleted && <Badge tone="slate">Completed</Badge>}
+            {!isCompleted && !isCancelled && (
+              <Badge tone={isFull ? "slate" : isUrgent ? "sun" : "fairway"} className={isUrgent ? "animate-pulse" : ""}>
+                {isFull ? "Full" : isUrgent ? "🏌️ 1 Spot Left" : `${openSpots} spot${openSpots === 1 ? "" : "s"} open`}
+              </Badge>
+            )}
+            <Badge tone="outline">{call.joinMode === "instant" ? "Instant join" : "Request to join"}</Badge>
+          </div>
+          {!isCompleted && !isCancelled && <CompatibilityBadge score={matchScore} size="sm" />}
         </div>
         <h1 className="text-2xl font-extrabold text-slate-900">{call.course}</h1>
         <p className="flex items-center gap-1 text-sm text-slate-500">
-          <MapPin size={13} /> {call.areaLabel}
+          <MapPin size={13} /> {call.distanceMiles.toFixed(0)} mi away · {call.areaLabel}
         </p>
       </div>
 
@@ -149,7 +160,8 @@ export function GolfCallDetail() {
                     {g.name} {g.id === currentUser.id && <span className="font-normal text-slate-400">(you)</span>}
                     {g.id === call.hostId && <span className="ml-1.5 text-xs font-medium text-sun-600">Host</span>}
                   </p>
-                  <TrustBadgeRow golfer={g} />
+                  <p className="text-xs text-slate-500">{g.handicap !== null ? `${g.handicap} handicap` : "No handicap yet"}</p>
+                  <TrustBadgeRow golfer={g} className="mt-1" />
                 </div>
               </button>
             );
