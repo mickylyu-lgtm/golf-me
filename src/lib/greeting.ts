@@ -1,0 +1,39 @@
+export function greetingForHour(hour: number): string {
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+}
+
+export function firstName(fullName: string): string {
+  return fullName.split(" ")[0];
+}
+
+function startOfDay(d: Date): Date {
+  const copy = new Date(d);
+  copy.setHours(0, 0, 0, 0);
+  return copy;
+}
+
+function addDays(d: Date, days: number): Date {
+  const copy = new Date(d);
+  copy.setDate(copy.getDate() + days);
+  return copy;
+}
+
+// "This weekend" = the current or upcoming Saturday through end of Sunday.
+export function getWeekendRange(): { start: Date; end: Date } {
+  const now = new Date();
+  const day = now.getDay(); // 0 Sun .. 6 Sat
+  let start: Date;
+  if (day === 6) start = startOfDay(now);
+  else if (day === 0) start = startOfDay(addDays(now, -1));
+  else start = startOfDay(addDays(now, 6 - day));
+  const end = addDays(start, 2); // exclusive end (Monday 00:00)
+  return { start, end };
+}
+
+export function isThisWeekend(dateISO: string): boolean {
+  const { start, end } = getWeekendRange();
+  const d = new Date(dateISO);
+  return d >= start && d < end;
+}
