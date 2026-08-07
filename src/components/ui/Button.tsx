@@ -11,11 +11,14 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const VARIANT_CLASSES: Record<Variant, string> = {
-  primary: "bg-fairway-600 text-white hover:bg-fairway-700 shadow-sm shadow-fairway-900/10",
-  secondary: "bg-sun-400 text-fairway-950 hover:bg-sun-500 shadow-sm shadow-sun-900/10",
-  ghost: "bg-transparent text-fairway-700 hover:bg-fairway-50",
-  outline: "bg-white text-slate-700 border border-slate-200 hover:border-fairway-300 hover:text-fairway-700",
-  danger: "bg-red-50 text-red-600 hover:bg-red-100",
+  primary:
+    "bg-fairway-600 text-white shadow-sm shadow-fairway-900/10 hover:bg-fairway-700 hover:shadow-md active:bg-fairway-800 focus-visible:ring-fairway-400",
+  secondary:
+    "bg-sun-400 text-fairway-950 shadow-sm shadow-sun-900/10 hover:bg-sun-500 hover:shadow-md active:bg-sun-600 focus-visible:ring-sun-500",
+  ghost: "bg-transparent text-fairway-700 hover:bg-fairway-50 active:bg-fairway-100 focus-visible:ring-fairway-400",
+  outline:
+    "bg-white text-slate-700 border border-slate-200 hover:border-fairway-300 hover:text-fairway-700 active:bg-slate-50 focus-visible:ring-fairway-400",
+  danger: "bg-red-50 text-red-600 hover:bg-red-100 active:bg-red-200 focus-visible:ring-red-400",
 };
 
 const SIZE_CLASSES: Record<Size, string> = {
@@ -35,7 +38,7 @@ export function Button({
 }: ButtonProps) {
   return (
     <button
-      className={`inline-flex items-center justify-center rounded-full font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${VARIANT_CLASSES[variant]} ${SIZE_CLASSES[size]} ${fullWidth ? "w-full" : ""} ${className}`}
+      className={`inline-flex items-center justify-center rounded-full font-semibold transition-all duration-200 ease-out hover:-translate-y-px active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:translate-y-0 ${VARIANT_CLASSES[variant]} ${SIZE_CLASSES[size]} ${fullWidth ? "w-full" : ""} ${className}`}
       {...rest}
     >
       {icon}

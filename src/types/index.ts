@@ -82,6 +82,10 @@ export interface GolferProfile {
   reputation: ReputationStats;
   memberSince: string; // ISO date
   isCurrentUser?: boolean;
+  // Mock "golfers this person has played with and would play with again"
+  // count, shown on their profile. Only the current user's own Golf Circle
+  // is tracked in AppData.circle; this is flavor for everyone else.
+  circleSize: number;
 }
 
 export type GolfCallStatus = "open" | "full" | "completed" | "cancelled";
@@ -116,6 +120,13 @@ export interface ChatMessage {
   system?: boolean;
 }
 
+export type PaceOfPlay = "Fast" | "Good" | "Slow";
+
+// Community feedback on whether a golfer's listed handicap seemed accurate —
+// aggregated (never shown 1:1) into a per-golfer Handicap Confidence level.
+// Never lets one player directly edit another's handicap.
+export type HandicapAccuracy = "accurate" | "slightly_off" | "very_inaccurate" | "not_sure";
+
 export interface Review {
   id: string;
   golfCallId: string;
@@ -124,8 +135,10 @@ export interface Review {
   showedUp: boolean;
   onTime: boolean;
   respectful: boolean;
-  goodPace: boolean;
+  paceOfPlay: PaceOfPlay;
   wouldPlayAgain: boolean;
+  handicapAccuracy: HandicapAccuracy;
+  privateNote?: string; // visible only to GolfMe's trust system, never a public review
   createdAt: string;
 }
 
@@ -173,6 +186,15 @@ export interface CircleConnection {
   createdAt: string;
 }
 
+// Mock session state — structured so a real backend (Supabase auth, etc.)
+// can replace it without touching the UI layer. isLoggedIn gates
+// Welcome/Login; hasOnboarded lets a logged-out-then-back-in user skip
+// straight past onboarding + profile setup.
+export interface SessionState {
+  isLoggedIn: boolean;
+  hasOnboarded: boolean;
+}
+
 export interface AppData {
   golfers: GolferProfile[];
   golfCalls: GolfCall[];
@@ -182,4 +204,5 @@ export interface AppData {
   blocks: Block[];
   circle: CircleConnection[];
   currentUserId: string;
+  session: SessionState;
 }

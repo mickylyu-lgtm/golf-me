@@ -7,6 +7,7 @@ import { VIBE_TONE } from "../../lib/theme";
 import { CompatibilityBadge } from "./CompatibilityBadge";
 import { ReputationRow } from "./ReputationRow";
 import { TrustBadgeRow } from "./TrustBadges";
+import { CLICKABLE_CARD_CLASS } from "../ui/cardStyles";
 import type { CompatibilityBreakdown } from "../../lib/compatibility";
 
 interface GolferCardProps {
@@ -17,10 +18,7 @@ interface GolferCardProps {
 
 export function GolferCard({ golfer, compatibility, onClick }: GolferCardProps) {
   return (
-    <button
-      onClick={onClick}
-      className="group flex w-full flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-4 text-left shadow-sm shadow-slate-900/[0.03] transition hover:-translate-y-0.5 hover:border-fairway-200 hover:shadow-md"
-    >
+    <button onClick={onClick} className={`flex w-full flex-col gap-3 p-4 text-left ${CLICKABLE_CARD_CLASS}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
           <Avatar golfer={golfer} size="lg" />

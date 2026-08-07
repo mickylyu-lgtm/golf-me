@@ -22,10 +22,12 @@ import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 import { GroupChat } from "../components/chat/GroupChat";
 import { ReviewModal } from "../components/review/ReviewModal";
 import { TrustBadgeRow } from "../components/golfer/TrustBadges";
-import { CompatibilityBadge } from "../components/golfer/CompatibilityBadge";
+import { MatchReasons } from "../components/golfer/MatchReasons";
+import { ConfirmJoinModal } from "../components/golfcall/ConfirmJoinModal";
 import { formatDate, formatMoney } from "../lib/format";
 import { VIBE_TONE } from "../lib/theme";
 import { computeCallCompatibility } from "../lib/compatibility";
+import { matchTier, callMatchReasons } from "../lib/matchReasons";
 
 export function GolfCallDetail() {
   const { id } = useParams<{ id: string }>();
@@ -38,6 +40,7 @@ export function GolfCallDetail() {
     cancelJoinRequest,
     leaveGolfCall,
     cancelGolfCall,
+    simulateCallCompletion,
     approveRequest,
     declineRequest,
     hasReviewed,
@@ -47,6 +50,7 @@ export function GolfCallDetail() {
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const [joinConfirmOpen, setJoinConfirmOpen] = useState(false);
 
   const call = id ? getGolfCall(id) : undefined;
   if (!call) {
@@ -72,11 +76,17 @@ export function GolfCallDetail() {
   const isCancelled = call.status === "cancelled";
   const isUrgent = !isFull && !isCompleted && !isCancelled && openSpots === 1;
   const chatUnlocked = isHost || isJoined;
-  const matchScore = computeCallCompatibility(currentUser, call).overall;
+  const breakdown = !isHost ? computeCallCompatibility(currentUser, call) : null;
+  const tier = breakdown ? matchTier(breakdown.overall) : null;
+  const reasons = breakdown ? callMatchReasons(call, breakdown) : [];
+  const canJoin = !isHost && !isJoined && !isPending && !isFull;
 
   function handleJoin() {
     joinGolfCall(call!.id);
-    showToast(call!.joinMode === "instant" ? "You're in! Say hi in the group chat." : "Request sent to the host.", "success");
+    showToast(
+      call!.joinMode === "instant" ? `You're playing ${formatDate(call!.dateISO)}. ⛳` : "Request sent to the host.",
+      "success",
+    );
   }
 
   return (
@@ -86,24 +96,33 @@ export function GolfCallDetail() {
       </button>
 
       <div>
-        <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-2">
-            {isCancelled && <Badge tone="rose">Cancelled</Badge>}
-            {isCompleted && <Badge tone="slate">Completed</Badge>}
-            {!isCompleted && !isCancelled && (
-              <Badge tone={isFull ? "slate" : isUrgent ? "sun" : "fairway"} className={isUrgent ? "animate-pulse" : ""}>
-                {isFull ? "Full" : isUrgent ? "🏌️ 1 Spot Left" : `${openSpots} spot${openSpots === 1 ? "" : "s"} open`}
-              </Badge>
-            )}
-            <Badge tone="outline">{call.joinMode === "instant" ? "Instant join" : "Request to join"}</Badge>
-          </div>
-          {!isCompleted && !isCancelled && <CompatibilityBadge score={matchScore} size="sm" />}
+        <div className="mb-1.5 flex flex-wrap items-center gap-2">
+          {isCancelled && <Badge tone="rose">Cancelled</Badge>}
+          {isCompleted && <Badge tone="slate">Completed</Badge>}
+          {!isCompleted && !isCancelled && (
+            <Badge
+              tone={isFull ? "slate" : isUrgent ? "sun" : "fairway"}
+              className={isUrgent ? "animate-pulse font-bold tracking-wide uppercase" : ""}
+            >
+              {isFull ? "Full" : isUrgent ? "1 Spot Left" : `${openSpots} spot${openSpots === 1 ? "" : "s"} open`}
+            </Badge>
+          )}
+          <Badge tone="outline">{call.joinMode === "instant" ? "Instant join" : "Request to join"}</Badge>
         </div>
         <h1 className="text-2xl font-extrabold text-slate-900">{call.course}</h1>
         <p className="flex items-center gap-1 text-sm text-slate-500">
           <MapPin size={13} /> {call.distanceMiles.toFixed(0)} mi away · {call.areaLabel}
         </p>
       </div>
+
+      {tier && (
+        <div className="rounded-2xl bg-fairway-50/70 p-4">
+          <p className="flex items-center gap-1.5 text-sm font-bold text-fairway-800">
+            <span aria-hidden>{tier.emoji}</span> {tier.label} for you
+          </p>
+          <MatchReasons reasons={reasons} className="mt-1.5" />
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-2xl border border-slate-100 bg-white p-4">
@@ -152,7 +171,7 @@ export function GolfCallDetail() {
               <button
                 key={gid}
                 onClick={() => (g.id === currentUser.id ? navigate("/profile") : navigate(`/golfer/${g.id}`))}
-                className="flex items-center gap-3 rounded-xl border border-slate-100 bg-white p-3 text-left transition hover:border-fairway-200"
+                className="flex items-center gap-3 rounded-xl border border-slate-100 bg-white p-3 text-left transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-fairway-200 hover:shadow-sm active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
               >
                 <Avatar golfer={g} size="sm" />
                 <div className="flex-1">
@@ -186,14 +205,14 @@ export function GolfCallDetail() {
                   <button
                     onClick={() => approveRequest(call.id, gid)}
                     aria-label={`Approve ${g.name}`}
-                    className="rounded-full bg-fairway-600 p-1.5 text-white hover:bg-fairway-700"
+                    className="rounded-full bg-fairway-600 p-1.5 text-white transition-all duration-200 ease-out hover:-translate-y-px hover:bg-fairway-700 active:translate-y-0 active:bg-fairway-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
                   >
                     <Check size={14} />
                   </button>
                   <button
                     onClick={() => declineRequest(call.id, gid)}
                     aria-label={`Decline ${g.name}`}
-                    className="rounded-full bg-slate-100 p-1.5 text-slate-500 hover:bg-slate-200"
+                    className="rounded-full bg-slate-100 p-1.5 text-slate-500 transition-all duration-200 ease-out hover:-translate-y-px hover:bg-slate-200 active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
                   >
                     <X size={14} />
                   </button>
@@ -223,11 +242,23 @@ export function GolfCallDetail() {
               Foursome full
             </Button>
           ) : (
-            <Button size="lg" fullWidth onClick={handleJoin}>
-              {call.joinMode === "instant" ? "I'm In" : "Request to Join"}
+            <Button size="lg" fullWidth onClick={() => setJoinConfirmOpen(true)}>
+              {call.joinMode === "instant" ? "Join Round" : "Request to Join"}
             </Button>
           )}
         </div>
+      )}
+
+      {!isCompleted && !isCancelled && (isHost || isJoined) && (
+        <button
+          onClick={() => {
+            simulateCallCompletion(call.id);
+            showToast("Round marked completed — you can now leave reviews.", "info");
+          }}
+          className="self-center text-xs font-medium text-slate-400 underline-offset-2 transition-colors duration-200 hover:text-slate-600 hover:underline"
+        >
+          🧪 Simulate round completion (prototype)
+        </button>
       )}
 
       {isCompleted && isJoined && (
@@ -303,6 +334,16 @@ export function GolfCallDetail() {
             showToast("Golf Call cancelled.", "info");
           }}
           onCancel={() => setCancelConfirmOpen(false)}
+        />
+      )}
+      {joinConfirmOpen && canJoin && (
+        <ConfirmJoinModal
+          call={call}
+          onClose={() => setJoinConfirmOpen(false)}
+          onConfirm={() => {
+            setJoinConfirmOpen(false);
+            handleJoin();
+          }}
         />
       )}
       {reviewingId &&

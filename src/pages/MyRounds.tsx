@@ -1,12 +1,13 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CalendarDays, ClipboardList, MapPin, Users } from "lucide-react";
+import { CalendarDays, ClipboardList, MapPin, Search, Users } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { Avatar } from "../components/ui/Avatar";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { EmptyState } from "../components/ui/EmptyState";
 import { ReviewModal } from "../components/review/ReviewModal";
+import { CLICKABLE_CARD_CLASS } from "../components/ui/cardStyles";
 import { formatDate, formatMoney } from "../lib/format";
 import { VIBE_TONE } from "../lib/theme";
 import type { GolfCall } from "../types";
@@ -46,23 +47,29 @@ export function MyRounds() {
         {upcoming.length === 0 ? (
           <EmptyState
             icon={<CalendarDays size={20} />}
-            title="No upcoming rounds yet"
-            description="Join a Golf Call to get one on the books."
+            title="Nothing on the books yet."
+            description="Find a round nearby or host your own — either way, you'll be golfing soon."
             action={
-              <Button size="sm" onClick={() => navigate("/golf-calls")}>
-                Browse Golf Calls
-              </Button>
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button size="sm" icon={<Search size={14} />} onClick={() => navigate("/golf-calls")}>
+                  Find a Round
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => navigate("/golf-calls/new")}>
+                  Host a Golf Call
+                </Button>
+              </div>
             }
           />
         ) : (
           <div className="flex flex-col gap-3">
             {upcoming.map((c) => {
               const isHost = c.hostId === currentUser.id;
+              const openSpots = c.totalSpots - c.joinedGolferIds.length;
               return (
                 <button
                   key={c.id}
                   onClick={() => navigate(`/golf-calls/${c.id}`)}
-                  className="flex w-full flex-col gap-2.5 rounded-2xl border border-slate-100 bg-white p-4 text-left shadow-sm shadow-slate-900/[0.03] transition hover:-translate-y-0.5 hover:border-fairway-200 hover:shadow-md"
+                  className={`flex w-full flex-col gap-2.5 p-4 text-left ${CLICKABLE_CARD_CLASS}`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -80,7 +87,7 @@ export function MyRounds() {
                     <Badge tone={VIBE_TONE[c.vibe]}>{c.vibe}</Badge>
                     <Badge tone="outline">{formatMoney(c.estimatedPricePerPerson)}/person</Badge>
                     <Badge tone="outline" icon={<Users size={11} />}>
-                      {c.joinedGolferIds.length}/{c.totalSpots} joined
+                      {openSpots === 1 ? "One more and you're set" : `${c.joinedGolferIds.length}/${c.totalSpots} joined`}
                     </Badge>
                   </div>
                 </button>
@@ -93,7 +100,11 @@ export function MyRounds() {
       <section>
         <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-400">Past</h2>
         {past.length === 0 ? (
-          <EmptyState icon={<ClipboardList size={20} />} title="No past rounds yet" description="Completed Golf Calls will show up here." />
+          <EmptyState
+            icon={<ClipboardList size={20} />}
+            title="No rounds played yet."
+            description="Once you complete a round, it'll show up here for reviews and reputation."
+          />
         ) : (
           <div className="flex flex-col gap-3">
             {past.map((c) => {
@@ -102,7 +113,10 @@ export function MyRounds() {
               const allReviewed = c.status === "completed" && reviewedCount === teammates.length;
               return (
                 <div key={c.id} className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-4">
-                  <button onClick={() => navigate(`/golf-calls/${c.id}`)} className="flex items-start justify-between gap-3 text-left">
+                  <button
+                    onClick={() => navigate(`/golf-calls/${c.id}`)}
+                    className="flex items-start justify-between gap-3 rounded-xl text-left transition-colors duration-200 hover:text-fairway-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2"
+                  >
                     <div>
                       <p className="font-bold text-slate-900">{c.course}</p>
                       <p className="flex items-center gap-1 text-xs text-slate-500">
@@ -131,10 +145,10 @@ export function MyRounds() {
                                   key={gid}
                                   disabled={reviewed}
                                   onClick={() => setReviewTarget({ call: c, revieweeId: gid })}
-                                  className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition ${
+                                  className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 disabled:pointer-events-none ${
                                     reviewed
                                       ? "border-fairway-200 bg-fairway-50 text-fairway-700"
-                                      : "border-slate-200 text-slate-600 hover:border-fairway-300"
+                                      : "border-slate-200 text-slate-600 hover:border-fairway-300 hover:text-fairway-700 active:bg-slate-50"
                                   }`}
                                 >
                                   <Avatar golfer={g} size="xs" showVerified={false} />

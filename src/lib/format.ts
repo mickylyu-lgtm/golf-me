@@ -18,6 +18,14 @@ export function formatShortDate(iso: string): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+// Compact "SAT · 10:20 AM" style day label for dense card layouts.
+export function formatCompactDay(iso: string): string {
+  const label = formatDate(iso);
+  if (label === "Today" || label === "Tomorrow") return label.toUpperCase();
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-US", { weekday: "short" }).toUpperCase();
+}
+
 export function formatMoney(n: number): string {
   return `$${n.toFixed(0)}`;
 }
@@ -53,4 +61,10 @@ export function memberSinceLabel(iso: string): string {
 
 export function isNewAccount(completedRounds: number): boolean {
   return completedRounds < 3;
+}
+
+export function paceLabel(goodPacePct: number): string {
+  if (goodPacePct >= 90) return "Quick Pace";
+  if (goodPacePct >= 70) return "Medium Pace";
+  return "Relaxed Pace";
 }

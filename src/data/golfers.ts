@@ -43,6 +43,7 @@ export function buildGolfers(): GolferProfile[] {
         goodPacePct: 90,
       },
       memberSince: isoMonthsAgo(14),
+      circleSize: 6,
     },
     {
       id: "g2",
@@ -70,6 +71,7 @@ export function buildGolfers(): GolferProfile[] {
         goodPacePct: 100,
       },
       memberSince: isoDaysAgo(29),
+      circleSize: 0,
     },
     {
       id: "g3",
@@ -97,6 +99,7 @@ export function buildGolfers(): GolferProfile[] {
         goodPacePct: 80,
       },
       memberSince: isoMonthsAgo(22),
+      circleSize: 18,
     },
     {
       id: "g4",
@@ -124,6 +127,7 @@ export function buildGolfers(): GolferProfile[] {
         goodPacePct: 90,
       },
       memberSince: isoMonthsAgo(8),
+      circleSize: 4,
     },
     {
       id: "g5",
@@ -151,6 +155,7 @@ export function buildGolfers(): GolferProfile[] {
         goodPacePct: 88,
       },
       memberSince: isoMonthsAgo(19),
+      circleSize: 11,
     },
     {
       id: "g6",
@@ -178,6 +183,7 @@ export function buildGolfers(): GolferProfile[] {
         goodPacePct: 0,
       },
       memberSince: isoDaysAgo(4),
+      circleSize: 0,
     },
     {
       id: "g7",
@@ -205,6 +211,7 @@ export function buildGolfers(): GolferProfile[] {
         goodPacePct: 92,
       },
       memberSince: isoMonthsAgo(26),
+      circleSize: 15,
     },
     {
       id: "g8",
@@ -232,6 +239,7 @@ export function buildGolfers(): GolferProfile[] {
         goodPacePct: 65,
       },
       memberSince: isoMonthsAgo(5),
+      circleSize: 1,
     },
     {
       id: "g9",
@@ -259,6 +267,7 @@ export function buildGolfers(): GolferProfile[] {
         goodPacePct: 94,
       },
       memberSince: isoMonthsAgo(15),
+      circleSize: 9,
     },
     {
       id: "g10",
@@ -286,6 +295,7 @@ export function buildGolfers(): GolferProfile[] {
         goodPacePct: 91,
       },
       memberSince: isoMonthsAgo(10),
+      circleSize: 5,
     },
   ];
 

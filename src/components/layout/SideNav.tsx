@@ -18,8 +18,10 @@ export function SideNav() {
             to={path}
             end={path === "/"}
             className={({ isActive }) =>
-              `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
-                isActive ? "bg-fairway-50 text-fairway-700" : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"
+              `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none ${
+                isActive
+                  ? "bg-fairway-50 text-fairway-700"
+                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-800 active:bg-slate-100"
               }`
             }
           >

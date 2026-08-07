@@ -33,6 +33,14 @@ export function ReputationRow({ golfer, compact }: ReputationRowProps) {
       {!compact && (
         <>
           <span className="text-slate-300">·</span>
+          <span>
+            <strong className="font-semibold text-slate-800">{golfer.reputation.onTimePct}%</strong> on-time
+          </span>
+        </>
+      )}
+      {!compact && (
+        <>
+          <span className="text-slate-300">·</span>
           <span>{memberSinceLabel(golfer.memberSince)}</span>
         </>
       )}

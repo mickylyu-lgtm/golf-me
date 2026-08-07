@@ -1,54 +1,32 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  Car,
-  Check,
-  Footprints,
-  Mail,
-  Phone,
-  RotateCcw,
-  ShieldCheck,
-  ShieldOff,
-  Sparkles,
-  Users,
-  Wallet,
-} from "lucide-react";
+import { Car, Check, Footprints, Mail, Phone, Settings as SettingsIcon, ShieldCheck, Users, Wallet } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useToast } from "../context/ToastContext";
 import { Avatar } from "../components/ui/Avatar";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
-import { ConfirmDialog } from "../components/ui/ConfirmDialog";
+import { Pill } from "../components/ui/Pill";
 import { inputClass, labelClass } from "../components/ui/FormControls";
 import { VerifyStepModal } from "../components/profile/VerifyStepModal";
 import { ReputationRow } from "../components/golfer/ReputationRow";
+import { CredibilityBadge } from "../components/golfer/CredibilityBadge";
 import { AGE_RANGES, AVAILABILITY_SLOTS, GOLF_VIBES } from "../types";
 import type { AgeRange, AvailabilitySlot, GolfVibe, WalkOrCart } from "../types";
 import { VIBE_TONE } from "../lib/theme";
 import { memberSinceLabel } from "../lib/format";
+import { computeCredibility, computeHandicapConfidence } from "../lib/credibility";
 
 const WALK_OPTIONS: WalkOrCart[] = ["Either", "Walking", "Cart"];
 
 export function Profile() {
-  const {
-    currentUser,
-    golfers,
-    blockedIds,
-    getGolfer,
-    unblockUser,
-    updateCurrentUserProfile,
-    setPhoneVerified,
-    setEmailVerified,
-    requestVerifiedGolfer,
-    resetDemoData,
-    circleGolfers,
-  } = useData();
+  const { currentUser, updateCurrentUserProfile, setPhoneVerified, setEmailVerified, requestVerifiedGolfer, circleGolfers, reviewsAbout } =
+    useData();
   const { showToast } = useToast();
   const navigate = useNavigate();
 
   const [editing, setEditing] = useState(false);
   const [verifyChannel, setVerifyChannel] = useState<"phone" | "email" | null>(null);
-  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
 
   const [form, setForm] = useState(() => ({
     ageRange: currentUser.ageRange,
@@ -57,7 +35,6 @@ export function Profile() {
     favoriteCourses: currentUser.favoriteCourses.join(", "),
     budgetMin: currentUser.budgetMin,
     budgetMax: currentUser.budgetMax,
-    availability: currentUser.availability,
     walkOrCart: currentUser.walkOrCart,
     vibes: currentUser.vibes,
     bio: currentUser.bio,
@@ -71,7 +48,6 @@ export function Profile() {
       favoriteCourses: currentUser.favoriteCourses.join(", "),
       budgetMin: currentUser.budgetMin,
       budgetMax: currentUser.budgetMax,
-      availability: currentUser.availability,
       walkOrCart: currentUser.walkOrCart,
       vibes: currentUser.vibes,
       bio: currentUser.bio,
@@ -80,10 +56,17 @@ export function Profile() {
   }
 
   function toggleAvailability(slot: AvailabilitySlot) {
-    setForm((prev) => ({
-      ...prev,
-      availability: prev.availability.includes(slot) ? prev.availability.filter((s) => s !== slot) : [...prev.availability, slot],
-    }));
+    const next = currentUser.availability.includes(slot)
+      ? currentUser.availability.filter((s) => s !== slot)
+      : [...currentUser.availability, slot];
+    updateCurrentUserProfile({ availability: next });
+  }
+
+  function setAvailableThisWeekend() {
+    const weekendSlots: AvailabilitySlot[] = ["Weekend Mornings", "Weekend Afternoons", "Weekend Evenings"];
+    const next = Array.from(new Set([...currentUser.availability, ...weekendSlots]));
+    updateCurrentUserProfile({ availability: next });
+    showToast("Marked available this weekend.", "success");
   }
 
   function toggleVibe(v: GolfVibe) {
@@ -105,7 +88,6 @@ export function Profile() {
         .filter(Boolean),
       budgetMin: form.budgetMin,
       budgetMax: Math.max(form.budgetMax, form.budgetMin),
-      availability: form.availability,
       walkOrCart: form.walkOrCart,
       vibes: form.vibes.length > 0 ? form.vibes : currentUser.vibes,
       bio: form.bio,
@@ -114,29 +96,63 @@ export function Profile() {
     showToast("Profile updated.", "success");
   }
 
-  const blockedGolfers = blockedIds.map((id) => getGolfer(id)).filter((g): g is NonNullable<typeof g> => Boolean(g));
   const canApplyVerifiedGolfer = currentUser.verification.phoneVerified && currentUser.verification.emailVerified && !currentUser.verification.verifiedGolfer;
+  const myReviews = reviewsAbout(currentUser.id);
+  const credibility = computeCredibility(currentUser, myReviews);
+  const handicapConfidence = computeHandicapConfidence(myReviews);
 
   return (
     <div className="flex flex-col gap-6 pb-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Avatar golfer={currentUser} size="xl" />
-          <div>
-            <h1 className="text-xl font-bold text-slate-900">{currentUser.name}</h1>
+      <div className="flex flex-wrap items-center justify-between gap-y-2">
+        <div className="flex min-w-0 items-center gap-3">
+          <Avatar golfer={currentUser} size="lg" />
+          <div className="min-w-0">
+            <h1 className="truncate text-xl font-bold text-slate-900">{currentUser.name}</h1>
             <p className="text-sm text-slate-500">{memberSinceLabel(currentUser.memberSince)}</p>
+            <div className="mt-1">
+              <CredibilityBadge tier={credibility.tier} label={credibility.label} size="sm" />
+            </div>
           </div>
         </div>
-        {!editing && (
-          <Button size="sm" variant="outline" onClick={startEditing}>
-            Edit
-          </Button>
-        )}
+        <div className="flex shrink-0 gap-2">
+          {!editing && (
+            <Button size="sm" variant="outline" onClick={startEditing}>
+              Edit
+            </Button>
+          )}
+          <button
+            onClick={() => navigate("/settings")}
+            aria-label="Settings"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition-all duration-200 ease-out hover:border-slate-300 hover:text-slate-800 active:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2"
+          >
+            <SettingsIcon size={16} />
+          </button>
+        </div>
       </div>
 
+      {handicapConfidence.level === "needs_review" && (
+        <div className="rounded-2xl border border-sun-200 bg-sun-50 p-4">
+          <p className="text-sm font-semibold text-sun-800">
+            We've received repeated feedback that your listed handicap may not reflect your current playing level.
+          </p>
+          <p className="mt-1 text-xs text-sun-700">Please review your handicap information — only you can see this note.</p>
+          <Button size="sm" variant="outline" className="mt-2.5" onClick={startEditing}>
+            Update handicap
+          </Button>
+        </div>
+      )}
+
       <div className="rounded-2xl border border-slate-100 bg-white p-4">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Golf Reputation</p>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">GolfMe Reputation</p>
         <ReputationRow golfer={currentUser} />
+        <p className="mt-2 flex items-center gap-1 text-xs text-slate-500">
+          {handicapConfidence.level === "high" && <ShieldCheck size={12} className="text-fairway-600" />}
+          {handicapConfidence.level === "high"
+            ? "Handicap usually confirmed by playing partners"
+            : handicapConfidence.level === "needs_review"
+              ? "Handicap accuracy has been questioned by multiple playing partners"
+              : null}
+        </p>
       </div>
 
       <div className="rounded-2xl border border-slate-100 bg-white p-4">
@@ -164,6 +180,25 @@ export function Profile() {
             ))}
           </div>
         )}
+      </div>
+
+      <div className="rounded-2xl border border-slate-100 bg-white p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">When can you play?</p>
+          <button
+            onClick={setAvailableThisWeekend}
+            className="text-xs font-semibold text-fairway-700 transition-colors duration-200 hover:text-fairway-800 hover:underline"
+          >
+            I'm available this weekend
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {AVAILABILITY_SLOTS.map((slot) => (
+            <Pill key={slot} active={currentUser.availability.includes(slot)} onClick={() => toggleAvailability(slot)}>
+              {slot}
+            </Pill>
+          ))}
+        </div>
       </div>
 
       <div className="rounded-2xl border border-slate-100 bg-white p-4">
@@ -314,22 +349,6 @@ export function Profile() {
             </div>
           </div>
           <div>
-            <label className={labelClass}>Availability</label>
-            <div className="flex flex-wrap gap-1.5">
-              {AVAILABILITY_SLOTS.map((slot) => (
-                <button
-                  key={slot}
-                  onClick={() => toggleAvailability(slot)}
-                  className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
-                    form.availability.includes(slot) ? "border-transparent bg-fairway-600 text-white" : "border-slate-200 text-slate-600"
-                  }`}
-                >
-                  {slot}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
             <label className={labelClass}>Bio</label>
             <textarea className={inputClass} rows={3} value={form.bio} onChange={(e) => setForm((f) => ({ ...f, bio: e.target.value }))} />
           </div>
@@ -382,16 +401,6 @@ export function Profile() {
             </div>
           </div>
           <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Availability</p>
-            <div className="flex flex-wrap gap-1.5">
-              {currentUser.availability.map((a) => (
-                <Badge key={a} tone="outline">
-                  {a}
-                </Badge>
-              ))}
-            </div>
-          </div>
-          <div>
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Favorite courses</p>
             <div className="flex flex-wrap gap-1.5">
               {currentUser.favoriteCourses.map((c) => (
@@ -404,37 +413,6 @@ export function Profile() {
         </>
       )}
 
-      {blockedGolfers.length > 0 && (
-        <div className="rounded-2xl border border-slate-100 bg-white p-4">
-          <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            <ShieldOff size={12} /> Blocked golfers
-          </p>
-          <div className="flex flex-col gap-2">
-            {blockedGolfers.map((g) => (
-              <div key={g.id} className="flex items-center gap-3">
-                <Avatar golfer={g} size="xs" showVerified={false} />
-                <p className="flex-1 text-sm text-slate-700">{g.name}</p>
-                <button onClick={() => { unblockUser(g.id); showToast(`Unblocked ${g.name}.`, "info"); }} className="text-xs font-semibold text-fairway-700 hover:underline">
-                  Unblock
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 p-4">
-        <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
-          <Sparkles size={12} /> Prototype tools
-        </p>
-        <p className="mb-3 text-xs text-slate-500">
-          Currently previewing as <strong>{currentUser.name}</strong> ({golfers.length} demo profiles available via the switcher in the top bar).
-        </p>
-        <Button size="sm" variant="ghost" icon={<RotateCcw size={14} />} onClick={() => setResetConfirmOpen(true)}>
-          Reset demo data
-        </Button>
-      </div>
-
       {verifyChannel && (
         <VerifyStepModal
           channel={verifyChannel}
@@ -446,21 +424,6 @@ export function Profile() {
             showToast(`${verifyChannel === "phone" ? "Phone" : "Email"} verified.`, "success");
             setVerifyChannel(null);
           }}
-        />
-      )}
-
-      {resetConfirmOpen && (
-        <ConfirmDialog
-          title="Reset demo data?"
-          message="This restores all golfers, Golf Calls, messages, and reviews to their original state. Any changes you've made will be lost."
-          confirmLabel="Reset"
-          danger
-          onConfirm={() => {
-            resetDemoData();
-            setResetConfirmOpen(false);
-            showToast("Demo data reset.", "info");
-          }}
-          onCancel={() => setResetConfirmOpen(false)}
         />
       )}
     </div>

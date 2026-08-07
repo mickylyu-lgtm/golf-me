@@ -2,9 +2,10 @@ import type { AppData } from "../types";
 import { buildGolfers, DEFAULT_CURRENT_USER_ID } from "../data/golfers";
 import { buildGolfCallsBundle } from "../data/golfCalls";
 
-// Bumped to v2 when GolfCall gained a required distanceMiles field —
-// forces a reseed for anyone with v1 data cached in their browser.
-const STORAGE_KEY = "golfme:data:v2";
+// Bumped to v3 when Review gained handicapAccuracy/paceOfPlay (replacing
+// goodPace) and AppData gained session state — forces a reseed for anyone
+// with older cached data.
+const STORAGE_KEY = "golfme:data:v3";
 
 export function seedData(): AppData {
   const golfers = buildGolfers();
@@ -18,6 +19,7 @@ export function seedData(): AppData {
     blocks: [],
     circle,
     currentUserId: DEFAULT_CURRENT_USER_ID,
+    session: { isLoggedIn: false, hasOnboarded: false },
   };
 }
 
@@ -37,6 +39,7 @@ export function loadData(): AppData {
       blocks: parsed.blocks ?? [],
       circle: parsed.circle ?? [],
       currentUserId: parsed.currentUserId ?? DEFAULT_CURRENT_USER_ID,
+      session: parsed.session ?? { isLoggedIn: false, hasOnboarded: false },
     };
   } catch (err) {
     console.error("Golf Me: failed to load data, reseeding.", err);

@@ -93,9 +93,7 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
     showToast("We'll notify you when a matching round appears.", "success");
   }
 
-  const results: { call: GolfCall; matchScore?: number }[] = isMatched
-    ? (matchedResults ?? [])
-    : defaultResults.map((call) => ({ call, matchScore: undefined }));
+  const results: GolfCall[] = isMatched ? (matchedResults ?? []).map((r) => r.call) : defaultResults;
 
   return (
     <div className="flex flex-col gap-5">
@@ -153,15 +151,15 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
         isMatched ? (
           <EmptyState
             icon={<SlidersHorizontal size={20} />}
-            title="No perfect matches yet."
-            description="Widen your search, host your own round, or we'll let you know when one opens up."
+            title="Nothing matches yet. Start the round."
+            description="There aren't any matching rounds right now — widen your search, host your own, or we'll let you know when one opens up."
             action={
               <div className="flex flex-wrap justify-center gap-2">
                 <Button size="sm" onClick={() => navigate("/golf-calls/new")}>
                   Create a Golf Call
                 </Button>
                 <Button size="sm" variant="outline" icon={<Bell size={14} />} disabled={notified} onClick={handleNotifyMe}>
-                  {notified ? "We'll notify you" : "Notify me when a match appears"}
+                  {notified ? "We'll notify you" : "Notify Me When One Opens"}
                 </Button>
               </div>
             }
@@ -169,8 +167,8 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
         ) : (
           <EmptyState
             icon={<Plus size={20} />}
-            title="No open Golf Calls match that vibe"
-            description="Be the first to start one."
+            title="Nothing matches yet. Start the round."
+            description="No open Golf Calls with that vibe right now — be the first to start one."
             action={
               <Button size="sm" onClick={() => navigate("/golf-calls/new")}>
                 Host a Golf Call
@@ -180,8 +178,8 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
         )
       ) : (
         <div className="flex flex-col gap-3">
-          {results.map(({ call, matchScore }) => (
-            <GolfCallCard key={call.id} call={call} matchScore={matchScore} />
+          {results.map((call) => (
+            <GolfCallCard key={call.id} call={call} />
           ))}
         </div>
       )}

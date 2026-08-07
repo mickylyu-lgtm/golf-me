@@ -1,21 +1,27 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type {
+  AgeRange,
   AppData,
+  AvailabilitySlot,
   ChatMessage,
   CircleConnection,
   GolfCall,
   GolferProfile,
+  HandicapAccuracy,
   JoinMode,
+  PaceOfPlay,
   Report,
   ReportCategory,
   Review,
+  SessionState,
   SkillFilter,
   GolfVibe,
   WalkOrCart,
 } from "../types";
 import { generateId } from "../lib/id";
 import { loadData, saveData, resetToSeedData } from "../lib/storage";
+import { avatarColorForName, initialsFromName } from "../lib/avatar";
 
 export interface CreateGolfCallInput {
   course: string;
@@ -39,8 +45,22 @@ export interface ReviewInput {
   showedUp: boolean;
   onTime: boolean;
   respectful: boolean;
-  goodPace: boolean;
+  paceOfPlay: PaceOfPlay;
   wouldPlayAgain: boolean;
+  handicapAccuracy: HandicapAccuracy;
+  privateNote?: string;
+}
+
+export interface NewGolferInput {
+  name: string;
+  ageRange: AgeRange;
+  areaLabel: string;
+  handicap: number | null;
+  vibes: GolfVibe[];
+  walkOrCart: WalkOrCart;
+  budgetMin: number;
+  budgetMax: number;
+  availability: AvailabilitySlot[];
 }
 
 interface DataContextValue {
@@ -57,6 +77,12 @@ interface DataContextValue {
   getGolfCall: (id: string) => GolfCall | undefined;
   messagesForCall: (callId: string) => ChatMessage[];
   visibleGolfers: (excludeSelf?: boolean) => GolferProfile[];
+  reviewsAbout: (golferId: string) => Review[];
+
+  session: SessionState;
+  logIn: () => void;
+  logOut: () => void;
+  signUpNewGolfer: (input: NewGolferInput) => GolferProfile;
 
   switchCurrentUser: (id: string) => void;
   updateCurrentUserProfile: (patch: Partial<GolferProfile>) => void;
@@ -66,6 +92,7 @@ interface DataContextValue {
 
   createGolfCall: (input: CreateGolfCallInput) => GolfCall;
   cancelGolfCall: (callId: string) => void;
+  simulateCallCompletion: (callId: string) => void;
   joinGolfCall: (callId: string) => void;
   cancelJoinRequest: (callId: string) => void;
   leaveGolfCall: (callId: string) => void;
@@ -116,6 +143,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     (callId: string) => data.messages.filter((m) => m.golfCallId === callId).sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
     [data.messages],
   );
+  const reviewsAbout = useCallback((golferId: string) => data.reviews.filter((r) => r.revieweeId === golferId), [data.reviews]);
 
   const blockedIds = useMemo(
     () => data.blocks.filter((b) => b.blockerId === currentUser.id).map((b) => b.blockedId),
@@ -217,6 +245,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
     },
     [addSystemMessage],
   );
+
+  // Prototype-only: in a real app a round transitions to "completed" once
+  // its tee time has passed. Here that's simulated on demand so the
+  // review/credibility loop is testable without waiting for a real clock.
+  const simulateCallCompletion = useCallback((callId: string) => {
+    setData((prev) => ({
+      ...prev,
+      golfCalls: prev.golfCalls.map((c) => (c.id === callId ? { ...c, status: "completed" } : c)),
+    }));
+  }, []);
 
   const joinGolfCall = useCallback(
     (callId: string) => {
@@ -425,6 +463,53 @@ export function DataProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const logIn = useCallback(() => {
+    setData((prev) => ({ ...prev, session: { isLoggedIn: true, hasOnboarded: true } }));
+  }, []);
+
+  const logOut = useCallback(() => {
+    setData((prev) => ({ ...prev, session: { ...prev.session, isLoggedIn: false } }));
+  }, []);
+
+  const signUpNewGolfer = useCallback((input: NewGolferInput): GolferProfile => {
+    const id = generateId("g");
+    const golfer: GolferProfile = {
+      id,
+      name: input.name.trim() || "New Golfer",
+      avatarColor: avatarColorForName(input.name),
+      avatarInitials: initialsFromName(input.name),
+      ageRange: input.ageRange,
+      areaLabel: input.areaLabel.trim() || "Nearby",
+      distanceMiles: 0,
+      handicap: input.handicap,
+      favoriteCourses: [],
+      budgetMin: input.budgetMin,
+      budgetMax: input.budgetMax,
+      availability: input.availability,
+      walkOrCart: input.walkOrCart,
+      vibes: input.vibes.length > 0 ? input.vibes : ["Casual & Social"],
+      bio: "New to Golf Me — excited to find my next round.",
+      verification: { phoneVerified: false, emailVerified: false, verifiedGolfer: false },
+      reputation: {
+        completedRounds: 0,
+        showUpRatePct: 0,
+        wouldPlayAgainPct: 0,
+        onTimePct: 0,
+        respectfulPct: 0,
+        goodPacePct: 0,
+      },
+      memberSince: new Date().toISOString(),
+      circleSize: 0,
+    };
+    setData((prev) => ({
+      ...prev,
+      golfers: [...prev.golfers, golfer],
+      currentUserId: id,
+      session: { isLoggedIn: true, hasOnboarded: true },
+    }));
+    return golfer;
+  }, []);
+
   const resetDemoData = useCallback(() => {
     setData(resetToSeedData());
   }, []);
@@ -443,6 +528,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
       getGolfCall,
       messagesForCall,
       visibleGolfers,
+      reviewsAbout,
+      session: data.session,
+      logIn,
+      logOut,
+      signUpNewGolfer,
       switchCurrentUser,
       updateCurrentUserProfile,
       setPhoneVerified,
@@ -450,6 +540,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       requestVerifiedGolfer,
       createGolfCall,
       cancelGolfCall,
+      simulateCallCompletion,
       joinGolfCall,
       cancelJoinRequest,
       leaveGolfCall,
@@ -477,6 +568,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
       getGolfCall,
       messagesForCall,
       visibleGolfers,
+      reviewsAbout,
+      logIn,
+      logOut,
+      signUpNewGolfer,
       switchCurrentUser,
       updateCurrentUserProfile,
       setPhoneVerified,
@@ -484,6 +579,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       requestVerifiedGolfer,
       createGolfCall,
       cancelGolfCall,
+      simulateCallCompletion,
       joinGolfCall,
       cancelJoinRequest,
       leaveGolfCall,

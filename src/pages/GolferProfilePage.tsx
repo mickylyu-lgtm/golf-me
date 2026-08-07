@@ -1,6 +1,19 @@
 import { useMemo, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Car, Flag, Footprints, MapPin, MoreHorizontal, ShieldAlert, ShieldOff, UserPlus, Users, Wallet } from "lucide-react";
+import {
+  ArrowLeft,
+  Car,
+  Flag,
+  Footprints,
+  MapPin,
+  MoreHorizontal,
+  ShieldAlert,
+  ShieldCheck,
+  ShieldOff,
+  UserPlus,
+  Users,
+  Wallet,
+} from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useToast } from "../context/ToastContext";
 import { Avatar } from "../components/ui/Avatar";
@@ -8,17 +21,20 @@ import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 import { ReportModal } from "../components/trust/ReportModal";
-import { CompatibilityBadge } from "../components/golfer/CompatibilityBadge";
+import { MatchReasons } from "../components/golfer/MatchReasons";
 import { ReputationRow } from "../components/golfer/ReputationRow";
 import { TrustBadgeRow } from "../components/golfer/TrustBadges";
+import { CredibilityBadge } from "../components/golfer/CredibilityBadge";
 import { computeCompatibility } from "../lib/compatibility";
-import { handicapLabel } from "../lib/format";
+import { matchTier, golferMatchReasons } from "../lib/matchReasons";
+import { computeCredibility, computeHandicapConfidence } from "../lib/credibility";
+import { handicapLabel, isNewAccount, paceLabel } from "../lib/format";
 import { VIBE_TONE } from "../lib/theme";
 
 export function GolferProfilePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { currentUser, getGolfer, isBlocked, blockUser, unblockUser, hasPlayedWith, isInCircle, addToCircle } = useData();
+  const { currentUser, getGolfer, isBlocked, blockUser, unblockUser, hasPlayedWith, isInCircle, addToCircle, reviewsAbout } = useData();
   const { showToast } = useToast();
   const [menuOpen, setMenuOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
@@ -42,18 +58,35 @@ export function GolferProfilePage() {
   }
 
   const blocked = isBlocked(golfer.id);
+  const tier = compat ? matchTier(compat.overall) : null;
+  const reasons = compat ? golferMatchReasons(compat) : [];
+  const isEstablished = !isNewAccount(golfer.reputation.completedRounds);
+  const golferReviews = reviewsAbout(golfer.id);
+  const credibility = computeCredibility(golfer, golferReviews);
+  const handicapConfidence = computeHandicapConfidence(golferReviews);
+
+  const feedbackTags = isEstablished
+    ? [
+        { label: "Good Pace", count: Math.round((golfer.reputation.completedRounds * golfer.reputation.goodPacePct) / 100) },
+        { label: "Respectful", count: Math.round((golfer.reputation.completedRounds * golfer.reputation.respectfulPct) / 100) },
+        { label: "On Time", count: Math.round((golfer.reputation.completedRounds * golfer.reputation.onTimePct) / 100) },
+      ].filter((t) => t.count > 0)
+    : [];
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-800">
+        <button
+          onClick={() => navigate(-1)}
+          className="flex items-center gap-1.5 rounded-full px-1 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2"
+        >
           <ArrowLeft size={16} /> Back
         </button>
         <div className="relative">
           <button
             onClick={() => setMenuOpen((v) => !v)}
             aria-label="More options"
-            className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            className="rounded-full p-2 text-slate-400 transition-all duration-200 ease-out hover:bg-slate-100 hover:text-slate-700 active:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none"
           >
             <MoreHorizontal size={18} />
           </button>
@@ -64,7 +97,7 @@ export function GolferProfilePage() {
                   setMenuOpen(false);
                   setReportOpen(true);
                 }}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 transition-colors duration-150 hover:bg-slate-50"
               >
                 <ShieldAlert size={15} /> Report {golfer.name}
               </button>
@@ -78,7 +111,7 @@ export function GolferProfilePage() {
                     setBlockConfirmOpen(true);
                   }
                 }}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 transition-colors duration-150 hover:bg-red-50"
               >
                 <ShieldOff size={15} /> {blocked ? `Unblock ${golfer.name}` : `Block ${golfer.name}`}
               </button>
@@ -87,17 +120,21 @@ export function GolferProfilePage() {
         </div>
       </div>
 
-      <div className="flex flex-col items-center gap-3 text-center">
-        <Avatar golfer={golfer} size="xl" />
+      <div className="flex flex-col items-center gap-2 text-center">
+        <Avatar golfer={golfer} size="lg" />
         <div>
-          <h1 className="text-xl font-bold text-slate-900">
-            {golfer.name} <span className="font-normal text-slate-400">· {golfer.ageRange}</span>
+          <h1 className="flex items-center justify-center gap-1 text-xl font-bold text-slate-900">
+            {golfer.name}
+            {golfer.verification.verifiedGolfer && <ShieldCheck size={16} className="text-fairway-600" />}
           </h1>
-          <p className="flex items-center justify-center gap-1 text-sm text-slate-500">
-            <MapPin size={13} /> {golfer.distanceMiles.toFixed(1)} mi away · {golfer.areaLabel}
+          <p className="text-sm text-slate-500">
+            {handicapLabel(golfer.handicap)} · {golfer.areaLabel}
+          </p>
+          <p className="flex items-center justify-center gap-1 text-xs text-slate-400">
+            <MapPin size={11} /> {golfer.distanceMiles.toFixed(1)} mi away
           </p>
         </div>
-        {compat && <CompatibilityBadge score={compat.overall} />}
+        <CredibilityBadge tier={credibility.tier} label={credibility.label} size="sm" />
         <TrustBadgeRow golfer={golfer} />
         {hasPlayedWith(golfer.id) &&
           (isInCircle(golfer.id) ? (
@@ -125,15 +162,71 @@ export function GolferProfilePage() {
         </div>
       )}
 
+      {tier && (
+        <div className="rounded-2xl bg-fairway-50/70 p-4">
+          <p className="flex items-center gap-1.5 text-sm font-bold text-fairway-800">
+            <span aria-hidden>{tier.emoji}</span> {tier.label} for you
+          </p>
+          <MatchReasons reasons={reasons} className="mt-1.5" />
+        </div>
+      )}
+
       <div className="rounded-2xl border border-slate-100 bg-white p-4">
         <p className="text-sm leading-relaxed text-slate-600">{golfer.bio}</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-2xl border border-slate-100 bg-white p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Handicap</p>
-          <p className="mt-1 font-bold text-slate-800">{handicapLabel(golfer.handicap)}</p>
+      <div className="rounded-2xl border border-slate-100 bg-white p-4">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">GolfMe Reputation</p>
+        <ReputationRow golfer={golfer} />
+        {handicapConfidence.level !== "normal" && (
+          <p className="mt-2 flex items-center gap-1 text-xs text-slate-500">
+            {handicapConfidence.level === "high" && <ShieldCheck size={12} className="text-fairway-600" />}
+            {handicapConfidence.level === "high"
+              ? "Handicap usually confirmed by playing partners"
+              : "Handicap accuracy has been questioned by multiple playing partners"}
+          </p>
+        )}
+      </div>
+
+      <div className="rounded-2xl border border-slate-100 bg-white p-4">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Playing Style</p>
+        <div className="flex flex-wrap gap-1.5">
+          {golfer.vibes.map((v) => (
+            <Badge key={v} tone={VIBE_TONE[v]}>
+              {v}
+            </Badge>
+          ))}
+          {isEstablished && <Badge tone="outline">{paceLabel(golfer.reputation.goodPacePct)}</Badge>}
+          <Badge tone="outline" icon={golfer.walkOrCart === "Walking" ? <Footprints size={12} /> : <Car size={12} />}>
+            {golfer.walkOrCart === "Either" ? "Walks or Carts" : `Usually ${golfer.walkOrCart === "Walking" ? "Walks" : "Carts"}`}
+          </Badge>
         </div>
+      </div>
+
+      <div className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white p-4">
+        <Users size={18} className="text-fairway-600" />
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Golf Circle</p>
+          <p className="font-bold text-slate-800">
+            {golfer.circleSize} golfer{golfer.circleSize === 1 ? "" : "s"} {golfer.circleSize === 0 ? "(just getting started)" : "would play with them again"}
+          </p>
+        </div>
+      </div>
+
+      {feedbackTags.length > 0 && (
+        <div className="rounded-2xl border border-slate-100 bg-white p-4">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Common Feedback</p>
+          <div className="flex flex-wrap gap-1.5">
+            {feedbackTags.map((t) => (
+              <Badge key={t.label} tone="outline">
+                {t.label} ×{t.count}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-3">
         <div className="rounded-2xl border border-slate-100 bg-white p-4">
           <p className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
             <Wallet size={12} /> Budget / round
@@ -143,25 +236,8 @@ export function GolferProfilePage() {
           </p>
         </div>
         <div className="rounded-2xl border border-slate-100 bg-white p-4">
-          <p className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            {golfer.walkOrCart === "Walking" ? <Footprints size={12} /> : <Car size={12} />} Preference
-          </p>
-          <p className="mt-1 font-bold text-slate-800">{golfer.walkOrCart}</p>
-        </div>
-        <div className="rounded-2xl border border-slate-100 bg-white p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Availability</p>
           <p className="mt-1 text-sm font-semibold text-slate-800">{golfer.availability.length} time slots/week</p>
-        </div>
-      </div>
-
-      <div>
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Golf vibe</p>
-        <div className="flex flex-wrap gap-1.5">
-          {golfer.vibes.map((v) => (
-            <Badge key={v} tone={VIBE_TONE[v]}>
-              {v}
-            </Badge>
-          ))}
         </div>
       </div>
 
@@ -187,11 +263,6 @@ export function GolferProfilePage() {
             </Badge>
           ))}
         </div>
-      </div>
-
-      <div className="rounded-2xl border border-slate-100 bg-white p-4">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Golf Reputation</p>
-        <ReputationRow golfer={golfer} />
       </div>
 
       {reportOpen && (

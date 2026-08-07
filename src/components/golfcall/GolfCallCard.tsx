@@ -1,21 +1,24 @@
 import { useNavigate } from "react-router-dom";
-import { CalendarDays, Eye, MapPin, Users, Wallet } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import type { GolfCall } from "../../types";
 import { useData } from "../../context/DataContext";
 import { useToast } from "../../context/ToastContext";
 import { Avatar } from "../ui/Avatar";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
-import { CompatibilityBadge } from "../golfer/CompatibilityBadge";
-import { formatDate, formatMoney } from "../../lib/format";
+import { MatchReasons } from "../golfer/MatchReasons";
+import { CLICKABLE_CARD_CLASS } from "../ui/cardStyles";
+import { formatCompactDay, formatDate, formatMoney } from "../../lib/format";
 import { VIBE_TONE } from "../../lib/theme";
+import { computeCallCompatibility } from "../../lib/compatibility";
+import { matchTier, callMatchReasons } from "../../lib/matchReasons";
 
 interface GolfCallCardProps {
   call: GolfCall;
-  matchScore?: number;
+  showMatch?: boolean;
 }
 
-export function GolfCallCard({ call, matchScore }: GolfCallCardProps) {
+export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
   const { currentUser, getGolfer, joinGolfCall } = useData();
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -28,20 +31,20 @@ export function GolfCallCard({ call, matchScore }: GolfCallCardProps) {
   const isFull = call.status === "full" || openSpots <= 0;
   const isCancelled = call.status === "cancelled";
   const isUrgent = !isFull && !isCancelled && openSpots === 1;
-  const isSoon = call.status === "open" && (formatDate(call.dateISO) === "Today" || formatDate(call.dateISO) === "Tomorrow");
+  const dateLabel = formatDate(call.dateISO);
+  const isSoon = call.status === "open" && (dateLabel === "Today" || dateLabel === "Tomorrow");
+
+  const breakdown = showMatch && !isHost ? computeCallCompatibility(currentUser, call) : null;
+  const tier = breakdown ? matchTier(breakdown.overall) : null;
+  const reasons = breakdown ? callMatchReasons(call, breakdown) : [];
 
   function handleJoin(e: React.MouseEvent) {
     e.stopPropagation();
     joinGolfCall(call.id);
     showToast(
-      call.joinMode === "instant" ? "You're in! Check the group for details." : "Request sent to the host.",
+      call.joinMode === "instant" ? `You're playing ${formatDate(call.dateISO)}. ⛳` : "Request sent to the host.",
       "success",
     );
-  }
-
-  function handleView(e: React.MouseEvent) {
-    e.stopPropagation();
-    navigate(`/golf-calls/${call.id}`);
   }
 
   let cta: React.ReactNode;
@@ -57,14 +60,9 @@ export function GolfCallCard({ call, matchScore }: GolfCallCardProps) {
     cta = <Badge tone="slate">Full</Badge>;
   } else {
     cta = (
-      <>
-        <Button size="sm" variant="outline" icon={<Eye size={13} />} onClick={handleView}>
-          View
-        </Button>
-        <Button size="sm" onClick={handleJoin}>
-          {call.joinMode === "instant" ? "I'm In" : "Request"}
-        </Button>
-      </>
+      <Button size="sm" icon={<ArrowRight size={13} />} className="flex-row-reverse" onClick={handleJoin}>
+        {call.joinMode === "instant" ? "Join Round" : "Request to Join"}
+      </Button>
     );
   }
 
@@ -74,31 +72,28 @@ export function GolfCallCard({ call, matchScore }: GolfCallCardProps) {
       tabIndex={0}
       onClick={() => navigate(`/golf-calls/${call.id}`)}
       onKeyDown={(e) => e.key === "Enter" && navigate(`/golf-calls/${call.id}`)}
-      className={`flex w-full cursor-pointer flex-col gap-3 rounded-2xl border bg-white p-4 text-left shadow-sm shadow-slate-900/[0.03] transition hover:-translate-y-0.5 hover:shadow-md ${
-        isUrgent ? "border-sun-300 hover:border-sun-400" : "border-slate-100 hover:border-fairway-200"
-      }`}
+      className={`flex w-full cursor-pointer flex-col gap-3 p-4 text-left ${CLICKABLE_CARD_CLASS} ${isUrgent ? "border-sun-300" : ""}`}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-base font-bold text-slate-900">{call.course}</p>
-          <p className={`flex items-center gap-1 text-xs font-medium ${isSoon ? "text-fairway-700" : "text-slate-500"}`}>
-            <CalendarDays size={12} /> {formatDate(call.dateISO)} · {call.timeLabel}
-          </p>
-          <p className="flex items-center gap-1 text-xs text-slate-500">
-            <MapPin size={12} /> {call.distanceMiles.toFixed(0)} mi away · {call.areaLabel}
-          </p>
-        </div>
-        {matchScore !== undefined && <CompatibilityBadge score={matchScore} size="sm" />}
+      <div>
+        <p className="text-base font-bold text-slate-900">{call.course}</p>
+        <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs font-medium text-slate-500">
+          <span className={isSoon ? "font-bold text-fairway-700" : ""}>{formatCompactDay(call.dateISO)}</span>
+          <span>· {call.timeLabel}</span>
+          <span className="text-slate-300">·</span>
+          <span>
+            {call.distanceMiles.toFixed(0)} mi away · ~{formatMoney(call.estimatedPricePerPerson)}
+          </span>
+        </p>
       </div>
 
-      <div>
+      <div className="flex flex-wrap items-center gap-1.5">
         {isCancelled ? (
           <Badge tone="rose">Cancelled</Badge>
         ) : isFull ? (
           <Badge tone="slate">Foursome Full</Badge>
         ) : isUrgent ? (
-          <Badge tone="sun" className="animate-pulse">
-            🏌️ 1 Spot Left
+          <Badge tone="sun" className="animate-pulse font-bold tracking-wide uppercase">
+            1 Spot Left
           </Badge>
         ) : (
           <Badge tone="fairway">
@@ -107,38 +102,56 @@ export function GolfCallCard({ call, matchScore }: GolfCallCardProps) {
         )}
       </div>
 
-      <div className="flex flex-col gap-1">
+      {/* Mobile: compact overlapping avatars only — full names/handicaps live one tap away on the detail page. */}
+      <div className="flex items-center gap-1.5 sm:hidden">
+        <div className="flex -space-x-2">
+          {call.joinedGolferIds.slice(0, 3).map((id) => {
+            const g = getGolfer(id);
+            if (!g) return null;
+            return <Avatar key={id} golfer={g} size="xs" showVerified={false} />;
+          })}
+        </div>
+        {call.joinedGolferIds.length > 3 && (
+          <span className="text-xs font-semibold text-slate-500">+{call.joinedGolferIds.length - 3}</span>
+        )}
+      </div>
+
+      {/* Desktop/tablet: full roster chips with handicap + host tag. */}
+      <div className="hidden flex-wrap gap-1.5 sm:flex">
         {call.joinedGolferIds.map((id) => {
           const g = getGolfer(id);
           if (!g) return null;
           return (
-            <div key={id} className="flex items-center gap-1.5 text-xs text-slate-600">
+            <div key={id} className="flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 py-1 pl-1 pr-2.5 text-xs">
               <Avatar golfer={g} size="xs" showVerified={false} />
-              <span className="font-medium text-slate-700">{g.name.split(" ")[0]}</span>
+              <span className="font-semibold text-slate-700">{g.name.split(" ")[0]}</span>
               {g.verification.verifiedGolfer && <span className="text-fairway-600">✓</span>}
-              <span className="text-slate-400">·</span>
-              <span>{g.handicap !== null ? `${g.handicap} HCP` : "New golfer"}</span>
-              {g.id === call.hostId && <span className="text-[10px] font-semibold text-sun-600">HOST</span>}
+              <span className="text-slate-400">· {g.handicap !== null ? `${g.handicap} HCP` : "New"}</span>
+              {g.id === call.hostId && <span className="font-semibold text-sun-600">· Host</span>}
             </div>
           );
         })}
       </div>
 
-      <div className="flex flex-wrap gap-1.5">
-        <Badge tone="outline" icon={<Wallet size={12} />}>
-          Approx. {formatMoney(call.estimatedPricePerPerson)}/person
-        </Badge>
-        <Badge tone="outline">{call.skillLevel}</Badge>
-        <Badge tone={VIBE_TONE[call.vibe]}>{call.vibe}</Badge>
-      </div>
+      <Badge tone={VIBE_TONE[call.vibe]} className="self-start font-semibold">
+        {call.vibe}
+      </Badge>
+
+      {tier && (
+        <div className="hidden rounded-xl bg-fairway-50/70 p-2.5 sm:block">
+          <p className="flex items-center gap-1.5 text-sm font-bold text-fairway-800">
+            <span aria-hidden>{tier.emoji}</span> {tier.label} for you
+          </p>
+          <MatchReasons reasons={reasons} className="mt-1" />
+        </div>
+      )}
 
       <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-2.5">
-        <p className="flex items-center gap-1 text-xs font-medium text-slate-500">
-          <Users size={12} />
+        <p className="text-xs font-medium text-slate-500">
           {call.joinedGolferIds.length} of {call.totalSpots} joined
           {host && <span className="text-slate-400"> · hosted by {isHost ? "you" : host.name}</span>}
         </p>
-        <div className="flex items-center gap-2">{cta}</div>
+        {cta}
       </div>
     </div>
   );

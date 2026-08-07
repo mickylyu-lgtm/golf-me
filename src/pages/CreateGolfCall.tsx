@@ -1,18 +1,21 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Users } from "lucide-react";
+import { ArrowLeft, ArrowRight, ChevronDown, Users } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useToast } from "../context/ToastContext";
 import { Avatar } from "../components/ui/Avatar";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
+import { Pill } from "../components/ui/Pill";
 import { GOLF_VIBES } from "../types";
 import type { GolfVibe, JoinMode, SkillFilter, WalkOrCart } from "../types";
 import { inputClass, labelClass } from "../components/ui/FormControls";
 import { getWeekendRange } from "../lib/greeting";
+import { skillTierFromHandicap } from "../lib/format";
 
 const SKILL_OPTIONS: SkillFilter[] = ["Any Skill Level", "Beginner", "Intermediate", "Advanced"];
 const WALK_OPTIONS: WalkOrCart[] = ["Either", "Walking", "Cart"];
+type LookingFor = "anyone" | "similar" | "custom";
 
 function toDateInputValue(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -32,7 +35,7 @@ function prefillDateFromWhen(when: string | null, dateParam: string | null): str
 
 export function CreateGolfCall() {
   const navigate = useNavigate();
-  const { createGolfCall, visibleGolfers, circleGolfers } = useData();
+  const { currentUser, createGolfCall, visibleGolfers, circleGolfers } = useData();
   const { showToast } = useToast();
   const [searchParams] = useSearchParams();
 
@@ -45,11 +48,13 @@ export function CreateGolfCall() {
   const [price, setPrice] = useState(50);
   const [totalSpots, setTotalSpots] = useState(4);
   const [joinMode, setJoinMode] = useState<JoinMode>("instant");
+  const [lookingFor, setLookingFor] = useState<LookingFor>("anyone");
   const [skillLevel, setSkillLevel] = useState<SkillFilter>("Any Skill Level");
   const [vibe, setVibe] = useState<GolfVibe>("Casual & Social");
   const [walkOrCart, setWalkOrCart] = useState<WalkOrCart>("Either");
   const [notes, setNotes] = useState("");
   const [friendIds, setFriendIds] = useState<string[]>([]);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const maxFriends = Math.max(0, totalSpots - 2); // leave room for host + at least 1 open spot
   const openSpotsRemaining = totalSpots - 1 - friendIds.length;
@@ -57,6 +62,14 @@ export function CreateGolfCall() {
   const otherGolfers = useMemo(() => visibleGolfers(), [visibleGolfers]);
   const circleIds = useMemo(() => new Set(circleGolfers.map((g) => g.id)), [circleGolfers]);
   const nonCircleGolfers = useMemo(() => otherGolfers.filter((g) => !circleIds.has(g.id)), [otherGolfers, circleIds]);
+
+  const effectiveSkillLevel: SkillFilter = fillMode
+    ? lookingFor === "anyone"
+      ? "Any Skill Level"
+      : lookingFor === "similar"
+        ? skillTierFromHandicap(currentUser.handicap)
+        : skillLevel
+    : skillLevel;
 
   function toggleFriend(id: string) {
     setFriendIds((prev) => {
@@ -82,19 +95,22 @@ export function CreateGolfCall() {
       estimatedPricePerPerson: price,
       totalSpots,
       joinMode,
-      skillLevel,
+      skillLevel: effectiveSkillLevel,
       vibe,
       walkOrCart,
       notes: notes.trim() || undefined,
       additionalJoinedGolferIds: fillMode ? friendIds : undefined,
     });
-    showToast(fillMode ? "Your foursome is live — we'll help you fill the last spot." : "Your Golf Call is live!", "success");
+    showToast(fillMode ? "Your open spot is posted — we'll help you fill it." : "Your Golf Call is live!", "success");
     navigate(`/golf-calls/${call.id}`);
   }
 
   return (
     <div className="flex flex-col gap-5 pb-6">
-      <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-800">
+      <button
+        onClick={() => navigate(-1)}
+        className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
+      >
         <ArrowLeft size={16} /> Back
       </button>
 
@@ -108,16 +124,16 @@ export function CreateGolfCall() {
       <div className="flex gap-2">
         <button
           onClick={() => setFillMode(false)}
-          className={`flex-1 rounded-xl border px-3 py-2.5 text-sm font-semibold transition ${
-            !fillMode ? "border-fairway-400 bg-fairway-50 text-fairway-700" : "border-slate-200 text-slate-600"
+          className={`flex-1 rounded-xl border px-3 py-2.5 text-sm font-semibold transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 ${
+            !fillMode ? "border-fairway-400 bg-fairway-50 text-fairway-700" : "border-slate-200 text-slate-600 hover:border-slate-300"
           }`}
         >
           Starting fresh
         </button>
         <button
           onClick={() => setFillMode(true)}
-          className={`flex-1 rounded-xl border px-3 py-2.5 text-sm font-semibold transition ${
-            fillMode ? "border-fairway-400 bg-fairway-50 text-fairway-700" : "border-slate-200 text-slate-600"
+          className={`flex-1 rounded-xl border px-3 py-2.5 text-sm font-semibold transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 ${
+            fillMode ? "border-fairway-400 bg-fairway-50 text-fairway-700" : "border-slate-200 text-slate-600 hover:border-slate-300"
           }`}
         >
           I already have players
@@ -141,146 +157,261 @@ export function CreateGolfCall() {
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className={labelClass}>Date</label>
+            <label className={labelClass}>When</label>
             <input type="date" className={inputClass} value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
           <div>
-            <label className={labelClass}>Tee time / window</label>
+            <label className={labelClass}>Tee time</label>
             <input className={inputClass} value={timeLabel} onChange={(e) => setTimeLabel(e.target.value)} placeholder="e.g. 10:00 AM" />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className={labelClass}>Estimated price / person</label>
-            <input
-              type="number"
-              min={0}
-              className={inputClass}
-              value={price}
-              onChange={(e) => setPrice(Number(e.target.value))}
-            />
+
+        {!fillMode && (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelClass}>Estimated price / person</label>
+              <input type="number" min={0} className={inputClass} value={price} onChange={(e) => setPrice(Number(e.target.value))} />
+            </div>
+            <div>
+              <label className={labelClass}>Total spots</label>
+              <select className={inputClass} value={totalSpots} onChange={(e) => setTotalSpots(Number(e.target.value))}>
+                {[2, 3, 4].map((n) => (
+                  <option key={n} value={n}>
+                    {n} players
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
+        )}
+
+        {fillMode && (
+          <>
+            <div>
+              <label className={labelClass}>Total players in the group</label>
+              <select className={inputClass} value={totalSpots} onChange={(e) => setTotalSpots(Number(e.target.value))}>
+                {[2, 3, 4].map((n) => (
+                  <option key={n} value={n}>
+                    {n} players
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className={labelClass}>Your Group</label>
+              <p className="mb-2 text-xs text-slate-500">
+                Pick up to {maxFriends} confirmed player{maxFriends === 1 ? "" : "s"} — we'll leave room for the rest.
+              </p>
+              <div className="flex flex-col gap-3">
+                {circleGolfers.length > 0 && (
+                  <div>
+                    <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-fairway-700">
+                      <Users size={12} /> Your Golf Circle
+                    </p>
+                    <div className="flex flex-col gap-1">
+                      {circleGolfers.map((g) => (
+                        <FriendRow
+                          key={g.id}
+                          golferId={g.id}
+                          name={g.name}
+                          handicap={g.handicap}
+                          avatar={g}
+                          checked={friendIds.includes(g.id)}
+                          disabled={!friendIds.includes(g.id) && friendIds.length >= maxFriends}
+                          onToggle={toggleFriend}
+                          circle
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div>
+                  {circleGolfers.length > 0 && <p className="mb-1.5 text-xs font-semibold text-slate-500">Other golfers</p>}
+                  <div className="flex flex-col gap-1">
+                    {nonCircleGolfers.map((g) => (
+                      <FriendRow
+                        key={g.id}
+                        golferId={g.id}
+                        name={g.name}
+                        handicap={g.handicap}
+                        avatar={g}
+                        checked={friendIds.includes(g.id)}
+                        disabled={!friendIds.includes(g.id) && friendIds.length >= maxFriends}
+                        onToggle={toggleFriend}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div
+              className={`rounded-xl px-4 py-3 text-center font-bold ${
+                openSpotsRemaining >= 1 ? "bg-sun-100 text-sun-700" : "bg-red-50 text-red-600"
+              }`}
+            >
+              {openSpotsRemaining >= 1
+                ? `${openSpotsRemaining} Player${openSpotsRemaining === 1 ? "" : "s"} Needed`
+                : "Pick fewer players so there's at least one open spot to fill."}
+            </div>
+
+            <div>
+              <label className={labelClass}>Looking for</label>
+              <div className="flex flex-wrap gap-1.5">
+                <Pill active={lookingFor === "anyone"} onClick={() => setLookingFor("anyone")}>
+                  Anyone
+                </Pill>
+                <Pill active={lookingFor === "similar"} onClick={() => setLookingFor("similar")}>
+                  Similar Handicap
+                </Pill>
+                <Pill active={lookingFor === "custom"} onClick={() => setLookingFor("custom")}>
+                  Custom
+                </Pill>
+              </div>
+              {lookingFor === "custom" && (
+                <select className={`${inputClass} mt-2`} value={skillLevel} onChange={(e) => setSkillLevel(e.target.value as SkillFilter)}>
+                  {SKILL_OPTIONS.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          </>
+        )}
+
+        {!fillMode && (
           <div>
-            <label className={labelClass}>Total spots</label>
-            <select className={inputClass} value={totalSpots} onChange={(e) => setTotalSpots(Number(e.target.value))}>
-              {[2, 3, 4].map((n) => (
-                <option key={n} value={n}>
-                  {n} players
+            <label className={labelClass}>Preferred skill level</label>
+            <select className={inputClass} value={skillLevel} onChange={(e) => setSkillLevel(e.target.value as SkillFilter)}>
+              {SKILL_OPTIONS.map((s) => (
+                <option key={s} value={s}>
+                  {s}
                 </option>
               ))}
             </select>
           </div>
-        </div>
-
-        {fillMode && (
-          <div>
-            <label className={labelClass}>Who's already in?</label>
-            <p className="mb-2 text-xs text-slate-500">
-              Pick up to {maxFriends} confirmed player{maxFriends === 1 ? "" : "s"} — we'll leave room for the rest.
-            </p>
-            <div className="flex flex-col gap-3">
-              {circleGolfers.length > 0 && (
-                <div>
-                  <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-fairway-700">
-                    <Users size={12} /> Your Golf Circle
-                  </p>
-                  <div className="flex flex-col gap-1">
-                    {circleGolfers.map((g) => (
-                      <FriendRow key={g.id} golferId={g.id} name={g.name} handicap={g.handicap} avatar={g} checked={friendIds.includes(g.id)} disabled={!friendIds.includes(g.id) && friendIds.length >= maxFriends} onToggle={toggleFriend} circle />
-                    ))}
-                  </div>
-                </div>
-              )}
-              <div>
-                {circleGolfers.length > 0 && <p className="mb-1.5 text-xs font-semibold text-slate-500">Other golfers</p>}
-                <div className="flex flex-col gap-1">
-                  {nonCircleGolfers.map((g) => (
-                    <FriendRow key={g.id} golferId={g.id} name={g.name} handicap={g.handicap} avatar={g} checked={friendIds.includes(g.id)} disabled={!friendIds.includes(g.id) && friendIds.length >= maxFriends} onToggle={toggleFriend} />
-                  ))}
-                </div>
-              </div>
-            </div>
-            <p className={`mt-2 text-xs font-semibold ${openSpotsRemaining >= 1 ? "text-fairway-700" : "text-red-600"}`}>
-              {openSpotsRemaining >= 1
-                ? `${openSpotsRemaining} open spot${openSpotsRemaining === 1 ? "" : "s"} to fill`
-                : "Pick fewer players so there's at least one open spot to fill."}
-            </p>
-          </div>
         )}
 
         <div>
-          <label className={labelClass}>Preferred skill level</label>
-          <select className={inputClass} value={skillLevel} onChange={(e) => setSkillLevel(e.target.value as SkillFilter)}>
-            {SKILL_OPTIONS.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className={labelClass}>Golf vibe</label>
-          <select className={inputClass} value={vibe} onChange={(e) => setVibe(e.target.value as GolfVibe)}>
+          <label className={labelClass}>Vibe</label>
+          <div className="flex flex-wrap gap-1.5">
             {GOLF_VIBES.map((v) => (
-              <option key={v} value={v}>
+              <Pill key={v} active={vibe === v} onClick={() => setVibe(v)}>
                 {v}
-              </option>
+              </Pill>
             ))}
-          </select>
+          </div>
         </div>
-        <div>
-          <label className={labelClass}>Walking or cart</label>
-          <div className="flex gap-2">
-            {WALK_OPTIONS.map((w) => (
+
+        {!fillMode && (
+          <div>
+            <label className={labelClass}>Walking or cart</label>
+            <div className="flex gap-2">
+              {WALK_OPTIONS.map((w) => (
+                <Pill key={w} active={walkOrCart === w} onClick={() => setWalkOrCart(w)} className="flex-1 py-2 text-center">
+                  {w}
+                </Pill>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {!fillMode && (
+          <div>
+            <label className={labelClass}>How should people join?</label>
+            <div className="flex gap-2">
               <button
-                key={w}
-                onClick={() => setWalkOrCart(w)}
-                className={`flex-1 rounded-xl border px-3 py-2 text-sm font-medium transition ${
-                  walkOrCart === w ? "border-fairway-400 bg-fairway-50 text-fairway-700" : "border-slate-200 text-slate-600"
+                onClick={() => setJoinMode("instant")}
+                className={`flex-1 rounded-xl border px-3 py-2.5 text-left text-sm transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 ${
+                  joinMode === "instant" ? "border-fairway-400 bg-fairway-50" : "border-slate-200 hover:border-slate-300"
                 }`}
               >
-                {w}
+                <p className="font-semibold text-slate-800">Instant join</p>
+                <p className="text-xs text-slate-500">Anyone can tap "Join Round" and they're on the roster.</p>
               </button>
-            ))}
+              <button
+                onClick={() => setJoinMode("request")}
+                className={`flex-1 rounded-xl border px-3 py-2.5 text-left text-sm transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 ${
+                  joinMode === "request" ? "border-fairway-400 bg-fairway-50" : "border-slate-200 hover:border-slate-300"
+                }`}
+              >
+                <p className="font-semibold text-slate-800">Request to join</p>
+                <p className="text-xs text-slate-500">You approve each player before they're added.</p>
+              </button>
+            </div>
           </div>
-        </div>
-        <div>
-          <label className={labelClass}>How should people join?</label>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setJoinMode("instant")}
-              className={`flex-1 rounded-xl border px-3 py-2.5 text-left text-sm transition ${
-                joinMode === "instant" ? "border-fairway-400 bg-fairway-50" : "border-slate-200"
-              }`}
-            >
-              <p className="font-semibold text-slate-800">Instant join</p>
-              <p className="text-xs text-slate-500">Anyone can tap "I'm In" and they're on the roster.</p>
-            </button>
-            <button
-              onClick={() => setJoinMode("request")}
-              className={`flex-1 rounded-xl border px-3 py-2.5 text-left text-sm transition ${
-                joinMode === "request" ? "border-fairway-400 bg-fairway-50" : "border-slate-200"
-              }`}
-            >
-              <p className="font-semibold text-slate-800">Request to join</p>
-              <p className="text-xs text-slate-500">You approve each player before they're added.</p>
-            </button>
+        )}
+
+        {!fillMode && (
+          <div>
+            <label className={labelClass}>Notes (optional)</label>
+            <textarea
+              className={inputClass}
+              rows={3}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Anything players should know — pace expectations, meeting spot, etc."
+            />
           </div>
-        </div>
-        <div>
-          <label className={labelClass}>{fillMode ? "Message to the group you're filling (optional)" : "Notes (optional)"}</label>
-          <textarea
-            className={inputClass}
-            rows={3}
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder={fillMode ? "e.g. Playing a casual morning round. Any skill level welcome." : "Anything players should know — pace expectations, meeting spot, etc."}
-          />
-        </div>
+        )}
+
+        {fillMode && (
+          <div>
+            <button
+              onClick={() => setShowAdvanced((v) => !v)}
+              className="flex items-center gap-1.5 text-sm font-semibold text-fairway-700 transition-colors duration-200 hover:text-fairway-800"
+            >
+              <ChevronDown size={15} className={`transition-transform duration-200 ${showAdvanced ? "rotate-180" : ""}`} />
+              {showAdvanced ? "Hide advanced settings" : "Advanced settings"}
+            </button>
+            {showAdvanced && (
+              <div className="mt-3 flex flex-col gap-4 rounded-2xl border border-slate-100 bg-slate-50/60 p-3.5">
+                <div>
+                  <label className={labelClass}>Estimated price / person</label>
+                  <input type="number" min={0} className={inputClass} value={price} onChange={(e) => setPrice(Number(e.target.value))} />
+                </div>
+                <div>
+                  <label className={labelClass}>Walking or cart</label>
+                  <div className="flex gap-2">
+                    {WALK_OPTIONS.map((w) => (
+                      <Pill key={w} active={walkOrCart === w} onClick={() => setWalkOrCart(w)} className="flex-1 py-2 text-center">
+                        {w}
+                      </Pill>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className={labelClass}>How should people join?</label>
+                  <div className="flex gap-2">
+                    <Pill active={joinMode === "instant"} onClick={() => setJoinMode("instant")} className="flex-1 py-2 text-center">
+                      Instant join
+                    </Pill>
+                    <Pill active={joinMode === "request"} onClick={() => setJoinMode("request")} className="flex-1 py-2 text-center">
+                      Request to join
+                    </Pill>
+                  </div>
+                </div>
+                <div>
+                  <label className={labelClass}>Message to the group (optional)</label>
+                  <textarea
+                    className={inputClass}
+                    rows={2}
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="e.g. Playing a casual morning round. Any skill level welcome."
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      <Button disabled={!canSubmit} onClick={handleSubmit} size="lg">
-        {fillMode ? "Publish & Find My Last Spot" : "Create Golf Call"}
+      <Button disabled={!canSubmit} onClick={handleSubmit} size="lg" icon={<ArrowRight size={18} />} className="flex-row-reverse">
+        {fillMode ? "Post Open Spot" : "Create Golf Call"}
       </Button>
     </div>
   );
@@ -307,8 +438,8 @@ function FriendRow({
 }) {
   return (
     <label
-      className={`flex items-center gap-3 rounded-xl border px-3 py-2 text-sm transition ${
-        checked ? "border-fairway-400 bg-fairway-50" : disabled ? "border-slate-100 opacity-50" : "border-slate-200"
+      className={`flex items-center gap-3 rounded-xl border px-3 py-2 text-sm transition-all duration-200 ease-out ${
+        checked ? "border-fairway-400 bg-fairway-50" : disabled ? "border-slate-100 opacity-50" : "border-slate-200 hover:border-slate-300"
       }`}
     >
       <input type="checkbox" checked={checked} disabled={disabled && !checked} onChange={() => onToggle(golferId)} className="h-4 w-4 accent-fairway-600" />

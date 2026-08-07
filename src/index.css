@@ -89,6 +89,24 @@ body {
   scrollbar-color: theme(colors.fairway.200) transparent;
 }
 
+/* Baseline visible focus ring for every interactive element — buttons and
+   pills layer their own tighter focus-visible:ring on top of this. */
+:focus-visible {
+  outline: 2px solid var(--color-fairway-500);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;

@@ -1,81 +1,52 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, SlidersHorizontal } from "lucide-react";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
+import { Pill } from "../ui/Pill";
 import { inputClass } from "../ui/FormControls";
 import { GOLF_VIBES } from "../../types";
 import type { GolfVibe, SkillFilter, WalkOrCart } from "../../types";
 
 export type WhenChoice = "today" | "tomorrow" | "weekend" | "date";
-export type RadiusChoice = "10" | "25" | "50" | "custom";
-export type IntentChoice = "join" | "need-players" | "either";
+export type RadiusChoice = "10" | "25" | "50";
 
 const WHEN_OPTIONS: { value: WhenChoice; label: string }[] = [
   { value: "today", label: "Today" },
   { value: "tomorrow", label: "Tomorrow" },
-  { value: "weekend", label: "This weekend" },
-  { value: "date", label: "Choose date" },
+  { value: "weekend", label: "This Weekend" },
+  { value: "date", label: "Choose Date" },
 ];
 
 const RADIUS_OPTIONS: { value: RadiusChoice; label: string }[] = [
   { value: "10", label: "10 miles" },
   { value: "25", label: "25 miles" },
   { value: "50", label: "50 miles" },
-  { value: "custom", label: "Custom" },
-];
-
-const INTENT_OPTIONS: { value: IntentChoice; label: string; hint: string }[] = [
-  { value: "join", label: "Join an existing group", hint: "Find an open Golf Call with spots free." },
-  { value: "need-players", label: "I already have friends and need more players", hint: "Fill your foursome instead." },
-  { value: "either", label: "Either", hint: "Show me everything." },
 ];
 
 const SKILL_OPTIONS: SkillFilter[] = ["Any Skill Level", "Beginner", "Intermediate", "Advanced"];
 const WALK_OPTIONS: WalkOrCart[] = ["Either", "Walking", "Cart"];
 
-function Pill({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
-        active ? "border-transparent bg-fairway-600 text-white" : "border-slate-200 bg-white text-slate-600 hover:border-fairway-300"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
+// Reached only from the homepage's "Find Me a Round" action, so intent is
+// implied (join an existing group) — no separate question needed here.
 export function FindRoundModal({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
 
   const [when, setWhen] = useState<WhenChoice>("today");
   const [customDate, setCustomDate] = useState("");
   const [radius, setRadius] = useState<RadiusChoice>("25");
-  const [customRadius, setCustomRadius] = useState(35);
-  const [intent, setIntent] = useState<IntentChoice>("either");
   const [showFilters, setShowFilters] = useState(false);
   const [budgetMax, setBudgetMax] = useState<number | "">("");
   const [skillLevel, setSkillLevel] = useState<SkillFilter | "">("");
   const [vibe, setVibe] = useState<GolfVibe | "">("");
   const [walkOrCart, setWalkOrCart] = useState<WalkOrCart | "">("");
 
-  const radiusMiles = radius === "custom" ? customRadius : Number(radius);
   const canSubmit = when !== "date" || Boolean(customDate);
 
   function handleFindRound() {
     if (!canSubmit) return;
 
-    if (intent === "need-players") {
-      const params = new URLSearchParams({ mode: "fill", when, radius: String(radiusMiles) });
-      if (when === "date" && customDate) params.set("date", customDate);
-      navigate(`/golf-calls/new?${params.toString()}`);
-      onClose();
-      return;
-    }
-
-    const params = new URLSearchParams({ matched: "1", when, radius: String(radiusMiles), intent });
+    const params = new URLSearchParams({ matched: "1", when, radius, intent: "join" });
     if (when === "date" && customDate) params.set("date", customDate);
     if (budgetMax !== "") params.set("budgetMax", String(budgetMax));
     if (skillLevel) params.set("skill", skillLevel);
@@ -87,7 +58,7 @@ export function FindRoundModal({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal
-      title="Find a round"
+      title="Find Me a Round"
       onClose={onClose}
       footer={
         <Button size="lg" fullWidth disabled={!canSubmit} onClick={handleFindRound} icon={<ArrowRight size={18} />} className="flex-row-reverse">
@@ -97,7 +68,7 @@ export function FindRoundModal({ onClose }: { onClose: () => void }) {
     >
       <div className="flex flex-col gap-5">
         <div>
-          <p className="mb-2 text-sm font-bold text-slate-800">When do you want to play?</p>
+          <p className="mb-2 text-sm font-bold text-slate-800">When?</p>
           <div className="flex flex-wrap gap-1.5">
             {WHEN_OPTIONS.map((opt) => (
               <Pill key={opt.value} active={when === opt.value} onClick={() => setWhen(opt.value)}>
@@ -111,7 +82,7 @@ export function FindRoundModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <div>
-          <p className="mb-2 text-sm font-bold text-slate-800">How far are you willing to travel?</p>
+          <p className="mb-2 text-sm font-bold text-slate-800">How far?</p>
           <div className="flex flex-wrap gap-1.5">
             {RADIUS_OPTIONS.map((opt) => (
               <Pill key={opt.value} active={radius === opt.value} onClick={() => setRadius(opt.value)}>
@@ -119,39 +90,15 @@ export function FindRoundModal({ onClose }: { onClose: () => void }) {
               </Pill>
             ))}
           </div>
-          {radius === "custom" && (
-            <input
-              type="number"
-              min={1}
-              className={`${inputClass} mt-2`}
-              value={customRadius}
-              onChange={(e) => setCustomRadius(Number(e.target.value))}
-              placeholder="Miles"
-            />
-          )}
         </div>
 
         <div>
-          <p className="mb-2 text-sm font-bold text-slate-800">What are you looking for?</p>
-          <div className="flex flex-col gap-1.5">
-            {INTENT_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => setIntent(opt.value)}
-                className={`rounded-xl border px-3.5 py-2.5 text-left transition ${
-                  intent === opt.value ? "border-fairway-400 bg-fairway-50" : "border-slate-200"
-                }`}
-              >
-                <p className="text-sm font-semibold text-slate-800">{opt.label}</p>
-                <p className="text-xs text-slate-500">{opt.hint}</p>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <button onClick={() => setShowFilters((v) => !v)} className="text-sm font-semibold text-fairway-700 hover:underline">
-            {showFilters ? "Hide optional filters" : "Add optional filters"}
+          <button
+            onClick={() => setShowFilters((v) => !v)}
+            className="flex items-center gap-1.5 text-sm font-semibold text-fairway-700 transition-colors duration-200 hover:text-fairway-800"
+          >
+            <SlidersHorizontal size={14} />
+            {showFilters ? "Hide advanced filters" : "Advanced Filters"}
           </button>
           {showFilters && (
             <div className="mt-3 flex flex-col gap-4 rounded-2xl border border-slate-100 bg-slate-50/60 p-3.5">

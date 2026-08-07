@@ -1,19 +1,24 @@
-import { compatibilityLabel } from "../../lib/compatibility";
+import { matchTier } from "../../lib/matchReasons";
 
-function toneForScore(score: number): string {
-  if (score >= 85) return "bg-fairway-600 text-white";
-  if (score >= 70) return "bg-fairway-100 text-fairway-700";
-  if (score >= 50) return "bg-sun-100 text-sun-700";
-  return "bg-slate-100 text-slate-600";
-}
+const TONE_CLASSES: Record<string, string> = {
+  great: "bg-fairway-600 text-white",
+  decent: "bg-sun-100 text-sun-700",
+  possible: "bg-slate-100 text-slate-600",
+  low: "bg-slate-100 text-slate-500",
+};
 
+// Shows the tier + label only — never the raw percentage. The score still
+// drives sorting/filtering internally (see lib/compatibility.ts); this is
+// just the human-readable face of it. Pair with <MatchReasons> when there's
+// room to explain *why*.
 export function CompatibilityBadge({ score, size = "md" }: { score: number; size?: "sm" | "md" }) {
+  const { emoji, label, tier } = matchTier(score);
   return (
     <div
-      className={`inline-flex flex-col items-center justify-center rounded-2xl px-3 py-1.5 leading-none ${toneForScore(score)} ${size === "sm" ? "text-[11px]" : "text-xs"}`}
+      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-semibold whitespace-nowrap ${TONE_CLASSES[tier]} ${size === "sm" ? "text-[11px]" : "text-xs"}`}
     >
-      <span className={`font-extrabold ${size === "sm" ? "text-sm" : "text-lg"}`}>{score}%</span>
-      <span className="font-medium opacity-90">{compatibilityLabel(score)}</span>
+      <span aria-hidden>{emoji}</span>
+      {label}
     </div>
   );
 }

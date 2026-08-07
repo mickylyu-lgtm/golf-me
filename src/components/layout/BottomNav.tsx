@@ -10,7 +10,7 @@ export function BottomNav() {
           to={path}
           end={path === "/"}
           className={({ isActive }) =>
-            `flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium transition ${
+            `flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium transition-colors duration-200 ease-out active:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-inset motion-reduce:transition-none ${
               isActive ? "text-fairway-700" : "text-slate-400"
             }`
           }
