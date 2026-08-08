@@ -9,6 +9,7 @@ import { ProfileSetup } from "./pages/ProfileSetup";
 import { Home } from "./pages/Home";
 import { Discover } from "./pages/Discover";
 import { Find } from "./pages/Find";
+import { AutoMatch } from "./pages/AutoMatch";
 import { GolfCalls } from "./pages/GolfCalls";
 import { CreateGolfCall } from "./pages/CreateGolfCall";
 import { GolfCallDetail } from "./pages/GolfCallDetail";
@@ -56,6 +57,7 @@ export default function App() {
               <Route path="/" element={<Home />} />
               <Route path="/discover" element={<Discover />} />
               <Route path="/find" element={<Find />} />
+              <Route path="/auto-match" element={<AutoMatch />} />
               <Route path="/golf-calls" element={<GolfCalls />} />
               <Route path="/golf-calls/new" element={<CreateGolfCall />} />
               <Route path="/golf-calls/:id" element={<GolfCallDetail />} />

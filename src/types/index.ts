@@ -47,6 +47,18 @@ export type JoinMode = "instant" | "request";
 
 export type SkillFilter = "Any Skill Level" | "Beginner" | "Intermediate" | "Advanced";
 
+// Gender is self-reported only — never inferred from name or photo. Presets
+// cover the common cases; a golfer can type anything else as "Custom."
+export const GENDER_OPTIONS = ["Man", "Woman", "Non-binary", "Prefer not to say"] as const;
+
+export type SkillPreference = "Similar to me" | "Any skill level";
+
+export type AgePreference = "Any age" | "18-24" | "25-34" | "35-44" | "45-54" | "55+";
+export const AGE_PREFERENCES: AgePreference[] = ["Any age", "18-24", "25-34", "35-44", "45-54", "55+"];
+
+export type GenderPreference = "No preference" | "Men" | "Women" | "Prefer mixed group";
+export const GENDER_PREFERENCES: GenderPreference[] = ["No preference", "Men", "Women", "Prefer mixed group"];
+
 export interface VerificationState {
   phoneVerified: boolean;
   emailVerified: boolean;
@@ -67,7 +79,9 @@ export interface GolferProfile {
   name: string;
   avatarColor: string; // css gradient token for placeholder avatar
   avatarInitials: string;
+  photoUrl?: string; // local data-URL from device upload; falls back to initials avatar when absent
   ageRange: AgeRange;
+  gender: string; // self-reported only; one of GENDER_OPTIONS or a custom value
   areaLabel: string; // general area only, e.g. "Long Island, NY" — never exact address
   distanceMiles: number; // approximate distance from current user, mock-computed
   handicap: number | null; // null = no handicap / brand new
@@ -86,6 +100,14 @@ export interface GolferProfile {
   // count, shown on their profile. Only the current user's own Golf Circle
   // is tracked in AppData.circle; this is flavor for everyone else.
   circleSize: number;
+
+  // --- Match preferences (all optional/secondary signals — background
+  // weighting only, never strict filters, never the headline of a match). ---
+  preferredCourses: string[]; // empty = "no preference, show me anything nearby"
+  travelRadiusMiles: number;
+  skillPreference: SkillPreference;
+  agePreference: AgePreference;
+  genderPreference: GenderPreference;
 }
 
 export type GolfCallStatus = "open" | "full" | "completed" | "cancelled";

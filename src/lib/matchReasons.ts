@@ -18,7 +18,7 @@ export function matchTier(score: number): TierInfo {
 }
 
 export interface MatchFactor {
-  key: "schedule" | "distance" | "skill" | "budget" | "vibe";
+  key: "schedule" | "distance" | "skill" | "budget" | "vibe" | "coursePreference";
   score: number;
   positive: boolean;
   text: string;
@@ -49,7 +49,21 @@ const VIBE_DESCRIPTOR: Record<string, string> = {
 
 export function callMatchReasons(call: GolfCall, breakdown: CompatibilityBreakdown): MatchFactor[] {
   const dayLabel = formatDate(call.dateISO);
-  const factors: MatchFactor[] = [
+  const factors: MatchFactor[] = [];
+
+  // Only surfaced when the golfer actually has course preferences set
+  // (score is neutral/70 otherwise) — and listed first since it's the most
+  // distinctive signal when it's a hit.
+  if (breakdown.coursePreference !== undefined && breakdown.coursePreference !== 70) {
+    factors.push({
+      key: "coursePreference",
+      score: breakdown.coursePreference,
+      positive: breakdown.coursePreference >= 70,
+      text: breakdown.coursePreference >= 70 ? "One of your preferred courses" : "Not one of your preferred courses",
+    });
+  }
+
+  factors.push(
     {
       key: "distance",
       score: breakdown.distance,
@@ -80,7 +94,7 @@ export function callMatchReasons(call: GolfCall, breakdown: CompatibilityBreakdo
       positive: breakdown.schedule >= 70,
       text: breakdown.schedule >= 70 ? `Available ${dayLabel}` : "Outside your usual free time",
     },
-  ];
+  );
   return pickReasons(factors);
 }
 

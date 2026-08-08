@@ -145,7 +145,7 @@ export function CreateGolfCall() {
           <label className={labelClass}>Course</label>
           <input className={inputClass} value={course} onChange={(e) => setCourse(e.target.value)} placeholder="e.g. Bethpage Red" />
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className={labelClass}>General area</label>
             <input className={inputClass} value={areaLabel} onChange={(e) => setAreaLabel(e.target.value)} placeholder="e.g. Farmingdale, NY" />
@@ -155,10 +155,10 @@ export function CreateGolfCall() {
             <input type="number" min={0} className={inputClass} value={distanceMiles} onChange={(e) => setDistanceMiles(Number(e.target.value))} />
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className={labelClass}>When</label>
-            <input type="date" className={inputClass} value={date} onChange={(e) => setDate(e.target.value)} />
+            <input type="date" className={`${inputClass} w-full`} value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
           <div>
             <label className={labelClass}>Tee time</label>
@@ -167,7 +167,7 @@ export function CreateGolfCall() {
         </div>
 
         {!fillMode && (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className={labelClass}>Estimated price / person</label>
               <input type="number" min={0} className={inputClass} value={price} onChange={(e) => setPrice(Number(e.target.value))} />

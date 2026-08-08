@@ -69,6 +69,7 @@ export interface CompatibilityBreakdown {
   skill: number;
   budget: number;
   vibe: number;
+  coursePreference?: number; // only meaningful for user-vs-call comparisons
 }
 
 export function computeCompatibility(current: GolferProfile, candidate: GolferProfile): CompatibilityBreakdown {
@@ -127,22 +128,41 @@ function callScheduleScore(user: GolferProfile, call: GolfCall): number {
   return user.availability.includes(slot) ? 100 : 45;
 }
 
+// No stated course preference is neutral (not a penalty) — a preference
+// only ever nudges the score, per "should not completely hide good rounds
+// at other courses."
+function callCourseScore(user: GolferProfile, call: GolfCall): number {
+  if (user.preferredCourses.length === 0) return 70;
+  return user.preferredCourses.includes(call.course) ? 100 : 45;
+}
+
+const CALL_WEIGHTS = {
+  schedule: 0.18,
+  distance: 0.18,
+  skill: 0.18,
+  budget: 0.18,
+  vibe: 0.18,
+  coursePreference: 0.1,
+};
+
 export function computeCallCompatibility(user: GolferProfile, call: GolfCall): CompatibilityBreakdown {
   const schedule = callScheduleScore(user, call);
   const distance = distanceScore(call.distanceMiles);
   const skill = callSkillScore(user, call);
   const budget = callBudgetScore(user, call);
   const vibe = callVibeScore(user, call);
+  const coursePreference = callCourseScore(user, call);
 
   const overall = Math.round(
-    schedule * WEIGHTS.schedule +
-      distance * WEIGHTS.distance +
-      skill * WEIGHTS.skill +
-      budget * WEIGHTS.budget +
-      vibe * WEIGHTS.vibe,
+    schedule * CALL_WEIGHTS.schedule +
+      distance * CALL_WEIGHTS.distance +
+      skill * CALL_WEIGHTS.skill +
+      budget * CALL_WEIGHTS.budget +
+      vibe * CALL_WEIGHTS.vibe +
+      coursePreference * CALL_WEIGHTS.coursePreference,
   );
 
-  return { overall, schedule, distance, skill, budget, vibe };
+  return { overall, schedule, distance, skill, budget, vibe, coursePreference };
 }
 
 export function compatibilityLabel(score: number): string {

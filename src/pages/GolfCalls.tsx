@@ -10,12 +10,7 @@ import { FindRoundModal } from "../components/find/FindRoundModal";
 import { GOLF_VIBES } from "../types";
 import type { GolfCall, GolfVibe, SkillFilter, WalkOrCart } from "../types";
 import { computeCallCompatibility } from "../lib/compatibility";
-import { isThisWeekend } from "../lib/greeting";
-
-function isSameCalendarDay(iso: string, ref: Date): boolean {
-  const d = new Date(iso);
-  return d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth() && d.getDate() === ref.getDate();
-}
+import { matchesWhen } from "../lib/roundFilters";
 
 interface GolfCallsProps {
   embedded?: boolean;
@@ -57,14 +52,7 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
     let list = [...baseResults];
 
     if (radius) list = list.filter((c) => c.distanceMiles <= Number(radius));
-
-    if (when === "today") list = list.filter((c) => isSameCalendarDay(c.dateISO, new Date()));
-    else if (when === "tomorrow") {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      list = list.filter((c) => isSameCalendarDay(c.dateISO, tomorrow));
-    } else if (when === "weekend") list = list.filter((c) => isThisWeekend(c.dateISO));
-    else if (when === "date" && customDate) list = list.filter((c) => isSameCalendarDay(c.dateISO, new Date(`${customDate}T12:00:00`)));
+    if (when) list = list.filter((c) => matchesWhen(c, when, customDate));
 
     if (intent === "join") list = list.filter((c) => c.totalSpots - c.joinedGolferIds.length > 0);
     if (budgetMax) list = list.filter((c) => c.estimatedPricePerPerson <= Number(budgetMax));

@@ -4,9 +4,11 @@ import { ArrowLeft } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { Button } from "../components/ui/Button";
 import { Pill } from "../components/ui/Pill";
+import { AvatarUpload } from "../components/profile/AvatarUpload";
+import { CoursePicker } from "../components/profile/CoursePicker";
 import { inputClass, labelClass } from "../components/ui/FormControls";
-import { GOLF_VIBES } from "../types";
-import type { GolfVibe, WalkOrCart, AvailabilitySlot } from "../types";
+import { AGE_PREFERENCES, GENDER_OPTIONS, GENDER_PREFERENCES, GOLF_VIBES } from "../types";
+import type { AgePreference, GenderPreference, GolfVibe, WalkOrCart, AvailabilitySlot } from "../types";
 import { initialsFromName, avatarColorForName } from "../lib/avatar";
 
 type SkillBand = "Beginner" | "Intermediate" | "Advanced";
@@ -30,7 +32,7 @@ const PICK_TO_SLOTS: Record<AvailabilityQuickPick, AvailabilitySlot[]> = {
 };
 
 const WALK_OPTIONS: WalkOrCart[] = ["Walking", "Cart", "Either"];
-const STEP_LABELS = ["Basics", "Your Golf", "How You Play", "Availability"];
+const STEP_LABELS = ["Basics", "Your Golf", "How You Play", "Availability", "Preferences"];
 
 export function ProfileSetup() {
   const navigate = useNavigate();
@@ -39,8 +41,11 @@ export function ProfileSetup() {
 
   // Step 1
   const [name, setName] = useState("");
+  const [photoUrl, setPhotoUrl] = useState<string | undefined>(undefined);
   const [is18Plus, setIs18Plus] = useState(false);
   const [areaLabel, setAreaLabel] = useState("");
+  const [gender, setGender] = useState("");
+  const [customGender, setCustomGender] = useState(false);
 
   // Step 2
   const [hasHandicap, setHasHandicap] = useState(true);
@@ -55,6 +60,11 @@ export function ProfileSetup() {
   // Step 4
   const [picks, setPicks] = useState<AvailabilityQuickPick[]>([]);
 
+  // Step 5 — optional match preferences
+  const [preferredCourses, setPreferredCourses] = useState<string[]>([]);
+  const [agePreference, setAgePreference] = useState<AgePreference>("Any age");
+  const [genderPreference, setGenderPreference] = useState<GenderPreference>("No preference");
+
   function toggleVibe(v: GolfVibe) {
     setVibes((prev) => {
       if (prev.includes(v)) return prev.filter((x) => x !== v);
@@ -67,18 +77,26 @@ export function ProfileSetup() {
     setPicks((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]));
   }
 
-  const stepValid = [Boolean(name.trim()) && is18Plus && Boolean(areaLabel.trim()), true, vibes.length > 0, picks.length > 0][step];
+  const stepValid = [
+    Boolean(name.trim()) && is18Plus && Boolean(areaLabel.trim()),
+    true,
+    vibes.length > 0,
+    picks.length > 0,
+    true,
+  ][step];
 
   function next() {
     if (!stepValid) return;
-    if (step < 3) {
+    if (step < STEP_LABELS.length - 1) {
       setStep((s) => s + 1);
       return;
     }
     const availability = Array.from(new Set(picks.flatMap((p) => PICK_TO_SLOTS[p])));
     signUpNewGolfer({
       name: name.trim(),
+      photoUrl,
       ageRange: "25-34",
+      gender: gender.trim() || "Prefer not to say",
       areaLabel: areaLabel.trim(),
       handicap: hasHandicap ? handicap : SKILL_HANDICAP[skillBand],
       vibes,
@@ -86,6 +104,11 @@ export function ProfileSetup() {
       budgetMin: Math.max(0, budget - 15),
       budgetMax: budget + 15,
       availability,
+      preferredCourses,
+      travelRadiusMiles: 25,
+      skillPreference: "Any skill level",
+      agePreference,
+      genderPreference,
     });
     navigate("/");
   }
@@ -101,7 +124,7 @@ export function ProfileSetup() {
         </button>
         <div className="flex gap-1.5">
           {STEP_LABELS.map((_, i) => (
-            <span key={i} className={`h-1.5 w-6 rounded-full transition-colors duration-300 ${i <= step ? "bg-fairway-600" : "bg-slate-200"}`} />
+            <span key={i} className={`h-1.5 w-5 rounded-full transition-colors duration-300 ${i <= step ? "bg-fairway-600" : "bg-slate-200"}`} />
           ))}
         </div>
       </div>
@@ -109,23 +132,22 @@ export function ProfileSetup() {
       <div className="flex flex-1 flex-col gap-5 py-6">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-fairway-600">
-            Step {step + 1} of 4
+            Step {step + 1} of {STEP_LABELS.length}
           </p>
           <h1 className="text-xl font-bold text-slate-900">{STEP_LABELS[step]}</h1>
         </div>
 
         {step === 0 && (
           <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-3">
-              <span
-                className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-lg font-bold text-white ${name.trim() ? avatarColorForName(name) : "from-slate-300 to-slate-400"}`}
-              >
-                {name.trim() ? initialsFromName(name) : "?"}
-              </span>
-              <p className="text-xs text-slate-500">
-                Profile photo upload isn't available in this prototype — we'll use your initials instead.
-              </p>
-            </div>
+            <AvatarUpload
+              golfer={{
+                photoUrl,
+                avatarColor: name.trim() ? avatarColorForName(name) : "from-slate-300 to-slate-400",
+                avatarInitials: name.trim() ? initialsFromName(name) : "?",
+                verification: { phoneVerified: false, emailVerified: false, verifiedGolfer: false },
+              }}
+              onChange={setPhotoUrl}
+            />
             <div>
               <label className={labelClass}>Name</label>
               <input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Sam Rivera" />
@@ -139,6 +161,36 @@ export function ProfileSetup() {
                 placeholder="e.g. Long Island, NY"
               />
               <p className="mt-1 text-xs text-slate-400">General area only — we never ask for your exact home address.</p>
+            </div>
+            <div>
+              <label className={labelClass}>Gender (optional)</label>
+              <div className="flex flex-wrap gap-1.5">
+                {GENDER_OPTIONS.map((g) => (
+                  <Pill
+                    key={g}
+                    active={!customGender && gender === g}
+                    onClick={() => {
+                      setGender(g);
+                      setCustomGender(false);
+                    }}
+                  >
+                    {g}
+                  </Pill>
+                ))}
+                <Pill active={customGender} onClick={() => setCustomGender(true)}>
+                  Custom
+                </Pill>
+              </div>
+              {customGender && (
+                <input
+                  className={`${inputClass} mt-2`}
+                  value={gender}
+                  onChange={(e) => setGender(e.target.value)}
+                  placeholder="How do you describe your gender?"
+                  autoFocus
+                />
+              )}
+              <p className="mt-1 text-xs text-slate-400">Self-reported only — never shared beyond your profile.</p>
             </div>
             <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 px-3.5 py-3">
               <input type="checkbox" checked={is18Plus} onChange={() => setIs18Plus((v) => !v)} className="mt-0.5 h-4 w-4 accent-fairway-600" />
@@ -234,10 +286,43 @@ export function ProfileSetup() {
             </div>
           </div>
         )}
+
+        {step === 4 && (
+          <div className="flex flex-col gap-5">
+            <p className="text-sm text-slate-500">
+              Totally optional — these help us find better rounds for you, but never hide a good round just because
+              one preference doesn't match.
+            </p>
+            <div>
+              <label className={labelClass}>Preferred courses</label>
+              <CoursePicker selected={preferredCourses} onChange={setPreferredCourses} />
+            </div>
+            <div>
+              <label className={labelClass}>Age preference for playing partners</label>
+              <div className="flex flex-wrap gap-1.5">
+                {AGE_PREFERENCES.map((a) => (
+                  <Pill key={a} active={agePreference === a} onClick={() => setAgePreference(a)}>
+                    {a}
+                  </Pill>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className={labelClass}>Gender preference for playing partners</label>
+              <div className="flex flex-wrap gap-1.5">
+                {GENDER_PREFERENCES.map((g) => (
+                  <Pill key={g} active={genderPreference === g} onClick={() => setGenderPreference(g)}>
+                    {g}
+                  </Pill>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <Button size="lg" fullWidth disabled={!stepValid} onClick={next}>
-        {step === 3 ? "Start Golfing" : "Continue"}
+        {step === STEP_LABELS.length - 1 ? "Start Golfing" : "Continue"}
       </Button>
     </div>
   );

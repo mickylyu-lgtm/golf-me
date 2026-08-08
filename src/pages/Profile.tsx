@@ -7,17 +7,22 @@ import { Avatar } from "../components/ui/Avatar";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Pill } from "../components/ui/Pill";
+import { Modal } from "../components/ui/Modal";
 import { inputClass, labelClass } from "../components/ui/FormControls";
 import { VerifyStepModal } from "../components/profile/VerifyStepModal";
+import { AvatarUpload } from "../components/profile/AvatarUpload";
+import { CoursePicker } from "../components/profile/CoursePicker";
 import { ReputationRow } from "../components/golfer/ReputationRow";
 import { CredibilityBadge } from "../components/golfer/CredibilityBadge";
-import { AGE_RANGES, AVAILABILITY_SLOTS, GOLF_VIBES } from "../types";
-import type { AgeRange, AvailabilitySlot, GolfVibe, WalkOrCart } from "../types";
+import { AGE_PREFERENCES, AGE_RANGES, AVAILABILITY_SLOTS, GENDER_PREFERENCES, GOLF_VIBES } from "../types";
+import type { AgePreference, AgeRange, AvailabilitySlot, GenderPreference, GolfVibe, SkillPreference, WalkOrCart } from "../types";
 import { VIBE_TONE } from "../lib/theme";
 import { memberSinceLabel } from "../lib/format";
 import { computeCredibility, computeHandicapConfidence } from "../lib/credibility";
 
 const WALK_OPTIONS: WalkOrCart[] = ["Either", "Walking", "Cart"];
+const RADIUS_OPTIONS = [10, 25, 50];
+const SKILL_PREFERENCES: SkillPreference[] = ["Any skill level", "Similar to me"];
 
 export function Profile() {
   const { currentUser, updateCurrentUserProfile, setPhoneVerified, setEmailVerified, requestVerifiedGolfer, circleGolfers, reviewsAbout } =
@@ -27,6 +32,7 @@ export function Profile() {
 
   const [editing, setEditing] = useState(false);
   const [verifyChannel, setVerifyChannel] = useState<"phone" | "email" | null>(null);
+  const [avatarModalOpen, setAvatarModalOpen] = useState(false);
 
   const [form, setForm] = useState(() => ({
     ageRange: currentUser.ageRange,
@@ -105,7 +111,13 @@ export function Profile() {
     <div className="flex flex-col gap-6 pb-6">
       <div className="flex flex-wrap items-center justify-between gap-y-2">
         <div className="flex min-w-0 items-center gap-3">
-          <Avatar golfer={currentUser} size="lg" />
+          <button
+            onClick={() => setAvatarModalOpen(true)}
+            aria-label="Change profile photo"
+            className="rounded-full transition-transform duration-200 ease-out hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2"
+          >
+            <Avatar golfer={currentUser} size="lg" />
+          </button>
           <div className="min-w-0">
             <h1 className="truncate text-xl font-bold text-slate-900">{currentUser.name}</h1>
             <p className="text-sm text-slate-500">{memberSinceLabel(currentUser.memberSince)}</p>
@@ -198,6 +210,86 @@ export function Profile() {
               {slot}
             </Pill>
           ))}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-4 rounded-2xl border border-slate-100 bg-white p-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Match preferences</p>
+          <p className="mt-0.5 text-xs text-slate-400">
+            Background signals only — a great round can still match you even if one of these is off. Vibe, budget,
+            and walk/cart live in Edit profile below.
+          </p>
+        </div>
+
+        <div>
+          <p className="mb-1.5 text-sm font-semibold text-slate-800">Preferred courses</p>
+          <CoursePicker
+            selected={currentUser.preferredCourses}
+            onChange={(preferredCourses) => updateCurrentUserProfile({ preferredCourses })}
+          />
+        </div>
+
+        <div>
+          <p className="mb-1.5 text-sm font-semibold text-slate-800">Travel radius</p>
+          <div className="flex gap-1.5">
+            {RADIUS_OPTIONS.map((r) => (
+              <Pill
+                key={r}
+                active={currentUser.travelRadiusMiles === r}
+                onClick={() => updateCurrentUserProfile({ travelRadiusMiles: r })}
+                className="flex-1 py-2 text-center"
+              >
+                {r} mi
+              </Pill>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <p className="mb-1.5 text-sm font-semibold text-slate-800">Handicap / skill preference</p>
+          <div className="flex gap-1.5">
+            {SKILL_PREFERENCES.map((s) => (
+              <Pill
+                key={s}
+                active={currentUser.skillPreference === s}
+                onClick={() => updateCurrentUserProfile({ skillPreference: s })}
+                className="flex-1 py-2 text-center"
+              >
+                {s}
+              </Pill>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <p className="mb-1.5 text-sm font-semibold text-slate-800">Age preference</p>
+          <div className="flex flex-wrap gap-1.5">
+            {AGE_PREFERENCES.map((a) => (
+              <Pill
+                key={a}
+                active={currentUser.agePreference === a}
+                onClick={() => updateCurrentUserProfile({ agePreference: a as AgePreference })}
+              >
+                {a}
+              </Pill>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <p className="mb-1.5 text-sm font-semibold text-slate-800">Gender preference</p>
+          <div className="flex flex-wrap gap-1.5">
+            {GENDER_PREFERENCES.map((g) => (
+              <Pill
+                key={g}
+                active={currentUser.genderPreference === g}
+                onClick={() => updateCurrentUserProfile({ genderPreference: g as GenderPreference })}
+              >
+                {g}
+              </Pill>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -411,6 +503,19 @@ export function Profile() {
             </div>
           </div>
         </>
+      )}
+
+      {avatarModalOpen && (
+        <Modal title="Profile photo" onClose={() => setAvatarModalOpen(false)}>
+          <AvatarUpload
+            golfer={currentUser}
+            size="xl"
+            onChange={(photoUrl) => updateCurrentUserProfile({ photoUrl })}
+          />
+          <Button className="mt-5" fullWidth onClick={() => setAvatarModalOpen(false)}>
+            Done
+          </Button>
+        </Modal>
       )}
 
       {verifyChannel && (

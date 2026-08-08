@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, SlidersHorizontal } from "lucide-react";
+import { ArrowRight, Sparkles, SlidersHorizontal } from "lucide-react";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
 import { Pill } from "../ui/Pill";
@@ -43,16 +43,25 @@ export function FindRoundModal({ onClose }: { onClose: () => void }) {
 
   const canSubmit = when !== "date" || Boolean(customDate);
 
-  function handleFindRound() {
-    if (!canSubmit) return;
-
+  function buildParams() {
     const params = new URLSearchParams({ matched: "1", when, radius, intent: "join" });
     if (when === "date" && customDate) params.set("date", customDate);
     if (budgetMax !== "") params.set("budgetMax", String(budgetMax));
     if (skillLevel) params.set("skill", skillLevel);
     if (vibe) params.set("vibe", vibe);
     if (walkOrCart) params.set("walk", walkOrCart);
-    navigate(`/golf-calls?${params.toString()}`);
+    return params;
+  }
+
+  function handleBrowseRounds() {
+    if (!canSubmit) return;
+    navigate(`/golf-calls?${buildParams().toString()}`);
+    onClose();
+  }
+
+  function handleAutoMatch() {
+    if (!canSubmit) return;
+    navigate(`/auto-match?${buildParams().toString()}`);
     onClose();
   }
 
@@ -61,9 +70,22 @@ export function FindRoundModal({ onClose }: { onClose: () => void }) {
       title="Find Me a Round"
       onClose={onClose}
       footer={
-        <Button size="lg" fullWidth disabled={!canSubmit} onClick={handleFindRound} icon={<ArrowRight size={18} />} className="flex-row-reverse">
-          Find Me a Round
-        </Button>
+        <div className="flex flex-col gap-2">
+          <Button size="lg" fullWidth disabled={!canSubmit} onClick={handleAutoMatch} icon={<Sparkles size={18} />}>
+            Auto-Match Me
+          </Button>
+          <Button
+            size="lg"
+            variant="outline"
+            fullWidth
+            disabled={!canSubmit}
+            onClick={handleBrowseRounds}
+            icon={<ArrowRight size={18} />}
+            className="flex-row-reverse"
+          >
+            Browse Rounds
+          </Button>
+        </div>
       }
     >
       <div className="flex flex-col gap-5">

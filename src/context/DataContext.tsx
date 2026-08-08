@@ -1,11 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type {
+  AgePreference,
   AgeRange,
   AppData,
   AvailabilitySlot,
   ChatMessage,
   CircleConnection,
+  GenderPreference,
   GolfCall,
   GolferProfile,
   HandicapAccuracy,
@@ -16,6 +18,7 @@ import type {
   Review,
   SessionState,
   SkillFilter,
+  SkillPreference,
   GolfVibe,
   WalkOrCart,
 } from "../types";
@@ -53,7 +56,9 @@ export interface ReviewInput {
 
 export interface NewGolferInput {
   name: string;
+  photoUrl?: string;
   ageRange: AgeRange;
+  gender: string;
   areaLabel: string;
   handicap: number | null;
   vibes: GolfVibe[];
@@ -61,6 +66,11 @@ export interface NewGolferInput {
   budgetMin: number;
   budgetMax: number;
   availability: AvailabilitySlot[];
+  preferredCourses: string[];
+  travelRadiusMiles: number;
+  skillPreference: SkillPreference;
+  agePreference: AgePreference;
+  genderPreference: GenderPreference;
 }
 
 interface DataContextValue {
@@ -478,7 +488,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
       name: input.name.trim() || "New Golfer",
       avatarColor: avatarColorForName(input.name),
       avatarInitials: initialsFromName(input.name),
+      photoUrl: input.photoUrl,
       ageRange: input.ageRange,
+      gender: input.gender,
       areaLabel: input.areaLabel.trim() || "Nearby",
       distanceMiles: 0,
       handicap: input.handicap,
@@ -488,6 +500,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
       availability: input.availability,
       walkOrCart: input.walkOrCart,
       vibes: input.vibes.length > 0 ? input.vibes : ["Casual & Social"],
+      preferredCourses: input.preferredCourses,
+      travelRadiusMiles: input.travelRadiusMiles,
+      skillPreference: input.skillPreference,
+      agePreference: input.agePreference,
+      genderPreference: input.genderPreference,
       bio: "New to Golf Me — excited to find my next round.",
       verification: { phoneVerified: false, emailVerified: false, verifiedGolfer: false },
       reputation: {
