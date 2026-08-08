@@ -2,10 +2,10 @@ import type { AppData } from "../types";
 import { buildGolfers, DEFAULT_CURRENT_USER_ID } from "../data/golfers";
 import { buildGolfCallsBundle } from "../data/golfCalls";
 
-// Bumped to v3 when Review gained handicapAccuracy/paceOfPlay (replacing
-// goodPace) and AppData gained session state — forces a reseed for anyone
-// with older cached data.
-const STORAGE_KEY = "golfme:data:v3";
+// Bumped to v4 when GolferProfile gained photoUrl/gender/preferredCourses/
+// travelRadiusMiles/skillPreference/agePreference/genderPreference — forces
+// a reseed for anyone with older cached data missing those fields.
+const STORAGE_KEY = "golfme:data:v4";
 
 export function seedData(): AppData {
   const golfers = buildGolfers();
