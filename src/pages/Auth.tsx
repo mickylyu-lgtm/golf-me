@@ -8,7 +8,7 @@ import { Avatar } from "../components/ui/Avatar";
 import { inputClass } from "../components/ui/FormControls";
 import { DEFAULT_CURRENT_USER_ID, DEMO_LOGIN_GOLFER_IDS } from "../data/golfers";
 import { isNewAccount } from "../lib/format";
-import { GolfChatMark } from "../components/brand/GolfChatMark";
+import { GolfMeIcon } from "../components/brand/GolfMeIcon";
 
 interface AuthProps {
   mode: "login" | "signup";
@@ -55,8 +55,8 @@ export function Auth({ mode }: AuthProps) {
 
       <div className="flex flex-1 flex-col justify-center gap-8">
         <div className="text-center">
-          <span className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-fairway-600 text-white">
-            <GolfChatMark size={26} />
+          <span className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-fairway-600">
+            <GolfMeIcon size={26} dotColor="#f8faf8" targetColor="#5aa171" holeColor="#143621" />
           </span>
           <h1 className="text-2xl font-extrabold text-slate-900">
             {mode === "signup" ? "Create your account" : session.hasOnboarded ? "Welcome back" : "Log in"}

@@ -1,16 +1,12 @@
 import { NavLink } from "react-router-dom";
 import { NAV_ITEMS } from "../../lib/nav";
-import { GolfChatMark } from "../brand/GolfChatMark";
-import { GolfMeWordmark } from "../brand/GolfMeWordmark";
+import { GolfMeLogo } from "../brand/GolfMeLogo";
 
 export function SideNav() {
   return (
     <aside className="fixed inset-y-0 left-0 z-40 hidden w-20 flex-col border-r border-slate-200 bg-white py-6 sm:flex lg:w-60">
-      <div className="mb-8 flex items-center gap-2 px-5">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-fairway-600 text-white">
-          <GolfChatMark size={20} />
-        </span>
-        <GolfMeWordmark className="hidden text-lg font-extrabold tracking-tight lg:inline" golfClassName="text-fairway-900" />
+      <div className="mb-8 px-5">
+        <GolfMeLogo size={20} wordmarkClassName="hidden text-lg font-extrabold tracking-tight lg:inline" />
       </div>
       <nav className="flex flex-1 flex-col gap-1 px-3">
         {NAV_ITEMS.map(({ label, path, icon: Icon }) => (

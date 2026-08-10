@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { GolfMeIcon } from "../brand/GolfMeIcon";
 
 function usePrefersReducedMotion(): boolean {
   const [reduced, setReduced] = useState(
@@ -143,6 +144,11 @@ export function GolfMeLoader({ message, fullScreen = false, size = "md", classNa
         className={`fixed inset-0 z-[100] flex items-center justify-center bg-[#faf8f2]/95 px-6 backdrop-blur-sm ${className}`}
       >
         <div className="flex w-full max-w-xs flex-col items-center gap-4">
+          {/* animate-pop plays once on mount — respects prefers-reduced-motion
+              via the global rule in index.css, never a continuous pulse. */}
+          <span className="animate-pop flex h-11 w-11 items-center justify-center rounded-2xl bg-fairway-900">
+            <GolfMeIcon size={24} dotColor="#f8faf8" targetColor="#5aa171" holeColor="#143621" />
+          </span>
           {reducedMotion ? (
             <ReducedMotionIndicator message={message} />
           ) : (

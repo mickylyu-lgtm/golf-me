@@ -2,9 +2,7 @@ import type { ReactNode } from "react";
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from "react-router-dom";
 import { DataProvider, useData } from "./context/DataContext";
 import { ToastProvider } from "./context/ToastContext";
-import { PresentationProvider } from "./context/PresentationContext";
 import { AppShell } from "./components/layout/AppShell";
-import { DeviceFrame } from "./components/presentation/DeviceFrame";
 import { GolfMeLoader } from "./components/loading/GolfMeLoader";
 import { Welcome } from "./pages/Welcome";
 import { Onboarding } from "./pages/Onboarding";
@@ -66,44 +64,40 @@ export default function App() {
   return (
     <DataProvider>
       <ToastProvider>
-        <PresentationProvider>
-          <AppGate>
-            <BrowserRouter>
-              <DeviceFrame>
-                <Routes>
-                  <Route element={<GuestOnly />}>
-                    <Route path="/welcome" element={<Welcome />} />
-                    <Route path="/onboarding" element={<Onboarding />} />
-                    <Route path="/login" element={<Auth mode="login" />} />
-                    <Route path="/signup" element={<Auth mode="signup" />} />
-                    <Route path="/profile-setup" element={<ProfileSetup />} />
-                  </Route>
+        <AppGate>
+          <BrowserRouter>
+            <Routes>
+              <Route element={<GuestOnly />}>
+                <Route path="/welcome" element={<Welcome />} />
+                <Route path="/onboarding" element={<Onboarding />} />
+                <Route path="/login" element={<Auth mode="login" />} />
+                <Route path="/signup" element={<Auth mode="signup" />} />
+                <Route path="/profile-setup" element={<ProfileSetup />} />
+              </Route>
 
-                  <Route element={<AuthedLayout />}>
-                    <Route path="/" element={<Home />} />
-                    <Route path="/discover" element={<Discover />} />
-                    <Route path="/find" element={<Find />} />
-                    <Route path="/auto-match" element={<AutoMatch />} />
-                    <Route path="/golf-calls" element={<GolfCalls />} />
-                    <Route path="/golf-calls/new" element={<CreateGolfCall />} />
-                    <Route path="/golf-calls/:id" element={<GolfCallDetail />} />
-                    <Route path="/my-rounds" element={<MyRounds />} />
-                    <Route path="/profile" element={<Profile />} />
-                    <Route path="/settings" element={<Settings />} />
-                    <Route path="/golfer/:id" element={<GolferProfilePage />} />
-                    <Route path="/messages" element={<Inbox />} />
-                    <Route path="/messages/:id" element={<DirectMessageThread />} />
-                    <Route path="/community" element={<Community />} />
-                    <Route path="/community/new" element={<CreatePost />} />
-                    <Route path="/community/guidelines" element={<CommunityGuidelines />} />
-                    <Route path="/community/:id" element={<PostDetail />} />
-                    <Route path="/saved-posts" element={<SavedPosts />} />
-                  </Route>
-                </Routes>
-              </DeviceFrame>
-            </BrowserRouter>
-          </AppGate>
-        </PresentationProvider>
+              <Route element={<AuthedLayout />}>
+                <Route path="/" element={<Home />} />
+                <Route path="/discover" element={<Discover />} />
+                <Route path="/find" element={<Find />} />
+                <Route path="/auto-match" element={<AutoMatch />} />
+                <Route path="/golf-calls" element={<GolfCalls />} />
+                <Route path="/golf-calls/new" element={<CreateGolfCall />} />
+                <Route path="/golf-calls/:id" element={<GolfCallDetail />} />
+                <Route path="/my-rounds" element={<MyRounds />} />
+                <Route path="/profile" element={<Profile />} />
+                <Route path="/settings" element={<Settings />} />
+                <Route path="/golfer/:id" element={<GolferProfilePage />} />
+                <Route path="/messages" element={<Inbox />} />
+                <Route path="/messages/:id" element={<DirectMessageThread />} />
+                <Route path="/community" element={<Community />} />
+                <Route path="/community/new" element={<CreatePost />} />
+                <Route path="/community/guidelines" element={<CommunityGuidelines />} />
+                <Route path="/community/:id" element={<PostDetail />} />
+                <Route path="/saved-posts" element={<SavedPosts />} />
+              </Route>
+            </Routes>
+          </BrowserRouter>
+        </AppGate>
       </ToastProvider>
     </DataProvider>
   );

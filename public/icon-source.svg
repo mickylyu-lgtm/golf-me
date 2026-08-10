@@ -1,17 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 48 48">
   <!-- Full-bleed, no baked-in corner rounding — iOS/Android apply their own
-       squircle/circle mask, so this source (unlike favicon.svg, which has
-       its own rx for the browser-tab context) leaves that to the OS.
-       Mark geometry is the exact GolfChatMark paths, just scaled+centered
-       with a generous safe margin so masking never clips it. -->
-  <rect width="512" height="512" fill="#1e5232"/>
-  <g transform="translate(88,88) scale(7)">
-    <rect x="6" y="7" width="36" height="26" rx="13" fill="none" stroke="#f8faf8" stroke-width="3"/>
-    <path d="M14 31c-1 5-4 9-8 11 5-.5 10-3 12.5-8.5" fill="none" stroke="#f8faf8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-    <circle cx="27" cy="21" r="1.7" fill="#f8faf8"/>
-    <circle cx="34" cy="21" r="1.7" fill="#f8faf8"/>
-    <circle cx="30.5" cy="25.5" r="1.7" fill="#f8faf8"/>
-    <circle cx="37" cy="25.5" r="1.7" fill="#f8faf8"/>
-    <circle cx="33.5" cy="29.5" r="1.7" fill="#f8faf8"/>
-  </g>
+       squircle/circle mask. Same "Open Fourth" geometry as GolfMeIcon.tsx
+       and favicon.svg (uniform viewBox scale keeps every circle perfectly
+       circular, never stretched), just pulled slightly closer to center
+       than the UI-context versions so all four spots stay inside the
+       maskable-icon safe zone (80%-diameter centered circle) even under an
+       aggressive circular/squircle crop. -->
+  <rect width="48" height="48" fill="#143621"/>
+  <circle cx="15" cy="15" r="5.5" fill="#f8faf8"/>
+  <circle cx="33" cy="15" r="5.5" fill="#f8faf8"/>
+  <circle cx="15" cy="33" r="5.5" fill="#f8faf8"/>
+  <circle cx="33" cy="33" r="5.5" fill="#5aa171"/>
+  <circle cx="33" cy="33" r="3.6" fill="#143621"/>
+  <circle cx="33" cy="33" r="1.6" fill="#5aa171"/>
 </svg>

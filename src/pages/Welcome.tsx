@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { Button } from "../components/ui/Button";
-import { GolfChatMark } from "../components/brand/GolfChatMark";
+import { GolfMeIcon } from "../components/brand/GolfMeIcon";
 import { GolfMeWordmark } from "../components/brand/GolfMeWordmark";
 
 export function Welcome() {
@@ -15,7 +15,7 @@ export function Welcome() {
 
       <div className="relative flex flex-col items-center gap-5">
         <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10">
-          <GolfChatMark size={34} />
+          <GolfMeIcon size={34} dotColor="#f8faf8" targetColor="#8bc09a" holeColor="#19422a" />
         </span>
         <h1 className="text-3xl font-extrabold tracking-tight">
           <GolfMeWordmark golfClassName="text-white" meClassName="text-sun-300" />
