@@ -1,17 +1,21 @@
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
-import type { GolfCall } from "../../types";
+import type { GolfCall, GolferProfile } from "../../types";
 import { useData } from "../../context/DataContext";
 import { useToast } from "../../context/ToastContext";
 import { Avatar } from "../ui/Avatar";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { MatchReasons } from "../golfer/MatchReasons";
+import { SharedPreferencesBadge } from "./SharedPreferencesBadge";
 import { CLICKABLE_CARD_CLASS } from "../ui/cardStyles";
 import { formatCompactDay, formatDate, formatMoney } from "../../lib/format";
 import { VIBE_TONE } from "../../lib/theme";
 import { computeCallCompatibility } from "../../lib/compatibility";
 import { matchTier, callMatchReasons } from "../../lib/matchReasons";
+import { evaluatePreferenceMatch } from "../../lib/preferenceMatch";
+import type { PreferenceMatchContext } from "../../lib/preferenceMatch";
 
 interface GolfCallCardProps {
   call: GolfCall;
@@ -19,7 +23,7 @@ interface GolfCallCardProps {
 }
 
 export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
-  const { currentUser, getGolfer, joinGolfCall } = useData();
+  const { currentUser, getGolfer, joinGolfCall, followingGolfers, circleGolfers, playedWithIds } = useData();
   const { showToast } = useToast();
   const navigate = useNavigate();
 
@@ -37,6 +41,17 @@ export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
   const breakdown = showMatch && !isHost ? computeCallCompatibility(currentUser, call) : null;
   const tier = breakdown ? matchTier(breakdown.overall) : null;
   const reasons = breakdown ? callMatchReasons(call, breakdown) : [];
+
+  const preferenceChecks = useMemo(() => {
+    if (!showMatch || isHost) return [];
+    const roster = call.joinedGolferIds.map(getGolfer).filter((g): g is GolferProfile => Boolean(g));
+    const ctx: PreferenceMatchContext = {
+      followingIds: new Set(followingGolfers.map((g) => g.id)),
+      circleIds: new Set(circleGolfers.map((g) => g.id)),
+      playedWithIds,
+    };
+    return evaluatePreferenceMatch(currentUser, currentUser.id, call, roster, ctx);
+  }, [showMatch, isHost, call, getGolfer, followingGolfers, circleGolfers, playedWithIds, currentUser]);
 
   function handleJoin(e: React.MouseEvent) {
     e.stopPropagation();
@@ -143,6 +158,11 @@ export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
             <span aria-hidden>{tier.emoji}</span> {tier.label} for you
           </p>
           <MatchReasons reasons={reasons} className="mt-1" />
+          {preferenceChecks.length > 0 && (
+            <div className="mt-1.5 border-t border-fairway-100 pt-1.5">
+              <SharedPreferencesBadge checks={preferenceChecks} />
+            </div>
+          )}
         </div>
       )}
 

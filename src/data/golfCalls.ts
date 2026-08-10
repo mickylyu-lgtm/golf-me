@@ -1,5 +1,6 @@
-import type { ChatMessage, CircleConnection, GolfCall, Review } from "../types";
+import type { ChatMessage, CircleConnection, DirectMessage, FollowConnection, GolfCall, Review } from "../types";
 import { generateId } from "../lib/id";
+import { dmConversationId } from "../lib/dm";
 
 function isoInDays(days: number, hour = 12): string {
   const d = new Date();
@@ -20,6 +21,8 @@ export interface SeedBundle {
   messages: ChatMessage[];
   reviews: Review[];
   circle: CircleConnection[];
+  follows: FollowConnection[];
+  directMessages: DirectMessage[];
 }
 
 export function buildGolfCallsBundle(): SeedBundle {
@@ -41,6 +44,8 @@ export function buildGolfCallsBundle(): SeedBundle {
       skillLevel: "Any Skill Level",
       vibe: "Casual & Social",
       walkOrCart: "Either",
+      holes: 18,
+      gameFormat: "Standard Stroke Play",
       status: "open",
       notes: "Playing a relaxed 18. Happy to grab lunch after if people are up for it.",
       createdAt: isoDaysAgo(2),
@@ -61,6 +66,8 @@ export function buildGolfCallsBundle(): SeedBundle {
       skillLevel: "Advanced",
       vibe: "Competitive",
       walkOrCart: "Cart",
+      holes: 18,
+      gameFormat: "Match Play",
       status: "open",
       notes: "Early tee time, moving fast. Single-digit handicaps preferred.",
       createdAt: isoDaysAgo(4),
@@ -81,6 +88,8 @@ export function buildGolfCallsBundle(): SeedBundle {
       skillLevel: "Beginner",
       vibe: "Beginner-Friendly",
       walkOrCart: "Walking",
+      holes: 9,
+      gameFormat: "Practice / Casual Round",
       status: "open",
       notes: "Twilight rate — no pressure round, great for newer golfers.",
       createdAt: isoDaysAgo(1),
@@ -101,6 +110,8 @@ export function buildGolfCallsBundle(): SeedBundle {
       skillLevel: "Any Skill Level",
       vibe: "Networking",
       walkOrCart: "Cart",
+      holes: 18,
+      gameFormat: "Standard Stroke Play",
       status: "open",
       notes: "Bucket-list course. Splitting the caddie fee among the group.",
       createdAt: isoDaysAgo(5),
@@ -121,6 +132,8 @@ export function buildGolfCallsBundle(): SeedBundle {
       skillLevel: "Intermediate",
       vibe: "Competitive",
       walkOrCart: "Walking",
+      holes: 18,
+      gameFormat: "Match Play",
       status: "open",
       notes: "One spot left — let's close it out tonight.",
       createdAt: isoDaysAgo(3),
@@ -135,12 +148,16 @@ export function buildGolfCallsBundle(): SeedBundle {
       timeLabel: "8:00 AM",
       estimatedPricePerPerson: 30,
       totalSpots: 4,
-      joinedGolferIds: ["g5"],
+      // Includes Jordan (g1) and Maya (g12) — gives them a shared Golf Call
+      // so messaging is unlocked between them without a follow relationship.
+      joinedGolferIds: ["g5", "g1", "g12"],
       pendingRequestIds: [],
       joinMode: "instant",
       skillLevel: "Any Skill Level",
       vibe: "Casual & Social",
       walkOrCart: "Either",
+      holes: 9,
+      gameFormat: "Scramble",
       status: "open",
       createdAt: isoDaysAgo(1),
     },
@@ -160,6 +177,8 @@ export function buildGolfCallsBundle(): SeedBundle {
       skillLevel: "Advanced",
       vibe: "Competitive",
       walkOrCart: "Cart",
+      holes: 18,
+      gameFormat: "Standard Stroke Play",
       status: "open",
       notes: "Hosting this one myself — bring your A game, decent pace please.",
       createdAt: isoDaysAgo(2),
@@ -180,11 +199,17 @@ export function buildGolfCallsBundle(): SeedBundle {
       skillLevel: "Beginner",
       vibe: "Beginner-Friendly",
       walkOrCart: "Walking",
+      holes: 9,
+      gameFormat: "Practice / Casual Round",
       status: "open",
       notes: "My first Golf Call ever — be kind, I'm still learning!",
       createdAt: isoDaysAgo(1),
     },
     {
+      // Deliberately tuned so it fully satisfies Jordan's (g1) default seeded
+      // Match Preferences — 18 holes, mixed-gender group, both golfers new
+      // to Jordan, Standard Stroke Play, Networking vibe — a ready-made
+      // "5 shared preferences / Excellent Match" demo for Auto-Match.
       id: "call-9",
       hostId: "g2",
       course: "Split Rock Golf Course",
@@ -198,8 +223,10 @@ export function buildGolfCallsBundle(): SeedBundle {
       pendingRequestIds: [],
       joinMode: "instant",
       skillLevel: "Beginner",
-      vibe: "Beginner-Friendly",
+      vibe: "Networking",
       walkOrCart: "Either",
+      holes: 18,
+      gameFormat: "Standard Stroke Play",
       status: "open",
       createdAt: isoDaysAgo(2),
     },
@@ -219,6 +246,8 @@ export function buildGolfCallsBundle(): SeedBundle {
       skillLevel: "Any Skill Level",
       vibe: "Just Here to Golf",
       walkOrCart: "Either",
+      holes: 18,
+      gameFormat: "Best Ball",
       status: "open",
       createdAt: isoDaysAgo(3),
     },
@@ -240,6 +269,8 @@ export function buildGolfCallsBundle(): SeedBundle {
       skillLevel: "Any Skill Level",
       vibe: "Casual & Social",
       walkOrCart: "Cart",
+      holes: 18,
+      gameFormat: "Standard Stroke Play",
       status: "completed",
       createdAt: isoDaysAgo(20),
     },
@@ -259,6 +290,8 @@ export function buildGolfCallsBundle(): SeedBundle {
       skillLevel: "Any Skill Level",
       vibe: "Networking",
       walkOrCart: "Either",
+      holes: 18,
+      gameFormat: "Best Ball",
       status: "completed",
       createdAt: isoDaysAgo(36),
     },
@@ -278,6 +311,8 @@ export function buildGolfCallsBundle(): SeedBundle {
       skillLevel: "Advanced",
       vibe: "Competitive",
       walkOrCart: "Cart",
+      holes: 18,
+      gameFormat: "Match Play",
       status: "completed",
       createdAt: isoDaysAgo(66),
     },
@@ -488,5 +523,33 @@ export function buildGolfCallsBundle(): SeedBundle {
     { id: generateId("circ"), ownerId: "g1", memberId: "g4", createdAt: isoDaysAgo(29) },
   ];
 
-  return { golfCalls, messages, reviews, circle };
+  // Jordan (g1) and Ethan (g11) follow each other — enables messaging via the
+  // mutual-follow rule and gives the Following list something to show on
+  // first load. Maya (g12) follows Jordan one-way (not enough on its own to
+  // unlock messaging — she and Jordan message via their shared call-6
+  // instead, demonstrating that path separately).
+  const follows: FollowConnection[] = [
+    { id: generateId("flw"), followerId: "g1", followingId: "g11", createdAt: isoDaysAgo(10) },
+    { id: generateId("flw"), followerId: "g11", followingId: "g1", createdAt: isoDaysAgo(9) },
+    { id: generateId("flw"), followerId: "g12", followingId: "g1", createdAt: isoDaysAgo(6) },
+  ];
+
+  const directMessages: DirectMessage[] = [
+    {
+      id: generateId("dm"),
+      conversationId: dmConversationId("g1", "g11"),
+      senderId: "g11",
+      text: "Hey, saw your Bethpage round for Saturday. Is there still a spot?",
+      createdAt: isoDaysAgo(1, 10),
+    },
+    {
+      id: generateId("dm"),
+      conversationId: dmConversationId("g1", "g11"),
+      senderId: "g1",
+      text: "Yeah, one left.",
+      createdAt: isoDaysAgo(1, 10, 30),
+    },
+  ];
+
+  return { golfCalls, messages, reviews, circle, follows, directMessages };
 }

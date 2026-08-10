@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
-import { Flag } from "lucide-react";
 import { Button } from "../components/ui/Button";
+import { GolfChatMark } from "../components/brand/GolfChatMark";
+import { GolfMeWordmark } from "../components/brand/GolfMeWordmark";
 
 export function Welcome() {
   const navigate = useNavigate();
@@ -14,9 +15,11 @@ export function Welcome() {
 
       <div className="relative flex flex-col items-center gap-5">
         <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10">
-          <Flag size={30} fill="currentColor" />
+          <GolfChatMark size={34} />
         </span>
-        <h1 className="text-3xl font-extrabold tracking-tight">GolfMe</h1>
+        <h1 className="text-3xl font-extrabold tracking-tight">
+          <GolfMeWordmark golfClassName="text-white" meClassName="text-sun-300" />
+        </h1>
         <div>
           <p className="text-xl font-bold">Find your next round.</p>
           <p className="mt-2 max-w-xs text-sm text-fairway-100">

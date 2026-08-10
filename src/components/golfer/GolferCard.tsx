@@ -2,7 +2,7 @@ import { MapPin, Wallet, Footprints, Car } from "lucide-react";
 import type { GolferProfile } from "../../types";
 import { Avatar } from "../ui/Avatar";
 import { Badge } from "../ui/Badge";
-import { handicapLabel } from "../../lib/format";
+import { formatBudgetRange, handicapLabel } from "../../lib/format";
 import { VIBE_TONE } from "../../lib/theme";
 import { CompatibilityBadge } from "./CompatibilityBadge";
 import { ReputationRow } from "./ReputationRow";
@@ -47,7 +47,7 @@ export function GolferCard({ golfer, compatibility, onClick }: GolferCardProps) 
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
         <span className="flex items-center gap-1">
-          <Wallet size={12} /> ${golfer.budgetMin}–${golfer.budgetMax}/round
+          <Wallet size={12} /> {formatBudgetRange(golfer.budgetMin, golfer.budgetMax, golfer.noBudgetPreference)}
         </span>
         <span className="flex items-center gap-1">
           {golfer.walkOrCart === "Walking" ? <Footprints size={12} /> : <Car size={12} />}

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
 import { REPORT_CATEGORIES } from "../../types";
@@ -11,18 +12,21 @@ interface ReportModalProps {
   reportedName: string;
   context: Report["context"];
   golfCallId?: string;
+  postId?: string;
+  commentId?: string;
   onClose: () => void;
 }
 
-export function ReportModal({ reportedId, reportedName, context, golfCallId, onClose }: ReportModalProps) {
+export function ReportModal({ reportedId, reportedName, context, golfCallId, postId, commentId, onClose }: ReportModalProps) {
   const { reportUser } = useData();
   const { showToast } = useToast();
+  const navigate = useNavigate();
   const [category, setCategory] = useState<ReportCategory | null>(null);
   const [details, setDetails] = useState("");
 
   function submit() {
     if (!category) return;
-    reportUser(reportedId, category, details.trim(), context, golfCallId);
+    reportUser(reportedId, category, details.trim(), context, { golfCallId, postId, commentId });
     showToast("Report submitted. Our trust & safety team will review it — thank you for keeping Golf Me safe.", "success");
     onClose();
   }
@@ -54,6 +58,15 @@ export function ReportModal({ reportedId, reportedName, context, golfCallId, onC
         <Button disabled={!category} onClick={submit} fullWidth>
           Submit report
         </Button>
+        <button
+          onClick={() => {
+            onClose();
+            navigate("/community/guidelines");
+          }}
+          className="text-center text-xs font-semibold text-fairway-700 hover:underline"
+        >
+          Read Community Guidelines
+        </button>
       </div>
     </Modal>
   );

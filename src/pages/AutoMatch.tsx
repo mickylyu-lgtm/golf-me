@@ -1,18 +1,23 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Bell, Loader2, Sparkles } from "lucide-react";
+import { ArrowLeft, Bell, Sparkles } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useToast } from "../context/ToastContext";
+import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { EmptyState } from "../components/ui/EmptyState";
+import { GolfMeLoader } from "../components/loading/GolfMeLoader";
 import { GolfCallCard } from "../components/golfcall/GolfCallCard";
-import { rankCallsForAutoMatch } from "../lib/autoMatch";
+import { SharedPreferencesBadge } from "../components/golfcall/SharedPreferencesBadge";
+import { rankCallsWithPreferences } from "../lib/autoMatch";
 import { matchesWhen } from "../lib/roundFilters";
-import { formatMoney } from "../lib/format";
+import { effectiveNewPreferences, selectedNewPreferenceLabels } from "../lib/matchPreferences";
+import { MIN_PREFERENCES_FOR_AUTO_MATCH, preferenceTierLabel, selectedPreferenceCount } from "../lib/preferenceMatch";
+import type { PreferenceMatchContext } from "../lib/preferenceMatch";
 import type { GolfVibe, SkillFilter, WalkOrCart } from "../types";
 
 export function AutoMatch() {
-  const { currentUser, golfCalls, getGolfer } = useData();
+  const { currentUser, golfCalls, getGolfer, followingGolfers, circleGolfers, playedWithIds } = useData();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -21,6 +26,7 @@ export function AutoMatch() {
   const [loading, setLoading] = useState(false);
   const [resultIndex, setResultIndex] = useState(0);
   const [notified, setNotified] = useState(false);
+  const [showClosest, setShowClosest] = useState(false);
 
   const when = searchParams.get("when");
   const radius = searchParams.get("radius");
@@ -31,6 +37,22 @@ export function AutoMatch() {
   const walk = searchParams.get("walk") as WalkOrCart | null;
 
   const whenLabel = when === "today" ? "today" : when === "tomorrow" ? "tomorrow" : when === "weekend" ? "this weekend" : "your chosen date";
+
+  // Reads a temporary per-search override from Find Me a Round if present,
+  // otherwise falls back to the golfer's saved Match Preferences.
+  const effectivePrefs = useMemo(() => effectiveNewPreferences(currentUser, searchParams), [currentUser, searchParams]);
+  const selectedCount = selectedPreferenceCount(effectivePrefs);
+  const preferenceLabels = useMemo(() => selectedNewPreferenceLabels(effectivePrefs), [effectivePrefs]);
+  const enoughPreferences = selectedCount >= MIN_PREFERENCES_FOR_AUTO_MATCH;
+
+  const ctx: PreferenceMatchContext = useMemo(
+    () => ({
+      followingIds: new Set(followingGolfers.map((g) => g.id)),
+      circleIds: new Set(circleGolfers.map((g) => g.id)),
+      playedWithIds,
+    }),
+    [followingGolfers, circleGolfers, playedWithIds],
+  );
 
   const joinableCalls = useMemo(
     () =>
@@ -44,7 +66,10 @@ export function AutoMatch() {
     [golfCalls, currentUser.id],
   );
 
-  const strictCandidates = useMemo(() => {
+  // STEP 1 — basic eligibility. Date/time and travel radius stay hard
+  // practical constraints regardless of how well preferences line up — the
+  // same filters Find Me a Round already offered, now just labeled by step.
+  const eligibleCalls = useMemo(() => {
     let list = joinableCalls;
     if (radius) list = list.filter((c) => c.distanceMiles <= Number(radius));
     if (when) list = list.filter((c) => matchesWhen(c, when, customDate));
@@ -52,21 +77,37 @@ export function AutoMatch() {
     if (skill) list = list.filter((c) => c.skillLevel === skill || c.skillLevel === "Any Skill Level");
     if (vibeFilter) list = list.filter((c) => c.vibe === vibeFilter);
     if (walk && walk !== "Either") list = list.filter((c) => c.walkOrCart === walk || c.walkOrCart === "Either");
-    return rankCallsForAutoMatch(currentUser, list, getGolfer);
-  }, [joinableCalls, radius, when, customDate, budgetMax, skill, vibeFilter, walk, currentUser, getGolfer]);
+    return list;
+  }, [joinableCalls, radius, when, customDate, budgetMax, skill, vibeFilter, walk]);
 
-  const fallbackCandidates = useMemo(
-    () => (strictCandidates.length === 0 ? rankCallsForAutoMatch(currentUser, joinableCalls, getGolfer) : []),
-    [strictCandidates, joinableCalls, currentUser, getGolfer],
+  // STEP 2 (preference comparison) + STEP 4 (ranking) — STEP 3's 3+ gate is
+  // applied just below via strongMatches/closestMatches.
+  const rankedCandidates = useMemo(
+    () => rankCallsWithPreferences(currentUser, effectivePrefs, eligibleCalls, getGolfer, ctx),
+    [currentUser, effectivePrefs, eligibleCalls, getGolfer, ctx],
   );
 
-  const hasStrongMatch = strictCandidates.length > 0;
-  const results = hasStrongMatch ? strictCandidates : fallbackCandidates;
-  const current = results[Math.min(resultIndex, results.length - 1)];
+  const strongMatches = useMemo(
+    () => rankedCandidates.filter((c) => c.preferenceMatchedCount >= MIN_PREFERENCES_FOR_AUTO_MATCH),
+    [rankedCandidates],
+  );
+  const closestMatches = useMemo(
+    () =>
+      [...rankedCandidates]
+        .filter((c) => c.preferenceMatchedCount > 0 && c.preferenceMatchedCount < MIN_PREFERENCES_FOR_AUTO_MATCH)
+        .sort((a, b) => b.preferenceMatchedCount - a.preferenceMatchedCount),
+    [rankedCandidates],
+  );
+
+  const hasStrongMatch = strongMatches.length > 0;
+  const results = hasStrongMatch ? strongMatches : showClosest ? closestMatches : [];
+  const current = results[Math.min(resultIndex, Math.max(results.length - 1, 0))];
 
   function runAutoMatch() {
+    if (!enoughPreferences) return;
     setLoading(true);
     setResultIndex(0);
+    setShowClosest(false);
     window.setTimeout(() => {
       setLoading(false);
       setStarted(true);
@@ -95,86 +136,111 @@ export function AutoMatch() {
         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
           <Sparkles size={20} className="text-fairway-600" /> Auto-Match
         </h1>
-        <p className="text-sm text-slate-500">We'll recommend the best available round for {whenLabel}, using your saved preferences.</p>
+        <p className="text-sm text-slate-500">We'll recommend the best available round for {whenLabel}, using your Match Preferences.</p>
       </div>
 
-      {!started ? (
-        <div className="flex flex-col gap-4">
-          <div className="rounded-2xl border border-slate-100 bg-white p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Your Match Preferences</p>
-              <button onClick={() => navigate("/profile")} className="text-xs font-semibold text-fairway-700 hover:underline">
-                Edit Preferences
-              </button>
+      {loading ? (
+        <GolfMeLoader fullScreen message="Finding your best match..." />
+      ) : !started ? (
+        !enoughPreferences ? (
+          <EmptyState
+            icon={<Sparkles size={20} />}
+            title="Choose at least 3 preferences for Auto-Match."
+            description="Round Length, Gender, Group Type, Game Format, and Networking — pick at least 3 so Auto-Match has enough to go on."
+            action={
+              <Button size="sm" onClick={() => navigate("/profile")}>
+                Set Preferences
+              </Button>
+            }
+          />
+        ) : (
+          <div className="flex flex-col gap-4">
+            <div className="rounded-2xl border border-slate-100 bg-white p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Using Your Match Preferences</p>
+                <button onClick={() => navigate("/profile")} className="text-xs font-semibold text-fairway-700 hover:underline">
+                  Edit Preferences
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {preferenceLabels.map((label) => (
+                  <Badge key={label} tone="fairway">
+                    {label}
+                  </Badge>
+                ))}
+              </div>
             </div>
-            <dl className="flex flex-col gap-2.5 text-sm">
-              <div className="flex justify-between gap-3">
-                <dt className="text-slate-500">Courses</dt>
-                <dd className="text-right font-semibold text-slate-800">
-                  {currentUser.preferredCourses.length > 0 ? currentUser.preferredCourses.join(", ") : "No preference"}
-                </dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-slate-500">Skill</dt>
-                <dd className="text-right font-semibold text-slate-800">
-                  {currentUser.skillPreference === "Similar to me" ? "Similar handicap preferred" : "Any skill level"}
-                </dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-slate-500">Golf Vibe</dt>
-                <dd className="text-right font-semibold text-slate-800">{currentUser.vibes[0]}</dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-slate-500">Age</dt>
-                <dd className="text-right font-semibold text-slate-800">
-                  {currentUser.agePreference === "Any age" ? "No preference" : `${currentUser.agePreference} preferred`}
-                </dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-slate-500">Gender</dt>
-                <dd className="text-right font-semibold text-slate-800">{currentUser.genderPreference}</dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-slate-500">Budget</dt>
-                <dd className="text-right font-semibold text-slate-800">Under {formatMoney(currentUser.budgetMax)}</dd>
-              </div>
-            </dl>
-          </div>
 
-          <Button size="lg" fullWidth icon={loading ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />} disabled={loading} onClick={runAutoMatch}>
-            {loading ? "Finding your match..." : "Auto-Match Me"}
-          </Button>
-        </div>
+            <Button size="lg" fullWidth icon={<Sparkles size={18} />} onClick={runAutoMatch}>
+              Auto-Match Me
+            </Button>
+          </div>
+        )
       ) : results.length === 0 ? (
-        <EmptyState
-          icon={<Sparkles size={20} />}
-          title="No perfect match yet."
-          description="There's nothing open near you right now — host your own round or we'll let you know when one opens up."
-          action={
-            <div className="flex flex-wrap justify-center gap-2">
-              <Button size="sm" onClick={() => navigate("/golf-calls/new")}>
-                Create a Golf Call
-              </Button>
-              <Button size="sm" variant="outline" icon={<Bell size={14} />} disabled={notified} onClick={handleNotifyMe}>
-                {notified ? "We'll notify you" : "Notify Me When One Opens"}
-              </Button>
-            </div>
-          }
-        />
+        !showClosest ? (
+          <EmptyState
+            icon={<Sparkles size={20} />}
+            title="No strong matches yet."
+            description="Nothing open right now hits 3 or more of your Match Preferences."
+            action={
+              <div className="flex flex-wrap justify-center gap-2">
+                {closestMatches.length > 0 && (
+                  <Button size="sm" variant="outline" onClick={() => setShowClosest(true)}>
+                    Show Closest Matches
+                  </Button>
+                )}
+                <Button size="sm" onClick={() => navigate("/golf-calls/new")}>
+                  Create a Golf Call
+                </Button>
+                <Button size="sm" variant="outline" icon={<Bell size={14} />} disabled={notified} onClick={handleNotifyMe}>
+                  {notified ? "We'll notify you" : "Notify Me When One Opens"}
+                </Button>
+              </div>
+            }
+          />
+        ) : (
+          <EmptyState
+            icon={<Sparkles size={20} />}
+            title="Nothing nearby right now."
+            description="There's nothing open near you at all — host your own round or we'll let you know when one opens up."
+            action={
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button size="sm" onClick={() => navigate("/golf-calls/new")}>
+                  Create a Golf Call
+                </Button>
+                <Button size="sm" variant="outline" icon={<Bell size={14} />} disabled={notified} onClick={handleNotifyMe}>
+                  {notified ? "We'll notify you" : "Notify Me When One Opens"}
+                </Button>
+              </div>
+            }
+          />
+        )
       ) : (
         <div className="flex flex-col gap-4">
           <div>
             <p className="text-xs font-bold tracking-wide text-fairway-700 uppercase">
-              {hasStrongMatch ? "Your Best Match" : "Closest Available Round"}
+              {hasStrongMatch ? preferenceTierLabel(current.preferenceTier) : "Closest Available Round"}
             </p>
             {!hasStrongMatch && (
               <p className="mt-1 text-sm text-slate-500">
-                Nothing matched every preference — here's the closest option, with an honest look at what's different.
+                Outside your normal Auto-Match criteria — shown because nothing hit 3+ of your preferences yet.
               </p>
             )}
           </div>
 
-          {current && <GolfCallCard call={current.call} />}
+          {current && (
+            <>
+              <GolfCallCard call={current.call} />
+              {current.preferenceChecks.length > 0 && (
+                <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-white px-4 py-3">
+                  <SharedPreferencesBadge checks={current.preferenceChecks} />
+                  <span className="text-xs text-slate-400">
+                    {current.preferenceMatchedCount}/{current.preferenceChecks.length} preferences
+                  </span>
+                </div>
+              )}
+            </>
+          )}
 
           <div className="flex flex-wrap gap-2">
             {results.length > 1 && (

@@ -35,6 +35,13 @@
   --animate-slide-up: slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   --animate-pop: pop 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 
+  /* GolfMeLoader — golf-cart loading animation. --gm-travel is set inline
+     per usage (full scene vs. inline) so one keyframe covers both. */
+  --animate-cart-drive: cart-drive 1.3s ease-in-out infinite;
+  --animate-cart-bounce: cart-bounce 0.35s ease-in-out infinite;
+  --animate-wheel-spin: wheel-spin 0.5s linear infinite;
+  --animate-dust-puff: dust-puff 1.3s ease-out infinite;
+
   @keyframes fade-in {
     from {
       opacity: 0;
@@ -61,6 +68,52 @@
     to {
       opacity: 1;
       transform: scale(1);
+    }
+  }
+  @keyframes cart-drive {
+    0% {
+      transform: translateX(0);
+      opacity: 0;
+    }
+    8% {
+      opacity: 1;
+    }
+    85% {
+      opacity: 1;
+    }
+    100% {
+      transform: translateX(var(--gm-travel, 200px));
+      opacity: 0;
+    }
+  }
+  @keyframes cart-bounce {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-1.5px);
+    }
+  }
+  @keyframes wheel-spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @keyframes dust-puff {
+    0% {
+      opacity: 0;
+      transform: translate(0, 0) scale(0.4);
+    }
+    30% {
+      opacity: 0.5;
+    }
+    100% {
+      opacity: 0;
+      transform: translate(-10px, -6px) scale(1);
     }
   }
 }
@@ -126,11 +179,125 @@ body {
   .animate-pop {
     animation: var(--animate-pop);
   }
+  .animate-cart-drive {
+    animation: var(--animate-cart-drive);
+  }
+  .animate-cart-bounce {
+    animation: var(--animate-cart-bounce);
+  }
+  .animate-wheel-spin {
+    animation: var(--animate-wheel-spin);
+  }
+  .animate-dust-puff {
+    animation: var(--animate-dust-puff);
+  }
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
   .no-scrollbar {
     -ms-overflow-style: none;
     scrollbar-width: none;
+  }
+}
+
+/* GolfMe slider primitives (Slider / RangeSlider) — native <input
+   type="range"> styled via vendor thumb pseudo-elements, which Tailwind
+   utility classes can't reach directly. Track is drawn by a sibling div in
+   the component; the input itself stays transparent so only the thumb (and,
+   for dual-handle sliders, just the thumb — see .gm-slider-overlay) is
+   visible/interactive. Native <input> is already excluded from
+   RootTabCarousel's swipe-gesture capture (see isInteractiveTarget), so
+   dragging a slider never triggers a tab swipe. */
+.gm-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  touch-action: none;
+}
+.gm-slider:focus-visible {
+  outline: none;
+}
+.gm-slider::-webkit-slider-runnable-track {
+  background: transparent;
+  height: 6px;
+}
+.gm-slider::-moz-range-track {
+  background: transparent;
+  height: 6px;
+}
+.gm-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  margin-top: -7px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: 3px solid var(--color-fairway-600);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.25);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+.gm-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 9999px;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px var(--color-fairway-600), 0 1px 3px rgba(15, 23, 42, 0.25);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+@media (hover: hover) {
+  .gm-slider:hover::-webkit-slider-thumb {
+    transform: scale(1.12);
+  }
+  .gm-slider:hover::-moz-range-thumb {
+    transform: scale(1.12);
+  }
+}
+.gm-slider:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--color-fairway-500);
+  outline-offset: 2px;
+}
+.gm-slider:focus-visible::-moz-range-thumb {
+  outline: 2px solid var(--color-fairway-500);
+  outline-offset: 2px;
+}
+.gm-slider:disabled {
+  cursor: not-allowed;
+}
+.gm-slider:disabled::-webkit-slider-thumb {
+  border-color: #cbd5e1;
+  cursor: not-allowed;
+}
+.gm-slider:disabled::-moz-range-thumb {
+  box-shadow: 0 0 0 3px #cbd5e1, 0 1px 3px rgba(15, 23, 42, 0.25);
+  cursor: not-allowed;
+}
+/* Dual-handle sliders stack two of these on the same track; only the thumb
+   itself stays clickable so each handle can be grabbed independently
+   without one input's full-width hit area blocking the other. */
+.gm-slider-overlay {
+  pointer-events: none;
+}
+.gm-slider-overlay::-webkit-slider-thumb {
+  pointer-events: auto;
+}
+.gm-slider-overlay::-moz-range-thumb {
+  pointer-events: auto;
+}
+@media (pointer: coarse) {
+  .gm-slider::-webkit-slider-thumb {
+    width: 24px;
+    height: 24px;
+    margin-top: -9px;
+  }
+  .gm-slider::-moz-range-thumb {
+    width: 24px;
+    height: 24px;
   }
 }

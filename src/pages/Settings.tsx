@@ -1,17 +1,26 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Bell, LogOut, MapPin, RotateCcw, ShieldOff, Sparkles, User, Users } from "lucide-react";
+import { ArrowLeft, Bell, Laptop, LogOut, MapPin, RotateCcw, Smartphone, ShieldCheck, ShieldOff, Sparkles, User, Users, XCircle } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useToast } from "../context/ToastContext";
+import { usePresentation } from "../context/PresentationContext";
+import type { FrameMode } from "../context/PresentationContext";
 import { Avatar } from "../components/ui/Avatar";
 import { Button } from "../components/ui/Button";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 import { Toggle } from "../components/ui/Toggle";
 import { ProfileSwitcher } from "../components/layout/ProfileSwitcher";
 
+const FRAME_OPTIONS: { value: FrameMode; label: string; icon: typeof Laptop }[] = [
+  { value: "desktop", label: "Desktop Frame", icon: Laptop },
+  { value: "mobile", label: "Mobile Frame", icon: Smartphone },
+  { value: "none", label: "No Frame", icon: XCircle },
+];
+
 export function Settings() {
   const { currentUser, golfers, blockedIds, getGolfer, unblockUser, logOut, resetDemoData } = useData();
   const { showToast } = useToast();
+  const { frameMode, setFrameMode } = usePresentation();
   const navigate = useNavigate();
 
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
@@ -116,9 +125,33 @@ export function Settings() {
         </div>
       )}
 
+      <Button variant="outline" icon={<ShieldCheck size={15} />} onClick={() => navigate("/community/guidelines")}>
+        Community Guidelines
+      </Button>
+
       <Button variant="outline" icon={<LogOut size={15} />} onClick={() => setLogoutConfirmOpen(true)}>
         Log out
       </Button>
+
+      <div className="rounded-2xl border border-slate-100 bg-white p-4">
+        <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
+          <Laptop size={12} /> Presentation Mode
+        </p>
+        <p className="mb-3 text-xs text-slate-500">Show GolfMe inside a laptop or phone frame for demos and screenshots.</p>
+        <div className="flex flex-wrap gap-2">
+          {FRAME_OPTIONS.map(({ value, label, icon: Icon }) => (
+            <Button
+              key={value}
+              size="sm"
+              variant={frameMode === value ? "primary" : "outline"}
+              icon={<Icon size={14} />}
+              onClick={() => setFrameMode(value)}
+            >
+              {label}
+            </Button>
+          ))}
+        </div>
+      </div>
 
       <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 p-4">
         <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">

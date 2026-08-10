@@ -6,10 +6,12 @@ import { Button } from "../components/ui/Button";
 import { Pill } from "../components/ui/Pill";
 import { AvatarUpload } from "../components/profile/AvatarUpload";
 import { CoursePicker } from "../components/profile/CoursePicker";
+import { RangeSlider } from "../components/ui/RangeSlider";
 import { inputClass, labelClass } from "../components/ui/FormControls";
-import { AGE_PREFERENCES, GENDER_OPTIONS, GENDER_PREFERENCES, GOLF_VIBES } from "../types";
-import type { AgePreference, GenderPreference, GolfVibe, WalkOrCart, AvailabilitySlot } from "../types";
+import { AGE_PREF_MAX, AGE_PREF_MIN, GENDER_OPTIONS, GENDER_PREFERENCES, GOLF_VIBES } from "../types";
+import type { GenderPreference, GolfVibe, WalkOrCart, AvailabilitySlot } from "../types";
 import { initialsFromName, avatarColorForName } from "../lib/avatar";
+import { formatAgeValue } from "../lib/matchPreferences";
 
 type SkillBand = "Beginner" | "Intermediate" | "Advanced";
 const SKILL_HANDICAP: Record<SkillBand, number> = { Beginner: 22, Intermediate: 14, Advanced: 6 };
@@ -49,20 +51,24 @@ export function ProfileSetup() {
 
   // Step 2
   const [hasHandicap, setHasHandicap] = useState(true);
-  const [handicap, setHandicap] = useState(15);
+  // "" is a valid mid-edit state (user cleared the field) — never coerce to
+  // 0 while typing, only when building the final profile in next().
+  const [handicap, setHandicap] = useState<number | "">(15);
   const [skillBand, setSkillBand] = useState<SkillBand>("Intermediate");
 
   // Step 3
   const [vibes, setVibes] = useState<GolfVibe[]>(["Casual & Social"]);
   const [walkOrCart, setWalkOrCart] = useState<WalkOrCart>("Either");
-  const [budget, setBudget] = useState(60);
+  const [budget, setBudget] = useState<number | "">(60);
 
   // Step 4
   const [picks, setPicks] = useState<AvailabilityQuickPick[]>([]);
 
   // Step 5 — optional match preferences
   const [preferredCourses, setPreferredCourses] = useState<string[]>([]);
-  const [agePreference, setAgePreference] = useState<AgePreference>("Any age");
+  const [agePreferenceMin, setAgePreferenceMin] = useState(AGE_PREF_MIN);
+  const [agePreferenceMax, setAgePreferenceMax] = useState(AGE_PREF_MAX);
+  const [noAgePreference, setNoAgePreference] = useState(true);
   const [genderPreference, setGenderPreference] = useState<GenderPreference>("No preference");
 
   function toggleVibe(v: GolfVibe) {
@@ -92,22 +98,25 @@ export function ProfileSetup() {
       return;
     }
     const availability = Array.from(new Set(picks.flatMap((p) => PICK_TO_SLOTS[p])));
+    const finalHandicap = handicap === "" ? 0 : handicap;
+    const finalBudget = budget === "" ? 0 : budget;
     signUpNewGolfer({
       name: name.trim(),
       photoUrl,
       ageRange: "25-34",
       gender: gender.trim() || "Prefer not to say",
       areaLabel: areaLabel.trim(),
-      handicap: hasHandicap ? handicap : SKILL_HANDICAP[skillBand],
+      handicap: hasHandicap ? finalHandicap : SKILL_HANDICAP[skillBand],
       vibes,
       walkOrCart,
-      budgetMin: Math.max(0, budget - 15),
-      budgetMax: budget + 15,
+      budgetMin: Math.max(0, finalBudget - 15),
+      budgetMax: finalBudget + 15,
       availability,
       preferredCourses,
       travelRadiusMiles: 25,
-      skillPreference: "Any skill level",
-      agePreference,
+      agePreferenceMin,
+      agePreferenceMax,
+      noAgePreference,
       genderPreference,
     });
     navigate("/");
@@ -222,7 +231,12 @@ export function ProfileSetup() {
             {hasHandicap ? (
               <div>
                 <label className={labelClass}>Handicap</label>
-                <input type="number" className={inputClass} value={handicap} onChange={(e) => setHandicap(Number(e.target.value))} />
+                <input
+                  type="number"
+                  className={inputClass}
+                  value={handicap}
+                  onChange={(e) => setHandicap(e.target.value === "" ? "" : Number(e.target.value))}
+                />
               </div>
             ) : (
               <div>
@@ -263,7 +277,13 @@ export function ProfileSetup() {
             </div>
             <div>
               <label className={labelClass}>Typical budget per round</label>
-              <input type="number" min={0} className={inputClass} value={budget} onChange={(e) => setBudget(Number(e.target.value))} />
+              <input
+                type="number"
+                min={0}
+                className={inputClass}
+                value={budget}
+                onChange={(e) => setBudget(e.target.value === "" ? "" : Number(e.target.value))}
+              />
             </div>
           </div>
         )}
@@ -298,14 +318,24 @@ export function ProfileSetup() {
               <CoursePicker selected={preferredCourses} onChange={setPreferredCourses} />
             </div>
             <div>
-              <label className={labelClass}>Age preference for playing partners</label>
-              <div className="flex flex-wrap gap-1.5">
-                {AGE_PREFERENCES.map((a) => (
-                  <Pill key={a} active={agePreference === a} onClick={() => setAgePreference(a)}>
-                    {a}
-                  </Pill>
-                ))}
+              <div className="mb-2 flex items-center justify-between">
+                <label className={labelClass + " mb-0"}>Age preference for playing partners</label>
+                <Pill active={noAgePreference} onClick={() => setNoAgePreference((v) => !v)}>
+                  No Age Preference
+                </Pill>
               </div>
+              <RangeSlider
+                label="Age Range"
+                min={AGE_PREF_MIN}
+                max={AGE_PREF_MAX}
+                step={1}
+                valueMin={agePreferenceMin}
+                valueMax={agePreferenceMax}
+                onChangeMin={setAgePreferenceMin}
+                onChangeMax={setAgePreferenceMax}
+                formatValue={formatAgeValue}
+                disabled={noAgePreference}
+              />
             </div>
             <div>
               <label className={labelClass}>Gender preference for playing partners</label>

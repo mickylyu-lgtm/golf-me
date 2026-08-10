@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Compass, ShieldCheck, Users } from "lucide-react";
 import { Button } from "../components/ui/Button";
+import { GolfChatMark } from "../components/brand/GolfChatMark";
+import { GolfMeWordmark } from "../components/brand/GolfMeWordmark";
 
 const SCREENS = [
   {
@@ -36,6 +38,13 @@ export function Onboarding() {
 
   return (
     <div className="flex min-h-screen flex-col bg-[#faf8f2] px-6 py-8">
+      <div className="mb-5 flex items-center gap-2">
+        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-fairway-600 text-white">
+          <GolfChatMark size={15} />
+        </span>
+        <GolfMeWordmark className="text-sm font-extrabold tracking-tight" golfClassName="text-fairway-900" />
+      </div>
+
       <div className="flex items-center justify-between">
         <div className="flex gap-1.5">
           {SCREENS.map((_, i) => (

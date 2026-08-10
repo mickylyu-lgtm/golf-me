@@ -1,15 +1,19 @@
 import type { AppData } from "../types";
 import { buildGolfers, DEFAULT_CURRENT_USER_ID } from "../data/golfers";
 import { buildGolfCallsBundle } from "../data/golfCalls";
+import { buildCommunityBundle } from "../data/community";
 
-// Bumped to v4 when GolferProfile gained photoUrl/gender/preferredCourses/
-// travelRadiusMiles/skillPreference/agePreference/genderPreference — forces
-// a reseed for anyone with older cached data missing those fields.
-const STORAGE_KEY = "golfme:data:v4";
+// Bumped to v8 when GolferProfile's skillPreference/agePreference fields
+// were replaced with numeric handicapPreferenceMin/Max, agePreferenceMin/Max,
+// noAgePreference, and noBudgetPreference was added — forces a reseed for
+// anyone with older cached data still shaped the old way (same class of
+// crash the v7 bump above was fixing).
+const STORAGE_KEY = "golfme:data:v8";
 
 export function seedData(): AppData {
   const golfers = buildGolfers();
-  const { golfCalls, messages, reviews, circle } = buildGolfCallsBundle();
+  const { golfCalls, messages, reviews, circle, follows, directMessages } = buildGolfCallsBundle();
+  const { posts, comments, postVotes, commentVotes } = buildCommunityBundle();
   return {
     golfers,
     golfCalls,
@@ -18,6 +22,16 @@ export function seedData(): AppData {
     reports: [],
     blocks: [],
     circle,
+    follows,
+    directMessages,
+    dmReads: [],
+    posts,
+    postVotes,
+    comments,
+    commentVotes,
+    savedPosts: [],
+    hiddenPosts: [],
+    notifications: [],
     currentUserId: DEFAULT_CURRENT_USER_ID,
     session: { isLoggedIn: false, hasOnboarded: false },
   };
@@ -38,6 +52,16 @@ export function loadData(): AppData {
       reports: parsed.reports ?? [],
       blocks: parsed.blocks ?? [],
       circle: parsed.circle ?? [],
+      follows: parsed.follows ?? [],
+      directMessages: parsed.directMessages ?? [],
+      dmReads: parsed.dmReads ?? [],
+      posts: parsed.posts ?? [],
+      postVotes: parsed.postVotes ?? [],
+      comments: parsed.comments ?? [],
+      commentVotes: parsed.commentVotes ?? [],
+      savedPosts: parsed.savedPosts ?? [],
+      hiddenPosts: parsed.hiddenPosts ?? [],
+      notifications: parsed.notifications ?? [],
       currentUserId: parsed.currentUserId ?? DEFAULT_CURRENT_USER_ID,
       session: parsed.session ?? { isLoggedIn: false, hasOnboarded: false },
     };

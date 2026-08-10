@@ -18,7 +18,7 @@ export function matchTier(score: number): TierInfo {
 }
 
 export interface MatchFactor {
-  key: "schedule" | "distance" | "skill" | "budget" | "vibe" | "coursePreference";
+  key: "schedule" | "distance" | "skill" | "budget" | "vibe" | "coursePreference" | "credibility";
   score: number;
   positive: boolean;
   text: string;

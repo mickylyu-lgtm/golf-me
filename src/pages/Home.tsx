@@ -1,19 +1,32 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Flag, Search, UserPlus, Users } from "lucide-react";
+import { ArrowRight, Flag, MessageSquareText, Search, UserPlus, Users } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { GolfCallCard } from "../components/golfcall/GolfCallCard";
 import { Avatar } from "../components/ui/Avatar";
 import { FindRoundModal } from "../components/find/FindRoundModal";
 import { firstName, greetingForHour, isThisWeekend } from "../lib/greeting";
-import { formatDate } from "../lib/format";
+import { formatDate, formatRelativeTime } from "../lib/format";
+import { rankForYou } from "../lib/communityFeed";
+import type { FeedContext } from "../lib/communityFeed";
 
 const HOME_RADIUS_MILES = 25;
 
 export function Home() {
-  const { currentUser, golfCalls, circleGolfers } = useData();
+  const { currentUser, golfCalls, circleGolfers, followingGolfers, getGolfer, visiblePosts, postUpvoteCount } = useData();
   const [wizardOpen, setWizardOpen] = useState(false);
   const navigate = useNavigate();
+
+  const communityPreview = useMemo(() => {
+    const ctx: FeedContext = {
+      followingIds: new Set(followingGolfers.map((g) => g.id)),
+      circleIds: new Set(circleGolfers.map((g) => g.id)),
+      preferredCourses: currentUser.preferredCourses,
+      areaLabel: currentUser.areaLabel,
+      upvoteCount: postUpvoteCount,
+    };
+    return rankForYou(visiblePosts(), ctx, getGolfer).slice(0, 2);
+  }, [followingGolfers, circleGolfers, currentUser.preferredCourses, currentUser.areaLabel, postUpvoteCount, visiblePosts, getGolfer]);
 
   const openCalls = useMemo(
     () => golfCalls.filter((c) => c.status === "open" && c.totalSpots - c.joinedGolferIds.length > 0),
@@ -141,6 +154,52 @@ export function Home() {
           </div>
         </section>
       )}
+
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <MessageSquareText size={16} className="text-fairway-600" />
+            <h2 className="text-lg font-bold text-slate-900">From the Community</h2>
+          </div>
+          <button
+            onClick={() => navigate("/community")}
+            className="text-sm font-semibold text-fairway-700 transition-colors duration-200 hover:text-fairway-800 hover:underline"
+          >
+            Open Community
+          </button>
+        </div>
+        {communityPreview.length === 0 ? (
+          <button
+            onClick={() => navigate("/community")}
+            className="flex w-full items-center gap-3 rounded-2xl border border-dashed border-slate-200 bg-white/60 p-4 text-left transition-colors duration-200 hover:border-fairway-300"
+          >
+            <MessageSquareText size={18} className="text-fairway-600" />
+            <p className="text-sm text-slate-600">Golf talk, memes, and course chat — check out the Community.</p>
+          </button>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {communityPreview.map((post) => {
+              const author = getGolfer(post.authorId);
+              if (!author) return null;
+              return (
+                <button
+                  key={post.id}
+                  onClick={() => navigate(`/community/${post.id}`)}
+                  className="flex w-full items-start gap-3 rounded-2xl border border-slate-100 bg-white p-3.5 text-left transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-fairway-200 hover:shadow-md active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+                >
+                  <Avatar golfer={author} size="sm" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm text-slate-700">
+                      <strong className="font-semibold text-slate-900">{firstName(author.name)}</strong> · {formatRelativeTime(post.createdAt)}
+                    </p>
+                    <p className="line-clamp-2 text-xs text-slate-500">{post.text}</p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
       <section>
         <div className="mb-3 flex items-center justify-between">

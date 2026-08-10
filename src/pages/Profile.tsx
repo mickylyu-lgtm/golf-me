@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Car, Check, Footprints, Mail, Phone, Settings as SettingsIcon, ShieldCheck, Users, Wallet } from "lucide-react";
+import { Car, Check, Footprints, Mail, Phone, Settings as SettingsIcon, ShieldCheck, UserRoundPlus, Users, Wallet } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useToast } from "../context/ToastContext";
 import { Avatar } from "../components/ui/Avatar";
@@ -11,53 +11,52 @@ import { Modal } from "../components/ui/Modal";
 import { inputClass, labelClass } from "../components/ui/FormControls";
 import { VerifyStepModal } from "../components/profile/VerifyStepModal";
 import { AvatarUpload } from "../components/profile/AvatarUpload";
-import { CoursePicker } from "../components/profile/CoursePicker";
 import { ReputationRow } from "../components/golfer/ReputationRow";
 import { CredibilityBadge } from "../components/golfer/CredibilityBadge";
-import { AGE_PREFERENCES, AGE_RANGES, AVAILABILITY_SLOTS, GENDER_PREFERENCES, GOLF_VIBES } from "../types";
-import type { AgePreference, AgeRange, AvailabilitySlot, GenderPreference, GolfVibe, SkillPreference, WalkOrCart } from "../types";
+import { MatchPreferencesPanel } from "../components/golfer/MatchPreferencesPanel";
+import { AGE_RANGES, AVAILABILITY_SLOTS } from "../types";
+import type { AgeRange, AvailabilitySlot } from "../types";
 import { VIBE_TONE } from "../lib/theme";
-import { memberSinceLabel } from "../lib/format";
+import { formatBudgetRange, memberSinceLabel } from "../lib/format";
 import { computeCredibility, computeHandicapConfidence } from "../lib/credibility";
-
-const WALK_OPTIONS: WalkOrCart[] = ["Either", "Walking", "Cart"];
-const RADIUS_OPTIONS = [10, 25, 50];
-const SKILL_PREFERENCES: SkillPreference[] = ["Any skill level", "Similar to me"];
+import { matchPreferencesFromGolfer } from "../lib/matchPreferences";
 
 export function Profile() {
-  const { currentUser, updateCurrentUserProfile, setPhoneVerified, setEmailVerified, requestVerifiedGolfer, circleGolfers, reviewsAbout } =
-    useData();
+  const {
+    currentUser,
+    updateCurrentUserProfile,
+    setPhoneVerified,
+    setEmailVerified,
+    requestVerifiedGolfer,
+    circleGolfers,
+    reviewsAbout,
+    followingGolfers,
+    unfollowUser,
+    posts,
+    savedPostsList,
+  } = useData();
   const { showToast } = useToast();
   const navigate = useNavigate();
+  const myPostCount = posts.filter((p) => p.authorId === currentUser.id).length;
 
   const [editing, setEditing] = useState(false);
   const [verifyChannel, setVerifyChannel] = useState<"phone" | "email" | null>(null);
   const [avatarModalOpen, setAvatarModalOpen] = useState(false);
 
-  const [form, setForm] = useState(() => ({
-    ageRange: currentUser.ageRange,
-    areaLabel: currentUser.areaLabel,
-    handicap: currentUser.handicap,
-    favoriteCourses: currentUser.favoriteCourses.join(", "),
-    budgetMin: currentUser.budgetMin,
-    budgetMax: currentUser.budgetMax,
-    walkOrCart: currentUser.walkOrCart,
-    vibes: currentUser.vibes,
-    bio: currentUser.bio,
-  }));
+  function buildForm(g: typeof currentUser) {
+    return {
+      ageRange: g.ageRange,
+      areaLabel: g.areaLabel,
+      handicap: g.handicap,
+      favoriteCourses: g.favoriteCourses.join(", "),
+      bio: g.bio,
+    };
+  }
+
+  const [form, setForm] = useState(() => buildForm(currentUser));
 
   function startEditing() {
-    setForm({
-      ageRange: currentUser.ageRange,
-      areaLabel: currentUser.areaLabel,
-      handicap: currentUser.handicap,
-      favoriteCourses: currentUser.favoriteCourses.join(", "),
-      budgetMin: currentUser.budgetMin,
-      budgetMax: currentUser.budgetMax,
-      walkOrCart: currentUser.walkOrCart,
-      vibes: currentUser.vibes,
-      bio: currentUser.bio,
-    });
+    setForm(buildForm(currentUser));
     setEditing(true);
   }
 
@@ -75,14 +74,6 @@ export function Profile() {
     showToast("Marked available this weekend.", "success");
   }
 
-  function toggleVibe(v: GolfVibe) {
-    setForm((prev) => {
-      if (prev.vibes.includes(v)) return { ...prev, vibes: prev.vibes.filter((x) => x !== v) };
-      if (prev.vibes.length >= 2) return prev;
-      return { ...prev, vibes: [...prev.vibes, v] };
-    });
-  }
-
   function save() {
     updateCurrentUserProfile({
       ageRange: form.ageRange,
@@ -92,10 +83,6 @@ export function Profile() {
         .split(",")
         .map((c) => c.trim())
         .filter(Boolean),
-      budgetMin: form.budgetMin,
-      budgetMax: Math.max(form.budgetMax, form.budgetMin),
-      walkOrCart: form.walkOrCart,
-      vibes: form.vibes.length > 0 ? form.vibes : currentUser.vibes,
       bio: form.bio,
     });
     setEditing(false);
@@ -195,6 +182,59 @@ export function Profile() {
       </div>
 
       <div className="rounded-2xl border border-slate-100 bg-white p-4">
+        <p className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
+          <UserRoundPlus size={12} /> Following · {followingGolfers.length}
+        </p>
+        {followingGolfers.length === 0 ? (
+          <p className="text-sm text-slate-500">
+            Follow golfers you'd like to play with again or keep tabs on — it's separate from your Golf Circle.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {followingGolfers.map((g) => (
+              <div key={g.id} className="flex items-center gap-3">
+                <button
+                  onClick={() => navigate(`/golfer/${g.id}`)}
+                  className="flex flex-1 items-center gap-3 rounded-xl py-1 text-left transition hover:bg-slate-50"
+                >
+                  <Avatar golfer={g} size="sm" />
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-slate-800">{g.name}</p>
+                    <p className="text-xs text-slate-500">
+                      {g.handicap !== null ? `${g.handicap} handicap` : "No handicap yet"} · {g.reputation.completedRounds} GolfMe rounds
+                    </p>
+                  </div>
+                </button>
+                <button
+                  onClick={() => {
+                    unfollowUser(g.id);
+                    showToast(`Unfollowed ${g.name}.`, "info");
+                  }}
+                  className="shrink-0 text-xs font-semibold text-slate-400 transition-colors duration-200 hover:text-slate-700"
+                >
+                  Unfollow
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-2xl border border-slate-100 bg-white p-4">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Community</p>
+        <div className="flex divide-x divide-slate-100">
+          <div className="flex-1 pr-3">
+            <p className="text-lg font-bold text-slate-800">{myPostCount}</p>
+            <p className="text-xs text-slate-500">Posts</p>
+          </div>
+          <button onClick={() => navigate("/saved-posts")} className="flex-1 pl-3 text-left transition-opacity hover:opacity-70">
+            <p className="text-lg font-bold text-slate-800">{savedPostsList.length}</p>
+            <p className="text-xs text-slate-500">Saved Posts</p>
+          </button>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-slate-100 bg-white p-4">
         <div className="mb-3 flex items-center justify-between">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">When can you play?</p>
           <button
@@ -217,80 +257,11 @@ export function Profile() {
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Match preferences</p>
           <p className="mt-0.5 text-xs text-slate-400">
-            Background signals only — a great round can still match you even if one of these is off. Vibe, budget,
-            and walk/cart live in Edit profile below.
+            Used by Auto-Match and background compatibility — a great round can still match you even if one of
+            these is off. Saved instantly as you change them.
           </p>
         </div>
-
-        <div>
-          <p className="mb-1.5 text-sm font-semibold text-slate-800">Preferred courses</p>
-          <CoursePicker
-            selected={currentUser.preferredCourses}
-            onChange={(preferredCourses) => updateCurrentUserProfile({ preferredCourses })}
-          />
-        </div>
-
-        <div>
-          <p className="mb-1.5 text-sm font-semibold text-slate-800">Travel radius</p>
-          <div className="flex gap-1.5">
-            {RADIUS_OPTIONS.map((r) => (
-              <Pill
-                key={r}
-                active={currentUser.travelRadiusMiles === r}
-                onClick={() => updateCurrentUserProfile({ travelRadiusMiles: r })}
-                className="flex-1 py-2 text-center"
-              >
-                {r} mi
-              </Pill>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <p className="mb-1.5 text-sm font-semibold text-slate-800">Handicap / skill preference</p>
-          <div className="flex gap-1.5">
-            {SKILL_PREFERENCES.map((s) => (
-              <Pill
-                key={s}
-                active={currentUser.skillPreference === s}
-                onClick={() => updateCurrentUserProfile({ skillPreference: s })}
-                className="flex-1 py-2 text-center"
-              >
-                {s}
-              </Pill>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <p className="mb-1.5 text-sm font-semibold text-slate-800">Age preference</p>
-          <div className="flex flex-wrap gap-1.5">
-            {AGE_PREFERENCES.map((a) => (
-              <Pill
-                key={a}
-                active={currentUser.agePreference === a}
-                onClick={() => updateCurrentUserProfile({ agePreference: a as AgePreference })}
-              >
-                {a}
-              </Pill>
-            ))}
-          </div>
-        </div>
-
-        <div>
-          <p className="mb-1.5 text-sm font-semibold text-slate-800">Gender preference</p>
-          <div className="flex flex-wrap gap-1.5">
-            {GENDER_PREFERENCES.map((g) => (
-              <Pill
-                key={g}
-                active={currentUser.genderPreference === g}
-                onClick={() => updateCurrentUserProfile({ genderPreference: g as GenderPreference })}
-              >
-                {g}
-              </Pill>
-            ))}
-          </div>
-        </div>
+        <MatchPreferencesPanel value={matchPreferencesFromGolfer(currentUser)} onChange={(patch) => updateCurrentUserProfile(patch)} />
       </div>
 
       <div className="rounded-2xl border border-slate-100 bg-white p-4">
@@ -388,58 +359,9 @@ export function Profile() {
               placeholder="Comma-separated"
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelClass}>Budget min</label>
-              <input
-                type="number"
-                className={inputClass}
-                value={form.budgetMin}
-                onChange={(e) => setForm((f) => ({ ...f, budgetMin: Number(e.target.value) }))}
-              />
-            </div>
-            <div>
-              <label className={labelClass}>Budget max</label>
-              <input
-                type="number"
-                className={inputClass}
-                value={form.budgetMax}
-                onChange={(e) => setForm((f) => ({ ...f, budgetMax: Number(e.target.value) }))}
-              />
-            </div>
-          </div>
-          <div>
-            <label className={labelClass}>Walking or cart</label>
-            <div className="flex gap-2">
-              {WALK_OPTIONS.map((w) => (
-                <button
-                  key={w}
-                  onClick={() => setForm((f) => ({ ...f, walkOrCart: w }))}
-                  className={`flex-1 rounded-xl border px-3 py-2 text-sm font-medium transition ${
-                    form.walkOrCart === w ? "border-fairway-400 bg-fairway-50 text-fairway-700" : "border-slate-200 text-slate-600"
-                  }`}
-                >
-                  {w}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <label className={labelClass}>Golf vibe (up to 2)</label>
-            <div className="flex flex-wrap gap-1.5">
-              {GOLF_VIBES.map((v) => (
-                <button
-                  key={v}
-                  onClick={() => toggleVibe(v)}
-                  className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
-                    form.vibes.includes(v) ? "border-transparent bg-fairway-600 text-white" : "border-slate-200 text-slate-600"
-                  }`}
-                >
-                  {v}
-                </button>
-              ))}
-            </div>
-          </div>
+          <p className="-mt-1 text-xs text-slate-400">
+            Budget, walking/cart, and Golf vibe now live in Match preferences below — changes there save instantly.
+          </p>
           <div>
             <label className={labelClass}>Bio</label>
             <textarea className={inputClass} rows={3} value={form.bio} onChange={(e) => setForm((f) => ({ ...f, bio: e.target.value }))} />
@@ -468,7 +390,7 @@ export function Profile() {
                 <Wallet size={12} /> Budget
               </p>
               <p className="mt-1 font-bold text-slate-800">
-                ${currentUser.budgetMin}–${currentUser.budgetMax}
+                {formatBudgetRange(currentUser.budgetMin, currentUser.budgetMax, currentUser.noBudgetPreference)}
               </p>
             </div>
             <div className="rounded-2xl border border-slate-100 bg-white p-4">

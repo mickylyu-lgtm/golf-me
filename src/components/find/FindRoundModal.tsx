@@ -1,15 +1,31 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Sparkles, SlidersHorizontal } from "lucide-react";
+import { ArrowLeft, ArrowRight, Sparkles, SlidersHorizontal } from "lucide-react";
+import { useData } from "../../context/DataContext";
+import { useToast } from "../../context/ToastContext";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
 import { Pill } from "../ui/Pill";
+import { Badge } from "../ui/Badge";
+import { Slider } from "../ui/Slider";
 import { inputClass } from "../ui/FormControls";
-import { GOLF_VIBES } from "../../types";
+import { BUDGET_PREF_MAX, BUDGET_PREF_MIN, GOLF_VIBES, TRAVEL_RADIUS_MAX, TRAVEL_RADIUS_MIN } from "../../types";
 import type { GolfVibe, SkillFilter, WalkOrCart } from "../../types";
+import {
+  GAME_FORMAT_OPTIONS,
+  GENDER_OPTIONS_MATCH,
+  GROUP_TYPE_OPTIONS,
+  NETWORKING_OPTIONS,
+  ROUND_LENGTH_OPTIONS,
+  TRAVEL_RADIUS_PRESETS,
+  formatBudgetValue,
+  formatDistanceValue,
+  newPreferenceParams,
+  selectedNewPreferenceLabels,
+} from "../../lib/matchPreferences";
+import type { NewPreferenceSelections } from "../../lib/preferenceMatch";
 
 export type WhenChoice = "today" | "tomorrow" | "weekend" | "date";
-export type RadiusChoice = "10" | "25" | "50";
 
 const WHEN_OPTIONS: { value: WhenChoice; label: string }[] = [
   { value: "today", label: "Today" },
@@ -18,35 +34,49 @@ const WHEN_OPTIONS: { value: WhenChoice; label: string }[] = [
   { value: "date", label: "Choose Date" },
 ];
 
-const RADIUS_OPTIONS: { value: RadiusChoice; label: string }[] = [
-  { value: "10", label: "10 miles" },
-  { value: "25", label: "25 miles" },
-  { value: "50", label: "50 miles" },
-];
-
 const SKILL_OPTIONS: SkillFilter[] = ["Any Skill Level", "Beginner", "Intermediate", "Advanced"];
 const WALK_OPTIONS: WalkOrCart[] = ["Either", "Walking", "Cart"];
+
+function newPreferencesFromUser(user: { roundLengthPreference: NewPreferenceSelections["roundLengthPreference"]; genderPreference: NewPreferenceSelections["genderPreference"]; groupTypePreference: NewPreferenceSelections["groupTypePreference"]; gameFormatPreference: NewPreferenceSelections["gameFormatPreference"]; networkingPreference: NewPreferenceSelections["networkingPreference"] }): NewPreferenceSelections {
+  return {
+    roundLengthPreference: user.roundLengthPreference,
+    genderPreference: user.genderPreference,
+    groupTypePreference: user.groupTypePreference,
+    gameFormatPreference: user.gameFormatPreference,
+    networkingPreference: user.networkingPreference,
+  };
+}
 
 // Reached only from the homepage's "Find Me a Round" action, so intent is
 // implied (join an existing group) — no separate question needed here.
 export function FindRoundModal({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
+  const { currentUser, updateCurrentUserProfile } = useData();
+  const { showToast } = useToast();
 
   const [when, setWhen] = useState<WhenChoice>("today");
   const [customDate, setCustomDate] = useState("");
-  const [radius, setRadius] = useState<RadiusChoice>("25");
+  const [radius, setRadius] = useState(25);
   const [showFilters, setShowFilters] = useState(false);
-  const [budgetMax, setBudgetMax] = useState<number | "">("");
+  const [budgetCapEnabled, setBudgetCapEnabled] = useState(false);
+  const [budgetMax, setBudgetMax] = useState(100);
   const [skillLevel, setSkillLevel] = useState<SkillFilter | "">("");
   const [vibe, setVibe] = useState<GolfVibe | "">("");
   const [walkOrCart, setWalkOrCart] = useState<WalkOrCart | "">("");
 
+  // A per-search draft of the 5 Match Preferences — starts from the golfer's
+  // saved defaults, but never writes back to the profile unless "Save as my
+  // new preference" is tapped explicitly.
+  const [editingPrefs, setEditingPrefs] = useState(false);
+  const [draftPrefs, setDraftPrefs] = useState<NewPreferenceSelections>(() => newPreferencesFromUser(currentUser));
+
   const canSubmit = when !== "date" || Boolean(customDate);
+  const preferenceLabels = selectedNewPreferenceLabels(draftPrefs);
 
   function buildParams() {
-    const params = new URLSearchParams({ matched: "1", when, radius, intent: "join" });
+    const params = new URLSearchParams({ matched: "1", when, radius: String(radius), intent: "join", ...newPreferenceParams(draftPrefs) });
     if (when === "date" && customDate) params.set("date", customDate);
-    if (budgetMax !== "") params.set("budgetMax", String(budgetMax));
+    if (budgetCapEnabled) params.set("budgetMax", String(budgetMax));
     if (skillLevel) params.set("skill", skillLevel);
     if (vibe) params.set("vibe", vibe);
     if (walkOrCart) params.set("walk", walkOrCart);
@@ -63,6 +93,92 @@ export function FindRoundModal({ onClose }: { onClose: () => void }) {
     if (!canSubmit) return;
     navigate(`/auto-match?${buildParams().toString()}`);
     onClose();
+  }
+
+  function saveAsNewPreference() {
+    updateCurrentUserProfile(draftPrefs);
+    showToast("Saved as your new Match Preferences.", "success");
+  }
+
+  if (editingPrefs) {
+    return (
+      <Modal
+        title="Match Preferences"
+        onClose={onClose}
+        footer={
+          <div className="flex flex-col gap-2">
+            <Button variant="outline" fullWidth onClick={saveAsNewPreference}>
+              Save as My New Preference
+            </Button>
+            <Button fullWidth onClick={() => setEditingPrefs(false)}>
+              Use for This Search
+            </Button>
+          </div>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <button
+            onClick={() => setEditingPrefs(false)}
+            className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
+          >
+            <ArrowLeft size={16} /> Back
+          </button>
+          <p className="text-xs text-slate-500">
+            Changes here apply to this search only — tap "Save as My New Preference" to make them your default.
+          </p>
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Round length</label>
+            <div className="flex flex-wrap gap-1.5">
+              {ROUND_LENGTH_OPTIONS.map((r) => (
+                <Pill key={r} active={draftPrefs.roundLengthPreference === r} onClick={() => setDraftPrefs((p) => ({ ...p, roundLengthPreference: r }))}>
+                  {r}
+                </Pill>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Gender preference</label>
+            <div className="flex flex-wrap gap-1.5">
+              {GENDER_OPTIONS_MATCH.map((g) => (
+                <Pill key={g} active={draftPrefs.genderPreference === g} onClick={() => setDraftPrefs((p) => ({ ...p, genderPreference: g }))}>
+                  {g === "Prefer mixed group" ? "Mixed Group" : g}
+                </Pill>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Group type</label>
+            <div className="flex flex-wrap gap-1.5">
+              {GROUP_TYPE_OPTIONS.map((g) => (
+                <Pill key={g} active={draftPrefs.groupTypePreference === g} onClick={() => setDraftPrefs((p) => ({ ...p, groupTypePreference: g }))}>
+                  {g}
+                </Pill>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Game format</label>
+            <div className="flex flex-wrap gap-1.5">
+              {GAME_FORMAT_OPTIONS.map((g) => (
+                <Pill key={g} active={draftPrefs.gameFormatPreference === g} onClick={() => setDraftPrefs((p) => ({ ...p, gameFormatPreference: g }))}>
+                  {g}
+                </Pill>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Networking</label>
+            <div className="flex flex-wrap gap-1.5">
+              {NETWORKING_OPTIONS.map((n) => (
+                <Pill key={n} active={draftPrefs.networkingPreference === n} onClick={() => setDraftPrefs((p) => ({ ...p, networkingPreference: n }))}>
+                  {n}
+                </Pill>
+              ))}
+            </div>
+          </div>
+        </div>
+      </Modal>
+    );
   }
 
   return (
@@ -103,15 +219,35 @@ export function FindRoundModal({ onClose }: { onClose: () => void }) {
           )}
         </div>
 
-        <div>
-          <p className="mb-2 text-sm font-bold text-slate-800">How far?</p>
-          <div className="flex flex-wrap gap-1.5">
-            {RADIUS_OPTIONS.map((opt) => (
-              <Pill key={opt.value} active={radius === opt.value} onClick={() => setRadius(opt.value)}>
-                {opt.label}
-              </Pill>
-            ))}
+        <Slider
+          label="How far?"
+          min={TRAVEL_RADIUS_MIN}
+          max={TRAVEL_RADIUS_MAX}
+          step={5}
+          value={radius}
+          onChange={setRadius}
+          formatValue={formatDistanceValue}
+          presets={TRAVEL_RADIUS_PRESETS}
+        />
+
+        <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-3.5">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-sm font-bold text-slate-800">Using Your Preferences</p>
+            <button onClick={() => setEditingPrefs(true)} className="text-xs font-semibold text-fairway-700 hover:underline">
+              View / Edit Preferences
+            </button>
           </div>
+          {preferenceLabels.length === 0 ? (
+            <p className="text-xs text-slate-500">No Match Preferences selected yet — Auto-Match needs at least 3 to run.</p>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {preferenceLabels.map((label) => (
+                <Badge key={label} tone="fairway">
+                  {label}
+                </Badge>
+              ))}
+            </div>
+          )}
         </div>
 
         <div>
@@ -125,14 +261,21 @@ export function FindRoundModal({ onClose }: { onClose: () => void }) {
           {showFilters && (
             <div className="mt-3 flex flex-col gap-4 rounded-2xl border border-slate-100 bg-slate-50/60 p-3.5">
               <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">Budget max ($/round)</label>
-                <input
-                  type="number"
-                  min={0}
-                  className={inputClass}
+                <div className="mb-2 flex items-center justify-between">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Budget max ($/round)</label>
+                  <Pill active={!budgetCapEnabled} onClick={() => setBudgetCapEnabled((v) => !v)}>
+                    No limit
+                  </Pill>
+                </div>
+                <Slider
+                  label="Budget max"
+                  min={BUDGET_PREF_MIN}
+                  max={BUDGET_PREF_MAX}
+                  step={10}
                   value={budgetMax}
-                  onChange={(e) => setBudgetMax(e.target.value === "" ? "" : Number(e.target.value))}
-                  placeholder="No limit"
+                  onChange={setBudgetMax}
+                  formatValue={formatBudgetValue}
+                  disabled={!budgetCapEnabled}
                 />
               </div>
               <div>

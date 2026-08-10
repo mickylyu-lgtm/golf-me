@@ -30,6 +30,15 @@ export function formatMoney(n: number): string {
   return `$${n.toFixed(0)}`;
 }
 
+// BUDGET_PREF_MAX (300) is the slider's uncapped "+" ceiling — shown as
+// "$300+" rather than a hard limit. noBudgetPreference is a distinct state
+// from a literal $0 minimum, never collapsed into it.
+export function formatBudgetRange(min: number, max: number, noPreference: boolean): string {
+  if (noPreference) return "No Budget Preference";
+  const maxLabel = max >= 300 ? "$300+" : `$${max}`;
+  return `$${min}–${maxLabel}`;
+}
+
 export function handicapLabel(handicap: number | null): string {
   if (handicap === null) return "No handicap yet";
   if (handicap <= 5) return `${handicap} handicap`;
@@ -61,6 +70,30 @@ export function memberSinceLabel(iso: string): string {
 
 export function isNewAccount(completedRounds: number): boolean {
   return completedRounds < 3;
+}
+
+// Compact relative timestamp for message previews/threads — "2m", "1h",
+// "Yesterday", or a short date once it's more than a day old.
+export function formatRelativeTime(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+
+  if (diffMin < 1) return "Just now";
+  if (diffMin < 60) return `${diffMin}m`;
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) return `${diffHours}h`;
+
+  const isSameDay = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  const yesterday = new Date();
+  yesterday.setDate(now.getDate() - 1);
+  if (isSameDay(d, yesterday)) return "Yesterday";
+
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 7) return d.toLocaleDateString("en-US", { weekday: "short" });
+  return formatShortDate(iso);
 }
 
 export function paceLabel(goodPacePct: number): string {

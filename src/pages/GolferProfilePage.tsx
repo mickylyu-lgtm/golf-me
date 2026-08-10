@@ -6,11 +6,15 @@ import {
   Flag,
   Footprints,
   MapPin,
+  MessageCircle,
   MoreHorizontal,
+  Scale,
   ShieldAlert,
   ShieldCheck,
   ShieldOff,
   UserPlus,
+  UserRoundCheck,
+  UserRoundPlus,
   Users,
   Wallet,
 } from "lucide-react";
@@ -21,6 +25,7 @@ import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 import { ReportModal } from "../components/trust/ReportModal";
+import { CompareModal } from "../components/golfer/CompareModal";
 import { MatchReasons } from "../components/golfer/MatchReasons";
 import { ReputationRow } from "../components/golfer/ReputationRow";
 import { TrustBadgeRow } from "../components/golfer/TrustBadges";
@@ -28,17 +33,32 @@ import { CredibilityBadge } from "../components/golfer/CredibilityBadge";
 import { computeCompatibility } from "../lib/compatibility";
 import { matchTier, golferMatchReasons } from "../lib/matchReasons";
 import { computeCredibility, computeHandicapConfidence } from "../lib/credibility";
-import { handicapLabel, isNewAccount, paceLabel } from "../lib/format";
+import { formatBudgetRange, handicapLabel, isNewAccount, paceLabel } from "../lib/format";
 import { VIBE_TONE } from "../lib/theme";
 
 export function GolferProfilePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { currentUser, getGolfer, isBlocked, blockUser, unblockUser, hasPlayedWith, isInCircle, addToCircle, reviewsAbout } = useData();
+  const {
+    currentUser,
+    getGolfer,
+    isBlocked,
+    blockUser,
+    unblockUser,
+    hasPlayedWith,
+    isInCircle,
+    addToCircle,
+    reviewsAbout,
+    isFollowing,
+    followUser,
+    unfollowUser,
+    canMessage,
+  } = useData();
   const { showToast } = useToast();
   const [menuOpen, setMenuOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
 
   const golfer = id ? getGolfer(id) : undefined;
   const compat = useMemo(() => (golfer ? computeCompatibility(currentUser, golfer) : null), [currentUser, golfer]);
@@ -58,6 +78,8 @@ export function GolferProfilePage() {
   }
 
   const blocked = isBlocked(golfer.id);
+  const following = isFollowing(golfer.id);
+  const messagingAllowed = canMessage(golfer.id);
   const tier = compat ? matchTier(compat.overall) : null;
   const reasons = compat ? golferMatchReasons(compat) : [];
   const isEstablished = !isNewAccount(golfer.reputation.completedRounds);
@@ -136,6 +158,44 @@ export function GolferProfilePage() {
         </div>
         <CredibilityBadge tier={credibility.tier} label={credibility.label} size="sm" />
         <TrustBadgeRow golfer={golfer} />
+
+        {!blocked && (
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <Button
+              size="sm"
+              variant={following ? "outline" : "primary"}
+              icon={following ? <UserRoundCheck size={14} /> : <UserRoundPlus size={14} />}
+              onClick={() => {
+                if (following) {
+                  unfollowUser(golfer.id);
+                  showToast(`Unfollowed ${golfer.name}.`, "info");
+                } else {
+                  followUser(golfer.id);
+                  showToast(`Following ${golfer.name}.`, "success");
+                }
+              }}
+            >
+              {following ? "Following" : "Follow"}
+            </Button>
+            {/* messagingAllowed is false here only when they've blocked us
+                (self and "we blocked them" are already covered by !blocked
+                above) — silently hide rather than surface their block. */}
+            {messagingAllowed && (
+              <Button
+                size="sm"
+                variant="outline"
+                icon={<MessageCircle size={14} />}
+                onClick={() => navigate(`/messages/${golfer.id}`)}
+              >
+                Message
+              </Button>
+            )}
+            <Button size="sm" variant="outline" icon={<Scale size={14} />} onClick={() => setCompareOpen(true)}>
+              Compare
+            </Button>
+          </div>
+        )}
+
         {hasPlayedWith(golfer.id) &&
           (isInCircle(golfer.id) ? (
             <Badge tone="fairway" icon={<Users size={12} />}>
@@ -232,7 +292,7 @@ export function GolferProfilePage() {
             <Wallet size={12} /> Budget / round
           </p>
           <p className="mt-1 font-bold text-slate-800">
-            ${golfer.budgetMin}–${golfer.budgetMax}
+            {formatBudgetRange(golfer.budgetMin, golfer.budgetMax, golfer.noBudgetPreference)}
           </p>
         </div>
         <div className="rounded-2xl border border-slate-100 bg-white p-4">
@@ -264,6 +324,8 @@ export function GolferProfilePage() {
           ))}
         </div>
       </div>
+
+      {compareOpen && <CompareModal other={golfer} onClose={() => setCompareOpen(false)} />}
 
       {reportOpen && (
         <ReportModal reportedId={golfer.id} reportedName={golfer.name} context="profile" onClose={() => setReportOpen(false)} />

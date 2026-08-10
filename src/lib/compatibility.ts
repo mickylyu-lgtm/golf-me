@@ -43,6 +43,9 @@ function skillScore(a: GolferProfile, b: GolferProfile): number {
 }
 
 function budgetScore(a: GolferProfile, b: GolferProfile): number {
+  // Either side opting out of budget matching entirely is neutral, not a
+  // literal $0 range that would otherwise read as a mismatch.
+  if (a.noBudgetPreference || b.noBudgetPreference) return 75;
   const overlapLow = Math.max(a.budgetMin, b.budgetMin);
   const overlapHigh = Math.min(a.budgetMax, b.budgetMax);
   if (overlapHigh < overlapLow) {
@@ -109,6 +112,7 @@ function callSkillScore(user: GolferProfile, call: GolfCall): number {
 }
 
 function callBudgetScore(user: GolferProfile, call: GolfCall): number {
+  if (user.noBudgetPreference) return 90;
   if (call.estimatedPricePerPerson >= user.budgetMin && call.estimatedPricePerPerson <= user.budgetMax) return 100;
   const gap =
     call.estimatedPricePerPerson < user.budgetMin

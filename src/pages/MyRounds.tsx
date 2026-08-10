@@ -7,6 +7,7 @@ import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { EmptyState } from "../components/ui/EmptyState";
 import { ReviewModal } from "../components/review/ReviewModal";
+import { ShareRoundPrompt } from "../components/community/ShareRoundPrompt";
 import { CLICKABLE_CARD_CLASS } from "../components/ui/cardStyles";
 import { formatDate, formatMoney } from "../lib/format";
 import { VIBE_TONE } from "../lib/theme";
@@ -16,6 +17,7 @@ export function MyRounds() {
   const { currentUser, golfCalls, getGolfer, hasReviewed } = useData();
   const navigate = useNavigate();
   const [reviewTarget, setReviewTarget] = useState<{ call: GolfCall; revieweeId: string } | null>(null);
+  const [sharePromptCall, setSharePromptCall] = useState<GolfCall | null>(null);
 
   const myCalls = useMemo(
     () => golfCalls.filter((c) => c.joinedGolferIds.includes(currentUser.id) || c.hostId === currentUser.id),
@@ -173,8 +175,17 @@ export function MyRounds() {
         (() => {
           const reviewee = getGolfer(reviewTarget.revieweeId);
           if (!reviewee) return null;
-          return <ReviewModal callId={reviewTarget.call.id} reviewee={reviewee} onClose={() => setReviewTarget(null)} />;
+          return (
+            <ReviewModal
+              callId={reviewTarget.call.id}
+              reviewee={reviewee}
+              onClose={() => setReviewTarget(null)}
+              onSubmitted={() => setSharePromptCall(reviewTarget.call)}
+            />
+          );
         })()}
+
+      {sharePromptCall && <ShareRoundPrompt call={sharePromptCall} onClose={() => setSharePromptCall(null)} />}
     </div>
   );
 }

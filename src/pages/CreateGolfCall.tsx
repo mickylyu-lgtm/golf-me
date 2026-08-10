@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, ArrowRight, ChevronDown, Users } from "lucide-react";
 import { useData } from "../context/DataContext";
@@ -7,8 +7,8 @@ import { Avatar } from "../components/ui/Avatar";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Pill } from "../components/ui/Pill";
-import { GOLF_VIBES } from "../types";
-import type { GolfVibe, JoinMode, SkillFilter, WalkOrCart } from "../types";
+import { GAME_FORMATS, GOLF_VIBES } from "../types";
+import type { GameFormat, GolfVibe, Holes, JoinMode, SkillFilter, WalkOrCart } from "../types";
 import { inputClass, labelClass } from "../components/ui/FormControls";
 import { getWeekendRange } from "../lib/greeting";
 import { skillTierFromHandicap } from "../lib/format";
@@ -33,25 +33,57 @@ function prefillDateFromWhen(when: string | null, dateParam: string | null): str
   return "";
 }
 
-export function CreateGolfCall() {
+interface CreateGolfCallProps {
+  // Only meaningful inside the swipeable root-tab carousel, which keeps
+  // this page permanently mounted rather than remounting it per navigation
+  // — true when it's the tab currently in view. Defaults to true so the
+  // page still behaves correctly if ever rendered on its own (e.g. a
+  // direct route match outside the carousel).
+  active?: boolean;
+}
+
+export function CreateGolfCall({ active = true }: CreateGolfCallProps) {
   const navigate = useNavigate();
-  const { currentUser, createGolfCall, visibleGolfers, circleGolfers } = useData();
+  const { currentUser, createGolfCall, visibleGolfers, circleGolfers, attachGolfCallToPost } = useData();
   const { showToast } = useToast();
   const [searchParams] = useSearchParams();
+  const fromPostId = searchParams.get("fromPost");
 
   const [fillMode, setFillMode] = useState(searchParams.get("mode") === "fill");
-  const [course, setCourse] = useState("");
+  const [course, setCourse] = useState(() => searchParams.get("course") ?? "");
   const [areaLabel, setAreaLabel] = useState("");
-  const [distanceMiles, setDistanceMiles] = useState(5);
+  // "" is a valid mid-edit state for these two — never coerced to 0 until
+  // handleSubmit, so an intentional 0 can't get stuck un-clearable.
+  const [distanceMiles, setDistanceMiles] = useState<number | "">(5);
   const [date, setDate] = useState(() => prefillDateFromWhen(searchParams.get("when"), searchParams.get("date")));
   const [timeLabel, setTimeLabel] = useState("");
-  const [price, setPrice] = useState(50);
+  const [price, setPrice] = useState<number | "">(50);
+
+  // The lazy initial state above only ever runs on first mount. Inside the
+  // root-tab carousel this page never unmounts, so re-read the URL whenever
+  // this tab transitions from inactive to active (e.g. Home's "Fill My
+  // Foursome" button navigating here with ?mode=fill) — otherwise a second
+  // visit via a link with fresh params would silently be ignored.
+  const wasActive = useRef(active);
+  useEffect(() => {
+    if (active && !wasActive.current) {
+      if (searchParams.get("mode") === "fill") setFillMode(true);
+      const whenParam = searchParams.get("when");
+      const dateParam = searchParams.get("date");
+      if (whenParam || dateParam) setDate(prefillDateFromWhen(whenParam, dateParam));
+      const courseParam = searchParams.get("course");
+      if (courseParam) setCourse(courseParam);
+    }
+    wasActive.current = active;
+  }, [active, searchParams]);
   const [totalSpots, setTotalSpots] = useState(4);
   const [joinMode, setJoinMode] = useState<JoinMode>("instant");
   const [lookingFor, setLookingFor] = useState<LookingFor>("anyone");
   const [skillLevel, setSkillLevel] = useState<SkillFilter>("Any Skill Level");
   const [vibe, setVibe] = useState<GolfVibe>("Casual & Social");
   const [walkOrCart, setWalkOrCart] = useState<WalkOrCart>("Either");
+  const [holes, setHoles] = useState<Holes>(18);
+  const [gameFormat, setGameFormat] = useState<GameFormat>("Standard Stroke Play");
   const [notes, setNotes] = useState("");
   const [friendIds, setFriendIds] = useState<string[]>([]);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -89,20 +121,23 @@ export function CreateGolfCall() {
     const call = createGolfCall({
       course: course.trim(),
       areaLabel: areaLabel.trim(),
-      distanceMiles,
+      distanceMiles: distanceMiles === "" ? 0 : distanceMiles,
       dateISO,
       timeLabel: timeLabel.trim(),
-      estimatedPricePerPerson: price,
+      estimatedPricePerPerson: price === "" ? 0 : price,
       totalSpots,
       joinMode,
       skillLevel: effectiveSkillLevel,
       vibe,
       walkOrCart,
+      holes,
+      gameFormat,
       notes: notes.trim() || undefined,
       additionalJoinedGolferIds: fillMode ? friendIds : undefined,
     });
+    if (fromPostId) attachGolfCallToPost(fromPostId, call.id);
     showToast(fillMode ? "Your open spot is posted — we'll help you fill it." : "Your Golf Call is live!", "success");
-    navigate(`/golf-calls/${call.id}`);
+    navigate(fromPostId ? `/community/${fromPostId}` : `/golf-calls/${call.id}`);
   }
 
   return (
@@ -152,7 +187,13 @@ export function CreateGolfCall() {
           </div>
           <div>
             <label className={labelClass}>Distance from you (mi)</label>
-            <input type="number" min={0} className={inputClass} value={distanceMiles} onChange={(e) => setDistanceMiles(Number(e.target.value))} />
+            <input
+              type="number"
+              min={0}
+              className={inputClass}
+              value={distanceMiles}
+              onChange={(e) => setDistanceMiles(e.target.value === "" ? "" : Number(e.target.value))}
+            />
           </div>
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -170,7 +211,13 @@ export function CreateGolfCall() {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className={labelClass}>Estimated price / person</label>
-              <input type="number" min={0} className={inputClass} value={price} onChange={(e) => setPrice(Number(e.target.value))} />
+              <input
+                type="number"
+                min={0}
+                className={inputClass}
+                value={price}
+                onChange={(e) => setPrice(e.target.value === "" ? "" : Number(e.target.value))}
+              />
             </div>
             <div>
               <label className={labelClass}>Total spots</label>
@@ -306,6 +353,29 @@ export function CreateGolfCall() {
           </div>
         </div>
 
+        <div>
+          <label className={labelClass}>Holes</label>
+          <div className="flex gap-2">
+            <Pill active={holes === 9} onClick={() => setHoles(9)} className="flex-1 py-2 text-center">
+              9 Holes
+            </Pill>
+            <Pill active={holes === 18} onClick={() => setHoles(18)} className="flex-1 py-2 text-center">
+              18 Holes
+            </Pill>
+          </div>
+        </div>
+
+        <div>
+          <label className={labelClass}>Game format</label>
+          <div className="flex flex-wrap gap-1.5">
+            {GAME_FORMATS.map((g) => (
+              <Pill key={g} active={gameFormat === g} onClick={() => setGameFormat(g)}>
+                {g}
+              </Pill>
+            ))}
+          </div>
+        </div>
+
         {!fillMode && (
           <div>
             <label className={labelClass}>Walking or cart</label>
@@ -371,7 +441,13 @@ export function CreateGolfCall() {
               <div className="mt-3 flex flex-col gap-4 rounded-2xl border border-slate-100 bg-slate-50/60 p-3.5">
                 <div>
                   <label className={labelClass}>Estimated price / person</label>
-                  <input type="number" min={0} className={inputClass} value={price} onChange={(e) => setPrice(Number(e.target.value))} />
+                  <input
+                    type="number"
+                    min={0}
+                    className={inputClass}
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value === "" ? "" : Number(e.target.value))}
+                  />
                 </div>
                 <div>
                   <label className={labelClass}>Walking or cart</label>

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Send } from "lucide-react";
 import { useData } from "../../context/DataContext";
 import { Avatar } from "../ui/Avatar";
+import { ChatComposer } from "./ChatComposer";
 
 export function GroupChat({ callId }: { callId: string }) {
   const { currentUser, getGolfer, messagesForCall, sendMessage } = useData();
@@ -51,23 +51,7 @@ export function GroupChat({ callId }: { callId: string }) {
         })}
         <div ref={bottomRef} />
       </div>
-      <div className="flex items-center gap-2 border-t border-slate-100 px-3 py-2.5">
-        <input
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleSend()}
-          placeholder="Message the group..."
-          className="flex-1 rounded-full bg-slate-100 px-3.5 py-2 text-sm outline-none focus:bg-slate-50 focus:ring-2 focus:ring-fairway-100"
-        />
-        <button
-          onClick={handleSend}
-          disabled={!text.trim()}
-          aria-label="Send message"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-fairway-600 text-white transition-all duration-200 ease-out hover:bg-fairway-700 hover:-translate-y-px active:translate-y-0 active:bg-fairway-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-40 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
-        >
-          <Send size={15} />
-        </button>
-      </div>
+      <ChatComposer value={text} onChange={setText} onSend={handleSend} placeholder="Message the group..." />
     </div>
   );
 }

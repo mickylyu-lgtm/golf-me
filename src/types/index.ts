@@ -51,13 +51,59 @@ export type SkillFilter = "Any Skill Level" | "Beginner" | "Intermediate" | "Adv
 // cover the common cases; a golfer can type anything else as "Custom."
 export const GENDER_OPTIONS = ["Man", "Woman", "Non-binary", "Prefer not to say"] as const;
 
-export type SkillPreference = "Similar to me" | "Any skill level";
-
-export type AgePreference = "Any age" | "18-24" | "25-34" | "35-44" | "45-54" | "55+";
-export const AGE_PREFERENCES: AgePreference[] = ["Any age", "18-24", "25-34", "35-44", "45-54", "55+"];
+// Age/handicap match preferences are stored as real numeric ranges (sliders)
+// rather than fixed buckets — 75/36 double as the slider's "+"-uncapped max.
+export const AGE_PREF_MIN = 18;
+export const AGE_PREF_MAX = 75;
+export const HANDICAP_PREF_MIN = 0;
+export const HANDICAP_PREF_MAX = 36;
+export const BUDGET_PREF_MIN = 0;
+export const BUDGET_PREF_MAX = 300;
+export const TRAVEL_RADIUS_MIN = 5;
+export const TRAVEL_RADIUS_MAX = 100;
 
 export type GenderPreference = "No preference" | "Men" | "Women" | "Prefer mixed group";
 export const GENDER_PREFERENCES: GenderPreference[] = ["No preference", "Men", "Women", "Prefer mixed group"];
+
+// --- Match Preferences (round 2): Round Length, Group Type, Game Format,
+// Networking. "Gender Preference" from the same batch reuses GenderPreference
+// above rather than duplicating it. ---
+
+export type RoundLengthPreference = "No Preference" | "9 Holes" | "18 Holes";
+export const ROUND_LENGTH_PREFERENCES: RoundLengthPreference[] = ["No Preference", "9 Holes", "18 Holes"];
+export type Holes = 9 | 18;
+
+// New Golfers = not previously played with. People I Follow / Golf Circle =
+// relationship checks against the round's roster. Mixed/Anyone is a real
+// selection (not the same as "No Preference") that always matches — it's an
+// explicit "no relationship restriction" choice, so it still counts as a
+// selected preference.
+export type GroupTypePreference = "No Preference" | "New Golfers" | "People I Follow" | "Golf Circle" | "Mixed / Anyone";
+export const GROUP_TYPE_PREFERENCES: GroupTypePreference[] = [
+  "No Preference",
+  "New Golfers",
+  "People I Follow",
+  "Golf Circle",
+  "Mixed / Anyone",
+];
+
+// GameFormat is the concrete value a Golf Call host picks; GameFormatPreference
+// adds "No Preference" for a golfer's saved match preference.
+export type GameFormat = "Standard Stroke Play" | "Match Play" | "Scramble" | "Best Ball" | "Practice / Casual Round";
+export const GAME_FORMATS: GameFormat[] = ["Standard Stroke Play", "Match Play", "Scramble", "Best Ball", "Practice / Casual Round"];
+export type GameFormatPreference = "No Preference" | GameFormat;
+export const GAME_FORMAT_PREFERENCES: GameFormatPreference[] = ["No Preference", ...GAME_FORMATS];
+
+// Deliberately secondary to golf — matched against a round's existing
+// "Networking" Golf Vibe rather than adding a whole parallel round-level
+// field, so this never becomes its own LinkedIn-style system.
+export type NetworkingPreference = "No Preference" | "Not Looking to Network" | "Open to Networking" | "Business / Professional Networking";
+export const NETWORKING_PREFERENCES: NetworkingPreference[] = [
+  "No Preference",
+  "Not Looking to Network",
+  "Open to Networking",
+  "Business / Professional Networking",
+];
 
 export interface VerificationState {
   phoneVerified: boolean;
@@ -88,6 +134,9 @@ export interface GolferProfile {
   favoriteCourses: string[];
   budgetMin: number;
   budgetMax: number;
+  // Distinct from budgetMin === 0 — an explicit "I don't want budget used in
+  // matching at all" rather than "my minimum is free."
+  noBudgetPreference: boolean;
   availability: AvailabilitySlot[];
   walkOrCart: WalkOrCart;
   vibes: GolfVibe[]; // primary vibe first
@@ -105,9 +154,19 @@ export interface GolferProfile {
   // weighting only, never strict filters, never the headline of a match). ---
   preferredCourses: string[]; // empty = "no preference, show me anything nearby"
   travelRadiusMiles: number;
-  skillPreference: SkillPreference;
-  agePreference: AgePreference;
+  // Preferred handicap range for playing partners — a full 0-36 span (the
+  // slider's default) behaves as "no preference," same convention as
+  // travelRadiusMiles/budget rather than a separate boolean.
+  handicapPreferenceMin: number;
+  handicapPreferenceMax: number;
+  agePreferenceMin: number;
+  agePreferenceMax: number;
+  noAgePreference: boolean;
   genderPreference: GenderPreference;
+  roundLengthPreference: RoundLengthPreference;
+  groupTypePreference: GroupTypePreference;
+  gameFormatPreference: GameFormatPreference;
+  networkingPreference: NetworkingPreference;
 }
 
 export type GolfCallStatus = "open" | "full" | "completed" | "cancelled";
@@ -128,6 +187,8 @@ export interface GolfCall {
   skillLevel: SkillFilter;
   vibe: GolfVibe;
   walkOrCart: WalkOrCart;
+  holes: Holes;
+  gameFormat: GameFormat;
   status: GolfCallStatus;
   notes?: string;
   createdAt: string;
@@ -164,19 +225,30 @@ export interface Review {
   createdAt: string;
 }
 
+// One shared taxonomy for every report surface (profile, chat, and now
+// Community posts/comments) — deliberately not a second "community reports"
+// system. Superset of the original list: content-moderation categories
+// (Hate/Sexual/Impersonation/Dangerous) added for Community, "No-show"
+// (real-world behavior, not content) kept for round/profile reports.
 export type ReportCategory =
+  | "Spam"
   | "Harassment"
-  | "Spam or scam"
-  | "Inappropriate behavior"
-  | "Fake identity"
+  | "Hate / abusive content"
+  | "Sexual / inappropriate content"
+  | "Scam"
+  | "Impersonation"
+  | "Dangerous behavior"
   | "No-show"
   | "Other";
 
 export const REPORT_CATEGORIES: ReportCategory[] = [
+  "Spam",
   "Harassment",
-  "Spam or scam",
-  "Inappropriate behavior",
-  "Fake identity",
+  "Hate / abusive content",
+  "Sexual / inappropriate content",
+  "Scam",
+  "Impersonation",
+  "Dangerous behavior",
   "No-show",
   "Other",
 ];
@@ -187,8 +259,10 @@ export interface Report {
   reportedId: string;
   category: ReportCategory;
   details: string;
-  context: "profile" | "chat" | "round";
+  context: "profile" | "chat" | "round" | "post" | "comment";
   golfCallId?: string;
+  postId?: string;
+  commentId?: string;
   createdAt: string;
 }
 
@@ -205,6 +279,124 @@ export interface CircleConnection {
   id: string;
   ownerId: string;
   memberId: string;
+  createdAt: string;
+}
+
+// Following is deliberately separate from Golf Circle: "I'm interested in
+// golfing with/keeping tabs on this person" vs. "I've actually played with
+// them and would again." Following never auto-adds to Golf Circle.
+export interface FollowConnection {
+  id: string;
+  followerId: string;
+  followingId: string;
+  createdAt: string;
+}
+
+// One-to-one messages, keyed by a canonical conversation id (sorted pair of
+// golfer ids) so a conversation doesn't need its own separate record.
+export interface DirectMessage {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  text: string;
+  createdAt: string;
+}
+
+// Per-user "last read" marker for a conversation, used only to compute
+// unread indicators in the Inbox.
+export interface DmReadState {
+  conversationId: string;
+  userId: string;
+  lastReadAt: string;
+}
+
+// --- Community: a social/discussion layer that stays embedded in the core
+// find-a-round loop rather than becoming a standalone generic feed. Reuses
+// golfers/follows/blocks/golfCalls/courses wholesale — never duplicates
+// them. ---
+
+export type PostType = "text" | "photo" | "course" | "round";
+export const POST_TYPES: PostType[] = ["text", "photo", "course", "round"];
+
+// Deliberately short — a meme is just a "photo" post categorized "Memes",
+// not a separate system.
+export type PostCategory = "General" | "Memes" | "Course Talk" | "Equipment" | "Tips & Advice" | "Round Stories" | "Looking to Play";
+export const POST_CATEGORIES: PostCategory[] = [
+  "General",
+  "Memes",
+  "Course Talk",
+  "Equipment",
+  "Tips & Advice",
+  "Round Stories",
+  "Looking to Play",
+];
+
+export interface CommunityPost {
+  id: string;
+  authorId: string;
+  type: PostType;
+  text: string;
+  imageUrl?: string; // local data-URL, same handling as GolferProfile.photoUrl
+  courseTag?: string; // a name from lib/courses.ts — never a duplicate course record
+  golfCallId?: string; // attached Golf Call, by reference only (upcoming or completed)
+  category: PostCategory;
+  createdAt: string;
+}
+
+// Upvote-only — no downvotes (see DataContext for the reasoning). Existence
+// of a row = upvoted; tapping again just removes the row. Community votes
+// never feed into GolferProfile.reputation or credibility.
+export interface PostVote {
+  id: string;
+  postId: string;
+  voterId: string;
+  createdAt: string;
+}
+
+// parentCommentId present only on a reply — caps nesting at 2 visible
+// levels (comment → reply) by construction, not by a depth counter.
+export interface PostComment {
+  id: string;
+  postId: string;
+  authorId: string;
+  text: string;
+  parentCommentId?: string;
+  createdAt: string;
+}
+
+export interface CommentVote {
+  id: string;
+  commentId: string;
+  voterId: string;
+  createdAt: string;
+}
+
+export interface SavedPost {
+  id: string;
+  ownerId: string;
+  postId: string;
+  createdAt: string;
+}
+
+// Per-viewer "don't show me this post again" — distinct from deleting (only
+// the author can delete) and from blocking (blocks the person, not just
+// one post).
+export interface HiddenPost {
+  ownerId: string;
+  postId: string;
+  createdAt: string;
+}
+
+export type NotificationType = "post_reply" | "comment_reply" | "new_follower" | "round_created_from_post" | "post_became_round";
+
+export interface AppNotification {
+  id: string;
+  userId: string; // recipient
+  type: NotificationType;
+  actorId?: string; // who triggered it, if anyone
+  text: string;
+  linkTo: string; // in-app path to open on tap
+  read: boolean;
   createdAt: string;
 }
 
@@ -225,6 +417,16 @@ export interface AppData {
   reports: Report[];
   blocks: Block[];
   circle: CircleConnection[];
+  follows: FollowConnection[];
+  directMessages: DirectMessage[];
+  dmReads: DmReadState[];
+  posts: CommunityPost[];
+  postVotes: PostVote[];
+  comments: PostComment[];
+  commentVotes: CommentVote[];
+  savedPosts: SavedPost[];
+  hiddenPosts: HiddenPost[];
+  notifications: AppNotification[];
   currentUserId: string;
   session: SessionState;
 }
