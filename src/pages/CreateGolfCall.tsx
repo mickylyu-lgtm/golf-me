@@ -9,9 +9,12 @@ import { Button } from "../components/ui/Button";
 import { Pill } from "../components/ui/Pill";
 import { GAME_FORMATS, GOLF_VIBES } from "../types";
 import type { GameFormat, GolfVibe, Holes, JoinMode, SkillFilter, WalkOrCart } from "../types";
+import { CourseAutocomplete } from "../components/golfcall/CourseAutocomplete";
 import { inputClass, labelClass } from "../components/ui/FormControls";
 import { getWeekendRange } from "../lib/greeting";
 import { skillTierFromHandicap } from "../lib/format";
+import { coordsForCourse } from "../lib/courses";
+import { haversineMiles } from "../lib/geo";
 
 const SKILL_OPTIONS: SkillFilter[] = ["Any Skill Level", "Beginner", "Intermediate", "Advanced"];
 const WALK_OPTIONS: WalkOrCart[] = ["Either", "Walking", "Cart"];
@@ -44,7 +47,7 @@ interface CreateGolfCallProps {
 
 export function CreateGolfCall({ active = true }: CreateGolfCallProps) {
   const navigate = useNavigate();
-  const { currentUser, createGolfCall, visibleGolfers, circleGolfers, attachGolfCallToPost } = useData();
+  const { currentUser, golfCalls, createGolfCall, visibleGolfers, circleGolfers, attachGolfCallToPost } = useData();
   const { showToast } = useToast();
   const [searchParams] = useSearchParams();
   const fromPostId = searchParams.get("fromPost");
@@ -90,6 +93,31 @@ export function CreateGolfCall({ active = true }: CreateGolfCallProps) {
 
   const maxFriends = Math.max(0, totalSpots - 2); // leave room for host + at least 1 open spot
   const openSpotsRemaining = totalSpots - 1 - friendIds.length;
+
+  const recentCourses = useMemo(() => {
+    const mine = golfCalls
+      .filter((c) => c.joinedGolferIds.includes(currentUser.id))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const seen = new Set<string>();
+    const names: string[] = [];
+    for (const c of mine) {
+      if (seen.has(c.course)) continue;
+      seen.add(c.course);
+      names.push(c.course);
+      if (names.length >= 3) break;
+    }
+    return names;
+  }, [golfCalls, currentUser.id]);
+
+  const userLocation = { label: currentUser.areaLabel, coords: currentUser.playingAreaCoords };
+
+  function handlePickKnownCourse(pick: { name: string; area?: string }) {
+    if (pick.area) setAreaLabel(pick.area);
+    const courseCoords = coordsForCourse(pick.name);
+    if (courseCoords && currentUser.playingAreaCoords) {
+      setDistanceMiles(Math.round(haversineMiles(currentUser.playingAreaCoords, courseCoords)));
+    }
+  }
 
   const otherGolfers = useMemo(() => visibleGolfers(), [visibleGolfers]);
   const circleIds = useMemo(() => new Set(circleGolfers.map((g) => g.id)), [circleGolfers]);
@@ -178,7 +206,14 @@ export function CreateGolfCall({ active = true }: CreateGolfCallProps) {
       <div className="flex flex-col gap-4 rounded-2xl border border-slate-100 bg-white p-4">
         <div>
           <label className={labelClass}>Course</label>
-          <input className={inputClass} value={course} onChange={(e) => setCourse(e.target.value)} placeholder="e.g. Bethpage Red" />
+          <CourseAutocomplete
+            value={course}
+            onChange={setCourse}
+            onPickKnownCourse={handlePickKnownCourse}
+            recentCourses={recentCourses}
+            preferredCourses={currentUser.preferredCourses}
+            location={userLocation}
+          />
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>

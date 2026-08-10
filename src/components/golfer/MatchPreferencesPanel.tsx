@@ -15,6 +15,7 @@ import {
   TRAVEL_RADIUS_MIN,
 } from "../../types";
 import type { WalkOrCart } from "../../types";
+import type { PlayingArea } from "../../lib/geo";
 import {
   GAME_FORMAT_OPTIONS,
   GENDER_OPTIONS_MATCH,
@@ -48,12 +49,14 @@ function Section({ title, children }: SectionProps) {
 interface MatchPreferencesPanelProps {
   value: MatchPreferencesValue;
   onChange: (patch: Partial<MatchPreferencesValue>) => void;
+  /** The golfer's playing area, for CoursePicker's "Near Your Area" chips. */
+  nearLocation?: PlayingArea;
 }
 
 // Sectioned per Part T: ROUND / PLAYING PARTNERS / STYLE / COST & LOCATION —
 // stacks vertically, no horizontal scrolling, reused as-is from both Profile
 // (permanent save) and Find Me a Round (temporary per-search override).
-export function MatchPreferencesPanel({ value, onChange }: MatchPreferencesPanelProps) {
+export function MatchPreferencesPanel({ value, onChange, nearLocation }: MatchPreferencesPanelProps) {
   function toggleVibe(v: (typeof GOLF_VIBES)[number]) {
     const has = value.vibes.includes(v);
     if (has) onChange({ vibes: value.vibes.filter((x) => x !== v) });
@@ -95,7 +98,7 @@ export function MatchPreferencesPanel({ value, onChange }: MatchPreferencesPanel
         </div>
         <div>
           <label className={labelClass}>Preferred courses</label>
-          <CoursePicker selected={value.preferredCourses} onChange={(preferredCourses) => onChange({ preferredCourses })} />
+          <CoursePicker selected={value.preferredCourses} onChange={(preferredCourses) => onChange({ preferredCourses })} location={nearLocation} />
         </div>
       </Section>
 

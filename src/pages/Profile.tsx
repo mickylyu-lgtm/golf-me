@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Car, Check, Footprints, Mail, Phone, Settings as SettingsIcon, ShieldCheck, UserRoundPlus, Users, Wallet } from "lucide-react";
+import { Car, Check, Footprints, Mail, MapPin, Phone, Settings as SettingsIcon, ShieldCheck, UserRoundPlus, Users, Wallet } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useToast } from "../context/ToastContext";
 import { Avatar } from "../components/ui/Avatar";
@@ -11,6 +11,7 @@ import { Modal } from "../components/ui/Modal";
 import { inputClass, labelClass } from "../components/ui/FormControls";
 import { VerifyStepModal } from "../components/profile/VerifyStepModal";
 import { AvatarUpload } from "../components/profile/AvatarUpload";
+import { LocationPicker } from "../components/location/LocationPicker";
 import { ReputationRow } from "../components/golfer/ReputationRow";
 import { CredibilityBadge } from "../components/golfer/CredibilityBadge";
 import { MatchPreferencesPanel } from "../components/golfer/MatchPreferencesPanel";
@@ -42,11 +43,11 @@ export function Profile() {
   const [editing, setEditing] = useState(false);
   const [verifyChannel, setVerifyChannel] = useState<"phone" | "email" | null>(null);
   const [avatarModalOpen, setAvatarModalOpen] = useState(false);
+  const [locationPickerOpen, setLocationPickerOpen] = useState(false);
 
   function buildForm(g: typeof currentUser) {
     return {
       ageRange: g.ageRange,
-      areaLabel: g.areaLabel,
       handicap: g.handicap,
       favoriteCourses: g.favoriteCourses.join(", "),
       bio: g.bio,
@@ -77,7 +78,6 @@ export function Profile() {
   function save() {
     updateCurrentUserProfile({
       ageRange: form.ageRange,
-      areaLabel: form.areaLabel.trim() || currentUser.areaLabel,
       handicap: form.handicap,
       favoriteCourses: form.favoriteCourses
         .split(",")
@@ -261,7 +261,23 @@ export function Profile() {
             these is off. Saved instantly as you change them.
           </p>
         </div>
-        <MatchPreferencesPanel value={matchPreferencesFromGolfer(currentUser)} onChange={(patch) => updateCurrentUserProfile(patch)} />
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/60 px-3.5 py-3">
+          <div className="flex items-center gap-2.5">
+            <MapPin size={16} className="shrink-0 text-fairway-600" />
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Playing area</p>
+              <p className="text-sm font-semibold text-slate-800">{currentUser.areaLabel}</p>
+            </div>
+          </div>
+          <Button size="sm" variant="outline" onClick={() => setLocationPickerOpen(true)}>
+            Change
+          </Button>
+        </div>
+        <MatchPreferencesPanel
+          value={matchPreferencesFromGolfer(currentUser)}
+          onChange={(patch) => updateCurrentUserProfile(patch)}
+          nearLocation={{ label: currentUser.areaLabel, coords: currentUser.playingAreaCoords }}
+        />
       </div>
 
       <div className="rounded-2xl border border-slate-100 bg-white p-4">
@@ -347,10 +363,6 @@ export function Profile() {
             </div>
           </div>
           <div>
-            <label className={labelClass}>General area</label>
-            <input className={inputClass} value={form.areaLabel} onChange={(e) => setForm((f) => ({ ...f, areaLabel: e.target.value }))} />
-          </div>
-          <div>
             <label className={labelClass}>Favorite courses</label>
             <input
               className={inputClass}
@@ -360,7 +372,7 @@ export function Profile() {
             />
           </div>
           <p className="-mt-1 text-xs text-slate-400">
-            Budget, walking/cart, and Golf vibe now live in Match preferences below — changes there save instantly.
+            Playing area, budget, walking/cart, and Golf vibe now live in Match preferences below — changes there save instantly.
           </p>
           <div>
             <label className={labelClass}>Bio</label>
@@ -438,6 +450,18 @@ export function Profile() {
             Done
           </Button>
         </Modal>
+      )}
+
+      {locationPickerOpen && (
+        <LocationPicker
+          title="Change your playing area"
+          onSelect={(area) => {
+            updateCurrentUserProfile({ areaLabel: area.label, playingAreaCoords: area.coords });
+            setLocationPickerOpen(false);
+            showToast(`Playing area set to ${area.label}.`, "success");
+          }}
+          onClose={() => setLocationPickerOpen(false)}
+        />
       )}
 
       {verifyChannel && (

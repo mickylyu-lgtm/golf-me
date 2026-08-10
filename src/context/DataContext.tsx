@@ -34,6 +34,7 @@ import type {
   WalkOrCart,
 } from "../types";
 import { generateId } from "../lib/id";
+import type { GeoPoint } from "../lib/geo";
 import { loadData, saveData, resetToSeedData } from "../lib/storage";
 import { avatarColorForName, initialsFromName } from "../lib/avatar";
 import { dmConversationId, otherParticipant } from "../lib/dm";
@@ -90,6 +91,7 @@ export interface NewGolferInput {
   ageRange: AgeRange;
   gender: string;
   areaLabel: string;
+  playingAreaCoords?: GeoPoint;
   handicap: number | null;
   vibes: GolfVibe[];
   walkOrCart: WalkOrCart;
@@ -759,6 +761,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       ageRange: input.ageRange,
       gender: input.gender,
       areaLabel: input.areaLabel.trim() || "Nearby",
+      playingAreaCoords: input.playingAreaCoords,
       distanceMiles: 0,
       handicap: input.handicap,
       favoriteCourses: [],

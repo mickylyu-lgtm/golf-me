@@ -8,6 +8,7 @@ import { Button } from "../ui/Button";
 import { Pill } from "../ui/Pill";
 import { Badge } from "../ui/Badge";
 import { Slider } from "../ui/Slider";
+import { LocationPicker } from "../location/LocationPicker";
 import { inputClass } from "../ui/FormControls";
 import { BUDGET_PREF_MAX, BUDGET_PREF_MIN, GOLF_VIBES, TRAVEL_RADIUS_MAX, TRAVEL_RADIUS_MIN } from "../../types";
 import type { GolfVibe, SkillFilter, WalkOrCart } from "../../types";
@@ -24,6 +25,8 @@ import {
   selectedNewPreferenceLabels,
 } from "../../lib/matchPreferences";
 import type { NewPreferenceSelections } from "../../lib/preferenceMatch";
+import { locationParams } from "../../lib/travelLocation";
+import type { PlayingArea } from "../../lib/geo";
 
 export type WhenChoice = "today" | "tomorrow" | "weekend" | "date";
 
@@ -64,6 +67,13 @@ export function FindRoundModal({ onClose }: { onClose: () => void }) {
   const [vibe, setVibe] = useState<GolfVibe | "">("");
   const [walkOrCart, setWalkOrCart] = useState<WalkOrCart | "">("");
 
+  // null = use the golfer's saved playing area; set only when "Playing
+  // Somewhere Else?" is used — never written back to the profile unless
+  // "Set as My Default" is tapped explicitly.
+  const [travelLocation, setTravelLocation] = useState<PlayingArea | null>(null);
+  const [locationPickerOpen, setLocationPickerOpen] = useState(false);
+  const effectiveAreaLabel = travelLocation?.label ?? currentUser.areaLabel;
+
   // A per-search draft of the 5 Match Preferences — starts from the golfer's
   // saved defaults, but never writes back to the profile unless "Save as my
   // new preference" is tapped explicitly.
@@ -80,7 +90,15 @@ export function FindRoundModal({ onClose }: { onClose: () => void }) {
     if (skillLevel) params.set("skill", skillLevel);
     if (vibe) params.set("vibe", vibe);
     if (walkOrCart) params.set("walk", walkOrCart);
+    if (travelLocation) for (const [k, v] of Object.entries(locationParams(travelLocation))) params.set(k, v);
     return params;
+  }
+
+  function setTravelLocationAsDefault() {
+    if (!travelLocation) return;
+    updateCurrentUserProfile({ areaLabel: travelLocation.label, playingAreaCoords: travelLocation.coords });
+    showToast(`Default playing area set to ${travelLocation.label}.`, "success");
+    setTravelLocation(null);
   }
 
   function handleBrowseRounds() {
@@ -219,6 +237,24 @@ export function FindRoundModal({ onClose }: { onClose: () => void }) {
           )}
         </div>
 
+        <div className="rounded-2xl border border-slate-100 bg-slate-50/60 p-3.5">
+          <div className="mb-1 flex items-center justify-between">
+            <p className="text-sm font-bold text-slate-800">Playing area</p>
+            <button onClick={() => setLocationPickerOpen(true)} className="text-xs font-semibold text-fairway-700 hover:underline">
+              {travelLocation ? "Change" : "Playing Somewhere Else?"}
+            </button>
+          </div>
+          <p className="text-sm text-slate-600">{effectiveAreaLabel}</p>
+          {travelLocation && (
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <p className="text-xs text-slate-500">Temporary for this search only.</p>
+              <button onClick={setTravelLocationAsDefault} className="shrink-0 text-xs font-semibold text-fairway-700 hover:underline">
+                Set as My Default
+              </button>
+            </div>
+          )}
+        </div>
+
         <Slider
           label="How far?"
           min={TRAVEL_RADIUS_MIN}
@@ -312,6 +348,17 @@ export function FindRoundModal({ onClose }: { onClose: () => void }) {
           )}
         </div>
       </div>
+
+      {locationPickerOpen && (
+        <LocationPicker
+          title="Playing somewhere else?"
+          onSelect={(area) => {
+            setTravelLocation(area);
+            setLocationPickerOpen(false);
+          }}
+          onClose={() => setLocationPickerOpen(false)}
+        />
+      )}
     </Modal>
   );
 }

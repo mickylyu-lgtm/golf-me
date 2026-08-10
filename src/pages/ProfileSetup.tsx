@@ -1,17 +1,19 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, MapPin } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { Button } from "../components/ui/Button";
 import { Pill } from "../components/ui/Pill";
 import { AvatarUpload } from "../components/profile/AvatarUpload";
 import { CoursePicker } from "../components/profile/CoursePicker";
 import { RangeSlider } from "../components/ui/RangeSlider";
+import { LocationPicker } from "../components/location/LocationPicker";
 import { inputClass, labelClass } from "../components/ui/FormControls";
 import { AGE_PREF_MAX, AGE_PREF_MIN, GENDER_OPTIONS, GENDER_PREFERENCES, GOLF_VIBES } from "../types";
 import type { GenderPreference, GolfVibe, WalkOrCart, AvailabilitySlot } from "../types";
 import { initialsFromName, avatarColorForName } from "../lib/avatar";
 import { formatAgeValue } from "../lib/matchPreferences";
+import type { GeoPoint } from "../lib/geo";
 
 type SkillBand = "Beginner" | "Intermediate" | "Advanced";
 const SKILL_HANDICAP: Record<SkillBand, number> = { Beginner: 22, Intermediate: 14, Advanced: 6 };
@@ -46,6 +48,8 @@ export function ProfileSetup() {
   const [photoUrl, setPhotoUrl] = useState<string | undefined>(undefined);
   const [is18Plus, setIs18Plus] = useState(false);
   const [areaLabel, setAreaLabel] = useState("");
+  const [playingAreaCoords, setPlayingAreaCoords] = useState<GeoPoint | undefined>(undefined);
+  const [locationPickerOpen, setLocationPickerOpen] = useState(false);
   const [gender, setGender] = useState("");
   const [customGender, setCustomGender] = useState(false);
 
@@ -106,6 +110,7 @@ export function ProfileSetup() {
       ageRange: "25-34",
       gender: gender.trim() || "Prefer not to say",
       areaLabel: areaLabel.trim(),
+      playingAreaCoords,
       handicap: hasHandicap ? finalHandicap : SKILL_HANDICAP[skillBand],
       vibes,
       walkOrCart,
@@ -162,13 +167,15 @@ export function ProfileSetup() {
               <input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Sam Rivera" />
             </div>
             <div>
-              <label className={labelClass}>General location</label>
-              <input
-                className={inputClass}
-                value={areaLabel}
-                onChange={(e) => setAreaLabel(e.target.value)}
-                placeholder="e.g. Long Island, NY"
-              />
+              <label className={labelClass}>Where do you usually play?</label>
+              <button
+                type="button"
+                onClick={() => setLocationPickerOpen(true)}
+                className={`${inputClass} flex items-center gap-2 text-left ${areaLabel ? "text-slate-800" : "text-slate-400"}`}
+              >
+                <MapPin size={15} className="shrink-0 text-fairway-600" />
+                {areaLabel || "Use My Current Location or choose an area"}
+              </button>
               <p className="mt-1 text-xs text-slate-400">General area only — we never ask for your exact home address.</p>
             </div>
             <div>
@@ -315,7 +322,7 @@ export function ProfileSetup() {
             </p>
             <div>
               <label className={labelClass}>Preferred courses</label>
-              <CoursePicker selected={preferredCourses} onChange={setPreferredCourses} />
+              <CoursePicker selected={preferredCourses} onChange={setPreferredCourses} location={{ label: areaLabel, coords: playingAreaCoords }} />
             </div>
             <div>
               <div className="mb-2 flex items-center justify-between">
@@ -354,6 +361,17 @@ export function ProfileSetup() {
       <Button size="lg" fullWidth disabled={!stepValid} onClick={next}>
         {step === STEP_LABELS.length - 1 ? "Start Golfing" : "Continue"}
       </Button>
+
+      {locationPickerOpen && (
+        <LocationPicker
+          onSelect={(area) => {
+            setAreaLabel(area.label);
+            setPlayingAreaCoords(area.coords);
+            setLocationPickerOpen(false);
+          }}
+          onClose={() => setLocationPickerOpen(false)}
+        />
+      )}
     </div>
   );
 }

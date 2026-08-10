@@ -11,6 +11,8 @@ import { GOLF_VIBES } from "../types";
 import type { GolfCall, GolfVibe, SkillFilter, WalkOrCart } from "../types";
 import { computeCallCompatibility } from "../lib/compatibility";
 import { matchesWhen } from "../lib/roundFilters";
+import { effectiveLocation } from "../lib/travelLocation";
+import { resolveCallDistanceMiles } from "../lib/courseSearch";
 
 interface GolfCallsProps {
   embedded?: boolean;
@@ -34,6 +36,7 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
   const vibeFilter = searchParams.get("vibe") as GolfVibe | null;
   const walk = searchParams.get("walk") as WalkOrCart | null;
   const customDate = searchParams.get("date");
+  const effectiveLoc = useMemo(() => effectiveLocation(currentUser, searchParams), [currentUser, searchParams]);
 
   function toggleVibe(v: GolfVibe) {
     setActiveVibes((prev) => (prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]));
@@ -51,7 +54,7 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
     if (!isMatched) return null;
     let list = [...baseResults];
 
-    if (radius) list = list.filter((c) => c.distanceMiles <= Number(radius));
+    if (radius) list = list.filter((c) => resolveCallDistanceMiles(c, effectiveLoc) <= Number(radius));
     if (when) list = list.filter((c) => matchesWhen(c, when, customDate));
 
     if (intent === "join") list = list.filter((c) => c.totalSpots - c.joinedGolferIds.length > 0);
@@ -63,7 +66,7 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
     return list
       .map((call) => ({ call, matchScore: computeCallCompatibility(currentUser, call).overall }))
       .sort((a, b) => b.matchScore - a.matchScore);
-  }, [isMatched, baseResults, radius, when, customDate, intent, budgetMax, skill, vibeFilter, walk, currentUser]);
+  }, [isMatched, baseResults, radius, when, customDate, intent, budgetMax, skill, vibeFilter, walk, currentUser, effectiveLoc]);
 
   const defaultResults = useMemo(
     () => [...baseResults].sort((a, b) => a.dateISO.localeCompare(b.dateISO)),

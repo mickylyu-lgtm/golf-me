@@ -12,6 +12,8 @@ import { SharedPreferencesBadge } from "../components/golfcall/SharedPreferences
 import { rankCallsWithPreferences } from "../lib/autoMatch";
 import { matchesWhen } from "../lib/roundFilters";
 import { effectiveNewPreferences, selectedNewPreferenceLabels } from "../lib/matchPreferences";
+import { effectiveLocation } from "../lib/travelLocation";
+import { resolveCallDistanceMiles } from "../lib/courseSearch";
 import { MIN_PREFERENCES_FOR_AUTO_MATCH, preferenceTierLabel, selectedPreferenceCount } from "../lib/preferenceMatch";
 import type { PreferenceMatchContext } from "../lib/preferenceMatch";
 import type { GolfVibe, SkillFilter, WalkOrCart } from "../types";
@@ -41,6 +43,9 @@ export function AutoMatch() {
   // Reads a temporary per-search override from Find Me a Round if present,
   // otherwise falls back to the golfer's saved Match Preferences.
   const effectivePrefs = useMemo(() => effectiveNewPreferences(currentUser, searchParams), [currentUser, searchParams]);
+  // Same override pattern for location — "Playing Somewhere Else?" in Find
+  // Me a Round, else the golfer's saved playing area.
+  const effectiveLoc = useMemo(() => effectiveLocation(currentUser, searchParams), [currentUser, searchParams]);
   const selectedCount = selectedPreferenceCount(effectivePrefs);
   const preferenceLabels = useMemo(() => selectedNewPreferenceLabels(effectivePrefs), [effectivePrefs]);
   const enoughPreferences = selectedCount >= MIN_PREFERENCES_FOR_AUTO_MATCH;
@@ -66,19 +71,22 @@ export function AutoMatch() {
     [golfCalls, currentUser.id],
   );
 
-  // STEP 1 — basic eligibility. Date/time and travel radius stay hard
-  // practical constraints regardless of how well preferences line up — the
-  // same filters Find Me a Round already offered, now just labeled by step.
+  // STEP 1 — basic eligibility. Region/coordinates + travel radius are
+  // evaluated first (real distance when the selected area and the call's
+  // course both have known coordinates, else the existing mock
+  // distanceMiles — never regresses for golfers without one), then
+  // date/time — the same filters Find Me a Round already offered, now just
+  // labeled and ordered by step.
   const eligibleCalls = useMemo(() => {
     let list = joinableCalls;
-    if (radius) list = list.filter((c) => c.distanceMiles <= Number(radius));
+    if (radius) list = list.filter((c) => resolveCallDistanceMiles(c, effectiveLoc) <= Number(radius));
     if (when) list = list.filter((c) => matchesWhen(c, when, customDate));
     if (budgetMax) list = list.filter((c) => c.estimatedPricePerPerson <= Number(budgetMax));
     if (skill) list = list.filter((c) => c.skillLevel === skill || c.skillLevel === "Any Skill Level");
     if (vibeFilter) list = list.filter((c) => c.vibe === vibeFilter);
     if (walk && walk !== "Either") list = list.filter((c) => c.walkOrCart === walk || c.walkOrCart === "Either");
     return list;
-  }, [joinableCalls, radius, when, customDate, budgetMax, skill, vibeFilter, walk]);
+  }, [joinableCalls, radius, when, customDate, budgetMax, skill, vibeFilter, walk, effectiveLoc]);
 
   // STEP 2 (preference comparison) + STEP 4 (ranking) — STEP 3's 3+ gate is
   // applied just below via strongMatches/closestMatches.

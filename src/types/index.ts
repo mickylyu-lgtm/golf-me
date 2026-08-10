@@ -3,6 +3,8 @@
 // course data, identity verification) can be swapped in without touching
 // the UI layer — components only ever talk to these types + the DataContext.
 
+import type { GeoPoint } from "../lib/geo";
+
 export type GolfVibe =
   | "Casual & Social"
   | "Competitive"
@@ -129,6 +131,12 @@ export interface GolferProfile {
   ageRange: AgeRange;
   gender: string; // self-reported only; one of GENDER_OPTIONS or a custom value
   areaLabel: string; // general area only, e.g. "Long Island, NY" — never exact address
+  // Optional real coordinates behind areaLabel — city/region granularity
+  // only (from a picked region or coarse geolocation), never an exact
+  // address, and never rendered directly anywhere (only areaLabel or a
+  // computed distance are shown). Absent for free-typed labels with no
+  // known match — every consumer must handle that gracefully.
+  playingAreaCoords?: GeoPoint;
   distanceMiles: number; // approximate distance from current user, mock-computed
   handicap: number | null; // null = no handicap / brand new
   favoriteCourses: string[];
