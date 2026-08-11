@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -28,6 +28,7 @@ import { formatDate, formatMoney } from "../lib/format";
 import { VIBE_TONE } from "../lib/theme";
 import { computeCallCompatibility } from "../lib/compatibility";
 import { matchTier, callMatchReasons } from "../lib/matchReasons";
+import { track } from "../lib/analytics";
 
 export function GolfCallDetail() {
   const { id } = useParams<{ id: string }>();
@@ -53,6 +54,11 @@ export function GolfCallDetail() {
   const [joinConfirmOpen, setJoinConfirmOpen] = useState(false);
 
   const call = id ? getGolfCall(id) : undefined;
+
+  useEffect(() => {
+    if (call) track("first_round_viewed", { callId: call.id });
+  }, [call?.id]);
+
   if (!call) {
     return (
       <div className="py-12 text-center text-slate-500">

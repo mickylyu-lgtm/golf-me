@@ -6,6 +6,7 @@ import { useLocale } from "../i18n/LocaleContext";
 import { GolfCallCard } from "../components/golfcall/GolfCallCard";
 import { CLICKABLE_CARD_CLASS } from "../components/ui/cardStyles";
 import { firstName, greetingKeyForHour, isThisWeekend } from "../lib/greeting";
+import { MIN_PREFERENCES_FOR_AUTO_MATCH, selectedPreferenceCount } from "../lib/preferenceMatch";
 
 const HOME_RADIUS_MILES = 25;
 const NEARBY_ROUNDS_SHOWN = 3;
@@ -45,6 +46,11 @@ export function Home() {
     () => [...nearbyAnytime].sort((a, b) => a.dateISO.localeCompare(b.dateISO)).slice(0, NEARBY_ROUNDS_SHOWN),
     [nearbyAnytime],
   );
+
+  // Self-resolving nudge — only shows while under the same 3-of-5 threshold
+  // Auto-Match itself gates on, so it disappears the moment it's no longer
+  // true rather than needing separate dismiss-state to avoid nagging.
+  const preferencesRemaining = MIN_PREFERENCES_FOR_AUTO_MATCH - selectedPreferenceCount(currentUser);
 
   return (
     <div className="flex flex-col gap-6">
@@ -102,6 +108,19 @@ export function Home() {
             ))}
           </div>
         </section>
+      )}
+
+      {preferencesRemaining > 0 && (
+        <button
+          onClick={() => navigate("/profile/preferences")}
+          className={`flex w-full items-center justify-between gap-3 p-4 text-left ${CLICKABLE_CARD_CLASS}`}
+        >
+          <span className="min-w-0">
+            <span className="block text-sm font-bold text-slate-900">{t("home.completeProfile")}</span>
+            <span className="block text-xs text-slate-500">{t("home.optionalPreferencesRemaining")}</span>
+          </span>
+          <span className="shrink-0 text-xs font-semibold text-fairway-700">{t("home.updatePreferences")}</span>
+        </button>
       )}
 
       <button

@@ -9,6 +9,7 @@ import { Welcome } from "./pages/Welcome";
 import { Onboarding } from "./pages/Onboarding";
 import { Auth } from "./pages/Auth";
 import { ProfileSetup } from "./pages/ProfileSetup";
+import { Ready } from "./pages/Ready";
 import { Home } from "./pages/Home";
 import { Discover } from "./pages/Discover";
 import { Find } from "./pages/Find";
@@ -78,6 +79,12 @@ export default function App() {
           <AppGate>
             <BrowserRouter>
               <Routes>
+                {/* Standalone, outside both GuestOnly and AuthedLayout — by the
+                    time signUpNewGolfer() lands here the session is already
+                    authenticated (GuestOnly would bounce it straight to "/"),
+                    but it deliberately skips AppShell's nav chrome, same as
+                    the rest of the pre-Home first-run flow. */}
+                <Route path="/ready" element={<Ready />} />
                 <Route element={<GuestOnly />}>
                   <Route path="/welcome" element={<Welcome />} />
                   <Route path="/onboarding" element={<Onboarding />} />

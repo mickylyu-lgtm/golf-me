@@ -17,10 +17,61 @@ import { effectiveLocation } from "../lib/travelLocation";
 import { resolveCallDistanceMiles } from "../lib/courseSearch";
 import { MIN_PREFERENCES_FOR_AUTO_MATCH, preferenceTierLabel, selectedPreferenceCount } from "../lib/preferenceMatch";
 import type { PreferenceMatchContext } from "../lib/preferenceMatch";
-import type { GolfVibe, SkillFilter, WalkOrCart } from "../types";
+import type { GolferProfile, GolfVibe, SkillFilter, WalkOrCart } from "../types";
+import type { TranslationKey } from "../i18n/locales/en";
+
+// One suggested, single-tap value per not-yet-set Match Preference — lets a
+// first-time golfer (onboarding only sets Round Length) reach the 3-of-5
+// Auto-Match threshold in a couple of taps instead of being sent away to a
+// full preferences form. Each suggestion is a real, meaningful value (never
+// "No Preference" itself, which wouldn't count) so accepting it is a
+// genuine choice, not a placeholder.
+const QUICK_PICK_SUGGESTIONS: {
+  id: string;
+  labelKey: TranslationKey;
+  value: string;
+  patch: Partial<GolferProfile>;
+  isSet: (v: ReturnType<typeof effectiveNewPreferences>) => boolean;
+}[] = [
+  {
+    id: "roundLength",
+    labelKey: "matchPrefs.roundLength",
+    value: "18 Holes",
+    patch: { roundLengthPreference: "18 Holes" },
+    isSet: (v) => v.roundLengthPreference !== "No Preference",
+  },
+  {
+    id: "groupType",
+    labelKey: "matchPrefs.groupType",
+    value: "Mixed / Anyone",
+    patch: { groupTypePreference: "Mixed / Anyone" },
+    isSet: (v) => v.groupTypePreference !== "No Preference",
+  },
+  {
+    id: "gameFormat",
+    labelKey: "host.gameFormat",
+    value: "Standard Stroke Play",
+    patch: { gameFormatPreference: "Standard Stroke Play" },
+    isSet: (v) => v.gameFormatPreference !== "No Preference",
+  },
+  {
+    id: "networking",
+    labelKey: "matchPrefs.networking",
+    value: "Open to Networking",
+    patch: { networkingPreference: "Open to Networking" },
+    isSet: (v) => v.networkingPreference !== "No Preference",
+  },
+  {
+    id: "gender",
+    labelKey: "matchPrefs.genderPreference",
+    value: "Prefer mixed group",
+    patch: { genderPreference: "Prefer mixed group" },
+    isSet: (v) => v.genderPreference !== "No preference",
+  },
+];
 
 export function AutoMatch() {
-  const { currentUser, golfCalls, getGolfer, followingGolfers, circleGolfers, playedWithIds } = useData();
+  const { currentUser, updateCurrentUserProfile, golfCalls, getGolfer, followingGolfers, circleGolfers, playedWithIds } = useData();
   const { showToast } = useToast();
   const { t } = useLocale();
   const navigate = useNavigate();
@@ -160,16 +211,35 @@ export function AutoMatch() {
         <GolfMeLoader fullScreen message={t("autoMatch.finding")} />
       ) : !started ? (
         !enoughPreferences ? (
-          <EmptyState
-            icon={<Sparkles size={20} />}
-            title={t("autoMatch.notEnoughPrefs")}
-            description={t("autoMatch.notEnoughPrefsDesc")}
-            action={
-              <Button size="sm" onClick={() => navigate("/profile")}>
-                {t("autoMatch.setPreferences")}
-              </Button>
-            }
-          />
+          <div className="flex flex-col gap-4">
+            <div className="rounded-2xl border border-slate-100 bg-white p-4">
+              <p className="text-base font-bold text-slate-900">{t("autoMatch.helpFindBetter")}</p>
+              <p className="mt-1 text-sm text-slate-500">{t("autoMatch.chooseOneMore")}</p>
+              {preferenceLabels.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {preferenceLabels.map((label) => (
+                    <Badge key={label} tone="fairway">
+                      {label}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {QUICK_PICK_SUGGESTIONS.filter((s) => !s.isSet(effectivePrefs)).map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => updateCurrentUserProfile(s.patch)}
+                    className="rounded-full border border-fairway-200 bg-fairway-50/70 px-3 py-1.5 text-xs font-medium text-fairway-700 transition-colors duration-150 hover:bg-fairway-100"
+                  >
+                    {t(s.labelKey)}: {s.value}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <Button variant="ghost" size="sm" className="self-start" onClick={() => navigate("/profile/preferences")}>
+              {t("autoMatch.setPreferences")}
+            </Button>
+          </div>
         ) : (
           <div className="flex flex-col gap-4">
             <div className="rounded-2xl border border-slate-100 bg-white p-4">

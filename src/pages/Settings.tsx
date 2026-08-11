@@ -9,6 +9,7 @@ import { Button } from "../components/ui/Button";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 import { Toggle } from "../components/ui/Toggle";
 import { ProfileSwitcher } from "../components/layout/ProfileSwitcher";
+import { clearOnboardingDraft } from "../lib/onboardingDraft";
 
 export function Settings() {
   const { currentUser, golfers, blockedIds, getGolfer, unblockUser, logOut, resetDemoData } = useData();
@@ -181,6 +182,20 @@ export function Settings() {
           </Button>
           <Button size="sm" variant="ghost" icon={<RotateCcw size={14} />} onClick={() => setResetConfirmOpen(true)}>
             Reset demo data
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            icon={<RotateCcw size={14} />}
+            onClick={() => {
+              clearOnboardingDraft();
+              window.localStorage.removeItem("golfme:notifPermissionShown");
+              logOut();
+              showToast("Onboarding reset — back to Welcome.", "info");
+              navigate("/welcome");
+            }}
+          >
+            Reset Onboarding
           </Button>
         </div>
       </div>

@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { ImagePlus, Loader2, X } from "lucide-react";
 import { Avatar } from "../ui/Avatar";
+import { useLocale } from "../../i18n/LocaleContext";
 import type { GolferProfile } from "../../types";
 
 // Client-side only: reads the file, center-crops it to a square, downsizes
@@ -46,13 +47,14 @@ export function AvatarUpload({ golfer, onChange, size = "xl" }: AvatarUploadProp
   const inputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const { t } = useLocale();
 
   async function handleFile(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
     if (!file.type.startsWith("image/")) {
-      setError("Please choose an image file.");
+      setError(t("avatarUpload.invalidFile"));
       return;
     }
     setLoading(true);
@@ -61,7 +63,7 @@ export function AvatarUpload({ golfer, onChange, size = "xl" }: AvatarUploadProp
       const dataUrl = await resizeImageToSquareDataUrl(file);
       onChange(dataUrl);
     } catch {
-      setError("Couldn't load that image — try another.");
+      setError(t("avatarUpload.loadError"));
     } finally {
       setLoading(false);
     }
@@ -84,7 +86,7 @@ export function AvatarUpload({ golfer, onChange, size = "xl" }: AvatarUploadProp
             onClick={() => inputRef.current?.click()}
             className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition-all duration-200 ease-out hover:border-fairway-300 hover:text-fairway-700 active:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2"
           >
-            <ImagePlus size={13} /> {golfer.photoUrl ? "Change photo" : "Add a profile photo"}
+            <ImagePlus size={13} /> {golfer.photoUrl ? t("avatarUpload.changePhoto") : t("avatarUpload.addPhoto")}
           </button>
           {golfer.photoUrl && (
             <button
@@ -92,16 +94,14 @@ export function AvatarUpload({ golfer, onChange, size = "xl" }: AvatarUploadProp
               onClick={() => onChange(undefined)}
               className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-slate-500 transition-colors duration-200 hover:text-red-600"
             >
-              <X size={13} /> Remove
+              <X size={13} /> {t("avatarUpload.remove")}
             </button>
           )}
         </div>
         {error ? (
           <p className="text-xs text-red-600">{error}</p>
         ) : (
-          <p className="text-xs text-slate-400">
-            {golfer.photoUrl ? "Displayed as a circle wherever your profile appears." : "Optional — we'll use your initials if you skip this."}
-          </p>
+          <p className="text-xs text-slate-400">{golfer.photoUrl ? t("avatarUpload.hasPhotoHelp") : t("avatarUpload.noPhotoHelp")}</p>
         )}
       </div>
       <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />

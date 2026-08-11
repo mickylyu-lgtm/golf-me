@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Check, Mail } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useToast } from "../context/ToastContext";
+import { useLocale } from "../i18n/LocaleContext";
 import { Button } from "../components/ui/Button";
 import { Avatar } from "../components/ui/Avatar";
 import { inputClass } from "../components/ui/FormControls";
@@ -18,6 +19,7 @@ export function Auth({ mode }: AuthProps) {
   const navigate = useNavigate();
   const { logIn, session, golfers } = useData();
   const { showToast } = useToast();
+  const { t } = useLocale();
   const [showEmailField, setShowEmailField] = useState(false);
   const [email, setEmail] = useState("");
   const [showPicker, setShowPicker] = useState(false);
@@ -40,7 +42,7 @@ export function Auth({ mode }: AuthProps) {
 
   function loginAs(golferId: string, label: string) {
     logIn(golferId);
-    showToast(`Signed in as ${label}.`, "success");
+    showToast(t("auth.signedInAs", { name: label }), "success");
     navigate("/");
   }
 
@@ -50,7 +52,7 @@ export function Auth({ mode }: AuthProps) {
         onClick={() => navigate(-1)}
         className="flex items-center gap-1.5 self-start text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
       >
-        <ArrowLeft size={16} /> Back
+        <ArrowLeft size={16} /> {t("auth.back")}
       </button>
 
       <div className="flex flex-1 flex-col justify-center gap-8">
@@ -59,19 +61,15 @@ export function Auth({ mode }: AuthProps) {
             <GolfMeIcon size={26} dotColor="#f8faf8" targetColor="#5aa171" holeColor="#143621" />
           </span>
           <h1 className="text-2xl font-extrabold text-slate-900">
-            {mode === "signup" ? "Create your account" : session.hasOnboarded ? "Welcome back" : "Log in"}
+            {mode === "signup" ? t("auth.createAccount") : session.hasOnboarded ? t("auth.welcomeBack") : t("auth.logIn")}
           </h1>
-          <p className="mt-1.5 text-sm text-slate-500">
-            {mode === "signup" ? "Let's get your golfer profile set up." : "Pick up right where you left off."}
-          </p>
+          <p className="mt-1.5 text-sm text-slate-500">{mode === "signup" ? t("auth.signupSubtitle") : t("auth.loginSubtitle")}</p>
         </div>
 
         {mode === "login" && showPicker ? (
           <div className="mx-auto flex w-full max-w-xs flex-col gap-3">
             <div className="rounded-2xl border border-slate-200 bg-white p-3">
-              <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                Prototype — choose your account
-              </p>
+              <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">{t("auth.prototypeChooseAccount")}</p>
               <div className="flex flex-col gap-1">
                 {loginableAccounts.map((g) => (
                   <button
@@ -83,7 +81,7 @@ export function Auth({ mode }: AuthProps) {
                     <div className="flex-1">
                       <p className="text-sm font-semibold text-slate-800">{g.name}</p>
                       <p className="text-xs text-slate-500">
-                        {isNewAccount(g.reputation.completedRounds) ? "New account" : `${g.reputation.completedRounds} rounds played`}
+                        {isNewAccount(g.reputation.completedRounds) ? t("auth.newAccount") : t("auth.roundsPlayed", { count: g.reputation.completedRounds })}
                       </p>
                     </div>
                   </button>
@@ -94,7 +92,7 @@ export function Auth({ mode }: AuthProps) {
               onClick={() => setShowPicker(false)}
               className="rounded-full px-4 py-2 text-xs font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
             >
-              Back
+              {t("auth.back")}
             </button>
           </div>
         ) : (
@@ -103,13 +101,13 @@ export function Auth({ mode }: AuthProps) {
               onClick={() => continueWith()}
               className="flex items-center justify-center gap-2 rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition-all duration-200 ease-out hover:-translate-y-px hover:bg-slate-800 active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 motion-reduce:transition-none"
             >
-              Continue with Apple
+              {t("auth.continueWithApple")}
             </button>
             <button
               onClick={() => continueWith()}
               className="flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition-all duration-200 ease-out hover:-translate-y-px hover:border-slate-300 hover:shadow-sm active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none"
             >
-              Continue with Google
+              {t("auth.continueWithGoogle")}
             </button>
 
             {!showEmailField ? (
@@ -117,7 +115,7 @@ export function Auth({ mode }: AuthProps) {
                 onClick={() => setShowEmailField(true)}
                 className="flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition-all duration-200 ease-out hover:-translate-y-px hover:border-slate-300 hover:shadow-sm active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none"
               >
-                <Mail size={16} /> Continue with Email
+                <Mail size={16} /> {t("auth.continueWithEmail")}
               </button>
             ) : (
               <div className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-3">
@@ -130,7 +128,7 @@ export function Auth({ mode }: AuthProps) {
                   className={inputClass}
                 />
                 <Button onClick={() => continueWith()} disabled={!email.includes("@")} fullWidth>
-                  Continue
+                  {t("common.continue")}
                 </Button>
               </div>
             )}
@@ -139,14 +137,14 @@ export function Auth({ mode }: AuthProps) {
               <>
                 <div className="my-1 flex items-center gap-3 text-xs font-medium text-slate-400">
                   <span className="h-px flex-1 bg-slate-200" />
-                  or
+                  {t("common.or")}
                   <span className="h-px flex-1 bg-slate-200" />
                 </div>
                 <button
-                  onClick={() => loginAs(DEFAULT_CURRENT_USER_ID, "Jordan (Demo Account)")}
+                  onClick={() => loginAs(DEFAULT_CURRENT_USER_ID, t("auth.demoAccountLabel", { name: "Jordan" }))}
                   className="flex items-center justify-center gap-2 rounded-full border border-dashed border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 transition-all duration-200 ease-out hover:-translate-y-px hover:border-slate-400 hover:bg-slate-50 active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none"
                 >
-                  <Check size={16} /> Try Demo Account
+                  <Check size={16} /> {t("auth.tryDemoAccount")}
                 </button>
               </>
             )}
@@ -156,16 +154,16 @@ export function Auth({ mode }: AuthProps) {
         <p className="text-center text-sm text-slate-500">
           {mode === "signup" ? (
             <>
-              Already have an account?{" "}
+              {t("auth.alreadyHaveAccount")}{" "}
               <button onClick={() => navigate("/login")} className="font-semibold text-fairway-700 hover:underline">
-                Log In
+                {t("welcome.logIn")}
               </button>
             </>
           ) : (
             <>
-              New here?{" "}
+              {t("auth.newHere")}{" "}
               <button onClick={() => navigate("/onboarding")} className="font-semibold text-fairway-700 hover:underline">
-                Get Started
+                {t("welcome.getStarted")}
               </button>
             </>
           )}

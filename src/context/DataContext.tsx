@@ -27,12 +27,14 @@ import type {
   Report,
   ReportCategory,
   Review,
+  RoundLengthPreference,
   SavedPost,
   SessionState,
   SkillFilter,
   GolfVibe,
   WalkOrCart,
 } from "../types";
+import { AGE_PREF_MAX, AGE_PREF_MIN } from "../types";
 import { generateId } from "../lib/id";
 import type { GeoPoint } from "../lib/geo";
 import { loadData, saveData, resetToSeedData } from "../lib/storage";
@@ -97,13 +99,19 @@ export interface NewGolferInput {
   walkOrCart: WalkOrCart;
   budgetMin: number;
   budgetMax: number;
-  availability: AvailabilitySlot[];
+  favoriteCourses?: string[];
+  // Onboarding no longer collects a full availability picker or partner-
+  // matching preferences (age/gender range) — those are secondary signals
+  // completed later from Profile > Match Preferences, so they're optional
+  // here with the same "no preference" defaults everyone else starts with.
+  availability?: AvailabilitySlot[];
   preferredCourses: string[];
   travelRadiusMiles: number;
-  agePreferenceMin: number;
-  agePreferenceMax: number;
-  noAgePreference: boolean;
-  genderPreference: GenderPreference;
+  roundLengthPreference?: RoundLengthPreference;
+  agePreferenceMin?: number;
+  agePreferenceMax?: number;
+  noAgePreference?: boolean;
+  genderPreference?: GenderPreference;
 }
 
 interface DataContextValue {
@@ -764,11 +772,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
       playingAreaCoords: input.playingAreaCoords,
       distanceMiles: 0,
       handicap: input.handicap,
-      favoriteCourses: [],
+      favoriteCourses: input.favoriteCourses ?? [],
       budgetMin: input.budgetMin,
       budgetMax: input.budgetMax,
       noBudgetPreference: false,
-      availability: input.availability,
+      availability: input.availability ?? [],
       walkOrCart: input.walkOrCart,
       vibes: input.vibes.length > 0 ? input.vibes : ["Casual & Social"],
       preferredCourses: input.preferredCourses,
@@ -778,14 +786,18 @@ export function DataProvider({ children }: { children: ReactNode }) {
       // preference"), same as everyone's default until edited from Profile.
       handicapPreferenceMin: 0,
       handicapPreferenceMax: 36,
-      agePreferenceMin: input.agePreferenceMin,
-      agePreferenceMax: input.agePreferenceMax,
-      noAgePreference: input.noAgePreference,
-      genderPreference: input.genderPreference,
-      // Round Length / Group Type / Game Format / Networking aren't part of
-      // onboarding — new golfers start with no opinion on any of them and
-      // set them later from Profile > Match Preferences if they want to.
-      roundLengthPreference: "No Preference",
+      // Age/gender-preference-for-partners isn't collected during
+      // onboarding either — same "no preference" default, completed later
+      // from Profile > Match Preferences if the golfer wants it.
+      agePreferenceMin: input.agePreferenceMin ?? AGE_PREF_MIN,
+      agePreferenceMax: input.agePreferenceMax ?? AGE_PREF_MAX,
+      noAgePreference: input.noAgePreference ?? true,
+      genderPreference: input.genderPreference ?? "No preference",
+      // Round Length is the one Match Preference onboarding does collect
+      // (see ProfileSetup step 4); Group Type / Game Format / Networking
+      // aren't part of onboarding — set later from Profile > Match
+      // Preferences if the golfer wants to.
+      roundLengthPreference: input.roundLengthPreference ?? "No Preference",
       groupTypePreference: "No Preference",
       gameFormatPreference: "No Preference",
       networkingPreference: "No Preference",

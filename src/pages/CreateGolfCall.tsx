@@ -18,6 +18,7 @@ import { getWeekendRange } from "../lib/greeting";
 import { skillTierFromHandicap } from "../lib/format";
 import { coordsForCourse } from "../lib/courses";
 import { haversineMiles } from "../lib/geo";
+import { track } from "../lib/analytics";
 
 const SKILL_OPTIONS: SkillFilter[] = ["Any Skill Level", "Beginner", "Intermediate", "Advanced"];
 const WALK_OPTIONS: WalkOrCart[] = ["Either", "Walking", "Cart"];
@@ -184,6 +185,7 @@ export function CreateGolfCall() {
       additionalJoinedGolferIds: fillMode ? friendIds : undefined,
     });
     if (fromPostId) attachGolfCallToPost(fromPostId, call.id);
+    track("first_round_hosted");
     showToast(fillMode ? t("host.postedFillToast") : t("host.postedFreshToast"), "success");
     navigate(fromPostId ? `/community/${fromPostId}` : `/golf-calls/${call.id}`);
   }

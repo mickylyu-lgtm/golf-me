@@ -15,6 +15,7 @@ import { VIBE_TONE } from "../../lib/theme";
 import { computeCallCompatibility } from "../../lib/compatibility";
 import { matchTier, callMatchReasons } from "../../lib/matchReasons";
 import { evaluatePreferenceMatch } from "../../lib/preferenceMatch";
+import { track } from "../../lib/analytics";
 import type { PreferenceMatchContext } from "../../lib/preferenceMatch";
 
 interface GolfCallCardProps {
@@ -55,6 +56,7 @@ export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
 
   function handleJoin(e: React.MouseEvent) {
     e.stopPropagation();
+    track("first_round_joined");
     joinGolfCall(call.id);
     showToast(
       call.joinMode === "instant" ? `You're playing ${formatDate(call.dateISO)}. ⛳` : "Request sent to the host.",

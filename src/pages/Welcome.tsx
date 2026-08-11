@@ -2,9 +2,13 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "../components/ui/Button";
 import { GolfMeIcon } from "../components/brand/GolfMeIcon";
 import { GolfMeWordmark } from "../components/brand/GolfMeWordmark";
+import { useLocale } from "../i18n/LocaleContext";
+import { hasOnboardingDraft } from "../lib/onboardingDraft";
 
 export function Welcome() {
   const navigate = useNavigate();
+  const { t } = useLocale();
+  const resuming = hasOnboardingDraft();
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-between bg-gradient-to-br from-fairway-700 via-fairway-800 to-fairway-950 px-6 py-12 text-center text-white">
@@ -21,22 +25,25 @@ export function Welcome() {
           <GolfMeWordmark golfClassName="text-white" meClassName="text-sun-300" />
         </h1>
         <div>
-          <p className="text-xl font-bold">Find your next round.</p>
-          <p className="mt-2 max-w-xs text-sm text-fairway-100">
-            Golf when you want, even when your usual group can't.
-          </p>
+          <p className="text-xl font-bold">{t("welcome.tagline")}</p>
+          <p className="mt-2 max-w-xs text-sm text-fairway-100">{t("welcome.subtitle")}</p>
         </div>
       </div>
 
       <div className="relative flex w-full max-w-xs flex-col gap-3">
-        <Button size="lg" variant="secondary" fullWidth onClick={() => navigate("/onboarding")}>
-          Get Started
+        <Button
+          size="lg"
+          variant="secondary"
+          fullWidth
+          onClick={() => navigate(resuming ? "/profile-setup" : "/onboarding")}
+        >
+          {resuming ? t("welcome.resumeSetup") : t("welcome.getStarted")}
         </Button>
         <button
           onClick={() => navigate("/login")}
           className="rounded-full px-4 py-2.5 text-sm font-semibold text-white/80 transition-colors duration-200 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-fairway-800"
         >
-          Log In
+          {t("welcome.logIn")}
         </button>
       </div>
     </div>

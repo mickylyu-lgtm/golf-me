@@ -4,35 +4,32 @@ import { Compass, ShieldCheck, Users } from "lucide-react";
 import { Button } from "../components/ui/Button";
 import { GolfMeIcon } from "../components/brand/GolfMeIcon";
 import { GolfMeWordmark } from "../components/brand/GolfMeWordmark";
+import { useLocale } from "../i18n/LocaleContext";
+import { track } from "../lib/analytics";
+import type { TranslationKey } from "../i18n/locales/en";
 
 const SCREENS = [
-  {
-    icon: Compass,
-    title: "Play more golf.",
-    body: "Find nearby rounds that need another player — no more waiting on your usual group's schedule.",
-  },
-  {
-    icon: Users,
-    title: "Find your kind of group.",
-    body: "Match around schedule, distance, skill, budget, and golf vibe — so every round actually fits you.",
-  },
-  {
-    icon: ShieldCheck,
-    title: "Build your golf circle.",
-    body: "Play together, build credibility, and find golfers you would actually play with again.",
-    credibilityNote: true,
-  },
-] as const;
+  { icon: Compass, titleKey: "onboarding.screen1Title", bodyKey: "onboarding.screen1Body" },
+  { icon: Users, titleKey: "onboarding.screen2Title", bodyKey: "onboarding.screen2Body" },
+  { icon: ShieldCheck, titleKey: "onboarding.screen3Title", bodyKey: "onboarding.screen3Body", credibilityNote: true },
+] as const satisfies readonly { icon: typeof Compass; titleKey: TranslationKey; bodyKey: TranslationKey; credibilityNote?: boolean }[];
 
 export function Onboarding() {
   const navigate = useNavigate();
+  const { t } = useLocale();
   const [step, setStep] = useState(0);
   const screen = SCREENS[step];
   const isLast = step === SCREENS.length - 1;
   const Icon = screen.icon;
 
+  function goToSignup() {
+    track("onboarding_completed");
+    navigate("/signup");
+  }
+
   function next() {
-    if (isLast) navigate("/signup");
+    if (step === 0) track("onboarding_started");
+    if (isLast) goToSignup();
     else setStep((s) => s + 1);
   }
 
@@ -51,11 +48,8 @@ export function Onboarding() {
             <span key={i} className={`h-1.5 w-8 rounded-full transition-colors duration-300 ${i === step ? "bg-fairway-600" : "bg-slate-200"}`} />
           ))}
         </div>
-        <button
-          onClick={() => navigate("/signup")}
-          className="text-sm font-semibold text-slate-400 transition-colors duration-200 hover:text-slate-600"
-        >
-          Skip
+        <button onClick={goToSignup} className="text-sm font-semibold text-slate-400 transition-colors duration-200 hover:text-slate-600">
+          {t("common.skip")}
         </button>
       </div>
 
@@ -64,23 +58,20 @@ export function Onboarding() {
           <Icon size={30} />
         </span>
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-900">{screen.title}</h1>
-          <p className="mx-auto mt-2 max-w-xs text-sm text-slate-500">{screen.body}</p>
+          <h1 className="text-2xl font-extrabold text-slate-900">{t(screen.titleKey)}</h1>
+          <p className="mx-auto mt-2 max-w-xs text-sm text-slate-500">{t(screen.bodyKey)}</p>
         </div>
 
         {"credibilityNote" in screen && screen.credibilityNote && (
           <div className="mx-auto max-w-xs rounded-2xl border border-slate-100 bg-white p-4 text-left">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">GolfMe is built around good golf partners</p>
-            <p className="mt-1.5 text-xs leading-relaxed text-slate-500">
-              After rounds, golfers can give private feedback about reliability, pace, sportsmanship, and handicap
-              accuracy. Credibility improves naturally as you complete good rounds.
-            </p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t("onboarding.credibilityNoteTitle")}</p>
+            <p className="mt-1.5 text-xs leading-relaxed text-slate-500">{t("onboarding.credibilityNoteBody")}</p>
           </div>
         )}
       </div>
 
       <Button size="lg" fullWidth onClick={next}>
-        {isLast ? "Create My Profile" : "Next"}
+        {isLast ? t("onboarding.createProfile") : t("onboarding.next")}
       </Button>
     </div>
   );

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { LocateFixed, MapPin, Search } from "lucide-react";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
@@ -18,6 +18,12 @@ interface LocationPickerProps {
   title?: string;
   onSelect: (area: PlayingArea) => void;
   onClose: () => void;
+  /** Immediately triggers "Use My Current Location" on mount — for an
+   * onboarding "Use My Location" button that should request the OS
+   * permission right away rather than making the user click twice. Still
+   * only fires after that explicit tap opened this modal in the first
+   * place, never on a silent/automatic mount elsewhere. */
+  autoRequestLocation?: boolean;
 }
 
 type GeoStatus = "idle" | "requesting" | "denied" | "unsupported";
@@ -40,15 +46,16 @@ function nearestRegion(lat: number, lng: number): Region | undefined {
 // non-blocking fallback to manual search when denied/unsupported. Reuses
 // the shared Modal, which is already a full-screen sheet on mobile and a
 // centered dialog on desktop.
-export function LocationPicker({ title = "Where do you usually play?", onSelect, onClose }: LocationPickerProps) {
+export function LocationPicker({ title = "Where do you usually play?", onSelect, onClose, autoRequestLocation = false }: LocationPickerProps) {
   const [query, setQuery] = useState("");
   const [geoStatus, setGeoStatus] = useState<GeoStatus>("idle");
+  const autoRequested = useRef(false);
 
   const results = searchRegions(query);
   const trimmedQuery = query.trim();
   const exactMatch = results.some((r) => r.label.toLowerCase() === trimmedQuery.toLowerCase());
 
-  function useCurrentLocation() {
+  function requestCurrentLocation() {
     if (!("geolocation" in navigator)) {
       setGeoStatus("unsupported");
       return;
@@ -65,6 +72,12 @@ export function LocationPicker({ title = "Where do you usually play?", onSelect,
     );
   }
 
+  useEffect(() => {
+    if (!autoRequestLocation || autoRequested.current) return;
+    autoRequested.current = true;
+    requestCurrentLocation();
+  }, [autoRequestLocation]);
+
   function selectRegion(region: Region) {
     onSelect({ label: region.label, coords: region.coords });
   }
@@ -77,7 +90,7 @@ export function LocationPicker({ title = "Where do you usually play?", onSelect,
   return (
     <Modal title={title} onClose={onClose}>
       <div className="flex flex-col gap-4">
-        <Button variant="outline" fullWidth icon={<LocateFixed size={16} />} onClick={useCurrentLocation} disabled={geoStatus === "requesting"}>
+        <Button variant="outline" fullWidth icon={<LocateFixed size={16} />} onClick={requestCurrentLocation} disabled={geoStatus === "requesting"}>
           {geoStatus === "requesting" ? "Getting your location..." : "Use My Current Location"}
         </Button>
         {geoStatus === "denied" && (
