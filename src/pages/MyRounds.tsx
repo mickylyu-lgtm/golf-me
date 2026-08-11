@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CalendarDays, ClipboardList, MapPin, Search, Users } from "lucide-react";
 import { useData } from "../context/DataContext";
+import { useLocale } from "../i18n/LocaleContext";
 import { Avatar } from "../components/ui/Avatar";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
@@ -15,6 +16,7 @@ import type { GolfCall } from "../types";
 
 export function MyRounds() {
   const { currentUser, golfCalls, getGolfer, hasReviewed } = useData();
+  const { t } = useLocale();
   const navigate = useNavigate();
   const [reviewTarget, setReviewTarget] = useState<{ call: GolfCall; revieweeId: string } | null>(null);
   const [sharePromptCall, setSharePromptCall] = useState<GolfCall | null>(null);
@@ -40,24 +42,24 @@ export function MyRounds() {
   return (
     <div className="flex flex-col gap-8">
       <div>
-        <h1 className="text-xl font-bold text-slate-900">My Rounds</h1>
-        <p className="text-sm text-slate-500">Everything you're hosting or playing in, in one place.</p>
+        <h1 className="text-xl font-bold text-slate-900">{t("myGolf.title")}</h1>
+        <p className="text-sm text-slate-500">{t("myGolf.subtitle")}</p>
       </div>
 
       <section>
-        <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-400">Upcoming</h2>
+        <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-400">{t("myGolf.upcoming")}</h2>
         {upcoming.length === 0 ? (
           <EmptyState
             icon={<CalendarDays size={20} />}
-            title="Nothing on the books yet."
-            description="Find a round nearby or host your own — either way, you'll be golfing soon."
+            title={t("myGolf.emptyUpcoming")}
+            description={t("myGolf.emptyUpcomingDesc")}
             action={
               <div className="flex flex-wrap justify-center gap-2">
                 <Button size="sm" icon={<Search size={14} />} onClick={() => navigate("/golf-calls")}>
-                  Find a Round
+                  {t("home.findRound")}
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => navigate("/golf-calls/new")}>
-                  Host a Golf Call
+                  {t("find.hostGolfCall")}
                 </Button>
               </div>
             }
@@ -80,7 +82,7 @@ export function MyRounds() {
                         <MapPin size={12} /> {c.areaLabel}
                       </p>
                     </div>
-                    {isHost ? <Badge tone="sun">Hosting</Badge> : <Badge tone="fairway">Joined</Badge>}
+                    {isHost ? <Badge tone="sun">{t("myGolf.hosting")}</Badge> : <Badge tone="fairway">{t("myGolf.joined")}</Badge>}
                   </div>
                   <p className="flex items-center gap-1 text-xs font-medium text-fairway-700">
                     <CalendarDays size={12} /> {formatDate(c.dateISO)} · {c.timeLabel}
@@ -89,7 +91,9 @@ export function MyRounds() {
                     <Badge tone={VIBE_TONE[c.vibe]}>{c.vibe}</Badge>
                     <Badge tone="outline">{formatMoney(c.estimatedPricePerPerson)}/person</Badge>
                     <Badge tone="outline" icon={<Users size={11} />}>
-                      {openSpots === 1 ? "One more and you're set" : `${c.joinedGolferIds.length}/${c.totalSpots} joined`}
+                      {openSpots === 1
+                        ? t("myGolf.oneMoreAndSet")
+                        : t("myGolf.joinedCount", { joined: c.joinedGolferIds.length, total: c.totalSpots })}
                     </Badge>
                   </div>
                 </button>
@@ -100,13 +104,9 @@ export function MyRounds() {
       </section>
 
       <section>
-        <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-400">Past</h2>
+        <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-400">{t("myGolf.past")}</h2>
         {past.length === 0 ? (
-          <EmptyState
-            icon={<ClipboardList size={20} />}
-            title="No rounds played yet."
-            description="Once you complete a round, it'll show up here for reviews and reputation."
-          />
+          <EmptyState icon={<ClipboardList size={20} />} title={t("myGolf.emptyPast")} description={t("myGolf.emptyPastDesc")} />
         ) : (
           <div className="flex flex-col gap-3">
             {past.map((c) => {
@@ -125,17 +125,17 @@ export function MyRounds() {
                         <CalendarDays size={12} /> {formatDate(c.dateISO)}
                       </p>
                     </div>
-                    <Badge tone={c.status === "cancelled" ? "rose" : "slate"}>{c.status === "cancelled" ? "Cancelled" : "Completed"}</Badge>
+                    <Badge tone={c.status === "cancelled" ? "rose" : "slate"}>{c.status === "cancelled" ? t("myGolf.cancelled") : t("myGolf.completed")}</Badge>
                   </button>
 
                   {c.status === "completed" && teammates.length > 0 && (
                     <div className="border-t border-slate-100 pt-3">
                       {allReviewed ? (
-                        <p className="text-xs font-medium text-fairway-700">All reviews submitted — thanks for keeping Golf Me trustworthy.</p>
+                        <p className="text-xs font-medium text-fairway-700">{t("myGolf.allReviewsSubmitted")}</p>
                       ) : (
                         <>
                           <p className="mb-2 text-xs font-semibold text-slate-500">
-                            Leave a review ({reviewedCount}/{teammates.length} done)
+                            {t("myGolf.leaveReview", { done: reviewedCount, total: teammates.length })}
                           </p>
                           <div className="flex flex-wrap gap-2">
                             {teammates.map((gid) => {

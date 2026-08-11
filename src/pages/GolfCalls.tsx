@@ -1,13 +1,13 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Bell, Plus, SlidersHorizontal, X } from "lucide-react";
+import { Bell, Plus, Search, SlidersHorizontal, X } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useToast } from "../context/ToastContext";
+import { useLocale } from "../i18n/LocaleContext";
 import { GolfCallCard } from "../components/golfcall/GolfCallCard";
 import { Button } from "../components/ui/Button";
 import { EmptyState } from "../components/ui/EmptyState";
 import { FindRoundModal } from "../components/find/FindRoundModal";
-import { GOLF_VIBES } from "../types";
 import type { GolfCall, GolfVibe, SkillFilter, WalkOrCart } from "../types";
 import { computeCallCompatibility } from "../lib/compatibility";
 import { matchesWhen } from "../lib/roundFilters";
@@ -21,8 +21,9 @@ interface GolfCallsProps {
 export function GolfCalls({ embedded = false }: GolfCallsProps) {
   const { currentUser, golfCalls } = useData();
   const { showToast } = useToast();
+  const { t } = useLocale();
   const navigate = useNavigate();
-  const [activeVibes, setActiveVibes] = useState<GolfVibe[]>([]);
+  const [query, setQuery] = useState("");
   const [wizardOpen, setWizardOpen] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const [notified, setNotified] = useState(false);
@@ -38,16 +39,16 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
   const customDate = searchParams.get("date");
   const effectiveLoc = useMemo(() => effectiveLocation(currentUser, searchParams), [currentUser, searchParams]);
 
-  function toggleVibe(v: GolfVibe) {
-    setActiveVibes((prev) => (prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]));
-  }
-
+  const trimmedQuery = query.trim().toLowerCase();
   const baseResults = useMemo(
     () =>
       golfCalls
         .filter((c) => c.status !== "completed" && c.status !== "cancelled")
-        .filter((c) => (activeVibes.length === 0 ? true : activeVibes.includes(c.vibe))),
-    [golfCalls, activeVibes],
+        .filter(
+          (c) =>
+            !trimmedQuery || c.course.toLowerCase().includes(trimmedQuery) || c.areaLabel.toLowerCase().includes(trimmedQuery),
+        ),
+    [golfCalls, trimmedQuery],
   );
 
   const matchedResults = useMemo(() => {
@@ -73,7 +74,16 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
     [baseResults],
   );
 
-  const whenLabel = when === "today" ? "today" : when === "tomorrow" ? "tomorrow" : when === "weekend" ? "this weekend" : when === "date" ? "your chosen date" : null;
+  const whenLabel =
+    when === "today"
+      ? t("filters.today").toLowerCase()
+      : when === "tomorrow"
+        ? t("filters.tomorrow").toLowerCase()
+        : when === "weekend"
+          ? t("filters.thisWeekend").toLowerCase()
+          : when === "date"
+            ? t("find.yourChosenDate")
+            : null;
 
   function clearSearch() {
     setSearchParams({});
@@ -81,7 +91,7 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
 
   function handleNotifyMe() {
     setNotified(true);
-    showToast("We'll notify you when a matching round appears.", "success");
+    showToast(t("find.willNotify"), "success");
   }
 
   const results: GolfCall[] = isMatched ? (matchedResults ?? []).map((r) => r.call) : defaultResults;
@@ -93,26 +103,45 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
           <div />
         ) : (
           <div>
-            <h1 className="text-xl font-bold text-slate-900">Golf Calls</h1>
-            <p className="text-sm text-slate-500">Open rounds looking for players, right now.</p>
+            <h1 className="text-xl font-bold text-slate-900">{t("find.golfCallsTitle")}</h1>
+            <p className="text-sm text-slate-500">{t("find.golfCallsSubtitle")}</p>
           </div>
         )}
         <Button size="sm" icon={<Plus size={15} />} onClick={() => navigate("/golf-calls/new")}>
-          Host
+          {t("common.host")}
         </Button>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search size={15} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t("find.searchPlaceholder")}
+            className="w-full rounded-full border border-slate-200 bg-white py-2.5 pl-9 pr-4 text-sm outline-none transition focus:border-fairway-400"
+          />
+        </div>
+        <button
+          onClick={() => setWizardOpen(true)}
+          aria-label={t("find.filters")}
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-all duration-200 ease-out hover:border-fairway-300 hover:text-fairway-700 active:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2"
+        >
+          <SlidersHorizontal size={16} />
+        </button>
       </div>
 
       {isMatched && (
         <div className="flex items-center justify-between gap-3 rounded-2xl border border-fairway-200 bg-fairway-50 px-4 py-3">
           <div>
             <p className="text-sm font-semibold text-fairway-800">
-              Matches {whenLabel ? `for ${whenLabel}` : ""} {radius ? `within ${radius} mi` : ""}
+              {whenLabel ? t("find.matchesFor", { when: whenLabel }) : t("find.matches")} {radius ? t("find.withinRadius", { radius }) : ""}
             </p>
-            <p className="text-xs text-fairway-700">Sorted by Golf Compatibility Score.</p>
+            <p className="text-xs text-fairway-700">{t("find.sortedByCompatibility")}</p>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={() => setWizardOpen(true)} className="text-xs font-semibold text-fairway-700 hover:underline">
-              Edit search
+              {t("find.editSearch")}
             </button>
             <button onClick={clearSearch} aria-label="Clear search" className="rounded-full p-1 text-fairway-600 hover:bg-fairway-100">
               <X size={14} />
@@ -121,36 +150,23 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-1.5">
-        <SlidersHorizontal size={14} className="mr-0.5 text-slate-400" />
-        {GOLF_VIBES.map((v) => (
-          <button
-            key={v}
-            onClick={() => toggleVibe(v)}
-            className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
-              activeVibes.includes(v)
-                ? "border-transparent bg-fairway-600 text-white"
-                : "border-slate-200 bg-white text-slate-600 hover:border-fairway-300"
-            }`}
-          >
-            {v}
-          </button>
-        ))}
-      </div>
+      {!isMatched && (
+        <h2 className="text-sm font-bold uppercase tracking-wide text-slate-400">{t("find.nearYou")}</h2>
+      )}
 
       {results.length === 0 ? (
         isMatched ? (
           <EmptyState
             icon={<SlidersHorizontal size={20} />}
-            title="Nothing matches yet. Start the round."
-            description="There aren't any matching rounds right now — widen your search, host your own, or we'll let you know when one opens up."
+            title={t("find.emptyNoMatches")}
+            description={t("find.emptyNoMatchesDesc")}
             action={
               <div className="flex flex-wrap justify-center gap-2">
                 <Button size="sm" onClick={() => navigate("/golf-calls/new")}>
-                  Create a Golf Call
+                  {t("find.createGolfCall")}
                 </Button>
                 <Button size="sm" variant="outline" icon={<Bell size={14} />} disabled={notified} onClick={handleNotifyMe}>
-                  {notified ? "We'll notify you" : "Notify Me When One Opens"}
+                  {notified ? t("find.notifiedMe") : t("find.notifyMe")}
                 </Button>
               </div>
             }
@@ -158,11 +174,11 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
         ) : (
           <EmptyState
             icon={<Plus size={20} />}
-            title="Nothing matches yet. Start the round."
-            description="No open Golf Calls with that vibe right now — be the first to start one."
+            title={t("find.emptyNoMatches")}
+            description={query ? t("find.emptyNoResultsSearch") : t("find.emptyNoResults")}
             action={
               <Button size="sm" onClick={() => navigate("/golf-calls/new")}>
-                Host a Golf Call
+                {t("find.hostGolfCall")}
               </Button>
             }
           />

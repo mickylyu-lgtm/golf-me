@@ -1,49 +1,54 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Car, Check, Footprints, Mail, MapPin, Phone, Settings as SettingsIcon, ShieldCheck, UserRoundPlus, Users, Wallet } from "lucide-react";
+import type { ReactNode } from "react";
+import {
+  ChevronRight,
+  MessageCircle,
+  MessageSquareText,
+  Settings as SettingsIcon,
+  SlidersHorizontal,
+  Users,
+  UserRoundPlus,
+} from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useToast } from "../context/ToastContext";
+import { useLocale } from "../i18n/LocaleContext";
 import { Avatar } from "../components/ui/Avatar";
-import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
-import { Pill } from "../components/ui/Pill";
 import { Modal } from "../components/ui/Modal";
 import { inputClass, labelClass } from "../components/ui/FormControls";
-import { VerifyStepModal } from "../components/profile/VerifyStepModal";
 import { AvatarUpload } from "../components/profile/AvatarUpload";
-import { LocationPicker } from "../components/location/LocationPicker";
-import { ReputationRow } from "../components/golfer/ReputationRow";
 import { CredibilityBadge } from "../components/golfer/CredibilityBadge";
-import { MatchPreferencesPanel } from "../components/golfer/MatchPreferencesPanel";
-import { AGE_RANGES, AVAILABILITY_SLOTS } from "../types";
-import type { AgeRange, AvailabilitySlot } from "../types";
-import { VIBE_TONE } from "../lib/theme";
-import { formatBudgetRange, memberSinceLabel } from "../lib/format";
-import { computeCredibility, computeHandicapConfidence } from "../lib/credibility";
-import { matchPreferencesFromGolfer } from "../lib/matchPreferences";
+import { AGE_RANGES } from "../types";
+import type { AgeRange } from "../types";
+import { memberSinceLabel } from "../lib/format";
+import { computeCredibility } from "../lib/credibility";
+
+function ProfileRow({ icon, label, value, onClick }: { icon: ReactNode; label: string; value?: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white p-4 text-left transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-fairway-200 hover:shadow-md active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+    >
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-fairway-50 text-fairway-700">{icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold text-slate-800">{label}</span>
+        {value && <span className="block truncate text-xs text-slate-500">{value}</span>}
+      </span>
+      <ChevronRight size={16} className="shrink-0 text-slate-300" />
+    </button>
+  );
+}
 
 export function Profile() {
-  const {
-    currentUser,
-    updateCurrentUserProfile,
-    setPhoneVerified,
-    setEmailVerified,
-    requestVerifiedGolfer,
-    circleGolfers,
-    reviewsAbout,
-    followingGolfers,
-    unfollowUser,
-    posts,
-    savedPostsList,
-  } = useData();
+  const { currentUser, updateCurrentUserProfile, circleGolfers, reviewsAbout, followingGolfers, posts, hasUnreadMessages } = useData();
   const { showToast } = useToast();
+  const { t } = useLocale();
   const navigate = useNavigate();
   const myPostCount = posts.filter((p) => p.authorId === currentUser.id).length;
 
   const [editing, setEditing] = useState(false);
-  const [verifyChannel, setVerifyChannel] = useState<"phone" | "email" | null>(null);
   const [avatarModalOpen, setAvatarModalOpen] = useState(false);
-  const [locationPickerOpen, setLocationPickerOpen] = useState(false);
 
   function buildForm(g: typeof currentUser) {
     return {
@@ -61,20 +66,6 @@ export function Profile() {
     setEditing(true);
   }
 
-  function toggleAvailability(slot: AvailabilitySlot) {
-    const next = currentUser.availability.includes(slot)
-      ? currentUser.availability.filter((s) => s !== slot)
-      : [...currentUser.availability, slot];
-    updateCurrentUserProfile({ availability: next });
-  }
-
-  function setAvailableThisWeekend() {
-    const weekendSlots: AvailabilitySlot[] = ["Weekend Mornings", "Weekend Afternoons", "Weekend Evenings"];
-    const next = Array.from(new Set([...currentUser.availability, ...weekendSlots]));
-    updateCurrentUserProfile({ availability: next });
-    showToast("Marked available this weekend.", "success");
-  }
-
   function save() {
     updateCurrentUserProfile({
       ageRange: form.ageRange,
@@ -86,396 +77,138 @@ export function Profile() {
       bio: form.bio,
     });
     setEditing(false);
-    showToast("Profile updated.", "success");
+    showToast(t("profile.profileUpdated"), "success");
   }
 
-  const canApplyVerifiedGolfer = currentUser.verification.phoneVerified && currentUser.verification.emailVerified && !currentUser.verification.verifiedGolfer;
   const myReviews = reviewsAbout(currentUser.id);
   const credibility = computeCredibility(currentUser, myReviews);
-  const handicapConfidence = computeHandicapConfidence(myReviews);
 
   return (
     <div className="flex flex-col gap-6 pb-6">
-      <div className="flex flex-wrap items-center justify-between gap-y-2">
-        <div className="flex min-w-0 items-center gap-3">
-          <button
-            onClick={() => setAvatarModalOpen(true)}
-            aria-label="Change profile photo"
-            className="rounded-full transition-transform duration-200 ease-out hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2"
-          >
-            <Avatar golfer={currentUser} size="lg" />
-          </button>
-          <div className="min-w-0">
-            <h1 className="truncate text-xl font-bold text-slate-900">{currentUser.name}</h1>
-            <p className="text-sm text-slate-500">{memberSinceLabel(currentUser.memberSince)}</p>
-            <div className="mt-1">
-              <CredibilityBadge tier={credibility.tier} label={credibility.label} size="sm" />
-            </div>
-          </div>
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => setAvatarModalOpen(true)}
+          aria-label={t("profile.changePhoto")}
+          className="rounded-full transition-transform duration-200 ease-out hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2"
+        >
+          <Avatar golfer={currentUser} size="lg" />
+        </button>
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-xl font-bold text-slate-900">{currentUser.name}</h1>
+          <p className="text-sm text-slate-500">{memberSinceLabel(currentUser.memberSince)}</p>
         </div>
-        <div className="flex shrink-0 gap-2">
-          {!editing && (
-            <Button size="sm" variant="outline" onClick={startEditing}>
-              Edit
-            </Button>
-          )}
-          <button
-            onClick={() => navigate("/settings")}
-            aria-label="Settings"
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition-all duration-200 ease-out hover:border-slate-300 hover:text-slate-800 active:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2"
-          >
-            <SettingsIcon size={16} />
-          </button>
-        </div>
+        <Button size="sm" variant="outline" onClick={startEditing}>
+          {t("common.edit")}
+        </Button>
       </div>
 
-      {handicapConfidence.level === "needs_review" && (
-        <div className="rounded-2xl border border-sun-200 bg-sun-50 p-4">
-          <p className="text-sm font-semibold text-sun-800">
-            We've received repeated feedback that your listed handicap may not reflect your current playing level.
-          </p>
-          <p className="mt-1 text-xs text-sun-700">Please review your handicap information — only you can see this note.</p>
-          <Button size="sm" variant="outline" className="mt-2.5" onClick={startEditing}>
-            Update handicap
-          </Button>
-        </div>
-      )}
-
-      <div className="rounded-2xl border border-slate-100 bg-white p-4">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">GolfMe Reputation</p>
-        <ReputationRow golfer={currentUser} />
-        <p className="mt-2 flex items-center gap-1 text-xs text-slate-500">
-          {handicapConfidence.level === "high" && <ShieldCheck size={12} className="text-fairway-600" />}
-          {handicapConfidence.level === "high"
-            ? "Handicap usually confirmed by playing partners"
-            : handicapConfidence.level === "needs_review"
-              ? "Handicap accuracy has been questioned by multiple playing partners"
-              : null}
+      <div className="flex items-center gap-2">
+        <p className="text-sm text-slate-600">
+          {currentUser.reputation.completedRounds === 1
+            ? t("profile.roundCountSingular", { handicap: currentUser.handicap ?? "--" })
+            : t("profile.roundCount", { count: currentUser.reputation.completedRounds, handicap: currentUser.handicap ?? "--" })}
         </p>
+        <CredibilityBadge tier={credibility.tier} label={credibility.label} size="sm" />
       </div>
 
-      <div className="rounded-2xl border border-slate-100 bg-white p-4">
-        <p className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
-          <Users size={12} /> Your Golf Circle · {circleGolfers.length} golfer{circleGolfers.length === 1 ? "" : "s"}
-        </p>
-        {circleGolfers.length === 0 ? (
-          <p className="text-sm text-slate-500">
-            Play a round and review your group to start building your Circle — golfers you've actually played with and would play with again.
-          </p>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {circleGolfers.map((g) => (
-              <button
-                key={g.id}
-                onClick={() => navigate(`/golfer/${g.id}`)}
-                className="flex items-center gap-3 rounded-xl px-1 py-1 text-left transition hover:bg-slate-50"
-              >
-                <Avatar golfer={g} size="sm" />
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-slate-800">{g.name}</p>
-                  <p className="text-xs text-slate-500">{g.handicap !== null ? `${g.handicap} handicap` : "No handicap yet"}</p>
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="rounded-2xl border border-slate-100 bg-white p-4">
-        <p className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
-          <UserRoundPlus size={12} /> Following · {followingGolfers.length}
-        </p>
-        {followingGolfers.length === 0 ? (
-          <p className="text-sm text-slate-500">
-            Follow golfers you'd like to play with again or keep tabs on — it's separate from your Golf Circle.
-          </p>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {followingGolfers.map((g) => (
-              <div key={g.id} className="flex items-center gap-3">
-                <button
-                  onClick={() => navigate(`/golfer/${g.id}`)}
-                  className="flex flex-1 items-center gap-3 rounded-xl py-1 text-left transition hover:bg-slate-50"
-                >
-                  <Avatar golfer={g} size="sm" />
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-slate-800">{g.name}</p>
-                    <p className="text-xs text-slate-500">
-                      {g.handicap !== null ? `${g.handicap} handicap` : "No handicap yet"} · {g.reputation.completedRounds} GolfMe rounds
-                    </p>
-                  </div>
-                </button>
-                <button
-                  onClick={() => {
-                    unfollowUser(g.id);
-                    showToast(`Unfollowed ${g.name}.`, "info");
-                  }}
-                  className="shrink-0 text-xs font-semibold text-slate-400 transition-colors duration-200 hover:text-slate-700"
-                >
-                  Unfollow
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="rounded-2xl border border-slate-100 bg-white p-4">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Community</p>
-        <div className="flex divide-x divide-slate-100">
-          <div className="flex-1 pr-3">
-            <p className="text-lg font-bold text-slate-800">{myPostCount}</p>
-            <p className="text-xs text-slate-500">Posts</p>
-          </div>
-          <button onClick={() => navigate("/saved-posts")} className="flex-1 pl-3 text-left transition-opacity hover:opacity-70">
-            <p className="text-lg font-bold text-slate-800">{savedPostsList.length}</p>
-            <p className="text-xs text-slate-500">Saved Posts</p>
-          </button>
-        </div>
-      </div>
-
-      <div className="rounded-2xl border border-slate-100 bg-white p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">When can you play?</p>
-          <button
-            onClick={setAvailableThisWeekend}
-            className="text-xs font-semibold text-fairway-700 transition-colors duration-200 hover:text-fairway-800 hover:underline"
-          >
-            I'm available this weekend
-          </button>
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {AVAILABILITY_SLOTS.map((slot) => (
-            <Pill key={slot} active={currentUser.availability.includes(slot)} onClick={() => toggleAvailability(slot)}>
-              {slot}
-            </Pill>
-          ))}
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-4 rounded-2xl border border-slate-100 bg-white p-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Match preferences</p>
-          <p className="mt-0.5 text-xs text-slate-400">
-            Used by Auto-Match and background compatibility — a great round can still match you even if one of
-            these is off. Saved instantly as you change them.
-          </p>
-        </div>
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/60 px-3.5 py-3">
-          <div className="flex items-center gap-2.5">
-            <MapPin size={16} className="shrink-0 text-fairway-600" />
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Playing area</p>
-              <p className="text-sm font-semibold text-slate-800">{currentUser.areaLabel}</p>
-            </div>
-          </div>
-          <Button size="sm" variant="outline" onClick={() => setLocationPickerOpen(true)}>
-            Change
-          </Button>
-        </div>
-        <MatchPreferencesPanel
-          value={matchPreferencesFromGolfer(currentUser)}
-          onChange={(patch) => updateCurrentUserProfile(patch)}
-          nearLocation={{ label: currentUser.areaLabel, coords: currentUser.playingAreaCoords }}
+      <div className="flex flex-col gap-2.5">
+        <ProfileRow
+          icon={<MessageCircle size={16} />}
+          label={t("profile.messages")}
+          value={hasUnreadMessages ? t("profile.newMessages") : undefined}
+          onClick={() => navigate("/messages")}
         />
+        <ProfileRow
+          icon={<Users size={16} />}
+          label={t("profile.reputation")}
+          value={credibility.label}
+          onClick={() => navigate("/profile/reputation")}
+        />
+        <ProfileRow
+          icon={<Users size={16} />}
+          label={t("profile.golfCircle")}
+          value={circleGolfers.length === 1 ? t("profile.golferCountSingular") : t("profile.golferCount", { count: circleGolfers.length })}
+          onClick={() => navigate("/profile/circle")}
+        />
+        <ProfileRow
+          icon={<UserRoundPlus size={16} />}
+          label={t("profile.following")}
+          value={`${followingGolfers.length}`}
+          onClick={() => navigate("/profile/following")}
+        />
+        <ProfileRow
+          icon={<MessageSquareText size={16} />}
+          label={t("profile.myPosts")}
+          value={myPostCount === 1 ? t("profile.postCountSingular") : t("profile.postCount", { count: myPostCount })}
+          onClick={() => navigate("/profile/posts")}
+        />
+        <ProfileRow icon={<SlidersHorizontal size={16} />} label={t("profile.matchPreferences")} onClick={() => navigate("/profile/preferences")} />
+        <ProfileRow icon={<SettingsIcon size={16} />} label={t("profile.settings")} onClick={() => navigate("/settings")} />
       </div>
-
-      <div className="rounded-2xl border border-slate-100 bg-white p-4">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Trust &amp; verification</p>
-        <div className="flex flex-col gap-2.5">
-          <div className="flex items-center gap-3 rounded-xl border border-slate-100 px-3.5 py-3">
-            <Phone size={16} className="text-slate-400" />
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-slate-800">Phone number</p>
-              <p className="text-xs text-slate-500">Never shown to other golfers.</p>
-            </div>
-            {currentUser.verification.phoneVerified ? (
-              <Badge tone="fairway" icon={<Check size={11} />}>
-                Verified
-              </Badge>
-            ) : (
-              <Button size="sm" variant="outline" onClick={() => setVerifyChannel("phone")}>
-                Verify
-              </Button>
-            )}
-          </div>
-          <div className="flex items-center gap-3 rounded-xl border border-slate-100 px-3.5 py-3">
-            <Mail size={16} className="text-slate-400" />
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-slate-800">Email address</p>
-              <p className="text-xs text-slate-500">Never shown to other golfers.</p>
-            </div>
-            {currentUser.verification.emailVerified ? (
-              <Badge tone="fairway" icon={<Check size={11} />}>
-                Verified
-              </Badge>
-            ) : (
-              <Button size="sm" variant="outline" onClick={() => setVerifyChannel("email")}>
-                Verify
-              </Button>
-            )}
-          </div>
-          <div className="flex items-center gap-3 rounded-xl border border-slate-100 px-3.5 py-3">
-            <ShieldCheck size={16} className="text-slate-400" />
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-slate-800">Verified Golfer badge</p>
-              <p className="text-xs text-slate-500">
-                {currentUser.verification.verifiedGolfer
-                  ? "Shown on your profile and Golf Calls."
-                  : "Requires phone + email verification."}
-              </p>
-            </div>
-            {currentUser.verification.verifiedGolfer ? (
-              <Badge tone="fairway" icon={<ShieldCheck size={11} />}>
-                Active
-              </Badge>
-            ) : (
-              <Button size="sm" variant="outline" disabled={!canApplyVerifiedGolfer} onClick={() => { requestVerifiedGolfer(); showToast("You're now a Verified Golfer!", "success"); }}>
-                Apply
-              </Button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {editing ? (
-        <div className="flex flex-col gap-4 rounded-2xl border border-slate-100 bg-white p-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelClass}>Age range</label>
-              <select className={inputClass} value={form.ageRange} onChange={(e) => setForm((f) => ({ ...f, ageRange: e.target.value as AgeRange }))}>
-                {AGE_RANGES.map((a) => (
-                  <option key={a} value={a}>
-                    {a}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className={labelClass}>Handicap</label>
-              <input
-                type="number"
-                className={inputClass}
-                value={form.handicap ?? ""}
-                placeholder="No handicap yet"
-                onChange={(e) => setForm((f) => ({ ...f, handicap: e.target.value === "" ? null : Number(e.target.value) }))}
-              />
-            </div>
-          </div>
-          <div>
-            <label className={labelClass}>Favorite courses</label>
-            <input
-              className={inputClass}
-              value={form.favoriteCourses}
-              onChange={(e) => setForm((f) => ({ ...f, favoriteCourses: e.target.value }))}
-              placeholder="Comma-separated"
-            />
-          </div>
-          <p className="-mt-1 text-xs text-slate-400">
-            Playing area, budget, walking/cart, and Golf vibe now live in Match preferences below — changes there save instantly.
-          </p>
-          <div>
-            <label className={labelClass}>Bio</label>
-            <textarea className={inputClass} rows={3} value={form.bio} onChange={(e) => setForm((f) => ({ ...f, bio: e.target.value }))} />
-          </div>
-          <div className="flex gap-3">
-            <Button variant="outline" fullWidth onClick={() => setEditing(false)}>
-              Cancel
-            </Button>
-            <Button fullWidth onClick={save}>
-              Save changes
-            </Button>
-          </div>
-        </div>
-      ) : (
-        <>
-          <div className="rounded-2xl border border-slate-100 bg-white p-4">
-            <p className="text-sm leading-relaxed text-slate-600">{currentUser.bio}</p>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-2xl border border-slate-100 bg-white p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Handicap</p>
-              <p className="mt-1 font-bold text-slate-800">{currentUser.handicap ?? "No handicap yet"}</p>
-            </div>
-            <div className="rounded-2xl border border-slate-100 bg-white p-4">
-              <p className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                <Wallet size={12} /> Budget
-              </p>
-              <p className="mt-1 font-bold text-slate-800">
-                {formatBudgetRange(currentUser.budgetMin, currentUser.budgetMax, currentUser.noBudgetPreference)}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-slate-100 bg-white p-4">
-              <p className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                {currentUser.walkOrCart === "Walking" ? <Footprints size={12} /> : <Car size={12} />} Preference
-              </p>
-              <p className="mt-1 font-bold text-slate-800">{currentUser.walkOrCart}</p>
-            </div>
-            <div className="rounded-2xl border border-slate-100 bg-white p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Area</p>
-              <p className="mt-1 font-bold text-slate-800">{currentUser.areaLabel}</p>
-            </div>
-          </div>
-          <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Golf vibe</p>
-            <div className="flex flex-wrap gap-1.5">
-              {currentUser.vibes.map((v) => (
-                <Badge key={v} tone={VIBE_TONE[v]}>
-                  {v}
-                </Badge>
-              ))}
-            </div>
-          </div>
-          <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Favorite courses</p>
-            <div className="flex flex-wrap gap-1.5">
-              {currentUser.favoriteCourses.map((c) => (
-                <Badge key={c} tone="outline">
-                  {c}
-                </Badge>
-              ))}
-            </div>
-          </div>
-        </>
-      )}
 
       {avatarModalOpen && (
-        <Modal title="Profile photo" onClose={() => setAvatarModalOpen(false)}>
-          <AvatarUpload
-            golfer={currentUser}
-            size="xl"
-            onChange={(photoUrl) => updateCurrentUserProfile({ photoUrl })}
-          />
+        <Modal title={t("profile.profilePhoto")} onClose={() => setAvatarModalOpen(false)}>
+          <AvatarUpload golfer={currentUser} size="xl" onChange={(photoUrl) => updateCurrentUserProfile({ photoUrl })} />
           <Button className="mt-5" fullWidth onClick={() => setAvatarModalOpen(false)}>
-            Done
+            {t("common.done")}
           </Button>
         </Modal>
       )}
 
-      {locationPickerOpen && (
-        <LocationPicker
-          title="Change your playing area"
-          onSelect={(area) => {
-            updateCurrentUserProfile({ areaLabel: area.label, playingAreaCoords: area.coords });
-            setLocationPickerOpen(false);
-            showToast(`Playing area set to ${area.label}.`, "success");
-          }}
-          onClose={() => setLocationPickerOpen(false)}
-        />
-      )}
-
-      {verifyChannel && (
-        <VerifyStepModal
-          channel={verifyChannel}
-          target={verifyChannel === "phone" ? "(•••) •••-0142" : "you@example.com"}
-          onClose={() => setVerifyChannel(null)}
-          onVerified={() => {
-            if (verifyChannel === "phone") setPhoneVerified(true);
-            else setEmailVerified(true);
-            showToast(`${verifyChannel === "phone" ? "Phone" : "Email"} verified.`, "success");
-            setVerifyChannel(null);
-          }}
-        />
+      {editing && (
+        <Modal
+          title={t("profile.editProfile")}
+          onClose={() => setEditing(false)}
+          footer={
+            <div className="flex gap-3">
+              <Button variant="outline" fullWidth onClick={() => setEditing(false)}>
+                {t("common.cancel")}
+              </Button>
+              <Button fullWidth onClick={save}>
+                {t("common.save")}
+              </Button>
+            </div>
+          }
+        >
+          <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelClass}>{t("profile.ageRange")}</label>
+                <select className={inputClass} value={form.ageRange} onChange={(e) => setForm((f) => ({ ...f, ageRange: e.target.value as AgeRange }))}>
+                  {AGE_RANGES.map((a) => (
+                    <option key={a} value={a}>
+                      {a}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>{t("profile.handicap")}</label>
+                <input
+                  type="number"
+                  className={inputClass}
+                  value={form.handicap ?? ""}
+                  placeholder={t("profile.noHandicapYet")}
+                  onChange={(e) => setForm((f) => ({ ...f, handicap: e.target.value === "" ? null : Number(e.target.value) }))}
+                />
+              </div>
+            </div>
+            <div>
+              <label className={labelClass}>{t("profile.favoriteCourses")}</label>
+              <input
+                className={inputClass}
+                value={form.favoriteCourses}
+                onChange={(e) => setForm((f) => ({ ...f, favoriteCourses: e.target.value }))}
+                placeholder={t("profile.commaSeparated")}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>{t("profile.bio")}</label>
+              <textarea className={inputClass} rows={3} value={form.bio} onChange={(e) => setForm((f) => ({ ...f, bio: e.target.value }))} />
+            </div>
+            <p className="-mt-1 text-xs text-slate-400">{t("profile.livesUnderMatchPreferences")}</p>
+          </div>
+        </Modal>
       )}
     </div>
   );

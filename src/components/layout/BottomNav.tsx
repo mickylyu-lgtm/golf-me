@@ -1,10 +1,12 @@
 import { NavLink } from "react-router-dom";
 import { MOBILE_NAV_ITEMS } from "../../lib/nav";
+import { useLocale } from "../../i18n/LocaleContext";
 
 export function BottomNav() {
+  const { t } = useLocale();
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-slate-200 bg-white/95 backdrop-blur-sm sm:hidden">
-      {MOBILE_NAV_ITEMS.map(({ label, path, icon: Icon }) => (
+      {MOBILE_NAV_ITEMS.map(({ labelKey, path, icon: Icon }) => (
         <NavLink
           key={path}
           to={path}
@@ -18,7 +20,7 @@ export function BottomNav() {
           {({ isActive }) => (
             <>
               <Icon size={22} strokeWidth={isActive ? 2.5 : 2} />
-              {label}
+              {t(labelKey)}
             </>
           )}
         </NavLink>

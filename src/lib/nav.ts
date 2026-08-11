@@ -1,20 +1,16 @@
-import { CircleUserRound, ClipboardList, Compass, Flag, Home, PlusCircle, Search } from "lucide-react";
+import { CircleUserRound, ClipboardList, Home, Search } from "lucide-react";
+import type { TranslationKey } from "../i18n/locales/en";
 
-// Desktop sidebar — unchanged from V1.
-export const NAV_ITEMS = [
-  { label: "Home", path: "/", icon: Home },
-  { label: "Discover", path: "/discover", icon: Compass },
-  { label: "Golf Calls", path: "/golf-calls", icon: Flag },
-  { label: "My Rounds", path: "/my-rounds", icon: ClipboardList },
-  { label: "Profile", path: "/profile", icon: CircleUserRound },
-] as const;
+// Same 4 root sections on desktop and mobile — "Find" merges Golf Calls +
+// Discover into one hub; hosting a round is reached via a "Host a Round"
+// action inside Home/Find/My Golf rather than living as its own permanent
+// nav destination (it's an action, not a place). labelKey (not a literal
+// label) so BottomNav/SideNav can translate it via t() at render time.
+export const NAV_ITEMS: { labelKey: TranslationKey; path: string; icon: typeof Home }[] = [
+  { labelKey: "nav.home", path: "/", icon: Home },
+  { labelKey: "nav.find", path: "/find", icon: Search },
+  { labelKey: "nav.myGolf", path: "/my-rounds", icon: ClipboardList },
+  { labelKey: "nav.profile", path: "/profile", icon: CircleUserRound },
+];
 
-// Mobile bottom nav — "Find" merges Golf Calls + Discover into one hub,
-// "Create" jumps straight into hosting a round (incl. Fill My Foursome).
-export const MOBILE_NAV_ITEMS = [
-  { label: "Home", path: "/", icon: Home },
-  { label: "Find", path: "/find", icon: Search },
-  { label: "Create", path: "/golf-calls/new", icon: PlusCircle },
-  { label: "My Golf", path: "/my-rounds", icon: ClipboardList },
-  { label: "Profile", path: "/profile", icon: CircleUserRound },
-] as const;
+export const MOBILE_NAV_ITEMS = NAV_ITEMS;

@@ -2,20 +2,17 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Home } from "../../pages/Home";
 import { Find } from "../../pages/Find";
-import { CreateGolfCall } from "../../pages/CreateGolfCall";
 import { MyRounds } from "../../pages/MyRounds";
 import { Profile } from "../../pages/Profile";
 
-// The 5 root sections, in swipe order. Kept in this file (rather than
+// The 4 root sections, in swipe order. Kept in this file (rather than
 // deriving from MOBILE_NAV_ITEMS) because it also needs the actual page
-// components, not just icons/labels. Only CreateGolfCall takes the `active`
-// flag (it needs to re-read the URL when it becomes the active tab, since
-// staying permanently mounted means its lazy initial state only runs once)
-// — the others render with no props, same as they always have.
+// components, not just icons/labels. Hosting a round is reached via an
+// action button, not a root tab, so it renders as a normal pushed route
+// (/golf-calls/new) outside this carousel.
 const PANELS = [
   { path: "/", render: () => <Home /> },
   { path: "/find", render: () => <Find /> },
-  { path: "/golf-calls/new", render: (active: boolean) => <CreateGolfCall active={active} /> },
   { path: "/my-rounds", render: () => <MyRounds /> },
   { path: "/profile", render: () => <Profile /> },
 ] as const;
@@ -180,7 +177,7 @@ export function RootTabCarousel({ activePath }: { activePath: string }) {
       >
         {PANELS.map(({ path, render }) => (
           <div key={path} style={{ width: `${100 / PANELS.length}%` }} className="min-w-0 shrink-0">
-            {render(path === activePath)}
+            {render()}
           </div>
         ))}
       </div>

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { MessageSquareText, Plus, Search } from "lucide-react";
 import { useData } from "../context/DataContext";
+import { useLocale } from "../i18n/LocaleContext";
 import { Button } from "../components/ui/Button";
 import { EmptyState } from "../components/ui/EmptyState";
 import { PostCard } from "../components/community/PostCard";
@@ -9,14 +10,15 @@ import { rankForYou, rankFollowing, rankNearby } from "../lib/communityFeed";
 import type { FeedContext } from "../lib/communityFeed";
 
 type FeedTab = "forYou" | "following" | "nearby";
-const TABS: { value: FeedTab; label: string }[] = [
-  { value: "forYou", label: "For You" },
-  { value: "following", label: "Following" },
-  { value: "nearby", label: "Nearby" },
+const TABS: { value: FeedTab; labelKey: "community.tabForYou" | "community.tabFollowing" | "community.tabNearby" }[] = [
+  { value: "forYou", labelKey: "community.tabForYou" },
+  { value: "following", labelKey: "community.tabFollowing" },
+  { value: "nearby", labelKey: "community.tabNearby" },
 ];
 
 export function Community() {
   const { currentUser, getGolfer, visiblePosts, followingGolfers, circleGolfers, postUpvoteCount } = useData();
+  const { t } = useLocale();
   const navigate = useNavigate();
   const [tab, setTab] = useState<FeedTab>("forYou");
   const [search, setSearch] = useState("");
@@ -59,8 +61,8 @@ export function Community() {
     <div className="flex flex-col gap-5 pb-6">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-slate-900">Community</h1>
-          <p className="text-sm text-slate-500">Golf talk, memes, course chat, and rounds looking for players.</p>
+          <h1 className="text-xl font-bold text-slate-900">{t("community.title")}</h1>
+          <p className="text-sm text-slate-500">{t("community.subtitle")}</p>
         </div>
         <div className="flex shrink-0 gap-2">
           <button
@@ -73,7 +75,7 @@ export function Community() {
             <Search size={16} />
           </button>
           <Button size="sm" icon={<Plus size={15} />} onClick={() => navigate("/community/new")}>
-            Create Post
+            {t("community.createPost")}
           </Button>
         </div>
       </div>
@@ -83,21 +85,21 @@ export function Community() {
           autoFocus
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search posts, golfers, courses, categories..."
+          placeholder={t("community.searchPlaceholder")}
           className="w-full rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-fairway-400"
         />
       )}
 
       <div className="flex rounded-full border border-slate-200 bg-white p-1">
-        {TABS.map((t) => (
+        {TABS.map((tabOption) => (
           <button
-            key={t.value}
-            onClick={() => setTab(t.value)}
+            key={tabOption.value}
+            onClick={() => setTab(tabOption.value)}
             className={`flex-1 rounded-full py-2 text-sm font-semibold transition ${
-              tab === t.value ? "bg-fairway-600 text-white" : "text-slate-500"
+              tab === tabOption.value ? "bg-fairway-600 text-white" : "text-slate-500"
             }`}
           >
-            {t.label}
+            {t(tabOption.labelKey)}
           </button>
         ))}
       </div>
@@ -105,17 +107,13 @@ export function Community() {
       {feed.length === 0 ? (
         <EmptyState
           icon={<MessageSquareText size={20} />}
-          title={search ? "No posts match your search." : "Nothing here yet."}
+          title={search ? t("community.emptyNoSearch") : t("community.emptyDefault")}
           description={
-            tab === "following"
-              ? "Follow a few golfers to see their posts here."
-              : tab === "nearby"
-                ? "Nothing from your area yet — check back soon."
-                : "Be the first to start a conversation."
+            tab === "following" ? t("community.emptyFollowing") : tab === "nearby" ? t("community.emptyNearby") : t("community.emptyForYou")
           }
           action={
             <Button size="sm" onClick={() => navigate("/community/new")}>
-              Create Post
+              {t("community.createPost")}
             </Button>
           }
         />

@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Bell, Sparkles } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useToast } from "../context/ToastContext";
+import { useLocale } from "../i18n/LocaleContext";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { EmptyState } from "../components/ui/EmptyState";
@@ -21,6 +22,7 @@ import type { GolfVibe, SkillFilter, WalkOrCart } from "../types";
 export function AutoMatch() {
   const { currentUser, golfCalls, getGolfer, followingGolfers, circleGolfers, playedWithIds } = useData();
   const { showToast } = useToast();
+  const { t } = useLocale();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -38,7 +40,14 @@ export function AutoMatch() {
   const vibeFilter = searchParams.get("vibe") as GolfVibe | null;
   const walk = searchParams.get("walk") as WalkOrCart | null;
 
-  const whenLabel = when === "today" ? "today" : when === "tomorrow" ? "tomorrow" : when === "weekend" ? "this weekend" : "your chosen date";
+  const whenLabel =
+    when === "today"
+      ? t("filters.today").toLowerCase()
+      : when === "tomorrow"
+        ? t("filters.tomorrow").toLowerCase()
+        : when === "weekend"
+          ? t("filters.thisWeekend").toLowerCase()
+          : t("find.yourChosenDate");
 
   // Reads a temporary per-search override from Find Me a Round if present,
   // otherwise falls back to the golfer's saved Match Preferences.
@@ -128,7 +137,7 @@ export function AutoMatch() {
 
   function handleNotifyMe() {
     setNotified(true);
-    showToast("We'll notify you when a matching round appears.", "success");
+    showToast(t("find.willNotify"), "success");
   }
 
   return (
@@ -137,27 +146,27 @@ export function AutoMatch() {
         onClick={() => navigate(-1)}
         className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
       >
-        <ArrowLeft size={16} /> Back
+        <ArrowLeft size={16} /> {t("common.back")}
       </button>
 
       <div>
         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
-          <Sparkles size={20} className="text-fairway-600" /> Auto-Match
+          <Sparkles size={20} className="text-fairway-600" /> {t("autoMatch.title")}
         </h1>
-        <p className="text-sm text-slate-500">We'll recommend the best available round for {whenLabel}, using your Match Preferences.</p>
+        <p className="text-sm text-slate-500">{t("autoMatch.subtitle", { when: whenLabel })}</p>
       </div>
 
       {loading ? (
-        <GolfMeLoader fullScreen message="Finding your best match..." />
+        <GolfMeLoader fullScreen message={t("autoMatch.finding")} />
       ) : !started ? (
         !enoughPreferences ? (
           <EmptyState
             icon={<Sparkles size={20} />}
-            title="Choose at least 3 preferences for Auto-Match."
-            description="Round Length, Gender, Group Type, Game Format, and Networking — pick at least 3 so Auto-Match has enough to go on."
+            title={t("autoMatch.notEnoughPrefs")}
+            description={t("autoMatch.notEnoughPrefsDesc")}
             action={
               <Button size="sm" onClick={() => navigate("/profile")}>
-                Set Preferences
+                {t("autoMatch.setPreferences")}
               </Button>
             }
           />
@@ -165,9 +174,9 @@ export function AutoMatch() {
           <div className="flex flex-col gap-4">
             <div className="rounded-2xl border border-slate-100 bg-white p-4">
               <div className="mb-3 flex items-center justify-between">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Using Your Match Preferences</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t("autoMatch.usingPreferences")}</p>
                 <button onClick={() => navigate("/profile")} className="text-xs font-semibold text-fairway-700 hover:underline">
-                  Edit Preferences
+                  {t("autoMatch.editPreferences")}
                 </button>
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -180,7 +189,7 @@ export function AutoMatch() {
             </div>
 
             <Button size="lg" fullWidth icon={<Sparkles size={18} />} onClick={runAutoMatch}>
-              Auto-Match Me
+              {t("filters.autoMatchMe")}
             </Button>
           </div>
         )
@@ -188,20 +197,20 @@ export function AutoMatch() {
         !showClosest ? (
           <EmptyState
             icon={<Sparkles size={20} />}
-            title="No strong matches yet."
-            description="Nothing open right now hits 3 or more of your Match Preferences."
+            title={t("autoMatch.noStrongMatches")}
+            description={t("autoMatch.noStrongMatchesDesc")}
             action={
               <div className="flex flex-wrap justify-center gap-2">
                 {closestMatches.length > 0 && (
                   <Button size="sm" variant="outline" onClick={() => setShowClosest(true)}>
-                    Show Closest Matches
+                    {t("autoMatch.showClosest")}
                   </Button>
                 )}
                 <Button size="sm" onClick={() => navigate("/golf-calls/new")}>
-                  Create a Golf Call
+                  {t("find.createGolfCall")}
                 </Button>
                 <Button size="sm" variant="outline" icon={<Bell size={14} />} disabled={notified} onClick={handleNotifyMe}>
-                  {notified ? "We'll notify you" : "Notify Me When One Opens"}
+                  {notified ? t("find.notifiedMe") : t("find.notifyMe")}
                 </Button>
               </div>
             }
@@ -209,15 +218,15 @@ export function AutoMatch() {
         ) : (
           <EmptyState
             icon={<Sparkles size={20} />}
-            title="Nothing nearby right now."
-            description="There's nothing open near you at all — host your own round or we'll let you know when one opens up."
+            title={t("autoMatch.nothingNearby")}
+            description={t("find.emptyNoMatchesDesc")}
             action={
               <div className="flex flex-wrap justify-center gap-2">
                 <Button size="sm" onClick={() => navigate("/golf-calls/new")}>
-                  Create a Golf Call
+                  {t("find.createGolfCall")}
                 </Button>
                 <Button size="sm" variant="outline" icon={<Bell size={14} />} disabled={notified} onClick={handleNotifyMe}>
-                  {notified ? "We'll notify you" : "Notify Me When One Opens"}
+                  {notified ? t("find.notifiedMe") : t("find.notifyMe")}
                 </Button>
               </div>
             }
@@ -227,13 +236,9 @@ export function AutoMatch() {
         <div className="flex flex-col gap-4">
           <div>
             <p className="text-xs font-bold tracking-wide text-fairway-700 uppercase">
-              {hasStrongMatch ? preferenceTierLabel(current.preferenceTier) : "Closest Available Round"}
+              {hasStrongMatch ? preferenceTierLabel(current.preferenceTier) : t("autoMatch.closestAvailable")}
             </p>
-            {!hasStrongMatch && (
-              <p className="mt-1 text-sm text-slate-500">
-                Outside your normal Auto-Match criteria — shown because nothing hit 3+ of your preferences yet.
-              </p>
-            )}
+            {!hasStrongMatch && <p className="mt-1 text-sm text-slate-500">{t("autoMatch.outsideNormalCriteria")}</p>}
           </div>
 
           {current && (
@@ -243,7 +248,7 @@ export function AutoMatch() {
                 <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-white px-4 py-3">
                   <SharedPreferencesBadge checks={current.preferenceChecks} />
                   <span className="text-xs text-slate-400">
-                    {current.preferenceMatchedCount}/{current.preferenceChecks.length} preferences
+                    {t("autoMatch.preferencesCount", { matched: current.preferenceMatchedCount, total: current.preferenceChecks.length })}
                   </span>
                 </div>
               )}
@@ -253,21 +258,21 @@ export function AutoMatch() {
           <div className="flex flex-wrap gap-2">
             {results.length > 1 && (
               <Button variant="outline" size="sm" onClick={showAnother}>
-                Show Another Match
+                {t("autoMatch.showAnother")}
               </Button>
             )}
             <Button variant="ghost" size="sm" onClick={() => navigate(`/golf-calls?${searchParams.toString()}`)}>
-              Browse All Rounds
+              {t("autoMatch.browseAll")}
             </Button>
           </div>
 
           {!hasStrongMatch && (
             <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-3">
               <Button size="sm" onClick={() => navigate("/golf-calls/new")}>
-                Create a Golf Call
+                {t("find.createGolfCall")}
               </Button>
               <Button size="sm" variant="outline" icon={<Bell size={14} />} disabled={notified} onClick={handleNotifyMe}>
-                {notified ? "We'll notify you" : "Notify Me When a Better Match Opens"}
+                {notified ? t("find.notifiedMe") : t("find.notifyMe")}
               </Button>
             </div>
           )}

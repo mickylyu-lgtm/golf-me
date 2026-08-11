@@ -1,4 +1,5 @@
 import { Pill } from "../ui/Pill";
+import { useLocale } from "../../i18n/LocaleContext";
 import { CoursePicker } from "../profile/CoursePicker";
 import { labelClass } from "../ui/FormControls";
 import { Slider } from "../ui/Slider";
@@ -57,6 +58,8 @@ interface MatchPreferencesPanelProps {
 // stacks vertically, no horizontal scrolling, reused as-is from both Profile
 // (permanent save) and Find Me a Round (temporary per-search override).
 export function MatchPreferencesPanel({ value, onChange, nearLocation }: MatchPreferencesPanelProps) {
+  const { t } = useLocale();
+
   function toggleVibe(v: (typeof GOLF_VIBES)[number]) {
     const has = value.vibes.includes(v);
     if (has) onChange({ vibes: value.vibes.filter((x) => x !== v) });
@@ -65,9 +68,9 @@ export function MatchPreferencesPanel({ value, onChange, nearLocation }: MatchPr
 
   return (
     <div className="flex flex-col gap-6">
-      <Section title="Round">
+      <Section title={t("matchPrefs.sectionRound")}>
         <div>
-          <label className={labelClass}>Round length</label>
+          <label className={labelClass}>{t("matchPrefs.roundLength")}</label>
           <div className="flex flex-wrap gap-1.5">
             {ROUND_LENGTH_OPTIONS.map((r) => (
               <Pill key={r} active={value.roundLengthPreference === r} onClick={() => onChange({ roundLengthPreference: r })}>
@@ -77,7 +80,7 @@ export function MatchPreferencesPanel({ value, onChange, nearLocation }: MatchPr
           </div>
         </div>
         <div>
-          <label className={labelClass}>Game format</label>
+          <label className={labelClass}>{t("host.gameFormat")}</label>
           <div className="flex flex-wrap gap-1.5">
             {GAME_FORMAT_OPTIONS.map((g) => (
               <Pill key={g} active={value.gameFormatPreference === g} onClick={() => onChange({ gameFormatPreference: g })}>
@@ -87,7 +90,7 @@ export function MatchPreferencesPanel({ value, onChange, nearLocation }: MatchPr
           </div>
         </div>
         <div>
-          <label className={labelClass}>Walking or cart</label>
+          <label className={labelClass}>{t("filters.walkingOrCart")}</label>
           <div className="flex gap-2">
             {WALK_OPTIONS.map((w) => (
               <Pill key={w} active={value.walkOrCart === w} onClick={() => onChange({ walkOrCart: w })} className="flex-1 py-2 text-center">
@@ -97,24 +100,24 @@ export function MatchPreferencesPanel({ value, onChange, nearLocation }: MatchPr
           </div>
         </div>
         <div>
-          <label className={labelClass}>Preferred courses</label>
+          <label className={labelClass}>{t("matchPrefs.preferredCourses")}</label>
           <CoursePicker selected={value.preferredCourses} onChange={(preferredCourses) => onChange({ preferredCourses })} location={nearLocation} />
         </div>
       </Section>
 
-      <Section title="Playing Partners">
+      <Section title={t("matchPrefs.sectionPlayingPartners")}>
         <div>
-          <label className={labelClass}>Gender preference</label>
+          <label className={labelClass}>{t("matchPrefs.genderPreference")}</label>
           <div className="flex flex-wrap gap-1.5">
             {GENDER_OPTIONS_MATCH.map((g) => (
               <Pill key={g} active={value.genderPreference === g} onClick={() => onChange({ genderPreference: g })}>
-                {g === "Prefer mixed group" ? "Mixed Group" : g}
+                {g === "Prefer mixed group" ? t("matchPrefs.mixedGroup") : g}
               </Pill>
             ))}
           </div>
         </div>
         <div>
-          <label className={labelClass}>Group type</label>
+          <label className={labelClass}>{t("matchPrefs.groupType")}</label>
           <div className="flex flex-wrap gap-1.5">
             {GROUP_TYPE_OPTIONS.map((g) => (
               <Pill key={g} active={value.groupTypePreference === g} onClick={() => onChange({ groupTypePreference: g })}>
@@ -124,7 +127,7 @@ export function MatchPreferencesPanel({ value, onChange, nearLocation }: MatchPr
           </div>
         </div>
         <RangeSlider
-          label="Preferred Handicap Range"
+          label={t("matchPrefs.preferredHandicapRange")}
           min={HANDICAP_PREF_MIN}
           max={HANDICAP_PREF_MAX}
           step={1}
@@ -136,13 +139,13 @@ export function MatchPreferencesPanel({ value, onChange, nearLocation }: MatchPr
         />
         <div>
           <div className="mb-2 flex items-center justify-between">
-            <label className={labelClass + " mb-0"}>Age preference</label>
+            <label className={labelClass + " mb-0"}>{t("matchPrefs.agePreference")}</label>
             <Pill active={value.noAgePreference} onClick={() => onChange({ noAgePreference: !value.noAgePreference })}>
-              No Age Preference
+              {t("matchPrefs.noAgePreference")}
             </Pill>
           </div>
           <RangeSlider
-            label="Age Range"
+            label={t("matchPrefs.ageRange")}
             min={AGE_PREF_MIN}
             max={AGE_PREF_MAX}
             step={1}
@@ -156,9 +159,9 @@ export function MatchPreferencesPanel({ value, onChange, nearLocation }: MatchPr
         </div>
       </Section>
 
-      <Section title="Style">
+      <Section title={t("matchPrefs.sectionStyle")}>
         <div>
-          <label className={labelClass}>Golf vibe (up to 2)</label>
+          <label className={labelClass}>{t("matchPrefs.golfVibeUpTo2")}</label>
           <div className="flex flex-wrap gap-1.5">
             {GOLF_VIBES.map((v) => (
               <Pill key={v} active={value.vibes.includes(v)} onClick={() => toggleVibe(v)}>
@@ -168,8 +171,8 @@ export function MatchPreferencesPanel({ value, onChange, nearLocation }: MatchPr
           </div>
         </div>
         <div>
-          <label className={labelClass}>Networking</label>
-          <p className="mb-1.5 text-xs text-slate-400">Secondary to golf — matched against rounds tagged with a Networking vibe.</p>
+          <label className={labelClass}>{t("matchPrefs.networking")}</label>
+          <p className="mb-1.5 text-xs text-slate-400">{t("matchPrefs.networkingHelp")}</p>
           <div className="flex flex-wrap gap-1.5">
             {NETWORKING_OPTIONS.map((n) => (
               <Pill key={n} active={value.networkingPreference === n} onClick={() => onChange({ networkingPreference: n })}>
@@ -180,16 +183,16 @@ export function MatchPreferencesPanel({ value, onChange, nearLocation }: MatchPr
         </div>
       </Section>
 
-      <Section title="Cost & Location">
+      <Section title={t("matchPrefs.sectionCostLocation")}>
         <div>
           <div className="mb-2 flex items-center justify-between">
-            <label className={labelClass + " mb-0"}>Budget per round</label>
+            <label className={labelClass + " mb-0"}>{t("matchPrefs.budgetPerRound")}</label>
             <Pill active={value.noBudgetPreference} onClick={() => onChange({ noBudgetPreference: !value.noBudgetPreference })}>
-              No Budget Preference
+              {t("matchPrefs.noBudgetPreference")}
             </Pill>
           </div>
           <RangeSlider
-            label="Budget"
+            label={t("filters.budgetMax")}
             min={BUDGET_PREF_MIN}
             max={BUDGET_PREF_MAX}
             step={10}
@@ -202,7 +205,7 @@ export function MatchPreferencesPanel({ value, onChange, nearLocation }: MatchPr
           />
         </div>
         <Slider
-          label="How far?"
+          label={t("matchPrefs.howFar")}
           min={TRAVEL_RADIUS_MIN}
           max={TRAVEL_RADIUS_MAX}
           step={5}

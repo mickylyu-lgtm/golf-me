@@ -1,15 +1,17 @@
 import { NavLink } from "react-router-dom";
 import { NAV_ITEMS } from "../../lib/nav";
 import { GolfMeLogo } from "../brand/GolfMeLogo";
+import { useLocale } from "../../i18n/LocaleContext";
 
 export function SideNav() {
+  const { t } = useLocale();
   return (
     <aside className="fixed inset-y-0 left-0 z-40 hidden w-20 flex-col border-r border-slate-200 bg-white py-6 sm:flex lg:w-60">
       <div className="mb-8 px-5">
         <GolfMeLogo size={20} wordmarkClassName="hidden text-lg font-extrabold tracking-tight lg:inline" />
       </div>
       <nav className="flex flex-1 flex-col gap-1 px-3">
-        {NAV_ITEMS.map(({ label, path, icon: Icon }) => (
+        {NAV_ITEMS.map(({ labelKey, path, icon: Icon }) => (
           <NavLink
             key={path}
             to={path}
@@ -23,7 +25,7 @@ export function SideNav() {
             }
           >
             <Icon size={20} />
-            <span className="hidden lg:inline">{label}</span>
+            <span className="hidden lg:inline">{t(labelKey)}</span>
           </NavLink>
         ))}
       </nav>
