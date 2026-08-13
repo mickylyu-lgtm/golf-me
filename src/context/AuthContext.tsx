@@ -51,26 +51,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profileChecked, setProfileChecked] = useState(false);
 
   const fetchProfile = useCallback(async (userId: string) => {
-    const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
-    if (error) {
-      console.error("Golf Me: failed to load profile.", error);
+    // profileChecked must flip to true no matter what happens here — a
+    // network-level throw (not just an API error in `error`) must never
+    // leave a signed-in visitor stuck on the loading screen forever.
+    try {
+      const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
+      if (error) {
+        console.error("Golf Me: failed to load profile.", error);
+        setProfileRow(null);
+      } else {
+        setProfileRow(data as ProfileRow | null);
+      }
+    } catch (err) {
+      console.error("Golf Me: failed to load profile.", err);
       setProfileRow(null);
-    } else {
-      setProfileRow(data as ProfileRow | null);
+    } finally {
+      setProfileChecked(true);
     }
-    setProfileChecked(true);
   }, []);
 
   useEffect(() => {
     let cancelled = false;
 
-    supabase.auth.getSession().then(({ data }) => {
-      if (cancelled) return;
-      setAuthUser(data.session?.user ?? null);
-      setSessionChecked(true);
-      if (data.session?.user) fetchProfile(data.session.user.id);
-      else setProfileChecked(true);
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (cancelled) return;
+        setAuthUser(data.session?.user ?? null);
+        setSessionChecked(true);
+        if (data.session?.user) fetchProfile(data.session.user.id);
+        else setProfileChecked(true);
+      })
+      .catch((err) => {
+        // A rejected getSession() (network hiccup, a restrictive in-app
+        // browser blocking storage/cookies, etc.) must never leave the app
+        // stuck on the loading screen forever — treat it as "no session"
+        // so a real visitor still reaches Welcome instead of a blank
+        // spinner with no way out.
+        if (cancelled) return;
+        console.error("Golf Me: getSession() failed, treating as signed out.", err);
+        setAuthUser(null);
+        setSessionChecked(true);
+        setProfileChecked(true);
+      });
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (cancelled) return;
