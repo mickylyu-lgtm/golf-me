@@ -55,6 +55,11 @@ export const zhTW: Record<TranslationKey, string> = {
   "auth.newAccount": "新帳號",
   "auth.roundsPlayed": "已打 {count} 局",
   "auth.back": "返回",
+  "auth.checkEmailTitle": "請查看你的電子郵件",
+  "auth.checkEmailBody": "我們已將登入連結寄至 {email},請在此裝置上開啟以繼續。",
+  "auth.resendEmail": "重新發送郵件",
+  "auth.sendMagicLink": "發送登入連結",
+  "auth.authError": "登入時發生問題,請再試一次。",
 
   "avatarUpload.invalidFile": "請選擇一張圖片檔案。",
   "avatarUpload.loadError": "圖片載入失敗——換一張試試。",

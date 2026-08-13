@@ -55,6 +55,11 @@ export const zhCN: Record<TranslationKey, string> = {
   "auth.newAccount": "新账号",
   "auth.roundsPlayed": "已打 {count} 局",
   "auth.back": "返回",
+  "auth.checkEmailTitle": "请查看你的电子邮件",
+  "auth.checkEmailBody": "我们已将登录链接发送至 {email},请在此设备上打开以继续。",
+  "auth.resendEmail": "重新发送邮件",
+  "auth.sendMagicLink": "发送登录链接",
+  "auth.authError": "登录时出了点问题,请重试。",
 
   "avatarUpload.invalidFile": "请选择一张图片文件。",
   "avatarUpload.loadError": "图片加载失败——换一张试试。",

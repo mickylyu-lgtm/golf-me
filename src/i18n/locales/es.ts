@@ -55,6 +55,11 @@ export const es: Record<TranslationKey, string> = {
   "auth.newAccount": "Cuenta nueva",
   "auth.roundsPlayed": "{count} rondas jugadas",
   "auth.back": "Atrás",
+  "auth.checkEmailTitle": "Revisa tu correo",
+  "auth.checkEmailBody": "Enviamos un enlace de acceso a {email}. Ábrelo en este dispositivo para continuar.",
+  "auth.resendEmail": "Reenviar correo",
+  "auth.sendMagicLink": "Enviar enlace de acceso",
+  "auth.authError": "Hubo un problema al iniciar sesión. Inténtalo de nuevo.",
 
   "avatarUpload.invalidFile": "Elige un archivo de imagen.",
   "avatarUpload.loadError": "No se pudo cargar esa imagen — prueba con otra.",

@@ -1,9 +1,9 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Check, Plus, X } from "lucide-react";
-import { COURSES } from "../../lib/courses";
-import { getNearbyCourses } from "../../lib/courseSearch";
+import { useNearbyCourses, useCourseTextSearch } from "../../lib/useCourseSearch";
 import type { PlayingArea } from "../../lib/geo";
 import { inputClass } from "../ui/FormControls";
+import { CourseSearchStatus } from "../ui/CourseSearchStatus";
 
 interface CoursePickerProps {
   selected: string[];
@@ -21,12 +21,11 @@ const NEARBY_RADIUS_MILES = 25;
 export function CoursePicker({ selected, onChange, location }: CoursePickerProps) {
   const [query, setQuery] = useState("");
 
-  const nearby = useMemo(
-    () => (location?.coords ? getNearbyCourses(location, NEARBY_RADIUS_MILES).filter((c) => !selected.includes(c.name)) : []),
-    [location, selected],
-  );
+  const nearbyState = useNearbyCourses(location, NEARBY_RADIUS_MILES);
+  const nearby = nearbyState.results.filter((c) => !selected.includes(c.name));
 
-  const filtered = COURSES.filter((c) => !selected.includes(c) && c.toLowerCase().includes(query.toLowerCase())).slice(0, 8);
+  const searchState = useCourseTextSearch(query, location, 8);
+  const filtered = searchState.results.filter((c) => !selected.includes(c.name));
 
   function addCourse(course: string) {
     onChange([...selected, course]);
@@ -39,6 +38,7 @@ export function CoursePicker({ selected, onChange, location }: CoursePickerProps
 
   return (
     <div className="flex flex-col gap-2.5">
+      <CourseSearchStatus loading={nearbyState.loading} error={nearbyState.error} onRetry={nearbyState.retry} />
       {nearby.length > 0 && (
         <div>
           <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Near Your Area</p>
@@ -56,8 +56,8 @@ export function CoursePicker({ selected, onChange, location }: CoursePickerProps
           </div>
         </div>
       )}
-      {location?.coords && nearby.length === 0 && (
-        <p className="text-xs text-slate-500">No courses found nearby yet — course coverage is currently limited to the New York area. Search below instead.</p>
+      {location?.coords && !nearbyState.loading && !nearbyState.error && nearby.length === 0 && (
+        <p className="text-xs text-slate-500">No courses found nearby yet. Search below instead.</p>
       )}
       {selected.length === 0 ? (
         <p className="text-sm text-slate-500">No preference — show me anything nearby.</p>
@@ -88,20 +88,27 @@ export function CoursePicker({ selected, onChange, location }: CoursePickerProps
           className={inputClass}
         />
         {query && (
-          <div className="mt-1.5 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-            {filtered.length > 0 ? (
-              filtered.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => addCourse(c)}
-                  className="flex w-full items-center gap-2 border-b border-slate-50 px-3 py-2.5 text-left text-sm text-slate-700 transition-colors duration-150 last:border-b-0 hover:bg-fairway-50"
-                >
-                  <Plus size={13} className="text-fairway-600" /> {c}
-                </button>
-              ))
-            ) : (
-              <p className="px-3 py-2.5 text-sm text-slate-400">No courses match "{query}".</p>
+          <div className="mt-1.5 flex flex-col gap-1.5">
+            <CourseSearchStatus loading={searchState.loading} error={searchState.error} onRetry={searchState.retry} />
+            {!searchState.loading && !searchState.error && (
+              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                {filtered.length > 0 ? (
+                  filtered.map((c) => (
+                    <button
+                      key={c.name}
+                      type="button"
+                      onClick={() => addCourse(c.name)}
+                      className="flex w-full items-center gap-2 border-b border-slate-50 px-3 py-2.5 text-left text-sm text-slate-700 transition-colors duration-150 last:border-b-0 hover:bg-fairway-50"
+                    >
+                      <Plus size={13} className="text-fairway-600 shrink-0" />
+                      <span className="flex-1">{c.name}</span>
+                      {c.area && <span className="shrink-0 text-xs text-slate-400">{c.area}</span>}
+                    </button>
+                  ))
+                ) : (
+                  <p className="px-3 py-2.5 text-sm text-slate-400">No courses match "{query}".</p>
+                )}
+              </div>
             )}
           </div>
         )}

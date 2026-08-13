@@ -55,6 +55,11 @@ export const ja: Record<TranslationKey, string> = {
   "auth.newAccount": "新規アカウント",
   "auth.roundsPlayed": "{count}ラウンドプレー済み",
   "auth.back": "戻る",
+  "auth.checkEmailTitle": "メールを確認してください",
+  "auth.checkEmailBody": "{email} にサインインリンクを送信しました。このデバイスで開いて続行してください。",
+  "auth.resendEmail": "メールを再送信",
+  "auth.sendMagicLink": "サインインリンクを送信",
+  "auth.authError": "サインイン中に問題が発生しました。もう一度お試しください。",
 
   "avatarUpload.invalidFile": "画像ファイルを選択してください。",
   "avatarUpload.loadError": "画像を読み込めませんでした — 別の画像をお試しください。",

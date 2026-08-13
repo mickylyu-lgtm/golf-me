@@ -1,14 +1,17 @@
 import { useMemo, useState } from "react";
 import { Check, Plus } from "lucide-react";
-import { COURSES, areaForCourse } from "../../lib/courses";
-import { getNearbyCourses } from "../../lib/courseSearch";
+import { useNearbyCourses, useCourseTextSearch } from "../../lib/useCourseSearch";
 import type { PlayingArea } from "../../lib/geo";
 import { inputClass, labelClass } from "../ui/FormControls";
+import { CourseSearchStatus } from "../ui/CourseSearchStatus";
 
 interface CoursePick {
+  id?: string; // courses.id — only present for a real (Geoapify-backed) pick
   name: string;
   area?: string;
   distanceMiles?: number;
+  lat?: number;
+  lng?: number;
 }
 
 interface CourseAutocompleteProps {
@@ -33,42 +36,42 @@ const NEARBY_RADIUS_MILES = 30;
 export function CourseAutocomplete({ value, onChange, onPickKnownCourse, recentCourses = [], preferredCourses = [], location }: CourseAutocompleteProps) {
   const [focused, setFocused] = useState(false);
 
-  const nearby = useMemo(
-    () => (location?.coords ? getNearbyCourses(location, NEARBY_RADIUS_MILES).map((c) => c.name) : []),
-    [location],
-  );
+  const nearbyState = useNearbyCourses(location, NEARBY_RADIUS_MILES);
+  const nearbyByName = useMemo(() => new Map(nearbyState.results.map((r) => [r.name, r])), [nearbyState.results]);
 
   const quickPicks = useMemo(() => {
     const seen = new Set<string>();
-    const picks: { label: string; name: string }[] = [];
+    const picks: (CoursePick & { label: string })[] = [];
     for (const name of recentCourses) {
       if (seen.has(name)) continue;
       seen.add(name);
-      picks.push({ label: "Recent", name });
+      picks.push({ label: "Recent", name, ...nearbyByName.get(name) });
     }
     for (const name of preferredCourses) {
       if (seen.has(name)) continue;
       seen.add(name);
-      picks.push({ label: "Preferred", name });
+      picks.push({ label: "Preferred", name, ...nearbyByName.get(name) });
     }
-    for (const name of nearby) {
-      if (seen.has(name)) continue;
-      seen.add(name);
-      picks.push({ label: "Near You", name });
+    for (const r of nearbyState.results) {
+      if (seen.has(r.name)) continue;
+      seen.add(r.name);
+      picks.push({ label: "Near You", ...r });
     }
     return picks.slice(0, 6);
-  }, [recentCourses, preferredCourses, nearby]);
+  }, [recentCourses, preferredCourses, nearbyState.results, nearbyByName]);
 
-  const filtered = value.trim() ? COURSES.filter((c) => c.toLowerCase().includes(value.trim().toLowerCase())).slice(0, 6) : [];
+  const searchState = useCourseTextSearch(value, location, 6);
+  const filtered = searchState.results;
 
-  function pick(name: string) {
-    onChange(name);
-    onPickKnownCourse?.({ name, area: areaForCourse(name) });
+  function pick(result: CoursePick) {
+    onChange(result.name);
+    onPickKnownCourse?.(result);
     setFocused(false);
   }
 
   return (
     <div className="flex flex-col gap-2">
+      <CourseSearchStatus loading={nearbyState.loading} error={nearbyState.error} onRetry={nearbyState.retry} />
       {quickPicks.length > 0 ? (
         <div>
           <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Quick Picks</p>
@@ -77,7 +80,7 @@ export function CourseAutocomplete({ value, onChange, onPickKnownCourse, recentC
               <button
                 key={p.name}
                 type="button"
-                onClick={() => pick(p.name)}
+                onClick={() => pick(p)}
                 className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors duration-150 ${
                   value === p.name
                     ? "border-transparent bg-fairway-600 text-white"
@@ -91,7 +94,9 @@ export function CourseAutocomplete({ value, onChange, onPickKnownCourse, recentC
           </div>
         </div>
       ) : (
-        location?.coords && <p className="text-xs text-slate-500">No known courses nearby yet — search for any course below.</p>
+        location?.coords && !nearbyState.loading && !nearbyState.error && (
+          <p className="text-xs text-slate-500">No known courses nearby yet — search for any course below.</p>
+        )
       )}
       <div className="relative">
         {quickPicks.length > 0 && <label className={labelClass}>Search All Courses</label>}
@@ -103,19 +108,27 @@ export function CourseAutocomplete({ value, onChange, onPickKnownCourse, recentC
           onBlur={() => window.setTimeout(() => setFocused(false), 150)}
           placeholder="e.g. Bethpage Red"
         />
-        {focused && filtered.length > 0 && (
+        {focused && value.trim() && (searchState.loading || searchState.error || filtered.length > 0) && (
           <div className="absolute z-10 mt-1.5 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-            {filtered.map((c) => (
-              <button
-                key={c}
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => pick(c)}
-                className="flex w-full items-center gap-2 border-b border-slate-50 px-3 py-2.5 text-left text-sm text-slate-700 transition-colors duration-150 last:border-b-0 hover:bg-fairway-50"
-              >
-                <Plus size={13} className="text-fairway-600" /> {c}
-              </button>
-            ))}
+            {searchState.loading || searchState.error ? (
+              <div className="p-2.5">
+                <CourseSearchStatus loading={searchState.loading} error={searchState.error} onRetry={searchState.retry} />
+              </div>
+            ) : (
+              filtered.map((c) => (
+                <button
+                  key={c.name}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => pick(c)}
+                  className="flex w-full items-center gap-2 border-b border-slate-50 px-3 py-2.5 text-left text-sm text-slate-700 transition-colors duration-150 last:border-b-0 hover:bg-fairway-50"
+                >
+                  <Plus size={13} className="text-fairway-600 shrink-0" />
+                  <span className="flex-1">{c.name}</span>
+                  {c.area && <span className="shrink-0 text-xs text-slate-400">{c.area}</span>}
+                </button>
+              ))
+            )}
           </div>
         )}
       </div>

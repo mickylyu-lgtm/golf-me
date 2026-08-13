@@ -54,14 +54,20 @@ export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
     return evaluatePreferenceMatch(currentUser, currentUser.id, call, roster, ctx);
   }, [showMatch, isHost, call, getGolfer, followingGolfers, circleGolfers, playedWithIds, currentUser]);
 
-  function handleJoin(e: React.MouseEvent) {
+  async function handleJoin(e: React.MouseEvent) {
     e.stopPropagation();
     track("first_round_joined");
-    joinGolfCall(call.id);
-    showToast(
-      call.joinMode === "instant" ? `You're playing ${formatDate(call.dateISO)}. ⛳` : "Request sent to the host.",
-      "success",
-    );
+    try {
+      await joinGolfCall(call.id);
+      showToast(
+        call.joinMode === "instant" ? `You're playing ${formatDate(call.dateISO)}. ⛳` : "Request sent to the host.",
+        "success",
+      );
+    } catch (err) {
+      // Real, atomic failure (e.g. someone else took the last spot) —
+      // surfaced, never a silent no-op.
+      showToast(err instanceof Error ? err.message : "Couldn't join this round. Please try again.", "warning");
+    }
   }
 
   let cta: React.ReactNode;

@@ -40,6 +40,9 @@ import type { GeoPoint } from "../lib/geo";
 import { loadData, saveData, resetToSeedData } from "../lib/storage";
 import { avatarColorForName, initialsFromName } from "../lib/avatar";
 import { dmConversationId, otherParticipant } from "../lib/dm";
+import { useAuth } from "./AuthContext";
+import { placeholderGolferProfile, golferPatchToProfileRow } from "../lib/profile";
+import { useRealRounds } from "./RealRoundsContext";
 
 export interface DmConversation {
   conversationId: string;
@@ -142,11 +145,11 @@ interface DataContextValue {
   requestVerifiedGolfer: () => void;
 
   createGolfCall: (input: CreateGolfCallInput) => GolfCall;
-  cancelGolfCall: (callId: string) => void;
+  cancelGolfCall: (callId: string) => Promise<void>;
   simulateCallCompletion: (callId: string) => void;
-  joinGolfCall: (callId: string) => void;
+  joinGolfCall: (callId: string) => Promise<void>;
   cancelJoinRequest: (callId: string) => void;
-  leaveGolfCall: (callId: string) => void;
+  leaveGolfCall: (callId: string) => Promise<void>;
   approveRequest: (callId: string, golferId: string) => void;
   declineRequest: (callId: string, golferId: string) => void;
 
@@ -229,6 +232,8 @@ interface DataContextValue {
 const DataContext = createContext<DataContextValue | null>(null);
 
 export function DataProvider({ children }: { children: ReactNode }) {
+  const auth = useAuth();
+  const realRounds = useRealRounds();
   const [data, setData] = useState<AppData>(() => loadData());
   const [isLoading, setIsLoading] = useState(true);
 
@@ -240,13 +245,42 @@ export function DataProvider({ children }: { children: ReactNode }) {
     if (!isLoading) saveData(data);
   }, [data, isLoading]);
 
-  const currentUser = useMemo(
+  const mockCurrentUser = useMemo(
     () => data.golfers.find((g) => g.id === data.currentUserId) ?? data.golfers[0],
     [data.golfers, data.currentUserId],
   );
 
-  const getGolfer = useCallback((id: string) => data.golfers.find((g) => g.id === id), [data.golfers]);
-  const getGolfCall = useCallback((id: string) => data.golfCalls.find((c) => c.id === id), [data.golfCalls]);
+  // Real (non-demo) accounts source identity from the real profiles row,
+  // never from the shared mock golfers array — that array stays the shared
+  // demo world every account still sees for Find/Discover/Community this
+  // phase. Falls back to a placeholder only in the brief window before a
+  // freshly-created auth session's stub profile row has loaded.
+  const currentUser = useMemo(() => {
+    if (auth.isDemo) return mockCurrentUser;
+    if (auth.profile) return auth.profile;
+    if (auth.authUser) return placeholderGolferProfile(auth.authUser.id, auth.authUser.email?.split("@")[0] ?? "Golfer");
+    return mockCurrentUser;
+  }, [auth.isDemo, auth.profile, auth.authUser, mockCurrentUser]);
+
+  const session = useMemo<SessionState>(() => {
+    if (auth.isDemo) return data.session;
+    return { isLoggedIn: Boolean(auth.authUser), hasOnboarded: auth.hasOnboarded };
+  }, [auth.isDemo, auth.authUser, auth.hasOnboarded, data.session]);
+
+  // Real rounds' participants are real accounts, never in the shared mock
+  // golfers array — resolved from RealRoundsContext's batch profile fetch
+  // instead. currentUser itself is checked first since it's always known
+  // even before any real round has loaded a participant list.
+  const golfCalls = auth.isDemo ? data.golfCalls : realRounds.golfCalls;
+  const getGolfer = useCallback(
+    (id: string) => {
+      if (auth.isDemo) return data.golfers.find((g) => g.id === id);
+      if (id === currentUser.id) return currentUser;
+      return realRounds.profilesById.get(id);
+    },
+    [auth.isDemo, data.golfers, currentUser, realRounds.profilesById],
+  );
+  const getGolfCall = useCallback((id: string) => golfCalls.find((c) => c.id === id), [golfCalls]);
   const messagesForCall = useCallback(
     (callId: string) => data.messages.filter((m) => m.golfCallId === callId).sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
     [data.messages],
@@ -296,39 +330,69 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setData((prev) => ({ ...prev, currentUserId: id }));
   }, []);
 
-  const updateCurrentUserProfile = useCallback((patch: Partial<GolferProfile>) => {
-    setData((prev) => ({
-      ...prev,
-      golfers: prev.golfers.map((g) => (g.id === prev.currentUserId ? { ...g, ...patch } : g)),
-    }));
-  }, []);
+  // Every profile-editing surface in the app (Profile page edit, Match
+  // Preferences, location change, availability, AutoMatch's quick-set
+  // buttons) already funnels through this one function — branching here
+  // (demo: mock golfers array; real: real profiles row) gives every one of
+  // those surfaces real persistence with no changes to their own code.
+  const updateCurrentUserProfile = useCallback(
+    (patch: Partial<GolferProfile>) => {
+      if (auth.isDemo) {
+        setData((prev) => ({
+          ...prev,
+          golfers: prev.golfers.map((g) => (g.id === prev.currentUserId ? { ...g, ...patch } : g)),
+        }));
+      } else {
+        auth.saveProfile(golferPatchToProfileRow(patch)).catch((err) => console.error("Golf Me: failed to save profile.", err));
+      }
+    },
+    [auth],
+  );
 
-  const setPhoneVerified = useCallback((value: boolean) => {
-    setData((prev) => ({
-      ...prev,
-      golfers: prev.golfers.map((g) =>
-        g.id === prev.currentUserId ? { ...g, verification: { ...g.verification, phoneVerified: value } } : g,
-      ),
-    }));
-  }, []);
+  const setPhoneVerified = useCallback(
+    (value: boolean) => {
+      if (auth.isDemo) {
+        setData((prev) => ({
+          ...prev,
+          golfers: prev.golfers.map((g) =>
+            g.id === prev.currentUserId ? { ...g, verification: { ...g.verification, phoneVerified: value } } : g,
+          ),
+        }));
+      } else {
+        auth.saveProfile({ phone_verified: value }).catch((err) => console.error("Golf Me: failed to save profile.", err));
+      }
+    },
+    [auth],
+  );
 
-  const setEmailVerified = useCallback((value: boolean) => {
-    setData((prev) => ({
-      ...prev,
-      golfers: prev.golfers.map((g) =>
-        g.id === prev.currentUserId ? { ...g, verification: { ...g.verification, emailVerified: value } } : g,
-      ),
-    }));
-  }, []);
+  const setEmailVerified = useCallback(
+    (value: boolean) => {
+      if (auth.isDemo) {
+        setData((prev) => ({
+          ...prev,
+          golfers: prev.golfers.map((g) =>
+            g.id === prev.currentUserId ? { ...g, verification: { ...g.verification, emailVerified: value } } : g,
+          ),
+        }));
+      } else {
+        auth.saveProfile({ email_verified: value }).catch((err) => console.error("Golf Me: failed to save profile.", err));
+      }
+    },
+    [auth],
+  );
 
   const requestVerifiedGolfer = useCallback(() => {
-    setData((prev) => ({
-      ...prev,
-      golfers: prev.golfers.map((g) =>
-        g.id === prev.currentUserId ? { ...g, verification: { ...g.verification, verifiedGolfer: true } } : g,
-      ),
-    }));
-  }, []);
+    if (auth.isDemo) {
+      setData((prev) => ({
+        ...prev,
+        golfers: prev.golfers.map((g) =>
+          g.id === prev.currentUserId ? { ...g, verification: { ...g.verification, verifiedGolfer: true } } : g,
+        ),
+      }));
+    } else {
+      auth.saveProfile({ verified_golfer: true }).catch((err) => console.error("Golf Me: failed to save profile.", err));
+    }
+  }, [auth]);
 
   const createGolfCall = useCallback(
     (input: CreateGolfCallInput): GolfCall => {
@@ -362,14 +426,18 @@ export function DataProvider({ children }: { children: ReactNode }) {
   );
 
   const cancelGolfCall = useCallback(
-    (callId: string) => {
+    async (callId: string) => {
+      if (!auth.isDemo) {
+        await realRounds.cancelRound(callId);
+        return;
+      }
       setData((prev) => ({
         ...prev,
         golfCalls: prev.golfCalls.map((c) => (c.id === callId ? { ...c, status: "cancelled" } : c)),
       }));
       addSystemMessage(callId, "The host cancelled this Golf Call.");
     },
-    [addSystemMessage],
+    [auth.isDemo, realRounds, addSystemMessage],
   );
 
   // Prototype-only: in a real app a round transitions to "completed" once
@@ -383,7 +451,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const joinGolfCall = useCallback(
-    (callId: string) => {
+    async (callId: string) => {
+      if (!auth.isDemo) {
+        // Atomic, database-side overfill check (join_golf_call RPC) —
+        // throws (e.g. "This round is full.") if someone else took the last
+        // spot first; the caller surfaces that, never silently no-ops.
+        await realRounds.joinRound(callId);
+        return;
+      }
       const call = data.golfCalls.find((c) => c.id === callId);
       if (!call) return;
       const uid = data.currentUserId;
@@ -409,7 +484,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         addSystemMessage(callId, `${currentUser.name} requested to join. Waiting on host approval.`);
       }
     },
-    [data.golfCalls, data.currentUserId, currentUser.name, addSystemMessage],
+    [auth.isDemo, realRounds, data.golfCalls, data.currentUserId, currentUser.name, addSystemMessage],
   );
 
   const cancelJoinRequest = useCallback(
@@ -425,7 +500,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
   );
 
   const leaveGolfCall = useCallback(
-    (callId: string) => {
+    async (callId: string) => {
+      if (!auth.isDemo) {
+        await realRounds.leaveRound(callId);
+        return;
+      }
       setData((prev) => ({
         ...prev,
         golfCalls: prev.golfCalls.map((c) =>
@@ -436,7 +515,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       }));
       addSystemMessage(callId, `${currentUser.name} left the round.`);
     },
-    [addSystemMessage, currentUser.name],
+    [auth.isDemo, realRounds, addSystemMessage, currentUser.name],
   );
 
   const approveRequest = useCallback(
@@ -609,17 +688,25 @@ export function DataProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  // Explicit account selection, not an implicit fallback — the caller
-  // (Auth.tsx) always passes the golfer id the person actually picked, so
-  // login never silently lands on whichever currentUserId happened to
-  // already be in storage.
-  const logIn = useCallback((userId: string) => {
-    setData((prev) => ({ ...prev, currentUserId: userId, session: { isLoggedIn: true, hasOnboarded: true } }));
-  }, []);
+  // Demo-only now — the only caller is Auth.tsx's "Try Demo Account"
+  // button. Explicitly flips into demo mode so currentUser/session read from
+  // the mock golfers array rather than any real Supabase session.
+  const logIn = useCallback(
+    (userId: string) => {
+      auth.enterDemoMode();
+      setData((prev) => ({ ...prev, currentUserId: userId, session: { isLoggedIn: true, hasOnboarded: true } }));
+    },
+    [auth],
+  );
 
   const logOut = useCallback(() => {
-    setData((prev) => ({ ...prev, session: { ...prev.session, isLoggedIn: false } }));
-  }, []);
+    if (auth.isDemo) {
+      auth.exitDemoMode();
+      setData((prev) => ({ ...prev, session: { ...prev.session, isLoggedIn: false } }));
+    } else {
+      void auth.signOut();
+    }
+  }, [auth]);
 
   const blockedByIds = useMemo(
     () => data.blocks.filter((b) => b.blockedId === currentUser.id).map((b) => b.blockerId),
@@ -1046,7 +1133,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       isLoading,
       currentUser,
       golfers: data.golfers,
-      golfCalls: data.golfCalls,
+      golfCalls,
       messages: data.messages,
       reviews: data.reviews,
       reports: data.reports,
@@ -1055,7 +1142,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       messagesForCall,
       visibleGolfers,
       reviewsAbout,
-      session: data.session,
+      session,
       logIn,
       logOut,
       signUpNewGolfer,
@@ -1127,6 +1214,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       data,
       isLoading,
       currentUser,
+      session,
+      golfCalls,
       getGolfer,
       getGolfCall,
       messagesForCall,

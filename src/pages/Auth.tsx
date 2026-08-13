@@ -2,13 +2,12 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Check, Mail } from "lucide-react";
 import { useData } from "../context/DataContext";
+import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { useLocale } from "../i18n/LocaleContext";
 import { Button } from "../components/ui/Button";
-import { Avatar } from "../components/ui/Avatar";
 import { inputClass } from "../components/ui/FormControls";
-import { DEFAULT_CURRENT_USER_ID, DEMO_LOGIN_GOLFER_IDS } from "../data/golfers";
-import { isNewAccount } from "../lib/format";
+import { DEFAULT_CURRENT_USER_ID } from "../data/golfers";
 import { GolfMeIcon } from "../components/brand/GolfMeIcon";
 
 interface AuthProps {
@@ -17,32 +16,44 @@ interface AuthProps {
 
 export function Auth({ mode }: AuthProps) {
   const navigate = useNavigate();
-  const { logIn, session, golfers } = useData();
+  const { logIn, session } = useData();
+  const { signInWithGoogle, signInWithEmailOtp } = useAuth();
   const { showToast } = useToast();
   const { t } = useLocale();
   const [showEmailField, setShowEmailField] = useState(false);
   const [email, setEmail] = useState("");
-  const [showPicker, setShowPicker] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
+  const [busy, setBusy] = useState(false);
 
-  const loginableAccounts = DEMO_LOGIN_GOLFER_IDS.map((id) => golfers.find((g) => g.id === id)).filter(
-    (g): g is NonNullable<typeof g> => Boolean(g),
-  );
-
-  function continueWith() {
-    if (mode === "signup") {
-      navigate("/profile-setup");
-      return;
+  async function continueWithGoogle() {
+    setBusy(true);
+    try {
+      await signInWithGoogle();
+      // No further action here on success — signInWithGoogle() redirects the
+      // whole page to Google, so this component unmounts. The post-redirect
+      // route guards (App.tsx) decide where a returning session lands.
+    } catch (err) {
+      setBusy(false);
+      showToast(err instanceof Error ? err.message : t("auth.authError"), "warning");
     }
-    // Login: there's no real backend to distinguish Apple/Google/Email, so
-    // every path here surfaces the same "choose your account" picker rather
-    // than silently authenticating as whichever golfer happened to be
-    // sitting in storage. Only "Try Demo Account" below skips the picker.
-    setShowPicker(true);
   }
 
-  function loginAs(golferId: string, label: string) {
-    logIn(golferId);
-    showToast(t("auth.signedInAs", { name: label }), "success");
+  async function continueWithEmail() {
+    if (!email.includes("@")) return;
+    setBusy(true);
+    try {
+      await signInWithEmailOtp(email.trim());
+      setEmailSent(true);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : t("auth.authError"), "warning");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function loginAsDemo() {
+    logIn(DEFAULT_CURRENT_USER_ID);
+    showToast(t("auth.signedInAs", { name: t("auth.demoAccountLabel", { name: "Jordan" }) }), "success");
     navigate("/");
   }
 
@@ -66,46 +77,27 @@ export function Auth({ mode }: AuthProps) {
           <p className="mt-1.5 text-sm text-slate-500">{mode === "signup" ? t("auth.signupSubtitle") : t("auth.loginSubtitle")}</p>
         </div>
 
-        {mode === "login" && showPicker ? (
-          <div className="mx-auto flex w-full max-w-xs flex-col gap-3">
-            <div className="rounded-2xl border border-slate-200 bg-white p-3">
-              <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-slate-400">{t("auth.prototypeChooseAccount")}</p>
-              <div className="flex flex-col gap-1">
-                {loginableAccounts.map((g) => (
-                  <button
-                    key={g.id}
-                    onClick={() => loginAs(g.id, g.name)}
-                    className="flex items-center gap-3 rounded-xl px-2.5 py-2.5 text-left transition-colors duration-200 hover:bg-slate-50"
-                  >
-                    <Avatar golfer={g} size="sm" />
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold text-slate-800">{g.name}</p>
-                      <p className="text-xs text-slate-500">
-                        {isNewAccount(g.reputation.completedRounds) ? t("auth.newAccount") : t("auth.roundsPlayed", { count: g.reputation.completedRounds })}
-                      </p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
+        {emailSent ? (
+          <div className="mx-auto flex w-full max-w-xs flex-col items-center gap-3 text-center">
+            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-fairway-50 text-fairway-600">
+              <Mail size={22} />
+            </span>
+            <h2 className="text-base font-bold text-slate-900">{t("auth.checkEmailTitle")}</h2>
+            <p className="text-sm text-slate-500">{t("auth.checkEmailBody", { email })}</p>
             <button
-              onClick={() => setShowPicker(false)}
-              className="rounded-full px-4 py-2 text-xs font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
+              onClick={() => continueWithEmail()}
+              disabled={busy}
+              className="mt-1 text-xs font-semibold text-fairway-700 hover:underline disabled:opacity-50"
             >
-              {t("auth.back")}
+              {t("auth.resendEmail")}
             </button>
           </div>
         ) : (
           <div className="mx-auto flex w-full max-w-xs flex-col gap-3">
             <button
-              onClick={() => continueWith()}
-              className="flex items-center justify-center gap-2 rounded-full bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition-all duration-200 ease-out hover:-translate-y-px hover:bg-slate-800 active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 motion-reduce:transition-none"
-            >
-              {t("auth.continueWithApple")}
-            </button>
-            <button
-              onClick={() => continueWith()}
-              className="flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition-all duration-200 ease-out hover:-translate-y-px hover:border-slate-300 hover:shadow-sm active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none"
+              onClick={continueWithGoogle}
+              disabled={busy}
+              className="flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition-all duration-200 ease-out hover:-translate-y-px hover:border-slate-300 hover:shadow-sm active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none disabled:opacity-50"
             >
               {t("auth.continueWithGoogle")}
             </button>
@@ -127,8 +119,8 @@ export function Auth({ mode }: AuthProps) {
                   placeholder="you@example.com"
                   className={inputClass}
                 />
-                <Button onClick={() => continueWith()} disabled={!email.includes("@")} fullWidth>
-                  {t("common.continue")}
+                <Button onClick={continueWithEmail} disabled={!email.includes("@") || busy} fullWidth>
+                  {t("auth.sendMagicLink")}
                 </Button>
               </div>
             )}
@@ -141,7 +133,7 @@ export function Auth({ mode }: AuthProps) {
                   <span className="h-px flex-1 bg-slate-200" />
                 </div>
                 <button
-                  onClick={() => loginAs(DEFAULT_CURRENT_USER_ID, t("auth.demoAccountLabel", { name: "Jordan" }))}
+                  onClick={loginAsDemo}
                   className="flex items-center justify-center gap-2 rounded-full border border-dashed border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 transition-all duration-200 ease-out hover:-translate-y-px hover:border-slate-400 hover:bg-slate-50 active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none"
                 >
                   <Check size={16} /> {t("auth.tryDemoAccount")}

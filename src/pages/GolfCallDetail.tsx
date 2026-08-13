@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { useData } from "../context/DataContext";
+import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { Avatar } from "../components/ui/Avatar";
 import { Badge } from "../components/ui/Badge";
@@ -46,7 +47,9 @@ export function GolfCallDetail() {
     declineRequest,
     hasReviewed,
   } = useData();
+  const { isDemo } = useAuth();
   const { showToast } = useToast();
+  const [joining, setJoining] = useState(false);
 
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
@@ -87,12 +90,22 @@ export function GolfCallDetail() {
   const reasons = breakdown ? callMatchReasons(call, breakdown) : [];
   const canJoin = !isHost && !isJoined && !isPending && !isFull;
 
-  function handleJoin() {
-    joinGolfCall(call!.id);
-    showToast(
-      call!.joinMode === "instant" ? `You're playing ${formatDate(call!.dateISO)}. ⛳` : "Request sent to the host.",
-      "success",
-    );
+  async function handleJoin() {
+    if (joining) return;
+    setJoining(true);
+    try {
+      await joinGolfCall(call!.id);
+      showToast(
+        call!.joinMode === "instant" ? `You're playing ${formatDate(call!.dateISO)}. ⛳` : "Request sent to the host.",
+        "success",
+      );
+    } catch (err) {
+      // Real, atomic failure — e.g. someone else took the last spot first.
+      // Never silently no-ops; the golfer sees exactly why it didn't work.
+      showToast(err instanceof Error ? err.message : "Couldn't join this round. Please try again.", "warning");
+    } finally {
+      setJoining(false);
+    }
   }
 
   return (
@@ -255,7 +268,9 @@ export function GolfCallDetail() {
         </div>
       )}
 
-      {!isCompleted && !isCancelled && (isHost || isJoined) && (
+      {/* Prototype-only shortcut — no real "round is over" detection exists
+          yet for real rounds this phase, so this stays demo-only. */}
+      {isDemo && !isCompleted && !isCancelled && (isHost || isJoined) && (
         <button
           onClick={() => {
             simulateCallCompletion(call.id);
@@ -320,10 +335,15 @@ export function GolfCallDetail() {
           message="You'll be removed from the foursome and lose access to the group chat. The host will be notified."
           confirmLabel="Leave round"
           danger
-          onConfirm={() => {
-            leaveGolfCall(call.id);
-            setLeaveConfirmOpen(false);
-            showToast("You left the round.", "info");
+          onConfirm={async () => {
+            try {
+              await leaveGolfCall(call.id);
+              showToast("You left the round.", "info");
+            } catch (err) {
+              showToast(err instanceof Error ? err.message : "Couldn't leave this round. Please try again.", "warning");
+            } finally {
+              setLeaveConfirmOpen(false);
+            }
           }}
           onCancel={() => setLeaveConfirmOpen(false)}
         />
@@ -334,10 +354,15 @@ export function GolfCallDetail() {
           message="Everyone who joined will be notified that the round is cancelled."
           confirmLabel="Cancel Golf Call"
           danger
-          onConfirm={() => {
-            cancelGolfCall(call.id);
-            setCancelConfirmOpen(false);
-            showToast("Golf Call cancelled.", "info");
+          onConfirm={async () => {
+            try {
+              await cancelGolfCall(call.id);
+              showToast("Golf Call cancelled.", "info");
+            } catch (err) {
+              showToast(err instanceof Error ? err.message : "Couldn't cancel this round. Please try again.", "warning");
+            } finally {
+              setCancelConfirmOpen(false);
+            }
           }}
           onCancel={() => setCancelConfirmOpen(false)}
         />

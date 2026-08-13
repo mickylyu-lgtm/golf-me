@@ -1,8 +1,12 @@
+import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
-import { BrowserRouter, Navigate, Outlet, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import { DataProvider, useData } from "./context/DataContext";
+import { AuthProvider, useAuth } from "./context/AuthContext";
+import { RealRoundsProvider } from "./context/RealRoundsContext";
 import { ToastProvider } from "./context/ToastContext";
-import { LocaleProvider, useLocale } from "./i18n/LocaleContext";
+import { LocaleProvider, useLocale, LOCALES } from "./i18n/LocaleContext";
+import type { Locale } from "./i18n/LocaleContext";
 import { AppShell } from "./components/layout/AppShell";
 import { GolfMeLoader } from "./components/loading/GolfMeLoader";
 import { Welcome } from "./pages/Welcome";
@@ -37,15 +41,17 @@ import { PostDetail } from "./pages/PostDetail";
 import { CommunityGuidelines } from "./pages/CommunityGuidelines";
 import { SavedPosts } from "./pages/SavedPosts";
 
-// Logged-in area: sidebar/bottom nav shell + redirect back to the Welcome
-// front page if the mock session isn't authenticated. Always the front
-// page, never straight to /login — hasOnboarded only changes the copy on
-// the login screen itself ("Welcome back" vs. "Log in"), it never skips
-// the branded landing screen for a logged-out visitor.
+// Logged-in area: sidebar/bottom nav shell. Three real states, not two —
+// no session -> Welcome; session but onboarding incomplete (real accounts
+// only reach this mid-signup) -> back to /profile-setup rather than Home;
+// session + onboarded -> the app.
 function AuthedLayout() {
   const { session } = useData();
   if (!session.isLoggedIn) {
     return <Navigate to="/welcome" replace />;
+  }
+  if (!session.hasOnboarded) {
+    return <Navigate to="/profile-setup" replace />;
   }
   return (
     <AppShell>
@@ -54,30 +60,77 @@ function AuthedLayout() {
   );
 }
 
-// Welcome/onboarding/auth screens: no point revisiting these once signed in.
+// Welcome/onboarding/auth screens: no point revisiting these once signed in
+// AND onboarded. A real account that's authenticated but hasn't finished
+// onboarding is neither "guest" nor "authed" — it's forced to
+// /profile-setup specifically (not bounced to "/", which AuthedLayout would
+// just bounce right back out of) rather than allowed to sit on Welcome/Login.
 function GuestOnly() {
   const { session } = useData();
-  if (session.isLoggedIn) return <Navigate to="/" replace />;
+  const location = useLocation();
+  if (session.isLoggedIn && session.hasOnboarded) return <Navigate to="/" replace />;
+  if (session.isLoggedIn && !session.hasOnboarded && location.pathname !== "/profile-setup") {
+    return <Navigate to="/profile-setup" replace />;
+  }
   return <Outlet />;
 }
 
+const KNOWN_LOCALES = new Set(LOCALES.map((l) => l.value));
+
+// Two-way, best-effort sync between the device-local language setting and a
+// real account's profiles.language — demo accounts never touch this. Pull
+// once per login (new device picks up a previously-saved language); push on
+// every explicit change after that (so it follows the account forward).
+// Fire-and-forget by design — a save that fails here just means the device
+// keeps its own local choice, never a blocking or user-visible error.
+function useLanguageProfileSync() {
+  const { locale, setLocale } = useLocale();
+  const { isDemo, authUser, profileLanguage, saveProfile } = useAuth();
+  const pulledForUser = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (isDemo || !authUser) return;
+    if (pulledForUser.current === authUser.id) return;
+    pulledForUser.current = authUser.id;
+    if (profileLanguage && KNOWN_LOCALES.has(profileLanguage as Locale) && profileLanguage !== locale) {
+      setLocale(profileLanguage as Locale);
+    }
+    // Only depends on authUser/profileLanguage becoming available — locale/
+    // setLocale intentionally excluded so this never re-fires on later
+    // local changes (that's the push effect below's job).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authUser, profileLanguage]);
+
+  useEffect(() => {
+    if (isDemo || !authUser) return;
+    if (pulledForUser.current !== authUser.id) return; // wait for the pull above to settle first
+    saveProfile({ language: locale }).catch((err) => console.error("Golf Me: failed to save language preference.", err));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locale, isDemo, authUser]);
+}
+
 // Real gate, not a fixed timer — mock data loads synchronously from
-// localStorage, so this normally resolves in a single tick, but it's the
-// actual state DataProvider uses internally, not a manufactured delay.
+// localStorage (near-instant), but real session restore is a network round
+// trip (getSession + the initial profiles fetch); both block here so the
+// app never flickers Welcome->Home while either resolves.
 function AppGate({ children }: { children: ReactNode }) {
   const { isLoading } = useData();
+  const { authLoading } = useAuth();
   const { t } = useLocale();
-  if (isLoading) return <GolfMeLoader fullScreen message={t("loading.gettingReady")} />;
+  useLanguageProfileSync();
+  if (isLoading || authLoading) return <GolfMeLoader fullScreen message={t("loading.gettingReady")} />;
   return <>{children}</>;
 }
 
 export default function App() {
   return (
     <LocaleProvider>
-      <DataProvider>
-        <ToastProvider>
-          <AppGate>
-            <BrowserRouter>
+      <AuthProvider>
+        <RealRoundsProvider>
+        <DataProvider>
+          <ToastProvider>
+            <AppGate>
+              <BrowserRouter>
               <Routes>
                 {/* Standalone, outside both GuestOnly and AuthedLayout — by the
                     time signUpNewGolfer() lands here the session is already
@@ -126,6 +179,8 @@ export default function App() {
           </AppGate>
         </ToastProvider>
       </DataProvider>
+        </RealRoundsProvider>
+      </AuthProvider>
     </LocaleProvider>
   );
 }

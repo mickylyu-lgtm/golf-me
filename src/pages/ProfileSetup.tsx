@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Check, LocateFixed, MapPin } from "lucide-react";
 import { useData } from "../context/DataContext";
+import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
 import { useLocale } from "../i18n/LocaleContext";
 import { Button } from "../components/ui/Button";
 import { Pill } from "../components/ui/Pill";
@@ -13,7 +15,8 @@ import { BUDGET_PREF_MAX, BUDGET_PREF_MIN, GENDER_OPTIONS, GOLF_VIBES, TRAVEL_RA
 import type { GolfVibe, RoundLengthPreference, WalkOrCart } from "../types";
 import { initialsFromName, avatarColorForName } from "../lib/avatar";
 import { formatBudgetValue, formatDistanceValue, TRAVEL_RADIUS_PRESETS } from "../lib/matchPreferences";
-import { getNearbyCourses } from "../lib/courseSearch";
+import { useNearbyCourses } from "../lib/useCourseSearch";
+import { CourseSearchStatus } from "../components/ui/CourseSearchStatus";
 import type { GeoPoint } from "../lib/geo";
 import { track } from "../lib/analytics";
 import { clearOnboardingDraft, loadOnboardingDraft, saveOnboardingDraft } from "../lib/onboardingDraft";
@@ -55,7 +58,10 @@ function draftDefaults(): OnboardingDraft {
 export function ProfileSetup() {
   const navigate = useNavigate();
   const { signUpNewGolfer } = useData();
+  const { isDemo, saveProfile } = useAuth();
+  const { showToast } = useToast();
   const { t } = useLocale();
+  const [submitting, setSubmitting] = useState(false);
 
   const initial = loadOnboardingDraft() ?? draftDefaults();
   const [step, setStep] = useState(initial.step);
@@ -113,16 +119,13 @@ export function ProfileSetup() {
     });
   }
 
-  const nearbyCourses = playingAreaCoords
-    ? getNearbyCourses({ label: areaLabel, coords: playingAreaCoords }, NEARBY_RADIUS_MILES)
-        .slice(0, 3)
-        .map((c) => c.name)
-    : [];
+  const nearbyState = useNearbyCourses(playingAreaCoords ? { label: areaLabel, coords: playingAreaCoords } : undefined, NEARBY_RADIUS_MILES);
+  const nearbyCourses = nearbyState.results.slice(0, 3).map((c) => c.name);
 
   const stepValid = [Boolean(name.trim()) && is18Plus, true, Boolean(areaLabel.trim()), vibes.length > 0][step];
 
-  function next() {
-    if (!stepValid) return;
+  async function next() {
+    if (!stepValid || submitting) return;
     if (step < STEP_LABEL_KEYS.length - 1) {
       setStep((s) => s + 1);
       return;
@@ -130,35 +133,73 @@ export function ProfileSetup() {
     const finalHandicap = handicap === "" ? 0 : handicap;
     const finalBudget = budget === "" ? 0 : budget;
     const roundLengthPreference: RoundLengthPreference = roundLength === "9" ? "9 Holes" : roundLength === "18" ? "18 Holes" : "No Preference";
-    signUpNewGolfer({
-      name: name.trim(),
-      photoUrl,
-      ageRange: "25-34",
-      gender: gender.trim() || "Prefer not to say",
-      areaLabel: areaLabel.trim(),
-      playingAreaCoords,
-      handicap: hasHandicap ? finalHandicap : SKILL_HANDICAP[skillBand],
-      vibes,
-      walkOrCart,
-      budgetMin: Math.max(0, finalBudget - 15),
-      budgetMax: finalBudget + 15,
-      favoriteCourses: favoriteCourse ? [favoriteCourse] : [],
-      preferredCourses: [],
-      travelRadiusMiles,
-      roundLengthPreference,
-    });
+
+    if (isDemo) {
+      signUpNewGolfer({
+        name: name.trim(),
+        photoUrl,
+        ageRange: "25-34",
+        gender: gender.trim() || "Prefer not to say",
+        areaLabel: areaLabel.trim(),
+        playingAreaCoords,
+        handicap: hasHandicap ? finalHandicap : SKILL_HANDICAP[skillBand],
+        vibes,
+        walkOrCart,
+        budgetMin: Math.max(0, finalBudget - 15),
+        budgetMax: finalBudget + 15,
+        favoriteCourses: favoriteCourse ? [favoriteCourse] : [],
+        preferredCourses: [],
+        travelRadiusMiles,
+        roundLengthPreference,
+      });
+    } else {
+      // Real account: the auth identity already exists (Google/email sign-in
+      // happened before this wizard could even be reached — see App.tsx's
+      // route guards), so this writes into that existing profiles row
+      // instead of minting a new mock golfer. Avatar upload isn't wired to
+      // Supabase Storage yet (that's a later phase) — photoUrl stays local-
+      // only for real accounts for now, never written as a data-URL.
+      setSubmitting(true);
+      try {
+        await saveProfile({
+          name: name.trim(),
+          avatar_color: avatarColorForName(name),
+          avatar_initials: initialsFromName(name),
+          age_range: "25-34",
+          gender: gender.trim() || "Prefer not to say",
+          area_label: areaLabel.trim(),
+          playing_area_lat: playingAreaCoords?.lat ?? null,
+          playing_area_lng: playingAreaCoords?.lng ?? null,
+          handicap: hasHandicap ? finalHandicap : null,
+          skill_level: hasHandicap ? null : skillBand,
+          vibes,
+          walk_or_cart: walkOrCart,
+          budget_min: Math.max(0, finalBudget - 15),
+          budget_max: finalBudget + 15,
+          favorite_courses: favoriteCourse ? [favoriteCourse] : [],
+          travel_radius_miles: travelRadiusMiles,
+          round_length_preference: roundLengthPreference,
+          has_onboarded: true,
+        });
+      } catch (err) {
+        setSubmitting(false);
+        showToast(err instanceof Error ? err.message : t("auth.authError"), "warning");
+        return;
+      }
+    }
+
     clearOnboardingDraft();
     track("profile_basic_completed");
     // Deferred one tick, verified against real behavior (not a hypothetical
-    // guard): signUpNewGolfer() flips session.isLoggedIn synchronously, but
+    // guard): the session flips to onboarded synchronously above, but
     // react-router-dom's own internal location state doesn't update in the
     // same commit as a navigate() call made from the same handler. GuestOnly
     // (still wrapping this /profile-setup route in that stale render) sees
-    // the new isLoggedIn against its OLD location and fires its own
-    // `replace` redirect to "/" — which, calling history.replaceState AFTER
-    // this navigate's pushState, wins and strands the user on Home instead
-    // of /ready. Pushing this navigate to a macrotask lets that stale
-    // render (and GuestOnly's redirect) fully settle first, so this call is
+    // the new state against its OLD location and fires its own `replace`
+    // redirect to "/" — which, calling history.replaceState AFTER this
+    // navigate's pushState, wins and strands the user on Home instead of
+    // /ready. Pushing this navigate to a macrotask lets that stale render
+    // (and GuestOnly's redirect) fully settle first, so this call is
     // guaranteed to be the last history write.
     setTimeout(() => navigate("/ready"), 0);
   }
@@ -313,6 +354,7 @@ export function ProfileSetup() {
                     {t("common.change")}
                   </button>
                 </div>
+                <CourseSearchStatus loading={nearbyState.loading} error={nearbyState.error} onRetry={nearbyState.retry} />
                 {nearbyCourses.length > 0 && (
                   <div>
                     <p className={labelClass}>{t("profileSetup.nearbyCourses")}</p>
@@ -410,7 +452,7 @@ export function ProfileSetup() {
         )}
       </div>
 
-      <Button size="lg" fullWidth disabled={!stepValid} onClick={next}>
+      <Button size="lg" fullWidth disabled={!stepValid || submitting} onClick={next}>
         {step === STEP_LABEL_KEYS.length - 1 ? t("profileSetup.startGolfing") : t("common.continue")}
       </Button>
 

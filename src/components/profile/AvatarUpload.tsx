@@ -3,7 +3,43 @@ import type { ChangeEvent } from "react";
 import { ImagePlus, Loader2, X } from "lucide-react";
 import { Avatar } from "../ui/Avatar";
 import { useLocale } from "../../i18n/LocaleContext";
+import { useAuth } from "../../context/AuthContext";
+import { supabase } from "../../lib/supabase";
 import type { GolferProfile } from "../../types";
+
+const AVATAR_BUCKET = "avatars";
+
+// Same square-crop-and-downsize as the data-URL path below, but resolving a
+// Blob instead of a string — real accounts upload the actual bytes to
+// Supabase Storage rather than ever writing a data-URL/base64 string into
+// the database.
+function resizeImageToSquareBlob(file: File, size = 320): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          reject(new Error("Canvas not supported"));
+          return;
+        }
+        const minSide = Math.min(img.width, img.height);
+        const sx = (img.width - minSide) / 2;
+        const sy = (img.height - minSide) / 2;
+        ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, size, size);
+        canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("Could not encode image"))), "image/jpeg", 0.85);
+      };
+      img.onerror = () => reject(new Error("Could not load image"));
+      img.src = reader.result as string;
+    };
+    reader.onerror = () => reject(new Error("Could not read file"));
+    reader.readAsDataURL(file);
+  });
+}
 
 // Client-side only: reads the file, center-crops it to a square, downsizes
 // it, and re-encodes as a JPEG data URL. Keeps localStorage lean without
@@ -48,6 +84,7 @@ export function AvatarUpload({ golfer, onChange, size = "xl" }: AvatarUploadProp
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const { t } = useLocale();
+  const { isDemo, authUser } = useAuth();
 
   async function handleFile(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -60,13 +97,40 @@ export function AvatarUpload({ golfer, onChange, size = "xl" }: AvatarUploadProp
     setLoading(true);
     setError(null);
     try {
-      const dataUrl = await resizeImageToSquareDataUrl(file);
-      onChange(dataUrl);
+      if (!isDemo && authUser) {
+        // Real account: upload the actual bytes to Storage, never a
+        // data-URL/base64 string into the database. Fixed path per user
+        // (upsert) so "change photo" replaces in place rather than
+        // accumulating orphaned objects.
+        const blob = await resizeImageToSquareBlob(file);
+        const path = `${authUser.id}/avatar.jpg`;
+        const { error: uploadError } = await supabase.storage.from(AVATAR_BUCKET).upload(path, blob, {
+          contentType: "image/jpeg",
+          upsert: true,
+        });
+        if (uploadError) throw uploadError;
+        const { data } = supabase.storage.from(AVATAR_BUCKET).getPublicUrl(path);
+        // Cache-bust: the path is stable across replacements, so without a
+        // changing query param the browser/CDN would keep showing the old
+        // image after a "change photo".
+        onChange(`${data.publicUrl}?t=${Date.now()}`);
+      } else {
+        const dataUrl = await resizeImageToSquareDataUrl(file);
+        onChange(dataUrl);
+      }
     } catch {
       setError(t("avatarUpload.loadError"));
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleRemove() {
+    if (!isDemo && authUser) {
+      const { error: removeError } = await supabase.storage.from(AVATAR_BUCKET).remove([`${authUser.id}/avatar.jpg`]);
+      if (removeError) console.error("Golf Me: failed to remove avatar from storage.", removeError);
+    }
+    onChange(undefined);
   }
 
   return (
@@ -91,7 +155,7 @@ export function AvatarUpload({ golfer, onChange, size = "xl" }: AvatarUploadProp
           {golfer.photoUrl && (
             <button
               type="button"
-              onClick={() => onChange(undefined)}
+              onClick={handleRemove}
               className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-slate-500 transition-colors duration-200 hover:text-red-600"
             >
               <X size={13} /> {t("avatarUpload.remove")}

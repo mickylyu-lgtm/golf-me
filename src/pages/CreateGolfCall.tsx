@@ -1,7 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, ArrowRight, ChevronDown, Users } from "lucide-react";
 import { useData } from "../context/DataContext";
+import { useAuth } from "../context/AuthContext";
+import { useRealRounds } from "../context/RealRoundsContext";
 import { useToast } from "../context/ToastContext";
 import { useLocale } from "../i18n/LocaleContext";
 import type { TranslationKey } from "../i18n/locales/en";
@@ -60,14 +62,23 @@ function prefillDateFromWhen(when: string | null, dateParam: string | null): str
 export function CreateGolfCall() {
   const navigate = useNavigate();
   const { currentUser, golfCalls, createGolfCall, visibleGolfers, circleGolfers, attachGolfCallToPost } = useData();
+  const { isDemo } = useAuth();
+  const { hostRound } = useRealRounds();
   const { showToast } = useToast();
   const { t } = useLocale();
   const [searchParams] = useSearchParams();
   const fromPostId = searchParams.get("fromPost");
 
   const [step, setStep] = useState(1);
-  const [fillMode, setFillMode] = useState(searchParams.get("mode") === "fill");
+  // Fill My Foursome (pre-inviting specific players at creation time) needs
+  // a real Golf Circle/Following to invite by id, which doesn't exist yet —
+  // real hosting this phase is "Starting Fresh" only. Demo mode keeps both.
+  const [fillMode, setFillMode] = useState(isDemo && searchParams.get("mode") === "fill");
   const [course, setCourse] = useState(() => searchParams.get("course") ?? "");
+  const [pickedCourseId, setPickedCourseId] = useState<string | null>(null);
+  const [pickedCourseLat, setPickedCourseLat] = useState<number | null>(null);
+  const [pickedCourseLng, setPickedCourseLng] = useState<number | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [areaLabel, setAreaLabel] = useState(() => currentUser.areaLabel);
   const [editingArea, setEditingArea] = useState(false);
   // "" is a valid mid-edit state — never coerced to 0 until handleSubmit, so
@@ -97,6 +108,11 @@ export function CreateGolfCall() {
   const maxFriends = Math.max(0, totalSpots - 2); // leave room for host + at least 1 open spot
   const openSpotsRemaining = totalSpots - 1 - friendIds.length;
 
+  // Guards the ?mode=fill deep-link case too, not just the in-page toggle.
+  useEffect(() => {
+    if (!isDemo && fillMode) setFillMode(false);
+  }, [isDemo, fillMode]);
+
   const recentCourses = useMemo(() => {
     const mine = golfCalls
       .filter((c) => c.joinedGolferIds.includes(currentUser.id))
@@ -114,9 +130,21 @@ export function CreateGolfCall() {
 
   const userLocation = { label: currentUser.areaLabel, coords: currentUser.playingAreaCoords };
 
-  function handlePickKnownCourse(pick: { name: string; area?: string }) {
+  function handleCourseChange(value: string) {
+    setCourse(value);
+    setPickedCourseId(null);
+    setPickedCourseLat(null);
+    setPickedCourseLng(null);
+  }
+
+  function handlePickKnownCourse(pick: { name: string; area?: string; id?: string; lat?: number; lng?: number }) {
     if (pick.area) setAreaLabel(pick.area);
-    const courseCoords = coordsForCourse(pick.name);
+    setPickedCourseId(pick.id ?? null);
+    setPickedCourseLat(pick.lat ?? null);
+    setPickedCourseLng(pick.lng ?? null);
+    // Real (Geoapify-backed) picks already carry their own coords; demo
+    // picks still resolve distance from the static fixture, same as before.
+    const courseCoords = pick.lat != null && pick.lng != null ? { lat: pick.lat, lng: pick.lng } : coordsForCourse(pick.name);
     if (courseCoords && currentUser.playingAreaCoords) {
       setDistanceMiles(Math.round(haversineMiles(currentUser.playingAreaCoords, courseCoords)));
     }
@@ -164,30 +192,61 @@ export function CreateGolfCall() {
     setStep((s) => s - 1);
   }
 
-  function handleSubmit() {
-    if (!canSubmit) return;
+  async function handleSubmit() {
+    if (!canSubmit || submitting) return;
     const dateISO = new Date(`${date}T12:00:00`).toISOString();
-    const call = createGolfCall({
-      course: course.trim(),
-      areaLabel: areaLabel.trim(),
-      distanceMiles: distanceMiles === "" ? 0 : distanceMiles,
-      dateISO,
-      timeLabel: timeLabel.trim(),
-      estimatedPricePerPerson: price === "" ? 0 : price,
-      totalSpots,
-      joinMode,
-      skillLevel: effectiveSkillLevel,
-      vibe,
-      walkOrCart,
-      holes,
-      gameFormat,
-      notes: notes.trim() || undefined,
-      additionalJoinedGolferIds: fillMode ? friendIds : undefined,
-    });
-    if (fromPostId) attachGolfCallToPost(fromPostId, call.id);
-    track("first_round_hosted");
-    showToast(fillMode ? t("host.postedFillToast") : t("host.postedFreshToast"), "success");
-    navigate(fromPostId ? `/community/${fromPostId}` : `/golf-calls/${call.id}`);
+
+    if (isDemo) {
+      const call = createGolfCall({
+        course: course.trim(),
+        areaLabel: areaLabel.trim(),
+        distanceMiles: distanceMiles === "" ? 0 : distanceMiles,
+        dateISO,
+        timeLabel: timeLabel.trim(),
+        estimatedPricePerPerson: price === "" ? 0 : price,
+        totalSpots,
+        joinMode,
+        skillLevel: effectiveSkillLevel,
+        vibe,
+        walkOrCart,
+        holes,
+        gameFormat,
+        notes: notes.trim() || undefined,
+        additionalJoinedGolferIds: fillMode ? friendIds : undefined,
+      });
+      if (fromPostId) attachGolfCallToPost(fromPostId, call.id);
+      track("first_round_hosted");
+      showToast(fillMode ? t("host.postedFillToast") : t("host.postedFreshToast"), "success");
+      navigate(fromPostId ? `/community/${fromPostId}` : `/golf-calls/${call.id}`);
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const call = await hostRound({
+        courseId: pickedCourseId,
+        courseName: course.trim(),
+        courseAreaLabel: areaLabel.trim(),
+        courseLat: pickedCourseLat,
+        courseLng: pickedCourseLng,
+        dateISO,
+        timeLabel: timeLabel.trim(),
+        holes,
+        gameFormat,
+        estimatedPricePerPerson: price === "" ? null : price,
+        totalSpots,
+        skillLevel: effectiveSkillLevel,
+        vibe,
+        walkOrCart,
+        notes: notes.trim() || undefined,
+      });
+      track("first_round_hosted");
+      showToast(t("host.postedFreshToast"), "success");
+      navigate(`/golf-calls/${call.id}`);
+    } catch (err) {
+      setSubmitting(false);
+      showToast(err instanceof Error ? err.message : "Couldn't post this round. Please try again.", "warning");
+    }
   }
 
   return (
@@ -209,7 +268,7 @@ export function CreateGolfCall() {
         <div className="flex flex-col gap-4 rounded-2xl border border-slate-100 bg-white p-4">
           <CourseAutocomplete
             value={course}
-            onChange={setCourse}
+            onChange={handleCourseChange}
             onPickKnownCourse={handlePickKnownCourse}
             recentCourses={recentCourses}
             preferredCourses={currentUser.preferredCourses}
@@ -276,24 +335,26 @@ export function CreateGolfCall() {
 
       {step === 3 && (
         <div className="flex flex-col gap-4 rounded-2xl border border-slate-100 bg-white p-4">
-          <div className="flex gap-2">
-            <button
-              onClick={() => setFillMode(false)}
-              className={`flex-1 rounded-xl border px-3 py-2.5 text-sm font-semibold transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 ${
-                !fillMode ? "border-fairway-400 bg-fairway-50 text-fairway-700" : "border-slate-200 text-slate-600 hover:border-slate-300"
-              }`}
-            >
-              {t("host.startingFresh")}
-            </button>
-            <button
-              onClick={() => setFillMode(true)}
-              className={`flex-1 rounded-xl border px-3 py-2.5 text-sm font-semibold transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 ${
-                fillMode ? "border-fairway-400 bg-fairway-50 text-fairway-700" : "border-slate-200 text-slate-600 hover:border-slate-300"
-              }`}
-            >
-              {t("host.alreadyHavePlayers")}
-            </button>
-          </div>
+          {isDemo && (
+            <div className="flex gap-2">
+              <button
+                onClick={() => setFillMode(false)}
+                className={`flex-1 rounded-xl border px-3 py-2.5 text-sm font-semibold transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 ${
+                  !fillMode ? "border-fairway-400 bg-fairway-50 text-fairway-700" : "border-slate-200 text-slate-600 hover:border-slate-300"
+                }`}
+              >
+                {t("host.startingFresh")}
+              </button>
+              <button
+                onClick={() => setFillMode(true)}
+                className={`flex-1 rounded-xl border px-3 py-2.5 text-sm font-semibold transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 ${
+                  fillMode ? "border-fairway-400 bg-fairway-50 text-fairway-700" : "border-slate-200 text-slate-600 hover:border-slate-300"
+                }`}
+              >
+                {t("host.alreadyHavePlayers")}
+              </button>
+            </div>
+          )}
 
           <div>
             <label className={labelClass}>{fillMode ? t("host.totalPlayersInGroup") : t("host.totalSpots")}</label>
@@ -477,7 +538,7 @@ export function CreateGolfCall() {
                     ))}
                   </div>
                 </div>
-                {!fillMode && (
+                {!fillMode && isDemo && (
                   <div>
                     <label className={labelClass}>{t("host.howShouldPeopleJoin")}</label>
                     <div className="flex gap-2">
@@ -565,7 +626,7 @@ export function CreateGolfCall() {
           {t("common.next")}
         </Button>
       ) : (
-        <Button disabled={!canSubmit} onClick={handleSubmit} size="lg" icon={<ArrowRight size={18} />} className="flex-row-reverse">
+        <Button disabled={!canSubmit || submitting} onClick={handleSubmit} size="lg" icon={<ArrowRight size={18} />} className="flex-row-reverse">
           {fillMode ? t("host.postOpenSpot") : t("host.postRound")}
         </Button>
       )}

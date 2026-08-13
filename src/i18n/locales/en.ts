@@ -60,6 +60,11 @@ export const en = {
   "auth.newAccount": "New account",
   "auth.roundsPlayed": "{count} rounds played",
   "auth.back": "Back",
+  "auth.checkEmailTitle": "Check your email",
+  "auth.checkEmailBody": "We sent a sign-in link to {email}. Open it on this device to continue.",
+  "auth.resendEmail": "Resend email",
+  "auth.sendMagicLink": "Send sign-in link",
+  "auth.authError": "Something went wrong signing you in. Please try again.",
 
   // Avatar upload (used in onboarding and Profile)
   "avatarUpload.invalidFile": "Please choose an image file.",

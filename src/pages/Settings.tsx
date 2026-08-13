@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Bell, ChevronRight, CircleHelp, Globe, Info, LogOut, MapPin, RotateCcw, ShieldCheck, ShieldOff, Sparkles, User, Users } from "lucide-react";
 import { useData } from "../context/DataContext";
+import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { useLocale, LOCALES } from "../i18n/LocaleContext";
 import { Avatar } from "../components/ui/Avatar";
@@ -13,6 +14,7 @@ import { clearOnboardingDraft } from "../lib/onboardingDraft";
 
 export function Settings() {
   const { currentUser, golfers, blockedIds, getGolfer, unblockUser, logOut, resetDemoData } = useData();
+  const { isDemo } = useAuth();
   const { showToast } = useToast();
   const { locale, t } = useLocale();
   const navigate = useNavigate();
@@ -169,6 +171,7 @@ export function Settings() {
         {t("settings.logOut")}
       </Button>
 
+      {isDemo && (
       <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 p-4">
         <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
           <Sparkles size={12} /> Prototype tools
@@ -199,6 +202,7 @@ export function Settings() {
           </Button>
         </div>
       </div>
+      )}
 
       {switcherOpen && <ProfileSwitcher onClose={() => setSwitcherOpen(false)} />}
 
