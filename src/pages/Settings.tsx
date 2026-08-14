@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Bell, ChevronRight, CircleHelp, Globe, Info, LogOut, MapPin, RotateCcw, ShieldCheck, ShieldOff, Sparkles, User, Users } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Bell, ChevronRight, CircleHelp, Globe, Info, LogOut, MapPin, RotateCcw, ShieldCheck, ShieldOff, Sparkles, User, Users } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { useLocale, LOCALES } from "../i18n/LocaleContext";
+import { supabase } from "../lib/supabase";
 import { Avatar } from "../components/ui/Avatar";
 import { Button } from "../components/ui/Button";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog";
@@ -21,10 +22,32 @@ export function Settings() {
 
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(true);
   const [emailEnabled, setEmailEnabled] = useState(true);
   const [profileDiscoverable, setProfileDiscoverable] = useState(true);
+
+  async function handleDeleteAccount() {
+    setDeletingAccount(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("delete-account", { method: "POST" });
+      if (error || (data as { error?: string } | null)?.error) {
+        throw new Error((data as { error?: string } | null)?.error ?? error?.message ?? "Account deletion failed.");
+      }
+      // The account (and its session) no longer exists server-side — clear
+      // local state and land back on Welcome, same destination as a normal
+      // logout, not a special "your account is gone" screen.
+      await supabase.auth.signOut();
+      setDeleteConfirmOpen(false);
+      navigate("/welcome");
+      showToast("Your account has been deleted.", "info");
+    } catch (err) {
+      setDeletingAccount(false);
+      showToast(err instanceof Error ? err.message : "Couldn't delete your account. Please try again.", "warning");
+    }
+  }
 
   const blockedGolfers = blockedIds.map((id) => getGolfer(id)).filter((g): g is NonNullable<typeof g> => Boolean(g));
   const currentLanguageName = LOCALES.find((l) => l.value === locale)?.nativeName ?? "English";
@@ -171,6 +194,20 @@ export function Settings() {
         {t("settings.logOut")}
       </Button>
 
+      {!isDemo && (
+        <div className="rounded-2xl border border-red-100 bg-red-50/40 p-4">
+          <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-red-400">
+            <AlertTriangle size={12} /> Danger Zone
+          </p>
+          <p className="mb-3 text-xs text-slate-500">
+            Permanently deletes your account and everything tied to it — profile, rounds you're hosting, messages, reviews. This can't be undone.
+          </p>
+          <Button variant="danger" size="sm" onClick={() => setDeleteConfirmOpen(true)}>
+            Delete Account
+          </Button>
+        </div>
+      )}
+
       {isDemo && (
       <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 p-4">
         <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -218,6 +255,17 @@ export function Settings() {
             showToast("Demo data reset.", "info");
           }}
           onCancel={() => setResetConfirmOpen(false)}
+        />
+      )}
+
+      {deleteConfirmOpen && (
+        <ConfirmDialog
+          title="Delete your account?"
+          message="This permanently deletes your profile, hosted rounds, messages, and reviews. Anyone still in a round you're hosting loses their spot too. This cannot be undone."
+          confirmLabel={deletingAccount ? "Deleting..." : "Delete Account"}
+          danger
+          onConfirm={handleDeleteAccount}
+          onCancel={() => setDeleteConfirmOpen(false)}
         />
       )}
 

@@ -23,6 +23,7 @@ import { AGE_RANGES } from "../types";
 import type { AgeRange } from "../types";
 import { memberSinceLabel } from "../lib/format";
 import { computeCredibility } from "../lib/credibility";
+import { useCredibilityStats } from "../lib/useCredibility";
 
 function ProfileRow({ icon, label, value, onClick }: { icon: ReactNode; label: string; value?: string; onClick: () => void }) {
   return (
@@ -80,8 +81,13 @@ export function Profile() {
     showToast(t("profile.profileUpdated"), "success");
   }
 
+  // Real accounts: real, live, never-fabricated reputation from
+  // get_credibility_stats() — a brand-new account naturally gets real zeros
+  // here, which reads as "Building Credibility," not a special case.
+  const { reputation: realReputation } = useCredibilityStats(currentUser.id, currentUser.reputation);
+  const enrichedUser = { ...currentUser, reputation: realReputation };
   const myReviews = reviewsAbout(currentUser.id);
-  const credibility = computeCredibility(currentUser, myReviews);
+  const credibility = computeCredibility(enrichedUser, myReviews);
 
   return (
     <div className="flex flex-col gap-6 pb-6">
@@ -104,9 +110,9 @@ export function Profile() {
 
       <div className="flex items-center gap-2">
         <p className="text-sm text-slate-600">
-          {currentUser.reputation.completedRounds === 1
+          {enrichedUser.reputation.completedRounds === 1
             ? t("profile.roundCountSingular", { handicap: currentUser.handicap ?? "--" })
-            : t("profile.roundCount", { count: currentUser.reputation.completedRounds, handicap: currentUser.handicap ?? "--" })}
+            : t("profile.roundCount", { count: enrichedUser.reputation.completedRounds, handicap: currentUser.handicap ?? "--" })}
         </p>
         <CredibilityBadge tier={credibility.tier} label={credibility.label} size="sm" />
       </div>

@@ -148,6 +148,7 @@ interface DataContextValue {
   createGolfCall: (input: CreateGolfCallInput) => GolfCall;
   cancelGolfCall: (callId: string) => Promise<void>;
   simulateCallCompletion: (callId: string) => void;
+  completeGolfCall: (callId: string) => Promise<void>;
   joinGolfCall: (callId: string) => Promise<void>;
   cancelJoinRequest: (callId: string) => void;
   leaveGolfCall: (callId: string) => Promise<void>;
@@ -444,15 +445,27 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [auth.isDemo, realRounds, addSystemMessage],
   );
 
-  // Prototype-only: in a real app a round transitions to "completed" once
-  // its tee time has passed. Here that's simulated on demand so the
-  // review/credibility loop is testable without waiting for a real clock.
+  // Demo-only prototype shortcut — real completion is completeGolfCall
+  // below (host-triggered, real accounts only).
   const simulateCallCompletion = useCallback((callId: string) => {
     setData((prev) => ({
       ...prev,
       golfCalls: prev.golfCalls.map((c) => (c.id === callId ? { ...c, status: "completed" } : c)),
     }));
   }, []);
+
+  // Real, host-only round completion — "keep the beta logic simple" means
+  // this is a manual host action, not a scheduled job watching tee times.
+  const completeGolfCall = useCallback(
+    async (callId: string) => {
+      if (!auth.isDemo) {
+        await realRounds.completeRound(callId);
+        return;
+      }
+      simulateCallCompletion(callId);
+    },
+    [auth.isDemo, realRounds, simulateCallCompletion],
+  );
 
   const joinGolfCall = useCallback(
     async (callId: string) => {
@@ -574,13 +587,19 @@ export function DataProvider({ children }: { children: ReactNode }) {
   );
 
   const hasReviewed = useCallback(
-    (callId: string, revieweeId: string) =>
-      data.reviews.some((r) => r.golfCallId === callId && r.revieweeId === revieweeId && r.reviewerId === data.currentUserId),
-    [data.reviews, data.currentUserId],
+    (callId: string, revieweeId: string) => {
+      if (!auth.isDemo) return realRounds.hasReviewed(callId, revieweeId);
+      return data.reviews.some((r) => r.golfCallId === callId && r.revieweeId === revieweeId && r.reviewerId === data.currentUserId);
+    },
+    [auth.isDemo, realRounds, data.reviews, data.currentUserId],
   );
 
   const submitReview = useCallback(
     (callId: string, revieweeId: string, input: ReviewInput) => {
+      if (!auth.isDemo) {
+        realRounds.submitReview(callId, revieweeId, input).catch((err) => console.error("Golf Me: failed to submit review.", err));
+        return;
+      }
       setData((prev) => {
         const already = prev.reviews.some(
           (r) => r.golfCallId === callId && r.revieweeId === revieweeId && r.reviewerId === prev.currentUserId,
@@ -597,7 +616,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         return { ...prev, reviews: [...prev.reviews, review] };
       });
     },
-    [],
+    [auth.isDemo, realRounds],
   );
 
   const reportUser = useCallback(
@@ -1198,6 +1217,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       createGolfCall,
       cancelGolfCall,
       simulateCallCompletion,
+      completeGolfCall,
       joinGolfCall,
       cancelJoinRequest,
       leaveGolfCall,
@@ -1276,6 +1296,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       createGolfCall,
       cancelGolfCall,
       simulateCallCompletion,
+      completeGolfCall,
       joinGolfCall,
       cancelJoinRequest,
       leaveGolfCall,

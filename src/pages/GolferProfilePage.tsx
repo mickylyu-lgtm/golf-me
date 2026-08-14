@@ -33,8 +33,15 @@ import { CredibilityBadge } from "../components/golfer/CredibilityBadge";
 import { computeCompatibility } from "../lib/compatibility";
 import { matchTier, golferMatchReasons } from "../lib/matchReasons";
 import { computeCredibility, computeHandicapConfidence } from "../lib/credibility";
+import { useCredibilityStats } from "../lib/useCredibility";
 import { formatBudgetRange, handicapLabel, isNewAccount, paceLabel } from "../lib/format";
 import { VIBE_TONE } from "../lib/theme";
+
+// Stable (module-level, not re-created per render) zeroed fallback for the
+// brief window before the route's golfer id resolves — useCredibilityStats
+// is called unconditionally per the rules of hooks, so it needs a baseline
+// even when `golfer` itself is still undefined.
+const EMPTY_REPUTATION = { completedRounds: 0, showUpRatePct: 0, wouldPlayAgainPct: 0, onTimePct: 0, respectfulPct: 0, goodPacePct: 0 };
 
 export function GolferProfilePage() {
   const { id } = useParams<{ id: string }>();
@@ -62,6 +69,18 @@ export function GolferProfilePage() {
 
   const golfer = id ? getGolfer(id) : undefined;
   const compat = useMemo(() => (golfer ? computeCompatibility(currentUser, golfer) : null), [currentUser, golfer]);
+  // Real accounts: golfer.reputation and the review corpus come from a live
+  // server aggregate (get_credibility_stats) — round_reviews' raw rows are
+  // reviewer-only, so `reviewsAbout(golfer.id)` is correctly always empty
+  // for someone else's real profile. Demo mode falls straight through
+  // unchanged (real* values just mirror the baseline already on golfer).
+  // Called unconditionally (before the early returns below) per the rules
+  // of hooks — golfer?.id/reputation may briefly be undefined while the
+  // route param resolves, which the hook itself already handles.
+  const { reputation: realReputation, handicapConfidence: realHandicapConfidence } = useCredibilityStats(
+    golfer?.id,
+    golfer?.reputation ?? EMPTY_REPUTATION,
+  );
 
   if (id === currentUser.id) return <Navigate to="/profile" replace />;
   if (!golfer) {
@@ -82,16 +101,17 @@ export function GolferProfilePage() {
   const messagingAllowed = canMessage(golfer.id);
   const tier = compat ? matchTier(compat.overall) : null;
   const reasons = compat ? golferMatchReasons(compat) : [];
-  const isEstablished = !isNewAccount(golfer.reputation.completedRounds);
+  const enrichedGolfer = { ...golfer, reputation: realReputation };
+  const isEstablished = !isNewAccount(enrichedGolfer.reputation.completedRounds);
   const golferReviews = reviewsAbout(golfer.id);
-  const credibility = computeCredibility(golfer, golferReviews);
-  const handicapConfidence = computeHandicapConfidence(golferReviews);
+  const credibility = computeCredibility(enrichedGolfer, golferReviews);
+  const handicapConfidence = realHandicapConfidence ?? computeHandicapConfidence(golferReviews);
 
   const feedbackTags = isEstablished
     ? [
-        { label: "Good Pace", count: Math.round((golfer.reputation.completedRounds * golfer.reputation.goodPacePct) / 100) },
-        { label: "Respectful", count: Math.round((golfer.reputation.completedRounds * golfer.reputation.respectfulPct) / 100) },
-        { label: "On Time", count: Math.round((golfer.reputation.completedRounds * golfer.reputation.onTimePct) / 100) },
+        { label: "Good Pace", count: Math.round((enrichedGolfer.reputation.completedRounds * enrichedGolfer.reputation.goodPacePct) / 100) },
+        { label: "Respectful", count: Math.round((enrichedGolfer.reputation.completedRounds * enrichedGolfer.reputation.respectfulPct) / 100) },
+        { label: "On Time", count: Math.round((enrichedGolfer.reputation.completedRounds * enrichedGolfer.reputation.onTimePct) / 100) },
       ].filter((t) => t.count > 0)
     : [];
 
@@ -157,7 +177,7 @@ export function GolferProfilePage() {
           </p>
         </div>
         <CredibilityBadge tier={credibility.tier} label={credibility.label} size="sm" />
-        <TrustBadgeRow golfer={golfer} />
+        <TrustBadgeRow golfer={enrichedGolfer} />
 
         {!blocked && (
           <div className="flex flex-wrap items-center justify-center gap-2">
@@ -237,7 +257,7 @@ export function GolferProfilePage() {
 
       <div className="rounded-2xl border border-slate-100 bg-white p-4">
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">GolfMe Reputation</p>
-        <ReputationRow golfer={golfer} />
+        <ReputationRow golfer={enrichedGolfer} />
         {handicapConfidence.level !== "normal" && (
           <p className="mt-2 flex items-center gap-1 text-xs text-slate-500">
             {handicapConfidence.level === "high" && <ShieldCheck size={12} className="text-fairway-600" />}
@@ -256,7 +276,7 @@ export function GolferProfilePage() {
               {v}
             </Badge>
           ))}
-          {isEstablished && <Badge tone="outline">{paceLabel(golfer.reputation.goodPacePct)}</Badge>}
+          {isEstablished && <Badge tone="outline">{paceLabel(enrichedGolfer.reputation.goodPacePct)}</Badge>}
           <Badge tone="outline" icon={golfer.walkOrCart === "Walking" ? <Footprints size={12} /> : <Car size={12} />}>
             {golfer.walkOrCart === "Either" ? "Walks or Carts" : `Usually ${golfer.walkOrCart === "Walking" ? "Walks" : "Carts"}`}
           </Badge>

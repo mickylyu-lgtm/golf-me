@@ -35,14 +35,24 @@ interface GeoapifyFeature {
 
 const GEOAPIFY_CATEGORY = "sport.golf";
 
+// Same CORS preflight issue as delete-account: without an explicit OPTIONS
+// response and Access-Control-Allow-* headers, the browser's preflight for
+// this cross-origin POST never succeeds, so the real request is never sent.
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...corsHeaders },
   });
 }
 
 Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
   if (req.method !== "POST") return jsonResponse({ error: "Method not allowed" }, 405);
 
   const apiKey = Deno.env.get("GEOAPIFY_API_KEY");

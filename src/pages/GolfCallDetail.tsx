@@ -43,6 +43,7 @@ export function GolfCallDetail() {
     leaveGolfCall,
     cancelGolfCall,
     simulateCallCompletion,
+    completeGolfCall,
     approveRequest,
     declineRequest,
     hasReviewed,
@@ -268,8 +269,7 @@ export function GolfCallDetail() {
         </div>
       )}
 
-      {/* Prototype-only shortcut — no real "round is over" detection exists
-          yet for real rounds this phase, so this stays demo-only. */}
+      {/* Demo: instant, any-participant prototype shortcut, unchanged. */}
       {isDemo && !isCompleted && !isCancelled && (isHost || isJoined) && (
         <button
           onClick={() => {
@@ -280,6 +280,25 @@ export function GolfCallDetail() {
         >
           🧪 Simulate round completion (prototype)
         </button>
+      )}
+
+      {/* Real: host-only, manual — "keep the beta logic simple" means no
+          scheduled job watching tee times, the host decides when it's over. */}
+      {!isDemo && isHost && !isCompleted && !isCancelled && (
+        <Button
+          variant="outline"
+          fullWidth
+          onClick={async () => {
+            try {
+              await completeGolfCall(call.id);
+              showToast("Round marked completed — you can now leave reviews.", "success");
+            } catch (err) {
+              showToast(err instanceof Error ? err.message : "Couldn't mark this round completed.", "warning");
+            }
+          }}
+        >
+          Mark Round Completed
+        </Button>
       )}
 
       {isCompleted && isJoined && (

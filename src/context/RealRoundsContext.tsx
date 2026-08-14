@@ -7,6 +7,7 @@ import type { RoundRow, ParticipantRow } from "../lib/golfCall";
 import { profileRowToGolferProfile } from "../lib/profile";
 import type { ProfileRow } from "../lib/profile";
 import type { GolfCall, GolferProfile } from "../types";
+import type { ReviewInput } from "./DataContext";
 
 export interface HostRealRoundInput {
   courseId: string | null;
@@ -34,6 +35,13 @@ interface RealRoundsContextValue {
   joinRound: (roundId: string) => Promise<void>;
   leaveRound: (roundId: string) => Promise<void>;
   cancelRound: (roundId: string) => Promise<void>;
+  completeRound: (roundId: string) => Promise<void>;
+  hasReviewed: (roundId: string, revieweeId: string) => boolean;
+  submitReview: (roundId: string, revieweeId: string, input: ReviewInput) => Promise<void>;
+}
+
+function reviewKey(roundId: string, revieweeId: string): string {
+  return `${roundId}:${revieweeId}`;
 }
 
 const RealRoundsContext = createContext<RealRoundsContextValue | null>(null);
@@ -42,6 +50,7 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
   const { isDemo, authUser, profile } = useAuth();
   const [rounds, setRounds] = useState<RoundRow[]>([]);
   const [participants, setParticipants] = useState<ParticipantRow[]>([]);
+  const [myReviewedKeys, setMyReviewedKeys] = useState<Set<string>>(new Set());
   const [profilesById, setProfilesById] = useState<Map<string, GolferProfile>>(new Map());
   const [isLoading, setIsLoading] = useState(false);
   const fetchingRef = useRef(false);
@@ -50,17 +59,20 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
     if (fetchingRef.current) return;
     fetchingRef.current = true;
     try {
-      const [{ data: roundRows, error: roundsError }, { data: participantRows, error: participantsError }] = await Promise.all([
+      const [{ data: roundRows, error: roundsError }, { data: participantRows, error: participantsError }, { data: myReviewRows, error: reviewsError }] = await Promise.all([
         supabase.from("golf_calls").select("*"),
         supabase.from("round_participants").select("*"),
+        authUser ? supabase.from("round_reviews").select("round_id, reviewed_user_id").eq("reviewer_user_id", authUser.id) : Promise.resolve({ data: [], error: null }),
       ]);
       if (roundsError) throw roundsError;
       if (participantsError) throw participantsError;
+      if (reviewsError) throw reviewsError;
 
       const nextRounds = (roundRows ?? []) as RoundRow[];
       const nextParticipants = (participantRows ?? []) as ParticipantRow[];
       setRounds(nextRounds);
       setParticipants(nextParticipants);
+      setMyReviewedKeys(new Set((myReviewRows ?? []).map((r: { round_id: string; reviewed_user_id: string }) => reviewKey(r.round_id, r.reviewed_user_id))));
 
       const ids = new Set<string>();
       for (const r of nextRounds) ids.add(r.host_user_id);
@@ -79,7 +91,7 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
     } finally {
       fetchingRef.current = false;
     }
-  }, []);
+  }, [authUser]);
 
   useEffect(() => {
     if (isDemo || !authUser) {
@@ -172,7 +184,49 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
     [refetch, authUser],
   );
 
-  const value: RealRoundsContextValue = { golfCalls, profilesById, isLoading, hostRound, joinRound, leaveRound, cancelRound };
+  const completeRound = useCallback(
+    async (roundId: string) => {
+      if (!authUser) throw new Error("Not signed in.");
+      const { error } = await supabase.from("golf_calls").update({ status: "completed" }).eq("id", roundId).eq("host_user_id", authUser.id);
+      if (error) throw new Error(error.message);
+      await refetch();
+    },
+    [refetch, authUser],
+  );
+
+  const hasReviewed = useCallback((roundId: string, revieweeId: string) => myReviewedKeys.has(reviewKey(roundId, revieweeId)), [myReviewedKeys]);
+
+  const submitReview = useCallback(
+    async (roundId: string, revieweeId: string, input: ReviewInput) => {
+      const { error } = await supabase.rpc("submit_round_review", {
+        p_round_id: roundId,
+        p_reviewed_user_id: revieweeId,
+        p_would_play_again: input.wouldPlayAgain,
+        p_showed_up: input.showedUp,
+        p_on_time: input.onTime,
+        p_pace: input.paceOfPlay,
+        p_respectful: input.respectful,
+        p_handicap_accuracy: input.handicapAccuracy,
+        p_private_note: input.privateNote ?? null,
+      });
+      if (error) throw new Error(error.message);
+      await refetch();
+    },
+    [refetch],
+  );
+
+  const value: RealRoundsContextValue = {
+    golfCalls,
+    profilesById,
+    isLoading,
+    hostRound,
+    joinRound,
+    leaveRound,
+    cancelRound,
+    completeRound,
+    hasReviewed,
+    submitReview,
+  };
   return <RealRoundsContext.Provider value={value}>{children}</RealRoundsContext.Provider>;
 }
 

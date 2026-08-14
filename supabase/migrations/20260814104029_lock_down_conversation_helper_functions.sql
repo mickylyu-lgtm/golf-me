@@ -1,0 +1,26 @@
+-- conversation_other_participants() and is_conversation_participant() are
+-- SECURITY DEFINER helpers meant only to be evaluated from inside RLS
+-- policies (same pattern/reason as the notification trigger lockdown in
+-- 20260813211500). Postgres grants EXECUTE to PUBLIC by default, which made
+-- both directly callable via /rest/v1/rpc/... by any authenticated user.
+-- conversation_other_participants(p_conversation_id) does not itself check
+-- that the caller is a participant of that conversation -- called directly,
+-- it lets any signed-in user pass an arbitrary conversation_id and learn
+-- who else is in that DM thread, a real privacy leak. is_conversation_participant
+-- only returns a boolean about the caller's own membership so it's lower
+-- severity, but it's still an internal-only helper and is locked down for
+-- the same reason. Revoking EXECUTE does not affect RLS policy evaluation:
+-- policies call these functions as the table owner, not through the
+-- REST/RPC-callable PostgREST path.
+--
+-- SUPERSEDED by the very next migration (move_conversation_helpers_to_private_schema):
+-- this revoke turned out to also block the querying role from evaluating
+-- these functions inside a policy's USING/WITH CHECK clause, which broke
+-- real messaging outright -- unlike trigger functions (which fire without
+-- an EXECUTE check on the invoking role), functions called explicitly
+-- inside a policy expression are ordinary calls that still require the
+-- querying role to hold EXECUTE. Kept in migration history rather than
+-- silently discarded, since it was actually applied to the remote project
+-- for a short window during this session.
+revoke execute on function public.conversation_other_participants(uuid) from public, anon, authenticated;
+revoke execute on function public.is_conversation_participant(uuid) from public, anon, authenticated;

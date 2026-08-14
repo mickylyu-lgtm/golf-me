@@ -10,6 +10,7 @@ import { ReputationRow } from "../components/golfer/ReputationRow";
 import { CredibilityBadge } from "../components/golfer/CredibilityBadge";
 import { VerifyStepModal } from "../components/profile/VerifyStepModal";
 import { computeCredibility, computeHandicapConfidence } from "../lib/credibility";
+import { useCredibilityStats } from "../lib/useCredibility";
 
 export function ReputationDetail() {
   const { currentUser, reviewsAbout, setPhoneVerified, setEmailVerified, requestVerifiedGolfer } = useData();
@@ -18,9 +19,15 @@ export function ReputationDetail() {
   const navigate = useNavigate();
   const [verifyChannel, setVerifyChannel] = useState<"phone" | "email" | null>(null);
 
+  // Real accounts: reputation/handicap-confidence come from a live server
+  // aggregate (get_credibility_stats), never raw review rows — those stay
+  // reviewer-only. Demo mode: falls straight through to the existing
+  // reviews-based computation, unchanged.
+  const { reputation: realReputation, handicapConfidence: realHandicapConfidence } = useCredibilityStats(currentUser.id, currentUser.reputation);
+  const enrichedUser = { ...currentUser, reputation: realReputation };
   const myReviews = reviewsAbout(currentUser.id);
-  const credibility = computeCredibility(currentUser, myReviews);
-  const handicapConfidence = computeHandicapConfidence(myReviews);
+  const credibility = computeCredibility(enrichedUser, myReviews);
+  const handicapConfidence = realHandicapConfidence ?? computeHandicapConfidence(myReviews);
   const canApplyVerifiedGolfer =
     currentUser.verification.phoneVerified && currentUser.verification.emailVerified && !currentUser.verification.verifiedGolfer;
 
