@@ -395,7 +395,18 @@ export interface HiddenPost {
   createdAt: string;
 }
 
-export type NotificationType = "post_reply" | "comment_reply" | "new_follower" | "round_created_from_post" | "post_became_round";
+export type NotificationType =
+  | "post_reply"
+  | "comment_reply"
+  | "new_follower"
+  | "round_created_from_post"
+  | "post_became_round"
+  // Real-account-only types (Phase 5) — database-trigger-generated, never
+  // client-inserted. See supabase/migrations/..._create_messaging_blocks_reports_notifications.sql.
+  | "round_joined"
+  | "round_left"
+  | "round_cancelled"
+  | "new_message";
 
 export interface AppNotification {
   id: string;

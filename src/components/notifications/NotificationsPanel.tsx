@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Bell, UserPlus, MessageCircle, Sparkles, Trophy } from "lucide-react";
+import { Bell, UserPlus, UserMinus, Users, Ban, MessageCircle, Sparkles, Trophy } from "lucide-react";
 import type { AppNotification, NotificationType } from "../../types";
 import { useData } from "../../context/DataContext";
 import { Modal } from "../ui/Modal";
@@ -12,6 +12,10 @@ const ICONS: Record<NotificationType, typeof Bell> = {
   new_follower: UserPlus,
   round_created_from_post: Sparkles,
   post_became_round: Trophy,
+  round_joined: Users,
+  round_left: UserMinus,
+  round_cancelled: Ban,
+  new_message: MessageCircle,
 };
 
 export function NotificationsPanel({ onClose }: { onClose: () => void }) {

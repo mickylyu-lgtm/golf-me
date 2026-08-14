@@ -43,6 +43,7 @@ import { dmConversationId, otherParticipant } from "../lib/dm";
 import { useAuth } from "./AuthContext";
 import { placeholderGolferProfile, golferPatchToProfileRow } from "../lib/profile";
 import { useRealRounds } from "./RealRoundsContext";
+import { useRealSocial } from "./RealSocialContext";
 
 export interface DmConversation {
   conversationId: string;
@@ -189,8 +190,8 @@ interface DataContextValue {
   dmConversations: DmConversation[];
   hasUnreadMessages: boolean;
   messagesWithGolfer: (golferId: string) => DirectMessage[];
-  sendDirectMessage: (golferId: string, text: string) => boolean;
-  markConversationRead: (golferId: string) => void;
+  sendDirectMessage: (golferId: string, text: string) => Promise<boolean>;
+  markConversationRead: (golferId: string) => Promise<void>;
 
   // --- Community — a social/discussion layer embedded in the core loop.
   // Votes are popularity signals only; they never touch reputation/credibility. ---
@@ -234,6 +235,7 @@ const DataContext = createContext<DataContextValue | null>(null);
 export function DataProvider({ children }: { children: ReactNode }) {
   const auth = useAuth();
   const realRounds = useRealRounds();
+  const realSocial = useRealSocial();
   const [data, setData] = useState<AppData>(() => loadData());
   const [isLoading, setIsLoading] = useState(true);
 
@@ -267,18 +269,19 @@ export function DataProvider({ children }: { children: ReactNode }) {
     return { isLoggedIn: Boolean(auth.authUser), hasOnboarded: auth.hasOnboarded };
   }, [auth.isDemo, auth.authUser, auth.hasOnboarded, data.session]);
 
-  // Real rounds' participants are real accounts, never in the shared mock
-  // golfers array — resolved from RealRoundsContext's batch profile fetch
-  // instead. currentUser itself is checked first since it's always known
-  // even before any real round has loaded a participant list.
+  // Real rounds' participants and real social contacts (DM partners, blocked
+  // users, notification actors) are real accounts, never in the shared mock
+  // golfers array — resolved from RealRoundsContext's/RealSocialContext's
+  // batch profile fetches instead. currentUser itself is checked first
+  // since it's always known even before either cache has loaded anyone.
   const golfCalls = auth.isDemo ? data.golfCalls : realRounds.golfCalls;
   const getGolfer = useCallback(
     (id: string) => {
       if (auth.isDemo) return data.golfers.find((g) => g.id === id);
       if (id === currentUser.id) return currentUser;
-      return realRounds.profilesById.get(id);
+      return realRounds.profilesById.get(id) ?? realSocial.profilesById.get(id);
     },
-    [auth.isDemo, data.golfers, currentUser, realRounds.profilesById],
+    [auth.isDemo, data.golfers, currentUser, realRounds.profilesById, realSocial.profilesById],
   );
   const getGolfCall = useCallback((id: string) => golfCalls.find((c) => c.id === id), [golfCalls]);
   const messagesForCall = useCallback(
@@ -287,12 +290,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
   );
   const reviewsAbout = useCallback((golferId: string) => data.reviews.filter((r) => r.revieweeId === golferId), [data.reviews]);
 
-  const blockedIds = useMemo(
+  const mockBlockedIds = useMemo(
     () => data.blocks.filter((b) => b.blockerId === currentUser.id).map((b) => b.blockedId),
     [data.blocks, currentUser.id],
   );
+  const blockedIds = auth.isDemo ? mockBlockedIds : realSocial.blockedIds;
 
-  const isBlocked = useCallback((id: string) => blockedIds.includes(id), [blockedIds]);
+  const isBlocked = useCallback((id: string) => (auth.isDemo ? mockBlockedIds.includes(id) : realSocial.isBlocked(id)), [auth.isDemo, mockBlockedIds, realSocial]);
 
   const visibleGolfers = useCallback(
     (excludeSelf = true) =>
@@ -604,6 +608,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
       context: Report["context"],
       meta?: { golfCallId?: string; postId?: string; commentId?: string },
     ) => {
+      if (!auth.isDemo) {
+        realSocial.reportUser(reportedId, category, details, context, { golfCallId: meta?.golfCallId }).catch((err) => console.error("Golf Me: failed to submit report.", err));
+        return;
+      }
       setData((prev) => ({
         ...prev,
         reports: [
@@ -623,22 +631,36 @@ export function DataProvider({ children }: { children: ReactNode }) {
         ],
       }));
     },
-    [],
+    [auth.isDemo, realSocial],
   );
 
-  const blockUser = useCallback((blockedId: string) => {
-    setData((prev) => ({
-      ...prev,
-      blocks: [...prev.blocks, { blockerId: prev.currentUserId, blockedId, createdAt: new Date().toISOString() }],
-    }));
-  }, []);
+  const blockUser = useCallback(
+    (blockedId: string) => {
+      if (!auth.isDemo) {
+        realSocial.blockUser(blockedId).catch((err) => console.error("Golf Me: failed to block user.", err));
+        return;
+      }
+      setData((prev) => ({
+        ...prev,
+        blocks: [...prev.blocks, { blockerId: prev.currentUserId, blockedId, createdAt: new Date().toISOString() }],
+      }));
+    },
+    [auth.isDemo, realSocial],
+  );
 
-  const unblockUser = useCallback((blockedId: string) => {
-    setData((prev) => ({
-      ...prev,
-      blocks: prev.blocks.filter((b) => !(b.blockerId === prev.currentUserId && b.blockedId === blockedId)),
-    }));
-  }, []);
+  const unblockUser = useCallback(
+    (blockedId: string) => {
+      if (!auth.isDemo) {
+        realSocial.unblockUser(blockedId).catch((err) => console.error("Golf Me: failed to unblock user.", err));
+        return;
+      }
+      setData((prev) => ({
+        ...prev,
+        blocks: prev.blocks.filter((b) => !(b.blockerId === prev.currentUserId && b.blockedId === blockedId)),
+      }));
+    },
+    [auth.isDemo, realSocial],
+  );
 
   const hasPlayedWith = useCallback(
     (golferId: string) =>
@@ -755,14 +777,17 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   // Messaging never requires following — Follow and Message are independent
   // actions. The only limits are the obvious ones: not yourself, and not
-  // blocked in either direction.
+  // blocked in either direction. Real mode's version is also enforced at
+  // the database level (see messages_insert_participant_not_blocked) — this
+  // is UI-side, not the only line of defense.
   const canMessage = useCallback(
     (id: string) => {
+      if (!auth.isDemo) return realSocial.canMessage(id);
       if (id === currentUser.id) return false;
       if (isBlocked(id) || isBlockedBy(id)) return false;
       return true;
     },
-    [currentUser.id, isBlocked, isBlockedBy],
+    [auth.isDemo, realSocial, currentUser.id, isBlocked, isBlockedBy],
   );
 
   // Basic anti-spam guard: a golfer can't fire off more than one direct
@@ -778,18 +803,20 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const messagesWithGolfer = useCallback(
     (golferId: string) => {
+      if (!auth.isDemo) return realSocial.messagesWithGolfer(golferId);
       const convId = dmConversationId(currentUser.id, golferId);
       return data.directMessages
         .filter((m) => m.conversationId === convId)
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     },
-    [data.directMessages, currentUser.id],
+    [auth.isDemo, realSocial, data.directMessages, currentUser.id],
   );
 
   // Returns whether the message actually sent, so the UI can tell a
-  // rate-limited send apart from a normal successful one.
+  // rate-limited/blocked send apart from a normal successful one.
   const sendDirectMessage = useCallback(
-    (golferId: string, text: string): boolean => {
+    async (golferId: string, text: string): Promise<boolean> => {
+      if (!auth.isDemo) return realSocial.sendDirectMessage(golferId, text);
       const trimmed = text.trim();
       if (!trimmed || !canMessage(golferId) || !canSendMessageNow()) return false;
       const convId = dmConversationId(currentUser.id, golferId);
@@ -802,11 +829,15 @@ export function DataProvider({ children }: { children: ReactNode }) {
       }));
       return true;
     },
-    [canMessage, canSendMessageNow, currentUser.id],
+    [auth.isDemo, realSocial, canMessage, canSendMessageNow, currentUser.id],
   );
 
   const markConversationRead = useCallback(
-    (golferId: string) => {
+    async (golferId: string) => {
+      if (!auth.isDemo) {
+        await realSocial.markConversationRead(golferId);
+        return;
+      }
       const convId = dmConversationId(currentUser.id, golferId);
       setData((prev) => {
         const now = new Date().toISOString();
@@ -817,10 +848,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
         return { ...prev, dmReads };
       });
     },
-    [currentUser.id],
+    [auth.isDemo, realSocial, currentUser.id],
   );
 
-  const dmConversations = useMemo<DmConversation[]>(() => {
+  const mockDmConversations = useMemo<DmConversation[]>(() => {
     const byConv = new Map<string, DirectMessage[]>();
     for (const m of data.directMessages) {
       if (!m.conversationId.split("__").includes(currentUser.id)) continue;
@@ -843,7 +874,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
     return conversations.sort((a, b) => b.lastMessage.createdAt.localeCompare(a.lastMessage.createdAt));
   }, [data.directMessages, data.dmReads, data.golfers, currentUser.id, blockedIds, blockedByIds]);
 
-  const hasUnreadMessages = useMemo(() => dmConversations.some((c) => c.unread), [dmConversations]);
+  const dmConversations = auth.isDemo ? mockDmConversations : realSocial.dmConversations;
+  const hasUnreadMessages = auth.isDemo ? mockDmConversations.some((c) => c.unread) : realSocial.hasUnreadMessages;
 
   const signUpNewGolfer = useCallback((input: NewGolferInput): GolferProfile => {
     const id = generateId("g");
@@ -1108,20 +1140,32 @@ export function DataProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const notifications = useMemo(
+  const mockNotifications = useMemo(
     () => data.notifications.filter((n) => n.userId === currentUser.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     [data.notifications, currentUser.id],
   );
-  const unreadNotificationCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
-  const markNotificationRead = useCallback((id: string) => {
-    setData((prev) => ({ ...prev, notifications: prev.notifications.map((n) => (n.id === id ? { ...n, read: true } : n)) }));
-  }, []);
+  const notifications = auth.isDemo ? mockNotifications : realSocial.notifications;
+  const unreadNotificationCount = auth.isDemo ? mockNotifications.filter((n) => !n.read).length : realSocial.unreadNotificationCount;
+  const markNotificationRead = useCallback(
+    (id: string) => {
+      if (!auth.isDemo) {
+        realSocial.markNotificationRead(id).catch((err) => console.error("Golf Me: failed to mark notification read.", err));
+        return;
+      }
+      setData((prev) => ({ ...prev, notifications: prev.notifications.map((n) => (n.id === id ? { ...n, read: true } : n)) }));
+    },
+    [auth.isDemo, realSocial],
+  );
   const markAllNotificationsRead = useCallback(() => {
+    if (!auth.isDemo) {
+      realSocial.markAllNotificationsRead().catch((err) => console.error("Golf Me: failed to mark all notifications read.", err));
+      return;
+    }
     setData((prev) => ({
       ...prev,
       notifications: prev.notifications.map((n) => (n.userId === prev.currentUserId ? { ...n, read: true } : n)),
     }));
-  }, []);
+  }, [auth.isDemo, realSocial]);
 
   const resetDemoData = useCallback(() => {
     setData(resetToSeedData());

@@ -59,14 +59,15 @@ export function DirectMessageThread() {
     );
   }
 
-  function handleSend() {
+  async function handleSend() {
     if (!text.trim() || !other) return;
-    const sent = sendDirectMessage(other.id, text);
-    if (!sent) {
-      showToast("Hold on a second before sending another message.", "info");
-      return;
-    }
+    const pendingText = text;
     setText("");
+    const sent = await sendDirectMessage(other.id, pendingText);
+    if (!sent) {
+      setText(pendingText);
+      showToast("Message didn't send — try again in a moment.", "info");
+    }
   }
 
   return (
