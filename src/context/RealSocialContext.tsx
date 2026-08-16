@@ -21,9 +21,27 @@ interface MessageRow {
   created_at: string;
 }
 
+// A message this client just sent, rendered before the server round trip
+// confirms it. Not a MessageRow with a real id -- pending.id is a client-
+// only tempid never sent to Supabase, so there's no risk of colliding with
+// a real message id.
+interface PendingMessage {
+  tempId: string;
+  conversation_id: string;
+  otherId: string; // matched directly against messagesWithGolfer's otherId — conversationIdWith() can't resolve a conversation that conversation_participants hasn't been refetched for yet (true for every conversation's very first message), so pending messages can't rely on that lookup being ready.
+  sender_id: string;
+  text: string;
+  created_at: string;
+}
+
 interface BlockRow {
   blocker_id: string;
   blocked_id: string;
+}
+
+interface FollowRow {
+  follower_id: string;
+  following_id: string;
 }
 
 interface NotificationRow {
@@ -52,6 +70,11 @@ interface RealSocialContextValue {
   blockedIds: string[];
   blockUser: (id: string) => Promise<void>;
   unblockUser: (id: string) => Promise<void>;
+
+  isFollowing: (id: string) => boolean;
+  followingGolfers: GolferProfile[];
+  followUser: (id: string) => Promise<void>;
+  unfollowUser: (id: string) => Promise<void>;
 
   dmConversations: DmConversation[];
   hasUnreadMessages: boolean;
@@ -97,6 +120,8 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
   const [participants, setParticipants] = useState<ConversationParticipantRow[]>([]);
   const [messages, setMessages] = useState<MessageRow[]>([]);
   const [blocks, setBlocks] = useState<BlockRow[]>([]);
+  const [follows, setFollows] = useState<FollowRow[]>([]);
+  const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
   const [notificationRows, setNotificationRows] = useState<NotificationRow[]>([]);
   const [profilesById, setProfilesById] = useState<Map<string, GolferProfile>>(new Map());
   const [allProfiles, setAllProfiles] = useState<GolferProfile[]>([]);
@@ -113,6 +138,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
         { data: blockRows, error: blockErr },
         { data: notifRows, error: notifErr },
         { data: allProfileRows, error: allProfilesErr },
+        { data: followRows, error: followErr },
       ] = await Promise.all([
         supabase.from("conversation_participants").select("conversation_id, user_id, last_read_at").eq("user_id", selfId),
         supabase.from("blocks").select("blocker_id, blocked_id").or(`blocker_id.eq.${selfId},blocked_id.eq.${selfId}`),
@@ -123,15 +149,18 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
         // visibleGolfers()). Self/blocked filtering happens in the
         // discoverableGolfers memo below, not here.
         supabase.from("profiles").select("*"),
+        supabase.from("follows").select("follower_id, following_id").or(`follower_id.eq.${selfId},following_id.eq.${selfId}`),
       ]);
       if (convErr) throw convErr;
       if (blockErr) throw blockErr;
       if (notifErr) throw notifErr;
       if (allProfilesErr) throw allProfilesErr;
+      if (followErr) throw followErr;
 
       setBlocks((blockRows ?? []) as BlockRow[]);
       setNotificationRows((notifRows ?? []) as NotificationRow[]);
       setAllProfiles(((allProfileRows ?? []) as ProfileRow[]).map(profileRowToGolferProfile));
+      setFollows((followRows ?? []) as FollowRow[]);
 
       const conversationIds = [...new Set((myConvIds ?? []).map((r) => r.conversation_id))];
       if (conversationIds.length === 0) {
@@ -179,6 +208,8 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       setNotificationRows([]);
       setProfilesById(new Map());
       setAllProfiles([]);
+      setFollows([]);
+      setPendingMessages([]);
       return;
     }
 
@@ -196,6 +227,24 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       supabase.removeChannel(channel);
     };
   }, [isDemo, selfId, refetch]);
+
+  // Drops a pending (optimistic) message once the realtime-driven refetch
+  // above brings in the real row it corresponds to -- matched by
+  // conversation + sender + exact text, canonical row created no earlier
+  // than the pending entry's own local timestamp. This is what prevents the
+  // optimistic render and the realtime-delivered row from both staying on
+  // screen as two separate bubbles.
+  useEffect(() => {
+    if (pendingMessages.length === 0) return;
+    setPendingMessages((prevPending) =>
+      prevPending.filter(
+        (p) =>
+          !messages.some(
+            (m) => m.conversation_id === p.conversation_id && m.sender_id === p.sender_id && m.text === p.text && m.created_at >= p.created_at,
+          ),
+      ),
+    );
+  }, [messages, pendingMessages.length]);
 
   const blockedIds = useMemo(() => (selfId ? blocks.filter((b) => b.blocker_id === selfId).map((b) => b.blocked_id) : []), [blocks, selfId]);
   const blockedByIds = useMemo(() => (selfId ? blocks.filter((b) => b.blocked_id === selfId).map((b) => b.blocker_id) : []), [blocks, selfId]);
@@ -226,6 +275,44 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     [selfId, refetch],
   );
 
+  const followingIds = useMemo(() => (selfId ? follows.filter((f) => f.follower_id === selfId).map((f) => f.following_id) : []), [follows, selfId]);
+  const isFollowing = useCallback((id: string) => followingIds.includes(id), [followingIds]);
+  const followingGolfers = useMemo(() => followingIds.map((id) => allProfiles.find((g) => g.id === id)).filter((g): g is GolferProfile => Boolean(g)), [followingIds, allProfiles]);
+
+  // Optimistic per the product spec: the button flips immediately, then
+  // reconciles with the real write. A failed insert/delete rolls the local
+  // state back to what it was before the tap and re-throws so the caller
+  // can show its own error toast — never leaves the button showing a state
+  // the database doesn't actually have.
+  const followUser = useCallback(
+    async (id: string) => {
+      if (!selfId || id === selfId) return;
+      const alreadyFollowing = followingIds.includes(id);
+      if (alreadyFollowing) return;
+      setFollows((prev) => [...prev, { follower_id: selfId, following_id: id }]);
+      const { error } = await supabase.from("follows").insert({ follower_id: selfId, following_id: id });
+      if (error) {
+        setFollows((prev) => prev.filter((f) => !(f.follower_id === selfId && f.following_id === id)));
+        throw new Error(error.message);
+      }
+    },
+    [selfId, followingIds],
+  );
+
+  const unfollowUser = useCallback(
+    async (id: string) => {
+      if (!selfId) return;
+      const previous = follows;
+      setFollows((prev) => prev.filter((f) => !(f.follower_id === selfId && f.following_id === id)));
+      const { error } = await supabase.from("follows").delete().eq("follower_id", selfId).eq("following_id", id);
+      if (error) {
+        setFollows(previous);
+        throw new Error(error.message);
+      }
+    },
+    [selfId, follows],
+  );
+
   const conversationIdWith = useCallback(
     (otherId: string) => {
       const mine = new Set(participants.filter((p) => p.user_id === selfId).map((p) => p.conversation_id));
@@ -238,10 +325,17 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
   const messagesWithGolfer = useCallback(
     (otherId: string): DirectMessage[] => {
       const convId = conversationIdWith(otherId);
-      if (!convId) return [];
-      return messages.filter((m) => m.conversation_id === convId).map(messageRowToDirectMessage);
+      const canonical = convId ? messages.filter((m) => m.conversation_id === convId) : [];
+      // Pending entries matched by otherId directly, not by conversation_id
+      // -- a brand-new conversation's very first message is sent before
+      // conversation_participants has been refetched, so conversationIdWith
+      // can't resolve it yet. Matching on otherId works regardless.
+      const pending = pendingMessages
+        .filter((p) => p.otherId === otherId)
+        .map((p): MessageRow => ({ id: p.tempId, conversation_id: p.conversation_id, sender_id: p.sender_id, text: p.text, created_at: p.created_at }));
+      return [...canonical, ...pending].sort((a, b) => a.created_at.localeCompare(b.created_at)).map(messageRowToDirectMessage);
     },
-    [conversationIdWith, messages],
+    [conversationIdWith, messages, pendingMessages],
   );
 
   const sendDirectMessage = useCallback(
@@ -253,15 +347,26 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
         console.error("Golf Me: failed to open conversation.", convErr);
         return false;
       }
+      // Optimistic: render immediately, before the network round trip. The
+      // effect above drops this once the realtime-driven refetch brings in
+      // the real row. No trailing refetch() here on purpose — the realtime
+      // subscription on the `messages` table already fires for this exact
+      // insert (the sender is subscribed to their own conversations too),
+      // so calling refetch() again here would just be a second, redundant
+      // full reload racing the one realtime is about to trigger anyway.
+      const tempId = `temp-${crypto.randomUUID()}`;
+      const optimisticCreatedAt = new Date().toISOString();
+      setPendingMessages((prev) => [...prev, { tempId, conversation_id: convId, otherId, sender_id: selfId, text: trimmed, created_at: optimisticCreatedAt }]);
+
       const { error } = await supabase.from("messages").insert({ conversation_id: convId, sender_id: selfId, text: trimmed });
       if (error) {
         console.error("Golf Me: failed to send message.", error);
+        setPendingMessages((prev) => prev.filter((p) => p.tempId !== tempId));
         return false;
       }
-      await refetch();
       return true;
     },
-    [selfId, canMessage, refetch],
+    [selfId, canMessage],
   );
 
   const markConversationRead = useCallback(
@@ -290,6 +395,18 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       if (list) list.push(m);
       else byConv.set(m.conversation_id, [m]);
     }
+    // Pending messages update an EXISTING conversation's preview instantly.
+    // A brand-new conversation's very first message can't appear in this
+    // list yet regardless -- conversation_participants hasn't been fetched
+    // for it, so there's no otherGolfer/otherParticipant to build a
+    // DmConversation row from until the next refetch.
+    for (const p of pendingMessages) {
+      if (!myConvIds.has(p.conversation_id)) continue;
+      const row: MessageRow = { id: p.tempId, conversation_id: p.conversation_id, sender_id: p.sender_id, text: p.text, created_at: p.created_at };
+      const list = byConv.get(p.conversation_id);
+      if (list) list.push(row);
+      else byConv.set(p.conversation_id, [row]);
+    }
     const result: DmConversation[] = [];
     for (const [conversationId, msgs] of byConv) {
       const otherParticipant = participants.find((p) => p.conversation_id === conversationId && p.user_id !== selfId);
@@ -304,7 +421,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       result.push({ conversationId, otherGolfer, lastMessage: messageRowToDirectMessage(lastMessageRow), unread });
     }
     return result.sort((a, b) => b.lastMessage.createdAt.localeCompare(a.lastMessage.createdAt));
-  }, [participants, messages, profilesById, selfId, blockedIds, blockedByIds]);
+  }, [participants, messages, pendingMessages, profilesById, selfId, blockedIds, blockedByIds]);
 
   const hasUnreadMessages = useMemo(() => dmConversations.some((c) => c.unread), [dmConversations]);
 
@@ -358,6 +475,10 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     blockedIds,
     blockUser,
     unblockUser,
+    isFollowing,
+    followingGolfers,
+    followUser,
+    unfollowUser,
     dmConversations,
     hasUnreadMessages,
     messagesWithGolfer,

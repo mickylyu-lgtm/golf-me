@@ -125,6 +125,7 @@ export interface ReputationStats {
 export interface GolferProfile {
   id: string;
   name: string;
+  username?: string; // real accounts only — unique, used by Find Friends search. Undefined for demo/mock golfers and for real accounts that haven't set one yet.
   avatarColor: string; // css gradient token for placeholder avatar
   avatarInitials: string;
   photoUrl?: string; // local data-URL from device upload; falls back to initials avatar when absent

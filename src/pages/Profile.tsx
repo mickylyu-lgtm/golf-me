@@ -11,6 +11,7 @@ import {
   UserRoundPlus,
 } from "lucide-react";
 import { useData } from "../context/DataContext";
+import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { useLocale } from "../i18n/LocaleContext";
 import { Avatar } from "../components/ui/Avatar";
@@ -43,6 +44,7 @@ function ProfileRow({ icon, label, value, onClick }: { icon: ReactNode; label: s
 
 export function Profile() {
   const { currentUser, updateCurrentUserProfile, circleGolfers, reviewsAbout, followingGolfers, posts, hasUnreadMessages } = useData();
+  const { isDemo, saveProfile } = useAuth();
   const { showToast } = useToast();
   const { t } = useLocale();
   const navigate = useNavigate();
@@ -50,6 +52,7 @@ export function Profile() {
 
   const [editing, setEditing] = useState(false);
   const [avatarModalOpen, setAvatarModalOpen] = useState(false);
+  const [savingUsername, setSavingUsername] = useState(false);
 
   function buildForm(g: typeof currentUser) {
     return {
@@ -57,6 +60,7 @@ export function Profile() {
       handicap: g.handicap,
       favoriteCourses: g.favoriteCourses.join(", "),
       bio: g.bio,
+      username: g.username ?? "",
     };
   }
 
@@ -67,7 +71,37 @@ export function Profile() {
     setEditing(true);
   }
 
-  function save() {
+  const USERNAME_FORMAT = /^[a-zA-Z0-9_.]{3,30}$/;
+
+  async function save() {
+    // Username has its own real-backend uniqueness constraint (see
+    // profiles_username_unique_idx) that the generic updateCurrentUserProfile
+    // path can't surface an error for — it's fire-and-forget by design for
+    // every other field. Saved separately here, through AuthContext's
+    // saveProfile directly, which does propagate real Postgres errors.
+    if (!isDemo) {
+      const trimmed = form.username.trim();
+      const currentUsername = currentUser.username ?? "";
+      if (trimmed !== currentUsername) {
+        if (trimmed && !USERNAME_FORMAT.test(trimmed)) {
+          showToast(t("username.invalidError"), "warning");
+          return;
+        }
+        setSavingUsername(true);
+        try {
+          await saveProfile({ username: trimmed || null });
+        } catch (err) {
+          setSavingUsername(false);
+          const msg = err instanceof Error ? err.message : "";
+          if (msg.includes("profiles_username_unique_idx")) showToast(t("username.takenError"), "warning");
+          else if (msg.includes("profiles_username_format")) showToast(t("username.invalidError"), "warning");
+          else showToast(t("username.saveFailedError"), "warning");
+          return;
+        }
+        setSavingUsername(false);
+      }
+    }
+
     updateCurrentUserProfile({
       ageRange: form.ageRange,
       handicap: form.handicap,
@@ -170,13 +204,26 @@ export function Profile() {
               <Button variant="outline" fullWidth onClick={() => setEditing(false)}>
                 {t("common.cancel")}
               </Button>
-              <Button fullWidth onClick={save}>
+              <Button fullWidth onClick={save} disabled={savingUsername}>
                 {t("common.save")}
               </Button>
             </div>
           }
         >
           <div className="flex flex-col gap-4">
+            {!isDemo && (
+              <div>
+                <label className={labelClass}>{currentUser.username ? t("username.label") : t("username.chooseYours")}</label>
+                <input
+                  className={inputClass}
+                  value={form.username}
+                  onChange={(e) => setForm((f) => ({ ...f, username: e.target.value.replace(/\s/g, "") }))}
+                  placeholder={t("username.placeholder")}
+                  maxLength={30}
+                />
+                <p className="mt-1 text-xs text-slate-400">{t("username.help")}</p>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={labelClass}>{t("profile.ageRange")}</label>

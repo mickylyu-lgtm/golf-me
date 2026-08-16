@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useToast } from "../context/ToastContext";
+import { useLocale } from "../i18n/LocaleContext";
 import { Avatar } from "../components/ui/Avatar";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
@@ -62,6 +63,7 @@ export function GolferProfilePage() {
     canMessage,
   } = useData();
   const { showToast } = useToast();
+  const { t } = useLocale();
   const [menuOpen, setMenuOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
@@ -185,17 +187,21 @@ export function GolferProfilePage() {
               size="sm"
               variant={following ? "outline" : "primary"}
               icon={following ? <UserRoundCheck size={14} /> : <UserRoundPlus size={14} />}
-              onClick={() => {
-                if (following) {
-                  unfollowUser(golfer.id);
-                  showToast(`Unfollowed ${golfer.name}.`, "info");
-                } else {
-                  followUser(golfer.id);
-                  showToast(`Following ${golfer.name}.`, "success");
+              onClick={async () => {
+                try {
+                  if (following) {
+                    await unfollowUser(golfer.id);
+                    showToast(`Unfollowed ${golfer.name}.`, "info");
+                  } else {
+                    await followUser(golfer.id);
+                    showToast(`Following ${golfer.name}.`, "success");
+                  }
+                } catch (err) {
+                  showToast(err instanceof Error ? err.message : "Couldn't update follow status. Please try again.", "warning");
                 }
               }}
             >
-              {following ? "Following" : "Follow"}
+              {following ? t("common.following") : t("common.follow")}
             </Button>
             {/* messagingAllowed is false here only when they've blocked us
                 (self and "we blocked them" are already covered by !blocked

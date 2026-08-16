@@ -183,8 +183,8 @@ interface DataContextValue {
   // auto-syncs into Golf Circle.
   followingGolfers: GolferProfile[];
   isFollowing: (golferId: string) => boolean;
-  followUser: (golferId: string) => void;
-  unfollowUser: (golferId: string) => void;
+  followUser: (golferId: string) => Promise<void>;
+  unfollowUser: (golferId: string) => Promise<void>;
 
   // Direct messages between two golfers, gated by canMessage().
   canMessage: (golferId: string) => boolean;
@@ -280,9 +280,18 @@ export function DataProvider({ children }: { children: ReactNode }) {
     (id: string) => {
       if (auth.isDemo) return data.golfers.find((g) => g.id === id);
       if (id === currentUser.id) return currentUser;
-      return realRounds.profilesById.get(id) ?? realSocial.profilesById.get(id);
+      // discoverableGolfers covers someone found via Discover/Find
+      // Friends who isn't (yet) a round participant or DM/notification
+      // contact — without it, tapping a search result or a Discover card
+      // for a not-yet-connected real golfer would incorrectly resolve to
+      // "not found" on their profile page.
+      return (
+        realRounds.profilesById.get(id) ??
+        realSocial.profilesById.get(id) ??
+        realSocial.discoverableGolfers.find((g) => g.id === id)
+      );
     },
-    [auth.isDemo, data.golfers, currentUser, realRounds.profilesById, realSocial.profilesById],
+    [auth.isDemo, data.golfers, currentUser, realRounds.profilesById, realSocial.profilesById, realSocial.discoverableGolfers],
   );
   const getGolfCall = useCallback((id: string) => golfCalls.find((c) => c.id === id), [golfCalls]);
   const messagesForCall = useCallback(
@@ -763,12 +772,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
   );
   const isBlockedBy = useCallback((id: string) => blockedByIds.includes(id), [blockedByIds]);
 
-  const isFollowing = useCallback(
+  const demoIsFollowing = useCallback(
     (id: string) => data.follows.some((f) => f.followerId === currentUser.id && f.followingId === id),
     [data.follows, currentUser.id],
   );
 
-  const followUser = useCallback(
+  const demoFollowUser = useCallback(
     (golferId: string) => {
       setData((prev) => {
         const already = prev.follows.some((f) => f.followerId === prev.currentUserId && f.followingId === golferId);
@@ -786,20 +795,50 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [pushNotification, currentUser.name, currentUser.id],
   );
 
-  const unfollowUser = useCallback((golferId: string) => {
+  const demoUnfollowUser = useCallback((golferId: string) => {
     setData((prev) => ({
       ...prev,
       follows: prev.follows.filter((f) => !(f.followerId === prev.currentUserId && f.followingId === golferId)),
     }));
   }, []);
 
-  const followingGolfers = useMemo(
+  const demoFollowingGolfers = useMemo(
     () =>
       data.follows
         .filter((f) => f.followerId === currentUser.id)
         .map((f) => data.golfers.find((g) => g.id === f.followingId))
         .filter((g): g is GolferProfile => Boolean(g)),
     [data.follows, data.golfers, currentUser.id],
+  );
+
+  // Real accounts previously shared this exact block's mock state, keyed
+  // off the mock blob's default currentUserId rather than the real user's
+  // uuid — the write (followUser) and the read (isFollowing) used two
+  // different identities, which is why Follow never reliably showed as
+  // "Following" for a real account. Now branches to a real Supabase-backed
+  // follows table (RealSocialContext) with proper optimistic update +
+  // rollback-on-failure, same as the rest of this file's real/demo split.
+  const isFollowing = useCallback((id: string) => (auth.isDemo ? demoIsFollowing(id) : realSocial.isFollowing(id)), [auth.isDemo, demoIsFollowing, realSocial]);
+  const followingGolfers = auth.isDemo ? demoFollowingGolfers : realSocial.followingGolfers;
+  const followUser = useCallback(
+    async (golferId: string) => {
+      if (auth.isDemo) {
+        demoFollowUser(golferId);
+        return;
+      }
+      await realSocial.followUser(golferId);
+    },
+    [auth.isDemo, demoFollowUser, realSocial],
+  );
+  const unfollowUser = useCallback(
+    async (golferId: string) => {
+      if (auth.isDemo) {
+        demoUnfollowUser(golferId);
+        return;
+      }
+      await realSocial.unfollowUser(golferId);
+    },
+    [auth.isDemo, demoUnfollowUser, realSocial],
   );
 
   // Messaging never requires following — Follow and Message are independent

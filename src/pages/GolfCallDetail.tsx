@@ -16,6 +16,7 @@ import {
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
+import { useLocale } from "../i18n/LocaleContext";
 import { Avatar } from "../components/ui/Avatar";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
@@ -51,6 +52,7 @@ export function GolfCallDetail() {
   } = useData();
   const { isDemo } = useAuth();
   const { showToast } = useToast();
+  const { t } = useLocale();
   const [joining, setJoining] = useState(false);
 
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
@@ -75,10 +77,10 @@ export function GolfCallDetail() {
   if (!call) {
     return (
       <div className="py-12 text-center text-slate-500">
-        Golf Call not found.
+        {t("golfCallDetail.notFound")}
         <div className="mt-4">
           <Button variant="outline" onClick={() => navigate(-1)}>
-            Go back
+            {t("golfCallDetail.goBack")}
           </Button>
         </div>
       </div>
@@ -106,13 +108,13 @@ export function GolfCallDetail() {
     try {
       await joinGolfCall(call!.id);
       showToast(
-        call!.joinMode === "instant" ? `You're playing ${formatDate(call!.dateISO)}. ⛳` : "Request sent to the host.",
+        call!.joinMode === "instant" ? t("golfCallDetail.joinedInstantToast", { date: formatDate(call!.dateISO) }) : t("golfCallDetail.requestSentToast"),
         "success",
       );
     } catch (err) {
       // Real, atomic failure — e.g. someone else took the last spot first.
       // Never silently no-ops; the golfer sees exactly why it didn't work.
-      showToast(err instanceof Error ? err.message : "Couldn't join this round. Please try again.", "warning");
+      showToast(err instanceof Error ? err.message : t("golfCallDetail.joinError"), "warning");
     } finally {
       setJoining(false);
     }
@@ -121,22 +123,22 @@ export function GolfCallDetail() {
   return (
     <div className="flex flex-col gap-6 pb-6">
       <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-800">
-        <ArrowLeft size={16} /> Back
+        <ArrowLeft size={16} /> {t("golfCallDetail.back")}
       </button>
 
       <div>
         <div className="mb-1.5 flex flex-wrap items-center gap-2">
-          {isCancelled && <Badge tone="rose">Cancelled</Badge>}
-          {isCompleted && <Badge tone="slate">Completed</Badge>}
+          {isCancelled && <Badge tone="rose">{t("golfCallDetail.statusCancelled")}</Badge>}
+          {isCompleted && <Badge tone="slate">{t("golfCallDetail.statusCompleted")}</Badge>}
           {!isCompleted && !isCancelled && (
             <Badge
               tone={isFull ? "slate" : isUrgent ? "sun" : "fairway"}
               className={isUrgent ? "animate-pulse font-bold tracking-wide uppercase" : ""}
             >
-              {isFull ? "Full" : isUrgent ? "1 Spot Left" : `${openSpots} spot${openSpots === 1 ? "" : "s"} open`}
+              {isFull ? t("golfCallDetail.full") : isUrgent ? t("golfCallDetail.oneSpotLeft") : t("golfCallDetail.spotsOpen", { count: openSpots, plural: openSpots === 1 ? "" : "s" })}
             </Badge>
           )}
-          <Badge tone="outline">{call.joinMode === "instant" ? "Instant join" : "Request to join"}</Badge>
+          <Badge tone="outline">{call.joinMode === "instant" ? t("golfCallDetail.instantJoin") : t("golfCallDetail.requestToJoinBadge")}</Badge>
         </div>
         <h1 className="text-2xl font-extrabold text-slate-900">{call.course}</h1>
         <p className="flex items-center gap-1 text-sm text-slate-500">
@@ -156,18 +158,18 @@ export function GolfCallDetail() {
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-2xl border border-slate-100 bg-white p-4">
           <p className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            <CalendarDays size={12} /> When
+            <CalendarDays size={12} /> {t("golfCallDetail.when")}
           </p>
           <p className="mt-1 font-bold text-slate-800">{formatDate(call.dateISO)}</p>
           <p className="text-sm text-slate-500">{call.timeLabel}</p>
-          {!isDemo && <p className="mt-1 text-[11px] leading-tight text-slate-400">Entered by the host — not confirmed with the course</p>}
+          {!isDemo && <p className="mt-1 text-[11px] leading-tight text-slate-400">{t("golfCallDetail.teeTimeDisclaimer")}</p>}
         </div>
         <div className="rounded-2xl border border-slate-100 bg-white p-4">
           <p className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            <Wallet size={12} /> Estimated price
+            <Wallet size={12} /> {t("golfCallDetail.estimatedPrice")}
           </p>
           <p className="mt-1 font-bold text-slate-800">{formatMoney(call.estimatedPricePerPerson)}/person</p>
-          <p className="text-sm text-slate-500">Pay at the course — no in-app payments</p>
+          <p className="text-sm text-slate-500">{t("golfCallDetail.payAtCourse")}</p>
         </div>
       </div>
 
@@ -181,7 +183,7 @@ export function GolfCallDetail() {
 
       {call.notes && (
         <div className="rounded-2xl border border-slate-100 bg-white p-4">
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Notes from the host</p>
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">{t("golfCallDetail.notesFromHost")}</p>
           <p className="text-sm text-slate-600">{call.notes}</p>
         </div>
       )}
@@ -190,7 +192,7 @@ export function GolfCallDetail() {
         <div className="mb-2 flex items-center gap-1.5">
           <Users size={15} className="text-slate-400" />
           <h2 className="text-sm font-bold text-slate-800">
-            Foursome ({call.joinedGolferIds.length}/{call.totalSpots})
+            {t("golfCallDetail.foursome", { joined: call.joinedGolferIds.length, total: call.totalSpots })}
           </h2>
         </div>
         <div className="flex flex-col gap-2">
@@ -206,10 +208,10 @@ export function GolfCallDetail() {
                 <Avatar golfer={g} size="sm" />
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-slate-800">
-                    {g.name} {g.id === currentUser.id && <span className="font-normal text-slate-400">(you)</span>}
-                    {g.id === call.hostId && <span className="ml-1.5 text-xs font-medium text-sun-600">Host</span>}
+                    {g.name} {g.id === currentUser.id && <span className="font-normal text-slate-400">{t("golfCallDetail.you")}</span>}
+                    {g.id === call.hostId && <span className="ml-1.5 text-xs font-medium text-sun-600">{t("golfCallDetail.hostTag")}</span>}
                   </p>
-                  <p className="text-xs text-slate-500">{g.handicap !== null ? `${g.handicap} handicap` : "No handicap yet"}</p>
+                  <p className="text-xs text-slate-500">{g.handicap !== null ? t("golfCallDetail.handicapValue", { handicap: g.handicap }) : t("golfCallDetail.noHandicapYet")}</p>
                   <TrustBadgeRow golfer={g} className="mt-1" />
                 </div>
               </button>
@@ -220,7 +222,7 @@ export function GolfCallDetail() {
 
       {isHost && call.pendingRequestIds.length > 0 && (
         <div>
-          <h2 className="mb-2 text-sm font-bold text-slate-800">Requests to join</h2>
+          <h2 className="mb-2 text-sm font-bold text-slate-800">{t("golfCallDetail.requestsToJoin")}</h2>
           <div className="flex flex-col gap-2">
             {call.pendingRequestIds.map((gid) => {
               const g = getGolfer(gid);
@@ -257,23 +259,23 @@ export function GolfCallDetail() {
         <div className="sticky bottom-20 z-10 sm:bottom-0">
           {isHost ? (
             <Button variant="danger" fullWidth onClick={() => setCancelConfirmOpen(true)}>
-              Cancel this Golf Call
+              {t("golfCallDetail.cancelGolfCall")}
             </Button>
           ) : isJoined ? (
             <Button variant="outline" fullWidth onClick={() => setLeaveConfirmOpen(true)}>
-              Leave round
+              {t("golfCallDetail.leaveRound")}
             </Button>
           ) : isPending ? (
             <Button variant="outline" fullWidth onClick={() => cancelJoinRequest(call.id)}>
-              Cancel request
+              {t("golfCallDetail.cancelRequest")}
             </Button>
           ) : isFull ? (
             <Button disabled fullWidth>
-              Foursome full
+              {t("golfCallDetail.foursomeFull")}
             </Button>
           ) : (
             <Button size="lg" fullWidth onClick={() => setJoinConfirmOpen(true)}>
-              {call.joinMode === "instant" ? "Join Round" : "Request to Join"}
+              {call.joinMode === "instant" ? t("golfCallDetail.joinRound") : t("golfCallDetail.requestToJoinButton")}
             </Button>
           )}
         </div>
@@ -284,7 +286,7 @@ export function GolfCallDetail() {
         <button
           onClick={() => {
             simulateCallCompletion(call.id);
-            showToast("Round marked completed — you can now leave reviews.", "info");
+            showToast(t("golfCallDetail.markCompletedToast"), "info");
           }}
           className="self-center text-xs font-medium text-slate-400 underline-offset-2 transition-colors duration-200 hover:text-slate-600 hover:underline"
         >
@@ -301,19 +303,19 @@ export function GolfCallDetail() {
           onClick={async () => {
             try {
               await completeGolfCall(call.id);
-              showToast("Round marked completed — you can now leave reviews.", "success");
+              showToast(t("golfCallDetail.markCompletedToast"), "success");
             } catch (err) {
-              showToast(err instanceof Error ? err.message : "Couldn't mark this round completed.", "warning");
+              showToast(err instanceof Error ? err.message : t("golfCallDetail.markCompletedError"), "warning");
             }
           }}
         >
-          Mark Round Completed
+          {t("golfCallDetail.markCompleted")}
         </Button>
       )}
 
       {isCompleted && isJoined && (
         <div>
-          <h2 className="mb-2 text-sm font-bold text-slate-800">Review your group</h2>
+          <h2 className="mb-2 text-sm font-bold text-slate-800">{t("golfCallDetail.reviewYourGroup")}</h2>
           <div className="flex flex-col gap-2">
             {call.joinedGolferIds
               .filter((gid) => gid !== currentUser.id)
@@ -326,10 +328,10 @@ export function GolfCallDetail() {
                     <Avatar golfer={g} size="sm" />
                     <p className="flex-1 text-sm font-semibold text-slate-800">{g.name}</p>
                     {reviewed ? (
-                      <Badge tone="fairway">Reviewed</Badge>
+                      <Badge tone="fairway">{t("golfCallDetail.reviewed")}</Badge>
                     ) : (
                       <Button size="sm" variant="outline" onClick={() => setReviewingId(gid)}>
-                        Leave review
+                        {t("golfCallDetail.leaveReview")}
                       </Button>
                     )}
                   </div>
@@ -342,34 +344,34 @@ export function GolfCallDetail() {
       <div>
         <div className="mb-2 flex items-center gap-1.5">
           <MessageCircle size={15} className="text-slate-400" />
-          <h2 className="text-sm font-bold text-slate-800">Group chat</h2>
+          <h2 className="text-sm font-bold text-slate-800">{t("golfCallDetail.groupChat")}</h2>
         </div>
         {chatUnlocked ? (
           <GroupChat callId={call.id} />
         ) : (
           <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-slate-200 bg-white/60 px-6 py-8 text-center">
             <Lock size={18} className="text-slate-400" />
-            <p className="text-sm text-slate-500">Join this Golf Call to unlock the group chat.</p>
+            <p className="text-sm text-slate-500">{t("golfCallDetail.chatLocked")}</p>
           </div>
         )}
       </div>
 
       {host && !isHost && (
-        <p className="text-center text-xs text-slate-400">Hosted by {host.name}</p>
+        <p className="text-center text-xs text-slate-400">{t("golfCallDetail.hostedBy", { name: host.name })}</p>
       )}
 
       {leaveConfirmOpen && (
         <ConfirmDialog
-          title="Leave this round?"
-          message="You'll be removed from the foursome and lose access to the group chat. The host will be notified."
-          confirmLabel="Leave round"
+          title={t("golfCallDetail.leaveConfirmTitle")}
+          message={t("golfCallDetail.leaveConfirmMessage")}
+          confirmLabel={t("golfCallDetail.leaveRound")}
           danger
           onConfirm={async () => {
             try {
               await leaveGolfCall(call.id);
-              showToast("You left the round.", "info");
+              showToast(t("golfCallDetail.leftRoundToast"), "info");
             } catch (err) {
-              showToast(err instanceof Error ? err.message : "Couldn't leave this round. Please try again.", "warning");
+              showToast(err instanceof Error ? err.message : t("golfCallDetail.leaveError"), "warning");
             } finally {
               setLeaveConfirmOpen(false);
             }
@@ -379,16 +381,16 @@ export function GolfCallDetail() {
       )}
       {cancelConfirmOpen && (
         <ConfirmDialog
-          title="Cancel this Golf Call?"
-          message="Everyone who joined will be notified that the round is cancelled."
-          confirmLabel="Cancel Golf Call"
+          title={t("golfCallDetail.cancelConfirmTitle")}
+          message={t("golfCallDetail.cancelConfirmMessage")}
+          confirmLabel={t("golfCallDetail.cancelGolfCall")}
           danger
           onConfirm={async () => {
             try {
               await cancelGolfCall(call.id);
-              showToast("Golf Call cancelled.", "info");
+              showToast(t("golfCallDetail.cancelledToast"), "info");
             } catch (err) {
-              showToast(err instanceof Error ? err.message : "Couldn't cancel this round. Please try again.", "warning");
+              showToast(err instanceof Error ? err.message : t("golfCallDetail.cancelError"), "warning");
             } finally {
               setCancelConfirmOpen(false);
             }

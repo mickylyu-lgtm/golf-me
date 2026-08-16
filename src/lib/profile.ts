@@ -7,6 +7,7 @@ import { avatarColorForName, initialsFromName } from "./avatar";
 export interface ProfileRow {
   id: string;
   name: string | null;
+  username: string | null;
   avatar_color: string | null;
   avatar_initials: string | null;
   photo_url: string | null;
@@ -108,6 +109,7 @@ export function placeholderGolferProfile(id: string, name: string): GolferProfil
 export function golferPatchToProfileRow(patch: Partial<GolferProfile>): Record<string, unknown> {
   const row: Record<string, unknown> = {};
   if ("name" in patch) row.name = patch.name;
+  if ("username" in patch) row.username = patch.username || null;
   if ("avatarColor" in patch) row.avatar_color = patch.avatarColor;
   if ("avatarInitials" in patch) row.avatar_initials = patch.avatarInitials;
   if ("photoUrl" in patch) row.photo_url = patch.photoUrl ?? null;
@@ -156,6 +158,7 @@ export function profileRowToGolferProfile(row: ProfileRow): GolferProfile {
   return {
     id: row.id,
     name,
+    username: row.username ?? undefined,
     avatarColor: row.avatar_color || avatarColorForName(name),
     avatarInitials: row.avatar_initials || initialsFromName(name),
     photoUrl: row.photo_url ?? undefined,

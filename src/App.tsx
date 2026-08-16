@@ -27,6 +27,7 @@ import { Profile } from "./pages/Profile";
 import { ReputationDetail } from "./pages/ReputationDetail";
 import { GolfCircleDetail } from "./pages/GolfCircleDetail";
 import { FollowingDetail } from "./pages/FollowingDetail";
+import { FindFriends } from "./pages/FindFriends";
 import { MyPosts } from "./pages/MyPosts";
 import { MatchPreferencesDetail } from "./pages/MatchPreferencesDetail";
 import { Settings } from "./pages/Settings";
@@ -161,6 +162,7 @@ export default function App() {
                   <Route path="/profile/reputation" element={<ReputationDetail />} />
                   <Route path="/profile/circle" element={<GolfCircleDetail />} />
                   <Route path="/profile/following" element={<FollowingDetail />} />
+                  <Route path="/profile/following/find" element={<FindFriends />} />
                   <Route path="/profile/posts" element={<MyPosts />} />
                   <Route path="/profile/preferences" element={<MatchPreferencesDetail />} />
                   <Route path="/settings" element={<Settings />} />

@@ -42,10 +42,10 @@ export function Settings() {
       await supabase.auth.signOut();
       setDeleteConfirmOpen(false);
       navigate("/welcome");
-      showToast("Your account has been deleted.", "info");
+      showToast(t("settings.accountDeletedToast"), "info");
     } catch (err) {
       setDeletingAccount(false);
-      showToast(err instanceof Error ? err.message : "Couldn't delete your account. Please try again.", "warning");
+      showToast(err instanceof Error ? err.message : t("settings.accountDeleteFailedToast"), "warning");
     }
   }
 
@@ -197,13 +197,11 @@ export function Settings() {
       {!isDemo && (
         <div className="rounded-2xl border border-red-100 bg-red-50/40 p-4">
           <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-red-400">
-            <AlertTriangle size={12} /> Danger Zone
+            <AlertTriangle size={12} /> {t("settings.dangerZone")}
           </p>
-          <p className="mb-3 text-xs text-slate-500">
-            Permanently deletes your account and everything tied to it — profile, rounds you're hosting, messages, reviews. This can't be undone.
-          </p>
+          <p className="mb-3 text-xs text-slate-500">{t("settings.deleteAccountWarning")}</p>
           <Button variant="danger" size="sm" onClick={() => setDeleteConfirmOpen(true)}>
-            Delete Account
+            {t("settings.deleteAccount")}
           </Button>
         </div>
       )}
@@ -260,9 +258,9 @@ export function Settings() {
 
       {deleteConfirmOpen && (
         <ConfirmDialog
-          title="Delete your account?"
-          message="This permanently deletes your profile, hosted rounds, messages, and reviews. Anyone still in a round you're hosting loses their spot too. This cannot be undone."
-          confirmLabel={deletingAccount ? "Deleting..." : "Delete Account"}
+          title={t("settings.deleteAccountConfirmTitle")}
+          message={t("settings.deleteAccountConfirmMessage")}
+          confirmLabel={deletingAccount ? t("settings.deletingAccount") : t("settings.deleteAccount")}
           danger
           onConfirm={handleDeleteAccount}
           onCancel={() => setDeleteConfirmOpen(false)}
@@ -271,9 +269,9 @@ export function Settings() {
 
       {logoutConfirmOpen && (
         <ConfirmDialog
-          title="Log out?"
-          message="You'll need to log back in to keep using GolfMe. Your profile and data stay saved."
-          confirmLabel="Log out"
+          title={t("settings.logOutConfirmTitle")}
+          message={t("settings.logOutConfirmMessage")}
+          confirmLabel={t("settings.logOut")}
           danger
           onConfirm={() => {
             logOut();
