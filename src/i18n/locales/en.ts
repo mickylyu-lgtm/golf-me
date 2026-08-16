@@ -75,6 +75,12 @@ export const en = {
   "golfCallDetail.pricePerPerson": "{price}/person",
   "trust.verifiedGolfer": "Verified Golfer",
   "trust.newToGolfMe": "New to Golf Me",
+  "credibility.excellent": "Excellent Credibility",
+  "credibility.good": "Good Credibility",
+  "credibility.building": "Building Credibility",
+  "credibility.limited": "Limited History",
+  "chat.noMessagesYet": "No messages yet — say hello to the group.",
+  "chat.messagePlaceholder": "Message the group...",
 
   // Welcome (first open, no session)
   "welcome.tagline": "Find your next round.",

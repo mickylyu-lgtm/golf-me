@@ -6,7 +6,7 @@ import { Avatar } from "../ui/Avatar";
 import { MatchReasons } from "./MatchReasons";
 import { computeCompatibility } from "../../lib/compatibility";
 import { golferMatchReasons } from "../../lib/matchReasons";
-import { computeCredibility } from "../../lib/credibility";
+import { computeCredibility, credibilityLabel } from "../../lib/credibility";
 import { formatBudgetRange, handicapLabel, paceLabel } from "../../lib/format";
 import { vibeLabel, walkOrCartLabel } from "../../lib/enumLabels";
 import type { MatchFactor } from "../../lib/matchReasons";
@@ -90,7 +90,11 @@ export function CompareModal({ other, onClose }: { other: GolferProfile; onClose
             them={formatBudgetRange(other.budgetMin, other.budgetMax, other.noBudgetPreference, t)}
           />
           <CompareRow label="Walking or Cart" you={walkOrCartLabel(currentUser.walkOrCart, t)} them={walkOrCartLabel(other.walkOrCart, t)} />
-          <CompareRow label="Credibility" you={myCredibility.label} them={theirCredibility.label} />
+          <CompareRow
+            label="Credibility"
+            you={credibilityLabel(myCredibility.tier, t)}
+            them={credibilityLabel(theirCredibility.tier, t)}
+          />
         </div>
 
         {positives.length > 0 && (

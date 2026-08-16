@@ -179,7 +179,7 @@ export function GolferProfilePage() {
             <MapPin size={11} /> {golfer.distanceMiles.toFixed(1)} mi away
           </p>
         </div>
-        <CredibilityBadge tier={credibility.tier} label={credibility.label} size="sm" />
+        <CredibilityBadge tier={credibility.tier} size="sm" />
         <TrustBadgeRow golfer={enrichedGolfer} />
 
         {!blocked && (

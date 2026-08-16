@@ -67,6 +67,12 @@ export const ja: Record<TranslationKey, string> = {
   "golfCallDetail.pricePerPerson": "{price}/人",
   "trust.verifiedGolfer": "認証済みゴルファー",
   "trust.newToGolfMe": "Golf Me新規",
+  "credibility.excellent": "非常に高い信頼度",
+  "credibility.good": "高い信頼度",
+  "credibility.building": "信頼度構築中",
+  "credibility.limited": "実績が少ない",
+  "chat.noMessagesYet": "まだメッセージはありません — グループに挨拶しましょう。",
+  "chat.messagePlaceholder": "グループにメッセージ...",
 
   "welcome.tagline": "次のラウンドを見つけよう。",
   "welcome.subtitle": "いつものメンバーがいなくても、好きな時にゴルフを。",

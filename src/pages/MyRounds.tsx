@@ -11,6 +11,7 @@ import { ReviewModal } from "../components/review/ReviewModal";
 import { ShareRoundPrompt } from "../components/community/ShareRoundPrompt";
 import { CLICKABLE_CARD_CLASS } from "../components/ui/cardStyles";
 import { formatDate, formatMoney } from "../lib/format";
+import { vibeLabel } from "../lib/enumLabels";
 import { VIBE_TONE } from "../lib/theme";
 import type { GolfCall } from "../types";
 
@@ -88,8 +89,8 @@ export function MyRounds() {
                     <CalendarDays size={12} /> {formatDate(c.dateISO, locale, t)} · {c.timeLabel}
                   </p>
                   <div className="flex flex-wrap gap-1.5">
-                    <Badge tone={VIBE_TONE[c.vibe]}>{c.vibe}</Badge>
-                    <Badge tone="outline">{formatMoney(c.estimatedPricePerPerson)}/person</Badge>
+                    <Badge tone={VIBE_TONE[c.vibe]}>{vibeLabel(c.vibe, t)}</Badge>
+                    <Badge tone="outline">{t("golfCallDetail.pricePerPerson", { price: formatMoney(c.estimatedPricePerPerson) })}</Badge>
                     <Badge tone="outline" icon={<Users size={11} />}>
                       {openSpots === 1
                         ? t("myGolf.oneMoreAndSet")

@@ -67,6 +67,12 @@ export const es: Record<TranslationKey, string> = {
   "golfCallDetail.pricePerPerson": "{price}/persona",
   "trust.verifiedGolfer": "Golfista Verificado",
   "trust.newToGolfMe": "Nuevo en Golf Me",
+  "credibility.excellent": "Credibilidad Excelente",
+  "credibility.good": "Buena Credibilidad",
+  "credibility.building": "Generando Credibilidad",
+  "credibility.limited": "Historial Limitado",
+  "chat.noMessagesYet": "Aún no hay mensajes — saluda al grupo.",
+  "chat.messagePlaceholder": "Mensaje al grupo...",
 
   "welcome.tagline": "Encuentra tu próxima ronda.",
   "welcome.subtitle": "Juega cuando quieras, incluso cuando tu grupo habitual no pueda.",

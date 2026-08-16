@@ -582,8 +582,8 @@ export function CreateGolfCall() {
               {holes} {t("host.holes")}
             </Badge>
             <Badge tone="outline">{gameFormat}</Badge>
-            <Badge tone={vibe === "Competitive" ? "sun" : "fairway"}>{vibe}</Badge>
-            <Badge tone="outline">{formatMoney(price === "" ? 0 : price)}/person</Badge>
+            <Badge tone={vibe === "Competitive" ? "sun" : "fairway"}>{vibeLabel(vibe, t)}</Badge>
+            <Badge tone="outline">{t("golfCallDetail.pricePerPerson", { price: formatMoney(price === "" ? 0 : price) })}</Badge>
           </div>
 
           <div className="border-t border-slate-100 pt-3">

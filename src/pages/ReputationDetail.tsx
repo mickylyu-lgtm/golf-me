@@ -43,7 +43,7 @@ export function ReputationDetail() {
       <div>
         <h1 className="text-xl font-bold text-slate-900">{t("reputation.title")}</h1>
         <div className="mt-2">
-          <CredibilityBadge tier={credibility.tier} label={credibility.label} />
+          <CredibilityBadge tier={credibility.tier} />
         </div>
       </div>
 

@@ -67,6 +67,12 @@ export const zhTW: Record<TranslationKey, string> = {
   "golfCallDetail.pricePerPerson": "{price}/人",
   "trust.verifiedGolfer": "已認證球友",
   "trust.newToGolfMe": "Golf Me 新用戶",
+  "credibility.excellent": "極佳口碑",
+  "credibility.good": "良好口碑",
+  "credibility.building": "口碑累積中",
+  "credibility.limited": "記錄較少",
+  "chat.noMessagesYet": "暫無訊息 — 跟大家打個招呼吧。",
+  "chat.messagePlaceholder": "給小組發訊息...",
 
   "welcome.tagline": "找到你的下一場球局。",
   "welcome.subtitle": "想打就打，即使你的老球友們沒空。",

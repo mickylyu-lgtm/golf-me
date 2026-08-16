@@ -67,6 +67,12 @@ export const ko: Record<TranslationKey, string> = {
   "golfCallDetail.pricePerPerson": "{price}/인",
   "trust.verifiedGolfer": "인증된 골퍼",
   "trust.newToGolfMe": "Golf Me 신규",
+  "credibility.excellent": "매우 높은 신뢰도",
+  "credibility.good": "좋은 신뢰도",
+  "credibility.building": "신뢰도 쌓는 중",
+  "credibility.limited": "기록 부족",
+  "chat.noMessagesYet": "아직 메시지가 없습니다 — 그룹에 인사해보세요.",
+  "chat.messagePlaceholder": "그룹에 메시지 보내기...",
 
   "welcome.tagline": "다음 라운드를 찾아보세요.",
   "welcome.subtitle": "평소 멤버가 없을 때도, 원할 때 언제든 라운드하세요.",

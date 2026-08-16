@@ -1,5 +1,8 @@
 import type { GolferProfile, HandicapAccuracy, Review } from "../types";
 import { isNewAccount, monthsSince } from "./format";
+import type { TranslationKey } from "../i18n/locales/en";
+
+type TFn = (key: TranslationKey, vars?: Record<string, string | number>) => string;
 
 // GolfMe Credibility is deliberately separate from handicap: handicap is
 // skill, credibility is "how reliable and pleasant is this person to golf
@@ -21,6 +24,20 @@ const TIER_LABEL: Record<CredibilityTier, string> = {
   building: "Building Credibility",
   limited: "Limited History",
 };
+
+const TIER_LABEL_KEY: Record<CredibilityTier, TranslationKey> = {
+  excellent: "credibility.excellent",
+  good: "credibility.good",
+  building: "credibility.building",
+  limited: "credibility.limited",
+};
+
+// The translated label to actually render — CredibilityInfo.label (below)
+// stays the fixed English string for any non-UI use; every display site
+// should call this instead.
+export function credibilityLabel(tier: CredibilityTier, t: TFn): string {
+  return t(TIER_LABEL_KEY[tier]);
+}
 
 export function computeCredibility(golfer: GolferProfile, reviews: Review[]): CredibilityInfo {
   const rep = golfer.reputation;

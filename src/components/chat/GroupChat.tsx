@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { useData } from "../../context/DataContext";
 import { Avatar } from "../ui/Avatar";
 import { ChatComposer } from "./ChatComposer";
+import { useLocale } from "../../i18n/LocaleContext";
 
 export function GroupChat({ callId }: { callId: string }) {
   const { currentUser, getGolfer, messagesForCall, sendMessage } = useData();
+  const { t } = useLocale();
   const [text, setText] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const messages = messagesForCall(callId);
@@ -22,7 +24,7 @@ export function GroupChat({ callId }: { callId: string }) {
   return (
     <div className="flex flex-col rounded-2xl border border-slate-100 bg-white">
       <div className="flex max-h-96 flex-col gap-3 overflow-y-auto px-4 py-4">
-        {messages.length === 0 && <p className="text-center text-sm text-slate-400">No messages yet — say hello to the group.</p>}
+        {messages.length === 0 && <p className="text-center text-sm text-slate-400">{t("chat.noMessagesYet")}</p>}
         {messages.map((m) => {
           if (m.system) {
             return (
@@ -51,7 +53,7 @@ export function GroupChat({ callId }: { callId: string }) {
         })}
         <div ref={bottomRef} />
       </div>
-      <ChatComposer value={text} onChange={setText} onSend={handleSend} placeholder="Message the group..." />
+      <ChatComposer value={text} onChange={setText} onSend={handleSend} placeholder={t("chat.messagePlaceholder")} />
     </div>
   );
 }

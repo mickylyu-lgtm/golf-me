@@ -23,7 +23,7 @@ import { CredibilityBadge } from "../components/golfer/CredibilityBadge";
 import { AGE_RANGES } from "../types";
 import type { AgeRange } from "../types";
 import { memberSinceLabel } from "../lib/format";
-import { computeCredibility } from "../lib/credibility";
+import { computeCredibility, credibilityLabel } from "../lib/credibility";
 import { useCredibilityStats } from "../lib/useCredibility";
 
 function ProfileRow({ icon, label, value, onClick }: { icon: ReactNode; label: string; value?: string; onClick: () => void }) {
@@ -148,7 +148,7 @@ export function Profile() {
             ? t("profile.roundCountSingular", { handicap: currentUser.handicap ?? "--" })
             : t("profile.roundCount", { count: enrichedUser.reputation.completedRounds, handicap: currentUser.handicap ?? "--" })}
         </p>
-        <CredibilityBadge tier={credibility.tier} label={credibility.label} size="sm" />
+        <CredibilityBadge tier={credibility.tier} size="sm" />
       </div>
 
       <div className="flex flex-col gap-2.5">
@@ -161,7 +161,7 @@ export function Profile() {
         <ProfileRow
           icon={<Users size={16} />}
           label={t("profile.reputation")}
-          value={credibility.label}
+          value={credibilityLabel(credibility.tier, t)}
           onClick={() => navigate("/profile/reputation")}
         />
         <ProfileRow

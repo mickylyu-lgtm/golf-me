@@ -60,7 +60,7 @@ export function ConfirmJoinModal({ call, onClose, onConfirm }: ConfirmJoinModalP
                 <div key={g.id} className="flex items-center gap-2.5">
                   <Avatar golfer={g} size="xs" showVerified={false} />
                   <span className="flex-1 text-sm font-medium text-slate-700">{g.name}</span>
-                  <CredibilityBadge tier={credibility.tier} label={credibility.label} size="sm" />
+                  <CredibilityBadge tier={credibility.tier} size="sm" />
                 </div>
               );
             })}
