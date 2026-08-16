@@ -1,5 +1,6 @@
 import type { GolferProfile } from "../../types";
 import { isNewAccount, memberSinceLabel } from "../../lib/format";
+import { useLocale } from "../../i18n/LocaleContext";
 
 interface ReputationRowProps {
   golfer: GolferProfile;
@@ -7,6 +8,7 @@ interface ReputationRowProps {
 }
 
 export function ReputationRow({ golfer, compact }: ReputationRowProps) {
+  const { t } = useLocale();
   const isNew = isNewAccount(golfer.reputation.completedRounds);
 
   if (isNew) {
@@ -41,7 +43,7 @@ export function ReputationRow({ golfer, compact }: ReputationRowProps) {
       {!compact && (
         <>
           <span className="text-slate-300">·</span>
-          <span>{memberSinceLabel(golfer.memberSince)}</span>
+          <span>{memberSinceLabel(golfer.memberSince, t)}</span>
         </>
       )}
     </div>

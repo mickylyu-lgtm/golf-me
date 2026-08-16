@@ -9,6 +9,7 @@ import { golferMatchReasons } from "../../lib/matchReasons";
 import { computeCredibility } from "../../lib/credibility";
 import { formatBudgetRange, handicapLabel, paceLabel } from "../../lib/format";
 import type { MatchFactor } from "../../lib/matchReasons";
+import { useLocale } from "../../i18n/LocaleContext";
 
 // Purposefully not a leaderboard: no ranking, no "who's better" framing —
 // just a side-by-side read of whether two golfers would likely enjoy a
@@ -28,6 +29,7 @@ function CompareRow({ label, you, them }: { label: string; you: string; them: st
 
 export function CompareModal({ other, onClose }: { other: GolferProfile; onClose: () => void }) {
   const { currentUser, reviewsAbout } = useData();
+  const { t } = useLocale();
 
   const compat = useMemo(() => computeCompatibility(currentUser, other), [currentUser, other]);
   const reasons = useMemo(() => golferMatchReasons(compat), [compat]);
@@ -63,7 +65,7 @@ export function CompareModal({ other, onClose }: { other: GolferProfile; onClose
         </div>
 
         <div>
-          <CompareRow label="Handicap" you={handicapLabel(currentUser.handicap)} them={handicapLabel(other.handicap)} />
+          <CompareRow label="Handicap" you={handicapLabel(currentUser.handicap, t)} them={handicapLabel(other.handicap, t)} />
           <CompareRow
             label="Rounds Played"
             you={`${currentUser.reputation.completedRounds} rounds`}
@@ -75,12 +77,12 @@ export function CompareModal({ other, onClose }: { other: GolferProfile; onClose
             them={`${other.reputation.wouldPlayAgainPct}%`}
           />
           <CompareRow label="Show-Up Rate" you={`${currentUser.reputation.showUpRatePct}%`} them={`${other.reputation.showUpRatePct}%`} />
-          <CompareRow label="Pace" you={paceLabel(currentUser.reputation.goodPacePct)} them={paceLabel(other.reputation.goodPacePct)} />
+          <CompareRow label="Pace" you={paceLabel(currentUser.reputation.goodPacePct, t)} them={paceLabel(other.reputation.goodPacePct, t)} />
           <CompareRow label="Golf Vibe" you={currentUser.vibes.join(" & ")} them={other.vibes.join(" & ")} />
           <CompareRow
             label="Budget / Round"
-            you={formatBudgetRange(currentUser.budgetMin, currentUser.budgetMax, currentUser.noBudgetPreference)}
-            them={formatBudgetRange(other.budgetMin, other.budgetMax, other.noBudgetPreference)}
+            you={formatBudgetRange(currentUser.budgetMin, currentUser.budgetMax, currentUser.noBudgetPreference, t)}
+            them={formatBudgetRange(other.budgetMin, other.budgetMax, other.noBudgetPreference, t)}
           />
           <CompareRow label="Walking or Cart" you={currentUser.walkOrCart} them={other.walkOrCart} />
           <CompareRow label="Credibility" you={myCredibility.label} them={theirCredibility.label} />

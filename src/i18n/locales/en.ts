@@ -23,6 +23,39 @@ export const en = {
   "common.notNow": "Not Now",
   "common.or": "or",
 
+  // Shared date/time/format helpers (src/lib/format.ts) — used across many screens
+  "date.today": "Today",
+  "date.tomorrow": "Tomorrow",
+  "date.yesterday": "Yesterday",
+  "time.justNow": "Just now",
+  "time.minutesAgo": "{minutes}m",
+  "time.hoursAgo": "{hours}h",
+  "budget.noPreference": "No Budget Preference",
+  "member.new": "New member",
+  "member.months": "{months} mo. on Golf Me",
+  "member.year": "{years} yr on Golf Me",
+  "member.years": "{years} yrs on Golf Me",
+  "pace.quick": "Quick Pace",
+  "pace.medium": "Medium Pace",
+  "pace.relaxed": "Relaxed Pace",
+
+  // GolfCallCard (round card shown on Home/Find/My Golf)
+  "golfCallCard.youreHosting": "You're hosting",
+  "golfCallCard.youreIn": "You're in",
+  "golfCallCard.requestPending": "Request pending",
+  "golfCallCard.spotsRemainingSingular": "{count} Spot Remaining",
+  "golfCallCard.spotsRemainingPlural": "{count} Spots Remaining",
+  "golfCallCard.newGolfer": "New",
+  "golfCallCard.joinedOfTotal": "{joined} of {total} joined",
+  "golfCallCard.hostedByYou": "hosted by you",
+  "golfCallCard.hostedBy": "hosted by {name}",
+
+  // Notifications bell panel
+  "notifications.title": "Notifications",
+  "notifications.empty": "No notifications yet.",
+  "notifications.emptyDescription": "Replies, follows, and round updates will show up here.",
+  "notifications.markAllRead": "Mark all as read",
+
   // Welcome (first open, no session)
   "welcome.tagline": "Find your next round.",
   "welcome.subtitle": "Golf when you want, even when your usual group can't.",

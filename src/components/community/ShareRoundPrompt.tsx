@@ -8,6 +8,7 @@ import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
 import { resizeImageToDataUrl } from "../../lib/image";
 import { formatDate } from "../../lib/format";
+import { useLocale } from "../../i18n/LocaleContext";
 
 interface ShareRoundPromptProps {
   call: GolfCall;
@@ -19,6 +20,7 @@ interface ShareRoundPromptProps {
 export function ShareRoundPrompt({ call, onClose }: ShareRoundPromptProps) {
   const { createPost } = useData();
   const { showToast } = useToast();
+  const { t, locale } = useLocale();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState("Great round today.");
   const [imageUrl, setImageUrl] = useState<string | undefined>(undefined);
@@ -54,7 +56,7 @@ export function ShareRoundPrompt({ call, onClose }: ShareRoundPromptProps) {
         <p className="text-sm text-slate-500">Let other golfers know how it went — totally optional.</p>
         <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3">
           <p className="text-sm font-semibold text-slate-800">Played: {call.course}</p>
-          <p className="text-xs text-slate-500">{formatDate(call.dateISO)}</p>
+          <p className="text-xs text-slate-500">{formatDate(call.dateISO, locale, t)}</p>
         </div>
         <textarea
           value={text}

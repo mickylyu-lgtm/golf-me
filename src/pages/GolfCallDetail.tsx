@@ -52,7 +52,7 @@ export function GolfCallDetail() {
   } = useData();
   const { isDemo } = useAuth();
   const { showToast } = useToast();
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const [joining, setJoining] = useState(false);
 
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
@@ -99,7 +99,7 @@ export function GolfCallDetail() {
   const chatUnlocked = isHost || isJoined;
   const breakdown = !isHost ? computeCallCompatibility(currentUser, call) : null;
   const tier = breakdown ? matchTier(breakdown.overall) : null;
-  const reasons = breakdown ? callMatchReasons(call, breakdown) : [];
+  const reasons = breakdown ? callMatchReasons(call, breakdown, locale, t) : [];
   const canJoin = !isHost && !isJoined && !isPending && !isFull;
 
   async function handleJoin() {
@@ -108,7 +108,7 @@ export function GolfCallDetail() {
     try {
       await joinGolfCall(call!.id);
       showToast(
-        call!.joinMode === "instant" ? t("golfCallDetail.joinedInstantToast", { date: formatDate(call!.dateISO) }) : t("golfCallDetail.requestSentToast"),
+        call!.joinMode === "instant" ? t("golfCallDetail.joinedInstantToast", { date: formatDate(call!.dateISO, locale, t) }) : t("golfCallDetail.requestSentToast"),
         "success",
       );
     } catch (err) {
@@ -160,7 +160,7 @@ export function GolfCallDetail() {
           <p className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
             <CalendarDays size={12} /> {t("golfCallDetail.when")}
           </p>
-          <p className="mt-1 font-bold text-slate-800">{formatDate(call.dateISO)}</p>
+          <p className="mt-1 font-bold text-slate-800">{formatDate(call.dateISO, locale, t)}</p>
           <p className="text-sm text-slate-500">{call.timeLabel}</p>
           {!isDemo && <p className="mt-1 text-[11px] leading-tight text-slate-400">{t("golfCallDetail.teeTimeDisclaimer")}</p>}
         </div>

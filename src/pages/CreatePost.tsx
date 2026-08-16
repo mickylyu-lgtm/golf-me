@@ -15,6 +15,7 @@ import { COURSES } from "../lib/courses";
 import { resizeImageToDataUrl, resizeImageToBlob } from "../lib/image";
 import { formatDate, formatMoney } from "../lib/format";
 import { supabase } from "../lib/supabase";
+import { useLocale } from "../i18n/LocaleContext";
 
 type Attachment = "none" | "photo" | "course" | "round" | "swing";
 
@@ -26,6 +27,7 @@ export function CreatePost() {
   const { currentUser, golfCalls, createPost } = useData();
   const { isDemo, authUser } = useAuth();
   const { showToast } = useToast();
+  const { t, locale } = useLocale();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
 
@@ -289,7 +291,7 @@ export function CreatePost() {
                   <div className="flex-1">
                     <p className="font-semibold text-slate-800">{c.course}</p>
                     <p className="text-xs text-slate-500">
-                      {formatDate(c.dateISO)} · {c.timeLabel} · {formatMoney(c.estimatedPricePerPerson)}
+                      {formatDate(c.dateISO, locale, t)} · {c.timeLabel} · {formatMoney(c.estimatedPricePerPerson)}
                     </p>
                   </div>
                   {golfCallId === c.id && <Check size={16} className="text-fairway-600" />}

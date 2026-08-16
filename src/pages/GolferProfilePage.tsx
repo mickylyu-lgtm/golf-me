@@ -172,7 +172,7 @@ export function GolferProfilePage() {
             {golfer.verification.verifiedGolfer && <ShieldCheck size={16} className="text-fairway-600" />}
           </h1>
           <p className="text-sm text-slate-500">
-            {handicapLabel(golfer.handicap)} · {golfer.areaLabel}
+            {handicapLabel(golfer.handicap, t)} · {golfer.areaLabel}
           </p>
           <p className="flex items-center justify-center gap-1 text-xs text-slate-400">
             <MapPin size={11} /> {golfer.distanceMiles.toFixed(1)} mi away
@@ -282,7 +282,7 @@ export function GolferProfilePage() {
               {v}
             </Badge>
           ))}
-          {isEstablished && <Badge tone="outline">{paceLabel(enrichedGolfer.reputation.goodPacePct)}</Badge>}
+          {isEstablished && <Badge tone="outline">{paceLabel(enrichedGolfer.reputation.goodPacePct, t)}</Badge>}
           <Badge tone="outline" icon={golfer.walkOrCart === "Walking" ? <Footprints size={12} /> : <Car size={12} />}>
             {golfer.walkOrCart === "Either" ? "Walks or Carts" : `Usually ${golfer.walkOrCart === "Walking" ? "Walks" : "Carts"}`}
           </Badge>
@@ -318,7 +318,7 @@ export function GolferProfilePage() {
             <Wallet size={12} /> Budget / round
           </p>
           <p className="mt-1 font-bold text-slate-800">
-            {formatBudgetRange(golfer.budgetMin, golfer.budgetMax, golfer.noBudgetPreference)}
+            {formatBudgetRange(golfer.budgetMin, golfer.budgetMax, golfer.noBudgetPreference, t)}
           </p>
         </div>
         <div className="rounded-2xl border border-slate-100 bg-white p-4">

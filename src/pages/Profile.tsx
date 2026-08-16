@@ -135,7 +135,7 @@ export function Profile() {
         </button>
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-xl font-bold text-slate-900">{currentUser.name}</h1>
-          <p className="text-sm text-slate-500">{memberSinceLabel(currentUser.memberSince)}</p>
+          <p className="text-sm text-slate-500">{memberSinceLabel(currentUser.memberSince, t)}</p>
         </div>
         <Button size="sm" variant="outline" onClick={startEditing}>
           {t("common.edit")}

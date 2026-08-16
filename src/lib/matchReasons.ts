@@ -1,6 +1,10 @@
 import type { GolfCall } from "../types";
 import type { CompatibilityBreakdown } from "./compatibility";
 import { formatDate } from "./format";
+import type { Locale } from "../i18n/LocaleContext";
+import type { TranslationKey } from "../i18n/locales/en";
+
+type TFn = (key: TranslationKey, vars?: Record<string, string | number>) => string;
 
 export type MatchTier = "great" | "decent" | "possible" | "low";
 
@@ -47,8 +51,8 @@ const VIBE_DESCRIPTOR: Record<string, string> = {
   "Just Here to Golf": "Low-key, just here to golf",
 };
 
-export function callMatchReasons(call: GolfCall, breakdown: CompatibilityBreakdown): MatchFactor[] {
-  const dayLabel = formatDate(call.dateISO);
+export function callMatchReasons(call: GolfCall, breakdown: CompatibilityBreakdown, locale: Locale, t: TFn): MatchFactor[] {
+  const dayLabel = formatDate(call.dateISO, locale, t);
   const factors: MatchFactor[] = [];
 
   // Only surfaced when the golfer actually has course preferences set

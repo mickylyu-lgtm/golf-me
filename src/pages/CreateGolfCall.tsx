@@ -65,7 +65,7 @@ export function CreateGolfCall() {
   const { isDemo } = useAuth();
   const { hostRound } = useRealRounds();
   const { showToast } = useToast();
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const [searchParams] = useSearchParams();
   const fromPostId = searchParams.get("fromPost");
 
@@ -575,7 +575,7 @@ export function CreateGolfCall() {
           </div>
           <div className="flex flex-wrap gap-1.5">
             <Badge tone="fairway">
-              {formatDate(new Date(`${date}T12:00:00`).toISOString())} · {timeLabel}
+              {formatDate(new Date(`${date}T12:00:00`).toISOString(), locale, t)} · {timeLabel}
             </Badge>
             <Badge tone="outline">
               {holes} {t("host.holes")}

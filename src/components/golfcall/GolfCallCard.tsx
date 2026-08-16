@@ -17,6 +17,7 @@ import { matchTier, callMatchReasons } from "../../lib/matchReasons";
 import { evaluatePreferenceMatch } from "../../lib/preferenceMatch";
 import { track } from "../../lib/analytics";
 import type { PreferenceMatchContext } from "../../lib/preferenceMatch";
+import { useLocale } from "../../i18n/LocaleContext";
 
 interface GolfCallCardProps {
   call: GolfCall;
@@ -26,6 +27,7 @@ interface GolfCallCardProps {
 export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
   const { currentUser, getGolfer, joinGolfCall, followingGolfers, circleGolfers, playedWithIds } = useData();
   const { showToast } = useToast();
+  const { t, locale } = useLocale();
   const navigate = useNavigate();
 
   const host = getGolfer(call.hostId);
@@ -36,12 +38,12 @@ export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
   const isFull = call.status === "full" || openSpots <= 0;
   const isCancelled = call.status === "cancelled";
   const isUrgent = !isFull && !isCancelled && openSpots === 1;
-  const dateLabel = formatDate(call.dateISO);
-  const isSoon = call.status === "open" && (dateLabel === "Today" || dateLabel === "Tomorrow");
+  const dateLabel = formatDate(call.dateISO, locale, t);
+  const isSoon = call.status === "open" && (dateLabel === t("date.today") || dateLabel === t("date.tomorrow"));
 
   const breakdown = showMatch && !isHost ? computeCallCompatibility(currentUser, call) : null;
   const tier = breakdown ? matchTier(breakdown.overall) : null;
-  const reasons = breakdown ? callMatchReasons(call, breakdown) : [];
+  const reasons = breakdown ? callMatchReasons(call, breakdown, locale, t) : [];
 
   const preferenceChecks = useMemo(() => {
     if (!showMatch || isHost) return [];
@@ -60,31 +62,33 @@ export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
     try {
       await joinGolfCall(call.id);
       showToast(
-        call.joinMode === "instant" ? `You're playing ${formatDate(call.dateISO)}. ⛳` : "Request sent to the host.",
+        call.joinMode === "instant"
+          ? t("golfCallDetail.joinedInstantToast", { date: formatDate(call.dateISO, locale, t) })
+          : t("golfCallDetail.requestSentToast"),
         "success",
       );
     } catch (err) {
       // Real, atomic failure (e.g. someone else took the last spot) —
       // surfaced, never a silent no-op.
-      showToast(err instanceof Error ? err.message : "Couldn't join this round. Please try again.", "warning");
+      showToast(err instanceof Error ? err.message : t("golfCallDetail.joinError"), "warning");
     }
   }
 
   let cta: React.ReactNode;
   if (isCancelled) {
-    cta = <Badge tone="rose">Cancelled</Badge>;
+    cta = <Badge tone="rose">{t("golfCallDetail.statusCancelled")}</Badge>;
   } else if (isHost) {
-    cta = <Badge tone="fairway">You're hosting</Badge>;
+    cta = <Badge tone="fairway">{t("golfCallCard.youreHosting")}</Badge>;
   } else if (isJoined) {
-    cta = <Badge tone="fairway">You're in</Badge>;
+    cta = <Badge tone="fairway">{t("golfCallCard.youreIn")}</Badge>;
   } else if (isPending) {
-    cta = <Badge tone="sun">Request pending</Badge>;
+    cta = <Badge tone="sun">{t("golfCallCard.requestPending")}</Badge>;
   } else if (isFull) {
-    cta = <Badge tone="slate">Full</Badge>;
+    cta = <Badge tone="slate">{t("golfCallDetail.full")}</Badge>;
   } else {
     cta = (
       <Button size="sm" icon={<ArrowRight size={13} />} className="flex-row-reverse" onClick={handleJoin}>
-        {call.joinMode === "instant" ? "Join Round" : "Request to Join"}
+        {call.joinMode === "instant" ? t("golfCallDetail.joinRound") : t("golfCallDetail.requestToJoinButton")}
       </Button>
     );
   }
@@ -100,7 +104,7 @@ export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
       <div>
         <p className="text-base font-bold text-slate-900">{call.course}</p>
         <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs font-medium text-slate-500">
-          <span className={isSoon ? "font-bold text-fairway-700" : ""}>{formatCompactDay(call.dateISO)}</span>
+          <span className={isSoon ? "font-bold text-fairway-700" : ""}>{formatCompactDay(call.dateISO, locale, t)}</span>
           <span>· {call.timeLabel}</span>
           <span className="text-slate-300">·</span>
           <span>
@@ -111,16 +115,18 @@ export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
 
       <div className="flex flex-wrap items-center gap-1.5">
         {isCancelled ? (
-          <Badge tone="rose">Cancelled</Badge>
+          <Badge tone="rose">{t("golfCallDetail.statusCancelled")}</Badge>
         ) : isFull ? (
-          <Badge tone="slate">Foursome Full</Badge>
+          <Badge tone="slate">{t("golfCallDetail.foursomeFull")}</Badge>
         ) : isUrgent ? (
           <Badge tone="sun" className="animate-pulse font-bold tracking-wide uppercase">
-            1 Spot Left
+            {t("golfCallDetail.oneSpotLeft")}
           </Badge>
         ) : (
           <Badge tone="fairway">
-            {openSpots} Spot{openSpots === 1 ? "" : "s"} Remaining
+            {openSpots === 1
+              ? t("golfCallCard.spotsRemainingSingular", { count: openSpots })
+              : t("golfCallCard.spotsRemainingPlural", { count: openSpots })}
           </Badge>
         )}
       </div>
@@ -149,8 +155,8 @@ export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
               <Avatar golfer={g} size="xs" showVerified={false} />
               <span className="font-semibold text-slate-700">{g.name.split(" ")[0]}</span>
               {g.verification.verifiedGolfer && <span className="text-fairway-600">✓</span>}
-              <span className="text-slate-400">· {g.handicap !== null ? `${g.handicap} HCP` : "New"}</span>
-              {g.id === call.hostId && <span className="font-semibold text-sun-600">· Host</span>}
+              <span className="text-slate-400">· {g.handicap !== null ? `${g.handicap} HCP` : t("golfCallCard.newGolfer")}</span>
+              {g.id === call.hostId && <span className="font-semibold text-sun-600">· {t("golfCallDetail.hostTag")}</span>}
             </div>
           );
         })}
@@ -176,8 +182,13 @@ export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
 
       <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-2.5">
         <p className="text-xs font-medium text-slate-500">
-          {call.joinedGolferIds.length} of {call.totalSpots} joined
-          {host && <span className="text-slate-400"> · hosted by {isHost ? "you" : host.name}</span>}
+          {t("golfCallCard.joinedOfTotal", { joined: call.joinedGolferIds.length, total: call.totalSpots })}
+          {host && (
+            <span className="text-slate-400">
+              {" "}
+              · {isHost ? t("golfCallCard.hostedByYou") : t("golfCallCard.hostedBy", { name: host.name })}
+            </span>
+          )}
         </p>
         {cta}
       </div>

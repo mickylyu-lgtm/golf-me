@@ -5,6 +5,7 @@ import { useData } from "../../context/DataContext";
 import { Modal } from "../ui/Modal";
 import { EmptyState } from "../ui/EmptyState";
 import { formatRelativeTime } from "../../lib/format";
+import { useLocale } from "../../i18n/LocaleContext";
 
 const ICONS: Record<NotificationType, typeof Bell> = {
   post_reply: MessageCircle,
@@ -21,6 +22,7 @@ const ICONS: Record<NotificationType, typeof Bell> = {
 export function NotificationsPanel({ onClose }: { onClose: () => void }) {
   const { notifications, markNotificationRead, markAllNotificationsRead } = useData();
   const navigate = useNavigate();
+  const { t, locale } = useLocale();
 
   function open(n: AppNotification) {
     markNotificationRead(n.id);
@@ -29,14 +31,14 @@ export function NotificationsPanel({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <Modal title="Notifications" onClose={onClose}>
+    <Modal title={t("notifications.title")} onClose={onClose}>
       {notifications.length === 0 ? (
-        <EmptyState icon={<Bell size={20} />} title="No notifications yet." description="Replies, follows, and round updates will show up here." />
+        <EmptyState icon={<Bell size={20} />} title={t("notifications.empty")} description={t("notifications.emptyDescription")} />
       ) : (
         <div className="flex flex-col gap-1">
           <div className="mb-1 flex justify-end">
             <button onClick={markAllNotificationsRead} className="text-xs font-semibold text-fairway-700 hover:underline">
-              Mark all as read
+              {t("notifications.markAllRead")}
             </button>
           </div>
           {notifications.map((n) => {
@@ -54,7 +56,7 @@ export function NotificationsPanel({ onClose }: { onClose: () => void }) {
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className={`text-sm ${n.read ? "text-slate-600" : "font-semibold text-slate-900"}`}>{n.text}</p>
-                  <p className="text-xs text-slate-400">{formatRelativeTime(n.createdAt)}</p>
+                  <p className="text-xs text-slate-400">{formatRelativeTime(n.createdAt, locale, t)}</p>
                 </div>
                 {!n.read && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-fairway-600" aria-label="Unread" />}
               </button>

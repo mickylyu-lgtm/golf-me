@@ -9,6 +9,7 @@ import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 import { ReportModal } from "../components/trust/ReportModal";
 import { ChatComposer } from "../components/chat/ChatComposer";
 import { handicapLabel } from "../lib/format";
+import { useLocale } from "../i18n/LocaleContext";
 
 export function DirectMessageThread() {
   const { id } = useParams<{ id: string }>();
@@ -25,6 +26,7 @@ export function DirectMessageThread() {
     markConversationRead,
   } = useData();
   const { showToast } = useToast();
+  const { t } = useLocale();
 
   const [text, setText] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -89,7 +91,7 @@ export function DirectMessageThread() {
               <span className="truncate">{other.name}</span>
               {other.verification.verifiedGolfer && <ShieldCheck size={13} className="shrink-0 text-fairway-600" />}
             </p>
-            <p className="truncate text-xs text-slate-500">{handicapLabel(other.handicap)} · View Profile</p>
+            <p className="truncate text-xs text-slate-500">{handicapLabel(other.handicap, t)} · View Profile</p>
           </div>
         </button>
         <div className="relative shrink-0">

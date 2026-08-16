@@ -5,10 +5,12 @@ import { Avatar } from "../components/ui/Avatar";
 import { EmptyState } from "../components/ui/EmptyState";
 import { CLICKABLE_CARD_CLASS } from "../components/ui/cardStyles";
 import { formatRelativeTime } from "../lib/format";
+import { useLocale } from "../i18n/LocaleContext";
 
 export function Inbox() {
   const { dmConversations } = useData();
   const navigate = useNavigate();
+  const { t, locale } = useLocale();
 
   return (
     <div className="flex flex-col gap-6 pb-6">
@@ -50,7 +52,7 @@ export function Inbox() {
                 </p>
               </div>
               <div className="flex shrink-0 flex-col items-end gap-1.5">
-                <span className="text-[11px] text-slate-400">{formatRelativeTime(c.lastMessage.createdAt)}</span>
+                <span className="text-[11px] text-slate-400">{formatRelativeTime(c.lastMessage.createdAt, locale, t)}</span>
                 {c.unread && <span className="h-2 w-2 rounded-full bg-fairway-600" aria-label="Unread" />}
               </div>
             </button>

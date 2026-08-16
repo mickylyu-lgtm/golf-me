@@ -16,7 +16,7 @@ import type { GolfCall } from "../types";
 
 export function MyRounds() {
   const { currentUser, golfCalls, getGolfer, hasReviewed } = useData();
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const navigate = useNavigate();
   const [reviewTarget, setReviewTarget] = useState<{ call: GolfCall; revieweeId: string } | null>(null);
   const [sharePromptCall, setSharePromptCall] = useState<GolfCall | null>(null);
@@ -85,7 +85,7 @@ export function MyRounds() {
                     {isHost ? <Badge tone="sun">{t("myGolf.hosting")}</Badge> : <Badge tone="fairway">{t("myGolf.joined")}</Badge>}
                   </div>
                   <p className="flex items-center gap-1 text-xs font-medium text-fairway-700">
-                    <CalendarDays size={12} /> {formatDate(c.dateISO)} · {c.timeLabel}
+                    <CalendarDays size={12} /> {formatDate(c.dateISO, locale, t)} · {c.timeLabel}
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     <Badge tone={VIBE_TONE[c.vibe]}>{c.vibe}</Badge>
@@ -122,7 +122,7 @@ export function MyRounds() {
                     <div>
                       <p className="font-bold text-slate-900">{c.course}</p>
                       <p className="flex items-center gap-1 text-xs text-slate-500">
-                        <CalendarDays size={12} /> {formatDate(c.dateISO)}
+                        <CalendarDays size={12} /> {formatDate(c.dateISO, locale, t)}
                       </p>
                     </div>
                     <Badge tone={c.status === "cancelled" ? "rose" : "slate"}>{c.status === "cancelled" ? t("myGolf.cancelled") : t("myGolf.completed")}</Badge>

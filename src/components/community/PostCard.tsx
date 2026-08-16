@@ -14,6 +14,7 @@ import { GolfCallCard } from "../golfcall/GolfCallCard";
 import { SwingAnalysisPanel } from "./SwingAnalysisPanel";
 import { formatRelativeTime } from "../../lib/format";
 import { areaForCourse } from "../../lib/courses";
+import { useLocale } from "../../i18n/LocaleContext";
 
 interface PostCardProps {
   post: CommunityPost;
@@ -41,6 +42,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
     blockUser,
   } = useData();
   const { showToast } = useToast();
+  const { t, locale } = useLocale();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
@@ -86,7 +88,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
               {author.verification.verifiedGolfer && <ShieldCheck size={13} className="shrink-0 text-fairway-600" />}
             </p>
             <p className="flex items-center gap-1 text-xs text-slate-400">
-              {formatRelativeTime(post.createdAt)}
+              {formatRelativeTime(post.createdAt, locale, t)}
               {isInCircle(author.id) && (
                 <span className="flex items-center gap-0.5 text-fairway-600">
                   · <span aria-hidden>⛳</span> In Your Golf Circle

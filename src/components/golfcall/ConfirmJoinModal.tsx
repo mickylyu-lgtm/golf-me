@@ -7,6 +7,7 @@ import { useData } from "../../context/DataContext";
 import type { GolfCall } from "../../types";
 import { formatDate } from "../../lib/format";
 import { computeCredibility } from "../../lib/credibility";
+import { useLocale } from "../../i18n/LocaleContext";
 
 interface ConfirmJoinModalProps {
   call: GolfCall;
@@ -18,6 +19,7 @@ interface ConfirmJoinModalProps {
 // warning, just "here's who you'd be playing with."
 export function ConfirmJoinModal({ call, onClose, onConfirm }: ConfirmJoinModalProps) {
   const { getGolfer, reviewsAbout } = useData();
+  const { t, locale } = useLocale();
   const roster = call.joinedGolferIds.map((id) => getGolfer(id)).filter((g): g is NonNullable<typeof g> => Boolean(g));
 
   const verifiedCount = roster.filter((g) => g.verification.verifiedGolfer).length;
@@ -68,7 +70,7 @@ export function ConfirmJoinModal({ call, onClose, onConfirm }: ConfirmJoinModalP
         <div>
           <p className="font-bold text-slate-900">{call.course}</p>
           <p className="text-sm text-slate-500">
-            {formatDate(call.dateISO)} · {call.timeLabel}
+            {formatDate(call.dateISO, locale, t)} · {call.timeLabel}
           </p>
         </div>
       </div>

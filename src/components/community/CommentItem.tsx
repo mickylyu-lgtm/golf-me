@@ -8,6 +8,7 @@ import { Avatar } from "../ui/Avatar";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { ReportModal } from "../trust/ReportModal";
 import { formatRelativeTime } from "../../lib/format";
+import { useLocale } from "../../i18n/LocaleContext";
 
 interface CommentItemProps {
   comment: PostComment;
@@ -22,6 +23,7 @@ export function CommentItem({ comment, postId, replies }: CommentItemProps) {
   const { getGolfer, currentUser, isCommentUpvoted, commentUpvoteCount, toggleCommentUpvote, deleteComment, createComment, isBlocked, blockUser } =
     useData();
   const { showToast } = useToast();
+  const { t, locale } = useLocale();
   const navigate = useNavigate();
   const [replyOpen, setReplyOpen] = useState(false);
   const [replyText, setReplyText] = useState("");
@@ -61,7 +63,7 @@ export function CommentItem({ comment, postId, replies }: CommentItemProps) {
             <p className="whitespace-pre-wrap text-sm text-slate-700">{comment.text}</p>
           </div>
           <div className="mt-1 flex items-center gap-3 pl-1 text-xs text-slate-400">
-            <span>{formatRelativeTime(comment.createdAt)}</span>
+            <span>{formatRelativeTime(comment.createdAt, locale, t)}</span>
             <button
               onClick={() => toggleCommentUpvote(comment.id)}
               className={`flex items-center gap-0.5 font-semibold transition-colors duration-150 ${upvoted ? "text-fairway-700" : "hover:text-slate-600"}`}
