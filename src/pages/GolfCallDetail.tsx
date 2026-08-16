@@ -30,6 +30,7 @@ import { VIBE_TONE } from "../lib/theme";
 import { computeCallCompatibility } from "../lib/compatibility";
 import { matchTier, callMatchReasons } from "../lib/matchReasons";
 import { track } from "../lib/analytics";
+import { enrichRealCourse } from "../lib/realCourseSearch";
 
 export function GolfCallDetail() {
   const { id } = useParams<{ id: string }>();
@@ -62,6 +63,14 @@ export function GolfCallDetail() {
   useEffect(() => {
     if (call) track("first_round_viewed", { callId: call.id });
   }, [call?.id]);
+
+  // Best-effort, fire-and-forget: on-demand GolfCourseAPI enrichment for the
+  // real course this round is at. course-enrich itself no-ops instantly if
+  // this course has already been checked, so it's safe to fire on every
+  // view rather than tracking "have I already called this" client-side too.
+  useEffect(() => {
+    if (!isDemo && call?.courseId) enrichRealCourse(call.courseId);
+  }, [isDemo, call?.courseId]);
 
   if (!call) {
     return (
@@ -151,6 +160,7 @@ export function GolfCallDetail() {
           </p>
           <p className="mt-1 font-bold text-slate-800">{formatDate(call.dateISO)}</p>
           <p className="text-sm text-slate-500">{call.timeLabel}</p>
+          {!isDemo && <p className="mt-1 text-[11px] leading-tight text-slate-400">Entered by the host — not confirmed with the course</p>}
         </div>
         <div className="rounded-2xl border border-slate-100 bg-white p-4">
           <p className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-slate-400">

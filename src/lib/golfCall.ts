@@ -54,6 +54,7 @@ export function realRoundToGolfCall(round: RoundRow, participants: ParticipantRo
     id: round.id,
     hostId: round.host_user_id,
     course: round.course_name,
+    courseId: round.course_id ?? undefined,
     areaLabel: round.course_area_label,
     distanceMiles,
     dateISO: round.date_iso,

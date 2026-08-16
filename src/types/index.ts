@@ -183,6 +183,7 @@ export interface GolfCall {
   id: string;
   hostId: string;
   course: string;
+  courseId?: string; // real accounts only — courses.id, used to trigger on-demand enrichment and future tee-time-provider lookups. Undefined for demo/mock rounds, which have no real courses row.
   areaLabel: string;
   distanceMiles: number; // approximate distance from current user to the course
   dateISO: string; // date of the round

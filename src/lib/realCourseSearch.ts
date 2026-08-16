@@ -62,6 +62,19 @@ export async function getNearbyRealCourses(location: PlayingArea, radiusMiles: n
   return sortByDistance(rows.map((r) => rowToResult(r, location)));
 }
 
+// Best-effort, on-demand GolfCourseAPI enrichment for a single course
+// already found via Geoapify — never called for a whole search-result list
+// (GolfCourseAPI's free tier is 50 requests/day; course-enrich itself
+// tracks courses.golfcourseapi_checked_at so a given course is ever checked
+// at most once regardless of how many times this is called). Fire-and-
+// forget by design: enrichment is a nice-to-have (real hole count), never
+// something a caller should block on or surface an error for.
+export function enrichRealCourse(courseId: string): void {
+  supabase.functions.invoke("course-enrich", { body: { courseId } }).catch((err) => {
+    console.error("Golf Me: course enrichment failed (non-blocking).", err);
+  });
+}
+
 export async function getRealCourseById(id: string): Promise<RealCourseResult | null> {
   const { data, error } = await supabase.from("courses").select("id, name, city, region, latitude, longitude").eq("id", id).maybeSingle();
   if (error) throw new CourseSearchError(error.message);

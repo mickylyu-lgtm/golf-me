@@ -3,10 +3,16 @@
 // or embedded in the browser bundle. Demo mode never calls this function at
 // all; it's only reached by real (non-demo), authenticated accounts.
 //
-// Uses the caller's own forwarded JWT (not a service-role key) to write the
-// upserted results into public.courses, so every write still goes through
-// that table's normal "any authenticated golfer" RLS policies rather than
-// bypassing them with elevated privileges this function doesn't need.
+// Geoapify is the location-discovery half of GolfMe's two-provider course
+// architecture (see course-enrich for the GolfCourseAPI name-based detail
+// half) — it's the one that can actually search by coordinates.
+//
+// Uses the caller's own forwarded JWT (not a service-role key) to call
+// upsert_external_course(), a SECURITY DEFINER RPC that's the only
+// sanctioned write path into courses/course_external_ids — same reasoning
+// as join_golf_call() for round_participants: the find-or-create-by-
+// (provider, external_id) check and the write happen atomically in one
+// transaction, so no caller can create a duplicate canonical course row.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -106,31 +112,41 @@ Deno.serve(async (req: Request) => {
   const geoapifyBody = (await geoapifyRes.json()) as { features?: GeoapifyFeature[] };
   const features = geoapifyBody.features ?? [];
 
-  const rows = features
-    .filter((f) => f.properties?.place_id && f.properties.lat != null && f.properties.lon != null)
-    .map((f) => ({
-      provider: "geoapify",
-      external_id: f.properties.place_id,
-      name: f.properties.name?.trim() || f.properties.address_line1?.trim() || "Unnamed course",
-      city: f.properties.city ?? null,
-      region: f.properties.state ?? null,
-      country: f.properties.country ?? null,
-      latitude: f.properties.lat,
-      longitude: f.properties.lon,
-      address: f.properties.formatted ?? null,
-      fetched_at: new Date().toISOString(),
-    }));
-
-  if (rows.length === 0) return jsonResponse({ results: [] });
+  const candidates = features.filter((f) => f.properties?.place_id && f.properties.lat != null && f.properties.lon != null);
+  if (candidates.length === 0) return jsonResponse({ results: [] });
 
   const authHeader = req.headers.get("Authorization") ?? "";
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
     global: { headers: { Authorization: authHeader } },
   });
 
-  const { data, error } = await supabase.from("courses").upsert(rows, { onConflict: "provider,external_id" }).select();
+  // Geoapify is the location-discovery provider -- it's the one of the two
+  // real course-data sources that can actually search by coordinates.
+  // GolfCourseAPI (course-enrich, a separate on-demand Edge Function) has no
+  // location search at all -- it only matches by course/club name -- so it
+  // never discovers a course on its own, only enriches one Geoapify already
+  // found. upsert_external_course() is what prevents the same physical
+  // course from ever getting a second, duplicate courses row if it's later
+  // also matched by name in GolfCourseAPI: both providers' mappings point at
+  // one canonical courses.id.
+  const results = [];
+  for (const f of candidates) {
+    const name = f.properties.name?.trim() || f.properties.address_line1?.trim() || "Unnamed course";
+    const { data, error } = await supabase.rpc("upsert_external_course", {
+      p_provider: "geoapify",
+      p_external_id: f.properties.place_id,
+      p_name: name,
+      p_normalized_name: name.toLowerCase(),
+      p_city: f.properties.city ?? null,
+      p_region: f.properties.state ?? null,
+      p_country: f.properties.country ?? null,
+      p_address: f.properties.formatted ?? null,
+      p_latitude: f.properties.lat,
+      p_longitude: f.properties.lon,
+    });
+    if (error) return jsonResponse({ error: `Failed to cache course results: ${error.message}` }, 500);
+    results.push(data);
+  }
 
-  if (error) return jsonResponse({ error: `Failed to cache course results: ${error.message}` }, 500);
-
-  return jsonResponse({ results: data });
+  return jsonResponse({ results });
 });
