@@ -9,6 +9,7 @@ import { EmptyState } from "../components/ui/EmptyState";
 import { computeCompatibility } from "../lib/compatibility";
 import { GOLF_VIBES } from "../types";
 import type { GolfVibe } from "../types";
+import { vibeLabel } from "../lib/enumLabels";
 
 type SortMode = "compatibility" | "distance" | "reputation";
 
@@ -92,7 +93,7 @@ export function Discover({ embedded = false }: DiscoverProps) {
                       : "border-slate-200 bg-white text-slate-600 hover:border-fairway-300"
                   }`}
                 >
-                  {v}
+                  {vibeLabel(v, t)}
                 </button>
               ))}
             </div>

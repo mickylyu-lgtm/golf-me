@@ -36,6 +36,7 @@ import { matchTier, golferMatchReasons } from "../lib/matchReasons";
 import { computeCredibility, computeHandicapConfidence } from "../lib/credibility";
 import { useCredibilityStats } from "../lib/useCredibility";
 import { formatBudgetRange, handicapLabel, isNewAccount, paceLabel } from "../lib/format";
+import { vibeLabel, walkOrCartLabel } from "../lib/enumLabels";
 import { VIBE_TONE } from "../lib/theme";
 
 // Stable (module-level, not re-created per render) zeroed fallback for the
@@ -279,12 +280,12 @@ export function GolferProfilePage() {
         <div className="flex flex-wrap gap-1.5">
           {golfer.vibes.map((v) => (
             <Badge key={v} tone={VIBE_TONE[v]}>
-              {v}
+              {vibeLabel(v, t)}
             </Badge>
           ))}
           {isEstablished && <Badge tone="outline">{paceLabel(enrichedGolfer.reputation.goodPacePct, t)}</Badge>}
           <Badge tone="outline" icon={golfer.walkOrCart === "Walking" ? <Footprints size={12} /> : <Car size={12} />}>
-            {golfer.walkOrCart === "Either" ? "Walks or Carts" : `Usually ${golfer.walkOrCart === "Walking" ? "Walks" : "Carts"}`}
+            {walkOrCartLabel(golfer.walkOrCart, t)}
           </Badge>
         </div>
       </div>

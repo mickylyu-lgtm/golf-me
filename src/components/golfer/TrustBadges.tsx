@@ -2,19 +2,22 @@ import { ShieldCheck, Sparkles } from "lucide-react";
 import type { GolferProfile } from "../../types";
 import { isNewAccount } from "../../lib/format";
 import { Badge } from "../ui/Badge";
+import { useLocale } from "../../i18n/LocaleContext";
 
 export function VerifiedBadge() {
+  const { t } = useLocale();
   return (
     <Badge tone="fairway" icon={<ShieldCheck size={12} />}>
-      Verified Golfer
+      {t("trust.verifiedGolfer")}
     </Badge>
   );
 }
 
 export function NewAccountBadge() {
+  const { t } = useLocale();
   return (
     <Badge tone="sun" icon={<Sparkles size={12} />}>
-      New to Golf Me
+      {t("trust.newToGolfMe")}
     </Badge>
   );
 }

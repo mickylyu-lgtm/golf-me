@@ -8,6 +8,7 @@ import { computeCompatibility } from "../../lib/compatibility";
 import { golferMatchReasons } from "../../lib/matchReasons";
 import { computeCredibility } from "../../lib/credibility";
 import { formatBudgetRange, handicapLabel, paceLabel } from "../../lib/format";
+import { vibeLabel, walkOrCartLabel } from "../../lib/enumLabels";
 import type { MatchFactor } from "../../lib/matchReasons";
 import { useLocale } from "../../i18n/LocaleContext";
 
@@ -78,13 +79,17 @@ export function CompareModal({ other, onClose }: { other: GolferProfile; onClose
           />
           <CompareRow label="Show-Up Rate" you={`${currentUser.reputation.showUpRatePct}%`} them={`${other.reputation.showUpRatePct}%`} />
           <CompareRow label="Pace" you={paceLabel(currentUser.reputation.goodPacePct, t)} them={paceLabel(other.reputation.goodPacePct, t)} />
-          <CompareRow label="Golf Vibe" you={currentUser.vibes.join(" & ")} them={other.vibes.join(" & ")} />
+          <CompareRow
+            label="Golf Vibe"
+            you={currentUser.vibes.map((v) => vibeLabel(v, t)).join(" & ")}
+            them={other.vibes.map((v) => vibeLabel(v, t)).join(" & ")}
+          />
           <CompareRow
             label="Budget / Round"
             you={formatBudgetRange(currentUser.budgetMin, currentUser.budgetMax, currentUser.noBudgetPreference, t)}
             them={formatBudgetRange(other.budgetMin, other.budgetMax, other.noBudgetPreference, t)}
           />
-          <CompareRow label="Walking or Cart" you={currentUser.walkOrCart} them={other.walkOrCart} />
+          <CompareRow label="Walking or Cart" you={walkOrCartLabel(currentUser.walkOrCart, t)} them={walkOrCartLabel(other.walkOrCart, t)} />
           <CompareRow label="Credibility" you={myCredibility.label} them={theirCredibility.label} />
         </div>
 

@@ -13,6 +13,7 @@ import { LocationPicker } from "../location/LocationPicker";
 import { inputClass } from "../ui/FormControls";
 import { BUDGET_PREF_MAX, BUDGET_PREF_MIN, GOLF_VIBES, TRAVEL_RADIUS_MAX, TRAVEL_RADIUS_MIN } from "../../types";
 import type { GolfVibe, SkillFilter, WalkOrCart } from "../../types";
+import { skillLabel, vibeLabel, walkOrCartLabel } from "../../lib/enumLabels";
 import {
   GAME_FORMAT_OPTIONS,
   GENDER_OPTIONS_MATCH,
@@ -319,7 +320,7 @@ export function FindRoundModal({ onClose }: { onClose: () => void }) {
                 <div className="flex flex-wrap gap-1.5">
                   {SKILL_OPTIONS.map((s) => (
                     <Pill key={s} active={skillLevel === s} onClick={() => setSkillLevel(skillLevel === s ? "" : s)}>
-                      {s}
+                      {skillLabel(s, t)}
                     </Pill>
                   ))}
                 </div>
@@ -329,7 +330,7 @@ export function FindRoundModal({ onClose }: { onClose: () => void }) {
                 <div className="flex flex-wrap gap-1.5">
                   {GOLF_VIBES.map((v) => (
                     <Pill key={v} active={vibe === v} onClick={() => setVibe(vibe === v ? "" : v)}>
-                      {v}
+                      {vibeLabel(v, t)}
                     </Pill>
                   ))}
                 </div>
@@ -339,7 +340,7 @@ export function FindRoundModal({ onClose }: { onClose: () => void }) {
                 <div className="flex flex-wrap gap-1.5">
                   {WALK_OPTIONS.map((w) => (
                     <Pill key={w} active={walkOrCart === w} onClick={() => setWalkOrCart(walkOrCart === w ? "" : w)}>
-                      {w}
+                      {walkOrCartLabel(w, t)}
                     </Pill>
                   ))}
                 </div>

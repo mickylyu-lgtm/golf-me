@@ -16,6 +16,7 @@ import {
   TRAVEL_RADIUS_MIN,
 } from "../../types";
 import type { WalkOrCart } from "../../types";
+import { vibeLabel, walkOrCartLabel } from "../../lib/enumLabels";
 import type { PlayingArea } from "../../lib/geo";
 import {
   GAME_FORMAT_OPTIONS,
@@ -94,7 +95,7 @@ export function MatchPreferencesPanel({ value, onChange, nearLocation }: MatchPr
           <div className="flex gap-2">
             {WALK_OPTIONS.map((w) => (
               <Pill key={w} active={value.walkOrCart === w} onClick={() => onChange({ walkOrCart: w })} className="flex-1 py-2 text-center">
-                {w}
+                {walkOrCartLabel(w, t)}
               </Pill>
             ))}
           </div>
@@ -165,7 +166,7 @@ export function MatchPreferencesPanel({ value, onChange, nearLocation }: MatchPr
           <div className="flex flex-wrap gap-1.5">
             {GOLF_VIBES.map((v) => (
               <Pill key={v} active={value.vibes.includes(v)} onClick={() => toggleVibe(v)}>
-                {v}
+                {vibeLabel(v, t)}
               </Pill>
             ))}
           </div>

@@ -3,6 +3,7 @@ import type { GolferProfile } from "../../types";
 import { Avatar } from "../ui/Avatar";
 import { Badge } from "../ui/Badge";
 import { formatBudgetRange, handicapLabel } from "../../lib/format";
+import { vibeLabel, walkOrCartLabel } from "../../lib/enumLabels";
 import { VIBE_TONE } from "../../lib/theme";
 import { CompatibilityBadge } from "./CompatibilityBadge";
 import { ReputationRow } from "./ReputationRow";
@@ -29,7 +30,7 @@ export function GolferCard({ golfer, compatibility, onClick }: GolferCardProps) 
               {golfer.name} <span className="font-normal text-slate-400">· {golfer.ageRange}</span>
             </p>
             <p className="flex items-center gap-1 text-xs text-slate-500">
-              <MapPin size={12} /> {golfer.distanceMiles.toFixed(1)} mi away · {golfer.areaLabel}
+              <MapPin size={12} /> {t("golfCallCard.miAway", { miles: golfer.distanceMiles.toFixed(1) })} · {golfer.areaLabel}
             </p>
           </div>
         </div>
@@ -40,7 +41,7 @@ export function GolferCard({ golfer, compatibility, onClick }: GolferCardProps) 
         <Badge tone="outline">{handicapLabel(golfer.handicap, t)}</Badge>
         {golfer.vibes.slice(0, 2).map((v) => (
           <Badge key={v} tone={VIBE_TONE[v]}>
-            {v}
+            {vibeLabel(v, t)}
           </Badge>
         ))}
       </div>
@@ -53,7 +54,7 @@ export function GolferCard({ golfer, compatibility, onClick }: GolferCardProps) 
         </span>
         <span className="flex items-center gap-1">
           {golfer.walkOrCart === "Walking" ? <Footprints size={12} /> : <Car size={12} />}
-          {golfer.walkOrCart}
+          {walkOrCartLabel(golfer.walkOrCart, t)}
         </span>
       </div>
 

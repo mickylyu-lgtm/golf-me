@@ -16,6 +16,7 @@ import type { GameFormat, GolfVibe, Holes, JoinMode, SkillFilter, WalkOrCart } f
 import { CourseAutocomplete } from "../components/golfcall/CourseAutocomplete";
 import { inputClass, labelClass } from "../components/ui/FormControls";
 import { formatDate, formatMoney } from "../lib/format";
+import { skillLabel, vibeLabel } from "../lib/enumLabels";
 import { getWeekendRange } from "../lib/greeting";
 import { skillTierFromHandicap } from "../lib/format";
 import { coordsForCourse } from "../lib/courses";
@@ -448,7 +449,7 @@ export function CreateGolfCall() {
                   <select className={`${inputClass} mt-2`} value={skillLevel} onChange={(e) => setSkillLevel(e.target.value as SkillFilter)}>
                     {SKILL_OPTIONS.map((s) => (
                       <option key={s} value={s}>
-                        {s}
+                        {skillLabel(s, t)}
                       </option>
                     ))}
                   </select>
@@ -500,7 +501,7 @@ export function CreateGolfCall() {
             <div className="flex flex-wrap gap-1.5">
               {GOLF_VIBES.map((v) => (
                 <Pill key={v} active={vibe === v} onClick={() => setVibe(v)}>
-                  {v}
+                  {vibeLabel(v, t)}
                 </Pill>
               ))}
             </div>

@@ -13,6 +13,7 @@ import { LocationPicker } from "../components/location/LocationPicker";
 import { inputClass, labelClass } from "../components/ui/FormControls";
 import { BUDGET_PREF_MAX, BUDGET_PREF_MIN, GENDER_OPTIONS, GOLF_VIBES, TRAVEL_RADIUS_MAX, TRAVEL_RADIUS_MIN } from "../types";
 import type { GolfVibe, RoundLengthPreference, WalkOrCart } from "../types";
+import { vibeLabel, walkOrCartLabel } from "../lib/enumLabels";
 import { initialsFromName, avatarColorForName } from "../lib/avatar";
 import { formatBudgetValue, formatDistanceValue, TRAVEL_RADIUS_PRESETS } from "../lib/matchPreferences";
 import { useNearbyCourses } from "../lib/useCourseSearch";
@@ -413,7 +414,7 @@ export function ProfileSetup() {
               <div className="flex flex-wrap gap-1.5">
                 {GOLF_VIBES.map((v) => (
                   <Pill key={v} active={vibes.includes(v)} onClick={() => toggleVibe(v)}>
-                    {v}
+                    {vibeLabel(v, t)}
                   </Pill>
                 ))}
               </div>
@@ -423,7 +424,7 @@ export function ProfileSetup() {
               <div className="flex gap-2">
                 {WALK_OPTIONS.map((w) => (
                   <Pill key={w} active={walkOrCart === w} onClick={() => setWalkOrCart(w)} className="flex-1 py-2 text-center">
-                    {w}
+                    {walkOrCartLabel(w, t)}
                   </Pill>
                 ))}
               </div>

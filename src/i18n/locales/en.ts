@@ -56,6 +56,26 @@ export const en = {
   "notifications.emptyDescription": "Replies, follows, and round updates will show up here.",
   "notifications.markAllRead": "Mark all as read",
 
+  // Enum display labels (GolfVibe/SkillFilter/WalkOrCart) — the underlying
+  // stored/compared values stay the fixed English literals from types.ts;
+  // only the rendered text goes through these. src/lib/enumLabels.ts.
+  "vibe.casualSocial": "Casual & Social",
+  "vibe.competitive": "Competitive",
+  "vibe.beginnerFriendly": "Beginner-Friendly",
+  "vibe.networking": "Networking",
+  "vibe.justHereToGolf": "Just Here to Golf",
+  "skill.any": "Any Skill Level",
+  "skill.beginner": "Beginner",
+  "skill.intermediate": "Intermediate",
+  "skill.advanced": "Advanced",
+  "walkOrCart.walking": "Walking",
+  "walkOrCart.cart": "Cart",
+  "walkOrCart.either": "Either",
+  "golfCallCard.miAway": "{miles} mi away",
+  "golfCallDetail.pricePerPerson": "{price}/person",
+  "trust.verifiedGolfer": "Verified Golfer",
+  "trust.newToGolfMe": "New to Golf Me",
+
   // Welcome (first open, no session)
   "welcome.tagline": "Find your next round.",
   "welcome.subtitle": "Golf when you want, even when your usual group can't.",

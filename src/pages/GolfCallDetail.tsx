@@ -27,6 +27,7 @@ import { TrustBadgeRow } from "../components/golfer/TrustBadges";
 import { MatchReasons } from "../components/golfer/MatchReasons";
 import { ConfirmJoinModal } from "../components/golfcall/ConfirmJoinModal";
 import { formatDate, formatMoney } from "../lib/format";
+import { skillLabel, vibeLabel, walkOrCartLabel } from "../lib/enumLabels";
 import { VIBE_TONE } from "../lib/theme";
 import { computeCallCompatibility } from "../lib/compatibility";
 import { matchTier, callMatchReasons } from "../lib/matchReasons";
@@ -142,7 +143,7 @@ export function GolfCallDetail() {
         </div>
         <h1 className="text-2xl font-extrabold text-slate-900">{call.course}</h1>
         <p className="flex items-center gap-1 text-sm text-slate-500">
-          <MapPin size={13} /> {call.distanceMiles.toFixed(0)} mi away · {call.areaLabel}
+          <MapPin size={13} /> {t("golfCallCard.miAway", { miles: call.distanceMiles.toFixed(0) })} · {call.areaLabel}
         </p>
       </div>
 
@@ -168,16 +169,18 @@ export function GolfCallDetail() {
           <p className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
             <Wallet size={12} /> {t("golfCallDetail.estimatedPrice")}
           </p>
-          <p className="mt-1 font-bold text-slate-800">{formatMoney(call.estimatedPricePerPerson)}/person</p>
+          <p className="mt-1 font-bold text-slate-800">
+            {t("golfCallDetail.pricePerPerson", { price: formatMoney(call.estimatedPricePerPerson) })}
+          </p>
           <p className="text-sm text-slate-500">{t("golfCallDetail.payAtCourse")}</p>
         </div>
       </div>
 
       <div className="flex flex-wrap gap-1.5">
-        <Badge tone="outline">{call.skillLevel}</Badge>
-        <Badge tone={VIBE_TONE[call.vibe]}>{call.vibe}</Badge>
+        <Badge tone="outline">{skillLabel(call.skillLevel, t)}</Badge>
+        <Badge tone={VIBE_TONE[call.vibe]}>{vibeLabel(call.vibe, t)}</Badge>
         <Badge tone="outline" icon={call.walkOrCart === "Walking" ? <Footprints size={12} /> : <Car size={12} />}>
-          {call.walkOrCart}
+          {walkOrCartLabel(call.walkOrCart, t)}
         </Badge>
       </div>
 

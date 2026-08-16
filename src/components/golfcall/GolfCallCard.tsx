@@ -11,6 +11,7 @@ import { MatchReasons } from "../golfer/MatchReasons";
 import { SharedPreferencesBadge } from "./SharedPreferencesBadge";
 import { CLICKABLE_CARD_CLASS } from "../ui/cardStyles";
 import { formatCompactDay, formatDate, formatMoney } from "../../lib/format";
+import { vibeLabel } from "../../lib/enumLabels";
 import { VIBE_TONE } from "../../lib/theme";
 import { computeCallCompatibility } from "../../lib/compatibility";
 import { matchTier, callMatchReasons } from "../../lib/matchReasons";
@@ -108,7 +109,7 @@ export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
           <span>· {call.timeLabel}</span>
           <span className="text-slate-300">·</span>
           <span>
-            {call.distanceMiles.toFixed(0)} mi away · ~{formatMoney(call.estimatedPricePerPerson)}
+            {t("golfCallCard.miAway", { miles: call.distanceMiles.toFixed(0) })} · ~{formatMoney(call.estimatedPricePerPerson)}
           </span>
         </p>
       </div>
@@ -163,7 +164,7 @@ export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
       </div>
 
       <Badge tone={VIBE_TONE[call.vibe]} className="self-start font-semibold">
-        {call.vibe}
+        {vibeLabel(call.vibe, t)}
       </Badge>
 
       {tier && (
