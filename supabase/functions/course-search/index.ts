@@ -39,7 +39,11 @@ interface GeoapifyFeature {
   };
 }
 
-const GEOAPIFY_CATEGORY = "sport.golf";
+// Confirmed against Geoapify's live category list — "sport.golf" (the
+// original Phase 3 value) doesn't exist and was never caught until now,
+// since GEOAPIFY_API_KEY was never set until 2026-08-16, meaning this
+// endpoint was never actually called successfully before today.
+const GEOAPIFY_CATEGORY = "sport.golf_course";
 
 // Same CORS preflight issue as delete-account: without an explicit OPTIONS
 // response and Access-Control-Allow-* headers, the browser's preflight for
@@ -106,7 +110,8 @@ Deno.serve(async (req: Request) => {
   }
 
   if (!geoapifyRes.ok) {
-    return jsonResponse({ error: `Course search provider returned an error (${geoapifyRes.status}).` }, 502);
+    const detail = await geoapifyRes.text().catch(() => "");
+    return jsonResponse({ error: `Course search provider returned an error (${geoapifyRes.status}): ${detail}` }, 502);
   }
 
   const geoapifyBody = (await geoapifyRes.json()) as { features?: GeoapifyFeature[] };
