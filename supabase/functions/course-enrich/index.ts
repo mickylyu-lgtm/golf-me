@@ -38,9 +38,14 @@ interface GolfCourseApiCourse {
   tees?: { male?: GolfCourseApiTeeSet[]; female?: GolfCourseApiTeeSet[] };
 }
 
+// x-client-info is sent on every real supabase.functions.invoke() call by
+// supabase-js's DEFAULT_HEADERS -- omitting it here would make a real
+// browser's CORS preflight reject the actual request client-side (a true
+// network failure, not an HTTP error status), the same bug found and fixed
+// in course-search's identical corsHeaders block.
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 

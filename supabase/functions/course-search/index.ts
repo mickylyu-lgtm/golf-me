@@ -48,9 +48,19 @@ const GEOAPIFY_CATEGORY = "sport.golf_course";
 // Same CORS preflight issue as delete-account: without an explicit OPTIONS
 // response and Access-Control-Allow-* headers, the browser's preflight for
 // this cross-origin POST never succeeds, so the real request is never sent.
+//
+// x-client-info specifically: supabase-js's DEFAULT_HEADERS puts this on
+// every request its FunctionsClient sends (see
+// @supabase/supabase-js/src/lib/constants.ts), including real
+// supabase.functions.invoke() calls -- a raw fetch() built by hand (what
+// every curl/Playwright test used while diagnosing this) never sends it,
+// so testing never caught that the browser's real preflight was rejecting
+// this header and silently blocking the actual POST client-side (surfaces
+// as supabase-js's FunctionsFetchError, "Failed to send a request to the
+// Edge Function" -- a network-layer failure, not an HTTP error response).
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 

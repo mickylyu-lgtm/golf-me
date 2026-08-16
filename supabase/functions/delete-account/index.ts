@@ -28,9 +28,19 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 // "Failed to fetch", no matter how correct the POST handler itself is. This
 // was caught live (a real browser fetch, not curl, which never triggers a
 // preflight) before ever being reported as done.
+//
+// x-client-info: supabase-js's FunctionsClient sends this on every real
+// supabase.functions.invoke() call (DEFAULT_HEADERS in
+// @supabase/supabase-js/src/lib/constants.ts). It was missing from this
+// allow-list too -- meaning even after the original CORS fix above, a real
+// browser call from the actual app would still have been silently blocked
+// client-side by the preflight (FunctionsFetchError, "Failed to send a
+// request to the Edge Function"), never caught because every test used a
+// hand-built fetch() that never sent this header. Found via the same bug
+// surfacing in course-search.
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
