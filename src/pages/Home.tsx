@@ -4,12 +4,14 @@ import { ArrowRight, Search, UserPlus } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useLocale } from "../i18n/LocaleContext";
 import { GolfCallCard } from "../components/golfcall/GolfCallCard";
+import { PostCard } from "../components/community/PostCard";
 import { CLICKABLE_CARD_CLASS } from "../components/ui/cardStyles";
 import { firstName, greetingKeyForHour, isThisWeekend } from "../lib/greeting";
 import { MIN_PREFERENCES_FOR_AUTO_MATCH, selectedPreferenceCount } from "../lib/preferenceMatch";
 
 const HOME_RADIUS_MILES = 25;
 const NEARBY_ROUNDS_SHOWN = 3;
+const HOME_POSTS_SHOWN = 3;
 
 // A standalone class list (rather than layering overrides onto
 // CLICKABLE_CARD_CLASS) — Tailwind's generated stylesheet order doesn't
@@ -19,7 +21,7 @@ const PRIMARY_ACTION_CLASS =
   "rounded-2xl bg-fairway-600 shadow-sm shadow-fairway-900/10 transition-all duration-200 ease-out hover:-translate-y-0.5 hover:bg-fairway-700 hover:shadow-md active:translate-y-0 active:bg-fairway-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:hover:translate-y-0";
 
 export function Home() {
-  const { currentUser, golfCalls } = useData();
+  const { currentUser, golfCalls, visiblePosts } = useData();
   const { t } = useLocale();
   const navigate = useNavigate();
 
@@ -45,6 +47,14 @@ export function Home() {
   const nearbyRounds = useMemo(
     () => [...nearbyAnytime].sort((a, b) => a.dateISO.localeCompare(b.dateISO)).slice(0, NEARBY_ROUNDS_SHOWN),
     [nearbyAnytime],
+  );
+
+  // Same underlying data + PostCard component as the full Community page —
+  // just the newest slice, so Home never carries a duplicate feed implementation.
+  const recentPosts = useMemo(
+    () =>
+      [...visiblePosts()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, HOME_POSTS_SHOWN),
+    [visiblePosts],
   );
 
   // Self-resolving nudge — only shows while under the same 3-of-5 threshold
@@ -123,12 +133,35 @@ export function Home() {
         </button>
       )}
 
-      <button
-        onClick={() => navigate("/community")}
-        className="self-start text-sm font-semibold text-fairway-700 transition-colors duration-200 hover:text-fairway-800 hover:underline"
-      >
-        {t("home.community")}
-      </button>
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-bold text-slate-900">{t("community.title")}</h2>
+          <button
+            onClick={() => navigate("/community")}
+            className="text-sm font-semibold text-fairway-700 transition-colors duration-200 hover:text-fairway-800 hover:underline"
+          >
+            {t("common.viewMore")}
+          </button>
+        </div>
+        {recentPosts.length > 0 ? (
+          <div className="flex flex-col gap-3">
+            {recentPosts.map((post) => (
+              <PostCard key={post.id} post={post} />
+            ))}
+          </div>
+        ) : (
+          <button
+            onClick={() => navigate("/community/new")}
+            className={`flex w-full items-center justify-between gap-3 p-4 text-left ${CLICKABLE_CARD_CLASS}`}
+          >
+            <span className="min-w-0">
+              <span className="block text-sm font-bold text-slate-900">{t("community.emptyDefault")}</span>
+              <span className="block text-xs text-slate-500">{t("community.subtitle")}</span>
+            </span>
+            <span className="shrink-0 text-xs font-semibold text-fairway-700">{t("community.createPost")}</span>
+          </button>
+        )}
+      </section>
     </div>
   );
 }

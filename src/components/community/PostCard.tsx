@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowUp, Bookmark, MapPin, MessageCircle, MoreHorizontal, ShieldAlert, ShieldCheck, ShieldOff, ShieldX, Trash2 } from "lucide-react";
+import { ArrowUp, Bookmark, MapPin, MessageCircle, MoreHorizontal, ShieldAlert, ShieldCheck, ShieldOff, ShieldX, Trash2, Video } from "lucide-react";
 import type { CommunityPost } from "../../types";
 import { useData } from "../../context/DataContext";
 import { useToast } from "../../context/ToastContext";
@@ -11,6 +11,7 @@ import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { ReportModal } from "../trust/ReportModal";
 import { CLICKABLE_CARD_CLASS } from "../ui/cardStyles";
 import { GolfCallCard } from "../golfcall/GolfCallCard";
+import { SwingAnalysisPanel } from "./SwingAnalysisPanel";
 import { formatRelativeTime } from "../../lib/format";
 import { areaForCourse } from "../../lib/courses";
 
@@ -64,8 +65,18 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
     e.stopPropagation();
   }
 
+  const isSwingPost = post.type === "swing";
+
   return (
-    <div className={`flex flex-col gap-3 p-4 ${linkToDetail ? "cursor-pointer" : ""} ${CLICKABLE_CARD_CLASS}`} onClick={goToDetail}>
+    <div
+      className={`flex flex-col gap-3 p-4 ${linkToDetail ? "cursor-pointer" : ""} ${isSwingPost ? "border-2 border-fairway-300" : ""} ${CLICKABLE_CARD_CLASS}`}
+      onClick={goToDetail}
+    >
+      {isSwingPost && (
+        <p className="flex w-fit items-center gap-1 rounded-full bg-fairway-600 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
+          <Video size={11} /> Swing Post
+        </p>
+      )}
       <div className="flex items-center justify-between gap-2">
         <button onClick={(e) => { stop(e); navigate(`/golfer/${author.id}`); }} className="flex min-w-0 items-center gap-2.5 text-left">
           <Avatar golfer={author} size="sm" />
@@ -156,6 +167,14 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
         </button>
       )}
 
+      {isSwingPost && post.videoUrl && (
+        <div onClick={stop} className="flex flex-col gap-2.5">
+          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+          <video src={post.videoUrl} controls className="max-h-96 w-full rounded-xl bg-black" />
+          <SwingAnalysisPanel status={post.swingAnalysisStatus} />
+        </div>
+      )}
+
       {post.type === "course" && post.courseTag && (
         <div className="flex flex-col gap-2 rounded-xl border border-slate-100 bg-slate-50/60 p-3" onClick={stop}>
           <p className="flex items-center gap-1 text-sm font-semibold text-slate-800">
@@ -244,10 +263,15 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
             message="This removes the post and its comments. This can't be undone."
             confirmLabel="Delete"
             danger
-            onConfirm={() => {
-              deletePost(post.id);
-              setDeleteConfirmOpen(false);
-              showToast("Post deleted.", "info");
+            onConfirm={async () => {
+              try {
+                await deletePost(post.id);
+                showToast("Post deleted.", "info");
+              } catch (err) {
+                showToast(err instanceof Error ? err.message : "Couldn't delete this post. Please try again.", "warning");
+              } finally {
+                setDeleteConfirmOpen(false);
+              }
             }}
             onCancel={() => setDeleteConfirmOpen(false)}
           />

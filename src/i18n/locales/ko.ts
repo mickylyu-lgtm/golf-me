@@ -126,7 +126,6 @@ export const ko: Record<TranslationKey, string> = {
   "home.hostRound": "라운드 만들기",
   "home.hostRoundSubtitle": "새 라운드를 만들거나 조를 채워보세요.",
   "home.roundsNearYou": "근처 라운드",
-  "home.community": "커뮤니티 →",
 
   "find.title": "근처 골프 찾기",
   "find.subtitle": "플레이어를 찾는 라운드와 그 뒤의 골퍼들.",

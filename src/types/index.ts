@@ -325,8 +325,13 @@ export interface DmReadState {
 // golfers/follows/blocks/golfCalls/courses wholesale — never duplicates
 // them. ---
 
-export type PostType = "text" | "photo" | "course" | "round";
-export const POST_TYPES: PostType[] = ["text", "photo", "course", "round"];
+export type PostType = "text" | "photo" | "course" | "round" | "swing";
+export const POST_TYPES: PostType[] = ["text", "photo", "course", "round", "swing"];
+
+// Real accounts only — set once a swing video finishes uploading (see
+// src/lib/swingAnalysis.ts). Never "complete" with fabricated numbers; only
+// a real analysis provider, not yet connected, can produce that state.
+export type SwingAnalysisStatus = "pending" | "processing" | "complete";
 
 // Deliberately short — a meme is just a "photo" post categorized "Memes",
 // not a separate system.
@@ -346,7 +351,9 @@ export interface CommunityPost {
   authorId: string;
   type: PostType;
   text: string;
-  imageUrl?: string; // local data-URL, same handling as GolferProfile.photoUrl
+  imageUrl?: string; // demo: local data-URL. Real: a public Supabase Storage URL.
+  videoUrl?: string; // swing posts only — always a real Supabase Storage URL, real accounts only (demo has no swing-post equivalent)
+  swingAnalysisStatus?: SwingAnalysisStatus; // present only on swing posts
   courseTag?: string; // a name from lib/courses.ts — never a duplicate course record
   golfCallId?: string; // attached Golf Call, by reference only (upcoming or completed)
   category: PostCategory;

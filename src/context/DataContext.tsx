@@ -44,6 +44,7 @@ import { useAuth } from "./AuthContext";
 import { placeholderGolferProfile, golferPatchToProfileRow } from "../lib/profile";
 import { useRealRounds } from "./RealRoundsContext";
 import { useRealSocial } from "./RealSocialContext";
+import { useRealCommunity } from "./RealCommunityContext";
 
 export interface DmConversation {
   conversationId: string;
@@ -86,6 +87,7 @@ export interface CreatePostInput {
   type: PostType;
   text: string;
   imageUrl?: string;
+  videoUrl?: string; // swing posts only — real accounts, ignored by the demo path
   courseTag?: string;
   golfCallId?: string;
   category: PostCategory;
@@ -199,29 +201,29 @@ interface DataContextValue {
   posts: CommunityPost[];
   getPost: (id: string) => CommunityPost | undefined;
   visiblePosts: () => CommunityPost[]; // excludes blocked-either-direction + hidden-by-me
-  createPost: (input: CreatePostInput) => CommunityPost;
-  deletePost: (postId: string) => void;
-  attachGolfCallToPost: (postId: string, callId: string) => void;
+  createPost: (input: CreatePostInput) => Promise<CommunityPost>;
+  deletePost: (postId: string) => Promise<void>;
+  attachGolfCallToPost: (postId: string, callId: string) => Promise<void>;
 
   isPostUpvoted: (postId: string) => boolean;
   postUpvoteCount: (postId: string) => number;
-  togglePostUpvote: (postId: string) => void;
+  togglePostUpvote: (postId: string) => Promise<void>;
 
   isPostSaved: (postId: string) => boolean;
-  savePost: (postId: string) => void;
-  unsavePost: (postId: string) => void;
+  savePost: (postId: string) => Promise<void>;
+  unsavePost: (postId: string) => Promise<void>;
   savedPostsList: CommunityPost[];
 
   isPostHidden: (postId: string) => boolean;
-  hidePost: (postId: string) => void;
+  hidePost: (postId: string) => Promise<void>;
 
   comments: PostComment[];
   commentsForPost: (postId: string) => PostComment[];
-  createComment: (postId: string, text: string, parentCommentId?: string) => void;
-  deleteComment: (commentId: string) => void;
+  createComment: (postId: string, text: string, parentCommentId?: string) => Promise<void>;
+  deleteComment: (commentId: string) => Promise<void>;
   isCommentUpvoted: (commentId: string) => boolean;
   commentUpvoteCount: (commentId: string) => number;
-  toggleCommentUpvote: (commentId: string) => void;
+  toggleCommentUpvote: (commentId: string) => Promise<void>;
 
   notifications: AppNotification[];
   unreadNotificationCount: number;
@@ -237,6 +239,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const auth = useAuth();
   const realRounds = useRealRounds();
   const realSocial = useRealSocial();
+  const realCommunity = useRealCommunity();
   const [data, setData] = useState<AppData>(() => loadData());
   const [isLoading, setIsLoading] = useState(true);
 
@@ -1009,23 +1012,36 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // --- Community ---
+  // Every function below now branches real vs demo — previously NONE of
+  // them did, so every real account silently shared the same local/mock
+  // blob and (worse) every write was attributed to a fixed mock placeholder
+  // id (data.currentUserId, never updated for real accounts) instead of the
+  // real signed-in user. See RealCommunityContext for the real-backed half.
 
-  const getPost = useCallback((id: string) => data.posts.find((p) => p.id === id), [data.posts]);
+  const posts = auth.isDemo ? data.posts : realCommunity.posts;
+  const comments = auth.isDemo ? data.comments : realCommunity.comments;
 
-  const isPostHidden = useCallback(
+  const demoGetPost = useCallback((id: string) => data.posts.find((p) => p.id === id), [data.posts]);
+  const getPost = useCallback((id: string) => (auth.isDemo ? demoGetPost(id) : realCommunity.getPost(id)), [auth.isDemo, demoGetPost, realCommunity]);
+
+  const demoIsPostHidden = useCallback(
     (postId: string) => data.hiddenPosts.some((h) => h.ownerId === currentUser.id && h.postId === postId),
     [data.hiddenPosts, currentUser.id],
+  );
+  const isPostHidden = useCallback(
+    (postId: string) => (auth.isDemo ? demoIsPostHidden(postId) : realCommunity.isPostHidden(postId)),
+    [auth.isDemo, demoIsPostHidden, realCommunity],
   );
 
   // Excludes anyone blocked in either direction and anything the current
   // user has individually hidden — the same block relationship used by
   // messaging and profiles, never a second "community block" list.
   const visiblePosts = useCallback(
-    () => data.posts.filter((p) => !blockedIds.includes(p.authorId) && !blockedByIds.includes(p.authorId) && !isPostHidden(p.id)),
-    [data.posts, blockedIds, blockedByIds, isPostHidden],
+    () => posts.filter((p) => !blockedIds.includes(p.authorId) && !blockedByIds.includes(p.authorId) && !isPostHidden(p.id)),
+    [posts, blockedIds, blockedByIds, isPostHidden],
   );
 
-  const createPost = useCallback(
+  const demoCreatePost = useCallback(
     (input: CreatePostInput): CommunityPost => {
       const post: CommunityPost = {
         id: generateId("post"),
@@ -1043,8 +1059,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
     },
     [data.currentUserId],
   );
+  const createPost = useCallback(
+    async (input: CreatePostInput): Promise<CommunityPost> => (auth.isDemo ? demoCreatePost(input) : realCommunity.createPost(input)),
+    [auth.isDemo, demoCreatePost, realCommunity],
+  );
 
-  const deletePost = useCallback((postId: string) => {
+  const demoDeletePost = useCallback((postId: string) => {
     setData((prev) => {
       const post = prev.posts.find((p) => p.id === postId);
       if (!post || post.authorId !== prev.currentUserId) return prev;
@@ -1060,15 +1080,26 @@ export function DataProvider({ children }: { children: ReactNode }) {
       };
     });
   }, []);
+  const deletePost = useCallback(
+    async (postId: string) => {
+      if (auth.isDemo) {
+        demoDeletePost(postId);
+        return;
+      }
+      await realCommunity.deletePost(postId);
+    },
+    [auth.isDemo, demoDeletePost, realCommunity],
+  );
 
   // Attaches a real Golf Call to the post it came from ("Create a Round
-  // From This Post"), then fans out the two follow-up notification types:
-  // the actor's followers ("someone you follow created a Golf Call from a
-  // post"), and everyone who posted or commented in the thread ("a
-  // conversation you participated in became a real Golf Call").
-  const attachGolfCallToPost = useCallback(
+  // From This Post"). Demo fans out the two follow-up notification types
+  // itself (mock pushNotification); the real path's equivalent fan-out
+  // (round_created_from_post / post_became_round) happens via a database
+  // trigger on community_posts (see the migration), not client-side, so it
+  // can't be skipped by a client that forgets to call it.
+  const demoAttachGolfCallToPost = useCallback(
     (postId: string, callId: string) => {
-      const post = getPost(postId);
+      const post = demoGetPost(postId);
       if (!post) return;
       const actorId = data.currentUserId;
       const call = getGolfCall(callId);
@@ -1093,15 +1124,33 @@ export function DataProvider({ children }: { children: ReactNode }) {
         pushNotification(participantId, "post_became_round", `A post you were part of turned into a real Golf Call.`, `/community/${postId}`, actorId);
       }
     },
-    [getPost, data.currentUserId, data.follows, data.comments, getGolfCall, currentUser.name, pushNotification],
+    [demoGetPost, data.currentUserId, data.follows, data.comments, getGolfCall, currentUser.name, pushNotification],
+  );
+  const attachGolfCallToPost = useCallback(
+    async (postId: string, callId: string) => {
+      if (auth.isDemo) {
+        demoAttachGolfCallToPost(postId, callId);
+        return;
+      }
+      await realCommunity.attachGolfCallToPost(postId, callId);
+    },
+    [auth.isDemo, demoAttachGolfCallToPost, realCommunity],
   );
 
-  const isPostUpvoted = useCallback(
+  const demoIsPostUpvoted = useCallback(
     (postId: string) => data.postVotes.some((v) => v.postId === postId && v.voterId === currentUser.id),
     [data.postVotes, currentUser.id],
   );
-  const postUpvoteCount = useCallback((postId: string) => data.postVotes.filter((v) => v.postId === postId).length, [data.postVotes]);
-  const togglePostUpvote = useCallback((postId: string) => {
+  const isPostUpvoted = useCallback(
+    (postId: string) => (auth.isDemo ? demoIsPostUpvoted(postId) : realCommunity.isPostUpvoted(postId)),
+    [auth.isDemo, demoIsPostUpvoted, realCommunity],
+  );
+  const demoPostUpvoteCount = useCallback((postId: string) => data.postVotes.filter((v) => v.postId === postId).length, [data.postVotes]);
+  const postUpvoteCount = useCallback(
+    (postId: string) => (auth.isDemo ? demoPostUpvoteCount(postId) : realCommunity.postUpvoteCount(postId)),
+    [auth.isDemo, demoPostUpvoteCount, realCommunity],
+  );
+  const demoTogglePostUpvote = useCallback((postId: string) => {
     setData((prev) => {
       const existing = prev.postVotes.find((v) => v.postId === postId && v.voterId === prev.currentUserId);
       if (existing) return { ...prev, postVotes: prev.postVotes.filter((v) => v !== existing) };
@@ -1109,12 +1158,26 @@ export function DataProvider({ children }: { children: ReactNode }) {
       return { ...prev, postVotes: [...prev.postVotes, vote] };
     });
   }, []);
+  const togglePostUpvote = useCallback(
+    async (postId: string) => {
+      if (auth.isDemo) {
+        demoTogglePostUpvote(postId);
+        return;
+      }
+      await realCommunity.togglePostUpvote(postId);
+    },
+    [auth.isDemo, demoTogglePostUpvote, realCommunity],
+  );
 
-  const isPostSaved = useCallback(
+  const demoIsPostSaved = useCallback(
     (postId: string) => data.savedPosts.some((s) => s.ownerId === currentUser.id && s.postId === postId),
     [data.savedPosts, currentUser.id],
   );
-  const savePost = useCallback((postId: string) => {
+  const isPostSaved = useCallback(
+    (postId: string) => (auth.isDemo ? demoIsPostSaved(postId) : realCommunity.isPostSaved(postId)),
+    [auth.isDemo, demoIsPostSaved, realCommunity],
+  );
+  const demoSavePost = useCallback((postId: string) => {
     setData((prev) => {
       const already = prev.savedPosts.some((s) => s.ownerId === prev.currentUserId && s.postId === postId);
       if (already) return prev;
@@ -1122,10 +1185,30 @@ export function DataProvider({ children }: { children: ReactNode }) {
       return { ...prev, savedPosts: [...prev.savedPosts, saved] };
     });
   }, []);
-  const unsavePost = useCallback((postId: string) => {
+  const savePost = useCallback(
+    async (postId: string) => {
+      if (auth.isDemo) {
+        demoSavePost(postId);
+        return;
+      }
+      await realCommunity.savePost(postId);
+    },
+    [auth.isDemo, demoSavePost, realCommunity],
+  );
+  const demoUnsavePost = useCallback((postId: string) => {
     setData((prev) => ({ ...prev, savedPosts: prev.savedPosts.filter((s) => !(s.ownerId === prev.currentUserId && s.postId === postId)) }));
   }, []);
-  const savedPostsList = useMemo(
+  const unsavePost = useCallback(
+    async (postId: string) => {
+      if (auth.isDemo) {
+        demoUnsavePost(postId);
+        return;
+      }
+      await realCommunity.unsavePost(postId);
+    },
+    [auth.isDemo, demoUnsavePost, realCommunity],
+  );
+  const demoSavedPostsList = useMemo(
     () =>
       data.savedPosts
         .filter((s) => s.ownerId === currentUser.id)
@@ -1133,21 +1216,40 @@ export function DataProvider({ children }: { children: ReactNode }) {
         .filter((p): p is CommunityPost => Boolean(p)),
     [data.savedPosts, data.posts, currentUser.id],
   );
+  const realSavedPostsList = useMemo(
+    () => realCommunity.savedPostIds.map((id) => realCommunity.posts.find((p) => p.id === id)).filter((p): p is CommunityPost => Boolean(p)),
+    [realCommunity.savedPostIds, realCommunity.posts],
+  );
+  const savedPostsList = auth.isDemo ? demoSavedPostsList : realSavedPostsList;
 
-  const hidePost = useCallback((postId: string) => {
+  const demoHidePost = useCallback((postId: string) => {
     setData((prev) => {
       const already = prev.hiddenPosts.some((h) => h.ownerId === prev.currentUserId && h.postId === postId);
       if (already) return prev;
       return { ...prev, hiddenPosts: [...prev.hiddenPosts, { ownerId: prev.currentUserId, postId, createdAt: new Date().toISOString() }] };
     });
   }, []);
+  const hidePost = useCallback(
+    async (postId: string) => {
+      if (auth.isDemo) {
+        demoHidePost(postId);
+        return;
+      }
+      await realCommunity.hidePost(postId);
+    },
+    [auth.isDemo, demoHidePost, realCommunity],
+  );
 
-  const commentsForPost = useCallback(
+  const demoCommentsForPost = useCallback(
     (postId: string) => data.comments.filter((c) => c.postId === postId).sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
     [data.comments],
   );
+  const commentsForPost = useCallback(
+    (postId: string) => (auth.isDemo ? demoCommentsForPost(postId) : realCommunity.commentsForPost(postId)),
+    [auth.isDemo, demoCommentsForPost, realCommunity],
+  );
 
-  const createComment = useCallback(
+  const demoCreateComment = useCallback(
     (postId: string, text: string, parentCommentId?: string) => {
       const trimmed = text.trim();
       if (!trimmed) return;
@@ -1166,14 +1268,24 @@ export function DataProvider({ children }: { children: ReactNode }) {
         const parent = data.comments.find((c) => c.id === parentCommentId);
         if (parent) pushNotification(parent.authorId, "comment_reply", `${currentUser.name} replied to your comment.`, `/community/${postId}`, actorId);
       } else {
-        const post = getPost(postId);
+        const post = demoGetPost(postId);
         if (post) pushNotification(post.authorId, "post_reply", `${currentUser.name} commented on your post.`, `/community/${postId}`, actorId);
       }
     },
-    [data.currentUserId, data.comments, getPost, currentUser.name, pushNotification],
+    [data.currentUserId, data.comments, demoGetPost, currentUser.name, pushNotification],
+  );
+  const createComment = useCallback(
+    async (postId: string, text: string, parentCommentId?: string) => {
+      if (auth.isDemo) {
+        demoCreateComment(postId, text, parentCommentId);
+        return;
+      }
+      await realCommunity.createComment(postId, text, parentCommentId);
+    },
+    [auth.isDemo, demoCreateComment, realCommunity],
   );
 
-  const deleteComment = useCallback((commentId: string) => {
+  const demoDeleteComment = useCallback((commentId: string) => {
     setData((prev) => {
       const comment = prev.comments.find((c) => c.id === commentId);
       if (!comment || comment.authorId !== prev.currentUserId) return prev;
@@ -1188,16 +1300,34 @@ export function DataProvider({ children }: { children: ReactNode }) {
       };
     });
   }, []);
+  const deleteComment = useCallback(
+    async (commentId: string) => {
+      if (auth.isDemo) {
+        demoDeleteComment(commentId);
+        return;
+      }
+      await realCommunity.deleteComment(commentId);
+    },
+    [auth.isDemo, demoDeleteComment, realCommunity],
+  );
 
-  const isCommentUpvoted = useCallback(
+  const demoIsCommentUpvoted = useCallback(
     (commentId: string) => data.commentVotes.some((v) => v.commentId === commentId && v.voterId === currentUser.id),
     [data.commentVotes, currentUser.id],
   );
-  const commentUpvoteCount = useCallback(
+  const isCommentUpvoted = useCallback(
+    (commentId: string) => (auth.isDemo ? demoIsCommentUpvoted(commentId) : realCommunity.isCommentUpvoted(commentId)),
+    [auth.isDemo, demoIsCommentUpvoted, realCommunity],
+  );
+  const demoCommentUpvoteCount = useCallback(
     (commentId: string) => data.commentVotes.filter((v) => v.commentId === commentId).length,
     [data.commentVotes],
   );
-  const toggleCommentUpvote = useCallback((commentId: string) => {
+  const commentUpvoteCount = useCallback(
+    (commentId: string) => (auth.isDemo ? demoCommentUpvoteCount(commentId) : realCommunity.commentUpvoteCount(commentId)),
+    [auth.isDemo, demoCommentUpvoteCount, realCommunity],
+  );
+  const demoToggleCommentUpvote = useCallback((commentId: string) => {
     setData((prev) => {
       const existing = prev.commentVotes.find((v) => v.commentId === commentId && v.voterId === prev.currentUserId);
       if (existing) return { ...prev, commentVotes: prev.commentVotes.filter((v) => v !== existing) };
@@ -1205,6 +1335,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
       return { ...prev, commentVotes: [...prev.commentVotes, vote] };
     });
   }, []);
+  const toggleCommentUpvote = useCallback(
+    async (commentId: string) => {
+      if (auth.isDemo) {
+        demoToggleCommentUpvote(commentId);
+        return;
+      }
+      await realCommunity.toggleCommentUpvote(commentId);
+    },
+    [auth.isDemo, demoToggleCommentUpvote, realCommunity],
+  );
 
   const mockNotifications = useMemo(
     () => data.notifications.filter((n) => n.userId === currentUser.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
@@ -1293,7 +1433,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       messagesWithGolfer,
       sendDirectMessage,
       markConversationRead,
-      posts: data.posts,
+      posts,
       getPost,
       visiblePosts,
       createPost,
@@ -1308,7 +1448,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       savedPostsList,
       isPostHidden,
       hidePost,
-      comments: data.comments,
+      comments,
       commentsForPost,
       createComment,
       deleteComment,
@@ -1372,6 +1512,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       messagesWithGolfer,
       sendDirectMessage,
       markConversationRead,
+      posts,
+      comments,
       getPost,
       visiblePosts,
       createPost,

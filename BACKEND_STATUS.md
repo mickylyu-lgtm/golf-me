@@ -1,6 +1,8 @@
 # GolfMe — Backend Status (Phase 6 audit)
 
 > Snapshot as of 2026-08-14, end of Phase 6. Read `DEVELOPMENT_STATUS.md` for the phase-by-phase build log; read this file for "is X actually real, and is it safe to ship to TestFlight."
+>
+> **Phase 7 addendum (2026-08-16, not yet a full re-audit):** Golf Circle/Following and Community are no longer accurate as written below — both now have real Supabase backends (real `follows` table; real `community_posts`/`community_comments`/`community_post_votes`/`community_comment_votes`/`saved_posts`/`hidden_posts` + a `community-media` Storage bucket for photos/swing videos). A real-vs-demo username/Find Friends search feature (`search_golfer_profiles()` RPC) also shipped. See the corrected rows below (marked "Phase 7") rather than treating the rest of this file's Phase 6 snapshot as stale — everything else here is still current. This addendum is not a substitute for a full re-audit; the RLS coverage, security audit, and TestFlight sections below were not re-verified against the Phase 7 changes.
 
 ## How to read the classification below
 
@@ -31,11 +33,13 @@
 | Block / report | **REAL** | Blocking enforced at the database (`messages` INSERT policy), not just hidden in the UI. Reports persist with a `status` field for future moderation. |
 | In-app notifications | **REAL** | Trigger-generated (`round_joined`/`round_left`/`round_cancelled`/`new_message`), never client-authored. Bell open/close/outside-click/Escape UX untouched since Phase 5. |
 | Account deletion | **REAL**, code-complete, **not yet verified end-to-end** | `delete-account` Edge Function, deletes the caller's own `auth.users` row (never a client-supplied id) via the service-role key held server-side only; cascades through every owned table. CORS bug fixed and redeployed this phase (see Security audit). Live re-verification blocked today by Supabase's auth email rate limit — see Two-account test results. |
-| Community (posts/comments/votes) | **LOCAL, DEMO-ONLY in spirit** | Untouched since before Phase 1, on purpose (explicit non-goal every phase). A single shared `localStorage` blob (`golfme:data:v8`) backs it for *every* account, demo or real — a real account's posts are not synced anywhere, not isolated per-account, and disappear if that browser's storage is cleared. Do not describe this as "real" anywhere in App Store copy. |
+| Community (posts/comments/votes) | **REAL** (Phase 7, 2026-08-16) | `community_posts`/`community_comments`/`community_post_votes`/`community_comment_votes`/`saved_posts`/`hidden_posts`, all RLS-enforced, real Realtime sync across accounts. Demo mode's original `localStorage`-backed implementation still exists unchanged (renamed `demoX`) and is used only when `auth.isDemo`. Root cause of the original "posts fail to publish" bug: `createPost()` attributed every post's `authorId` to a fixed mock placeholder (`data.currentUserId`) instead of the real signed-in user's id — same class of bug as the earlier Follow fix, not an RLS or upload failure. |
+| Swing Posts (video + analysis) | **REAL storage, PENDING analysis** (Phase 7) | Real video upload to the `community-media` Storage bucket (200MB cap). `swing_analysis_status` is stored but no code path ever produces a result — `src/lib/swingAnalysis.ts`'s only provider always throws rather than fabricating measurements; UI shows an honest "Swing analysis processing" placeholder. Provider-ready architecture, not a real CV/AI integration yet. |
+| Find Friends / username search | **REAL** (Phase 7) | `profiles.username` (format-checked, case-insensitive-unique partial index) + `search_golfer_profiles()` RPC returning a deliberately narrow field set (not the same broad `SELECT *` the rest of `profiles` allows — see the broad-read risk noted below). |
 | Chat on a real Golf Call round | **MOCK** | Explicitly deferred in Phase 4 — a real round's chat tab is a local, non-synced mock thread. |
 | Fill My Foursome (friend-invite hosting) | **DEMO-ONLY** | Needs a real Golf Circle/Following graph that doesn't exist yet; real hosting is "Starting Fresh" + instant-join only (approved scope trim, Phase 4). |
 | Request-to-join (approval flow) | **DEMO-ONLY** | Real Golf Calls are instant-join only; `golf_calls.join_mode` is currently locked to `'instant'` by a `CHECK` constraint. |
-| Golf Circle / Following | **DEMO-ONLY** | No real schema yet. |
+| Golf Circle / Following | **REAL** (Phase 7, 2026-08-16) | `public.follows`, composite PK, `follows_no_self` check constraint preventing self-follow, RLS scoped to `follower_id = auth.uid()` for writes. Demo mode's original implementation still exists unchanged (renamed `demoX`) for `auth.isDemo`. |
 | Live tee-time inventory / booking | **PENDING** | `tee_time_source`/`tee_time_provider`/`external_tee_time_id` columns exist and are reserved for this, but every real round's tee time is user-entered text (`tee_time_source` locked to `'user_entered'`) and never presented as live availability. Out of scope for Phase 6 per explicit instruction — no work done here this phase. |
 | Push notifications (device) | **PENDING** | In-app notifications only; no APNs/FCM integration. |
 | Payments | **PENDING** | Not built. |
@@ -100,21 +104,21 @@ Consolidated across Phases 4-6 (Phases 1-3's own test results are in `DEVELOPMEN
 - Set `GEOAPIFY_API_KEY` so course search returns real results instead of a configuration error.
 - Complete Google OAuth manual configuration (provider + Cloud Console client + redirect URL), or ship with email-only auth for the first TestFlight build if Google sign-in isn't ready in time.
 - Confirm production Vercel env vars (`VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`) are set for Production (done earlier in this project, but reconfirm before the TestFlight-linked build is cut).
-- Do not describe Community as a live/social feature in App Store copy or TestFlight release notes — it's local-only mock data per device.
+- Community and Golf Circle/Following are now real (Phase 7, see addendum) — this line is superseded, kept for historical record.
 
 ### SAFE TO DO AFTER FIRST TESTFLIGHT
-- Community fully real (posts/comments/votes backed by Supabase).
 - Direct tee-time booking / live tee-time provider integration.
 - Payments.
 - A more sophisticated credibility algorithm (current one is simple, honest, and correct — just not fancy).
+- A real CV/AI swing-analysis provider behind the `SwingAnalysisProvider` interface (currently provider-ready only, see Phase 7 addendum).
 - Apple Sign-In.
 - Push notifications (APNs).
-- Golf Circle / Following, Fill My Foursome for real rounds, request-to-join approval flow.
+- Fill My Foursome for real rounds, request-to-join approval flow (Following now exists for real accounts, but these two features aren't built on top of it yet).
 - Real chat on real Golf Call rounds.
 - Narrowing `profiles`' broad-read location precision (flagged above), if you decide it's worth doing before a wider public launch.
 
 ### What beta does NOT need (explicitly, per your own scoping)
-Community fully real, direct tee-time booking, live tee-time provider, payments, a sophisticated credibility algorithm, Apple Sign-In, push notifications.
+Direct tee-time booking, live tee-time provider, payments, a sophisticated credibility algorithm, a real swing-analysis provider, Apple Sign-In, push notifications.
 
 ### What beta DOES need (all confirmed REAL and verified above)
 Real auth, account isolation, real profiles, real location, real course search (pending the API key), real Golf Calls with join/leave, real messaging, block/report basics, real notifications, avatar upload, round completion, reviews, real basic credibility, a stable mobile flow.

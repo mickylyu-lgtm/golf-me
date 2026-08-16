@@ -126,7 +126,6 @@ export const zhCN: Record<TranslationKey, string> = {
   "home.hostRound": "发起球局",
   "home.hostRoundSubtitle": "新建球局，或为你的四人组招募球友。",
   "home.roundsNearYou": "附近的球局",
-  "home.community": "社区 →",
 
   "find.title": "寻找附近的球局",
   "find.subtitle": "正在招募球友的球局，以及背后的球友。",

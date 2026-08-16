@@ -1,8 +1,9 @@
 import { useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Check, ImagePlus, Loader2, MapPin, Users, X } from "lucide-react";
+import { ArrowLeft, Check, ImagePlus, Loader2, MapPin, Users, Video, X } from "lucide-react";
 import { useData } from "../context/DataContext";
+import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { Button } from "../components/ui/Button";
 import { Pill } from "../components/ui/Pill";
@@ -11,26 +12,35 @@ import { inputClass, labelClass } from "../components/ui/FormControls";
 import { POST_CATEGORIES } from "../types";
 import type { PostCategory, PostType } from "../types";
 import { COURSES } from "../lib/courses";
-import { resizeImageToDataUrl } from "../lib/image";
+import { resizeImageToDataUrl, resizeImageToBlob } from "../lib/image";
 import { formatDate, formatMoney } from "../lib/format";
+import { supabase } from "../lib/supabase";
 
-type Attachment = "none" | "photo" | "course" | "round";
+type Attachment = "none" | "photo" | "course" | "round" | "swing";
+
+const COMMUNITY_MEDIA_BUCKET = "community-media";
+const MAX_SWING_VIDEO_BYTES = 200 * 1024 * 1024; // matches the Storage bucket's own file_size_limit
 
 export function CreatePost() {
   const navigate = useNavigate();
   const { currentUser, golfCalls, createPost } = useData();
+  const { isDemo, authUser } = useAuth();
   const { showToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
 
   const [text, setText] = useState("");
   const [attachment, setAttachment] = useState<Attachment>("none");
   const [imageUrl, setImageUrl] = useState<string | undefined>(undefined);
   const [imageLoading, setImageLoading] = useState(false);
+  const [videoFile, setVideoFile] = useState<File | undefined>(undefined);
+  const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | undefined>(undefined);
   const [courseQuery, setCourseQuery] = useState("");
   const [courseTag, setCourseTag] = useState<string | undefined>(undefined);
   const [golfCallId, setGolfCallId] = useState<string | undefined>(undefined);
   const [category, setCategory] = useState<PostCategory>("General");
   const [posting, setPosting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<"idle" | "uploading" | "publishing">("idle");
 
   const myCalls = useMemo(
     () => golfCalls.filter((c) => c.hostId === currentUser.id || c.joinedGolferIds.includes(currentUser.id)),
@@ -48,7 +58,13 @@ export function CreatePost() {
       setCourseQuery("");
     }
     if (next !== "round") setGolfCallId(undefined);
+    if (next !== "swing") {
+      setVideoFile(undefined);
+      if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
+      setVideoPreviewUrl(undefined);
+    }
     if (next === "photo") fileInputRef.current?.click();
+    if (next === "swing") videoInputRef.current?.click();
   }
 
   async function handleFile(e: ChangeEvent<HTMLInputElement>) {
@@ -61,7 +77,16 @@ export function CreatePost() {
     }
     setImageLoading(true);
     try {
-      setImageUrl(await resizeImageToDataUrl(file));
+      if (!isDemo && authUser) {
+        const blob = await resizeImageToBlob(file);
+        const path = `${authUser.id}/${crypto.randomUUID()}.jpg`;
+        const { error: uploadError } = await supabase.storage.from(COMMUNITY_MEDIA_BUCKET).upload(path, blob, { contentType: "image/jpeg" });
+        if (uploadError) throw uploadError;
+        const { data } = supabase.storage.from(COMMUNITY_MEDIA_BUCKET).getPublicUrl(path);
+        setImageUrl(data.publicUrl);
+      } else {
+        setImageUrl(await resizeImageToDataUrl(file));
+      }
     } catch {
       showToast("Couldn't load that image — try another.", "warning");
       setAttachment("none");
@@ -70,22 +95,65 @@ export function CreatePost() {
     }
   }
 
-  const canPost = text.trim().length > 0 && !imageLoading;
+  function handleVideoFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("video/")) {
+      showToast("Please choose a video file.", "warning");
+      return;
+    }
+    if (file.size > MAX_SWING_VIDEO_BYTES) {
+      showToast("That video is too large — please choose a shorter clip.", "warning");
+      return;
+    }
+    setVideoFile(file);
+    setVideoPreviewUrl(URL.createObjectURL(file));
+  }
 
-  function handlePost() {
+  const canPost = text.trim().length > 0 && !imageLoading && (attachment !== "swing" || Boolean(videoFile));
+
+  async function handlePost() {
     if (!canPost || posting) return;
     setPosting(true);
-    const type: PostType = attachment === "none" ? "text" : attachment;
-    createPost({
-      type,
-      text,
-      imageUrl: attachment === "photo" ? imageUrl : undefined,
-      courseTag: attachment === "course" ? courseTag : undefined,
-      golfCallId: attachment === "round" ? golfCallId : undefined,
-      category,
-    });
-    showToast("Post published.", "success");
-    navigate("/community");
+    setUploadProgress(attachment === "swing" ? "uploading" : "publishing");
+    try {
+      let videoUrl: string | undefined;
+      if (attachment === "swing" && videoFile) {
+        if (isDemo || !authUser) {
+          // Swing Posts have no demo/local equivalent — real Supabase
+          // Storage only, per explicit product decision (a data-URL video
+          // would blow past localStorage's cap almost immediately).
+          showToast("Swing Post video upload needs a real GolfMe account.", "warning");
+          setPosting(false);
+          setUploadProgress("idle");
+          return;
+        }
+        const path = `${authUser.id}/swing-${crypto.randomUUID()}.${videoFile.name.split(".").pop() ?? "mp4"}`;
+        const { error: uploadError } = await supabase.storage.from(COMMUNITY_MEDIA_BUCKET).upload(path, videoFile, { contentType: videoFile.type });
+        if (uploadError) throw uploadError;
+        const { data } = supabase.storage.from(COMMUNITY_MEDIA_BUCKET).getPublicUrl(path);
+        videoUrl = data.publicUrl;
+      }
+
+      setUploadProgress("publishing");
+      const type: PostType = attachment === "none" ? "text" : attachment;
+      await createPost({
+        type,
+        text,
+        imageUrl: attachment === "photo" ? imageUrl : undefined,
+        videoUrl,
+        courseTag: attachment === "course" ? courseTag : undefined,
+        golfCallId: attachment === "round" ? golfCallId : undefined,
+        category,
+      });
+      showToast("Post published.", "success");
+      navigate("/community");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Couldn't publish your post. Please try again.", "warning");
+      setPosting(false);
+      setUploadProgress("idle");
+    }
   }
 
   return (
@@ -134,6 +202,29 @@ export function CreatePost() {
               </button>
             </>
           ) : null}
+        </div>
+      )}
+
+      {attachment === "swing" && (
+        <div className="relative overflow-hidden rounded-2xl border border-fairway-200 bg-fairway-50/40 p-3">
+          <p className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-fairway-700">
+            <Video size={13} /> Swing Post
+          </p>
+          {videoPreviewUrl ? (
+            <div className="relative overflow-hidden rounded-xl">
+              {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+              <video src={videoPreviewUrl} controls className="max-h-72 w-full rounded-xl bg-black" />
+              <button
+                onClick={() => chooseAttachment("none")}
+                aria-label="Remove video"
+                className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-slate-900/60 text-white"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-500">Choose a video of your swing to get feedback once analysis is available.</p>
+          )}
         </div>
       )}
 
@@ -218,6 +309,11 @@ export function CreatePost() {
         <Pill active={attachment === "photo"} onClick={() => chooseAttachment(attachment === "photo" ? "none" : "photo")}>
           <ImagePlus size={13} className="mr-1 inline" /> Photo
         </Pill>
+        {!isDemo && (
+          <Pill active={attachment === "swing"} onClick={() => chooseAttachment(attachment === "swing" ? "none" : "swing")}>
+            <Video size={13} className="mr-1 inline" /> Swing Post
+          </Pill>
+        )}
         <Pill active={attachment === "course"} onClick={() => chooseAttachment(attachment === "course" ? "none" : "course")}>
           <MapPin size={13} className="mr-1 inline" /> Course
         </Pill>
@@ -226,6 +322,7 @@ export function CreatePost() {
         </Pill>
       </div>
       <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+      <input ref={videoInputRef} type="file" accept="video/*" className="hidden" onChange={handleVideoFile} />
 
       <div>
         <label className={labelClass}>Category</label>
@@ -238,8 +335,8 @@ export function CreatePost() {
         </div>
       </div>
 
-      <Button size="lg" fullWidth disabled={!canPost || posting} onClick={handlePost}>
-        Post
+      <Button size="lg" fullWidth disabled={!canPost || posting} onClick={handlePost} icon={posting ? <Loader2 size={16} className="animate-spin" /> : undefined}>
+        {posting ? (uploadProgress === "uploading" ? "Uploading video..." : "Posting...") : "Post"}
       </Button>
     </div>
   );

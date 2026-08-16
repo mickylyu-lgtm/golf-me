@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import { useData } from "../context/DataContext";
+import { useToast } from "../context/ToastContext";
 import { Button } from "../components/ui/Button";
 import { Avatar } from "../components/ui/Avatar";
 import { PostCard } from "../components/community/PostCard";
@@ -11,7 +12,9 @@ export function PostDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { getPost, commentsForPost, createComment, currentUser } = useData();
+  const { showToast } = useToast();
   const [commentText, setCommentText] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const post = id ? getPost(id) : undefined;
 
@@ -32,10 +35,19 @@ export function PostDetail() {
   const topLevel = allComments.filter((c) => !c.parentCommentId);
   const repliesFor = (commentId: string) => allComments.filter((c) => c.parentCommentId === commentId);
 
-  function submitComment() {
-    if (!commentText.trim() || !post) return;
-    createComment(post.id, commentText);
+  async function submitComment() {
+    if (!commentText.trim() || !post || submitting) return;
+    setSubmitting(true);
+    const text = commentText;
     setCommentText("");
+    try {
+      await createComment(post.id, text);
+    } catch (err) {
+      setCommentText(text);
+      showToast(err instanceof Error ? err.message : "Couldn't post your comment. Please try again.", "warning");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -85,7 +97,7 @@ export function PostDetail() {
         />
         <button
           onClick={submitComment}
-          disabled={!commentText.trim()}
+          disabled={!commentText.trim() || submitting}
           className="shrink-0 rounded-full px-3 py-1.5 text-sm font-semibold text-fairway-700 disabled:opacity-40"
         >
           Send

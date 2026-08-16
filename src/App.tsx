@@ -5,6 +5,7 @@ import { DataProvider, useData } from "./context/DataContext";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { RealRoundsProvider } from "./context/RealRoundsContext";
 import { RealSocialProvider } from "./context/RealSocialContext";
+import { RealCommunityProvider } from "./context/RealCommunityContext";
 import { ToastProvider } from "./context/ToastContext";
 import { LocaleProvider, useLocale, LOCALES } from "./i18n/LocaleContext";
 import type { Locale } from "./i18n/LocaleContext";
@@ -130,6 +131,7 @@ export default function App() {
       <AuthProvider>
         <RealRoundsProvider>
         <RealSocialProvider>
+        <RealCommunityProvider>
         <DataProvider>
           <ToastProvider>
             <AppGate>
@@ -183,6 +185,7 @@ export default function App() {
           </AppGate>
         </ToastProvider>
       </DataProvider>
+        </RealCommunityProvider>
         </RealSocialProvider>
         </RealRoundsProvider>
       </AuthProvider>

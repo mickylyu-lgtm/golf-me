@@ -214,7 +214,7 @@ export function CreateGolfCall() {
         notes: notes.trim() || undefined,
         additionalJoinedGolferIds: fillMode ? friendIds : undefined,
       });
-      if (fromPostId) attachGolfCallToPost(fromPostId, call.id);
+      if (fromPostId) attachGolfCallToPost(fromPostId, call.id).catch((err) => console.error("Golf Me: failed to attach round to post.", err));
       track("first_round_hosted");
       showToast(fillMode ? t("host.postedFillToast") : t("host.postedFreshToast"), "success");
       navigate(fromPostId ? `/community/${fromPostId}` : `/golf-calls/${call.id}`);
