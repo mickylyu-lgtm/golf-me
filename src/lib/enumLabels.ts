@@ -1,4 +1,4 @@
-import type { GolfVibe, SkillFilter, WalkOrCart } from "../types";
+import type { GolfVibe, PostCategory, SkillFilter, WalkOrCart } from "../types";
 import type { TranslationKey } from "../i18n/locales/en";
 
 // The stored/compared value for these three enums stays the fixed English
@@ -28,6 +28,16 @@ const WALK_OR_CART_KEYS: Record<WalkOrCart, TranslationKey> = {
   Either: "walkOrCart.either",
 };
 
+const POST_CATEGORY_KEYS: Record<PostCategory, TranslationKey> = {
+  General: "postCategory.general",
+  Memes: "postCategory.memes",
+  "Course Talk": "postCategory.courseTalk",
+  Equipment: "postCategory.equipment",
+  "Tips & Advice": "postCategory.tipsAdvice",
+  "Round Stories": "postCategory.roundStories",
+  "Looking to Play": "postCategory.lookingToPlay",
+};
+
 export function vibeLabel(vibe: GolfVibe, t: TFn): string {
   return t(VIBE_KEYS[vibe]);
 }
@@ -38,4 +48,8 @@ export function skillLabel(skill: SkillFilter, t: TFn): string {
 
 export function walkOrCartLabel(walkOrCart: WalkOrCart, t: TFn): string {
   return t(WALK_OR_CART_KEYS[walkOrCart]);
+}
+
+export function postCategoryLabel(category: PostCategory, t: TFn): string {
+  return t(POST_CATEGORY_KEYS[category]);
 }

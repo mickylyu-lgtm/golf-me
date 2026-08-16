@@ -13,6 +13,7 @@ import { CLICKABLE_CARD_CLASS } from "../ui/cardStyles";
 import { GolfCallCard } from "../golfcall/GolfCallCard";
 import { SwingAnalysisPanel } from "./SwingAnalysisPanel";
 import { formatRelativeTime } from "../../lib/format";
+import { postCategoryLabel } from "../../lib/enumLabels";
 import { areaForCourse } from "../../lib/courses";
 import { useLocale } from "../../i18n/LocaleContext";
 
@@ -76,7 +77,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
     >
       {isSwingPost && (
         <p className="flex w-fit items-center gap-1 rounded-full bg-fairway-600 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
-          <Video size={11} /> Swing Post
+          <Video size={11} /> {t("community.swingPostBadge")}
         </p>
       )}
       <div className="flex items-center justify-between gap-2">
@@ -200,7 +201,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
 
       <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-2.5" onClick={stop}>
         <div className="flex items-center gap-1.5">
-          <Badge tone="outline">{post.category}</Badge>
+          <Badge tone="outline">{postCategoryLabel(post.category, t)}</Badge>
         </div>
         <div className="flex items-center gap-1.5">
           <button

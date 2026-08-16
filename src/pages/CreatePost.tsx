@@ -14,6 +14,7 @@ import type { PostCategory, PostType } from "../types";
 import { COURSES } from "../lib/courses";
 import { resizeImageToDataUrl, resizeImageToBlob } from "../lib/image";
 import { formatDate, formatMoney } from "../lib/format";
+import { postCategoryLabel } from "../lib/enumLabels";
 import { supabase } from "../lib/supabase";
 import { useLocale } from "../i18n/LocaleContext";
 
@@ -331,7 +332,7 @@ export function CreatePost() {
         <div className="flex flex-wrap gap-1.5">
           {POST_CATEGORIES.map((c) => (
             <Pill key={c} active={category === c} onClick={() => setCategory(c)}>
-              {c}
+              {postCategoryLabel(c, t)}
             </Pill>
           ))}
         </div>

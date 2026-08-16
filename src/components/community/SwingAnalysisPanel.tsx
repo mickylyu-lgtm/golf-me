@@ -1,6 +1,7 @@
 import { Loader2, Sparkles } from "lucide-react";
 import type { SwingAnalysisStatus } from "../../types";
 import type { SwingAnalysisSection } from "../../lib/swingAnalysis";
+import { useLocale } from "../../i18n/LocaleContext";
 
 interface SwingAnalysisPanelProps {
   status: SwingAnalysisStatus | undefined;
@@ -39,6 +40,7 @@ function BulletList({ items }: { items: string[] }) {
 // overall take + what's working + problems + drills, per the "concise
 // rather than a wall of text" requirement.
 export function SwingAnalysisPanel({ status, result }: SwingAnalysisPanelProps) {
+  const { t } = useLocale();
   if (!status) return null;
 
   if (!result) {
@@ -46,8 +48,8 @@ export function SwingAnalysisPanel({ status, result }: SwingAnalysisPanelProps) 
       <div className="flex items-center gap-2.5 rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-3.5">
         <Loader2 size={16} className="shrink-0 animate-spin text-fairway-600" />
         <div>
-          <p className="text-sm font-semibold text-slate-700">Swing analysis processing</p>
-          <p className="text-xs text-slate-500">No real analysis provider is connected yet — this isn't a bug, it's an honest "not available yet" state.</p>
+          <p className="text-sm font-semibold text-slate-700">{t("swingAnalysis.processingTitle")}</p>
+          <p className="text-xs text-slate-500">{t("swingAnalysis.processingDescription")}</p>
         </div>
       </div>
     );
@@ -56,27 +58,27 @@ export function SwingAnalysisPanel({ status, result }: SwingAnalysisPanelProps) 
   return (
     <div className="flex flex-col gap-3 rounded-2xl border border-fairway-100 bg-fairway-50/40 p-4">
       <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-fairway-700">
-        <Sparkles size={13} /> Swing Analysis
+        <Sparkles size={13} /> {t("swingAnalysis.title")}
       </p>
-      <Section title="Overall">{result.overallFeedback}</Section>
-      <Section title="What's working">
+      <Section title={t("swingAnalysis.overall")}>{result.overallFeedback}</Section>
+      <Section title={t("swingAnalysis.whatsWorking")}>
         <BulletList items={result.whatsGoingWell} />
       </Section>
-      <Section title="Key problems">
+      <Section title={t("swingAnalysis.keyProblems")}>
         <BulletList items={result.keyProblems} />
       </Section>
-      <Section title="Try this">
+      <Section title={t("swingAnalysis.tryThis")}>
         <BulletList items={result.priorityDrills} />
       </Section>
       <details className="group">
-        <summary className="cursor-pointer text-xs font-semibold text-fairway-700">Full breakdown by position</summary>
+        <summary className="cursor-pointer text-xs font-semibold text-fairway-700">{t("swingAnalysis.fullBreakdown")}</summary>
         <div className="mt-2 flex flex-col gap-2.5 border-t border-fairway-100 pt-2.5">
-          <Section title="Address / setup">{result.address}</Section>
-          <Section title="Backswing">{result.backswing}</Section>
-          <Section title="Top of backswing">{result.topOfBackswing}</Section>
-          <Section title="Downswing">{result.downswing}</Section>
-          <Section title="Impact">{result.impact}</Section>
-          <Section title="Follow-through">{result.followThrough}</Section>
+          <Section title={t("swingAnalysis.address")}>{result.address}</Section>
+          <Section title={t("swingAnalysis.backswing")}>{result.backswing}</Section>
+          <Section title={t("swingAnalysis.topOfBackswing")}>{result.topOfBackswing}</Section>
+          <Section title={t("swingAnalysis.downswing")}>{result.downswing}</Section>
+          <Section title={t("swingAnalysis.impact")}>{result.impact}</Section>
+          <Section title={t("swingAnalysis.followThrough")}>{result.followThrough}</Section>
         </div>
       </details>
     </div>
