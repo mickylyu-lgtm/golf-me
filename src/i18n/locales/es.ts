@@ -152,6 +152,7 @@ export const es: Record<TranslationKey, string> = {
   "find.hostGolfCall": "Organizar una Ronda",
   "find.noGolfersMatch": "Ningún golfista coincide con esos ambientes",
   "find.clearFilter": "Prueba a quitar un filtro.",
+  "find.noRealGolfersYet": "Sé uno de los primeros golfistas en tu área.",
   "discover.title": "Descubrir golfistas",
   "discover.subtitle": "Emparejados por horario, nivel, presupuesto y ambiente — no por apariencia.",
   "find.golfCallsTitle": "Rondas",

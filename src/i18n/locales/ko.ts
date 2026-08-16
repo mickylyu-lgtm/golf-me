@@ -152,6 +152,7 @@ export const ko: Record<TranslationKey, string> = {
   "find.hostGolfCall": "라운드 만들기",
   "find.noGolfersMatch": "해당 분위기와 맞는 골퍼가 없어요",
   "find.clearFilter": "필터를 지워보세요.",
+  "find.noRealGolfersYet": "당신의 지역에서 첫 번째 골퍼가 되어보세요.",
   "discover.title": "골퍼 찾기",
   "discover.subtitle": "외모가 아닌 일정, 실력, 예산, 분위기로 매칭돼요.",
   "find.golfCallsTitle": "전체 라운드",

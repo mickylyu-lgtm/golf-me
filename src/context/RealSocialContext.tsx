@@ -40,6 +40,11 @@ interface NotificationRow {
 interface RealSocialContextValue {
   profilesById: Map<string, GolferProfile>;
   isLoading: boolean;
+  // Every other real profile (minus self, minus blocked either direction) —
+  // the real-mode data source for Discover/Find, distinct from profilesById
+  // above (which only ever holds people already connected via a round/DM/
+  // notification, not a broad discovery list).
+  discoverableGolfers: GolferProfile[];
 
   canMessage: (otherId: string) => boolean;
   isBlocked: (id: string) => boolean;
@@ -94,6 +99,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
   const [blocks, setBlocks] = useState<BlockRow[]>([]);
   const [notificationRows, setNotificationRows] = useState<NotificationRow[]>([]);
   const [profilesById, setProfilesById] = useState<Map<string, GolferProfile>>(new Map());
+  const [allProfiles, setAllProfiles] = useState<GolferProfile[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const fetchingRef = useRef(false);
   const selfId = authUser?.id;
@@ -106,17 +112,26 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
         { data: myConvIds, error: convErr },
         { data: blockRows, error: blockErr },
         { data: notifRows, error: notifErr },
+        { data: allProfileRows, error: allProfilesErr },
       ] = await Promise.all([
         supabase.from("conversation_participants").select("conversation_id, user_id, last_read_at").eq("user_id", selfId),
         supabase.from("blocks").select("blocker_id, blocked_id").or(`blocker_id.eq.${selfId},blocked_id.eq.${selfId}`),
         supabase.from("notifications").select("*").eq("user_id", selfId).order("created_at", { ascending: false }),
+        // Discover/Find's real-mode candidate pool — every registered real
+        // golfer, RLS already allows any authenticated user to read every
+        // profile row (mirrors the old mock world's fully-open
+        // visibleGolfers()). Self/blocked filtering happens in the
+        // discoverableGolfers memo below, not here.
+        supabase.from("profiles").select("*"),
       ]);
       if (convErr) throw convErr;
       if (blockErr) throw blockErr;
       if (notifErr) throw notifErr;
+      if (allProfilesErr) throw allProfilesErr;
 
       setBlocks((blockRows ?? []) as BlockRow[]);
       setNotificationRows((notifRows ?? []) as NotificationRow[]);
+      setAllProfiles(((allProfileRows ?? []) as ProfileRow[]).map(profileRowToGolferProfile));
 
       const conversationIds = [...new Set((myConvIds ?? []).map((r) => r.conversation_id))];
       if (conversationIds.length === 0) {
@@ -163,6 +178,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       setBlocks([]);
       setNotificationRows([]);
       setProfilesById(new Map());
+      setAllProfiles([]);
       return;
     }
 
@@ -292,6 +308,11 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
 
   const hasUnreadMessages = useMemo(() => dmConversations.some((c) => c.unread), [dmConversations]);
 
+  const discoverableGolfers = useMemo(
+    () => allProfiles.filter((g) => g.id !== selfId && !blockedIds.includes(g.id) && !blockedByIds.includes(g.id)),
+    [allProfiles, selfId, blockedIds, blockedByIds],
+  );
+
   const reportUser = useCallback(
     async (reportedId: string, category: ReportCategory, details: string, context: Report["context"], meta?: { golfCallId?: string }) => {
       if (!selfId) return;
@@ -330,6 +351,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
   const value: RealSocialContextValue = {
     profilesById,
     isLoading,
+    discoverableGolfers,
     canMessage,
     isBlocked,
     isBlockedBy,

@@ -166,6 +166,7 @@ export const en = {
   "find.hostGolfCall": "Host a Golf Call",
   "find.noGolfersMatch": "No golfers match those vibes",
   "find.clearFilter": "Try clearing a filter.",
+  "find.noRealGolfersYet": "Be one of the first golfers in your area.",
   "discover.title": "Discover golfers",
   "discover.subtitle": "Matched on schedule, skill, budget, and vibe — not looks.",
   "find.golfCallsTitle": "Golf Calls",

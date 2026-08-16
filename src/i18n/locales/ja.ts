@@ -152,6 +152,7 @@ export const ja: Record<TranslationKey, string> = {
   "find.hostGolfCall": "ラウンドを作成",
   "find.noGolfersMatch": "その雰囲気に合うゴルファーがいません",
   "find.clearFilter": "フィルターを解除してみてください。",
+  "find.noRealGolfersYet": "あなたのエリアで最初のゴルファーになりましょう。",
   "discover.title": "ゴルファーを探す",
   "discover.subtitle": "外見ではなく、予定・レベル・予算・雰囲気でマッチング。",
   "find.golfCallsTitle": "全てのラウンド",

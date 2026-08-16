@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Flag, SlidersHorizontal } from "lucide-react";
+import { ArrowRight, Flag, SlidersHorizontal, Sparkles } from "lucide-react";
 import { useData } from "../context/DataContext";
+import { useAuth } from "../context/AuthContext";
 import { useLocale } from "../i18n/LocaleContext";
 import { GolferCard } from "../components/golfer/GolferCard";
 import { EmptyState } from "../components/ui/EmptyState";
@@ -17,6 +18,7 @@ interface DiscoverProps {
 
 export function Discover({ embedded = false }: DiscoverProps) {
   const { currentUser, visibleGolfers } = useData();
+  const { isDemo } = useAuth();
   const { t } = useLocale();
   const navigate = useNavigate();
   const [activeVibes, setActiveVibes] = useState<GolfVibe[]>([]);
@@ -27,8 +29,10 @@ export function Discover({ embedded = false }: DiscoverProps) {
     setActiveVibes((prev) => (prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]));
   }
 
+  const rawCandidates = visibleGolfers();
+
   const results = useMemo(() => {
-    let list = visibleGolfers().map((g) => ({ golfer: g, compat: computeCompatibility(currentUser, g) }));
+    let list = rawCandidates.map((g) => ({ golfer: g, compat: computeCompatibility(currentUser, g) }));
     if (activeVibes.length > 0) {
       list = list.filter(({ golfer }) => golfer.vibes.some((v) => activeVibes.includes(v)));
     }
@@ -43,7 +47,7 @@ export function Discover({ embedded = false }: DiscoverProps) {
         list.sort((a, b) => b.compat.overall - a.compat.overall);
     }
     return list;
-  }, [visibleGolfers, currentUser, activeVibes, sortMode]);
+  }, [rawCandidates, currentUser, activeVibes, sortMode]);
 
   return (
     <div className="flex flex-col gap-5">
@@ -119,7 +123,11 @@ export function Discover({ embedded = false }: DiscoverProps) {
       )}
 
       {results.length === 0 ? (
-        <EmptyState icon={<SlidersHorizontal size={20} />} title={t("find.noGolfersMatch")} description={t("find.clearFilter")} />
+        !isDemo && rawCandidates.length === 0 ? (
+          <EmptyState icon={<Sparkles size={20} />} title={t("find.noRealGolfersYet")} />
+        ) : (
+          <EmptyState icon={<SlidersHorizontal size={20} />} title={t("find.noGolfersMatch")} description={t("find.clearFilter")} />
+        )
       ) : (
         <div className="flex flex-col gap-3">
           {results.map(({ golfer, compat }) => (

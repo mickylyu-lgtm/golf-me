@@ -152,6 +152,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "find.hostGolfCall": "發起球局",
   "find.noGolfersMatch": "沒有符合該氛圍的球友",
   "find.clearFilter": "試試清除篩選條件。",
+  "find.noRealGolfersYet": "成為你所在地區的第一批高爾夫球友吧。",
   "discover.title": "發現球友",
   "discover.subtitle": "根據日程、程度、預算和氛圍配對——而非外貌。",
   "find.golfCallsTitle": "全部球局",

@@ -299,10 +299,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const isBlocked = useCallback((id: string) => (auth.isDemo ? mockBlockedIds.includes(id) : realSocial.isBlocked(id)), [auth.isDemo, mockBlockedIds, realSocial]);
 
+  // Real accounts must only ever discover other real, registered golfers —
+  // never the shared mock roster. realSocial.discoverableGolfers already
+  // excludes self/blocked; the excludeSelf param only matters for the demo
+  // path's own occasional excludeSelf=false caller.
   const visibleGolfers = useCallback(
-    (excludeSelf = true) =>
-      data.golfers.filter((g) => (excludeSelf ? g.id !== currentUser.id : true) && !blockedIds.includes(g.id)),
-    [data.golfers, currentUser.id, blockedIds],
+    (excludeSelf = true) => {
+      if (!auth.isDemo) return realSocial.discoverableGolfers;
+      return data.golfers.filter((g) => (excludeSelf ? g.id !== currentUser.id : true) && !blockedIds.includes(g.id));
+    },
+    [auth.isDemo, realSocial.discoverableGolfers, data.golfers, currentUser.id, blockedIds],
   );
 
   const addSystemMessage = useCallback((callId: string, text: string) => {
@@ -681,25 +687,27 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [auth.isDemo, realSocial],
   );
 
+  // golfCalls here is the branched variable (demo -> data.golfCalls, real ->
+  // realRounds.golfCalls), not the raw mock data.golfCalls -- a real
+  // account's "played with" signal must reflect its own real round history,
+  // never the shared mock world's completed rounds.
   const hasPlayedWith = useCallback(
     (golferId: string) =>
-      data.golfCalls.some(
-        (c) => c.status === "completed" && c.joinedGolferIds.includes(data.currentUserId) && c.joinedGolferIds.includes(golferId),
-      ),
-    [data.golfCalls, data.currentUserId],
+      golfCalls.some((c) => c.status === "completed" && c.joinedGolferIds.includes(currentUser.id) && c.joinedGolferIds.includes(golferId)),
+    [golfCalls, currentUser.id],
   );
 
   // Bulk form of hasPlayedWith — used by the "New Golfers" Group Type
   // preference check, which needs to test a whole round's roster at once.
   const playedWithIds = useMemo(() => {
     const ids = new Set<string>();
-    for (const c of data.golfCalls) {
-      if (c.status === "completed" && c.joinedGolferIds.includes(data.currentUserId)) {
-        for (const id of c.joinedGolferIds) if (id !== data.currentUserId) ids.add(id);
+    for (const c of golfCalls) {
+      if (c.status === "completed" && c.joinedGolferIds.includes(currentUser.id)) {
+        for (const id of c.joinedGolferIds) if (id !== currentUser.id) ids.add(id);
       }
     }
     return ids;
-  }, [data.golfCalls, data.currentUserId]);
+  }, [golfCalls, currentUser.id]);
 
   const circleGolfers = useMemo(
     () =>
