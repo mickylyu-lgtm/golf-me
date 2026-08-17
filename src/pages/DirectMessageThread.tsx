@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, MoreHorizontal, ShieldAlert, ShieldCheck, ShieldOff } from "lucide-react";
+import { ArrowLeft, Eraser, MoreHorizontal, ShieldAlert, ShieldCheck, ShieldOff, Trash2 } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useToast } from "../context/ToastContext";
 import { Avatar } from "../components/ui/Avatar";
@@ -24,6 +24,8 @@ export function DirectMessageThread() {
     messagesWithGolfer,
     sendDirectMessage,
     markConversationRead,
+    clearChatHistory,
+    deleteConversation,
   } = useData();
   const { showToast } = useToast();
   const { t } = useLocale();
@@ -32,6 +34,8 @@ export function DirectMessageThread() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const other = id ? getGolfer(id) : undefined;
@@ -103,7 +107,25 @@ export function DirectMessageThread() {
             <MoreHorizontal size={18} />
           </button>
           {menuOpen && (
-            <div className="absolute right-0 z-10 mt-1 w-44 overflow-hidden rounded-xl border border-slate-100 bg-white py-1 shadow-lg">
+            <div className="absolute right-0 z-10 mt-1 w-52 overflow-hidden rounded-xl border border-slate-100 bg-white py-1 shadow-lg">
+              <button
+                onClick={() => {
+                  setMenuOpen(false);
+                  setClearConfirmOpen(true);
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 transition-colors duration-150 hover:bg-slate-50"
+              >
+                <Eraser size={15} /> {t("chat.clearHistory")}
+              </button>
+              <button
+                onClick={() => {
+                  setMenuOpen(false);
+                  setDeleteConfirmOpen(true);
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 transition-colors duration-150 hover:bg-slate-50"
+              >
+                <Trash2 size={15} /> {t("chat.deleteConversation")}
+              </button>
               <button
                 onClick={() => {
                   setMenuOpen(false);
@@ -171,6 +193,44 @@ export function DirectMessageThread() {
       </div>
 
       {reportOpen && <ReportModal reportedId={other.id} reportedName={other.name} context="chat" onClose={() => setReportOpen(false)} />}
+      {clearConfirmOpen && (
+        <ConfirmDialog
+          title={t("chat.clearHistoryConfirmTitle")}
+          message={t("chat.clearHistoryConfirmMessage")}
+          confirmLabel={t("chat.clear")}
+          danger
+          onConfirm={async () => {
+            try {
+              await clearChatHistory(other.id);
+              showToast(t("chat.historyClearedToast"), "info");
+            } catch (err) {
+              showToast(err instanceof Error ? err.message : "Couldn't clear chat history.", "warning");
+            } finally {
+              setClearConfirmOpen(false);
+            }
+          }}
+          onCancel={() => setClearConfirmOpen(false)}
+        />
+      )}
+      {deleteConfirmOpen && (
+        <ConfirmDialog
+          title={t("chat.deleteConversationConfirmTitle")}
+          message={t("chat.deleteConversationConfirmMessage")}
+          confirmLabel={t("chat.delete")}
+          danger
+          onConfirm={async () => {
+            try {
+              await deleteConversation(other.id);
+              showToast(t("chat.conversationDeletedToast"), "info");
+              navigate("/messages");
+            } catch (err) {
+              showToast(err instanceof Error ? err.message : "Couldn't delete conversation.", "warning");
+              setDeleteConfirmOpen(false);
+            }
+          }}
+          onCancel={() => setDeleteConfirmOpen(false)}
+        />
+      )}
       {blockConfirmOpen && (
         <ConfirmDialog
           title={`Block ${other.name}?`}

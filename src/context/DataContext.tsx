@@ -199,6 +199,8 @@ interface DataContextValue {
   messagesWithGolfer: (golferId: string) => DirectMessage[];
   sendDirectMessage: (golferId: string, text: string) => Promise<boolean>;
   markConversationRead: (golferId: string) => Promise<void>;
+  clearChatHistory: (golferId: string) => Promise<void>;
+  deleteConversation: (golferId: string) => Promise<void>;
 
   // --- Community — a social/discussion layer embedded in the core loop.
   // Votes are popularity signals only; they never touch reputation/credibility. ---
@@ -880,15 +882,24 @@ export function DataProvider({ children }: { children: ReactNode }) {
     return Date.now() - new Date(last.createdAt).getTime() >= DM_RATE_LIMIT_MS;
   }, [data.directMessages, currentUser.id]);
 
+  // Demo-only, intentionally not persisted to localStorage (unlike
+  // dmReads) — a lightweight preview of the real feature, not a full
+  // second implementation. Resets on reload, an acceptable demo-mode-only
+  // limitation; the real per-account behavior is what's actually tested
+  // and DB-enforced (see RealSocialContext's cleared_before/hidden_at).
+  const [demoDmCleared, setDemoDmCleared] = useState<Record<string, string>>({});
+  const [demoDmHidden, setDemoDmHidden] = useState<Record<string, string>>({});
+
   const messagesWithGolfer = useCallback(
     (golferId: string) => {
       if (!auth.isDemo) return realSocial.messagesWithGolfer(golferId);
       const convId = dmConversationId(currentUser.id, golferId);
+      const clearedBefore = demoDmCleared[convId];
       return data.directMessages
-        .filter((m) => m.conversationId === convId)
+        .filter((m) => m.conversationId === convId && (!clearedBefore || m.createdAt > clearedBefore))
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     },
-    [auth.isDemo, realSocial, data.directMessages, currentUser.id],
+    [auth.isDemo, realSocial, data.directMessages, currentUser.id, demoDmCleared],
   );
 
   // Returns whether the message actually sent, so the UI can tell a
@@ -930,6 +941,30 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [auth.isDemo, realSocial, currentUser.id],
   );
 
+  const clearChatHistory = useCallback(
+    async (golferId: string) => {
+      if (!auth.isDemo) {
+        await realSocial.clearChatHistory(golferId);
+        return;
+      }
+      const convId = dmConversationId(currentUser.id, golferId);
+      setDemoDmCleared((prev) => ({ ...prev, [convId]: new Date().toISOString() }));
+    },
+    [auth.isDemo, realSocial, currentUser.id],
+  );
+
+  const deleteConversation = useCallback(
+    async (golferId: string) => {
+      if (!auth.isDemo) {
+        await realSocial.deleteConversation(golferId);
+        return;
+      }
+      const convId = dmConversationId(currentUser.id, golferId);
+      setDemoDmHidden((prev) => ({ ...prev, [convId]: new Date().toISOString() }));
+    },
+    [auth.isDemo, realSocial, currentUser.id],
+  );
+
   const mockDmConversations = useMemo<DmConversation[]>(() => {
     const byConv = new Map<string, DirectMessage[]>();
     for (const m of data.directMessages) {
@@ -946,12 +981,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
       if (!otherGolfer) continue;
       const sorted = [...msgs].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
       const lastMessage = sorted[sorted.length - 1];
+      const hiddenAt = demoDmHidden[conversationId];
+      if (hiddenAt && lastMessage.createdAt <= hiddenAt) continue;
       const readState = data.dmReads.find((r) => r.conversationId === conversationId && r.userId === currentUser.id);
       const unread = lastMessage.senderId !== currentUser.id && (!readState || readState.lastReadAt < lastMessage.createdAt);
       conversations.push({ conversationId, otherGolfer, lastMessage, unread });
     }
     return conversations.sort((a, b) => b.lastMessage.createdAt.localeCompare(a.lastMessage.createdAt));
-  }, [data.directMessages, data.dmReads, data.golfers, currentUser.id, blockedIds, blockedByIds]);
+  }, [data.directMessages, data.dmReads, data.golfers, currentUser.id, blockedIds, blockedByIds, demoDmHidden]);
 
   const dmConversations = auth.isDemo ? mockDmConversations : realSocial.dmConversations;
   const hasUnreadMessages = auth.isDemo ? mockDmConversations.some((c) => c.unread) : realSocial.hasUnreadMessages;
@@ -1478,6 +1515,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       messagesWithGolfer,
       sendDirectMessage,
       markConversationRead,
+      clearChatHistory,
+      deleteConversation,
       posts,
       getPost,
       visiblePosts,
@@ -1560,6 +1599,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       messagesWithGolfer,
       sendDirectMessage,
       markConversationRead,
+      clearChatHistory,
+      deleteConversation,
       posts,
       comments,
       getPost,

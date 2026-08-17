@@ -11,6 +11,8 @@ interface ConversationParticipantRow {
   conversation_id: string;
   user_id: string;
   last_read_at: string | null;
+  cleared_before: string | null;
+  hidden_at: string | null;
 }
 
 interface MessageRow {
@@ -81,6 +83,8 @@ interface RealSocialContextValue {
   messagesWithGolfer: (otherId: string) => DirectMessage[];
   sendDirectMessage: (otherId: string, text: string) => Promise<boolean>;
   markConversationRead: (otherId: string) => Promise<void>;
+  clearChatHistory: (otherId: string) => Promise<void>;
+  deleteConversation: (otherId: string) => Promise<void>;
 
   reportUser: (
     reportedId: string,
@@ -140,7 +144,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
         { data: allProfileRows, error: allProfilesErr },
         { data: followRows, error: followErr },
       ] = await Promise.all([
-        supabase.from("conversation_participants").select("conversation_id, user_id, last_read_at").eq("user_id", selfId),
+        supabase.from("conversation_participants").select("conversation_id, user_id, last_read_at, cleared_before, hidden_at").eq("user_id", selfId),
         supabase.from("blocks").select("blocker_id, blocked_id").or(`blocker_id.eq.${selfId},blocked_id.eq.${selfId}`),
         supabase.from("notifications").select("*").eq("user_id", selfId).order("created_at", { ascending: false }),
         // Discover/Find's real-mode candidate pool — every registered real
@@ -170,7 +174,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       }
 
       const [{ data: allParticipants, error: pErr }, { data: allMessages, error: mErr }] = await Promise.all([
-        supabase.from("conversation_participants").select("conversation_id, user_id, last_read_at").in("conversation_id", conversationIds),
+        supabase.from("conversation_participants").select("conversation_id, user_id, last_read_at, cleared_before, hidden_at").in("conversation_id", conversationIds),
         supabase.from("messages").select("*").in("conversation_id", conversationIds).order("created_at", { ascending: true }),
       ]);
       if (pErr) throw pErr;
@@ -385,6 +389,47 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     [selfId, conversationIdWith, refetch],
   );
 
+  // "Clear for me" — messages up to now become invisible to the caller
+  // only, enforced by the messages_select_participant RLS policy (which
+  // compares each row's created_at against the caller's own
+  // cleared_before), not just filtered client-side. The other participant
+  // is untouched: their own cleared_before stays whatever it was.
+  const clearChatHistory = useCallback(
+    async (otherId: string) => {
+      if (!selfId) return;
+      const convId = conversationIdWith(otherId);
+      if (!convId) return;
+      const { error } = await supabase
+        .from("conversation_participants")
+        .update({ cleared_before: new Date().toISOString() })
+        .eq("conversation_id", convId)
+        .eq("user_id", selfId);
+      if (error) throw new Error(error.message);
+      await refetch();
+    },
+    [selfId, conversationIdWith, refetch],
+  );
+
+  // Removes the conversation from the caller's own inbox only — never
+  // deletes messages, never affects the other participant. See
+  // dmConversations below for the "reappears once a newer message
+  // arrives" half of this.
+  const deleteConversation = useCallback(
+    async (otherId: string) => {
+      if (!selfId) return;
+      const convId = conversationIdWith(otherId);
+      if (!convId) return;
+      const { error } = await supabase
+        .from("conversation_participants")
+        .update({ hidden_at: new Date().toISOString() })
+        .eq("conversation_id", convId)
+        .eq("user_id", selfId);
+      if (error) throw new Error(error.message);
+      await refetch();
+    },
+    [selfId, conversationIdWith, refetch],
+  );
+
   const dmConversations = useMemo<DmConversation[]>(() => {
     if (!selfId) return [];
     const myConvIds = new Set(participants.filter((p) => p.user_id === selfId).map((p) => p.conversation_id));
@@ -417,6 +462,10 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       const sorted = [...msgs].sort((a, b) => a.created_at.localeCompare(b.created_at));
       const lastMessageRow = sorted[sorted.length - 1];
       const myParticipation = participants.find((p) => p.conversation_id === conversationId && p.user_id === selfId);
+      // "Delete Conversation" (hidden_at) only hides the inbox row — it
+      // naturally reappears the moment a message newer than hidden_at
+      // shows up, rather than needing an explicit "undelete" action.
+      if (myParticipation?.hidden_at && lastMessageRow.created_at <= myParticipation.hidden_at) continue;
       const unread = lastMessageRow.sender_id !== selfId && (!myParticipation?.last_read_at || myParticipation.last_read_at < lastMessageRow.created_at);
       result.push({ conversationId, otherGolfer, lastMessage: messageRowToDirectMessage(lastMessageRow), unread });
     }
@@ -484,6 +533,8 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     messagesWithGolfer,
     sendDirectMessage,
     markConversationRead,
+    clearChatHistory,
+    deleteConversation,
     reportUser,
     notifications,
     unreadNotificationCount,
