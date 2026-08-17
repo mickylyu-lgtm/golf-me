@@ -17,21 +17,22 @@ interface CaddieNavIconProps {
 export function CaddieNavIcon({ size = 24, strokeWidth = 2.1, className }: CaddieNavIconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
-      {/* cap: full rounded dome, closed at the bottom so fill reads as one shape */}
+      {/* cap: wide rounded dome — deliberately wider than the face below it,
+          so the brim reads as a real overhang and "AI" gets more room */}
       <path
-        d="M4.2 9.4 C4.2 4.8 7.7 1.4 12 1.4 C16.3 1.4 19.8 4.8 19.8 9.4 Z"
+        d="M2.8 9.4 C2.8 4.5 6.8 1 12 1 C17.2 1 21.2 4.5 21.2 9.4 Z"
         fill="white"
         stroke="currentColor"
         strokeWidth={strokeWidth}
         strokeLinejoin="round"
       />
-      {/* small side tabs where the cap's brim overhangs the face */}
-      <line x1="4.2" y1="9.4" x2="4.2" y2="11" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" />
-      <line x1="19.8" y1="9.4" x2="19.8" y2="11" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" />
+      {/* side tabs where the wide brim overhangs the narrower face */}
+      <line x1="2.8" y1="9.4" x2="2.8" y2="11.2" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" />
+      <line x1="21.2" y1="9.4" x2="21.2" y2="11.2" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" />
       {/* brim seam */}
-      <path d="M6.2 7.9 Q12 10 17.8 7.9" fill="none" stroke="currentColor" strokeWidth={strokeWidth * 0.8} strokeLinecap="round" />
+      <path d="M4.5 7.9 Q12 10.4 19.5 7.9" fill="none" stroke="currentColor" strokeWidth={strokeWidth * 0.8} strokeLinecap="round" />
       {/* "AI" lettering — sized to read at a glance, not a close look */}
-      <text x="12" y="6.6" textAnchor="middle" fontSize="6.6" fontWeight="900" fill="currentColor" stroke="none" fontFamily="system-ui, sans-serif" letterSpacing="-0.2">
+      <text x="12" y="6.7" textAnchor="middle" fontSize="7.4" fontWeight="900" fill="currentColor" stroke="none" fontFamily="system-ui, sans-serif" letterSpacing="-0.2">
         AI
       </text>
 
