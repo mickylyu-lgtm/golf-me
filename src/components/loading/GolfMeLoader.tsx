@@ -17,6 +17,9 @@ function usePrefersReducedMotion(): boolean {
 
 // One golf cart drawing, reused at every size via an outer <g transform="scale()">
 // rather than redrawn per context — native box is 44 wide x 30 tall.
+// Wheels get spokes (not just a flat disc) specifically so animate-wheel-
+// spin actually reads as spinning — a rotationally-symmetric plain circle
+// looked identical at every frame of that same animation before.
 function CartGlyph({ animated }: { animated: boolean }) {
   return (
     <g>
@@ -27,24 +30,40 @@ function CartGlyph({ animated }: { animated: boolean }) {
         </>
       )}
       {/* bag + clubs, trailing at the back */}
-      <line x1="3" y1="13" x2="1.5" y2="5" stroke="#64748b" strokeWidth="1" strokeLinecap="round" />
-      <line x1="5.5" y1="13" x2="6.5" y2="4.5" stroke="#64748b" strokeWidth="1" strokeLinecap="round" />
+      <line x1="3" y1="13" x2="1" y2="4.5" stroke="#64748b" strokeWidth="1" strokeLinecap="round" />
+      <line x1="5.5" y1="13" x2="6.8" y2="3.8" stroke="#64748b" strokeWidth="1" strokeLinecap="round" />
+      <line x1="4.2" y1="13" x2="4.2" y2="4.2" stroke="#64748b" strokeWidth="1" strokeLinecap="round" />
+      <circle cx="1" cy="4.5" r="0.9" fill="#94a3b8" />
+      <circle cx="6.8" cy="3.8" r="0.9" fill="#94a3b8" />
+      <circle cx="4.2" cy="4.2" r="0.9" fill="#94a3b8" />
       <rect x="2" y="12.5" width="5.5" height="9.5" rx="1.6" fill="#f2b82c" />
-      {/* wheels */}
-      <circle cx="12" cy="25" r="4" fill="#475569" className={animated ? "animate-wheel-spin" : ""} style={{ transformOrigin: "12px 25px" }} />
-      <circle cx="32" cy="25" r="4" fill="#475569" className={animated ? "animate-wheel-spin" : ""} style={{ transformOrigin: "32px 25px" }} />
-      <circle cx="12" cy="25" r="1.4" fill="#cbd5e1" />
-      <circle cx="32" cy="25" r="1.4" fill="#cbd5e1" />
-      {/* body */}
-      <rect x="7" y="14" width="28" height="10" rx="3" fill="#26663d" />
+      <line x1="2.9" y1="14" x2="6.6" y2="20.5" stroke="#c67b0f" strokeWidth="0.7" strokeLinecap="round" />
+      {/* wheels — tire + rim + spokes so spin is visible, not a flat disc */}
+      {[12, 32].map((cx) => (
+        <g key={cx} className={animated ? "animate-wheel-spin" : ""} style={{ transformOrigin: `${cx}px 25px` }}>
+          <circle cx={cx} cy="25" r="4" fill="#334155" />
+          <circle cx={cx} cy="25" r="2.5" fill="#cbd5e1" />
+          <line x1={cx} y1="22.5" x2={cx} y2="27.5" stroke="#64748b" strokeWidth="0.7" />
+          <line x1={cx - 2.2} y1="25" x2={cx + 2.2} y2="25" stroke="#64748b" strokeWidth="0.7" />
+          <circle cx={cx} cy="25" r="0.8" fill="#475569" />
+        </g>
+      ))}
+      {/* body — two-tone panel for a little dimension instead of one flat rect */}
+      <rect x="7" y="14" width="28" height="10" rx="3" fill="#1e5232" />
+      <rect x="7" y="14" width="28" height="5.5" rx="3" fill="#26663d" />
+      <rect x="9" y="20.5" width="24" height="2.4" rx="1.2" fill="#19422a" />
       <circle cx="36" cy="20" r="1.2" fill="#f6cc54" />
+      {/* side mirror */}
+      <line x1="10" y1="15" x2="8.5" y2="13.2" stroke="#19422a" strokeWidth="1" strokeLinecap="round" />
+      <circle cx="8.2" cy="12.8" r="0.9" fill="#cbd5e1" stroke="#19422a" strokeWidth="0.4" />
       {/* roof + pillars */}
       <line x1="11" y1="14" x2="11" y2="9" stroke="#1e5232" strokeWidth="1.5" strokeLinecap="round" />
       <line x1="29" y1="14" x2="29" y2="9" stroke="#1e5232" strokeWidth="1.5" strokeLinecap="round" />
       <rect x="9" y="6" width="22" height="4" rx="2" fill="#f8faf8" stroke="#e2e8f0" strokeWidth="0.5" />
-      {/* simple neutral driver silhouette — cart stays the main character */}
+      {/* driver silhouette + steering wheel */}
       <rect x="17" y="10.5" width="6" height="4.5" rx="2" fill="#94a3b8" />
       <circle cx="20" cy="9.5" r="2.4" fill="#94a3b8" />
+      <circle cx="15.5" cy="14" r="1.6" fill="none" stroke="#64748b" strokeWidth="0.8" />
     </g>
   );
 }
@@ -144,9 +163,13 @@ export function GolfMeLoader({ message, fullScreen = false, size = "md", classNa
         className={`fixed inset-0 z-[100] flex items-center justify-center bg-[#faf8f2]/95 px-6 backdrop-blur-sm ${className}`}
       >
         <div className="flex w-full max-w-xs flex-col items-center gap-4">
-          {/* animate-pop plays once on mount — respects prefers-reduced-motion
-              via the global rule in index.css, never a continuous pulse. */}
-          <span className="animate-pop flex h-11 w-11 items-center justify-center rounded-2xl bg-fairway-900">
+          {/* Continuous hop-and-tumble (Geometry Dash's cube is the
+              reference) while genuinely loading — respects prefers-
+              reduced-motion by falling back to the plain one-time pop-in
+              instead of an unbounded spin. */}
+          <span
+            className={`flex h-11 w-11 items-center justify-center rounded-2xl bg-fairway-900 ${reducedMotion ? "animate-pop" : "animate-geometry-hop"}`}
+          >
             <GolfMeIcon size={24} dotColor="#f8faf8" targetColor="#5aa171" holeColor="#143621" />
           </span>
           {reducedMotion ? (

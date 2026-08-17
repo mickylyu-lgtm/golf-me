@@ -2,7 +2,7 @@
 
 > Read this file first in any new session (laptop or claude.ai/code on mobile) before making changes. Update it in the same commit as any milestone — new feature, schema change, or architectural decision — so the next session (possibly on another device) has zero context loss.
 
-Last updated: 2026-08-17 (Phase 10)
+Last updated: 2026-08-17 (Phase 11)
 
 ## Current phase
 
@@ -283,6 +283,16 @@ No cAddIe rebrand (explicitly dropped mid-brief — "Caddie" stays as-is). Four 
 **Not verified live:** the notification popup's actual on-screen appearance/timing/tap behavior, the composer fix's click-through, and the nav icon's rendered appearance at real mobile sizes — this phase's verification is compile-clean + (for chat) DB-level SQL simulation only, no live Playwright/browser pass was run.
 
 Nothing in this phase has been committed or pushed yet — awaiting explicit go-ahead, per standing project rule.
+
+## Phase 11 — Dyker Beach URL, embedded golfer search, Caddie icon polish (2026-08-17)
+
+Small round, three independent changes:
+- **Dyker Beach booking URL** changed to the official course site (`https://www.dykerbeachgc.com/`) per explicit instruction, replacing the Tee It Up booking-platform URL — updated in both `src/services/teeTimes/providers/dykerBeach.ts` and `supabase/functions/get-tee-times/index.ts` (redeployed, v2, live-curl-verified). Skyway's URL untouched — already the confirmed official channel from Phase 8's research, nothing to change.
+- **Golfer search embedded directly in the Golfers tab** (`Discover.tsx`, under Play). Reused, not duplicated: the same `useFriendSearch` hook + `search_golfer_profiles()` RPC + `followUser`/`unfollowUser` already built for the standalone Find Friends page (Phase 7d) — confirmed the RPC already excludes self and blocked users and is naturally dedup'd (queries `profiles` by primary key, no fan-out join) before touching any code. Real-only (hidden in demo mode, same reasoning as Find Friends itself: the RPC needs a real auth session). Typing replaces the normal compatibility-ranked discovery list with live search results; clearing the box returns to normal browsing. The standalone `/profile/following/find` page is untouched as an additional entry point.
+- **Caddie nav icon redesigned** to match an approved reference image (outlined cap silhouette with "AI" lettering and a brim seam, solid `currentColor` face below with fixed-white pill eyes) — replaces the first pass's simpler all-outline version.
+- **GolfMeLoader splash polish** (`src/components/loading/GolfMeLoader.tsx`, `index.css`): the app-icon mark now hops-and-tumbles continuously while the full-screen loader is up (`animate-geometry-hop`, a new keyframe — one full rotation per hop, landing upright, Geometry Dash's cube as the explicit reference), replacing the old one-time pop-in; falls back to the plain pop for `prefers-reduced-motion`. The golf cart illustration (`CartGlyph`) gained wheel spokes/rim detail (a plain circle spinning is visually identical at every frame — spokes are what make `animate-wheel-spin` actually read as spinning), a two-tone body panel, a side mirror, a steering wheel, and a 3-club bag instead of 2.
+
+`npx tsc -b`, `npm run lint`, `npm run build` clean. Not live-browser-tested (search UI, icon appearance, the new loader animation/cart redesign) — compile-clean plus one live curl check on the Edge Function URL only. The loader/cart changes in particular are hand-authored SVG/CSS with no way to render-and-inspect them myself this session — flagging that the actual on-screen result hasn't been visually confirmed.
 
 ## Remote/local sync note (2026-08-12)
 

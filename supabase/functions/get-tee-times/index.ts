@@ -33,7 +33,7 @@ const COURSES: Record<string, CourseConfig> = {
     name: "Dyker Beach Golf Course",
     holes: 18,
     provider: "tee-it-up",
-    bookingUrl: "https://new-york-american-golf.book.teeitup.com/",
+    bookingUrl: "https://www.dykerbeachgc.com/",
   },
 };
 
