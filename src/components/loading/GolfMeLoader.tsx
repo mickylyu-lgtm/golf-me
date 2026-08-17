@@ -85,8 +85,8 @@ function CourseScene({ animated }: { animated: boolean }) {
       <rect x="0" y="90" width="300" height="40" fill="#8bc09a" />
       <line x1="18" y1="108" x2="252" y2="108" stroke="#5aa171" strokeWidth="2" strokeDasharray="1 8" strokeLinecap="round" opacity="0.7" />
 
-      {/* destination flag */}
-      <ellipse cx="268" cy="109" rx="15" ry="4" fill="#37814f" opacity="0.5" />
+      {/* destination flag, with a small grounding shadow at its base */}
+      <ellipse cx="272" cy="108.5" rx="7" ry="2.2" fill="#1e5232" opacity="0.25" />
       <line x1="272" y1="70" x2="272" y2="108" stroke="#334155" strokeWidth="2" strokeLinecap="round" />
       <path d="M272 70 L285 75.5 L272 81 Z" fill="#f2b82c" />
 
