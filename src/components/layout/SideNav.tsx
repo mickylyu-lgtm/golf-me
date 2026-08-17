@@ -24,10 +24,13 @@ export function SideNav() {
               }`
             }
           >
-            {/* Caddie's icon carries small "AI" lettering the other
-                glyphs don't, so it's rendered a bit larger than its
-                siblings to keep that detail legible. */}
-            <Icon size={path === "/caddie" ? 24 : 20} />
+            {/* Fixed-width wrapper keeps every label starting at the same
+                x-offset regardless of icon size — Caddie's icon renders
+                larger (so its "AI" lettering stays legible) but must not
+                shift its label out of line with its siblings' labels. */}
+            <span className="flex w-6 items-center justify-center">
+              <Icon size={path === "/caddie" ? 24 : 20} />
+            </span>
             <span className="hidden lg:inline">{t(labelKey)}</span>
           </NavLink>
         ))}

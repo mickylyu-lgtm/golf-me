@@ -19,11 +19,14 @@ export function BottomNav() {
         >
           {({ isActive }) => (
             <>
-              {/* Caddie's icon carries small lettering ("AI") that the
-                  other glyphs don't — rendered a bit larger than its
-                  siblings so that detail stays legible instead of
-                  shrinking to match a uniform icon size. */}
-              <Icon size={path === "/caddie" ? 28 : 22} strokeWidth={isActive ? 2.5 : 2} />
+              {/* Fixed-height wrapper keeps every label starting at the
+                  same offset regardless of icon size — Caddie's icon
+                  renders larger (so its "AI" lettering stays legible)
+                  but must not push its label out of line with its
+                  siblings' labels below. */}
+              <span className="flex h-7 items-center justify-center">
+                <Icon size={path === "/caddie" ? 28 : 22} strokeWidth={isActive ? 2.5 : 2} />
+              </span>
               {t(labelKey)}
             </>
           )}
