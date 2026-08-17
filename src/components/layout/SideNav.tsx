@@ -24,7 +24,10 @@ export function SideNav() {
               }`
             }
           >
-            <Icon size={20} />
+            {/* Caddie's icon carries small "AI" lettering the other
+                glyphs don't, so it's rendered a bit larger than its
+                siblings to keep that detail legible. */}
+            <Icon size={path === "/caddie" ? 24 : 20} />
             <span className="hidden lg:inline">{t(labelKey)}</span>
           </NavLink>
         ))}

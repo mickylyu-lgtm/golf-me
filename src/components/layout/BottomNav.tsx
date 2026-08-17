@@ -19,7 +19,11 @@ export function BottomNav() {
         >
           {({ isActive }) => (
             <>
-              <Icon size={22} strokeWidth={isActive ? 2.5 : 2} />
+              {/* Caddie's icon carries small lettering ("AI") that the
+                  other glyphs don't — rendered a bit larger than its
+                  siblings so that detail stays legible instead of
+                  shrinking to match a uniform icon size. */}
+              <Icon size={path === "/caddie" ? 28 : 22} strokeWidth={isActive ? 2.5 : 2} />
               {t(labelKey)}
             </>
           )}
