@@ -7,42 +7,41 @@ interface CaddieNavIconProps {
 // A minimal robot-caddie head wearing a golf visor, replacing the generic
 // Sparkles icon for the Caddie nav tab only (see src/lib/nav.ts). Built to
 // the same prop shape lucide-react icons expose (size, strokeWidth,
-// className) so it drops into NAV_ITEMS' `icon` field unchanged. Rounder
-// and chunkier than a strict geometric trace — thicker strokes, a fuller
-// dome, big round eyes — with "AI" sized up so it reads at a glance rather
-// than needing a close look. The eyes and cap interior stay a fixed white
-// (not currentColor) so they read as distinct cutout shapes against the
-// nav bar's white background in both the active (green) and inactive
-// (gray) states.
+// className) so it drops into NAV_ITEMS' `icon` field unchanged. Traced
+// closely against an approved reference sketch: a flatter, wider dome cap
+// with small rounded ear-flaps flaring out at each side (not straight
+// tabs), "AI" lettering and a brim seam inside it, a rounded-square
+// (robotic, not domed) face just under the cap, and two close-set pill
+// eyes. The eyes and cap interior stay a fixed white (not currentColor)
+// so they read as distinct cutout shapes against the nav bar's white
+// background in both the active (green) and inactive (gray) states.
 export function CaddieNavIcon({ size = 24, strokeWidth = 2.1, className }: CaddieNavIconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
-      {/* cap: wide rounded dome — deliberately wider than the face below it,
-          so the brim reads as a real overhang and "AI" gets more room */}
+      {/* cap: flatter, wider dome */}
       <path
-        d="M2.8 9.4 C2.8 4.5 6.8 1 12 1 C17.2 1 21.2 4.5 21.2 9.4 Z"
+        d="M4 9.6 C4 5.6 7.6 2.6 12 2.6 C16.4 2.6 20 5.6 20 9.6 Z"
         fill="white"
         stroke="currentColor"
         strokeWidth={strokeWidth}
         strokeLinejoin="round"
       />
-      {/* side tabs where the wide brim overhangs the narrower face */}
-      <line x1="2.8" y1="9.4" x2="2.8" y2="11.2" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" />
-      <line x1="21.2" y1="9.4" x2="21.2" y2="11.2" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" />
+      {/* rounded ear-flaps flaring out at each side of the cap's base */}
+      <circle cx="4" cy="10" r="1.6" fill="white" stroke="currentColor" strokeWidth={strokeWidth} />
+      <circle cx="20" cy="10" r="1.6" fill="white" stroke="currentColor" strokeWidth={strokeWidth} />
       {/* brim seam */}
-      <path d="M4.5 7.9 Q12 10.4 19.5 7.9" fill="none" stroke="currentColor" strokeWidth={strokeWidth * 0.8} strokeLinecap="round" />
+      <path d="M5.8 8.2 Q12 10.3 18.2 8.2" fill="none" stroke="currentColor" strokeWidth={strokeWidth * 0.8} strokeLinecap="round" />
       {/* "AI" lettering — sized to read at a glance, not a close look */}
-      <text x="12" y="6.7" textAnchor="middle" fontSize="7.4" fontWeight="900" fill="currentColor" stroke="none" fontFamily="system-ui, sans-serif" letterSpacing="-0.2">
+      <text x="12" y="6.9" textAnchor="middle" fontSize="7" fontWeight="900" fill="currentColor" stroke="none" fontFamily="system-ui, sans-serif" letterSpacing="-0.2">
         AI
       </text>
 
-      {/* face: rounded square, not a dome — reads as robotic rather than
-          an organic round blob, per explicit design feedback */}
-      <rect x="4.8" y="9.4" width="14.4" height="9.4" rx="3.2" fill="currentColor" />
+      {/* face: rounded square, not a dome — reads as robotic */}
+      <rect x="4.8" y="9.6" width="14.4" height="9.2" rx="3.2" fill="currentColor" />
 
-      {/* eyes: big, round, cartoon-friendly, fixed-white cutouts */}
-      <circle cx="9.7" cy="14.3" r="1.65" fill="white" />
-      <circle cx="14.3" cy="14.3" r="1.65" fill="white" />
+      {/* eyes: close-set pills, fixed-white cutouts */}
+      <rect x="9.3" y="13.6" width="2" height="3.3" rx="1" fill="white" />
+      <rect x="12.7" y="13.6" width="2" height="3.3" rx="1" fill="white" />
     </svg>
   );
 }
