@@ -19,6 +19,8 @@ import { Ready } from "./pages/Ready";
 import { Home } from "./pages/Home";
 import { Discover } from "./pages/Discover";
 import { Find } from "./pages/Find";
+import { TeeTimes } from "./pages/TeeTimes";
+import { TeeTimeCourseDetail } from "./pages/TeeTimeCourseDetail";
 import { AutoMatch } from "./pages/AutoMatch";
 import { GolfCalls } from "./pages/GolfCalls";
 import { CreateGolfCall } from "./pages/CreateGolfCall";
@@ -179,6 +181,8 @@ export default function App() {
                   <Route path="/community/guidelines" element={<CommunityGuidelines />} />
                   <Route path="/community/:id" element={<PostDetail />} />
                   <Route path="/saved-posts" element={<SavedPosts />} />
+                  <Route path="/tee-times" element={<TeeTimes />} />
+                  <Route path="/tee-times/:courseId" element={<TeeTimeCourseDetail />} />
                 </Route>
               </Routes>
             </BrowserRouter>

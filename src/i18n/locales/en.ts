@@ -106,6 +106,22 @@ export const en = {
   "swingAnalysis.impact": "Impact",
   "swingAnalysis.followThrough": "Follow-through",
 
+  "teeTimes.title": "Tee Times",
+  "teeTimes.subtitle": "Check tee time availability at supported courses.",
+  "teeTimes.holesLabel": "{holes} Holes",
+  "teeTimes.selectDate": "Select a date",
+  "teeTimes.loading": "Loading tee times...",
+  "teeTimes.retry": "Retry",
+  "teeTimes.emptyTitle": "No live tee times inside GolfMe yet",
+  "teeTimes.emptyDescription": "GolfMe doesn't have a live availability connection for this course yet — check the official booking site directly.",
+  "teeTimes.viewLiveTeeTimes": "View Live Tee Times",
+  "teeTimes.liveInsideGolfMe": "Live availability inside GolfMe",
+  "teeTimes.checkOnCourseWebsite": "Check availability on course website",
+  "teeTimes.lastUpdatedJustNow": "Updated just now",
+  "teeTimes.lastUpdated": "Updated {time}",
+  "teeTimes.notFound": "That course isn't supported yet.",
+  "teeTimes.backToTeeTimes": "Back to Tee Times",
+
   // Welcome (first open, no session)
   "welcome.tagline": "Find your next round.",
   "welcome.subtitle": "Golf when you want, even when your usual group can't.",

@@ -2,7 +2,7 @@
 
 > Read this file first in any new session (laptop or claude.ai/code on mobile) before making changes. Update it in the same commit as any milestone — new feature, schema change, or architectural decision — so the next session (possibly on another device) has zero context loss.
 
-Last updated: 2026-08-16 (Phase 7)
+Last updated: 2026-08-17 (Phase 8)
 
 ## Current phase
 
@@ -211,6 +211,35 @@ Four sequenced sub-phases, each approved individually before the next started (u
 **Not verified live (browser, real two-account click-through):** Follow/unfollow between two real accounts, Find Friends search UX, and the full Community flow (text post, media post, Swing Post upload, cross-account visibility, mobile layout) — repeatedly blocked this session by disposable-inbox (mailinator) flakiness and Supabase's auth email-send rate limit, the same infrastructure constraints noted throughout Phases 1-6. Where live browser testing wasn't possible, correctness was instead verified via direct SQL role-simulation (`set local role authenticated` + `request.jwt.claims`), which is a real check of RLS/trigger/function behavior but not a substitute for a live click-through — flagged honestly rather than claimed as fully tested. **A caution self-caught mid-session**: while hunting for a throwaway test account, a magic-link email was accidentally sent to Micky's own real account (`mickylyu@gmail.com`) — caught immediately, no further action taken against that account, switched to a fresh disposable inbox instead.
 
 Sub-phases 7a-7d (real Follow, messaging speed, i18n completion, Find Friends) are already committed and pushed. **Sub-phase 7e (Community) is implemented in the working tree but not yet committed, pushed, or deployed** — per standing project rule, awaiting explicit go-ahead for this round of changes.
+
+## Phase 8 — restricted tee-time system for Skyway + Dyker Beach (2026-08-17)
+
+Briefed as a full live-availability system (fetch real slots, auto-fill round creation, booking-status tracking, caching/freshness). Investigated both courses' real booking systems live before writing any code, per the brief's own priority order (public API > partner API > legitimate scrape > deep-link):
+
+- **Skyway Golf Course at Lincoln Park West** (Jersey City, Hudson County-operated, 9 holes) books through **Lightspeed Golf** (formerly Chronogolf) — confirmed live, skywaygolfcourse.com's own "Members Area" link points at `members.chronogolf.com`. Lightspeed publishes an official Partner API (`partner-api.docs.chronogolf.com`) that can read a real tee sheet, but it's explicitly partner-gated (apply + get approved), not a public/anonymous API.
+- **Dyker Beach Golf Course** (Brooklyn, one of 6 NYC courses operated by American Golf, 18 holes) books through **Tee It Up** (NBC Sports Next) at a NYC-American-Golf-specific site. Same story: no public API found.
+- Both providers' real booking pages are JS-rendered and sit behind bot protection — returned a flat 403 to every plain server-side fetch attempted during research. Per explicit hard constraint (no bypassing anti-bot protection), this was not worked around.
+
+**Conclusion, confirmed with Micky before building (AskUserQuestion, all 3 answered with the recommended option):** genuine live in-app availability isn't legitimately buildable today for either course — this is an access wall, not a shortcut being taken. Built exactly the fallback the brief's own Step 15/16 describes for this situation: the full modular provider architecture, honestly returning no availability, with "View Live Tee Times" (a plain link to each course's real official booking page — no invented/unverified URL query params, since neither provider's real page could be loaded to confirm deep-link params are honored) as the primary action. Integration scope was also explicitly narrowed on Micky's say-so to just the course+date picker and booking link — no round/Foursome/community-post auto-fill, no booking-status tracking, since there's no real selected slot to attach that data to yet.
+
+- `src/services/teeTimes/types.ts` (new) — `SUPPORTED_TEE_TIME_COURSES` (exactly Skyway + Dyker Beach), `TeeTime`, `TeeTimeProvider`, `TeeTimeStatus`, `SelectedTeeTime` (types only; not wired into a UI yet, since no real selection flow exists — see integration-scope note above).
+- `src/services/teeTimes/providers/skyway.ts`, `providers/dykerBeach.ts` (new) — each implements `TeeTimeProvider`; `getTeeTimes()` always resolves `[]` (never fabricated), `getBookingUrl()` returns the real, live-confirmed official booking URL for that course.
+- `src/services/teeTimes/index.ts` (new) — `getProviderForCourse(courseId)` registry; adding a third course later is add-to-list + write-a-provider + register-here, nothing else changes.
+- `supabase/functions/get-tee-times/index.ts` (new, deployed, ACTIVE, v1) — `GET ?course=&date=`, validates both params, returns an honest `teeTimes: []` payload (`liveAvailability: false` + a clear message) plus the real `bookingUrl`/`provider`/`holes`/`lastUpdated`. Same CORS-header convention as `course-search`/`course-enrich` (including `x-client-info`, learned the hard way earlier this project). **Live-verified via curl**, not just code-reviewed: OPTIONS preflight (204, correct headers), no-auth GET (401, Supabase's own JWT gate), valid GET for both courses (200, correct honest payload), unsupported course (400), malformed date (400).
+- `src/lib/useTeeTimes.ts` (new) — hook wrapping `supabase.functions.invoke("get-tee-times?course=...&date=...", { method: "GET" })`, loading/error/retry state.
+- `src/pages/TeeTimes.tsx` (new) — the 2-course list, entry point.
+- `src/pages/TeeTimeCourseDetail.tsx` (new) — date picker (native `<input type="date">`, min=today) + loading/error/empty states + "View Live Tee Times" button (opens the real official page in a new tab) + a last-updated indicator. The live-teeTimes-list rendering branch is implemented (per the architecture requirement) but structurally unreachable today, same honesty posture as `SwingAnalysisPanel`'s "complete" branch.
+- `src/App.tsx` — routes `/tee-times`, `/tee-times/:courseId` added.
+- `src/pages/Find.tsx` — new entry-point card ("GolfMe -> Tee Times" per the brief's flow) above the existing Rounds/Golfers tabs.
+- Removed `src/lib/teeTimeProvider.ts` — an earlier, unused (zero call sites, confirmed via grep) scaffold for a more general tee-time-provider concept tied to the main `courses` table; superseded by this narrower, brief-specified architecture at `src/services/teeTimes/`.
+- `.env.example` — documents (comment-only, no real values) the two future partner-API secret names this would need, marked not-yet-set.
+- All new UI strings localized across all 6 languages from the start (`teeTimes.*` keys), matching the discipline established in Phase 7.
+
+**Deliberate deviation from the brief's literal `TeeTimeProvider` interface**, flagged rather than silent: `getBookingUrl()` takes `{ courseId, date? }` instead of `{ teeTime: TeeTime }` — since `getTeeTimes()` never returns a real `TeeTime` today, there's nothing to pass. Revisit this signature the day real availability exists and a specific slot needs its own booking URL.
+
+**Not verified live:** clicking through the actual booking URLs in a browser (both `chronogolf.com/club/skyway-golf-course` and `new-york-american-golf.book.teeitup.com` returned 403 to WebFetch, the same bot-protection found during research) — their provenance is solid (read directly off each course's own official site navigation, not guessed), but "the link opens and shows the real booking page" is not something this session could click-test. Also not verified: any real live availability at all (impossible today, by design — see above). Mobile layout review was code-level only (reused `CLICKABLE_CARD_CLASS`/`EmptyState`/`GolfMeLoader`, all already mobile-verified elsewhere), not click-tested on a phone.
+
+`npx tsc -b`, `npm run lint`, `npm run build`: all clean, zero new errors/warnings.
 
 ## Remote/local sync note (2026-08-12)
 

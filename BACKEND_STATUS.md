@@ -40,7 +40,7 @@
 | Fill My Foursome (friend-invite hosting) | **DEMO-ONLY** | Needs a real Golf Circle/Following graph that doesn't exist yet; real hosting is "Starting Fresh" + instant-join only (approved scope trim, Phase 4). |
 | Request-to-join (approval flow) | **DEMO-ONLY** | Real Golf Calls are instant-join only; `golf_calls.join_mode` is currently locked to `'instant'` by a `CHECK` constraint. |
 | Golf Circle / Following | **REAL** (Phase 7, 2026-08-16) | `public.follows`, composite PK, `follows_no_self` check constraint preventing self-follow, RLS scoped to `follower_id = auth.uid()` for writes. Demo mode's original implementation still exists unchanged (renamed `demoX`) for `auth.isDemo`. |
-| Live tee-time inventory / booking | **PENDING** | `tee_time_source`/`tee_time_provider`/`external_tee_time_id` columns exist and are reserved for this, but every real round's tee time is user-entered text (`tee_time_source` locked to `'user_entered'`) and never presented as live availability. Out of scope for Phase 6 per explicit instruction — no work done here this phase. |
+| Live tee-time inventory / booking | **PENDING, partner-API-gated** (Phase 8, 2026-08-17) | `/tee-times` — restricted to 2 hand-verified courses (Skyway, Dyker Beach). Real `get-tee-times` Edge Function deployed and live-tested (CORS, JWT gate, honest empty payload all verified via curl). Both courses' real booking providers were identified live (Skyway -> Lightspeed Golf/Chronogolf; Dyker Beach -> Tee It Up/NBC Sports Next) but neither offers a public API — only a partner API requiring an approved business relationship GolfMe doesn't have. Their live booking sites also returned 403 to automated fetches (bot protection), which was not bypassed per explicit instruction. Never fabricates availability: `getTeeTimes()` always returns `[]` today; the only real action is "View Live Tee Times," a plain link to each course's real official booking page. `golf_calls.tee_time_source` is unaffected, still locked to `'user_entered'`. |
 | Push notifications (device) | **PENDING** | In-app notifications only; no APNs/FCM integration. |
 | Payments | **PENDING** | Not built. |
 | Apple Sign-In | **PENDING** | Google + email only. |
@@ -96,6 +96,7 @@ Consolidated across Phases 4-6 (Phases 1-3's own test results are in `DEVELOPMEN
 - Google Cloud Console OAuth client setup for the production domain.
 - Supabase Auth redirect URL configured for the Vercel production domain.
 - (Optional, low priority) Enable leaked-password-protection in Supabase Auth settings — no effect until/unless password auth is added.
+- **Tee-time partner API access (Phase 8, new)**: not something any session can do — would need Micky/GolfMe to apply for and be approved for the Lightspeed Golf Partner API (Skyway) and a Tee It Up/NBC Sports Next partner integration (Dyker Beach), a business/legal process, not a config toggle. Until then, `get-tee-times` intentionally has nothing to connect to.
 
 ## I — TestFlight readiness
 
