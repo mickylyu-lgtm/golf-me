@@ -31,8 +31,10 @@ export function CaddieNavIcon({ size = 24, strokeWidth = 2.1, className }: Caddi
       <circle cx="20" cy="10" r="1.6" fill="white" stroke="currentColor" strokeWidth={strokeWidth} />
       {/* brim seam */}
       <path d="M5.8 8.2 Q12 10.3 18.2 8.2" fill="none" stroke="currentColor" strokeWidth={strokeWidth * 0.8} strokeLinecap="round" />
-      {/* "AI" lettering — sized to read at a glance, not a close look */}
-      <text x="12" y="6.9" textAnchor="middle" fontSize="7" fontWeight="900" fill="currentColor" stroke="none" fontFamily="system-ui, sans-serif" letterSpacing="-0.2">
+      {/* "AI" lettering — dropped clear of the dome's peak (y≈2.6 at
+          center) so the glyphs sit inside the cap instead of poking
+          above its outline */}
+      <text x="12" y="7.7" textAnchor="middle" fontSize="6.6" fontWeight="900" fill="currentColor" stroke="none" fontFamily="system-ui, sans-serif" letterSpacing="-0.2">
         AI
       </text>
 
