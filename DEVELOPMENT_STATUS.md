@@ -2,7 +2,7 @@
 
 > Read this file first in any new session (laptop or claude.ai/code on mobile) before making changes. Update it in the same commit as any milestone — new feature, schema change, or architectural decision — so the next session (possibly on another device) has zero context loss.
 
-Last updated: 2026-08-17 (Phase 8)
+Last updated: 2026-08-17 (Phase 9)
 
 ## Current phase
 
@@ -240,6 +240,31 @@ Briefed as a full live-availability system (fetch real slots, auto-fill round cr
 **Not verified live:** clicking through the actual booking URLs in a browser (both `chronogolf.com/club/skyway-golf-course` and `new-york-american-golf.book.teeitup.com` returned 403 to WebFetch, the same bot-protection found during research) — their provenance is solid (read directly off each course's own official site navigation, not guessed), but "the link opens and shows the real booking page" is not something this session could click-test. Also not verified: any real live availability at all (impossible today, by design — see above). Mobile layout review was code-level only (reused `CLICKABLE_CARD_CLASS`/`EmptyState`/`GolfMeLoader`, all already mobile-verified elsewhere), not click-tested on a phone.
 
 `npx tsc -b`, `npm run lint`, `npm run build`: all clean, zero new errors/warnings.
+
+## Phase 9 — Caddie (AI swing-analysis history) + Home/Play/Caddie/Me nav (2026-08-17)
+
+Nav restructured from Home/Find/My Golf/Profile to **Home/Play/Caddie/Me**: "Play" is the old "Find" relabeled (still merges Golf Calls + Discover + Tee Times + Auto-Match + Host a Round, none of them a separate destination); "Me" is the old "Profile" relabeled; **My Golf moved off the root tabs** — its page (`/my-rounds`, unchanged) is now reached via a row on the Me page instead of its own tab, since a 4-slot nav had to give something up for Caddie. `RootTabCarousel.tsx` (the swipe-between-root-tabs component, easy to miss since it hardcodes its own panel list separately from `nav.ts`) was updated to match — the earlier `MyRounds` panel dropped, `Caddie` panel added.
+
+**Caddie** is a new, real, per-user, private AI swing-analysis history — `public.caddie_analyses`, RLS strictly `owner_id = auth.uid()` on every operation (no other role can ever select a row, live-verified via SQL role-simulation: a second real account got exactly 0 rows querying another user's analysis). No real CV/AI provider exists (`src/lib/swingAnalysis.ts`'s `swingAnalysisProvider` still always throws) — every analysis, direct-upload or Community-sourced, is created with real, persisted metadata (real video URL, real timestamps, real ownership) but `status` stays `'pending'` forever until a real provider is connected; the UI shows an honest "Caddie is taking a look..." state, never a fabricated result, matching the same discipline already established for Swing Posts.
+
+- `supabase/migrations/20260817090000_create_caddie_analyses.sql` — the table + RLS.
+- `supabase/migrations/20260817091500_enforce_caddie_ask_owner_only.sql` — "Ask Caddie" is owner-only for this beta (explicit product decision, deferred the open question of analyzing a stranger's swing) — **DB-enforced, not just hidden in the UI**: a trigger rejects any `community_post`-sourced analysis whose `owner_id` doesn't match that post's real author. Live-verified: a second real account's attempt to bypass the UI gate and directly insert an analysis against the first account's post was rejected with the intended error, zero rows leaked.
+- `src/context/RealCaddieContext.tsx` (new) — same shape as the other `RealXContext`s: owner-scoped fetch + realtime subscription + `createAnalysis()`, which fires the (currently always-failing) real provider call and leaves the row honestly `pending` on the expected throw.
+- `src/data/caddie.ts` (new) — demo mode's own illustrative (openly fictional, same posture as every other demo fixture) 2-analysis mock history, completely separate from real accounts' data.
+- `src/pages/Caddie.tsx`, `AnalyzeSwing.tsx`, `CaddieAnalysisDetail.tsx` (new) — home screen (Analyze a Swing CTA + Recent list, empty state), direct-upload flow (reuses the exact `community-media` Storage upload mechanics `CreatePost.tsx` already established for Swing Posts — no second media pipeline), and the result view (strengths/issues/recommendations, "From Community Post" breadcrumb when relevant, "Share to Community").
+- **Ask Caddie in Community**: `PostCard.tsx` — swing posts the viewer owns show "Ask Caddie" (creates a `community_post`-sourced analysis referencing the post's existing video, no re-upload) or, once one exists, an inline "✨ Caddie Swing Analysis · View Analysis" row — satisfies the later persistence-brief's #6/#11 ask that a post's Caddie analysis stay visible on the post itself, not only inside Caddie's own history.
+- **Share to Community**: `CaddieAnalysisDetail.tsx`'s "Share to Community" hands off to `CreatePost.tsx` via `navigate(..., { state })` with the real (already-uploaded) video URL + a caption — `CreatePost.tsx` was extended to accept this prefill and, critically, to **reuse that URL directly instead of re-uploading a second copy of the same file**. User must still review and tap Post; nothing is auto-published.
+- `src/pages/Profile.tsx` — new "My Golf" row (first in the list) linking to `/my-rounds`; `src/pages/MyRounds.tsx` gained a back button since it's no longer a root tab.
+- `src/pages/Home.tsx` — one optional, compact Caddie card (latest analysis only, shown only if one exists) between the preferences nudge and the Community section.
+- All new UI text localized across all 6 languages from the start.
+
+**A separate, later brief (2026-08-17) asked to make Community posts persistent** on a mistaken premise — Community has been fully real/Supabase-backed since Phase 7e (verified again this phase: real accounts' posts, comments, votes, and now Caddie references all survive refresh/restart/navigation because they were never local React state to begin with). Corrected before doing any redundant rebuild; the one genuinely new piece from that brief (Caddie analysis visible inline on the post) is the "Ask Caddie" row above, not a separate change.
+
+**Verified this phase:** RLS privacy (cross-account read blocked), DB-enforced Ask-Caddie ownership (cross-account bypass attempt rejected), direct-upload and Community-sourced analysis creation, `status` defaulting honestly to `'pending'` — all via SQL role-simulation with two real accounts, zero test-data footprint left behind (confirmed by count after). `npx tsc -b`, `npm run lint`, `npm run build` all clean throughout every step, not just at the end. Security advisors clean (no unexpected findings on the new table or trigger function).
+
+**Not verified live:** an actual browser click-through of the nav swipe/tap behavior, the direct-upload flow, or the Community Ask-Caddie button — this phase's verification is compile-clean + DB-level SQL simulation only, no live Playwright pass was run.
+
+Nothing in this phase has been committed or pushed yet — awaiting explicit go-ahead, per standing project rule.
 
 ## Remote/local sync note (2026-08-12)
 

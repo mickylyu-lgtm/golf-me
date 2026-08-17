@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Search, UserPlus } from "lucide-react";
+import { ArrowRight, Search, Sparkles, UserPlus } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useLocale } from "../i18n/LocaleContext";
 import { GolfCallCard } from "../components/golfcall/GolfCallCard";
@@ -8,6 +8,7 @@ import { PostCard } from "../components/community/PostCard";
 import { CLICKABLE_CARD_CLASS } from "../components/ui/cardStyles";
 import { firstName, greetingKeyForHour, isThisWeekend } from "../lib/greeting";
 import { MIN_PREFERENCES_FOR_AUTO_MATCH, selectedPreferenceCount } from "../lib/preferenceMatch";
+import { formatShortDate } from "../lib/format";
 
 const HOME_RADIUS_MILES = 25;
 const NEARBY_ROUNDS_SHOWN = 3;
@@ -21,9 +22,16 @@ const PRIMARY_ACTION_CLASS =
   "rounded-2xl bg-fairway-600 shadow-sm shadow-fairway-900/10 transition-all duration-200 ease-out hover:-translate-y-0.5 hover:bg-fairway-700 hover:shadow-md active:translate-y-0 active:bg-fairway-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:hover:translate-y-0";
 
 export function Home() {
-  const { currentUser, golfCalls, visiblePosts } = useData();
-  const { t } = useLocale();
+  const { currentUser, golfCalls, visiblePosts, caddieAnalyses } = useData();
+  const { t, locale } = useLocale();
   const navigate = useNavigate();
+
+  // Only the single latest analysis, and only if one exists — Home stays
+  // uncluttered for anyone who's never used Caddie (per explicit instruction).
+  const latestCaddieAnalysis = useMemo(
+    () => [...caddieAnalyses].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0],
+    [caddieAnalyses],
+  );
 
   const openCalls = useMemo(
     () => golfCalls.filter((c) => c.status === "open" && c.totalSpots - c.joinedGolferIds.length > 0),
@@ -130,6 +138,27 @@ export function Home() {
             <span className="block text-xs text-slate-500">{t("home.optionalPreferencesRemaining")}</span>
           </span>
           <span className="shrink-0 text-xs font-semibold text-fairway-700">{t("home.updatePreferences")}</span>
+        </button>
+      )}
+
+      {latestCaddieAnalysis && (
+        <button
+          onClick={() => navigate(`/caddie/${latestCaddieAnalysis.id}`)}
+          className={`flex w-full items-center gap-3 p-4 text-left ${CLICKABLE_CARD_CLASS}`}
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-fairway-50 text-fairway-700">
+            <Sparkles size={18} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-xs font-bold uppercase tracking-wide text-fairway-700">{t("caddie.title")}</span>
+            <span className="block text-sm font-semibold text-slate-900">
+              {latestCaddieAnalysis.swingType || t("caddie.homeCardTitle")} · {formatShortDate(latestCaddieAnalysis.createdAt, locale)}
+            </span>
+            {latestCaddieAnalysis.status === "complete" && latestCaddieAnalysis.issues.length > 0 && (
+              <span className="block text-xs text-slate-500">{t("caddie.thingsToWorkOn", { count: latestCaddieAnalysis.issues.length })}</span>
+            )}
+          </span>
+          <span className="shrink-0 text-xs font-semibold text-fairway-700">{t("caddie.continueInCaddie")}</span>
         </button>
       )}
 

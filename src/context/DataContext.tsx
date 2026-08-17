@@ -5,6 +5,7 @@ import type {
   AppData,
   AppNotification,
   AvailabilitySlot,
+  CaddieAnalysis,
   ChatMessage,
   CircleConnection,
   CommentVote,
@@ -45,6 +46,9 @@ import { placeholderGolferProfile, golferPatchToProfileRow } from "../lib/profil
 import { useRealRounds } from "./RealRoundsContext";
 import { useRealSocial } from "./RealSocialContext";
 import { useRealCommunity } from "./RealCommunityContext";
+import { useRealCaddie } from "./RealCaddieContext";
+import type { CreateAnalysisInput } from "./RealCaddieContext";
+import { buildDemoCaddieAnalyses } from "../data/caddie";
 
 export interface DmConversation {
   conversationId: string;
@@ -225,6 +229,10 @@ interface DataContextValue {
   commentUpvoteCount: (commentId: string) => number;
   toggleCommentUpvote: (commentId: string) => Promise<void>;
 
+  caddieAnalyses: CaddieAnalysis[];
+  getCaddieAnalysis: (id: string) => CaddieAnalysis | undefined;
+  createCaddieAnalysis: (input: CreateAnalysisInput) => Promise<CaddieAnalysis>;
+
   notifications: AppNotification[];
   unreadNotificationCount: number;
   markNotificationRead: (id: string) => void;
@@ -240,6 +248,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const realRounds = useRealRounds();
   const realSocial = useRealSocial();
   const realCommunity = useRealCommunity();
+  const realCaddie = useRealCaddie();
+  const [demoCaddieAnalyses, setDemoCaddieAnalyses] = useState<CaddieAnalysis[]>(() => buildDemoCaddieAnalyses());
   const [data, setData] = useState<AppData>(() => loadData());
   const [isLoading, setIsLoading] = useState(true);
 
@@ -1346,6 +1356,41 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [auth.isDemo, demoToggleCommentUpvote, realCommunity],
   );
 
+  // Caddie — a real user's private AI swing-analysis history. Demo mode
+  // gets its own openly-illustrative mock array (never persisted, reset on
+  // reload); real accounts go through RealCaddieContext, whose RLS makes
+  // this genuinely private (see the caddie_analyses migration). Neither
+  // path ever fabricates a "complete" result for a real account — see
+  // src/lib/swingAnalysis.ts.
+  const caddieAnalyses = auth.isDemo ? demoCaddieAnalyses : realCaddie.analyses;
+  const getCaddieAnalysis = useCallback((id: string) => caddieAnalyses.find((a) => a.id === id), [caddieAnalyses]);
+  const createCaddieAnalysis = useCallback(
+    async (input: CreateAnalysisInput): Promise<CaddieAnalysis> => {
+      if (auth.isDemo) {
+        const created: CaddieAnalysis = {
+          id: generateId("caddie"),
+          ownerId: currentUser.id,
+          sourceType: input.sourceType,
+          sourcePostId: input.sourcePostId,
+          sourceMediaUrl: input.sourceMediaUrl,
+          swingType: input.swingType,
+          status: "pending",
+          strengths: [],
+          issues: [],
+          recommendations: [],
+          drills: [],
+          sharedToCommunity: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        setDemoCaddieAnalyses((prev) => [created, ...prev]);
+        return created;
+      }
+      return realCaddie.createAnalysis(input);
+    },
+    [auth.isDemo, currentUser.id, realCaddie],
+  );
+
   const mockNotifications = useMemo(
     () => data.notifications.filter((n) => n.userId === currentUser.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     [data.notifications, currentUser.id],
@@ -1455,6 +1500,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
       isCommentUpvoted,
       commentUpvoteCount,
       toggleCommentUpvote,
+      caddieAnalyses,
+      getCaddieAnalysis,
+      createCaddieAnalysis,
       notifications,
       unreadNotificationCount,
       markNotificationRead,
@@ -1534,6 +1582,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
       isCommentUpvoted,
       commentUpvoteCount,
       toggleCommentUpvote,
+      caddieAnalyses,
+      getCaddieAnalysis,
+      createCaddieAnalysis,
       notifications,
       unreadNotificationCount,
       markNotificationRead,

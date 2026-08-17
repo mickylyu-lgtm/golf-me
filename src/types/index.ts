@@ -360,6 +360,31 @@ export interface CommunityPost {
   createdAt: string;
 }
 
+// Caddie: a real user's private AI swing-analysis history — see
+// src/lib/swingAnalysis.ts for why status never reaches "complete" today
+// (no real provider connected) and public.caddie_analyses' RLS for why this
+// is never readable by anyone but its owner.
+export type CaddieSourceType = "direct_upload" | "community_post";
+export type CaddieAnalysisStatus = "pending" | "processing" | "complete" | "failed";
+
+export interface CaddieAnalysis {
+  id: string;
+  ownerId: string;
+  sourceType: CaddieSourceType;
+  sourcePostId?: string; // only for sourceType "community_post"
+  sourceMediaUrl: string;
+  swingType?: string;
+  status: CaddieAnalysisStatus;
+  analysisSummary?: string;
+  strengths: string[];
+  issues: string[];
+  recommendations: string[];
+  drills: string[];
+  sharedToCommunity: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // Upvote-only — no downvotes (see DataContext for the reasoning). Existence
 // of a row = upvoted; tapping again just removes the row. Community votes
 // never feed into GolferProfile.reputation or credibility.

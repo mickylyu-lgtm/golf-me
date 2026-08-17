@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import { RealRoundsProvider } from "./context/RealRoundsContext";
 import { RealSocialProvider } from "./context/RealSocialContext";
 import { RealCommunityProvider } from "./context/RealCommunityContext";
+import { RealCaddieProvider } from "./context/RealCaddieContext";
 import { ToastProvider } from "./context/ToastContext";
 import { LocaleProvider, useLocale, LOCALES } from "./i18n/LocaleContext";
 import type { Locale } from "./i18n/LocaleContext";
@@ -21,6 +22,9 @@ import { Discover } from "./pages/Discover";
 import { Find } from "./pages/Find";
 import { TeeTimes } from "./pages/TeeTimes";
 import { TeeTimeCourseDetail } from "./pages/TeeTimeCourseDetail";
+import { Caddie } from "./pages/Caddie";
+import { AnalyzeSwing } from "./pages/AnalyzeSwing";
+import { CaddieAnalysisDetail } from "./pages/CaddieAnalysisDetail";
 import { AutoMatch } from "./pages/AutoMatch";
 import { GolfCalls } from "./pages/GolfCalls";
 import { CreateGolfCall } from "./pages/CreateGolfCall";
@@ -134,6 +138,7 @@ export default function App() {
         <RealRoundsProvider>
         <RealSocialProvider>
         <RealCommunityProvider>
+        <RealCaddieProvider>
         <DataProvider>
           <ToastProvider>
             <AppGate>
@@ -183,12 +188,16 @@ export default function App() {
                   <Route path="/saved-posts" element={<SavedPosts />} />
                   <Route path="/tee-times" element={<TeeTimes />} />
                   <Route path="/tee-times/:courseId" element={<TeeTimeCourseDetail />} />
+                  <Route path="/caddie" element={<Caddie />} />
+                  <Route path="/caddie/analyze" element={<AnalyzeSwing />} />
+                  <Route path="/caddie/:analysisId" element={<CaddieAnalysisDetail />} />
                 </Route>
               </Routes>
             </BrowserRouter>
           </AppGate>
         </ToastProvider>
       </DataProvider>
+        </RealCaddieProvider>
         </RealCommunityProvider>
         </RealSocialProvider>
         </RealRoundsProvider>

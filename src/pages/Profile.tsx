@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import type { ReactNode } from "react";
 import {
   ChevronRight,
+  ClipboardList,
   MessageCircle,
   MessageSquareText,
   Settings as SettingsIcon,
@@ -152,6 +153,7 @@ export function Profile() {
       </div>
 
       <div className="flex flex-col gap-2.5">
+        <ProfileRow icon={<ClipboardList size={16} />} label={t("profile.myGolf")} onClick={() => navigate("/my-rounds")} />
         <ProfileRow
           icon={<MessageCircle size={16} />}
           label={t("profile.messages")}

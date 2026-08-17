@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { ArrowLeft, Check, ImagePlus, Loader2, MapPin, Users, Video, X } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
@@ -23,8 +23,17 @@ type Attachment = "none" | "photo" | "course" | "round" | "swing";
 const COMMUNITY_MEDIA_BUCKET = "community-media";
 const MAX_SWING_VIDEO_BYTES = 200 * 1024 * 1024; // matches the Storage bucket's own file_size_limit
 
+// Caddie's "Share to Community" hands off here via navigate(..., { state })
+// — a real video already sitting in community-media, so posting must reuse
+// that URL directly rather than re-uploading a second copy of the same file.
+export interface CreatePostSwingPrefill {
+  swingVideoUrl: string;
+  caption?: string;
+}
+
 export function CreatePost() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { currentUser, golfCalls, createPost } = useData();
   const { isDemo, authUser } = useAuth();
   const { showToast } = useToast();
@@ -32,12 +41,19 @@ export function CreatePost() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
 
-  const [text, setText] = useState("");
-  const [attachment, setAttachment] = useState<Attachment>("none");
+  const prefill = location.state as CreatePostSwingPrefill | null;
+
+  const [text, setText] = useState(prefill?.caption ?? "");
+  const [attachment, setAttachment] = useState<Attachment>(prefill?.swingVideoUrl ? "swing" : "none");
   const [imageUrl, setImageUrl] = useState<string | undefined>(undefined);
   const [imageLoading, setImageLoading] = useState(false);
   const [videoFile, setVideoFile] = useState<File | undefined>(undefined);
-  const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | undefined>(undefined);
+  const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | undefined>(prefill?.swingVideoUrl);
+  // Set only for a prefilled video that's already uploaded — publishing
+  // must skip the upload step and reuse this URL as-is. Cleared the moment
+  // the user picks a different video file, since that's a genuinely new
+  // upload no longer represented by this URL.
+  const [prefilledVideoUrl, setPrefilledVideoUrl] = useState<string | undefined>(prefill?.swingVideoUrl);
   const [courseQuery, setCourseQuery] = useState("");
   const [courseTag, setCourseTag] = useState<string | undefined>(undefined);
   const [golfCallId, setGolfCallId] = useState<string | undefined>(undefined);
@@ -63,8 +79,9 @@ export function CreatePost() {
     if (next !== "round") setGolfCallId(undefined);
     if (next !== "swing") {
       setVideoFile(undefined);
-      if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
+      if (videoPreviewUrl && !prefilledVideoUrl) URL.revokeObjectURL(videoPreviewUrl);
       setVideoPreviewUrl(undefined);
+      setPrefilledVideoUrl(undefined);
     }
     if (next === "photo") fileInputRef.current?.click();
     if (next === "swing") videoInputRef.current?.click();
@@ -110,11 +127,12 @@ export function CreatePost() {
       showToast("That video is too large — please choose a shorter clip.", "warning");
       return;
     }
+    setPrefilledVideoUrl(undefined);
     setVideoFile(file);
     setVideoPreviewUrl(URL.createObjectURL(file));
   }
 
-  const canPost = text.trim().length > 0 && !imageLoading && (attachment !== "swing" || Boolean(videoFile));
+  const canPost = text.trim().length > 0 && !imageLoading && (attachment !== "swing" || Boolean(videoFile) || Boolean(prefilledVideoUrl));
 
   async function handlePost() {
     if (!canPost || posting) return;
@@ -122,7 +140,12 @@ export function CreatePost() {
     setUploadProgress(attachment === "swing" ? "uploading" : "publishing");
     try {
       let videoUrl: string | undefined;
-      if (attachment === "swing" && videoFile) {
+      if (attachment === "swing" && prefilledVideoUrl && !videoFile) {
+        // Handed off from Caddie's "Share to Community" — already a real
+        // Storage URL, so reuse it directly rather than uploading a second
+        // copy of the same file.
+        videoUrl = prefilledVideoUrl;
+      } else if (attachment === "swing" && videoFile) {
         if (isDemo || !authUser) {
           // Swing Posts have no demo/local equivalent — real Supabase
           // Storage only, per explicit product decision (a data-URL video

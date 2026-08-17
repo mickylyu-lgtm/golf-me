@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowUp, Bookmark, MapPin, MessageCircle, MoreHorizontal, ShieldAlert, ShieldCheck, ShieldOff, ShieldX, Trash2, Video } from "lucide-react";
+import { ArrowUp, Bookmark, Loader2, MapPin, MessageCircle, MoreHorizontal, ShieldAlert, ShieldCheck, ShieldOff, ShieldX, Sparkles, Trash2, Video } from "lucide-react";
 import type { CommunityPost } from "../../types";
 import { useData } from "../../context/DataContext";
 import { useToast } from "../../context/ToastContext";
@@ -41,6 +41,8 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
     hidePost,
     isBlocked,
     blockUser,
+    caddieAnalyses,
+    createCaddieAnalysis,
   } = useData();
   const { showToast } = useToast();
   const { t, locale } = useLocale();
@@ -50,6 +52,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
   const [imageOpen, setImageOpen] = useState(false);
+  const [askingCaddie, setAskingCaddie] = useState(false);
 
   const author = getGolfer(post.authorId);
   if (!author || isBlocked(post.authorId)) return null;
@@ -69,6 +72,24 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
   }
 
   const isSwingPost = post.type === "swing";
+  // Owner-only for this beta (explicit product decision) — analyzing a
+  // stranger's swing and saving it to your own private history raised an
+  // open permissions question the brief flagged, so Ask Caddie is scoped
+  // to the post's own author until that's revisited.
+  const existingCaddieAnalysis = isOwn ? caddieAnalyses.find((a) => a.sourcePostId === post.id) : undefined;
+
+  async function askCaddie() {
+    if (!post.videoUrl || askingCaddie) return;
+    setAskingCaddie(true);
+    try {
+      const created = await createCaddieAnalysis({ sourceType: "community_post", sourcePostId: post.id, sourceMediaUrl: post.videoUrl });
+      navigate(`/caddie/${created.id}`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : t("caddie.askCaddieError"), "warning");
+    } finally {
+      setAskingCaddie(false);
+    }
+  }
 
   return (
     <div
@@ -175,6 +196,28 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
           {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
           <video src={post.videoUrl} controls className="max-h-96 w-full rounded-xl bg-black" />
           <SwingAnalysisPanel status={post.swingAnalysisStatus} />
+          {isOwn &&
+            (existingCaddieAnalysis ? (
+              <button
+                onClick={() => navigate(`/caddie/${existingCaddieAnalysis.id}`)}
+                className="flex items-center justify-between gap-2 rounded-xl border border-fairway-100 bg-fairway-50/50 px-3.5 py-2.5 text-left transition-colors duration-150 hover:border-fairway-300"
+              >
+                <span className="flex items-center gap-1.5 text-sm font-semibold text-fairway-800">
+                  <Sparkles size={14} /> {t("caddie.title")} {t("swingAnalysis.title")}
+                </span>
+                <span className="text-xs font-semibold text-fairway-700">{t("caddie.viewAnalysis")}</span>
+              </button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                icon={askingCaddie ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                onClick={askCaddie}
+                disabled={askingCaddie}
+              >
+                {t("caddie.askCaddie")}
+              </Button>
+            ))}
         </div>
       )}
 

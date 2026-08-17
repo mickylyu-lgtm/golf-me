@@ -2,18 +2,20 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Home } from "../../pages/Home";
 import { Find } from "../../pages/Find";
-import { MyRounds } from "../../pages/MyRounds";
+import { Caddie } from "../../pages/Caddie";
 import { Profile } from "../../pages/Profile";
 
-// The 4 root sections, in swipe order. Kept in this file (rather than
-// deriving from MOBILE_NAV_ITEMS) because it also needs the actual page
-// components, not just icons/labels. Hosting a round is reached via an
-// action button, not a root tab, so it renders as a normal pushed route
-// (/golf-calls/new) outside this carousel.
+// The 4 root sections, in swipe order — Home / Play / Caddie / Me. Kept in
+// this file (rather than deriving from MOBILE_NAV_ITEMS) because it also
+// needs the actual page components, not just icons/labels. Hosting a round
+// is reached via an action button, not a root tab, so it renders as a
+// normal pushed route (/golf-calls/new) outside this carousel. My Golf
+// moved off the root tabs (now a row on the Me/Profile page) when Caddie
+// took its slot, so MyRounds is no longer one of these 4 panels.
 const PANELS = [
   { path: "/", render: () => <Home /> },
   { path: "/find", render: () => <Find /> },
-  { path: "/my-rounds", render: () => <MyRounds /> },
+  { path: "/caddie", render: () => <Caddie /> },
   { path: "/profile", render: () => <Profile /> },
 ] as const;
 
