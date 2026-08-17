@@ -36,12 +36,13 @@ export function CaddieNavIcon({ size = 24, strokeWidth = 2.1, className }: Caddi
         AI
       </text>
 
-      {/* face: solid, rounder and chunkier than a strict dome */}
-      <path d="M4.8 9.6 H19.2 V13.8 A7.2 7.2 0 0 1 4.8 13.8 Z" fill="currentColor" />
+      {/* face: rounded square, not a dome — reads as robotic rather than
+          an organic round blob, per explicit design feedback */}
+      <rect x="4.8" y="9.4" width="14.4" height="9.4" rx="3.2" fill="currentColor" />
 
       {/* eyes: big, round, cartoon-friendly, fixed-white cutouts */}
-      <circle cx="9.7" cy="14" r="1.65" fill="white" />
-      <circle cx="14.3" cy="14" r="1.65" fill="white" />
+      <circle cx="9.7" cy="14.3" r="1.65" fill="white" />
+      <circle cx="14.3" cy="14.3" r="1.65" fill="white" />
     </svg>
   );
 }
