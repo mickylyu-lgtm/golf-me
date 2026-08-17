@@ -89,7 +89,7 @@ export function Discover({ embedded = false }: DiscoverProps) {
           <input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={t("findFriends.searchPlaceholder")}
+            placeholder={t("discover.searchPlaceholder")}
             className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-10 pr-3.5 text-sm text-slate-800 outline-none transition focus:border-fairway-400 focus:ring-2 focus:ring-fairway-100"
           />
         </div>

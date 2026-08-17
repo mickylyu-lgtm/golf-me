@@ -167,6 +167,7 @@ export const es: Record<TranslationKey, string> = {
   "chat.delete": "Eliminar",
   "chat.historyClearedToast": "Historial del chat borrado.",
   "chat.conversationDeletedToast": "Conversación eliminada.",
+  "discover.searchPlaceholder": "Estoy buscando a...",
 
   "welcome.tagline": "Encuentra tu próxima ronda.",
   "welcome.subtitle": "Juega cuando quieras, incluso cuando tu grupo habitual no pueda.",

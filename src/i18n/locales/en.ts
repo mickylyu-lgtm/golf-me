@@ -175,6 +175,7 @@ export const en = {
   "chat.delete": "Delete",
   "chat.historyClearedToast": "Chat history cleared.",
   "chat.conversationDeletedToast": "Conversation deleted.",
+  "discover.searchPlaceholder": "I'm looking for...",
 
   // Welcome (first open, no session)
   "welcome.tagline": "Find your next round.",

@@ -167,6 +167,7 @@ export const ja: Record<TranslationKey, string> = {
   "chat.delete": "削除",
   "chat.historyClearedToast": "チャット履歴を削除しました。",
   "chat.conversationDeletedToast": "会話を削除しました。",
+  "discover.searchPlaceholder": "探しているのは...",
 
   "welcome.tagline": "次のラウンドを見つけよう。",
   "welcome.subtitle": "いつものメンバーがいなくても、好きな時にゴルフを。",

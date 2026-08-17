@@ -13,6 +13,14 @@ import type { AppNotification, NotificationType } from "../../types";
 const POPUP_TYPES = new Set<NotificationType>(["new_message", "round_joined", "round_cancelled", "post_reply", "comment_reply"]);
 
 const AUTO_DISMISS_MS = 4500;
+// Real accounts' `notifications` starts as an empty array before
+// RealSocialContext's async fetch resolves — locking the "already seen"
+// baseline in immediately (on the very first render) meant a returning
+// user's entire existing history looked "new" the instant it actually
+// loaded a beat later, re-popping already-read notifications on every
+// login. Waiting this long before capturing the baseline gives the real
+// fetch time to land first in virtually every case.
+const BASELINE_GRACE_MS = 1200;
 
 // Deliberately driven by useData().notifications (already branched demo/
 // real, already the thing RealSocialContext's own realtime subscription
@@ -26,14 +34,26 @@ export function NotificationPopupHost() {
   const { notifications, getGolfer } = useData();
   const navigate = useNavigate();
   const seenIds = useRef<Set<string> | null>(null);
+  const notificationsRef = useRef(notifications);
+  notificationsRef.current = notifications;
   const [queue, setQueue] = useState<AppNotification[]>([]);
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
+    // Capture the baseline once, after a grace period, from whatever
+    // notifications looks like AT THAT TIME (via the ref, so this doesn't
+    // close over the empty array present on mount) — not immediately on
+    // mount, when the real fetch hasn't resolved yet.
+    const timer = setTimeout(() => {
+      seenIds.current = new Set(notificationsRef.current.map((n) => n.id));
+    }, BASELINE_GRACE_MS);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
     if (seenIds.current === null) {
-      // First load (including every login) — don't replay a user's
-      // existing notification history as a burst of popups.
-      seenIds.current = new Set(notifications.map((n) => n.id));
+      // Still within the grace period — don't treat the real fetch landing
+      // as a burst of "new" notifications.
       return;
     }
     const fresh = notifications.filter((n) => !seenIds.current!.has(n.id));

@@ -167,6 +167,7 @@ export const ko: Record<TranslationKey, string> = {
   "chat.delete": "삭제",
   "chat.historyClearedToast": "채팅 기록을 지웠습니다.",
   "chat.conversationDeletedToast": "대화를 삭제했습니다.",
+  "discover.searchPlaceholder": "찾는 사람...",
 
   "welcome.tagline": "다음 라운드를 찾아보세요.",
   "welcome.subtitle": "평소 멤버가 없을 때도, 원할 때 언제든 라운드하세요.",

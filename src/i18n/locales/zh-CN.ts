@@ -167,6 +167,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "chat.delete": "删除",
   "chat.historyClearedToast": "聊天记录已清除。",
   "chat.conversationDeletedToast": "对话已删除。",
+  "discover.searchPlaceholder": "我想找...",
 
   "welcome.tagline": "找到你的下一场球局。",
   "welcome.subtitle": "想打就打，即使你的老球友们没空。",
