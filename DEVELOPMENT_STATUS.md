@@ -2,7 +2,7 @@
 
 > Read this file first in any new session (laptop or claude.ai/code on mobile) before making changes. Update it in the same commit as any milestone — new feature, schema change, or architectural decision — so the next session (possibly on another device) has zero context loss.
 
-Last updated: 2026-08-18 (Phase 16)
+Last updated: 2026-08-18 (Phase 17)
 
 ## Current phase
 
@@ -348,6 +348,16 @@ Bug report: the Home page's "Complete your profile — Update Preferences" remin
 - Regression-tested via a real headless browser in demo mode: Save button starts disabled, enables the instant a pill changes, no toast/network activity before it's tapped, tapping it saves + shows the confirmation toast + disables again, zero console errors. The underlying real-account save-ordering race (still fixed via the serialized queue above) can't be demonstrated in demo mode itself — confidence there comes from code/Promise-semantics review, not a live repro.
 - **Follow-up**: `handleSave` now navigates to `/` (Home) only after `updateCurrentUserProfile` resolves, per explicit request. This also likely explains the "reminder doesn't show as completed" complaint on its own — real-account saves are a genuine network round trip, and if the user checked Home before that finished (easy to do without an explicit save button forcing a wait), they'd see `currentUser` before it had actually updated. Waiting for the await before navigating means Home always renders with the just-saved data. Verified live: URL correctly lands on `/` after Save, zero console errors.
 
+## Phase 17 — Email the founder on every waitlist signup (2026-08-18)
+
+GolfMe had zero outbound-email capability before this (the app only ever sent Supabase Auth's own magic-link login emails, a separate system that can't be repurposed). Micky signed up for Resend and provided an API key over Telegram.
+
+- **`20260818110000_add_waitlist_signup_email_notification` migration**: enables `pg_net` (async HTTP from Postgres — new to this project) and adds an `AFTER INSERT` trigger on `waitlist_signups` that calls Resend's API directly via `net.http_post`, emailing `mickylyu@gmail.com` the new signup's email/region/referral source. **The actual API key is deliberately NOT in this migration file** — same reasoning `.env.local` is gitignored, a real secret must never land in a tracked file. It was inserted directly into Supabase Vault via a one-off `execute_sql` call outside of any migration (`vault.create_secret(...)`), referenced by the trigger only by name (`vault.decrypted_secrets where name = 'resend_api_key'`), readable only by the trigger's own `SECURITY DEFINER` context. If the vault secret is ever missing, the trigger no-ops silently rather than blocking or failing the actual signup.
+- **Chose this over adding a new Edge Function** specifically because there's no way for this session to set an Edge Function secret (that's a dashboard/CLI-only step — same limitation documented below for `GEOAPIFY_API_KEY`, still unresolved). A Vault secret, by contrast, is settable via SQL, so this path could be finished completely today without requiring Micky to do anything else manually.
+- **Verified live with a real send, not a mock**: inserted a real test row through the actual REST API (anon key, exactly how the frontend does it), confirmed via `net._http_response` that the HTTP call to Resend returned `200` with a real email id — the notification email genuinely sent. Test signup deleted afterward.
+- **Known, unfixable advisor warning**: `pg_net` installs its extension registration into the `public` schema and doesn't support `ALTER EXTENSION ... SET SCHEMA` (confirmed by trying) — a common, low-severity (`WARN`, not `ERROR`) finding for this specific extension on Supabase; its actual callable functions already live properly isolated in the `net` schema regardless.
+- Uses Resend's shared `onboarding@resend.dev` sending address (works immediately, no domain verification needed) — fine for founder-only notification emails; would need a verified custom domain before sending anything to end users.
+
 ## Remote/local sync note (2026-08-12)
 
 The `create_profiles` and `lock_down_handle_new_user_execute` migrations were applied straight to `golfme-dev` in an earlier session (likely mobile/claude.ai/code — "remote control"), without a corresponding local commit. This session discovered the drift via `list_tables`/`list_migrations` against the live project, and wrote matching files into `supabase/migrations/` so the repo is reproducible again. **Lesson: always check `list_migrations` against the remote project at the start of a Supabase-touching session, don't trust local `supabase/migrations/` alone to reflect DB state**, since this project has no CLI-linked local Postgres to diff against.
@@ -423,6 +433,7 @@ Not done by any session — needs dashboard/browser/third-party-account access t
 - `20260818050000_create_waitlist_signups` — `public.waitlist_signups`, the first anon-writable table in this project (insert-only, zero read policy for anyone), needed by Phase 13's public waitlist landing page. Applied via the Supabase MCP, reconciled into this file. Advisors clean.
 - `20260818070000_add_tee_time_verification` — widens `golf_calls.tee_time_source`'s CHECK constraint (`manual`/`user_verified`/`provider_verified`, was locked to a single value), adds `booking_source`/`verification_created_at` to `golf_calls`, new `public.booking_proofs` table + narrow RLS, new private `booking-proofs` Storage bucket, `attach_booking_proof()`/`remove_booking_proof()`/`edit_golf_call_tee_time()` SECURITY DEFINER RPCs, `notify_booking_proof_attached()` trigger, extends `notifications.type`'s CHECK constraint with `booking_proof_attached`. Needed by Phase 14's tee-time trust feature. Applied via the Supabase MCP, reconciled into this file. Advisors clean.
 - `20260818090000_add_admin_dashboard_rpcs` — `admin_list_waitlist_signups()`/`admin_list_users()`, needed by Phase 15's admin dashboard. Applied via the Supabase MCP, reconciled into this file. Advisors clean.
+- `20260818110000_add_waitlist_signup_email_notification` — enables `pg_net`, adds `notify_admin_of_waitlist_signup()` trigger, needed by Phase 17's founder email notification. Applied via the Supabase MCP, reconciled into this file. The `resend_api_key` Vault secret itself was inserted separately via a direct `execute_sql` call, not part of this (or any) migration file. Advisors: one new, unfixable `pg_net`-in-`public` WARN (see Phase 17 section above), otherwise clean.
 
 ## Supabase configuration status
 
