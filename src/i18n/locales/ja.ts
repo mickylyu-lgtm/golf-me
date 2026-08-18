@@ -680,6 +680,8 @@ export const ja: Record<TranslationKey, string> = {
   "preferences.whenCanYouPlay": "いつプレーできますか？",
   "preferences.availableThisWeekend": "今週末プレー可能",
   "preferences.markedAvailableToast": "今週末プレー可能に設定しました。",
+  "preferences.savedToast": "設定を保存しました。",
+  "preferences.saveError": "現在保存できませんでした。もう一度お試しください。",
   "preferences.changePlayingArea": "プレーエリアを変更",
   "preferences.areaSetToast": "プレーエリアを{area}に設定しました。",
 

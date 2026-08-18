@@ -680,6 +680,8 @@ export const zhTW: Record<TranslationKey, string> = {
   "preferences.whenCanYouPlay": "什麼時候有空？",
   "preferences.availableThisWeekend": "本週末有空",
   "preferences.markedAvailableToast": "已標記本週末有空。",
+  "preferences.savedToast": "偏好設定已儲存。",
+  "preferences.saveError": "暫時無法儲存，請再試一次。",
   "preferences.changePlayingArea": "更改打球區域",
   "preferences.areaSetToast": "打球區域已設為{area}。",
 

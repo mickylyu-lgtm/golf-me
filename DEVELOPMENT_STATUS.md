@@ -2,7 +2,7 @@
 
 > Read this file first in any new session (laptop or claude.ai/code on mobile) before making changes. Update it in the same commit as any milestone — new feature, schema change, or architectural decision — so the next session (possibly on another device) has zero context loss.
 
-Last updated: 2026-08-18 (Phase 15)
+Last updated: 2026-08-18 (Phase 16)
 
 ## Current phase
 
@@ -337,6 +337,15 @@ Directly answers the two `0a`/`0b` "no admin UI yet" gaps flagged at the end of 
 - **Registered users**: total + onboarded counts, and a roster (avatar/name/username/email/member-since, with admin/coach-reviewer/mid-onboarding badges).
 
 Two new admin-gated RPCs (`20260818090000_add_admin_dashboard_rpcs` migration): `admin_list_waitlist_signups()` (waitlist_signups has zero read policy for anyone at all by design — this is now the one sanctioned way to read it, still admin-only, not opened up broadly) and `admin_list_users()` (joins `profiles` to `auth.users` for email, same pattern as `admin_search_users()`). Verified live via role-simulated SQL: non-admin correctly rejected, admin call returns the expected rows. Reachable via a new "Platform Dashboard" row next to "Coach Reviewers" on the founder's own Profile page. Regression-tested via a real headless browser in demo mode — link correctly absent, zero console errors. English-only, same reasoning as the Coach Reviewer dashboard (internal tool, not user-facing).
+
+## Phase 16 — Fix Match Preferences save race + add a confirm signal (2026-08-18)
+
+Bug report: the Home page's "Complete your profile — Update Preferences" reminder (`src/pages/Home.tsx`, driven by `selectedPreferenceCount(currentUser) < 3` in `src/lib/preferenceMatch.ts`) sometimes wouldn't disappear even after the user had genuinely set 3+ preferences, and there was no confirmation that a tap on a preference pill had actually saved.
+
+- **Root cause (real accounts only)**: `updateCurrentUserProfile` (`src/context/DataContext.tsx`) fired an independent `UPDATE → re-SELECT` round trip per field change with nothing sequencing them. Every individual `UPDATE` always landed correctly in Postgres, but the re-SELECT *responses* could resolve out of order under normal network jitter — whichever one's `setProfileRow` call happened to land LAST won, which isn't guaranteed to be the one for the most-recently-clicked pill. Result: the in-memory `currentUser` (and anything computed from it, like the Home reminder) could regress to a state missing one of several rapid changes, even though the database was already fully correct. Demo mode was never affected — its save path is a synchronous local merge with no network round trip to race.
+- **Fix**: `updateCurrentUserProfile` now serializes real-account saves through a ref-held promise queue (`profileSaveQueueRef`) — each save's full round trip finishes before the next one starts, so completion order always matches initiation order. It also now returns a `Promise<void>` (previously fire-and-forget/`void`) so a caller that wants to know when a save actually lands can await it; existing callers that don't award it are unaffected (a default `.catch()` still logs failures, same as before, so nothing became noisier).
+- **Confirmation signal**: `MatchPreferencesDetail.tsx`'s pill grid (`MatchPreferencesPanel`) now awaits each save and shows a debounced "Preferences saved." toast (one toast per settled burst of clicks, not one per click — a user setting 3 preferences in a row gets a single confirmation, not a stack of them) plus an error toast on failure. `MatchPreferencesPanel` itself is untouched (it's also reused by Find Me a Round's temporary per-search override, where a persistent "saved" toast wouldn't make sense).
+- Regression-tested via a real headless browser in demo mode: the debounced toast fires exactly once after 3 rapid pill clicks, zero console errors, Home's reminder state unaffected. The specific real-account race this fixes can't be demonstrated in demo mode (it has no network round trip to race in the first place) — confidence here comes from direct code/Promise-semantics review, not a live repro.
 
 ## Remote/local sync note (2026-08-12)
 

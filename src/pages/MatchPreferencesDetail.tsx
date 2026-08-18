@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, MapPin } from "lucide-react";
 import { useData } from "../context/DataContext";
@@ -11,6 +11,7 @@ import { MatchPreferencesPanel } from "../components/golfer/MatchPreferencesPane
 import { AVAILABILITY_SLOTS } from "../types";
 import type { AvailabilitySlot } from "../types";
 import { matchPreferencesFromGolfer } from "../lib/matchPreferences";
+import type { MatchPreferencesValue } from "../lib/matchPreferences";
 
 export function MatchPreferencesDetail() {
   const { currentUser, updateCurrentUserProfile } = useData();
@@ -18,6 +19,22 @@ export function MatchPreferencesDetail() {
   const { t } = useLocale();
   const navigate = useNavigate();
   const [locationPickerOpen, setLocationPickerOpen] = useState(false);
+  // Debounced rather than one toast per pill tap — a user setting several
+  // preferences in a row would otherwise get a stack of near-identical
+  // "Saved" toasts. Waits for a short pause after the last successful save
+  // before confirming, giving a real completion signal (the thing this was
+  // missing) without spamming one per click.
+  const savedToastTimerRef = useRef<number | null>(null);
+
+  async function handlePreferenceChange(patch: Partial<MatchPreferencesValue>) {
+    try {
+      await updateCurrentUserProfile(patch);
+      if (savedToastTimerRef.current) window.clearTimeout(savedToastTimerRef.current);
+      savedToastTimerRef.current = window.setTimeout(() => showToast(t("preferences.savedToast"), "success"), 500);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : t("preferences.saveError"), "warning");
+    }
+  }
 
   function toggleAvailability(slot: AvailabilitySlot) {
     const next = currentUser.availability.includes(slot)
@@ -82,7 +99,7 @@ export function MatchPreferencesDetail() {
       <div className="rounded-2xl border border-slate-100 bg-white p-4">
         <MatchPreferencesPanel
           value={matchPreferencesFromGolfer(currentUser)}
-          onChange={(patch) => updateCurrentUserProfile(patch)}
+          onChange={handlePreferenceChange}
           nearLocation={{ label: currentUser.areaLabel, coords: currentUser.playingAreaCoords }}
         />
       </div>

@@ -680,6 +680,8 @@ export const zhCN: Record<TranslationKey, string> = {
   "preferences.whenCanYouPlay": "什么时候有空？",
   "preferences.availableThisWeekend": "本周末有空",
   "preferences.markedAvailableToast": "已标记本周末有空。",
+  "preferences.savedToast": "偏好设置已保存。",
+  "preferences.saveError": "暂时无法保存，请重试。",
   "preferences.changePlayingArea": "更改打球区域",
   "preferences.areaSetToast": "打球区域已设为{area}。",
 

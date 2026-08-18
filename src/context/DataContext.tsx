@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type {
   AgeRange,
@@ -146,7 +146,7 @@ interface DataContextValue {
   signUpNewGolfer: (input: NewGolferInput) => GolferProfile;
 
   switchCurrentUser: (id: string) => void;
-  updateCurrentUserProfile: (patch: Partial<GolferProfile>) => void;
+  updateCurrentUserProfile: (patch: Partial<GolferProfile>) => Promise<void>;
   setPhoneVerified: (value: boolean) => void;
   setEmailVerified: (value: boolean) => void;
   requestVerifiedGolfer: () => void;
@@ -254,6 +254,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [demoCaddieAnalyses, setDemoCaddieAnalyses] = useState<CaddieAnalysis[]>(() => buildDemoCaddieAnalyses());
   const [data, setData] = useState<AppData>(() => loadData());
   const [isLoading, setIsLoading] = useState(true);
+  // Serializes real-account profile saves — see updateCurrentUserProfile
+  // below for why two rapid edits racing was a real correctness bug, not
+  // just a UX one.
+  const profileSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
     setIsLoading(false);
@@ -371,15 +375,40 @@ export function DataProvider({ children }: { children: ReactNode }) {
   // (demo: mock golfers array; real: real profiles row) gives every one of
   // those surfaces real persistence with no changes to their own code.
   const updateCurrentUserProfile = useCallback(
-    (patch: Partial<GolferProfile>) => {
+    (patch: Partial<GolferProfile>): Promise<void> => {
       if (auth.isDemo) {
         setData((prev) => ({
           ...prev,
           golfers: prev.golfers.map((g) => (g.id === prev.currentUserId ? { ...g, ...patch } : g)),
         }));
-      } else {
-        auth.saveProfile(golferPatchToProfileRow(patch)).catch((err) => console.error("Golf Me: failed to save profile.", err));
+        return Promise.resolve();
       }
+      // Real accounts: each save is UPDATE-then-refetch (see
+      // AuthContext.saveProfile), and several surfaces (Match Preferences'
+      // pill grid especially) fire one of these per click with nothing
+      // batching them. Run in parallel, and the refetch responses can
+      // arrive out of order — whichever one's setProfileRow happens to
+      // resolve LAST wins, which isn't guaranteed to be the one initiated
+      // last. Every individual UPDATE still lands in Postgres either way,
+      // but the in-memory currentUser (and anything computed from it, like
+      // Home's "complete your profile" reminder) could transiently or
+      // persistently show a stale/regressed value. Chaining off the queue
+      // makes each save's full round trip finish before the next one
+      // starts, so completion order always matches initiation order.
+      const row = golferPatchToProfileRow(patch);
+      const thisSave = profileSaveQueueRef.current.then(
+        () => auth.saveProfile(row),
+        () => auth.saveProfile(row), // a previous save's failure must never block this one
+      );
+      // Two independent subscribers on the same promise: a default logger
+      // (most existing callers don't await this at all, and shouldn't
+      // start producing "unhandled rejection" console noise now that this
+      // returns something rejectable) and the queue's own bookkeeping.
+      // Neither prevents a caller who DOES want to await/catch `thisSave`
+      // itself (see MatchPreferencesDetail.tsx) from doing so.
+      thisSave.catch((err) => console.error("Golf Me: failed to save profile.", err));
+      profileSaveQueueRef.current = thisSave.catch(() => {});
+      return thisSave;
     },
     [auth],
   );

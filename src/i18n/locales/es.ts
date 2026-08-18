@@ -680,6 +680,8 @@ export const es: Record<TranslationKey, string> = {
   "preferences.whenCanYouPlay": "¿Cuándo puedes jugar?",
   "preferences.availableThisWeekend": "Disponible este fin de semana",
   "preferences.markedAvailableToast": "Marcado como disponible este fin de semana.",
+  "preferences.savedToast": "Preferencias guardadas.",
+  "preferences.saveError": "No pudimos guardar eso. Inténtalo de nuevo.",
   "preferences.changePlayingArea": "Cambia tu zona de juego",
   "preferences.areaSetToast": "Zona de juego establecida en {area}.",
 

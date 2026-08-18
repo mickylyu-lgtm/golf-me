@@ -680,6 +680,8 @@ export const ko: Record<TranslationKey, string> = {
   "preferences.whenCanYouPlay": "언제 라운드 가능하세요?",
   "preferences.availableThisWeekend": "이번 주말 가능해요",
   "preferences.markedAvailableToast": "이번 주말 가능으로 표시했어요.",
+  "preferences.savedToast": "환경설정이 저장되었습니다.",
+  "preferences.saveError": "지금은 저장할 수 없습니다. 다시 시도해 주세요.",
   "preferences.changePlayingArea": "라운드 지역 변경",
   "preferences.areaSetToast": "라운드 지역이 {area}(으)로 설정됐어요.",
 
