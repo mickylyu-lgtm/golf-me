@@ -4,7 +4,7 @@ import { GolfMeWordmark } from "../brand/GolfMeWordmark";
 import { useLocale } from "../../i18n/LocaleContext";
 
 // Deliberately minimal — logo, two anchor links, Log In, Join Waitlist.
-// Never the authenticated app's Home/Play/cAddIe/Me nav, which stays gated
+// Never the authenticated app's Home/Play/Caddie/Me nav, which stays gated
 // behind a real session (see AppShell/BottomNav/SideNav, untouched by this
 // page).
 export function LandingNav() {

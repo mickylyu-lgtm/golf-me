@@ -186,11 +186,11 @@ export const en = {
 
   // Public landing page (pre-TestFlight waitlist — logged-out visitors only)
   "landing.nav.howItWorks": "How It Works",
-  "landing.nav.caddie": "cAddIe",
+  "landing.nav.caddie": "Caddie",
   "landing.nav.joinWaitlist": "Join Waitlist",
   "landing.hero.headline": "Never let an open spot go to waste.",
   "landing.hero.subhead": "GolfMe helps golfers find people to play with, fill open spots, and connect around the game.",
-  "landing.hero.explainer": "Find golfers nearby. Join a round. Fill your foursome. Get better with cAddIe.",
+  "landing.hero.explainer": "Find golfers nearby. Join a round. Fill your foursome. Get better with Caddie.",
   "landing.hero.primaryCta": "Join the GolfMe Waitlist",
   "landing.hero.secondaryCta": "Already have access? Log In",
   "landing.explain.title": "Golf is better with the right people.",
@@ -201,7 +201,7 @@ export const en = {
   "landing.pillar.playBody": "Find golfers and rounds near you. Join an open group or fill your own foursome.",
   "landing.pillar.communityTitle": "Community",
   "landing.pillar.communityBody": "Share swings, golf experiences, questions, and content with other golfers.",
-  "landing.pillar.caddieTitle": "cAddIe",
+  "landing.pillar.caddieTitle": "Caddie",
   "landing.pillar.caddieBody": "Get AI-powered swing feedback and keep your improvement history in one place.",
   "landing.how.title": "How GolfMe Works",
   "landing.how.step1Title": "Find",

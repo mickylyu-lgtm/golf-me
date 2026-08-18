@@ -28,7 +28,7 @@ function StepCard({ n, title, body }: { n: number; title: string; body: string }
 }
 
 // Public / logged-out landing experience — pre-TestFlight waitlist capture.
-// The authenticated app (Home/Play/cAddIe/Me, real Supabase auth, the whole
+// The authenticated app (Home/Play/Caddie/Me, real Supabase auth, the whole
 // existing product) is completely untouched by this file; a visitor here
 // has no session at all. "Get Started" self-serve signup is deliberately
 // no longer the page's primary action (Join Waitlist is) but /onboarding,
