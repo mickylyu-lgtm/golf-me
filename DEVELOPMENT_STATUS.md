@@ -2,7 +2,7 @@
 
 > Read this file first in any new session (laptop or claude.ai/code on mobile) before making changes. Update it in the same commit as any milestone — new feature, schema change, or architectural decision — so the next session (possibly on another device) has zero context loss.
 
-Last updated: 2026-08-18 (Phase 14)
+Last updated: 2026-08-18 (Phase 15)
 
 ## Current phase
 
@@ -330,6 +330,14 @@ Three trust levels for a round's tee time: `manual` (host typed it in, unchanged
 - **Tested live via a real headless Chromium** (demo-mode click-through, since completing real magic-link auth isn't possible from this session — same constraint noted for every prior phase's "real two-account" tests): demo login, Play list, and Host a Round wizard all render with zero console errors; confirmed the new host-only UI (Edit Tee Time, Add Booking Proof, Verify Your Tee Time) correctly renders nowhere in demo mode, and the pre-existing demo hosting flow still works unchanged — no regression. **Not yet done**: an actual two-real-account click-through of the host/proof-upload/badge-viewing flow end to end (blocked by the same real-auth-session limitation as every previous phase's live UI tests) — backend correctness for that exact flow was instead verified via role-simulated SQL, per the section above.
 - One pre-existing test round (Hong Kong Golf Club, hosted by the founder account) had its `tee_time_label` changed to "11:40 AM" as a side effect of live-testing the edit RPC — cosmetic only, flagged to Micky rather than silently left.
 
+## Phase 15 — Admin platform dashboard: waitlist + registered users (2026-08-18)
+
+Directly answers the two `0a`/`0b` "no admin UI yet" gaps flagged at the end of Phases 13/14 — a hidden `/admin/dashboard` page (same access model as `/admin/coach-reviewers`: not in nav, gated on `isAdmin` client-side, re-verified server-side) showing:
+- **Waitlist**: total count, a status breakdown (waiting/invited/beta/declined), a region-count table (the thing Phase 13 specifically structured `home_region` cleanly to support), and the full recent-signups list (email/region/referral/status/date).
+- **Registered users**: total + onboarded counts, and a roster (avatar/name/username/email/member-since, with admin/coach-reviewer/mid-onboarding badges).
+
+Two new admin-gated RPCs (`20260818090000_add_admin_dashboard_rpcs` migration): `admin_list_waitlist_signups()` (waitlist_signups has zero read policy for anyone at all by design — this is now the one sanctioned way to read it, still admin-only, not opened up broadly) and `admin_list_users()` (joins `profiles` to `auth.users` for email, same pattern as `admin_search_users()`). Verified live via role-simulated SQL: non-admin correctly rejected, admin call returns the expected rows. Reachable via a new "Platform Dashboard" row next to "Coach Reviewers" on the founder's own Profile page. Regression-tested via a real headless browser in demo mode — link correctly absent, zero console errors. English-only, same reasoning as the Coach Reviewer dashboard (internal tool, not user-facing).
+
 ## Remote/local sync note (2026-08-12)
 
 The `create_profiles` and `lock_down_handle_new_user_execute` migrations were applied straight to `golfme-dev` in an earlier session (likely mobile/claude.ai/code — "remote control"), without a corresponding local commit. This session discovered the drift via `list_tables`/`list_migrations` against the live project, and wrote matching files into `supabase/migrations/` so the repo is reproducible again. **Lesson: always check `list_migrations` against the remote project at the start of a Supabase-touching session, don't trust local `supabase/migrations/` alone to reflect DB state**, since this project has no CLI-linked local Postgres to diff against.
@@ -337,7 +345,6 @@ The `create_profiles` and `lock_down_handle_new_user_execute` migrations were ap
 ## Remaining / next up
 
 0b. **Live two-real-account click-through of Phase 14's tee-time verification** — host a round with proof as one account, confirm the badge/explainer/notification appear correctly to a second joined account, confirm editing an unrelated field doesn't disturb it, confirm editing course/date/time correctly shows "proof no longer applies." Backend correctness (RLS, RPC authorization, the notification trigger) is verified via role-simulated SQL, and demo mode was regression-tested via a real headless browser, but nobody has clicked through the real-account host/upload/view flow yet — real magic-link auth can't be completed unattended from this session, same limitation noted for every earlier phase's "real two-account" tests.
-0a. **No admin UI for the waitlist yet** — Phase 13 deliberately didn't build one (not asked for this round; "do not begin another feature update after this"). Right now Micky sees waitlist signups/region concentration/status only via direct SQL against `public.waitlist_signups` (e.g. `select home_region, count(*) from waitlist_signups group by 1 order by 2 desc;`). Worth a small admin page later, mirroring the Coach Reviewer dashboard's pattern, once there's enough signups to want a UI for it.
 0. **Live browser click-through of Phase 12's Coach Reviewer system** — grant a friend via the admin dashboard, send/redeem an invite link end-to-end (both the already-has-an-account and brand-new-signup paths), leave a Coach Review on the real swing post, confirm the badge shows. Backend correctness is verified via role-simulated SQL (see Phase 12 section) but nobody has clicked through the actual UI yet.
 1. **Set `GEOAPIFY_API_KEY` as an Edge Function secret** — Micky has the key, just hasn't set it yet. No MCP tool can do this remotely; it's a dashboard/CLI step. See "Manual configuration required" below for exactly where.
 2. **Manual config required before real auth actually works end-to-end for Google** — see "Manual configuration required" below. Not something a session can do unsupervised (needs Google Cloud Console + Supabase dashboard access).
@@ -405,6 +412,7 @@ Not done by any session — needs dashboard/browser/third-party-account access t
 - `20260818041500_add_is_coach_reviewer_check` — `is_coach_reviewer()`, open to any authenticated caller, needed by the Coach Reviewer profile badge. Applied via the Supabase MCP, reconciled into this file.
 - `20260818050000_create_waitlist_signups` — `public.waitlist_signups`, the first anon-writable table in this project (insert-only, zero read policy for anyone), needed by Phase 13's public waitlist landing page. Applied via the Supabase MCP, reconciled into this file. Advisors clean.
 - `20260818070000_add_tee_time_verification` — widens `golf_calls.tee_time_source`'s CHECK constraint (`manual`/`user_verified`/`provider_verified`, was locked to a single value), adds `booking_source`/`verification_created_at` to `golf_calls`, new `public.booking_proofs` table + narrow RLS, new private `booking-proofs` Storage bucket, `attach_booking_proof()`/`remove_booking_proof()`/`edit_golf_call_tee_time()` SECURITY DEFINER RPCs, `notify_booking_proof_attached()` trigger, extends `notifications.type`'s CHECK constraint with `booking_proof_attached`. Needed by Phase 14's tee-time trust feature. Applied via the Supabase MCP, reconciled into this file. Advisors clean.
+- `20260818090000_add_admin_dashboard_rpcs` — `admin_list_waitlist_signups()`/`admin_list_users()`, needed by Phase 15's admin dashboard. Applied via the Supabase MCP, reconciled into this file. Advisors clean.
 
 ## Supabase configuration status
 

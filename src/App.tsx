@@ -50,6 +50,7 @@ import { PostDetail } from "./pages/PostDetail";
 import { CommunityGuidelines } from "./pages/CommunityGuidelines";
 import { SavedPosts } from "./pages/SavedPosts";
 import { AdminReviewers } from "./pages/AdminReviewers";
+import { AdminDashboard } from "./pages/AdminDashboard";
 import { CoachInvite } from "./pages/CoachInvite";
 import { usePendingReviewerInviteRedemption } from "./lib/usePendingReviewerInviteRedemption";
 
@@ -205,6 +206,7 @@ export default function App() {
                       the page itself (re-verified server-side by every RPC
                       it calls). */}
                   <Route path="/admin/coach-reviewers" element={<AdminReviewers />} />
+                  <Route path="/admin/dashboard" element={<AdminDashboard />} />
                   <Route path="/tee-times" element={<TeeTimes />} />
                   <Route path="/tee-times/:courseId" element={<TeeTimeCourseDetail />} />
                   <Route path="/caddie" element={<Caddie />} />
