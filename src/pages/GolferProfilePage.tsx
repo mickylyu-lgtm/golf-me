@@ -38,6 +38,7 @@ import { useCredibilityStats } from "../lib/useCredibility";
 import { formatBudgetRange, handicapLabel, isNewAccount, paceLabel } from "../lib/format";
 import { vibeLabel, walkOrCartLabel } from "../lib/enumLabels";
 import { VIBE_TONE } from "../lib/theme";
+import { useIsCoachReviewer } from "../lib/useIsCoachReviewer";
 
 // Stable (module-level, not re-created per render) zeroed fallback for the
 // brief window before the route's golfer id resolves — useCredibilityStats
@@ -84,6 +85,7 @@ export function GolferProfilePage() {
     golfer?.id,
     golfer?.reputation ?? EMPTY_REPUTATION,
   );
+  const isCoachReviewer = useIsCoachReviewer(golfer?.id);
 
   if (id === currentUser.id) return <Navigate to="/profile" replace />;
   if (!golfer) {
@@ -180,6 +182,11 @@ export function GolferProfilePage() {
           </p>
         </div>
         <CredibilityBadge tier={credibility.tier} size="sm" />
+        {isCoachReviewer && (
+          <Badge tone="fairway" icon={<ShieldCheck size={12} />}>
+            Coach Reviewer
+          </Badge>
+        )}
         <TrustBadgeRow golfer={enrichedGolfer} />
 
         {!blocked && (

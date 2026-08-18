@@ -7,6 +7,7 @@ import {
   MessageCircle,
   MessageSquareText,
   Settings as SettingsIcon,
+  ShieldCheck,
   SlidersHorizontal,
   Users,
   UserRoundPlus,
@@ -16,6 +17,7 @@ import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { useLocale } from "../i18n/LocaleContext";
 import { Avatar } from "../components/ui/Avatar";
+import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Modal } from "../components/ui/Modal";
 import { inputClass, labelClass } from "../components/ui/FormControls";
@@ -26,6 +28,7 @@ import type { AgeRange } from "../types";
 import { memberSinceLabel } from "../lib/format";
 import { computeCredibility, credibilityLabel } from "../lib/credibility";
 import { useCredibilityStats } from "../lib/useCredibility";
+import { useRoles } from "../lib/useRoles";
 
 function ProfileRow({ icon, label, value, onClick }: { icon: ReactNode; label: string; value?: string; onClick: () => void }) {
   return (
@@ -49,6 +52,7 @@ export function Profile() {
   const { showToast } = useToast();
   const { t } = useLocale();
   const navigate = useNavigate();
+  const { isCoachReviewer, isAdmin } = useRoles();
   const myPostCount = posts.filter((p) => p.authorId === currentUser.id).length;
 
   const [editing, setEditing] = useState(false);
@@ -150,6 +154,11 @@ export function Profile() {
             : t("profile.roundCount", { count: enrichedUser.reputation.completedRounds, handicap: currentUser.handicap ?? "--" })}
         </p>
         <CredibilityBadge tier={credibility.tier} size="sm" />
+        {isCoachReviewer && (
+          <Badge tone="fairway" icon={<ShieldCheck size={12} />}>
+            Coach Reviewer
+          </Badge>
+        )}
       </div>
 
       <div className="flex flex-col gap-2.5">
@@ -186,6 +195,9 @@ export function Profile() {
         />
         <ProfileRow icon={<SlidersHorizontal size={16} />} label={t("profile.matchPreferences")} onClick={() => navigate("/profile/preferences")} />
         <ProfileRow icon={<SettingsIcon size={16} />} label={t("profile.settings")} onClick={() => navigate("/settings")} />
+        {isAdmin && (
+          <ProfileRow icon={<ShieldCheck size={16} />} label="Coach Reviewers" onClick={() => navigate("/admin/coach-reviewers")} />
+        )}
       </div>
 
       {avatarModalOpen && (

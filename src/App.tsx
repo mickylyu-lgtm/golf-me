@@ -49,6 +49,9 @@ import { CreatePost } from "./pages/CreatePost";
 import { PostDetail } from "./pages/PostDetail";
 import { CommunityGuidelines } from "./pages/CommunityGuidelines";
 import { SavedPosts } from "./pages/SavedPosts";
+import { AdminReviewers } from "./pages/AdminReviewers";
+import { CoachInvite } from "./pages/CoachInvite";
+import { usePendingReviewerInviteRedemption } from "./lib/usePendingReviewerInviteRedemption";
 
 // Logged-in area: sidebar/bottom nav shell. Three real states, not two —
 // no session -> Welcome; session but onboarding incomplete (real accounts
@@ -127,6 +130,10 @@ function AppGate({ children }: { children: ReactNode }) {
   const { authLoading } = useAuth();
   const { t } = useLocale();
   useLanguageProfileSync();
+  // Fires as soon as a real auth session exists, even mid-onboarding (a
+  // Coach Reviewer invite isn't gated on has_onboarded) — see the hook's
+  // own comment for why this can't wait for AuthedLayout to mount.
+  usePendingReviewerInviteRedemption();
   if (isLoading || authLoading) return <GolfMeLoader fullScreen message={t("loading.gettingReady")} />;
   return <>{children}</>;
 }
@@ -150,6 +157,13 @@ export default function App() {
                     but it deliberately skips AppShell's nav chrome, same as
                     the rest of the pre-Home first-run flow. */}
                 <Route path="/ready" element={<Ready />} />
+                {/* Standalone for the same reason as /ready — must work
+                    whether the visitor is logged out, mid-onboarding, or
+                    fully set up, so it can't sit inside either GuestOnly
+                    (would bounce an already-authed visitor away) or
+                    AuthedLayout (would bounce a logged-out one to /welcome
+                    before the token is ever captured). */}
+                <Route path="/coach-invite/:token" element={<CoachInvite />} />
                 <Route element={<GuestOnly />}>
                   <Route path="/welcome" element={<Welcome />} />
                   <Route path="/onboarding" element={<Onboarding />} />
@@ -186,6 +200,11 @@ export default function App() {
                   <Route path="/community/guidelines" element={<CommunityGuidelines />} />
                   <Route path="/community/:id" element={<PostDetail />} />
                   <Route path="/saved-posts" element={<SavedPosts />} />
+                  {/* Not linked from any nav — reachable only by a direct
+                      hit, and gated on the caller's own admin role inside
+                      the page itself (re-verified server-side by every RPC
+                      it calls). */}
+                  <Route path="/admin/coach-reviewers" element={<AdminReviewers />} />
                   <Route path="/tee-times" element={<TeeTimes />} />
                   <Route path="/tee-times/:courseId" element={<TeeTimeCourseDetail />} />
                   <Route path="/caddie" element={<Caddie />} />

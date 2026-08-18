@@ -7,6 +7,7 @@ import { Button } from "../components/ui/Button";
 import { Avatar } from "../components/ui/Avatar";
 import { PostCard } from "../components/community/PostCard";
 import { CommentItem } from "../components/community/CommentItem";
+import { CoachReviewSection } from "../components/community/CoachReviewSection";
 
 export function PostDetail() {
   const { id } = useParams<{ id: string }>();
@@ -60,6 +61,8 @@ export function PostDetail() {
       </button>
 
       <PostCard post={post} linkToDetail={false} />
+
+      <CoachReviewSection post={post} />
 
       {!post.golfCallId && (
         <Button
