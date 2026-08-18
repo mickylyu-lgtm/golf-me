@@ -120,7 +120,6 @@ export const en = {
   "teeTimes.lastUpdatedJustNow": "Updated just now",
   "teeTimes.lastUpdated": "Updated {time}",
   "teeTimes.notFound": "That course isn't supported yet.",
-  "teeTimes.backToTeeTimes": "Back to Tee Times",
 
   "nav.play": "Play",
   "nav.caddie": "Caddie",

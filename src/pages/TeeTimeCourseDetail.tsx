@@ -28,11 +28,14 @@ export function TeeTimeCourseDetail() {
 
   return (
     <div className="flex flex-col gap-5 pb-6">
+      {/* Goes straight to Play, skipping the Tee Times list this page was
+          reached through — that list is a picker, not a place worth
+          returning to. */}
       <button
-        onClick={() => navigate("/tee-times")}
+        onClick={() => navigate("/find")}
         className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
       >
-        <ArrowLeft size={16} /> {t("teeTimes.backToTeeTimes")}
+        <ArrowLeft size={16} /> {t("common.back")}
       </button>
 
       <div>

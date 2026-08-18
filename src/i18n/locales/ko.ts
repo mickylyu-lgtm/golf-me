@@ -112,7 +112,6 @@ export const ko: Record<TranslationKey, string> = {
   "teeTimes.lastUpdatedJustNow": "방금 업데이트됨",
   "teeTimes.lastUpdated": "{time} 업데이트됨",
   "teeTimes.notFound": "아직 지원되지 않는 골프장입니다.",
-  "teeTimes.backToTeeTimes": "티타임으로 돌아가기",
 
   "nav.play": "플레이",
   "nav.caddie": "캐디",

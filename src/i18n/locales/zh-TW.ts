@@ -112,7 +112,6 @@ export const zhTW: Record<TranslationKey, string> = {
   "teeTimes.lastUpdatedJustNow": "剛剛更新",
   "teeTimes.lastUpdated": "{time}更新",
   "teeTimes.notFound": "該球場暫不支援。",
-  "teeTimes.backToTeeTimes": "返回開球時間",
 
   "nav.play": "打球",
   "nav.caddie": "球僮",

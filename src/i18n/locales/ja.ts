@@ -112,7 +112,6 @@ export const ja: Record<TranslationKey, string> = {
   "teeTimes.lastUpdatedJustNow": "たった今更新",
   "teeTimes.lastUpdated": "{time}に更新",
   "teeTimes.notFound": "このコースはまだ対応していません。",
-  "teeTimes.backToTeeTimes": "ティータイムに戻る",
 
   "nav.play": "プレー",
   "nav.caddie": "キャディ",

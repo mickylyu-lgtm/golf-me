@@ -112,7 +112,6 @@ export const es: Record<TranslationKey, string> = {
   "teeTimes.lastUpdatedJustNow": "Actualizado justo ahora",
   "teeTimes.lastUpdated": "Actualizado {time}",
   "teeTimes.notFound": "Ese campo todavía no está disponible.",
-  "teeTimes.backToTeeTimes": "Volver a Horarios de Salida",
 
   "nav.play": "Jugar",
   "nav.caddie": "Caddie",
