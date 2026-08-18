@@ -27,6 +27,16 @@ export interface HostRealRoundInput {
   notes?: string;
 }
 
+export interface EditTeeTimeInput {
+  courseId: string | null;
+  courseName: string;
+  courseAreaLabel: string;
+  courseLat: number | null;
+  courseLng: number | null;
+  dateISO: string;
+  timeLabel: string;
+}
+
 interface RealRoundsContextValue {
   golfCalls: GolfCall[];
   profilesById: Map<string, GolferProfile>;
@@ -36,6 +46,7 @@ interface RealRoundsContextValue {
   leaveRound: (roundId: string) => Promise<void>;
   cancelRound: (roundId: string) => Promise<void>;
   completeRound: (roundId: string) => Promise<void>;
+  editTeeTime: (roundId: string, input: EditTeeTimeInput) => Promise<{ proofInvalidated: boolean }>;
   hasReviewed: (roundId: string, revieweeId: string) => boolean;
   submitReview: (roundId: string, revieweeId: string, input: ReviewInput) => Promise<void>;
 }
@@ -194,6 +205,35 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
     [refetch, authUser],
   );
 
+  // The first host-initiated edit of an already-created round (previously
+  // only cancel/complete existed post-creation, both single-column status
+  // flips) — scoped to just course/date/time, matching the RPC's own
+  // narrow scope. If proof was attached and any of those actually changed,
+  // the RPC deletes the now-stale booking_proofs row itself and reports it
+  // back here so the freed Storage object can be cleaned up too.
+  const editTeeTime = useCallback(
+    async (roundId: string, input: EditTeeTimeInput): Promise<{ proofInvalidated: boolean }> => {
+      const { data, error } = await supabase.rpc("edit_golf_call_tee_time", {
+        p_golf_call_id: roundId,
+        p_course_id: input.courseId,
+        p_course_name: input.courseName,
+        p_course_area_label: input.courseAreaLabel,
+        p_course_lat: input.courseLat,
+        p_course_lng: input.courseLng,
+        p_date_iso: input.dateISO,
+        p_tee_time_label: input.timeLabel,
+      });
+      if (error) throw new Error(error.message);
+      await refetch();
+      const row = (data as { proof_invalidated: boolean; invalidated_storage_path: string | null }[] | null)?.[0];
+      if (row?.invalidated_storage_path) {
+        await supabase.storage.from("booking-proofs").remove([row.invalidated_storage_path]);
+      }
+      return { proofInvalidated: Boolean(row?.proof_invalidated) };
+    },
+    [refetch],
+  );
+
   const hasReviewed = useCallback((roundId: string, revieweeId: string) => myReviewedKeys.has(reviewKey(roundId, revieweeId)), [myReviewedKeys]);
 
   const submitReview = useCallback(
@@ -224,6 +264,7 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
     leaveRound,
     cancelRound,
     completeRound,
+    editTeeTime,
     hasReviewed,
     submitReview,
   };

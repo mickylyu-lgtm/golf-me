@@ -9,6 +9,7 @@ import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { MatchReasons } from "../golfer/MatchReasons";
 import { SharedPreferencesBadge } from "./SharedPreferencesBadge";
+import { TeeTimeTrustBadge } from "./TeeTimeTrustBadge";
 import { CLICKABLE_CARD_CLASS } from "../ui/cardStyles";
 import { formatCompactDay, formatDate, formatMoney } from "../../lib/format";
 import { vibeLabel } from "../../lib/enumLabels";
@@ -130,6 +131,9 @@ export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
               : t("golfCallCard.spotsRemainingPlural", { count: openSpots })}
           </Badge>
         )}
+        {/* Cancelled rounds keep verification metadata in the DB but never
+            show an active badge — see TeeTimeTrustBadge's own gating too. */}
+        {!isCancelled && <TeeTimeTrustBadge source={call.teeTimeSource} />}
       </div>
 
       {/* Mobile: compact overlapping avatars only — full names/handicaps live one tap away on the detail page. */}
@@ -173,6 +177,11 @@ export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
             <span aria-hidden>{tier.emoji}</span> {tier.label} for you
           </p>
           <MatchReasons reasons={reasons} className="mt-1" />
+          {call.teeTimeSource === "user_verified" && (
+            <p className="mt-0.5 flex items-center gap-1.5 text-xs text-fairway-700">
+              <span aria-hidden className="font-bold">✓</span> {t("golfCallDetail.bookingProofMatchReason")}
+            </p>
+          )}
           {preferenceChecks.length > 0 && (
             <div className="mt-1.5 border-t border-fairway-100 pt-1.5">
               <SharedPreferencesBadge checks={preferenceChecks} />

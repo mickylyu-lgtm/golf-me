@@ -180,6 +180,19 @@ export interface GolferProfile {
 
 export type GolfCallStatus = "open" | "full" | "completed" | "cancelled";
 
+// Trust levels for a round's tee time — never "how GolfMe verified this",
+// only "how much evidence exists that it's real":
+//   manual            — host typed it in, no evidence attached (the default)
+//   user_verified      — host attached supporting booking proof (a
+//                         screenshot/PDF and/or reference number) — GolfMe
+//                         has NOT independently confirmed this with the
+//                         course, it's the host's own attestation
+//   provider_verified  — reserved for a future real tee-time API/provider
+//                         integration. Nothing in this codebase ever sets
+//                         this today; it exists so the UI/types don't need
+//                         another migration once a provider exists.
+export type TeeTimeSource = "manual" | "user_verified" | "provider_verified";
+
 export interface GolfCall {
   id: string;
   hostId: string;
@@ -202,6 +215,12 @@ export interface GolfCall {
   status: GolfCallStatus;
   notes?: string;
   createdAt: string;
+  // Public-safe verification metadata only — the booking reference number
+  // is deliberately NOT part of this type (it's fetched separately, host-
+  // only, from booking_proofs — see useBookingProof.ts).
+  teeTimeSource: TeeTimeSource;
+  bookingSource?: string; // e.g. "Course Website", "GolfNow" — set only when teeTimeSource is user_verified
+  verificationCreatedAt?: string;
 }
 
 export interface ChatMessage {
@@ -440,7 +459,8 @@ export type NotificationType =
   | "round_joined"
   | "round_left"
   | "round_cancelled"
-  | "new_message";
+  | "new_message"
+  | "booking_proof_attached";
 
 export interface AppNotification {
   id: string;

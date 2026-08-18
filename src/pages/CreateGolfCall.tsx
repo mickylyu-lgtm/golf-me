@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, ArrowRight, ChevronDown, Users } from "lucide-react";
+import { ArrowLeft, ArrowRight, ChevronDown, ShieldCheck, Users } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
 import { useRealRounds } from "../context/RealRoundsContext";
@@ -22,6 +22,24 @@ import { skillTierFromHandicap } from "../lib/format";
 import { coordsForCourse } from "../lib/courses";
 import { haversineMiles } from "../lib/geo";
 import { track } from "../lib/analytics";
+import { attachBookingProofDirect } from "../lib/useBookingProof";
+
+const BOOKING_SOURCES = ["Course Website", "GolfNow", "Lightspeed / Chronogolf", "Phone Reservation", "Other"] as const;
+
+function bookingSourceLabel(source: string, t: (key: TranslationKey) => string): string {
+  switch (source) {
+    case "Course Website":
+      return t("golfCallDetail.bookingSourceCourseWebsite");
+    case "GolfNow":
+      return t("golfCallDetail.bookingSourceGolfNow");
+    case "Lightspeed / Chronogolf":
+      return t("golfCallDetail.bookingSourceLightspeed");
+    case "Phone Reservation":
+      return t("golfCallDetail.bookingSourcePhone");
+    default:
+      return t("golfCallDetail.bookingSourceOther");
+  }
+}
 
 const SKILL_OPTIONS: SkillFilter[] = ["Any Skill Level", "Beginner", "Intermediate", "Advanced"];
 const WALK_OPTIONS: WalkOrCart[] = ["Either", "Walking", "Cart"];
@@ -63,7 +81,7 @@ function prefillDateFromWhen(when: string | null, dateParam: string | null): str
 export function CreateGolfCall() {
   const navigate = useNavigate();
   const { currentUser, golfCalls, createGolfCall, visibleGolfers, circleGolfers, attachGolfCallToPost } = useData();
-  const { isDemo } = useAuth();
+  const { isDemo, authUser } = useAuth();
   const { hostRound } = useRealRounds();
   const { showToast } = useToast();
   const { t, locale } = useLocale();
@@ -105,6 +123,15 @@ export function CreateGolfCall() {
   const [notes, setNotes] = useState("");
   const [friendIds, setFriendIds] = useState<string[]>([]);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  // Optional booking-proof capture — never blocks canSubmit, matching the
+  // brief's explicit "a host must still be able to create a Golf Call
+  // without verification." Uploaded only after the round itself exists
+  // (see handleSubmit), since golf_call_id is required for the Storage
+  // path/attach RPC.
+  const [proofExpanded, setProofExpanded] = useState(false);
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const [proofSource, setProofSource] = useState<string>(BOOKING_SOURCES[0]);
+  const [proofReference, setProofReference] = useState("");
 
   const maxFriends = Math.max(0, totalSpots - 2); // leave room for host + at least 1 open spot
   const openSpotsRemaining = totalSpots - 1 - friendIds.length;
@@ -242,6 +269,19 @@ export function CreateGolfCall() {
         notes: notes.trim() || undefined,
       });
       track("first_round_hosted");
+      // Best-effort: the round itself already exists and is posted either
+      // way — a failed proof upload here must never look like the whole
+      // hosting action failed, since from the golfer's perspective it
+      // didn't. They can always add proof later from the round's detail
+      // page (see BookingProofHostControls).
+      if (proofFile && authUser) {
+        try {
+          await attachBookingProofDirect(authUser.id, call.id, proofFile, proofSource, proofReference);
+        } catch (err) {
+          console.error("Golf Me: failed to attach booking proof at creation time.", err);
+          showToast(t("golfCallDetail.bookingProofSaveError"), "warning");
+        }
+      }
       showToast(t("host.postedFreshToast"), "success");
       navigate(`/golf-calls/${call.id}`);
     } catch (err) {
@@ -331,6 +371,75 @@ export function CreateGolfCall() {
             <label className={labelClass}>{t("host.tellUsWhenTeeTime")}</label>
             <input className={inputClass} value={timeLabel} onChange={(e) => setTimeLabel(e.target.value)} placeholder="e.g. 10:00 AM" />
           </div>
+
+          {/* Real accounts only — Storage/RPCs need a real auth session.
+              Always optional: canSubmit never depends on this. */}
+          {!isDemo && (
+            <div className="rounded-xl border border-dashed border-slate-200 p-3">
+              {!proofExpanded && !proofFile ? (
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
+                      <ShieldCheck size={14} className="text-fairway-600" /> {t("host.verifyYourTeeTime")}
+                    </p>
+                    <p className="mt-0.5 text-xs text-slate-500">{t("host.verifyYourTeeTimeBody")}</p>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => setProofExpanded(true)}>
+                    {t("golfCallDetail.addBookingProof")}
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
+                    <ShieldCheck size={14} className="text-fairway-600" /> {t("host.verifyYourTeeTime")}
+                  </p>
+                  <p className="rounded-lg bg-amber-50 p-2.5 text-xs leading-relaxed text-amber-700">{t("golfCallDetail.sensitiveInfoWarning")}</p>
+                  <div>
+                    <label className={labelClass}>{t("golfCallDetail.uploadImageOrPdf")}</label>
+                    <input
+                      type="file"
+                      accept="image/*,application/pdf"
+                      onChange={(e) => setProofFile(e.target.files?.[0] ?? null)}
+                      className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-full file:border-0 file:bg-fairway-50 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-fairway-700"
+                    />
+                    {proofFile && <p className="mt-1 truncate text-xs text-slate-500">{proofFile.name}</p>}
+                  </div>
+                  <div>
+                    <label className={labelClass}>{t("golfCallDetail.bookingSourceLabel")}</label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {BOOKING_SOURCES.map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => setProofSource(s)}
+                          className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                            proofSource === s ? "border-transparent bg-fairway-600 text-white" : "border-slate-200 bg-white text-slate-600 hover:border-fairway-300"
+                          }`}
+                        >
+                          {bookingSourceLabel(s, t)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className={labelClass}>{t("golfCallDetail.bookingReferenceLabel")}</label>
+                    <input value={proofReference} onChange={(e) => setProofReference(e.target.value)} className={inputClass} />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProofExpanded(false);
+                      setProofFile(null);
+                      setProofReference("");
+                    }}
+                    className="self-start text-xs font-semibold text-slate-400 hover:text-slate-600"
+                  >
+                    {t("host.skipForNow")}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

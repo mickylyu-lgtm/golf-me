@@ -26,7 +26,11 @@ export interface SeedBundle {
 }
 
 export function buildGolfCallsBundle(): SeedBundle {
-  const golfCalls: GolfCall[] = [
+  // Every seed round is deliberately "manual" — demo mode has no
+  // booking-proof upload UI at all (Storage/RPCs are real-account only),
+  // so there's nothing else it could honestly be. Applied via a single map
+  // at the bottom rather than adding the same field to all ~38 literals below.
+  const golfCallsWithoutTeeTimeSource: Omit<GolfCall, "teeTimeSource">[] = [
     // The flagship example from the product spec — open, instant-join, easy first "I'm In".
     {
       id: "call-1",
@@ -317,6 +321,7 @@ export function buildGolfCallsBundle(): SeedBundle {
       createdAt: isoDaysAgo(66),
     },
   ];
+  const golfCalls: GolfCall[] = golfCallsWithoutTeeTimeSource.map((c) => ({ ...c, teeTimeSource: "manual" }));
 
   const messages: ChatMessage[] = [
     {

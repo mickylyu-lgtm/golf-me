@@ -453,6 +453,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
         status: joinedGolferIds.length >= input.totalSpots ? "full" : "open",
         notes: input.notes,
         createdAt: new Date().toISOString(),
+        // Demo mode has no booking-proof upload UI (Storage/RPCs are real-
+        // account only) — every demo round is simply "manual".
+        teeTimeSource: "manual",
       };
       setData((prev) => ({ ...prev, golfCalls: [call, ...prev.golfCalls] }));
       return call;

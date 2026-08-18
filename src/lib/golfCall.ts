@@ -22,6 +22,9 @@ export interface RoundRow {
   status: string;
   notes: string | null;
   created_at: string;
+  tee_time_source: string;
+  booking_source: string | null;
+  verification_created_at: string | null;
 }
 
 export interface ParticipantRow {
@@ -72,5 +75,8 @@ export function realRoundToGolfCall(round: RoundRow, participants: ParticipantRo
     status: round.status as GolfCall["status"],
     notes: round.notes ?? undefined,
     createdAt: round.created_at,
+    teeTimeSource: round.tee_time_source as GolfCall["teeTimeSource"],
+    bookingSource: round.booking_source ?? undefined,
+    verificationCreatedAt: round.verification_created_at ?? undefined,
   };
 }

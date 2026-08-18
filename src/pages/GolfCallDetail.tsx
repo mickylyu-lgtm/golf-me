@@ -9,6 +9,9 @@ import {
   Lock,
   MapPin,
   MessageCircle,
+  MoreHorizontal,
+  Pencil,
+  ShieldAlert,
   Users,
   Wallet,
   X,
@@ -23,9 +26,14 @@ import { Button } from "../components/ui/Button";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 import { GroupChat } from "../components/chat/GroupChat";
 import { ReviewModal } from "../components/review/ReviewModal";
+import { ReportModal } from "../components/trust/ReportModal";
 import { TrustBadgeRow } from "../components/golfer/TrustBadges";
 import { MatchReasons } from "../components/golfer/MatchReasons";
 import { ConfirmJoinModal } from "../components/golfcall/ConfirmJoinModal";
+import { TeeTimeTrustBadge } from "../components/golfcall/TeeTimeTrustBadge";
+import { BookingProofExplainer } from "../components/golfcall/BookingProofExplainer";
+import { BookingProofHostControls } from "../components/golfcall/BookingProofHostControls";
+import { EditTeeTimeModal } from "../components/golfcall/EditTeeTimeModal";
 import { formatDate, formatMoney } from "../lib/format";
 import { skillLabel, vibeLabel, walkOrCartLabel } from "../lib/enumLabels";
 import { VIBE_TONE } from "../lib/theme";
@@ -60,6 +68,10 @@ export function GolfCallDetail() {
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
   const [joinConfirmOpen, setJoinConfirmOpen] = useState(false);
+  const [proofExplainerOpen, setProofExplainerOpen] = useState(false);
+  const [editTeeTimeOpen, setEditTeeTimeOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
 
   const call = id ? getGolfCall(id) : undefined;
 
@@ -123,9 +135,35 @@ export function GolfCallDetail() {
 
   return (
     <div className="flex flex-col gap-6 pb-6">
-      <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-800">
-        <ArrowLeft size={16} /> {t("golfCallDetail.back")}
-      </button>
+      <div className="flex items-center justify-between">
+        <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-800">
+          <ArrowLeft size={16} /> {t("golfCallDetail.back")}
+        </button>
+        {!isDemo && !isHost && (
+          <div className="relative">
+            <button
+              onClick={() => setMenuOpen((v) => !v)}
+              aria-label={t("golfCallDetail.moreOptions")}
+              className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            >
+              <MoreHorizontal size={18} />
+            </button>
+            {menuOpen && (
+              <div className="absolute right-0 z-10 mt-1 w-44 overflow-hidden rounded-xl border border-slate-100 bg-white py-1 shadow-lg">
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setReportOpen(true);
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-slate-700 hover:bg-slate-50"
+                >
+                  <ShieldAlert size={13} /> {t("golfCallDetail.reportRound")}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       <div>
         <div className="mb-1.5 flex flex-wrap items-center gap-2">
@@ -153,6 +191,15 @@ export function GolfCallDetail() {
             <span aria-hidden>{tier.emoji}</span> {tier.label} for you
           </p>
           <MatchReasons reasons={reasons} className="mt-1.5" />
+          {/* A trust signal, never one of the compatibility factors above —
+              always appended after them, not competing for one of their
+              slots (see callMatchReasons/pickReasons, which never sees or
+              scores this). */}
+          {call.teeTimeSource === "user_verified" && (
+            <p className="mt-0.5 flex items-center gap-1.5 text-xs text-fairway-700">
+              <span aria-hidden className="font-bold">✓</span> {t("golfCallDetail.bookingProofMatchReason")}
+            </p>
+          )}
         </div>
       )}
 
@@ -163,7 +210,14 @@ export function GolfCallDetail() {
           </p>
           <p className="mt-1 font-bold text-slate-800">{formatDate(call.dateISO, locale, t)}</p>
           <p className="text-sm text-slate-500">{call.timeLabel}</p>
-          {!isDemo && <p className="mt-1 text-[11px] leading-tight text-slate-400">{t("golfCallDetail.teeTimeDisclaimer")}</p>}
+          {/* Cancelled/completed rounds keep their verification metadata in
+              the DB (never deleted) but never show an active badge — a
+              tee time that's over or off is never still "usable." */}
+          {!isDemo && !isCancelled && !isCompleted && call.teeTimeSource === "user_verified" ? (
+            <TeeTimeTrustBadge source={call.teeTimeSource} onClick={() => setProofExplainerOpen(true)} className="mt-1.5" />
+          ) : (
+            !isDemo && <p className="mt-1 text-[11px] leading-tight text-slate-400">{t("golfCallDetail.teeTimeDisclaimer")}</p>
+          )}
         </div>
         <div className="rounded-2xl border border-slate-100 bg-white p-4">
           <p className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -183,6 +237,15 @@ export function GolfCallDetail() {
           {walkOrCartLabel(call.walkOrCart, t)}
         </Badge>
       </div>
+
+      {!isDemo && isHost && !isCompleted && !isCancelled && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" variant="outline" icon={<Pencil size={13} />} onClick={() => setEditTeeTimeOpen(true)}>
+            {t("golfCallDetail.editTeeTime")}
+          </Button>
+          <BookingProofHostControls golfCallId={call.id} />
+        </div>
+      )}
 
       {call.notes && (
         <div className="rounded-2xl border border-slate-100 bg-white p-4">
@@ -417,6 +480,11 @@ export function GolfCallDetail() {
           if (!reviewee) return null;
           return <ReviewModal callId={call.id} reviewee={reviewee} onClose={() => setReviewingId(null)} />;
         })()}
+      {proofExplainerOpen && <BookingProofExplainer call={call} onClose={() => setProofExplainerOpen(false)} />}
+      {editTeeTimeOpen && <EditTeeTimeModal call={call} onClose={() => setEditTeeTimeOpen(false)} />}
+      {reportOpen && host && (
+        <ReportModal reportedId={host.id} reportedName={host.name} context="round" golfCallId={call.id} onClose={() => setReportOpen(false)} />
+      )}
     </div>
   );
 }

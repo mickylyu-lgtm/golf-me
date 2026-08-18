@@ -10,7 +10,7 @@ import type { AppNotification, NotificationType } from "../../types";
 // profile views, etc. never existed as notification rows anyway, but this
 // still excludes round_left/round_created_from_post/post_became_round,
 // which the brief's own examples didn't ask for).
-const POPUP_TYPES = new Set<NotificationType>(["new_message", "round_joined", "round_cancelled", "post_reply", "comment_reply"]);
+const POPUP_TYPES = new Set<NotificationType>(["new_message", "round_joined", "round_cancelled", "post_reply", "comment_reply", "booking_proof_attached"]);
 
 const AUTO_DISMISS_MS = 4500;
 // Real accounts' `notifications` starts as an empty array before

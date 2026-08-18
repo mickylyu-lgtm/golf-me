@@ -65,7 +65,16 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
     if (walk && walk !== "Either") list = list.filter((c) => c.walkOrCart === walk || c.walkOrCart === "Either");
 
     return list
-      .map((call) => ({ call, matchScore: computeCallCompatibility(currentUser, call).overall }))
+      .map((call) => ({
+        call,
+        // A small trust nudge, never a real ranking factor — enough to
+        // break a near-tie between two otherwise-similar rounds, never
+        // enough to override a genuine compatibility difference (max
+        // realistic gap here is a small fraction of the 0-100 scale
+        // computeCallCompatibility produces). Unverified rounds are never
+        // hidden or excluded, just not the tiebreak winner.
+        matchScore: computeCallCompatibility(currentUser, call).overall + (call.teeTimeSource === "user_verified" ? 2 : 0),
+      }))
       .sort((a, b) => b.matchScore - a.matchScore);
   }, [isMatched, baseResults, radius, when, customDate, intent, budgetMax, skill, vibeFilter, walk, currentUser, effectiveLoc]);
 
