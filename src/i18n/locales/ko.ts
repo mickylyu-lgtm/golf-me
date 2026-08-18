@@ -679,9 +679,9 @@ export const ko: Record<TranslationKey, string> = {
   "preferences.subtitle": "자동 매칭과 백그라운드 호환성 계산에 사용돼요 — 이 중 하나가 맞지 않아도 좋은 라운드는 매칭될 수 있어요. 변경 즉시 저장돼요.",
   "preferences.whenCanYouPlay": "언제 라운드 가능하세요?",
   "preferences.availableThisWeekend": "이번 주말 가능해요",
-  "preferences.markedAvailableToast": "이번 주말 가능으로 표시했어요.",
   "preferences.savedToast": "환경설정이 저장되었습니다.",
   "preferences.saveError": "지금은 저장할 수 없습니다. 다시 시도해 주세요.",
+  "preferences.saving": "저장 중…",
   "preferences.changePlayingArea": "라운드 지역 변경",
   "preferences.areaSetToast": "라운드 지역이 {area}(으)로 설정됐어요.",
 

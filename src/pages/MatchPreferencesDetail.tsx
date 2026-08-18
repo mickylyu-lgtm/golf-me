@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, MapPin } from "lucide-react";
 import { useData } from "../context/DataContext";
@@ -10,48 +10,67 @@ import { LocationPicker } from "../components/location/LocationPicker";
 import { MatchPreferencesPanel } from "../components/golfer/MatchPreferencesPanel";
 import { AVAILABILITY_SLOTS } from "../types";
 import type { AvailabilitySlot } from "../types";
+import type { PlayingArea } from "../lib/geo";
 import { matchPreferencesFromGolfer } from "../lib/matchPreferences";
 import type { MatchPreferencesValue } from "../lib/matchPreferences";
 
+// Everything on this page is a local draft until "Save Changes" is tapped —
+// no per-field auto-save. Rebuilt this way after live per-field saving
+// turned out to have two real problems: rapid saves could race each other
+// client-side (see DataContext.updateCurrentUserProfile's now-serialized
+// queue, added first but not sufficient on its own), and there was no
+// single, obvious moment where the user could tell "yes, that's saved now."
+// A bottom Save button, disabled until something actually changed, fixes
+// both by construction. Mirrors the draft-then-commit pattern
+// FindRoundModal.tsx already uses for its own per-search preference
+// override, just persisted instead of temporary.
 export function MatchPreferencesDetail() {
   const { currentUser, updateCurrentUserProfile } = useData();
   const { showToast } = useToast();
   const { t } = useLocale();
   const navigate = useNavigate();
   const [locationPickerOpen, setLocationPickerOpen] = useState(false);
-  // Debounced rather than one toast per pill tap — a user setting several
-  // preferences in a row would otherwise get a stack of near-identical
-  // "Saved" toasts. Waits for a short pause after the last successful save
-  // before confirming, giving a real completion signal (the thing this was
-  // missing) without spamming one per click.
-  const savedToastTimerRef = useRef<number | null>(null);
+  const [saving, setSaving] = useState(false);
 
-  async function handlePreferenceChange(patch: Partial<MatchPreferencesValue>) {
-    try {
-      await updateCurrentUserProfile(patch);
-      if (savedToastTimerRef.current) window.clearTimeout(savedToastTimerRef.current);
-      savedToastTimerRef.current = window.setTimeout(() => showToast(t("preferences.savedToast"), "success"), 500);
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : t("preferences.saveError"), "warning");
-    }
-  }
+  const [draftPrefs, setDraftPrefs] = useState<MatchPreferencesValue>(() => matchPreferencesFromGolfer(currentUser));
+  const [draftAvailability, setDraftAvailability] = useState<AvailabilitySlot[]>(currentUser.availability);
+  const [draftArea, setDraftArea] = useState<PlayingArea>({ label: currentUser.areaLabel, coords: currentUser.playingAreaCoords });
+
+  const availabilityChanged =
+    draftAvailability.length !== currentUser.availability.length || draftAvailability.some((s) => !currentUser.availability.includes(s));
+  const areaChanged = draftArea.label !== currentUser.areaLabel;
+  const prefsChanged = JSON.stringify(draftPrefs) !== JSON.stringify(matchPreferencesFromGolfer(currentUser));
+  const isDirty = availabilityChanged || areaChanged || prefsChanged;
 
   function toggleAvailability(slot: AvailabilitySlot) {
-    const next = currentUser.availability.includes(slot)
-      ? currentUser.availability.filter((s) => s !== slot)
-      : [...currentUser.availability, slot];
-    updateCurrentUserProfile({ availability: next });
+    setDraftAvailability((prev) => (prev.includes(slot) ? prev.filter((s) => s !== slot) : [...prev, slot]));
   }
 
   function setAvailableThisWeekend() {
     const weekendSlots: AvailabilitySlot[] = ["Weekend Mornings", "Weekend Afternoons", "Weekend Evenings"];
-    const next = Array.from(new Set([...currentUser.availability, ...weekendSlots]));
-    updateCurrentUserProfile({ availability: next });
-    showToast(t("preferences.markedAvailableToast"), "success");
+    setDraftAvailability((prev) => Array.from(new Set([...prev, ...weekendSlots])));
+  }
+
+  async function handleSave() {
+    if (!isDirty || saving) return;
+    setSaving(true);
+    try {
+      await updateCurrentUserProfile({
+        ...draftPrefs,
+        availability: draftAvailability,
+        areaLabel: draftArea.label,
+        playingAreaCoords: draftArea.coords,
+      });
+      showToast(t("preferences.savedToast"), "success");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : t("preferences.saveError"), "warning");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
-    <div className="flex flex-col gap-6 pb-6">
+    <div className="flex flex-col gap-6 pb-24">
       <button
         onClick={() => navigate(-1)}
         className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
@@ -69,7 +88,7 @@ export function MatchPreferencesDetail() {
           <MapPin size={16} className="shrink-0 text-fairway-600" />
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t("host.playingArea")}</p>
-            <p className="text-sm font-semibold text-slate-800">{currentUser.areaLabel}</p>
+            <p className="text-sm font-semibold text-slate-800">{draftArea.label}</p>
           </div>
         </div>
         <Button size="sm" variant="outline" onClick={() => setLocationPickerOpen(true)}>
@@ -89,7 +108,7 @@ export function MatchPreferencesDetail() {
         </div>
         <div className="flex flex-wrap gap-1.5">
           {AVAILABILITY_SLOTS.map((slot) => (
-            <Pill key={slot} active={currentUser.availability.includes(slot)} onClick={() => toggleAvailability(slot)}>
+            <Pill key={slot} active={draftAvailability.includes(slot)} onClick={() => toggleAvailability(slot)}>
               {slot}
             </Pill>
           ))}
@@ -98,9 +117,9 @@ export function MatchPreferencesDetail() {
 
       <div className="rounded-2xl border border-slate-100 bg-white p-4">
         <MatchPreferencesPanel
-          value={matchPreferencesFromGolfer(currentUser)}
-          onChange={handlePreferenceChange}
-          nearLocation={{ label: currentUser.areaLabel, coords: currentUser.playingAreaCoords }}
+          value={draftPrefs}
+          onChange={(patch) => setDraftPrefs((d) => ({ ...d, ...patch }))}
+          nearLocation={{ label: draftArea.label, coords: draftArea.coords }}
         />
       </div>
 
@@ -108,13 +127,21 @@ export function MatchPreferencesDetail() {
         <LocationPicker
           title={t("preferences.changePlayingArea")}
           onSelect={(area) => {
-            updateCurrentUserProfile({ areaLabel: area.label, playingAreaCoords: area.coords });
+            setDraftArea(area);
             setLocationPickerOpen(false);
-            showToast(t("preferences.areaSetToast", { area: area.label }), "success");
           }}
           onClose={() => setLocationPickerOpen(false)}
         />
       )}
+
+      {/* Sticky, disabled until something actually changed -- the single,
+          explicit "yes, this is saved now" moment the live-save version
+          didn't have. */}
+      <div className="sticky bottom-20 z-10 sm:bottom-0">
+        <Button size="lg" fullWidth disabled={!isDirty || saving} onClick={handleSave}>
+          {saving ? t("preferences.saving") : t("common.saveChanges")}
+        </Button>
+      </div>
     </div>
   );
 }

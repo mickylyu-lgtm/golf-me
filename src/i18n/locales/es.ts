@@ -679,9 +679,9 @@ export const es: Record<TranslationKey, string> = {
   "preferences.subtitle": "Usadas por el Emparejamiento Automático y la compatibilidad en segundo plano — una buena ronda aún puede coincidir contigo aunque una de estas no encaje. Se guardan al instante.",
   "preferences.whenCanYouPlay": "¿Cuándo puedes jugar?",
   "preferences.availableThisWeekend": "Disponible este fin de semana",
-  "preferences.markedAvailableToast": "Marcado como disponible este fin de semana.",
   "preferences.savedToast": "Preferencias guardadas.",
   "preferences.saveError": "No pudimos guardar eso. Inténtalo de nuevo.",
+  "preferences.saving": "Guardando…",
   "preferences.changePlayingArea": "Cambia tu zona de juego",
   "preferences.areaSetToast": "Zona de juego establecida en {area}.",
 

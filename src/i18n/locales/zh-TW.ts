@@ -679,9 +679,9 @@ export const zhTW: Record<TranslationKey, string> = {
   "preferences.subtitle": "用於自動配對與後台相容度計算——即使其中一項不完全符合，好的球局仍可能配對到你。修改後立即儲存。",
   "preferences.whenCanYouPlay": "什麼時候有空？",
   "preferences.availableThisWeekend": "本週末有空",
-  "preferences.markedAvailableToast": "已標記本週末有空。",
   "preferences.savedToast": "偏好設定已儲存。",
   "preferences.saveError": "暫時無法儲存，請再試一次。",
+  "preferences.saving": "儲存中…",
   "preferences.changePlayingArea": "更改打球區域",
   "preferences.areaSetToast": "打球區域已設為{area}。",
 

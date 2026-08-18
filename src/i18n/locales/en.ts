@@ -588,9 +588,9 @@ export const en = {
   "preferences.subtitle": "Used by Auto-Match and background compatibility — a great round can still match you even if one of these is off. Saved instantly.",
   "preferences.whenCanYouPlay": "When can you play?",
   "preferences.availableThisWeekend": "I'm available this weekend",
-  "preferences.markedAvailableToast": "Marked available this weekend.",
   "preferences.savedToast": "Preferences saved.",
   "preferences.saveError": "Couldn't save that just now. Please try again.",
+  "preferences.saving": "Saving…",
   "preferences.changePlayingArea": "Change your playing area",
   "preferences.areaSetToast": "Playing area set to {area}.",
 
