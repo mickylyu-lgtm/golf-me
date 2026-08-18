@@ -55,6 +55,13 @@ export function MatchPreferencesDetail() {
     if (!isDirty || saving) return;
     setSaving(true);
     try {
+      // Navigating only after this resolves matters for more than just
+      // correctness: updateCurrentUserProfile's real-account path awaits a
+      // full UPDATE + re-SELECT round trip before currentUser reflects the
+      // change (see DataContext.tsx). Leaving before that finished was the
+      // likely cause of Home's "complete your profile" reminder looking
+      // like it hadn't registered the save — the reminder was reading
+      // currentUser before it had actually updated.
       await updateCurrentUserProfile({
         ...draftPrefs,
         availability: draftAvailability,
@@ -62,6 +69,7 @@ export function MatchPreferencesDetail() {
         playingAreaCoords: draftArea.coords,
       });
       showToast(t("preferences.savedToast"), "success");
+      navigate("/");
     } catch (err) {
       showToast(err instanceof Error ? err.message : t("preferences.saveError"), "warning");
     } finally {
