@@ -1443,6 +1443,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
           sourceType: input.sourceType,
           sourcePostId: input.sourcePostId,
           sourceMediaUrl: input.sourceMediaUrl,
+          thumbnailUrl: input.thumbnailUrl,
           swingType: input.swingType,
           status: "pending",
           strengths: [],

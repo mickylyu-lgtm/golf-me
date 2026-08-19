@@ -393,6 +393,7 @@ export interface CaddieAnalysis {
   sourceType: CaddieSourceType;
   sourcePostId?: string; // only for sourceType "community_post"
   sourceMediaUrl: string;
+  thumbnailUrl?: string; // a real captured frame from the source video — see community_posts.videoThumbnailUrl for the same idea
   swingType?: string;
   status: CaddieAnalysisStatus;
   analysisSummary?: string;

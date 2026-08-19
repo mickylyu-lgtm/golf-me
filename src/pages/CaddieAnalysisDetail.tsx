@@ -44,6 +44,7 @@ export function CaddieAnalysisDetail() {
     if (!analysis) return;
     const prefill: CreatePostSwingPrefill = {
       swingVideoUrl: analysis.sourceMediaUrl,
+      videoThumbnailUrl: analysis.thumbnailUrl,
       caption: analysis.swingType ? `${analysis.swingType} swing` : "",
     };
     navigate("/community/new", { state: prefill });
@@ -73,7 +74,7 @@ export function CaddieAnalysisDetail() {
 
       {analysis.sourceMediaUrl && (
         // eslint-disable-next-line jsx-a11y/media-has-caption
-        <video src={analysis.sourceMediaUrl} controls className="max-h-80 w-full rounded-2xl bg-black" />
+        <video src={analysis.sourceMediaUrl} poster={analysis.thumbnailUrl} preload="metadata" controls className="max-h-80 w-full rounded-2xl bg-black" />
       )}
 
       {analysis.status === "complete" ? (

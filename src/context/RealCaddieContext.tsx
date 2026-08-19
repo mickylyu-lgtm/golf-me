@@ -11,6 +11,7 @@ interface CaddieAnalysisRow {
   source_type: CaddieSourceType;
   source_post_id: string | null;
   source_media_url: string;
+  thumbnail_url: string | null;
   swing_type: string | null;
   status: CaddieAnalysisStatus;
   analysis_summary: string | null;
@@ -30,6 +31,7 @@ function rowToAnalysis(row: CaddieAnalysisRow): CaddieAnalysis {
     sourceType: row.source_type,
     sourcePostId: row.source_post_id ?? undefined,
     sourceMediaUrl: row.source_media_url,
+    thumbnailUrl: row.thumbnail_url ?? undefined,
     swingType: row.swing_type ?? undefined,
     status: row.status,
     analysisSummary: row.analysis_summary ?? undefined,
@@ -47,6 +49,7 @@ export interface CreateAnalysisInput {
   sourceType: CaddieSourceType;
   sourcePostId?: string;
   sourceMediaUrl: string;
+  thumbnailUrl?: string;
   swingType?: string;
 }
 
@@ -119,6 +122,7 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
           source_type: input.sourceType,
           source_post_id: input.sourcePostId ?? null,
           source_media_url: input.sourceMediaUrl,
+          thumbnail_url: input.thumbnailUrl ?? null,
           swing_type: input.swingType ?? null,
           status: "pending",
         })

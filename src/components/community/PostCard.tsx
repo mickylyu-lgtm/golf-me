@@ -100,7 +100,12 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
     if (!post.videoUrl || askingCaddie) return;
     setAskingCaddie(true);
     try {
-      const created = await createCaddieAnalysis({ sourceType: "community_post", sourcePostId: post.id, sourceMediaUrl: post.videoUrl });
+      const created = await createCaddieAnalysis({
+        sourceType: "community_post",
+        sourcePostId: post.id,
+        sourceMediaUrl: post.videoUrl,
+        thumbnailUrl: post.videoThumbnailUrl,
+      });
       navigate(`/caddie/${created.id}`);
     } catch (err) {
       showToast(err instanceof Error ? err.message : t("caddie.askCaddieError"), "warning");

@@ -29,6 +29,7 @@ const MAX_SWING_VIDEO_BYTES = 200 * 1024 * 1024; // matches the Storage bucket's
 // that URL directly rather than re-uploading a second copy of the same file.
 export interface CreatePostSwingPrefill {
   swingVideoUrl: string;
+  videoThumbnailUrl?: string;
   caption?: string;
 }
 
@@ -223,11 +224,13 @@ export function CreatePost() {
       if (kind === "swing" && prefilledVideoUrl && !videoFile) {
         // Handed off from Caddie's "Share to Community" — already a real
         // Storage URL, so reuse it directly rather than uploading a second
-        // copy of the same file. No thumbnail generated for this path yet
-        // (would mean fetching the remote video back down to capture a
-        // frame from it) — falls back to the plain black player until
-        // re-uploaded directly.
+        // copy of the same file. The thumbnail was already captured at the
+        // original upload point on the caddie_analyses row (see
+        // RealCaddieContext/AnalyzeSwing) and carried along in router
+        // state, so it comes along here too instead of falling back to a
+        // black player.
         videoUrl = prefilledVideoUrl;
+        videoThumbnailUrl = prefill?.videoThumbnailUrl;
       } else if (kind === "swing" && videoFile) {
         if (isDemo || !authUser) {
           // Swing Posts have no demo/local equivalent — real Supabase
