@@ -1,6 +1,22 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bookmark, Loader2, MapPin, MessageCircle, MoreHorizontal, ShieldAlert, ShieldCheck, ShieldOff, ShieldX, Sparkles, ThumbsUp, Trash2, Video } from "lucide-react";
+import {
+  Bookmark,
+  Loader2,
+  MapPin,
+  MessageCircle,
+  MoreHorizontal,
+  ShieldAlert,
+  ShieldCheck,
+  ShieldOff,
+  ShieldX,
+  Sparkles,
+  ThumbsUp,
+  Trash2,
+  Video,
+  Volume2,
+  VolumeX,
+} from "lucide-react";
 import type { CommunityPost } from "../../types";
 import { useData } from "../../context/DataContext";
 import { useToast } from "../../context/ToastContext";
@@ -53,6 +69,35 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
   const [imageOpen, setImageOpen] = useState(false);
   const [askingCaddie, setAskingCaddie] = useState(false);
+  const [videoMuted, setVideoMuted] = useState(true);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Feed/Reels-style autoplay: the video itself plays/pauses based on
+  // whether it's actually on-screen, not on a manual tap-to-start — matches
+  // the brief's explicit "like on Instagram" request. Starts muted (the
+  // only way browsers allow unattended autoplay anyway) and stays muted
+  // until the golfer taps it; each card gets its own observer since Community
+  // renders many of these in a single scrolling list.
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          el.play().catch(() => {
+            // Autoplay can still be blocked in some embedded contexts even
+            // when muted — not an error state, just leaves it paused with
+            // its poster frame showing until the golfer taps play.
+          });
+        } else {
+          el.pause();
+        }
+      },
+      { threshold: 0.6 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [post.videoUrl]);
 
   const author = getGolfer(post.authorId);
   if (!author || isBlocked(post.authorId)) return null;
@@ -216,14 +261,26 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
 
       {isSwingPost && post.videoUrl && (
         <div onClick={stop} className="flex flex-col gap-2.5">
-          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-          <video
-            src={post.videoUrl}
-            controls
-            poster={post.videoThumbnailUrl}
-            preload="metadata"
-            className="max-h-96 w-full rounded-xl bg-black"
-          />
+          <div className="relative overflow-hidden rounded-xl bg-black">
+            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+            <video
+              ref={videoRef}
+              src={post.videoUrl}
+              poster={post.videoThumbnailUrl}
+              preload="metadata"
+              muted={videoMuted}
+              loop
+              playsInline
+              onClick={(e) => {
+                stop(e);
+                setVideoMuted((prev) => !prev);
+              }}
+              className="max-h-96 w-full cursor-pointer rounded-xl bg-black"
+            />
+            <div className="pointer-events-none absolute bottom-2.5 right-2.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white">
+              {videoMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+            </div>
+          </div>
           <SwingAnalysisPanel status={post.swingAnalysisStatus} />
           {isOwn &&
             (existingCaddieAnalysis ? (
