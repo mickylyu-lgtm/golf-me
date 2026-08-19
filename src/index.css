@@ -8,28 +8,37 @@
 @theme {
   --font-sans: "Inter", system-ui, "Segoe UI", Roboto, sans-serif;
 
-  /* Fairway green — primary brand color */
-  --color-fairway-50: #f1f8f2;
-  --color-fairway-100: #dcece0;
-  --color-fairway-200: #b8d9c1;
-  --color-fairway-300: #8bc09a;
-  --color-fairway-400: #5aa171;
-  --color-fairway-500: #37814f;
-  --color-fairway-600: #26663d;
-  --color-fairway-700: #1e5232;
-  --color-fairway-800: #19422a;
-  --color-fairway-900: #143621;
-  --color-fairway-950: #0a1e12;
+  /* Fairway green — primary brand color. Premium-refresh palette (2026-08-19):
+     anchored at 800 = #166534, the brand's primary green, with the rest of
+     the scale regenerated around it to keep every existing fairway-NNN
+     usage (86 files) tonally coherent without per-file edits. 500 = #22c55e
+     is the new "bright interactive green" — deliberately the LEAST-used
+     shade before this change (10 call sites), so repointing specific
+     active/success/selected states onto it doesn't collide with anything
+     that was already relying on the old, more muted 500. */
+  --color-fairway-50: #f0fdf4;
+  --color-fairway-100: #dcfce7;
+  --color-fairway-200: #bbf7d0;
+  --color-fairway-300: #86efac;
+  --color-fairway-400: #4ade80;
+  --color-fairway-500: #22c55e;
+  --color-fairway-600: #16a34a;
+  --color-fairway-700: #15803d;
+  --color-fairway-800: #166534;
+  --color-fairway-900: #14532d;
+  --color-fairway-950: #052e16;
 
-  /* Sunlit gold — accent for CTAs and highlights */
-  --color-sun-50: #fefaec;
-  --color-sun-100: #fcf0c8;
-  --color-sun-200: #f9e08e;
-  --color-sun-300: #f6cc54;
-  --color-sun-400: #f2b82c;
-  --color-sun-500: #e59d14;
-  --color-sun-600: #c67b0f;
-  --color-sun-700: #9e5b10;
+  /* Sunlit gold — accent for CTAs and highlights. Anchored at 400 = #F4B942
+     (the brand's gold accent, used on primary CTA buttons); the rest of the
+     scale regenerated around it the same way as fairway above. */
+  --color-sun-50: #fef8ec;
+  --color-sun-100: #fcedcf;
+  --color-sun-200: #f9db9f;
+  --color-sun-300: #f6c96f;
+  --color-sun-400: #f4b942;
+  --color-sun-500: #eca413;
+  --color-sun-600: #b88114;
+  --color-sun-700: #8f6614;
 
   --animate-fade-in: fade-in 0.25s ease-out;
   --animate-slide-up: slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1);
@@ -169,7 +178,7 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  @apply bg-[#faf8f2] text-slate-900;
+  @apply bg-[#faf9f6] text-slate-900;
   background-image: radial-gradient(circle at 15% 0%, rgba(55, 129, 79, 0.06), transparent 45%);
 }
 

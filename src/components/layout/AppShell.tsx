@@ -19,7 +19,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const isRootTab = ROOT_PATHS.has(pathname);
 
   return (
-    <div className="min-h-screen bg-[#faf8f2]">
+    <div className="min-h-screen bg-[#faf9f6]">
       <NotificationPopupHost />
       <SideNav />
       <div className="flex min-h-screen flex-col sm:pl-20 lg:pl-60">

@@ -75,7 +75,7 @@ export function NotificationsPanel({ onClose }: { onClose: () => void }) {
                   <p className={`text-sm ${n.read ? "text-slate-600" : "font-semibold text-slate-900"}`}>{n.text}</p>
                   <p className="text-xs text-slate-400">{formatRelativeTime(n.createdAt, locale, t)}</p>
                 </div>
-                {!n.read && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-fairway-600" aria-label="Unread" />}
+                {!n.read && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-fairway-500" aria-label="Unread" />}
               </button>
             );
           })}

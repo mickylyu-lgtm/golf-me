@@ -66,7 +66,7 @@ export function Inbox() {
               <div className="min-w-0 flex-1">
                 <p className="flex items-center gap-1 text-sm font-semibold text-slate-800">
                   <span className="truncate">{c.otherGolfer.name}</span>
-                  {c.otherGolfer.verification.verifiedGolfer && <ShieldCheck size={13} className="shrink-0 text-fairway-600" />}
+                  {c.otherGolfer.verification.verifiedGolfer && <ShieldCheck size={13} className="shrink-0 text-fairway-500" />}
                 </p>
                 <p className={`truncate text-xs ${c.unread ? "font-semibold text-slate-700" : "text-slate-500"}`}>
                   {c.lastMessage.senderId === c.otherGolfer.id ? "" : t("chatInbox.youPrefix")}
@@ -75,7 +75,7 @@ export function Inbox() {
               </div>
               <div className="flex shrink-0 flex-col items-end gap-1.5">
                 <span className="text-[11px] text-slate-400">{formatRelativeTime(c.lastMessage.createdAt, locale, t)}</span>
-                {c.unread && <span className="h-2 w-2 rounded-full bg-fairway-600" aria-label="Unread" />}
+                {c.unread && <span className="h-2 w-2 rounded-full bg-fairway-500" aria-label="Unread" />}
               </div>
             </button>
           ))}

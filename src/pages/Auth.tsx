@@ -58,7 +58,7 @@ export function Auth({ mode }: AuthProps) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#faf8f2] px-6 py-8">
+    <div className="flex min-h-screen flex-col bg-[#faf9f6] px-6 py-8">
       <button
         onClick={() => navigate(-1)}
         className="flex items-center gap-1.5 self-start text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
@@ -69,7 +69,7 @@ export function Auth({ mode }: AuthProps) {
       <div className="flex flex-1 flex-col justify-center gap-8">
         <div className="text-center">
           <span className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-fairway-600">
-            <GolfMeIcon size={26} dotColor="#f8faf8" targetColor="#5aa171" holeColor="#143621" />
+            <GolfMeIcon size={26} dotColor="#f8faf8" targetColor="#4ade80" holeColor="#14532d" />
           </span>
           <h1 className="text-2xl font-extrabold text-slate-900">
             {mode === "signup" ? t("auth.createAccount") : session.hasOnboarded ? t("auth.welcomeBack") : t("auth.logIn")}

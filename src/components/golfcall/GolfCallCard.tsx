@@ -159,7 +159,7 @@ export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
             <div key={id} className="flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 py-1 pl-1 pr-2.5 text-xs">
               <Avatar golfer={g} size="xs" showVerified={false} />
               <span className="font-semibold text-slate-700">{g.name.split(" ")[0]}</span>
-              {g.verification.verifiedGolfer && <span className="text-fairway-600">✓</span>}
+              {g.verification.verifiedGolfer && <span className="text-fairway-500">✓</span>}
               <span className="text-slate-400">· {g.handicap !== null ? `${g.handicap} HCP` : t("golfCallCard.newGolfer")}</span>
               {g.id === call.hostId && <span className="font-semibold text-sun-600">· {t("golfCallDetail.hostTag")}</span>}
             </div>

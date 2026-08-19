@@ -20,7 +20,7 @@ interface GolfMeIconProps {
 // GolfMeLogo for the common "chip + wordmark" composition, and
 // public/icon-source.svg for the app-icon/favicon raster source, which
 // mirrors this exact geometry at a different scale.
-export function GolfMeIcon({ size = 24, className = "", dotColor = "#19422a", targetColor = "#5aa171", holeColor = "#f8faf8" }: GolfMeIconProps) {
+export function GolfMeIcon({ size = 24, className = "", dotColor = "#166534", targetColor = "#4ade80", holeColor = "#f8faf8" }: GolfMeIconProps) {
   return (
     <svg
       width={size}

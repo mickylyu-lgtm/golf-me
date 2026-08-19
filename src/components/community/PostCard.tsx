@@ -175,7 +175,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
           <div className="min-w-0">
             <p className="flex items-center gap-1 text-sm font-semibold text-slate-800">
               <span className="truncate">{author.name}</span>
-              {author.verification.verifiedGolfer && <ShieldCheck size={13} className="shrink-0 text-fairway-600" />}
+              {author.verification.verifiedGolfer && <ShieldCheck size={13} className="shrink-0 text-fairway-500" />}
             </p>
             <p className="flex items-center gap-1 text-xs text-slate-400">
               {formatRelativeTime(post.createdAt, locale, t)}
@@ -338,7 +338,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
             aria-pressed={upvoted}
             aria-label={upvoted ? t("community.liked") : t("community.like")}
             className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold transition-all duration-200 ease-out active:scale-95 ${
-              upvoted ? "border-transparent bg-fairway-600 text-white" : "border-slate-200 text-slate-600 hover:border-fairway-300"
+              upvoted ? "border-transparent bg-fairway-500 text-white" : "border-slate-200 text-slate-600 hover:border-fairway-300"
             }`}
           >
             <ThumbsUp size={13} fill={upvoted ? "currentColor" : "none"} /> {postUpvoteCount(post.id)}

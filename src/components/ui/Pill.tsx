@@ -20,7 +20,7 @@ export function Pill({ active, onClick, children, disabled, className = "" }: Pi
       aria-pressed={active}
       className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none ${
         active
-          ? "border-transparent bg-fairway-600 text-white hover:bg-fairway-700 active:bg-fairway-800"
+          ? "border-transparent bg-fairway-500 text-white hover:bg-fairway-600 active:bg-fairway-700"
           : "border-slate-200 bg-white text-slate-600 hover:border-fairway-300 hover:text-fairway-700 active:bg-slate-50"
       } ${className}`}
     >

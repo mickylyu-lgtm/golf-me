@@ -29,7 +29,7 @@ export function BottomNav() {
               <span className="relative flex h-7 items-center justify-center">
                 <Icon size={path === "/caddie" ? 28 : 22} strokeWidth={isActive ? 2.5 : 2} />
                 {path === "/messages" && hasUnreadMessages && (
-                  <span className="absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-fairway-600" aria-label="Unread messages" />
+                  <span className="absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-fairway-500" aria-label="Unread messages" />
                 )}
               </span>
               {t(labelKey)}

@@ -43,7 +43,7 @@ export function Ready() {
 
   if (pendingPath) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-[#faf8f2] px-6 py-12 text-center">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-[#faf9f6] px-6 py-12 text-center">
         <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-fairway-50 text-fairway-600">
           <Bell size={26} />
         </span>
@@ -67,7 +67,7 @@ export function Ready() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-8 bg-[#faf8f2] px-6 py-12 text-center">
+    <div className="flex min-h-screen flex-col items-center justify-center gap-8 bg-[#faf9f6] px-6 py-12 text-center">
       <div>
         <h1 className="text-2xl font-extrabold text-slate-900">{t("ready.title")}</h1>
         <p className="mt-1.5 text-sm text-slate-500">{t("ready.subtitle")}</p>

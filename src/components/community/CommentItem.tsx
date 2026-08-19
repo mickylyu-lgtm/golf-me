@@ -58,7 +58,7 @@ export function CommentItem({ comment, postId, replies }: CommentItemProps) {
               className="flex items-center gap-1 text-xs font-semibold text-slate-800 hover:underline"
             >
               {author.name}
-              {author.verification.verifiedGolfer && <ShieldCheck size={11} className="text-fairway-600" />}
+              {author.verification.verifiedGolfer && <ShieldCheck size={11} className="text-fairway-500" />}
             </button>
             <p className="whitespace-pre-wrap text-sm text-slate-700">{comment.text}</p>
           </div>

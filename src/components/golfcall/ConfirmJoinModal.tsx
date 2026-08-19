@@ -42,7 +42,7 @@ export function ConfirmJoinModal({ call, onClose, onConfirm }: ConfirmJoinModalP
         <div className="rounded-2xl border border-fairway-100 bg-fairway-50/60 p-4">
           <ul className="flex flex-col gap-2 text-sm text-fairway-800">
             <li className="flex items-center gap-2 font-semibold">
-              <ShieldCheck size={15} className="text-fairway-600" />
+              <ShieldCheck size={15} className="text-fairway-500" />
               {verifiedCount} Verified Golfer{verifiedCount === 1 ? "" : "s"}
             </li>
             <li className="font-semibold">{combinedRounds} Combined GolfMe Rounds</li>

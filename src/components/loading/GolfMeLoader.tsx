@@ -160,7 +160,7 @@ export function GolfMeLoader({ message, fullScreen = false, size = "md", classNa
       <div
         role="status"
         aria-live="polite"
-        className={`fixed inset-0 z-[100] flex items-center justify-center bg-[#faf8f2]/95 px-6 backdrop-blur-sm ${className}`}
+        className={`fixed inset-0 z-[100] flex items-center justify-center bg-[#faf9f6]/95 px-6 backdrop-blur-sm ${className}`}
       >
         <div className="flex w-full max-w-xs flex-col items-center gap-4">
           {/* Continuous hop-and-tumble (Geometry Dash's cube is the
@@ -170,7 +170,7 @@ export function GolfMeLoader({ message, fullScreen = false, size = "md", classNa
           <span
             className={`flex h-11 w-11 items-center justify-center rounded-2xl bg-fairway-900 ${reducedMotion ? "animate-pop" : "animate-geometry-hop"}`}
           >
-            <GolfMeIcon size={24} dotColor="#f8faf8" targetColor="#5aa171" holeColor="#143621" />
+            <GolfMeIcon size={24} dotColor="#f8faf8" targetColor="#4ade80" holeColor="#14532d" />
           </span>
           {reducedMotion ? (
             <ReducedMotionIndicator message={message} />

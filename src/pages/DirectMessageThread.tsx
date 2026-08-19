@@ -93,7 +93,7 @@ export function DirectMessageThread() {
           <div className="min-w-0">
             <p className="flex items-center gap-1 truncate text-sm font-bold text-slate-900">
               <span className="truncate">{other.name}</span>
-              {other.verification.verifiedGolfer && <ShieldCheck size={13} className="shrink-0 text-fairway-600" />}
+              {other.verification.verifiedGolfer && <ShieldCheck size={13} className="shrink-0 text-fairway-500" />}
             </p>
             <p className="truncate text-xs text-slate-500">{handicapLabel(other.handicap, t)} · View Profile</p>
           </div>

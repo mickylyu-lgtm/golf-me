@@ -213,7 +213,7 @@ export function ProfileSetup() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#faf8f2] px-6 py-8">
+    <div className="flex min-h-screen flex-col bg-[#faf9f6] px-6 py-8">
       <div className="flex items-center justify-between">
         <button
           onClick={() => (step === 0 ? navigate(-1) : setStep((s) => s - 1))}

@@ -66,12 +66,12 @@ export function Welcome() {
   const { t } = useLocale();
 
   return (
-    <div className="min-h-screen bg-[#faf8f2] text-slate-900">
+    <div className="min-h-screen bg-[#faf9f6] text-slate-900">
       <div className="bg-gradient-to-br from-fairway-700 via-fairway-800 to-fairway-950 text-white">
         <LandingNav />
         <section className="mx-auto flex max-w-2xl flex-col items-center gap-5 px-6 py-14 text-center sm:py-20">
           <Reveal delayMs={0} className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10">
-            <GolfMeIcon size={34} dotColor="#f8faf8" targetColor="#8bc09a" holeColor="#19422a" />
+            <GolfMeIcon size={34} dotColor="#f8faf8" targetColor="#86efac" holeColor="#166534" />
           </Reveal>
           <Reveal delayMs={350}>
             <h1 className="text-3xl font-extrabold leading-tight tracking-tight sm:text-5xl">{t("landing.hero.headline")}</h1>

@@ -23,8 +23,13 @@ const ICONS: Record<ToastVariant, typeof CheckCircle2> = {
   warning: TriangleAlert,
 };
 
+// success previously used Tailwind's stock emerald scale, the one toast
+// variant not drawn from the brand palette — now uses the new bright
+// fairway-500 accent (#22c55e) for its border so a genuine success reads as
+// a touch more vivid than a plain info toast, without introducing a second
+// unrelated green into the app.
 const STYLES: Record<ToastVariant, string> = {
-  success: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  success: "border-fairway-500/50 bg-fairway-50 text-fairway-900",
   info: "border-fairway-500/30 bg-fairway-50 text-fairway-800",
   warning: "border-amber-200 bg-amber-50 text-amber-800",
 };

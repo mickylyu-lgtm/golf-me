@@ -33,7 +33,7 @@ export function SideNav() {
             <span className="relative flex w-6 items-center justify-center">
               <Icon size={path === "/caddie" ? 24 : 20} />
               {path === "/messages" && hasUnreadMessages && (
-                <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-fairway-600" aria-label="Unread messages" />
+                <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-fairway-500" aria-label="Unread messages" />
               )}
             </span>
             <span className="hidden lg:inline">{t(labelKey)}</span>

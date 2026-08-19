@@ -22,6 +22,7 @@ import { Button } from "../components/ui/Button";
 import { Modal } from "../components/ui/Modal";
 import { inputClass, labelClass } from "../components/ui/FormControls";
 import { AvatarUpload } from "../components/profile/AvatarUpload";
+import { HighlightGolfMe } from "../components/brand/HighlightGolfMe";
 import { CredibilityBadge } from "../components/golfer/CredibilityBadge";
 import { AGE_RANGES } from "../types";
 import type { AgeRange } from "../types";
@@ -140,7 +141,9 @@ export function Profile() {
         </button>
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-xl font-bold text-slate-900">{currentUser.name}</h1>
-          <p className="text-sm text-slate-500">{memberSinceLabel(currentUser.memberSince, t)}</p>
+          <p className="text-sm text-slate-500">
+            <HighlightGolfMe text={memberSinceLabel(currentUser.memberSince, t)} />
+          </p>
         </div>
         <Button size="sm" variant="outline" onClick={startEditing}>
           {t("common.edit")}

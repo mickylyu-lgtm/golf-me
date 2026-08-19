@@ -24,13 +24,13 @@ export function TopBar() {
     // header establishes a containing block for NotificationsPanel's
     // `position: fixed` Modal in Chromium, so instead of positioning
     // against the viewport it positions against this ~60px-tall header,
-    // pushing the panel almost entirely off-screen. bg-[#faf8f2]/95 makes
+    // pushing the panel almost entirely off-screen. bg-[#faf9f6]/95 makes
     // up the visual difference without that side effect. Keeping the panel
     // nested inside <header> (rather than a sibling) is what lets the
     // bell's z-[95] below win against the panel's own z-[90] backdrop —
     // moving it out would drop both into separate stacking contexts and
     // make the bell unclickable while the panel is open.
-    <header className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-200/70 bg-[#faf8f2]/95 px-4 py-3 sm:px-6">
+    <header className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-200/70 bg-[#faf9f6]/95 px-4 py-3 sm:px-6">
       <div className="sm:hidden">
         <GolfMeLogo size={18} />
       </div>
@@ -55,7 +55,7 @@ export function TopBar() {
           className="relative z-[95] flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition-all duration-200 ease-out hover:border-fairway-300 hover:text-fairway-700 hover:shadow active:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none"
         >
           <Bell size={16} />
-          {unreadNotificationCount > 0 && <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-fairway-600" aria-label="Unread notifications" />}
+          {unreadNotificationCount > 0 && <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-fairway-500" aria-label="Unread notifications" />}
         </button>
         <button
           onClick={() => navigate("/profile")}
