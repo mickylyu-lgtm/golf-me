@@ -1,0 +1,11 @@
+-- read_at (added just before this migration) is null for every notification
+-- that was already marked read before that column existed, so the 2-hour
+-- "stays visible after reading" filter in NotificationsPanel.tsx treats a
+-- null read_at as "never expires" (the safe backward-compatible default) --
+-- meaning these old already-read rows would sit in the inbox forever
+-- instead of clearing. Backfilling read_at = created_at for them gives an
+-- honest (if approximate) read timestamp -- they were read at some point
+-- after being created, we just never recorded exactly when -- which is
+-- enough to let the 2-hour window naturally clear this backlog immediately
+-- (every one of them is already well past 2 hours old).
+update public.notifications set read_at = created_at where read = true and read_at is null;
