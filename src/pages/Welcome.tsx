@@ -7,9 +7,25 @@ import { GolfMeIcon } from "../components/brand/GolfMeIcon";
 import { CaddieNavIcon } from "../components/icons/CaddieNavIcon";
 import { useLocale } from "../i18n/LocaleContext";
 
-function PillarCard({ id, icon, title, body }: { id?: string; icon: ReactNode; title: string; body: string }) {
+function PillarCard({
+  id,
+  icon,
+  title,
+  body,
+  delayMs,
+}: {
+  id?: string;
+  icon: ReactNode;
+  title: string;
+  body: string;
+  delayMs: number;
+}) {
   return (
-    <div id={id} className="flex flex-col items-center gap-3 rounded-2xl border border-slate-100 bg-white p-6 text-center shadow-sm">
+    <div
+      id={id}
+      className="flex flex-col items-center gap-3 rounded-2xl border border-slate-100 bg-white p-6 text-center shadow-sm animate-slide-up motion-reduce:animate-none"
+      style={{ animationDelay: `${delayMs}ms`, animationFillMode: "backwards" }}
+    >
       <span className="flex h-11 w-11 items-center justify-center rounded-full bg-fairway-50 text-fairway-700">{icon}</span>
       <h3 className="text-base font-bold text-slate-900">{title}</h3>
       <p className="text-sm text-slate-500">{body}</p>
@@ -44,13 +60,34 @@ export function Welcome() {
       <div className="bg-gradient-to-br from-fairway-700 via-fairway-800 to-fairway-950 text-white">
         <LandingNav />
         <section className="mx-auto flex max-w-2xl flex-col items-center gap-5 px-6 py-14 text-center sm:py-20">
-          <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10">
+          <span
+            className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 animate-slide-up motion-reduce:animate-none"
+            style={{ animationDelay: "0ms", animationFillMode: "backwards" }}
+          >
             <GolfMeIcon size={34} dotColor="#f8faf8" targetColor="#8bc09a" holeColor="#19422a" />
           </span>
-          <h1 className="text-3xl font-extrabold leading-tight tracking-tight sm:text-5xl">{t("landing.hero.headline")}</h1>
-          <p className="max-w-lg text-base text-fairway-100 sm:text-lg">{t("landing.hero.subhead")}</p>
-          <p className="max-w-md text-sm text-fairway-200/80">{t("landing.hero.explainer")}</p>
-          <div className="mt-2 flex w-full max-w-xs flex-col items-center gap-3">
+          <h1
+            className="text-3xl font-extrabold leading-tight tracking-tight sm:text-5xl animate-slide-up motion-reduce:animate-none"
+            style={{ animationDelay: "90ms", animationFillMode: "backwards" }}
+          >
+            {t("landing.hero.headline")}
+          </h1>
+          <p
+            className="max-w-lg text-base text-fairway-100 sm:text-lg animate-slide-up motion-reduce:animate-none"
+            style={{ animationDelay: "180ms", animationFillMode: "backwards" }}
+          >
+            {t("landing.hero.subhead")}
+          </p>
+          <p
+            className="max-w-md text-sm text-fairway-200/80 animate-slide-up motion-reduce:animate-none"
+            style={{ animationDelay: "260ms", animationFillMode: "backwards" }}
+          >
+            {t("landing.hero.explainer")}
+          </p>
+          <div
+            className="mt-2 flex w-full max-w-xs flex-col items-center gap-3 animate-slide-up motion-reduce:animate-none"
+            style={{ animationDelay: "330ms", animationFillMode: "backwards" }}
+          >
             <a
               href="#waitlist"
               className="flex w-full items-center justify-center rounded-full bg-sun-400 px-6 py-3.5 text-base font-bold text-fairway-950 shadow-md shadow-fairway-950/20 transition hover:-translate-y-px hover:bg-sun-300"
@@ -77,9 +114,9 @@ export function Welcome() {
         </div>
 
         <div className="mt-10 grid gap-4 sm:grid-cols-3">
-          <PillarCard icon={<Flag size={18} />} title={t("landing.pillar.playTitle")} body={t("landing.pillar.playBody")} />
-          <PillarCard icon={<Users size={18} />} title={t("landing.pillar.communityTitle")} body={t("landing.pillar.communityBody")} />
-          <PillarCard id="caddie" icon={<CaddieNavIcon size={20} />} title={t("landing.pillar.caddieTitle")} body={t("landing.pillar.caddieBody")} />
+          <PillarCard icon={<Flag size={18} />} title={t("landing.pillar.playTitle")} body={t("landing.pillar.playBody")} delayMs={0} />
+          <PillarCard icon={<Users size={18} />} title={t("landing.pillar.communityTitle")} body={t("landing.pillar.communityBody")} delayMs={100} />
+          <PillarCard id="caddie" icon={<CaddieNavIcon size={20} />} title={t("landing.pillar.caddieTitle")} body={t("landing.pillar.caddieBody")} delayMs={200} />
         </div>
       </section>
 
