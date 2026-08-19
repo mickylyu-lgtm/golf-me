@@ -14,7 +14,7 @@ interface GolfMeWordmarkProps {
 // next to GolfMeIcon or stand alone in headings. Font weight/size are
 // controlled entirely by `className` on the wrapping span so this drops
 // into any existing heading.
-export function GolfMeWordmark({ className = "", golfClassName = "text-fairway-800", meClassName = "text-sun-600" }: GolfMeWordmarkProps) {
+export function GolfMeWordmark({ className = "", golfClassName = "text-fairway-800", meClassName = "text-sun-500" }: GolfMeWordmarkProps) {
   return (
     <span className={className}>
       <span className={golfClassName}>Golf</span>
