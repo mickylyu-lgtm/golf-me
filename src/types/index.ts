@@ -462,7 +462,9 @@ export type NotificationType =
   | "round_left"
   | "round_cancelled"
   | "new_message"
-  | "booking_proof_attached";
+  | "booking_proof_attached"
+  | "tee_time_updated"
+  | "booking_proof_removed";
 
 export interface AppNotification {
   id: string;

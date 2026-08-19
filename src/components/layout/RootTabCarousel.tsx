@@ -2,19 +2,25 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Home } from "../../pages/Home";
 import { Find } from "../../pages/Find";
+import { Inbox } from "../../pages/Inbox";
 import { Caddie } from "../../pages/Caddie";
 import { Profile } from "../../pages/Profile";
 
-// The 4 root sections, in swipe order — Home / Play / Caddie / Me. Kept in
-// this file (rather than deriving from MOBILE_NAV_ITEMS) because it also
-// needs the actual page components, not just icons/labels. Hosting a round
-// is reached via an action button, not a root tab, so it renders as a
+// The 5 root sections, in swipe order — Home / Play / Chat / Caddie / Me.
+// Kept in this file (rather than deriving from MOBILE_NAV_ITEMS) because it
+// also needs the actual page components, not just icons/labels. Hosting a
+// round is reached via an action button, not a root tab, so it renders as a
 // normal pushed route (/golf-calls/new) outside this carousel. My Golf
 // moved off the root tabs (now a row on the Me/Profile page) when Caddie
-// took its slot, so MyRounds is no longer one of these 4 panels.
+// took its slot, so MyRounds is no longer one of these panels. Chat's own
+// path (/messages) is a root tab, but an individual thread (/messages/:id)
+// is not — AppShell only renders this carousel for exact ROOT_PATHS
+// matches, so opening a conversation naturally falls through to a normal
+// pushed route instead of activating tab-swipe underneath it.
 const PANELS = [
   { path: "/", render: () => <Home /> },
   { path: "/find", render: () => <Find /> },
+  { path: "/messages", render: () => <Inbox /> },
   { path: "/caddie", render: () => <Caddie /> },
   { path: "/profile", render: () => <Profile /> },
 ] as const;

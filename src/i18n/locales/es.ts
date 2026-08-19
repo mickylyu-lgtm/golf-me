@@ -123,6 +123,7 @@ export const es: Record<TranslationKey, string> = {
   "teeTimes.notFound": "Ese campo todavía no está disponible.",
 
   "nav.play": "Jugar",
+  "nav.chat": "Chat",
   "nav.caddie": "Caddie",
   "nav.me": "Yo",
 
@@ -175,6 +176,12 @@ export const es: Record<TranslationKey, string> = {
   "chat.delete": "Eliminar",
   "chat.historyClearedToast": "Historial del chat borrado.",
   "chat.conversationDeletedToast": "Conversación eliminada.",
+  "chatInbox.title": "Chat",
+  "chatInbox.searchPlaceholder": "Buscar conversaciones",
+  "chatInbox.emptyTitle": "Aún no hay mensajes.",
+  "chatInbox.emptyDescription": "Abre el perfil de un golfista para iniciar una conversación.",
+  "chatInbox.noSearchResults": "Ninguna conversación coincide con tu búsqueda.",
+  "chatInbox.youPrefix": "Tú: ",
   "discover.searchPlaceholder": "Estoy buscando a...",
 
   "welcome.tagline": "Encuentra tu próxima ronda.",
@@ -624,7 +631,6 @@ export const es: Record<TranslationKey, string> = {
   "myGolf.allReviewsSubmitted": "Todas las reseñas enviadas — gracias por mantener a GolfMe confiable.",
   "myGolf.leaveReview": "Dejar una reseña ({done}/{total} hechas)",
 
-  "profile.messages": "Mensajes",
   "profile.reputation": "Reputación GolfMe",
   "profile.golfCircle": "Círculo de Golf",
   "profile.following": "Siguiendo",
@@ -638,7 +644,6 @@ export const es: Record<TranslationKey, string> = {
   "profile.bio": "Biografía",
   "profile.roundCount": "{count} rondas · Hándicap {handicap}",
   "profile.roundCountSingular": "1 ronda · Hándicap {handicap}",
-  "profile.newMessages": "Mensajes nuevos",
   "profile.golferCount": "{count} golfistas",
   "profile.golferCountSingular": "1 golfista",
   "profile.postCount": "{count} publicaciones",

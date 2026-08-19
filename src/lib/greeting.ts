@@ -1,8 +1,11 @@
 import type { TranslationKey } from "../i18n/locales/en";
 
+// 05:00-11:59 Morning, 12:00-17:59 Afternoon, 18:00-04:59 Evening — the
+// wrap past midnight matters here: hour < 5 must still read as evening/
+// night, not fall through to "morning" just because it's numerically small.
 export function greetingKeyForHour(hour: number): TranslationKey {
-  if (hour < 12) return "greeting.morning";
-  if (hour < 18) return "greeting.afternoon";
+  if (hour >= 5 && hour < 12) return "greeting.morning";
+  if (hour >= 12 && hour < 18) return "greeting.afternoon";
   return "greeting.evening";
 }
 

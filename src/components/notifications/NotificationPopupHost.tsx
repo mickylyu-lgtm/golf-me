@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Bell, X } from "lucide-react";
 import { useData } from "../../context/DataContext";
 import { Avatar } from "../ui/Avatar";
@@ -10,7 +10,16 @@ import type { AppNotification, NotificationType } from "../../types";
 // profile views, etc. never existed as notification rows anyway, but this
 // still excludes round_left/round_created_from_post/post_became_round,
 // which the brief's own examples didn't ask for).
-const POPUP_TYPES = new Set<NotificationType>(["new_message", "round_joined", "round_cancelled", "post_reply", "comment_reply", "booking_proof_attached"]);
+const POPUP_TYPES = new Set<NotificationType>([
+  "new_message",
+  "round_joined",
+  "round_cancelled",
+  "post_reply",
+  "comment_reply",
+  "booking_proof_attached",
+  "tee_time_updated",
+  "booking_proof_removed",
+]);
 
 const AUTO_DISMISS_MS = 4500;
 // Real accounts' `notifications` starts as an empty array before
@@ -33,9 +42,17 @@ const BASELINE_GRACE_MS = 1200;
 export function NotificationPopupHost() {
   const { notifications, getGolfer } = useData();
   const navigate = useNavigate();
+  const location = useLocation();
   const seenIds = useRef<Set<string> | null>(null);
   const notificationsRef = useRef(notifications);
   notificationsRef.current = notifications;
+  // Read via a ref inside the notifications effect below (which only
+  // depends on `notifications`) rather than adding location.pathname as a
+  // dependency there — this only needs the CURRENT path at the moment a
+  // fresh notification arrives, not a re-run of that effect on every
+  // navigation.
+  const pathnameRef = useRef(location.pathname);
+  pathnameRef.current = location.pathname;
   const [queue, setQueue] = useState<AppNotification[]>([]);
   const [visible, setVisible] = useState(false);
 
@@ -58,7 +75,16 @@ export function NotificationPopupHost() {
     }
     const fresh = notifications.filter((n) => !seenIds.current!.has(n.id));
     for (const n of fresh) seenIds.current!.add(n.id);
-    const poppable = fresh.filter((n) => POPUP_TYPES.has(n.type));
+    // A new_message notification for the conversation you're actively
+    // looking at needs no popup — the message already appears live in the
+    // open thread via RealSocialContext's own realtime subscription, so a
+    // popup on top of it would just be a redundant "new message from the
+    // person you're already texting."
+    const poppable = fresh.filter((n) => {
+      if (!POPUP_TYPES.has(n.type)) return false;
+      if (n.type === "new_message" && n.actorId && pathnameRef.current === `/messages/${n.actorId}`) return false;
+      return true;
+    });
     if (poppable.length > 0) {
       // Oldest-first so a burst of simultaneous events (e.g. several
       // replies while away from the phone for a minute) plays back in the

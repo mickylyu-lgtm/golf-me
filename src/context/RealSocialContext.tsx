@@ -131,10 +131,22 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
   const [allProfiles, setAllProfiles] = useState<GolferProfile[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const fetchingRef = useRef(false);
+  // A realtime event that arrives while a refetch is already in flight used
+  // to be silently dropped (fetchingRef.current just bailed out early) with
+  // nothing to trigger a follow-up — a message could land and, in a fast
+  // burst, simply never show up until some unrelated action happened to
+  // call refetch() again. This flag remembers that a fresh event was missed
+  // and runs exactly one more refetch right after the in-flight one
+  // finishes, so nothing is ever lost.
+  const pendingRefetchRef = useRef(false);
   const selfId = authUser?.id;
 
   const refetch = useCallback(async () => {
-    if (!selfId || fetchingRef.current) return;
+    if (!selfId) return;
+    if (fetchingRef.current) {
+      pendingRefetchRef.current = true;
+      return;
+    }
     fetchingRef.current = true;
     try {
       const [
@@ -201,6 +213,10 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       console.error("Golf Me: failed to load messages/blocks/notifications.", err);
     } finally {
       fetchingRef.current = false;
+      if (pendingRefetchRef.current) {
+        pendingRefetchRef.current = false;
+        refetch();
+      }
     }
   }, [selfId]);
 

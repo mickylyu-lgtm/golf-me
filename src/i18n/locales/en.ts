@@ -131,6 +131,7 @@ export const en = {
   "teeTimes.notFound": "That course isn't supported yet.",
 
   "nav.play": "Play",
+  "nav.chat": "Chat",
   "nav.caddie": "Caddie",
   "nav.me": "Me",
 
@@ -183,6 +184,12 @@ export const en = {
   "chat.delete": "Delete",
   "chat.historyClearedToast": "Chat history cleared.",
   "chat.conversationDeletedToast": "Conversation deleted.",
+  "chatInbox.title": "Chat",
+  "chatInbox.searchPlaceholder": "Search conversations",
+  "chatInbox.emptyTitle": "No messages yet.",
+  "chatInbox.emptyDescription": "Open a golfer's profile to start a conversation.",
+  "chatInbox.noSearchResults": "No conversations match your search.",
+  "chatInbox.youPrefix": "You: ",
   "discover.searchPlaceholder": "I'm looking for...",
 
   // Welcome (first open, no session)
@@ -331,9 +338,9 @@ export const en = {
   "nav.home": "Home",
 
   // Greeting (time-of-day)
-  "greeting.morning": "Good morning",
-  "greeting.afternoon": "Good afternoon",
-  "greeting.evening": "Good evening",
+  "greeting.morning": "Good Morning",
+  "greeting.afternoon": "Good Afternoon",
+  "greeting.evening": "Good Evening",
 
   // Home
   "home.readyToGolf": "Ready to golf?",
@@ -528,7 +535,6 @@ export const en = {
   "myGolf.leaveReview": "Leave a review ({done}/{total} done)",
 
   // Profile
-  "profile.messages": "Messages",
   "profile.reputation": "GolfMe Reputation",
   "profile.golfCircle": "Golf Circle",
   "profile.following": "Following",
@@ -542,7 +548,6 @@ export const en = {
   "profile.bio": "Bio",
   "profile.roundCount": "{count} rounds · Handicap {handicap}",
   "profile.roundCountSingular": "1 round · Handicap {handicap}",
-  "profile.newMessages": "New messages",
   "profile.golferCount": "{count} golfers",
   "profile.golferCountSingular": "1 golfer",
   "profile.postCount": "{count} posts",

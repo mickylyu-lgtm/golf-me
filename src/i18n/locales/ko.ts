@@ -123,6 +123,7 @@ export const ko: Record<TranslationKey, string> = {
   "teeTimes.notFound": "아직 지원되지 않는 골프장입니다.",
 
   "nav.play": "플레이",
+  "nav.chat": "채팅",
   "nav.caddie": "캐디",
   "nav.me": "나",
 
@@ -175,6 +176,12 @@ export const ko: Record<TranslationKey, string> = {
   "chat.delete": "삭제",
   "chat.historyClearedToast": "채팅 기록을 지웠습니다.",
   "chat.conversationDeletedToast": "대화를 삭제했습니다.",
+  "chatInbox.title": "채팅",
+  "chatInbox.searchPlaceholder": "대화 검색",
+  "chatInbox.emptyTitle": "아직 메시지가 없습니다.",
+  "chatInbox.emptyDescription": "골퍼의 프로필을 열어 대화를 시작하세요.",
+  "chatInbox.noSearchResults": "검색과 일치하는 대화가 없습니다.",
+  "chatInbox.youPrefix": "나: ",
   "discover.searchPlaceholder": "찾는 사람...",
 
   "welcome.tagline": "다음 라운드를 찾아보세요.",
@@ -624,7 +631,6 @@ export const ko: Record<TranslationKey, string> = {
   "myGolf.allReviewsSubmitted": "모든 리뷰를 제출했어요 — GolfMe를 신뢰할 수 있게 만들어주셔서 감사해요.",
   "myGolf.leaveReview": "리뷰 남기기 ({done}/{total} 완료)",
 
-  "profile.messages": "메시지",
   "profile.reputation": "GolfMe 평판",
   "profile.golfCircle": "골프 서클",
   "profile.following": "팔로잉",
@@ -638,7 +644,6 @@ export const ko: Record<TranslationKey, string> = {
   "profile.bio": "자기소개",
   "profile.roundCount": "{count}라운드 · 핸디캡 {handicap}",
   "profile.roundCountSingular": "1라운드 · 핸디캡 {handicap}",
-  "profile.newMessages": "새 메시지",
   "profile.golferCount": "{count}명",
   "profile.golferCountSingular": "1명",
   "profile.postCount": "게시물 {count}개",

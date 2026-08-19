@@ -5,7 +5,6 @@ import {
   ChevronRight,
   ClipboardList,
   LayoutDashboard,
-  MessageCircle,
   MessageSquareText,
   Settings as SettingsIcon,
   ShieldCheck,
@@ -48,7 +47,7 @@ function ProfileRow({ icon, label, value, onClick }: { icon: ReactNode; label: s
 }
 
 export function Profile() {
-  const { currentUser, updateCurrentUserProfile, circleGolfers, reviewsAbout, followingGolfers, posts, hasUnreadMessages } = useData();
+  const { currentUser, updateCurrentUserProfile, circleGolfers, reviewsAbout, followingGolfers, posts } = useData();
   const { isDemo, saveProfile } = useAuth();
   const { showToast } = useToast();
   const { t } = useLocale();
@@ -164,12 +163,6 @@ export function Profile() {
 
       <div className="flex flex-col gap-2.5">
         <ProfileRow icon={<ClipboardList size={16} />} label={t("profile.myGolf")} onClick={() => navigate("/my-rounds")} />
-        <ProfileRow
-          icon={<MessageCircle size={16} />}
-          label={t("profile.messages")}
-          value={hasUnreadMessages ? t("profile.newMessages") : undefined}
-          onClick={() => navigate("/messages")}
-        />
         <ProfileRow
           icon={<Users size={16} />}
           label={t("profile.reputation")}

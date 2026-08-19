@@ -123,6 +123,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "teeTimes.notFound": "该球场暂不支持。",
 
   "nav.play": "打球",
+  "nav.chat": "聊天",
   "nav.caddie": "球童",
   "nav.me": "我",
 
@@ -175,6 +176,12 @@ export const zhCN: Record<TranslationKey, string> = {
   "chat.delete": "删除",
   "chat.historyClearedToast": "聊天记录已清除。",
   "chat.conversationDeletedToast": "对话已删除。",
+  "chatInbox.title": "聊天",
+  "chatInbox.searchPlaceholder": "搜索对话",
+  "chatInbox.emptyTitle": "暂无消息。",
+  "chatInbox.emptyDescription": "打开一位球友的主页即可开始对话。",
+  "chatInbox.noSearchResults": "没有符合搜索条件的对话。",
+  "chatInbox.youPrefix": "你：",
   "discover.searchPlaceholder": "我想找...",
 
   "welcome.tagline": "找到你的下一场球局。",
@@ -624,7 +631,6 @@ export const zhCN: Record<TranslationKey, string> = {
   "myGolf.allReviewsSubmitted": "所有评价已提交——感谢你让 GolfMe 更值得信赖。",
   "myGolf.leaveReview": "去评价（已完成 {done}/{total}）",
 
-  "profile.messages": "消息",
   "profile.reputation": "GolfMe 口碑",
   "profile.golfCircle": "球友圈",
   "profile.following": "关注",
@@ -638,7 +644,6 @@ export const zhCN: Record<TranslationKey, string> = {
   "profile.bio": "个人简介",
   "profile.roundCount": "{count} 局 · 差点 {handicap}",
   "profile.roundCountSingular": "1 局 · 差点 {handicap}",
-  "profile.newMessages": "有新消息",
   "profile.golferCount": "{count} 位球友",
   "profile.golferCountSingular": "1 位球友",
   "profile.postCount": "{count} 篇帖子",

@@ -1,9 +1,11 @@
 import { NavLink } from "react-router-dom";
 import { MOBILE_NAV_ITEMS } from "../../lib/nav";
 import { useLocale } from "../../i18n/LocaleContext";
+import { useData } from "../../context/DataContext";
 
 export function BottomNav() {
   const { t } = useLocale();
+  const { hasUnreadMessages } = useData();
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-slate-200 bg-white/95 backdrop-blur-sm sm:hidden">
       {MOBILE_NAV_ITEMS.map(({ labelKey, path, icon: Icon }) => (
@@ -24,8 +26,11 @@ export function BottomNav() {
                   renders larger (so its "AI" lettering stays legible)
                   but must not push its label out of line with its
                   siblings' labels below. */}
-              <span className="flex h-7 items-center justify-center">
+              <span className="relative flex h-7 items-center justify-center">
                 <Icon size={path === "/caddie" ? 28 : 22} strokeWidth={isActive ? 2.5 : 2} />
+                {path === "/messages" && hasUnreadMessages && (
+                  <span className="absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-fairway-600" aria-label="Unread messages" />
+                )}
               </span>
               {t(labelKey)}
             </>

@@ -2,9 +2,11 @@ import { NavLink } from "react-router-dom";
 import { NAV_ITEMS } from "../../lib/nav";
 import { GolfMeLogo } from "../brand/GolfMeLogo";
 import { useLocale } from "../../i18n/LocaleContext";
+import { useData } from "../../context/DataContext";
 
 export function SideNav() {
   const { t } = useLocale();
+  const { hasUnreadMessages } = useData();
   return (
     <aside className="fixed inset-y-0 left-0 z-40 hidden w-20 flex-col border-r border-slate-200 bg-white py-6 sm:flex lg:w-60">
       <div className="mb-8 px-5">
@@ -28,8 +30,11 @@ export function SideNav() {
                 x-offset regardless of icon size — Caddie's icon renders
                 larger (so its "AI" lettering stays legible) but must not
                 shift its label out of line with its siblings' labels. */}
-            <span className="flex w-6 items-center justify-center">
+            <span className="relative flex w-6 items-center justify-center">
               <Icon size={path === "/caddie" ? 24 : 20} />
+              {path === "/messages" && hasUnreadMessages && (
+                <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-fairway-600" aria-label="Unread messages" />
+              )}
             </span>
             <span className="hidden lg:inline">{t(labelKey)}</span>
           </NavLink>

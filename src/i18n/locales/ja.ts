@@ -123,6 +123,7 @@ export const ja: Record<TranslationKey, string> = {
   "teeTimes.notFound": "このコースはまだ対応していません。",
 
   "nav.play": "プレー",
+  "nav.chat": "チャット",
   "nav.caddie": "キャディ",
   "nav.me": "マイページ",
 
@@ -175,6 +176,12 @@ export const ja: Record<TranslationKey, string> = {
   "chat.delete": "削除",
   "chat.historyClearedToast": "チャット履歴を削除しました。",
   "chat.conversationDeletedToast": "会話を削除しました。",
+  "chatInbox.title": "チャット",
+  "chatInbox.searchPlaceholder": "会話を検索",
+  "chatInbox.emptyTitle": "まだメッセージはありません。",
+  "chatInbox.emptyDescription": "ゴルファーのプロフィールを開いて会話を始めましょう。",
+  "chatInbox.noSearchResults": "検索に一致する会話はありません。",
+  "chatInbox.youPrefix": "自分: ",
   "discover.searchPlaceholder": "探しているのは...",
 
   "welcome.tagline": "次のラウンドを見つけよう。",
@@ -624,7 +631,6 @@ export const ja: Record<TranslationKey, string> = {
   "myGolf.allReviewsSubmitted": "すべてのレビューを送信しました — GolfMe の信頼性向上にご協力ありがとうございます。",
   "myGolf.leaveReview": "レビューを書く（{done}/{total}件完了）",
 
-  "profile.messages": "メッセージ",
   "profile.reputation": "GolfMe 評判",
   "profile.golfCircle": "ゴルフサークル",
   "profile.following": "フォロー中",
@@ -638,7 +644,6 @@ export const ja: Record<TranslationKey, string> = {
   "profile.bio": "自己紹介",
   "profile.roundCount": "{count}ラウンド · ハンディキャップ {handicap}",
   "profile.roundCountSingular": "1ラウンド · ハンディキャップ {handicap}",
-  "profile.newMessages": "新着メッセージ",
   "profile.golferCount": "{count}人",
   "profile.golferCountSingular": "1人",
   "profile.postCount": "{count}件の投稿",

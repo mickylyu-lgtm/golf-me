@@ -123,6 +123,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "teeTimes.notFound": "該球場暫不支援。",
 
   "nav.play": "打球",
+  "nav.chat": "聊天",
   "nav.caddie": "球僮",
   "nav.me": "我",
 
@@ -175,6 +176,12 @@ export const zhTW: Record<TranslationKey, string> = {
   "chat.delete": "刪除",
   "chat.historyClearedToast": "聊天記錄已清除。",
   "chat.conversationDeletedToast": "對話已刪除。",
+  "chatInbox.title": "聊天",
+  "chatInbox.searchPlaceholder": "搜尋對話",
+  "chatInbox.emptyTitle": "尚無訊息。",
+  "chatInbox.emptyDescription": "打開一位球友的主頁即可開始對話。",
+  "chatInbox.noSearchResults": "沒有符合搜尋條件的對話。",
+  "chatInbox.youPrefix": "你：",
   "discover.searchPlaceholder": "我想找...",
 
   "welcome.tagline": "找到你的下一場球局。",
@@ -624,7 +631,6 @@ export const zhTW: Record<TranslationKey, string> = {
   "myGolf.allReviewsSubmitted": "所有評價已送出——謝謝你讓 GolfMe 更值得信賴。",
   "myGolf.leaveReview": "去評價（已完成 {done}/{total}）",
 
-  "profile.messages": "訊息",
   "profile.reputation": "GolfMe 口碑",
   "profile.golfCircle": "球友圈",
   "profile.following": "關注",
@@ -638,7 +644,6 @@ export const zhTW: Record<TranslationKey, string> = {
   "profile.bio": "個人簡介",
   "profile.roundCount": "{count} 局 · 差點 {handicap}",
   "profile.roundCountSingular": "1 局 · 差點 {handicap}",
-  "profile.newMessages": "有新訊息",
   "profile.golferCount": "{count} 位球友",
   "profile.golferCountSingular": "1 位球友",
   "profile.postCount": "{count} 篇貼文",
