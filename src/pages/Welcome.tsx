@@ -73,18 +73,18 @@ export function Welcome() {
           <Reveal delayMs={0} className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10">
             <GolfMeIcon size={34} dotColor="#f8faf8" targetColor="#8bc09a" holeColor="#19422a" />
           </Reveal>
-          <Reveal delayMs={90}>
+          <Reveal delayMs={350}>
             <h1 className="text-3xl font-extrabold leading-tight tracking-tight sm:text-5xl">{t("landing.hero.headline")}</h1>
           </Reveal>
-          <Reveal delayMs={180}>
+          <Reveal delayMs={700}>
             <p className="max-w-lg text-base text-fairway-100 sm:text-lg">
               <HighlightGolfMe text={t("landing.hero.subhead")} golfClassName="text-white" meClassName="text-sun-300" />
             </p>
           </Reveal>
-          <Reveal delayMs={260}>
+          <Reveal delayMs={1050}>
             <p className="max-w-md text-sm text-fairway-200/80">{t("landing.hero.explainer")}</p>
           </Reveal>
-          <Reveal delayMs={330} className="mt-2 flex w-full max-w-xs flex-col items-center gap-3">
+          <Reveal delayMs={1400} className="mt-2 flex w-full max-w-xs flex-col items-center gap-3">
             <a
               href="#waitlist"
               className="flex w-full items-center justify-center rounded-full bg-sun-400 px-6 py-3.5 text-base font-bold text-fairway-950 shadow-md shadow-fairway-950/20 transition hover:-translate-y-px hover:bg-sun-300"
@@ -112,8 +112,8 @@ export function Welcome() {
 
         <div className="mt-10 grid gap-4 sm:grid-cols-3">
           <PillarCard icon={<Flag size={18} />} title={t("landing.pillar.playTitle")} body={t("landing.pillar.playBody")} delayMs={0} />
-          <PillarCard icon={<Users size={18} />} title={t("landing.pillar.communityTitle")} body={t("landing.pillar.communityBody")} delayMs={100} />
-          <PillarCard id="caddie" icon={<CaddieNavIcon size={20} />} title={t("landing.pillar.caddieTitle")} body={t("landing.pillar.caddieBody")} delayMs={200} />
+          <PillarCard icon={<Users size={18} />} title={t("landing.pillar.communityTitle")} body={t("landing.pillar.communityBody")} delayMs={350} />
+          <PillarCard id="caddie" icon={<CaddieNavIcon size={20} />} title={t("landing.pillar.caddieTitle")} body={t("landing.pillar.caddieBody")} delayMs={700} />
         </div>
       </section>
 
@@ -126,8 +126,8 @@ export function Welcome() {
           </Reveal>
           <div className="mt-10 grid gap-8 sm:grid-cols-3">
             <StepCard n={1} title={t("landing.how.step1Title")} body={t("landing.how.step1Body")} delayMs={0} />
-            <StepCard n={2} title={t("landing.how.step2Title")} body={t("landing.how.step2Body")} delayMs={100} />
-            <StepCard n={3} title={t("landing.how.step3Title")} body={t("landing.how.step3Body")} delayMs={200} />
+            <StepCard n={2} title={t("landing.how.step2Title")} body={t("landing.how.step2Body")} delayMs={350} />
+            <StepCard n={3} title={t("landing.how.step3Title")} body={t("landing.how.step3Body")} delayMs={700} />
           </div>
         </div>
       </section>
@@ -141,7 +141,7 @@ export function Welcome() {
             <HighlightGolfMe text={t("landing.waitlist.subtitle")} />
           </p>
         </Reveal>
-        <Reveal delayMs={80}>
+        <Reveal delayMs={350}>
           <WaitlistForm />
         </Reveal>
       </section>

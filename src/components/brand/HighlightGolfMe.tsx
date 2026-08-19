@@ -4,7 +4,7 @@ interface HighlightGolfMeProps {
   text: string;
   /** Color for "Golf" — defaults to deep forest green for light backgrounds; pass a light color on a dark background. */
   golfClassName?: string;
-  /** Color for "Me" — defaults to bright GolfMe green; on a dark background pass a brighter shade so it doesn't wash out. */
+  /** Color for "Me" — defaults to the brand's sun/gold accent; on a dark background pass a lighter shade (e.g. text-sun-300) so it doesn't wash out. */
   meClassName?: string;
 }
 
@@ -15,7 +15,7 @@ interface HighlightGolfMeProps {
 // untranslated brand token in all 6 locale files (verified directly, not
 // assumed) — this never touches surrounding translated text, only splits
 // on that one literal substring.
-export function HighlightGolfMe({ text, golfClassName = "text-fairway-800", meClassName = "text-fairway-500" }: HighlightGolfMeProps): ReactNode {
+export function HighlightGolfMe({ text, golfClassName = "text-fairway-800", meClassName = "text-sun-600" }: HighlightGolfMeProps): ReactNode {
   const parts = text.split("GolfMe");
   if (parts.length === 1) return text;
   const nodes: ReactNode[] = [];

@@ -45,7 +45,7 @@ export function Reveal({ children, delayMs = 0, className = "", id }: RevealProp
     <div
       ref={ref}
       id={id}
-      className={`${className} ${revealed ? "animate-slide-up" : "opacity-0"}`}
+      className={`${className} ${revealed ? "animate-slide-up-slow" : "opacity-0"}`}
       style={revealed ? { animationDelay: `${delayMs}ms`, animationFillMode: "backwards" } : undefined}
     >
       {children}
