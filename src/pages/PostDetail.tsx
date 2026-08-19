@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useToast } from "../context/ToastContext";
+import { useLocale } from "../i18n/LocaleContext";
 import { Button } from "../components/ui/Button";
 import { Avatar } from "../components/ui/Avatar";
 import { PostCard } from "../components/community/PostCard";
@@ -14,6 +15,7 @@ export function PostDetail() {
   const navigate = useNavigate();
   const { getPost, commentsForPost, createComment, currentUser } = useData();
   const { showToast } = useToast();
+  const { t } = useLocale();
   const [commentText, setCommentText] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -77,9 +79,13 @@ export function PostDetail() {
       )}
 
       <div>
-        <p className="mb-3 text-sm font-bold text-slate-800">Comments · {allComments.length}</p>
+        <p className="mb-3 text-sm font-bold text-slate-800">
+          {t("community.comments")} · {allComments.length}
+        </p>
         {topLevel.length === 0 ? (
-          <p className="text-sm text-slate-400">No comments yet — be the first.</p>
+          <p className="text-sm text-slate-400">
+            {t("community.noCommentsYet")} — {t("community.beFirstToComment")}
+          </p>
         ) : (
           <div className="flex flex-col gap-4">
             {topLevel.map((c) => (
@@ -92,10 +98,11 @@ export function PostDetail() {
       <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2 py-1.5">
         <Avatar golfer={currentUser} size="xs" />
         <input
+          id="comment-composer-input"
           value={commentText}
           onChange={(e) => setCommentText(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && submitComment()}
-          placeholder="Add a comment..."
+          placeholder={t("community.writeCommentPlaceholder")}
           className="flex-1 bg-transparent px-1.5 text-sm outline-none"
         />
         <button
@@ -103,7 +110,7 @@ export function PostDetail() {
           disabled={!commentText.trim() || submitting}
           className="shrink-0 rounded-full px-3 py-1.5 text-sm font-semibold text-fairway-700 disabled:opacity-40"
         >
-          Send
+          {t("community.postComment")}
         </button>
       </div>
     </div>

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowUp, Bookmark, Loader2, MapPin, MessageCircle, MoreHorizontal, ShieldAlert, ShieldCheck, ShieldOff, ShieldX, Sparkles, Trash2, Video } from "lucide-react";
+import { Bookmark, Loader2, MapPin, MessageCircle, MoreHorizontal, ShieldAlert, ShieldCheck, ShieldOff, ShieldX, Sparkles, ThumbsUp, Trash2, Video } from "lucide-react";
 import type { CommunityPost } from "../../types";
 import { useData } from "../../context/DataContext";
 import { useToast } from "../../context/ToastContext";
@@ -65,6 +65,24 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
 
   function goToDetail() {
     if (linkToDetail) navigate(`/community/${post.id}`);
+  }
+
+  // Previously this button called goToDetail() unconditionally, which is a
+  // no-op whenever linkToDetail is false — exactly the case on the post's
+  // own detail page (PostDetail.tsx renders this card with
+  // linkToDetail={false} so tapping the card body doesn't re-navigate to
+  // itself), so "Comment" silently did nothing there. On the feed, it
+  // still just navigates to the detail view, where the full comment
+  // section is already visible. On the detail page itself, it scrolls to
+  // and focuses the existing comment composer instead.
+  function goToComments() {
+    if (linkToDetail) {
+      navigate(`/community/${post.id}`);
+      return;
+    }
+    const input = document.getElementById("comment-composer-input");
+    input?.scrollIntoView({ behavior: "smooth", block: "center" });
+    input?.focus();
   }
 
   function stop(e: React.MouseEvent) {
@@ -250,14 +268,16 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
           <button
             onClick={() => togglePostUpvote(post.id)}
             aria-pressed={upvoted}
-            className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold transition-all duration-200 ease-out ${
+            aria-label={upvoted ? t("community.liked") : t("community.like")}
+            className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold transition-all duration-200 ease-out active:scale-95 ${
               upvoted ? "border-transparent bg-fairway-600 text-white" : "border-slate-200 text-slate-600 hover:border-fairway-300"
             }`}
           >
-            <ArrowUp size={13} /> {postUpvoteCount(post.id)}
+            <ThumbsUp size={13} fill={upvoted ? "currentColor" : "none"} /> {postUpvoteCount(post.id)}
           </button>
           <button
-            onClick={goToDetail}
+            onClick={goToComments}
+            aria-label={t("community.comment")}
             className="flex items-center gap-1 rounded-full border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 transition-colors duration-150 hover:border-fairway-300"
           >
             <MessageCircle size={13} /> {commentCount}

@@ -2,7 +2,7 @@
 
 > Read this file first in any new session (laptop or claude.ai/code on mobile) before making changes. Update it in the same commit as any milestone — new feature, schema change, or architectural decision — so the next session (possibly on another device) has zero context loss.
 
-Last updated: 2026-08-18 (Phase 17)
+Last updated: 2026-08-18 (Phase 18)
 
 ## Current phase
 
@@ -357,6 +357,17 @@ GolfMe had zero outbound-email capability before this (the app only ever sent Su
 - **Verified live with a real send, not a mock**: inserted a real test row through the actual REST API (anon key, exactly how the frontend does it), confirmed via `net._http_response` that the HTTP call to Resend returned `200` with a real email id — the notification email genuinely sent. Test signup deleted afterward.
 - **Known, unfixable advisor warning**: `pg_net` installs its extension registration into the `public` schema and doesn't support `ALTER EXTENSION ... SET SCHEMA` (confirmed by trying) — a common, low-severity (`WARN`, not `ERROR`) finding for this specific extension on Supabase; its actual callable functions already live properly isolated in the `net` schema regardless.
 - Uses Resend's shared `onboarding@resend.dev` sending address (works immediately, no domain verification needed) — fine for founder-only notification emails; would need a verified custom domain before sending anything to end users.
+
+## Phase 18 — Fix dead Comment button, replace Upvote with Like (2026-08-18)
+
+Small, targeted Community fix — no schema/migration changes at all (voting/comments already had a real Supabase backend; this phase touched only the frontend).
+
+- **Root cause of the "Comment button doesn't work" bug**: `PostCard.tsx`'s Comment button called `goToDetail()`, which is a no-op whenever `linkToDetail` is `false` — exactly the prop `PostDetail.tsx` passes when rendering a post's own detail page (so the card's own tap-anywhere handler doesn't re-navigate to itself). Result: tapping "Comment" while already on a post's detail view — where the full comment thread and composer are already on-screen below it — did literally nothing. On the feed (`linkToDetail` defaults `true`) it technically worked (navigated to detail), just redundantly with tapping the card itself.
+- **Fix**: new `goToComments()` replaces the Comment button's handler — on the feed it still navigates to detail; on the detail page itself it now scrolls to and focuses the existing comment composer (`document.getElementById("comment-composer-input")`) instead of doing nothing.
+- **Upvote → Like**: swapped the arrow-up icon for `lucide-react`'s `ThumbsUp` (outline when unliked, `fill="currentColor"` when liked) in `PostCard.tsx`'s action bar, added a subtle `active:scale-95` press response, added `aria-label`s. **Internal naming intentionally untouched** — `community_post_votes` table, `isPostUpvoted`/`postUpvoteCount`/`togglePostUpvote`/`PostVote` all keep their existing names, per explicit instruction to avoid unnecessary migration/rename risk; only user-facing text and the icon changed. Comment-level upvoting (`CommentItem.tsx`'s own arrow-up button) was deliberately left alone — out of the brief's stated scope (post-level "Community post action bar" specifically), flagged rather than silently expanded.
+- New `community.*` i18n keys (like/liked/likes/comment/comments/writeCommentPlaceholder/postComment/noCommentsYet/beFirstToComment) added across all 6 locales; `PostDetail.tsx`'s previously-hardcoded "Add a comment..."/"Send"/"No comments yet — be the first." now route through these. Pre-existing hardcoded English elsewhere in `PostCard.tsx`/`CommentItem.tsx` (menu items, toasts, etc.) was left as-is — not introduced by this change, out of scope for a targeted fix.
+- **Live-tested via a real headless browser in demo mode**: confirmed the Like button's toggle is a true, symmetric on/off (count +1/-1, `aria-pressed` flips correctly, returns to the exact original count after two clicks); confirmed the Comment button on the detail page now genuinely focuses the composer (previously a dead click); posted a real comment and confirmed the visible comment count updates and the new comment text renders; checked 320/375/390/430px for horizontal overflow on the Community feed — none. Zero console errors throughout.
+- **Not independently re-verified this phase** (pre-existing, unchanged): comment persistence/realtime/notification-on-comment (`RealCommunityContext.tsx`'s realtime subscription + `notify_community_comment()` trigger, both already live since Phase 7e) and vote persistence/uniqueness (`community_post_votes`' composite primary key `(post_id, voter_id)` already enforces one vote per user per post at the database level, unchanged by this phase) — confirmed correct by reading the existing code/schema, not by a fresh live two-real-account test this round (blocked by the same real-magic-link-auth limitation as every other phase).
 
 ## Remote/local sync note (2026-08-12)
 
