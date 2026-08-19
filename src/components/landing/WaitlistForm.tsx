@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { CheckCircle2 } from "lucide-react";
 import { useLocale } from "../../i18n/LocaleContext";
 import { useWaitlistSignup } from "../../lib/useWaitlistSignup";
+import { HighlightGolfMe } from "../brand/HighlightGolfMe";
 import { Button } from "../ui/Button";
 import { inputClass, labelClass } from "../ui/FormControls";
 
@@ -60,7 +61,9 @@ export function WaitlistForm() {
           <CheckCircle2 size={26} />
         </span>
         <h3 className="text-xl font-extrabold text-slate-900">{t("landing.waitlist.successTitle")}</h3>
-        <p className="max-w-xs text-sm text-slate-500">{t("landing.waitlist.successBody")}</p>
+        <p className="max-w-xs text-sm text-slate-500">
+          <HighlightGolfMe text={t("landing.waitlist.successBody")} />
+        </p>
         {success.region && (
           <p className="text-xs text-slate-400">
             {t("landing.waitlist.successRegionLabel")} <span className="font-semibold text-slate-600">{success.region}</span>
@@ -125,12 +128,18 @@ export function WaitlistForm() {
         )}
       </div>
 
-      {error && <p className="text-sm font-medium text-rose-600">{error}</p>}
+      {error && (
+        <p className="text-sm font-medium text-rose-600">
+          <HighlightGolfMe text={error} />
+        </p>
+      )}
 
       <Button type="submit" size="lg" fullWidth disabled={submitting}>
         {submitting ? t("landing.waitlist.submitting") : t("landing.waitlist.submit")}
       </Button>
-      <p className="text-center text-xs text-slate-400">{t("landing.waitlist.disclaimer")}</p>
+      <p className="text-center text-xs text-slate-400">
+        <HighlightGolfMe text={t("landing.waitlist.disclaimer")} />
+      </p>
     </form>
   );
 }
