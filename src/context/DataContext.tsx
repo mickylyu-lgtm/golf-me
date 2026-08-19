@@ -1474,7 +1474,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
         realSocial.markNotificationRead(id).catch((err) => console.error("Golf Me: failed to mark notification read.", err));
         return;
       }
-      setData((prev) => ({ ...prev, notifications: prev.notifications.map((n) => (n.id === id ? { ...n, read: true } : n)) }));
+      setData((prev) => ({
+        ...prev,
+        notifications: prev.notifications.map((n) => (n.id === id ? { ...n, read: true, readAt: new Date().toISOString() } : n)),
+      }));
     },
     [auth.isDemo, realSocial],
   );
@@ -1485,7 +1488,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     }
     setData((prev) => ({
       ...prev,
-      notifications: prev.notifications.map((n) => (n.userId === prev.currentUserId ? { ...n, read: true } : n)),
+      notifications: prev.notifications.map((n) => (n.userId === prev.currentUserId ? { ...n, read: true, readAt: new Date().toISOString() } : n)),
     }));
   }, [auth.isDemo, realSocial]);
 

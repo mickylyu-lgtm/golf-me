@@ -54,6 +54,7 @@ interface NotificationRow {
   text: string;
   link_to: string;
   read: boolean;
+  read_at: string | null;
   created_at: string;
 }
 
@@ -115,6 +116,7 @@ function notificationRowToAppNotification(row: NotificationRow): AppNotification
     text: row.text,
     linkTo: row.link_to,
     read: row.read,
+    readAt: row.read_at ?? undefined,
     createdAt: row.created_at,
   };
 }
@@ -516,7 +518,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
 
   const markNotificationRead = useCallback(
     async (id: string) => {
-      const { error } = await supabase.from("notifications").update({ read: true }).eq("id", id);
+      const { error } = await supabase.from("notifications").update({ read: true, read_at: new Date().toISOString() }).eq("id", id);
       if (error) console.error("Golf Me: failed to mark notification read.", error);
       else await refetch();
     },
@@ -525,7 +527,11 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
 
   const markAllNotificationsRead = useCallback(async () => {
     if (!selfId) return;
-    const { error } = await supabase.from("notifications").update({ read: true }).eq("user_id", selfId).eq("read", false);
+    const { error } = await supabase
+      .from("notifications")
+      .update({ read: true, read_at: new Date().toISOString() })
+      .eq("user_id", selfId)
+      .eq("read", false);
     if (error) console.error("Golf Me: failed to mark all notifications read.", error);
     else await refetch();
   }, [selfId, refetch]);

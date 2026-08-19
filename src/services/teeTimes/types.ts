@@ -14,7 +14,7 @@ export interface SupportedTeeTimeCourse {
 export const SUPPORTED_TEE_TIME_COURSES: SupportedTeeTimeCourse[] = [
   {
     id: "skyway",
-    name: "Skyway Golf Course at Lincoln Park West",
+    name: "Skyway Golf Course",
     city: "Jersey City",
     state: "NJ",
     holes: 9,

@@ -474,6 +474,7 @@ export interface AppNotification {
   text: string;
   linkTo: string; // in-app path to open on tap
   read: boolean;
+  readAt?: string; // when `read` flipped to true — lets the inbox keep a read notification visible for a while instead of it vanishing instantly or piling up forever
   createdAt: string;
 }
 
