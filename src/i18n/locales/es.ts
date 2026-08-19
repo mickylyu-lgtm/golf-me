@@ -177,7 +177,7 @@ export const es: Record<TranslationKey, string> = {
   "chat.historyClearedToast": "Historial del chat borrado.",
   "chat.conversationDeletedToast": "Conversación eliminada.",
   "chatInbox.title": "Chat",
-  "chatInbox.searchPlaceholder": "Buscar conversaciones",
+  "chatInbox.searchPlaceholder": "Déjame buscar…",
   "chatInbox.emptyTitle": "Aún no hay mensajes.",
   "chatInbox.emptyDescription": "Abre el perfil de un golfista para iniciar una conversación.",
   "chatInbox.noSearchResults": "Ninguna conversación coincide con tu búsqueda.",

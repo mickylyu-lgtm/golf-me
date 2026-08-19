@@ -177,7 +177,7 @@ export const ko: Record<TranslationKey, string> = {
   "chat.historyClearedToast": "채팅 기록을 지웠습니다.",
   "chat.conversationDeletedToast": "대화를 삭제했습니다.",
   "chatInbox.title": "채팅",
-  "chatInbox.searchPlaceholder": "대화 검색",
+  "chatInbox.searchPlaceholder": "찾아볼게…",
   "chatInbox.emptyTitle": "아직 메시지가 없습니다.",
   "chatInbox.emptyDescription": "골퍼의 프로필을 열어 대화를 시작하세요.",
   "chatInbox.noSearchResults": "검색과 일치하는 대화가 없습니다.",

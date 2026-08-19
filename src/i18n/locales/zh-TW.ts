@@ -177,7 +177,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "chat.historyClearedToast": "聊天記錄已清除。",
   "chat.conversationDeletedToast": "對話已刪除。",
   "chatInbox.title": "聊天",
-  "chatInbox.searchPlaceholder": "搜尋對話",
+  "chatInbox.searchPlaceholder": "讓我找找…",
   "chatInbox.emptyTitle": "尚無訊息。",
   "chatInbox.emptyDescription": "打開一位球友的主頁即可開始對話。",
   "chatInbox.noSearchResults": "沒有符合搜尋條件的對話。",

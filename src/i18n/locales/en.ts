@@ -185,7 +185,7 @@ export const en = {
   "chat.historyClearedToast": "Chat history cleared.",
   "chat.conversationDeletedToast": "Conversation deleted.",
   "chatInbox.title": "Chat",
-  "chatInbox.searchPlaceholder": "Search conversations",
+  "chatInbox.searchPlaceholder": "Let me find…",
   "chatInbox.emptyTitle": "No messages yet.",
   "chatInbox.emptyDescription": "Open a golfer's profile to start a conversation.",
   "chatInbox.noSearchResults": "No conversations match your search.",

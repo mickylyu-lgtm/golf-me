@@ -37,17 +37,40 @@ const DIRECTION_RATIO = 1.2;
 // Movement below this, in either axis, isn't enough to even guess intent
 // yet — avoids jitter/tap noise deciding the gesture prematurely.
 const DECISION_DEADZONE_PX = 8;
+// A touch that starts on a button/link/row needs a clearly more deliberate
+// drag before it's read as a swipe rather than a tap — most of a typical
+// screen here (Home/Play/Me especially) is covered edge-to-edge by
+// clickable cards, so requiring the swipe to start on bare background would
+// leave almost nowhere to actually swipe from. These wider thresholds keep
+// a normal tap on a card reliable (small finger jitter stays under them)
+// while still letting an intentional horizontal drag starting ON a card
+// change tabs, instead of refusing to track the touch at all.
+const INTERACTIVE_DECISION_DEADZONE_PX = 20;
+const INTERACTIVE_DIRECTION_RATIO = 2;
 
 function prefersReducedMotion(): boolean {
   return typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
 }
 
-function isInteractiveTarget(el: EventTarget | null): boolean {
+// Sliders (and anything explicitly opted out via [data-no-swipe]) need a
+// full exclusion, not just a stricter threshold — a drag handle has to
+// track every pixel of finger movement with zero risk of ever being
+// reinterpreted as a tab change, so touch tracking never even starts here.
+function isSliderTarget(el: EventTarget | null): boolean {
   if (!(el instanceof Element)) return false;
-  // Buttons/inputs/selects/links and anything explicitly opted out (chips,
-  // sliders, horizontally-scrollable pickers) keep gesture priority over
-  // the root-tab swipe — a drag that starts on them never changes tabs.
-  return Boolean(el.closest('button, a, input, textarea, select, [role="slider"], [data-no-swipe]'));
+  return Boolean(el.closest('[role="slider"], [data-no-swipe]'));
+}
+
+// Buttons/links/inputs are different: a plain tap must stay reliable, but
+// most of a typical screen here (Home/Play/Me especially) is covered
+// edge-to-edge by clickable cards, so fully excluding them (as this used
+// to) would leave almost nowhere to actually start a swipe from. These get
+// a stricter deadzone/direction check below instead of a full exclusion —
+// small tap jitter stays a tap, a clearly deliberate horizontal drag can
+// still change tabs.
+function isTappableTarget(el: EventTarget | null): boolean {
+  if (!(el instanceof Element)) return false;
+  return Boolean(el.closest("button, a, input, textarea, select"));
 }
 
 interface TouchTrack {
@@ -58,6 +81,7 @@ interface TouchTrack {
   lastTime: number;
   decided: boolean;
   isHorizontalSwipe: boolean;
+  startedOnInteractive: boolean;
 }
 
 // Persistent-mounted carousel of the 5 root tabs — all 5 stay alive at
@@ -95,12 +119,21 @@ export function RootTabCarousel({ activePath }: { activePath: string }) {
     }
 
     function onTouchStart(e: TouchEvent) {
-      if (isInteractiveTarget(e.target)) {
+      if (isSliderTarget(e.target)) {
         touchRef.current = null;
         return;
       }
       const t = e.touches[0];
-      touchRef.current = { startX: t.clientX, startY: t.clientY, startTime: Date.now(), lastX: t.clientX, lastTime: Date.now(), decided: false, isHorizontalSwipe: false };
+      touchRef.current = {
+        startX: t.clientX,
+        startY: t.clientY,
+        startTime: Date.now(),
+        lastX: t.clientX,
+        lastTime: Date.now(),
+        decided: false,
+        isHorizontalSwipe: false,
+        startedOnInteractive: isTappableTarget(e.target),
+      };
     }
 
     function onTouchMove(e: TouchEvent) {
@@ -111,11 +144,13 @@ export function RootTabCarousel({ activePath }: { activePath: string }) {
       const dy = t.clientY - state.startY;
 
       if (!state.decided) {
-        if (Math.abs(dx) < DECISION_DEADZONE_PX && Math.abs(dy) < DECISION_DEADZONE_PX) return;
+        const deadzone = state.startedOnInteractive ? INTERACTIVE_DECISION_DEADZONE_PX : DECISION_DEADZONE_PX;
+        const directionRatio = state.startedOnInteractive ? INTERACTIVE_DIRECTION_RATIO : DIRECTION_RATIO;
+        if (Math.abs(dx) < deadzone && Math.abs(dy) < deadzone) return;
         state.decided = true;
-        state.isHorizontalSwipe = Math.abs(dx) > Math.abs(dy) * DIRECTION_RATIO;
+        state.isHorizontalSwipe = Math.abs(dx) > Math.abs(dy) * directionRatio;
         if (!state.isHorizontalSwipe) {
-          touchRef.current = null; // hand off to native vertical scroll entirely
+          touchRef.current = null; // hand off to native scroll / the element's own tap entirely
           return;
         }
       }

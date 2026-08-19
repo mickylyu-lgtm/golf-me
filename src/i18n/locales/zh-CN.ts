@@ -177,7 +177,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "chat.historyClearedToast": "聊天记录已清除。",
   "chat.conversationDeletedToast": "对话已删除。",
   "chatInbox.title": "聊天",
-  "chatInbox.searchPlaceholder": "搜索对话",
+  "chatInbox.searchPlaceholder": "让我找找…",
   "chatInbox.emptyTitle": "暂无消息。",
   "chatInbox.emptyDescription": "打开一位球友的主页即可开始对话。",
   "chatInbox.noSearchResults": "没有符合搜索条件的对话。",
