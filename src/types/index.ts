@@ -372,6 +372,7 @@ export interface CommunityPost {
   text: string;
   imageUrl?: string; // demo: local data-URL. Real: a public Supabase Storage URL.
   videoUrl?: string; // swing posts only — always a real Supabase Storage URL, real accounts only (demo has no swing-post equivalent)
+  videoThumbnailUrl?: string; // a real captured frame from the video, never a placeholder — undefined for posts made before this existed, or handed off from Caddie's Share to Community (no thumbnail generated for that path yet)
   swingAnalysisStatus?: SwingAnalysisStatus; // present only on swing posts
   courseTag?: string; // a name from lib/courses.ts — never a duplicate course record
   golfCallId?: string; // attached Golf Call, by reference only (upcoming or completed)

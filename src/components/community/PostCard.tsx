@@ -212,7 +212,13 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
       {isSwingPost && post.videoUrl && (
         <div onClick={stop} className="flex flex-col gap-2.5">
           {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-          <video src={post.videoUrl} controls className="max-h-96 w-full rounded-xl bg-black" />
+          <video
+            src={post.videoUrl}
+            controls
+            poster={post.videoThumbnailUrl}
+            preload="metadata"
+            className="max-h-96 w-full rounded-xl bg-black"
+          />
           <SwingAnalysisPanel status={post.swingAnalysisStatus} />
           {isOwn &&
             (existingCaddieAnalysis ? (

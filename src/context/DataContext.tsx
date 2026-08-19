@@ -92,6 +92,7 @@ export interface CreatePostInput {
   text: string;
   imageUrl?: string;
   videoUrl?: string; // swing posts only — real accounts, ignored by the demo path
+  videoThumbnailUrl?: string; // real accounts only, ignored by the demo path
   courseTag?: string;
   golfCallId?: string;
   category: PostCategory;

@@ -14,7 +14,7 @@ import { inputClass, labelClass } from "../components/ui/FormControls";
 import { POST_CATEGORIES } from "../types";
 import type { PostCategory, PostType } from "../types";
 import { COURSES } from "../lib/courses";
-import { resizeImageToDataUrl, resizeImageToBlob } from "../lib/image";
+import { resizeImageToDataUrl, resizeImageToBlob, captureVideoThumbnail } from "../lib/image";
 import { formatDate, formatMoney } from "../lib/format";
 import { postCategoryLabel } from "../lib/enumLabels";
 import { supabase } from "../lib/supabase";
@@ -219,10 +219,14 @@ export function CreatePost() {
     setUploadProgress(kind === "swing" && videoFile ? "uploading" : "publishing");
     try {
       let videoUrl: string | undefined;
+      let videoThumbnailUrl: string | undefined;
       if (kind === "swing" && prefilledVideoUrl && !videoFile) {
         // Handed off from Caddie's "Share to Community" — already a real
         // Storage URL, so reuse it directly rather than uploading a second
-        // copy of the same file.
+        // copy of the same file. No thumbnail generated for this path yet
+        // (would mean fetching the remote video back down to capture a
+        // frame from it) — falls back to the plain black player until
+        // re-uploaded directly.
         videoUrl = prefilledVideoUrl;
       } else if (kind === "swing" && videoFile) {
         if (isDemo || !authUser) {
@@ -239,6 +243,24 @@ export function CreatePost() {
         if (uploadError) throw uploadError;
         const { data } = supabase.storage.from(COMMUNITY_MEDIA_BUCKET).getPublicUrl(path);
         videoUrl = data.publicUrl;
+
+        // Best-effort: a real captured frame from the actual video, so the
+        // post shows something other than a black rectangle before anyone
+        // taps play — never a fake/placeholder image. A failure here
+        // (unsupported codec, etc.) must never block publishing the post
+        // itself, since the video already uploaded successfully.
+        try {
+          const thumbBlob = await captureVideoThumbnail(videoFile);
+          const thumbPath = `${authUser.id}/swing-thumb-${crypto.randomUUID()}.jpg`;
+          const { error: thumbUploadError } = await supabase.storage
+            .from(COMMUNITY_MEDIA_BUCKET)
+            .upload(thumbPath, thumbBlob, { contentType: "image/jpeg" });
+          if (!thumbUploadError) {
+            videoThumbnailUrl = supabase.storage.from(COMMUNITY_MEDIA_BUCKET).getPublicUrl(thumbPath).data.publicUrl;
+          }
+        } catch (thumbErr) {
+          console.error("Golf Me: failed to capture a video thumbnail.", thumbErr);
+        }
       }
 
       setUploadProgress("publishing");
@@ -248,6 +270,7 @@ export function CreatePost() {
         text,
         imageUrl: kind === "photo" ? imageUrl : undefined,
         videoUrl,
+        videoThumbnailUrl,
         courseTag: kind === "course" ? courseTag : undefined,
         golfCallId: kind === "round" ? golfCallId : undefined,
         category,

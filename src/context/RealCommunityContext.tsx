@@ -13,6 +13,7 @@ interface PostRow {
   text: string;
   image_url: string | null;
   video_url: string | null;
+  video_thumbnail_url: string | null;
   course_tag: string | null;
   golf_call_id: string | null;
   category: PostCategory;
@@ -37,6 +38,7 @@ function rowToPost(row: PostRow): CommunityPost {
     text: row.text,
     imageUrl: row.image_url ?? undefined,
     videoUrl: row.video_url ?? undefined,
+    videoThumbnailUrl: row.video_thumbnail_url ?? undefined,
     swingAnalysisStatus: row.swing_analysis_status === "not_applicable" ? undefined : row.swing_analysis_status,
     courseTag: row.course_tag ?? undefined,
     golfCallId: row.golf_call_id ?? undefined,
@@ -61,6 +63,7 @@ export interface CreateRealPostInput {
   text: string;
   imageUrl?: string;
   videoUrl?: string;
+  videoThumbnailUrl?: string;
   courseTag?: string;
   golfCallId?: string;
   category: PostCategory;
@@ -225,6 +228,7 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
         text: input.text.trim(),
         image_url: input.imageUrl ?? null,
         video_url: input.videoUrl ?? null,
+        video_thumbnail_url: input.videoThumbnailUrl ?? null,
         course_tag: input.courseTag ?? null,
         golf_call_id: input.golfCallId ?? null,
         category: input.category,
@@ -241,6 +245,7 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
           text: input.text.trim(),
           image_url: input.imageUrl ?? null,
           video_url: input.videoUrl ?? null,
+          video_thumbnail_url: input.videoThumbnailUrl ?? null,
           course_tag: input.courseTag ?? null,
           golf_call_id: input.golfCallId ?? null,
           category: input.category,
