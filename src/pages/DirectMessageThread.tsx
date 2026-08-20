@@ -171,8 +171,17 @@ export function DirectMessageThread() {
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col rounded-2xl border border-slate-100 bg-white">
-        <div className="flex min-h-[50vh] max-h-[65vh] flex-col gap-3 overflow-y-auto px-4 py-4">
+      {/* Bounded to the actual visible viewport (dvh, not vh -- accounts for
+          mobile browser chrome) rather than the message list having its own
+          separately-scrolling max-height with the composer just sticky
+          against the page below it -- those were two different scroll
+          contexts, so the sticky composer could end up floating on top of
+          (hiding) the message list's own last message instead of sitting
+          cleanly below it. flex-1 + min-h-0 here makes the message list the
+          only thing that scrolls, and the composer just always sits after
+          it, guaranteed never overlapping. */}
+      <div className="flex h-[calc(100dvh-13rem)] flex-col rounded-2xl border border-slate-100 bg-white">
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4">
           {messages.length === 0 && (
             <p className="my-auto text-center text-sm text-slate-400">
               {eligible ? "No messages yet — say hello." : "You can't message this golfer."}
@@ -196,14 +205,7 @@ export function DirectMessageThread() {
           <div ref={bottomRef} />
         </div>
 
-        {/* Sticky rather than just "the next element after a capped-height
-            message list" — on a long conversation, the card's natural
-            height (header + up to 65vh of messages + composer) can exceed
-            the viewport, which pushed the composer below the fold and
-            forced a page-level scroll just to find the box to type in.
-            Sticking it to the bottom of the viewport (just above the
-            mobile bottom nav) keeps it reachable at all times. */}
-        <div className="sticky bottom-20 z-10 rounded-b-2xl bg-white sm:bottom-4">
+        <div className="shrink-0 rounded-b-2xl bg-white">
           {blocked ? (
             <p className="border-t border-slate-100 px-4 py-3 text-center text-xs text-slate-500">
               You've blocked {other.name}. Unblock them to send messages.
