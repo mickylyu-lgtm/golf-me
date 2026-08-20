@@ -60,7 +60,15 @@ export function Onboarding() {
           slow utility class so the duration isn't locked to that class's
           own value) — a full-screen step swap reads as an abrupt cut at
           1.1s in a way a section scrolling into view alongside older
-          content doesn't. */}
+          content doesn't.
+          Every element (including the first) carries a nonzero
+          animation-delay — a desktop browser can commit the new DOM and
+          paint the first frame in the same tick often enough that a
+          zero-delay animation-fill-mode:backwards element skips visibly
+          showing its 0% state at all, reading as an instant pop instead of
+          a fade on a fast machine (mobile's slower paint pipeline was
+          incidentally giving it that gap for free). A small delay
+          guarantees a real frame at the starting state everywhere. */}
       <div key={step} className="flex flex-1 flex-col items-center justify-center gap-5 text-center">
         <span
           className="flex h-16 w-16 items-center justify-center rounded-2xl bg-fairway-50 text-fairway-600"
@@ -68,6 +76,7 @@ export function Onboarding() {
             animationName: "slide-up-gentle",
             animationDuration: "2.2s",
             animationTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)",
+            animationDelay: "60ms",
             animationFillMode: "backwards",
           }}
         >
@@ -78,7 +87,7 @@ export function Onboarding() {
             animationName: "slide-up-gentle",
             animationDuration: "2.2s",
             animationTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)",
-            animationDelay: "300ms",
+            animationDelay: "360ms",
             animationFillMode: "backwards",
           }}
         >
@@ -93,7 +102,7 @@ export function Onboarding() {
               animationName: "slide-up-gentle",
               animationDuration: "2.2s",
               animationTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)",
-              animationDelay: "600ms",
+              animationDelay: "660ms",
               animationFillMode: "backwards",
             }}
           >
