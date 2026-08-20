@@ -63,12 +63,12 @@ export function PrivacyPolicy() {
 
       <Section title="Information we collect">
         <p>
-          <span className="font-semibold text-slate-800">Account information:</span> email address, name, profile photo, handicap, and
+          <span className="font-semibold text-slate-800">Account information:</span> Email address, name, profile photo, handicap, and
           your general home/playing area. If you sign in with Google, we receive your name, email, and profile picture from Google —
           nothing else.
         </p>
         <p>
-          <span className="font-semibold text-slate-800">Location:</span> your precise device location, only if you grant permission and
+          <span className="font-semibold text-slate-800">Location:</span> Your precise device location, only if you grant permission and
           only to show you nearby courses and rounds. You can always enter a location manually instead. Your general playing area (a
           region, not exact coordinates) is saved to your profile to personalize what you see.
         </p>
@@ -78,7 +78,7 @@ export function PrivacyPolicy() {
           you've played with, reports you file, and booking-proof screenshots you attach to a round.
         </p>
         <p>
-          <span className="font-semibold text-slate-800">What we don't collect:</span> we don't have any advertising or analytics
+          <span className="font-semibold text-slate-800">What we don't collect:</span> We don't have any advertising or analytics
           tracking in the app, and we don't collect payment or financial information — GolfMe doesn't process payments.
         </p>
       </Section>
