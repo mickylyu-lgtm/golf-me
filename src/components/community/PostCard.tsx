@@ -16,6 +16,7 @@ import {
   Video,
   Volume2,
   VolumeX,
+  X,
 } from "lucide-react";
 import type { CommunityPost } from "../../types";
 import { useData } from "../../context/DataContext";
@@ -70,7 +71,39 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
   const [imageOpen, setImageOpen] = useState(false);
   const [askingCaddie, setAskingCaddie] = useState(false);
   const [videoMuted, setVideoMuted] = useState(true);
+  const [fullscreenVideoOpen, setFullscreenVideoOpen] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const lastVideoTapRef = useRef(0);
+  const singleTapTimerRef = useRef<number | null>(null);
+
+  // Reels-style double-tap: a tap toggles mute, but a SECOND tap within
+  // 300ms instead opens the fullscreen viewer — so a single tap has to wait
+  // out that window before committing to the mute toggle, standard
+  // double-tap-gesture tradeoff (Instagram does the same thing).
+  function handleVideoTap(e: React.MouseEvent) {
+    stop(e);
+    const now = Date.now();
+    const isDoubleTap = now - lastVideoTapRef.current < 300;
+    lastVideoTapRef.current = now;
+    if (isDoubleTap) {
+      if (singleTapTimerRef.current !== null) {
+        window.clearTimeout(singleTapTimerRef.current);
+        singleTapTimerRef.current = null;
+      }
+      setFullscreenVideoOpen(true);
+      return;
+    }
+    singleTapTimerRef.current = window.setTimeout(() => {
+      setVideoMuted((prev) => !prev);
+      singleTapTimerRef.current = null;
+    }, 300);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (singleTapTimerRef.current !== null) window.clearTimeout(singleTapTimerRef.current);
+    };
+  }, []);
 
   // Feed/Reels-style autoplay: the video itself plays/pauses based on
   // whether it's actually on-screen, not on a manual tap-to-start — matches
@@ -271,10 +304,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
               muted={videoMuted}
               loop
               playsInline
-              onClick={(e) => {
-                stop(e);
-                setVideoMuted((prev) => !prev);
-              }}
+              onClick={handleVideoTap}
               className="max-h-96 w-full cursor-pointer rounded-xl bg-black"
             />
             <div className="pointer-events-none absolute bottom-2.5 right-2.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white">
@@ -381,6 +411,44 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
           className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-950/90 p-6"
         >
           <img src={post.imageUrl} alt="" className="max-h-full max-w-full rounded-lg object-contain" />
+        </div>
+      )}
+
+      {fullscreenVideoOpen && post.videoUrl && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={(e) => {
+            stop(e);
+            setFullscreenVideoOpen(false);
+          }}
+          className="fixed inset-0 z-[95] flex items-center justify-center bg-black"
+        >
+          <button
+            onClick={(e) => {
+              stop(e);
+              setFullscreenVideoOpen(false);
+            }}
+            aria-label="Close"
+            className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
+            style={{ top: "max(1rem, env(safe-area-inset-top))" }}
+          >
+            <X size={18} />
+          </button>
+          {/* Reels-style: double-tapping opens this specifically to watch the
+              video large and with sound, so it starts unmuted here regardless
+              of the feed card's own (independent) mute state. */}
+          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+          <video
+            src={post.videoUrl}
+            poster={post.videoThumbnailUrl}
+            autoPlay
+            controls
+            loop
+            playsInline
+            onClick={stop}
+            className="max-h-full max-w-full"
+          />
         </div>
       )}
 

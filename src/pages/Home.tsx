@@ -1,10 +1,11 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Search, Sparkles, UserPlus } from "lucide-react";
+import { ArrowRight, Plus, Search, Sparkles, UserPlus } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useLocale } from "../i18n/LocaleContext";
 import { GolfCallCard } from "../components/golfcall/GolfCallCard";
 import { PostCard } from "../components/community/PostCard";
+import { Button } from "../components/ui/Button";
 import { CLICKABLE_CARD_CLASS } from "../components/ui/cardStyles";
 import { firstName, greetingKeyForHour, isThisWeekend } from "../lib/greeting";
 import { MIN_PREFERENCES_FOR_AUTO_MATCH, selectedPreferenceCount } from "../lib/preferenceMatch";
@@ -163,14 +164,19 @@ export function Home() {
       )}
 
       <section>
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex items-center justify-between gap-2">
           <h2 className="text-lg font-bold text-slate-900">{t("community.title")}</h2>
-          <button
-            onClick={() => navigate("/community")}
-            className="text-sm font-semibold text-fairway-700 transition-colors duration-200 hover:text-fairway-800 hover:underline"
-          >
-            {t("common.viewMore")}
-          </button>
+          <div className="flex shrink-0 items-center gap-3">
+            <Button size="sm" icon={<Plus size={14} />} onClick={() => navigate("/community/new")}>
+              {t("community.createPost")}
+            </Button>
+            <button
+              onClick={() => navigate("/community")}
+              className="text-sm font-semibold text-fairway-700 transition-colors duration-200 hover:text-fairway-800 hover:underline"
+            >
+              {t("common.viewMore")}
+            </button>
+          </div>
         </div>
         {recentPosts.length > 0 ? (
           <div className="flex flex-col gap-3">

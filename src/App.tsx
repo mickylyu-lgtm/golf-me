@@ -11,6 +11,7 @@ import { ToastProvider } from "./context/ToastContext";
 import { LocaleProvider, useLocale, LOCALES } from "./i18n/LocaleContext";
 import type { Locale } from "./i18n/LocaleContext";
 import { AppShell } from "./components/layout/AppShell";
+import { ScrollToTop } from "./components/layout/ScrollToTop";
 import { GolfMeLoader } from "./components/loading/GolfMeLoader";
 import { Welcome } from "./pages/Welcome";
 import { Onboarding } from "./pages/Onboarding";
@@ -151,6 +152,7 @@ export default function App() {
           <ToastProvider>
             <AppGate>
               <BrowserRouter>
+              <ScrollToTop />
               <Routes>
                 {/* Standalone, outside both GuestOnly and AuthedLayout — by the
                     time signUpNewGolfer() lands here the session is already
