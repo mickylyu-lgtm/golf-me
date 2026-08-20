@@ -134,7 +134,7 @@ export function GolfCallDetail() {
   }
 
   return (
-    <div className="flex flex-col gap-6 pb-32">
+    <div className="flex flex-col gap-6 pb-6">
       <div className="flex items-center justify-between">
         <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-800">
           <ArrowLeft size={16} /> {t("golfCallDetail.back")}
@@ -322,34 +322,32 @@ export function GolfCallDetail() {
       )}
 
       {!isCompleted && !isCancelled && (
-        // Fixed to the true bottom of the screen (not `sticky`, which was
-        // pinning it mid-scroll and covering later content on longer
-        // rounds) — the page's own bottom padding keeps later content
-        // (mark completed, reviews) clear of it.
-        <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-[45] px-4 sm:bottom-4 sm:px-6">
-          <div className="mx-auto w-full max-w-3xl">
-            {isHost ? (
-              <Button variant="danger" fullWidth onClick={() => setCancelConfirmOpen(true)}>
-                {t("golfCallDetail.cancelGolfCall")}
-              </Button>
-            ) : isJoined ? (
-              <Button variant="outline" fullWidth onClick={() => setLeaveConfirmOpen(true)}>
-                {t("golfCallDetail.leaveRound")}
-              </Button>
-            ) : isPending ? (
-              <Button variant="outline" fullWidth onClick={() => cancelJoinRequest(call.id)}>
-                {t("golfCallDetail.cancelRequest")}
-              </Button>
-            ) : isFull ? (
-              <Button disabled fullWidth>
-                {t("golfCallDetail.foursomeFull")}
-              </Button>
-            ) : (
-              <Button size="lg" fullWidth onClick={() => setJoinConfirmOpen(true)}>
-                {call.joinMode === "instant" ? t("golfCallDetail.joinRound") : t("golfCallDetail.requestToJoinButton")}
-              </Button>
-            )}
-          </div>
+        // A normal, non-fixed block right where the form/content ends —
+        // only reachable by scrolling to it, not pinned to the screen the
+        // whole time. Previously `fixed`, which kept it visible over the
+        // content constantly instead of just sitting at the natural end.
+        <div>
+          {isHost ? (
+            <Button variant="danger" fullWidth onClick={() => setCancelConfirmOpen(true)}>
+              {t("golfCallDetail.cancelGolfCall")}
+            </Button>
+          ) : isJoined ? (
+            <Button variant="outline" fullWidth onClick={() => setLeaveConfirmOpen(true)}>
+              {t("golfCallDetail.leaveRound")}
+            </Button>
+          ) : isPending ? (
+            <Button variant="outline" fullWidth onClick={() => cancelJoinRequest(call.id)}>
+              {t("golfCallDetail.cancelRequest")}
+            </Button>
+          ) : isFull ? (
+            <Button disabled fullWidth>
+              {t("golfCallDetail.foursomeFull")}
+            </Button>
+          ) : (
+            <Button size="lg" fullWidth onClick={() => setJoinConfirmOpen(true)}>
+              {call.joinMode === "instant" ? t("golfCallDetail.joinRound") : t("golfCallDetail.requestToJoinButton")}
+            </Button>
+          )}
         </div>
       )}
 

@@ -78,7 +78,7 @@ export function MatchPreferencesDetail() {
   }
 
   return (
-    <div className="flex flex-col gap-6 pb-32">
+    <div className="flex flex-col gap-6 pb-6">
       <button
         onClick={() => navigate(-1)}
         className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
@@ -142,17 +142,16 @@ export function MatchPreferencesDetail() {
         />
       )}
 
-      {/* Fixed to the true bottom of the screen (not `sticky`, which was
-          pinning it mid-scroll and covering the Round/Game Format section
-          below it on longer content) — disabled until something actually
-          changed, the single, explicit "yes, this is saved now" moment the
-          live-save version didn't have. */}
-      <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-[45] px-4 sm:bottom-4 sm:px-6">
-        <div className="mx-auto w-full max-w-3xl">
-          <Button size="lg" fullWidth disabled={!isDirty || saving} onClick={handleSave}>
-            {saving ? t("preferences.saving") : t("common.saveChanges")}
-          </Button>
-        </div>
+      {/* A normal, non-fixed/non-sticky block at the end of the page —
+          deliberately only reachable by scrolling to it (not always
+          visible), the single, explicit "yes, this is saved now" moment
+          the live-save version didn't have. Previously `fixed` to the
+          screen bottom, which stayed visible over the content the whole
+          time instead of just sitting where the form ends. */}
+      <div className="mt-4">
+        <Button size="lg" fullWidth disabled={!isDirty || saving} onClick={handleSave}>
+          {saving ? t("preferences.saving") : t("common.saveChanges")}
+        </Button>
       </div>
     </div>
   );
