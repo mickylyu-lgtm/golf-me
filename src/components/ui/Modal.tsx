@@ -29,7 +29,7 @@ export function Modal({ title, onClose, children, footer }: ModalProps) {
       }}
     >
       <div
-        className="animate-slide-up flex max-h-[88vh] w-full flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:max-w-md sm:rounded-3xl"
+        className="animate-slide-up flex max-h-[88dvh] w-full flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:max-w-md sm:rounded-3xl"
         role="dialog"
         aria-modal="true"
       >
