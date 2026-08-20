@@ -53,26 +53,49 @@ export function Onboarding() {
         </button>
       </div>
 
-      {/* key={step} forces a remount on every step change, so the gentle
-          slide-up-in (same animation/timing as the dashboard's Reveal
-          sections) replays each time instead of only ever playing once on
-          the first screen. */}
+      {/* key={step} forces a remount on every step change, so the entrance
+          replays each time instead of only ever playing once on the first
+          screen. Slower/longer than the dashboard's own Reveal timing
+          (2.2s vs 1.1s, set directly rather than via the animate-slide-up-
+          slow utility class so the duration isn't locked to that class's
+          own value) — a full-screen step swap reads as an abrupt cut at
+          1.1s in a way a section scrolling into view alongside older
+          content doesn't. */}
       <div key={step} className="flex flex-1 flex-col items-center justify-center gap-5 text-center">
         <span
-          className="flex h-16 w-16 items-center justify-center rounded-2xl bg-fairway-50 text-fairway-600 animate-slide-up-slow"
-          style={{ animationFillMode: "backwards" }}
+          className="flex h-16 w-16 items-center justify-center rounded-2xl bg-fairway-50 text-fairway-600"
+          style={{
+            animationName: "slide-up-gentle",
+            animationDuration: "2.2s",
+            animationTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)",
+            animationFillMode: "backwards",
+          }}
         >
           <Icon size={30} />
         </span>
-        <div className="animate-slide-up-slow" style={{ animationDelay: "150ms", animationFillMode: "backwards" }}>
+        <div
+          style={{
+            animationName: "slide-up-gentle",
+            animationDuration: "2.2s",
+            animationTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)",
+            animationDelay: "300ms",
+            animationFillMode: "backwards",
+          }}
+        >
           <h1 className="text-2xl font-extrabold text-slate-900">{t(screen.titleKey)}</h1>
           <p className="mx-auto mt-2 max-w-xs text-sm text-slate-500">{t(screen.bodyKey)}</p>
         </div>
 
         {"credibilityNote" in screen && screen.credibilityNote && (
           <div
-            className="mx-auto max-w-xs rounded-2xl border border-slate-100 bg-white p-4 text-left animate-slide-up-slow"
-            style={{ animationDelay: "300ms", animationFillMode: "backwards" }}
+            className="mx-auto max-w-xs rounded-2xl border border-slate-100 bg-white p-4 text-left"
+            style={{
+              animationName: "slide-up-gentle",
+              animationDuration: "2.2s",
+              animationTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)",
+              animationDelay: "600ms",
+              animationFillMode: "backwards",
+            }}
           >
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t("onboarding.credibilityNoteTitle")}</p>
             <p className="mt-1.5 text-xs leading-relaxed text-slate-500">{t("onboarding.credibilityNoteBody")}</p>
