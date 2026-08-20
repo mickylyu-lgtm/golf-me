@@ -51,6 +51,7 @@ import { PostDetail } from "./pages/PostDetail";
 import { CommunityGuidelines } from "./pages/CommunityGuidelines";
 import { SavedPosts } from "./pages/SavedPosts";
 import { CoachReviewQueue } from "./pages/CoachReviewQueue";
+import { PrivacyPolicy } from "./pages/PrivacyPolicy";
 import { AdminReviewers } from "./pages/AdminReviewers";
 import { AdminDashboard } from "./pages/AdminDashboard";
 import { CoachInvite } from "./pages/CoachInvite";
@@ -168,6 +169,11 @@ export default function App() {
                     AuthedLayout (would bounce a logged-out one to /welcome
                     before the token is ever captured). */}
                 <Route path="/coach-invite/:token" element={<CoachInvite />} />
+                {/* Standalone for the same reason as /ready and
+                    /coach-invite — must be viewable by someone who doesn't
+                    have an account yet, and by Apple/Google app reviewers,
+                    neither of whom will ever have a session. */}
+                <Route path="/privacy" element={<PrivacyPolicy />} />
                 <Route element={<GuestOnly />}>
                   <Route path="/welcome" element={<Welcome />} />
                   <Route path="/onboarding" element={<Onboarding />} />

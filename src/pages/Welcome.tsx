@@ -164,6 +164,11 @@ export function Welcome() {
       <footer className="px-6 py-6 text-center text-xs text-slate-400">
         <GolfMeIcon size={14} className="mx-auto mb-2 opacity-60" />
         {new Date().getFullYear()} <HighlightGolfMe text="GolfMe" />
+        <div className="mt-1">
+          <button onClick={() => navigate("/privacy")} className="hover:text-slate-600 hover:underline">
+            Privacy Policy
+          </button>
+        </div>
       </footer>
     </div>
   );
