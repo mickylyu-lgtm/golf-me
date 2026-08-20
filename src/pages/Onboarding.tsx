@@ -55,56 +55,27 @@ export function Onboarding() {
 
       {/* key={step} forces a remount on every step change, so the entrance
           replays each time instead of only ever playing once on the first
-          screen. Slower/longer than the dashboard's own Reveal timing
-          (2.2s vs 1.1s, set directly rather than via the animate-slide-up-
-          slow utility class so the duration isn't locked to that class's
-          own value) — a full-screen step swap reads as an abrupt cut at
-          1.1s in a way a section scrolling into view alongside older
-          content doesn't.
-          Every element (including the first) carries a nonzero
-          animation-delay — a desktop browser can commit the new DOM and
-          paint the first frame in the same tick often enough that a
-          zero-delay animation-fill-mode:backwards element skips visibly
-          showing its 0% state at all, reading as an instant pop instead of
-          a fade on a fast machine (mobile's slower paint pipeline was
-          incidentally giving it that gap for free). A small delay
-          guarantees a real frame at the starting state everywhere. */}
+          screen. Mobile only (see .onboarding-enter in index.css) — desktop
+          rendering was reading as an abrupt pop instead of a fade for
+          reasons that resisted a couple of real fix attempts, so it's off
+          there for now rather than keep guessing without a way to test on
+          an actual desktop browser. */}
       <div key={step} className="flex flex-1 flex-col items-center justify-center gap-5 text-center">
         <span
-          className="flex h-16 w-16 items-center justify-center rounded-2xl bg-fairway-50 text-fairway-600"
-          style={{
-            animationName: "slide-up-gentle",
-            animationDuration: "2.2s",
-            animationTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)",
-            animationDelay: "60ms",
-            animationFillMode: "backwards",
-          }}
+          className="onboarding-enter flex h-16 w-16 items-center justify-center rounded-2xl bg-fairway-50 text-fairway-600"
+          style={{ "--onboarding-delay": "60ms" } as React.CSSProperties}
         >
           <Icon size={30} />
         </span>
-        <div
-          style={{
-            animationName: "slide-up-gentle",
-            animationDuration: "2.2s",
-            animationTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)",
-            animationDelay: "360ms",
-            animationFillMode: "backwards",
-          }}
-        >
+        <div className="onboarding-enter" style={{ "--onboarding-delay": "360ms" } as React.CSSProperties}>
           <h1 className="text-2xl font-extrabold text-slate-900">{t(screen.titleKey)}</h1>
           <p className="mx-auto mt-2 max-w-xs text-sm text-slate-500">{t(screen.bodyKey)}</p>
         </div>
 
         {"credibilityNote" in screen && screen.credibilityNote && (
           <div
-            className="mx-auto max-w-xs rounded-2xl border border-slate-100 bg-white p-4 text-left"
-            style={{
-              animationName: "slide-up-gentle",
-              animationDuration: "2.2s",
-              animationTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)",
-              animationDelay: "660ms",
-              animationFillMode: "backwards",
-            }}
+            className="onboarding-enter mx-auto max-w-xs rounded-2xl border border-slate-100 bg-white p-4 text-left"
+            style={{ "--onboarding-delay": "660ms" } as React.CSSProperties}
           >
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t("onboarding.credibilityNoteTitle")}</p>
             <p className="mt-1.5 text-xs leading-relaxed text-slate-500">{t("onboarding.credibilityNoteBody")}</p>

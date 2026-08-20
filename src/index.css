@@ -250,6 +250,25 @@ body {
   .animate-dust-puff {
     animation: var(--animate-dust-puff);
   }
+  /* Onboarding's per-step entrance — mobile only. Desktop rendering was
+     reading as an abrupt pop instead of a fade for reasons that resisted a
+     couple of real fix attempts (fill-mode timing, delay tuning); rather
+     than keep guessing blind without a way to test on an actual desktop
+     browser, it's just off there for now — content appears immediately,
+     same as any other page. Delay is per-element via the --onboarding-delay
+     custom property, set inline where this class is used. */
+  .onboarding-enter {
+    animation-name: slide-up-gentle;
+    animation-duration: 2.2s;
+    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+    animation-delay: var(--onboarding-delay, 0ms);
+    animation-fill-mode: backwards;
+  }
+  @media (min-width: 640px) {
+    .onboarding-enter {
+      animation: none;
+    }
+  }
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
