@@ -39,6 +39,24 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Double-tapping a playing feed video into fullscreen should keep playing
+  // it, not drop back to a paused poster the golfer has to tap again —
+  // matches how the feed card itself already behaves (reels-style autoplay).
+  useEffect(() => {
+    if (variant !== "lightbox") return;
+    const item = media[initialIndex];
+    if (!item || item.type !== "video") return;
+    const el = videoElsRef.current.get(item.id);
+    if (!el) return;
+    el.play()
+      .then(() => setPlayingIds((prev) => new Set(prev).add(item.id)))
+      .catch(() => {
+        // Autoplay-with-sound can still be blocked in some contexts — not
+        // an error state, the play/pause overlay just stays visible.
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     return () => {
       if (singleTapTimerRef.current !== null) window.clearTimeout(singleTapTimerRef.current);
