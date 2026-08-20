@@ -86,7 +86,7 @@ export function FullscreenMediaViewer({ media, initialIndex = 0, onClose }: Full
           onClose();
         }}
         aria-label="Close"
-        className="absolute right-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
+        className="absolute right-4 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
         style={{ top: "max(1rem, env(safe-area-inset-top))" }}
       >
         <X size={18} />
@@ -97,7 +97,7 @@ export function FullscreenMediaViewer({ media, initialIndex = 0, onClose }: Full
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
         onTouchCancel={onTouchEnd}
-        className={`h-full max-h-[85dvh] w-full max-w-2xl ${dragging ? "" : "transition-transform duration-200 ease-out"}`}
+        className={`h-[85dvh] w-full max-w-2xl ${dragging ? "" : "transition-transform duration-200 ease-out"}`}
         style={{ transform: `translateY(${dragY}px)` }}
       >
         <MediaCarousel media={media} variant="lightbox" initialIndex={initialIndex} />

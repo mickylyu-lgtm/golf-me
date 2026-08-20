@@ -120,7 +120,7 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
       <div
         ref={trackRef}
         onScroll={handleScroll}
-        className={`no-scrollbar flex w-full snap-x snap-mandatory overflow-x-auto scroll-smooth ${variant === "card" ? "rounded-xl" : "h-full items-center"}`}
+        className={`no-scrollbar flex w-full snap-x snap-mandatory overflow-x-auto scroll-smooth ${variant === "card" ? "rounded-xl" : "h-[85dvh]"}`}
       >
         {media.map((item, i) =>
           item.type === "video" ? (
@@ -154,7 +154,7 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
               // which WebKit has a history of not respecting — that was
               // pinning landscape clips to the top-left instead of
               // centering them, reading as mostly empty black below.
-              <div key={item.id} className="flex h-full w-full shrink-0 snap-center items-center justify-center">
+              <div key={item.id} className="grid h-full w-full shrink-0 snap-center place-items-center">
                 <div className="relative inline-block">
                   {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
                   <video
@@ -219,7 +219,7 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
               onClick={() => handleCardTap(i)}
             />
           ) : (
-            <div key={item.id} className="flex h-full w-full shrink-0 snap-center items-center justify-center">
+            <div key={item.id} className="grid h-full w-full shrink-0 snap-center place-items-center">
               <img src={item.url} alt="" loading="lazy" className="block max-h-[75dvh] max-w-full" />
             </div>
           ),
