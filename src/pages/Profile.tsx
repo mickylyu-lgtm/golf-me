@@ -192,6 +192,7 @@ export function Profile() {
         />
         <ProfileRow icon={<SlidersHorizontal size={16} />} label={t("profile.matchPreferences")} onClick={() => navigate("/profile/preferences")} />
         <ProfileRow icon={<SettingsIcon size={16} />} label={t("profile.settings")} onClick={() => navigate("/settings")} />
+        {isCoachReviewer && <ProfileRow icon={<ShieldCheck size={16} />} label="Coach Review Queue" onClick={() => navigate("/coach-reviews")} />}
         {isAdmin && (
           <>
             <ProfileRow icon={<ShieldCheck size={16} />} label="Coach Reviewers" onClick={() => navigate("/admin/coach-reviewers")} />

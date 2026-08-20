@@ -50,6 +50,7 @@ import { CreatePost } from "./pages/CreatePost";
 import { PostDetail } from "./pages/PostDetail";
 import { CommunityGuidelines } from "./pages/CommunityGuidelines";
 import { SavedPosts } from "./pages/SavedPosts";
+import { CoachReviewQueue } from "./pages/CoachReviewQueue";
 import { AdminReviewers } from "./pages/AdminReviewers";
 import { AdminDashboard } from "./pages/AdminDashboard";
 import { CoachInvite } from "./pages/CoachInvite";
@@ -203,6 +204,7 @@ export default function App() {
                   <Route path="/community/guidelines" element={<CommunityGuidelines />} />
                   <Route path="/community/:id" element={<PostDetail />} />
                   <Route path="/saved-posts" element={<SavedPosts />} />
+                  <Route path="/coach-reviews" element={<CoachReviewQueue />} />
                   {/* Not linked from any nav — reachable only by a direct
                       hit, and gated on the caller's own admin role inside
                       the page itself (re-verified server-side by every RPC
