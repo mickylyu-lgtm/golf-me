@@ -133,6 +133,10 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
   const [allProfiles, setAllProfiles] = useState<GolferProfile[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const fetchingRef = useRef(false);
+  // conversation_id -> Date.now() of the last successful markConversationRead
+  // call, so a caller that ends up invoking it repeatedly in a tight loop
+  // (see markConversationRead below) can't turn into a request storm.
+  const recentlyMarkedReadRef = useRef<Map<string, number>>(new Map());
   // A realtime event that arrives while a refetch is already in flight used
   // to be silently dropped (fetchingRef.current just bailed out early) with
   // nothing to trigger a follow-up — a message could land and, in a fast
@@ -396,6 +400,15 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       if (!selfId) return;
       const convId = conversationIdWith(otherId);
       if (!convId) return;
+      // Defense in depth against any caller that ends up invoking this
+      // repeatedly in a tight loop (e.g. an effect re-firing because this
+      // function's own identity changed) — skipping a call this soon after
+      // the last successful one for the same conversation is always safe
+      // (last_read_at a couple seconds stale is never wrong in a way that
+      // matters) and turns a potential request storm into a no-op.
+      const lastMarked = recentlyMarkedReadRef.current.get(convId);
+      if (lastMarked && Date.now() - lastMarked < 2000) return;
+      recentlyMarkedReadRef.current.set(convId, Date.now());
       const { error } = await supabase
         .from("conversation_participants")
         .update({ last_read_at: new Date().toISOString() })

@@ -43,9 +43,26 @@ export function DirectMessageThread() {
   const blocked = id ? isBlocked(id) : false;
   const eligible = id ? canMessage(id) : false;
 
+  // markConversationRead's own identity changes on every refetch (it's
+  // built from conversationIdWith, which depends on the `participants`
+  // array — a brand-new array reference each refetch even when the data is
+  // identical), so it can't safely sit in this effect's dependency array:
+  // doing so created a real feedback loop — mark-read triggers a refetch,
+  // the refetch produces a new participants array, that gives
+  // markConversationRead a new identity, which re-triggers this effect,
+  // which marks read again... Confirmed live in the request logs as a
+  // sustained burst of dozens of requests/second while a thread was open,
+  // which is almost certainly what was making notifications and incoming
+  // messages look like they'd stopped working (the connection was saturated
+  // re-fetching the same thread over and over). A ref sidesteps this: the
+  // effect only re-runs for the reasons that actually matter (opening a
+  // different thread, or a genuinely new message arriving), while always
+  // calling whatever the latest markConversationRead happens to be.
+  const markConversationReadRef = useRef(markConversationRead);
+  markConversationReadRef.current = markConversationRead;
   useEffect(() => {
-    if (id) markConversationRead(id);
-  }, [id, messages.length, markConversationRead]);
+    if (id) markConversationReadRef.current(id);
+  }, [id, messages.length]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
