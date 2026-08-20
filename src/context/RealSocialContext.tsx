@@ -267,7 +267,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     window.addEventListener("focus", onVisible);
     const pollInterval = window.setInterval(() => {
       if (document.visibilityState === "visible") refetch();
-    }, 25000);
+    }, 6000);
 
     return () => {
       supabase.removeChannel(channel);
