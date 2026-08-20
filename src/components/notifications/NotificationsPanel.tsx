@@ -22,24 +22,16 @@ const ICONS: Record<NotificationType, typeof Bell> = {
   booking_proof_removed: ShieldOff,
 };
 
-// A read notification stays visible for a while after being read, then
-// drops out of the panel on its own — keeps the inbox from either
-// vanishing an item the instant it's tapped or piling up read items
-// forever. Purely a display filter: the underlying row (and its read
-// state) is untouched, so this recomputes fresh every time the panel is
-// opened (it's only mounted while open, see TopBar.tsx) without needing a
-// live-updating timer.
-const READ_NOTIFICATION_VISIBLE_MS = 2 * 60 * 60 * 1000;
-
 export function NotificationsPanel({ onClose }: { onClose: () => void }) {
   const { notifications: allNotifications, markNotificationRead, markAllNotificationsRead } = useData();
   const navigate = useNavigate();
   const { t, locale } = useLocale();
 
-  const now = Date.now();
-  const notifications = allNotifications.filter(
-    (n) => !n.read || !n.readAt || now - new Date(n.readAt).getTime() < READ_NOTIFICATION_VISIBLE_MS,
-  );
+  // A read notification drops out of the panel immediately rather than
+  // lingering — keeps the inbox from stacking up with things you've
+  // already seen. Purely a display filter: the underlying row (and its
+  // read state) is untouched.
+  const notifications = allNotifications.filter((n) => !n.read);
 
   function open(n: AppNotification) {
     markNotificationRead(n.id);
