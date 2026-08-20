@@ -1,6 +1,10 @@
 import type { TranslationKey } from "./en";
 
 export const zhCN: Record<TranslationKey, string> = {
+  "a2hs.title": "安装 GolfMe",
+  "a2hs.iosInstructions": "点击分享按钮，然后选择「添加到主屏幕」— 可保持登录状态。",
+  "a2hs.androidInstructions": "安装应用即可保持登录状态。",
+  "a2hs.install": "安装",
   "common.back": "返回",
   "common.next": "下一步",
   "common.save": "保存",

@@ -5,6 +5,7 @@ import { useData } from "../context/DataContext";
 import { useLocale } from "../i18n/LocaleContext";
 import { GolfCallCard } from "../components/golfcall/GolfCallCard";
 import { PostCard } from "../components/community/PostCard";
+import { AddToHomeScreenPrompt } from "../components/layout/AddToHomeScreenPrompt";
 import { Button } from "../components/ui/Button";
 import { CLICKABLE_CARD_CLASS } from "../components/ui/cardStyles";
 import { firstName, greetingKeyForHour, isThisWeekend } from "../lib/greeting";
@@ -79,6 +80,8 @@ export function Home() {
         </p>
         <p className="mt-0.5 text-lg font-bold text-slate-900">{subtitle}</p>
       </div>
+
+      <AddToHomeScreenPrompt />
 
       <div className="flex flex-col gap-3">
         <button

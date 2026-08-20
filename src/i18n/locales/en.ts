@@ -2,6 +2,12 @@
 // key. Every other locale file is typed against `keyof typeof en`, so a
 // missing key in any language is a compile error, not a silent fallback.
 export const en = {
+  // Add to Home Screen prompt
+  "a2hs.title": "Install GolfMe",
+  "a2hs.iosInstructions": "Tap Share, then \"Add to Home Screen\" — keeps you signed in.",
+  "a2hs.androidInstructions": "Install the app so you stay signed in.",
+  "a2hs.install": "Install",
+
   // Common / shared across many screens
   "common.back": "Back",
   "common.next": "Next",

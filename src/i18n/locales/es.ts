@@ -1,6 +1,10 @@
 import type { TranslationKey } from "./en";
 
 export const es: Record<TranslationKey, string> = {
+  "a2hs.title": "Instalar GolfMe",
+  "a2hs.iosInstructions": "Toca Compartir y luego \"Agregar a pantalla de inicio\" — te mantiene conectado.",
+  "a2hs.androidInstructions": "Instala la app para mantenerte conectado.",
+  "a2hs.install": "Instalar",
   "common.back": "Atrás",
   "common.next": "Siguiente",
   "common.save": "Guardar",

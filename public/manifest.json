@@ -4,8 +4,8 @@
   "description": "Golf Me — Find your next foursome.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#faf8f2",
-  "theme_color": "#1e5232",
+  "background_color": "#faf9f6",
+  "theme_color": "#166534",
   "icons": [
     { "src": "/icons/favicon-16-v2.png", "sizes": "16x16", "type": "image/png" },
     { "src": "/icons/favicon-32-v2.png", "sizes": "32x32", "type": "image/png" },

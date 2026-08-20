@@ -1,6 +1,10 @@
 import type { TranslationKey } from "./en";
 
 export const ko: Record<TranslationKey, string> = {
+  "a2hs.title": "GolfMe 설치하기",
+  "a2hs.iosInstructions": "공유 버튼을 누른 후 \"홈 화면에 추가\"를 선택하세요 — 로그인 상태가 유지됩니다.",
+  "a2hs.androidInstructions": "앱을 설치하면 로그인 상태가 유지됩니다.",
+  "a2hs.install": "설치",
   "common.back": "뒤로",
   "common.next": "다음",
   "common.save": "저장",
