@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { MessageSquareText, Plus, Search } from "lucide-react";
+import { ArrowLeft, MessageSquareText, Plus, Search } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useLocale } from "../i18n/LocaleContext";
 import { Button } from "../components/ui/Button";
@@ -59,6 +59,13 @@ export function Community() {
 
   return (
     <div className="flex flex-col gap-5 pb-6">
+      <button
+        onClick={() => navigate(-1)}
+        className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
+      >
+        <ArrowLeft size={16} /> {t("common.back")}
+      </button>
+
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-slate-900">{t("community.title")}</h1>
