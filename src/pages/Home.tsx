@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, MessageCircle, Plus, Search, Sparkles, UserPlus } from "lucide-react";
+import { ArrowRight, Plus, Search, Sparkles, UserPlus } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useLocale } from "../i18n/LocaleContext";
 import { GolfCallCard } from "../components/golfcall/GolfCallCard";
@@ -23,7 +23,7 @@ const PRIMARY_ACTION_CLASS =
   "rounded-2xl bg-fairway-600 shadow-sm shadow-fairway-900/10 transition-all duration-200 ease-out hover:-translate-y-0.5 hover:bg-fairway-700 hover:shadow-md active:translate-y-0 active:bg-fairway-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:hover:translate-y-0";
 
 export function Home() {
-  const { currentUser, golfCalls, visiblePosts, caddieAnalyses, dmConversations } = useData();
+  const { currentUser, golfCalls, visiblePosts, caddieAnalyses } = useData();
   const { t, locale } = useLocale();
   const navigate = useNavigate();
 
@@ -71,8 +71,6 @@ export function Home() {
   // true rather than needing separate dismiss-state to avoid nagging.
   const preferencesRemaining = MIN_PREFERENCES_FOR_AUTO_MATCH - selectedPreferenceCount(currentUser);
 
-  const unreadConversations = useMemo(() => dmConversations.filter((c) => c.unread), [dmConversations]);
-
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -81,26 +79,6 @@ export function Home() {
         </p>
         <p className="mt-0.5 text-lg font-bold text-slate-900">{subtitle}</p>
       </div>
-
-      {unreadConversations.length > 0 && (
-        <button
-          onClick={() => navigate("/messages")}
-          className={`flex w-full items-center gap-3 p-4 text-left ${CLICKABLE_CARD_CLASS}`}
-        >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-fairway-50 text-fairway-700">
-            <MessageCircle size={18} />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-base font-bold text-slate-900">
-              {unreadConversations.length === 1
-                ? t("home.unreadMessageSingular", { name: unreadConversations[0].otherGolfer.name.split(" ")[0] })
-                : t("home.unreadMessagesPlural", { count: unreadConversations.length })}
-            </span>
-            <span className="block text-sm text-slate-500">{t("home.unreadMessagesSubtitle")}</span>
-          </span>
-          <ArrowRight size={16} className="shrink-0 text-slate-400" />
-        </button>
-      )}
 
       <div className="flex flex-col gap-3">
         <button

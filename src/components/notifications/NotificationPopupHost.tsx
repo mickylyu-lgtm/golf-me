@@ -55,6 +55,13 @@ export function NotificationPopupHost() {
   pathnameRef.current = location.pathname;
   const [queue, setQueue] = useState<AppNotification[]>([]);
   const [visible, setVisible] = useState(false);
+  // Swipe-up-to-dismiss, matching how a native phone notification banner
+  // behaves — the banner follows the finger upward (downward drag resists,
+  // since there's nowhere for it to go) and either dismisses or snaps back
+  // once released, based on distance/speed.
+  const [dragY, setDragY] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const dragStateRef = useRef<{ startY: number; startTime: number; lastY: number } | null>(null);
 
   useEffect(() => {
     // Capture the baseline once, after a grace period, from whatever
@@ -116,12 +123,45 @@ export function NotificationPopupHost() {
 
   function dismissNow() {
     setVisible(false);
+    setDragY(0);
     setTimeout(() => setQueue((prev) => prev.slice(1)), 220);
   }
 
   function handleTap() {
     navigate(current.linkTo);
     dismissNow();
+  }
+
+  function onTouchStart(e: React.TouchEvent) {
+    const t = e.touches[0];
+    dragStateRef.current = { startY: t.clientY, startTime: Date.now(), lastY: t.clientY };
+    setDragging(true);
+  }
+
+  function onTouchMove(e: React.TouchEvent) {
+    const state = dragStateRef.current;
+    if (!state) return;
+    const t = e.touches[0];
+    state.lastY = t.clientY;
+    const dy = t.clientY - state.startY;
+    // Only follows upward drags; a downward pull just resists (nothing to
+    // reveal above it) rather than dragging the banner off past its resting spot.
+    setDragY(dy < 0 ? dy : dy / 4);
+  }
+
+  function onTouchEnd() {
+    const state = dragStateRef.current;
+    dragStateRef.current = null;
+    setDragging(false);
+    if (!state) return;
+    const totalDy = state.lastY - state.startY;
+    const elapsedMs = Math.max(1, Date.now() - state.startTime);
+    const velocity = Math.abs(totalDy) / elapsedMs;
+    if (totalDy < -24 || (totalDy < 0 && velocity > 0.5)) {
+      dismissNow();
+    } else {
+      setDragY(0);
+    }
   }
 
   const actor = current.actorId ? getGolfer(current.actorId) : undefined;
@@ -134,8 +174,15 @@ export function NotificationPopupHost() {
       <div
         role="status"
         aria-live="polite"
-        className={`w-full max-w-sm transition-all duration-200 ease-out ${visible ? "translate-y-0 opacity-100" : "-translate-y-2 opacity-0"}`}
-        style={{ pointerEvents: "auto" }}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        onTouchCancel={onTouchEnd}
+        className={`w-full max-w-sm ${dragging ? "" : "transition-all duration-200 ease-out"} ${visible ? "opacity-100" : "-translate-y-2 opacity-0"}`}
+        style={{
+          pointerEvents: "auto",
+          transform: visible ? `translateY(${dragY}px)` : undefined,
+        }}
       >
         <button
           onClick={handleTap}
