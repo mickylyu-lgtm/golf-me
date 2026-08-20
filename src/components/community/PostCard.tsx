@@ -16,9 +16,8 @@ import {
   Video,
   Volume2,
   VolumeX,
-  X,
 } from "lucide-react";
-import type { CommunityPost } from "../../types";
+import type { CommunityPost, PostMediaItem } from "../../types";
 import { useData } from "../../context/DataContext";
 import { useToast } from "../../context/ToastContext";
 import { Avatar } from "../ui/Avatar";
@@ -30,6 +29,7 @@ import { CLICKABLE_CARD_CLASS } from "../ui/cardStyles";
 import { GolfCallCard } from "../golfcall/GolfCallCard";
 import { SwingAnalysisPanel } from "./SwingAnalysisPanel";
 import { MediaCarousel } from "./MediaCarousel";
+import { FullscreenMediaViewer } from "./FullscreenMediaViewer";
 import { formatRelativeTime } from "../../lib/format";
 import { postCategoryLabel } from "../../lib/enumLabels";
 import { areaForCourse } from "../../lib/courses";
@@ -68,10 +68,8 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
   const [reportOpen, setReportOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
-  const [imageOpen, setImageOpen] = useState(false);
   const [mediaLightboxIndex, setMediaLightboxIndex] = useState<number | null>(null);
   const [videoMuted, setVideoMuted] = useState(true);
-  const [fullscreenVideoOpen, setFullscreenVideoOpen] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const lastVideoTapRef = useRef(0);
   const singleTapTimerRef = useRef<number | null>(null);
@@ -90,7 +88,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
         window.clearTimeout(singleTapTimerRef.current);
         singleTapTimerRef.current = null;
       }
-      setFullscreenVideoOpen(true);
+      setMediaLightboxIndex(0);
       return;
     }
     singleTapTimerRef.current = window.setTimeout(() => {
@@ -173,6 +171,18 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
   // open permissions question the brief flagged, so Ask Caddie is scoped
   // to the post's own author until that's revisited.
   const existingCaddieAnalysis = isOwn ? caddieAnalyses.find((a) => a.sourcePostId === post.id) : undefined;
+
+  // Normalizes every post's media into one shape for the fullscreen viewer
+  // — a multi-item carousel, a swing post's single video, or a legacy
+  // single-photo post's imageUrl, whichever one this post actually has.
+  const displayMedia: PostMediaItem[] =
+    post.media && post.media.length > 0
+      ? post.media
+      : isSwingPost && post.videoUrl
+        ? [{ id: "swing-video", type: "video", url: post.videoUrl, thumbnailUrl: post.videoThumbnailUrl }]
+        : post.imageUrl
+          ? [{ id: "legacy-image", type: "image", url: post.imageUrl }]
+          : [];
 
   return (
     <div
@@ -262,22 +272,10 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
 
       <p className="whitespace-pre-wrap text-sm text-slate-700">{post.text}</p>
 
-      {post.media && post.media.length > 0 ? (
+      {!isSwingPost && displayMedia.length > 0 && (
         <div onClick={stop} className="overflow-hidden rounded-xl border border-slate-100">
-          <MediaCarousel media={post.media} variant="card" onItemClick={(i) => setMediaLightboxIndex(i)} />
+          <MediaCarousel media={displayMedia} variant="card" onItemClick={(i) => setMediaLightboxIndex(i)} />
         </div>
-      ) : (
-        post.imageUrl && (
-          <button
-            onClick={(e) => {
-              stop(e);
-              setImageOpen(true);
-            }}
-            className="overflow-hidden rounded-xl border border-slate-100"
-          >
-            <img src={post.imageUrl} alt="" className="max-h-80 w-full object-cover" loading="lazy" />
-          </button>
-        )
       )}
 
       {isSwingPost && post.videoUrl && (
@@ -382,81 +380,9 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
         </div>
       </div>
 
-      {imageOpen && post.imageUrl && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          onClick={(e) => {
-            stop(e);
-            setImageOpen(false);
-          }}
-          className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-950/90 p-6"
-        >
-          <img src={post.imageUrl} alt="" className="max-h-full max-w-full rounded-lg object-contain" />
-        </div>
-      )}
-
-      {mediaLightboxIndex !== null && post.media && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          onClick={(e) => {
-            stop(e);
-            setMediaLightboxIndex(null);
-          }}
-          className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-950/90 p-6"
-        >
-          <button
-            onClick={(e) => {
-              stop(e);
-              setMediaLightboxIndex(null);
-            }}
-            aria-label={t("common.close")}
-            className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white"
-          >
-            <X size={16} />
-          </button>
-          <div className="h-full max-h-[80vh] w-full max-w-2xl" onClick={stop}>
-            <MediaCarousel media={post.media} variant="lightbox" initialIndex={mediaLightboxIndex} />
-          </div>
-        </div>
-      )}
-
-      {fullscreenVideoOpen && post.videoUrl && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          onClick={(e) => {
-            stop(e);
-            setFullscreenVideoOpen(false);
-          }}
-          className="fixed inset-0 z-[95] flex items-center justify-center bg-black"
-        >
-          <button
-            onClick={(e) => {
-              stop(e);
-              setFullscreenVideoOpen(false);
-            }}
-            aria-label="Close"
-            className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
-            style={{ top: "max(1rem, env(safe-area-inset-top))" }}
-          >
-            <X size={18} />
-          </button>
-          {/* Reels-style: double-tapping opens this specifically to watch the
-              video large and with sound, so it starts unmuted here regardless
-              of the feed card's own (independent) mute state. */}
-          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-          <video
-            src={post.videoUrl}
-            poster={post.videoThumbnailUrl}
-            autoPlay
-            controls
-            loop
-            playsInline
-            onClick={stop}
-            className="max-h-full max-w-full"
-          />
+      {mediaLightboxIndex !== null && displayMedia.length > 0 && (
+        <div onClick={stop}>
+          <FullscreenMediaViewer media={displayMedia} initialIndex={mediaLightboxIndex} onClose={() => setMediaLightboxIndex(null)} />
         </div>
       )}
 
