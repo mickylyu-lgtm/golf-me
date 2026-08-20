@@ -34,7 +34,7 @@ export function GolfMeLogo({
         className={`flex shrink-0 items-center justify-center rounded-lg ${chipClassName}`}
         style={{ width: Math.round(size * 1.6), height: Math.round(size * 1.6) }}
       >
-        <GolfMeIcon size={size} dotColor="#f8faf8" targetColor="#4ade80" holeColor="#14532d" />
+        <GolfMeIcon size={size} dotColor="#f8faf8" flagColor="#4ade80" holeColor="#14532d" />
       </span>
       {showWordmark && <GolfMeWordmark className={wordmarkClassName} />}
     </>

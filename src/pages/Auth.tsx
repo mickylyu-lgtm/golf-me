@@ -69,7 +69,7 @@ export function Auth({ mode }: AuthProps) {
       <div className="flex flex-1 flex-col justify-center gap-8">
         <div className="text-center">
           <span className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-fairway-600">
-            <GolfMeIcon size={26} dotColor="#f8faf8" targetColor="#4ade80" holeColor="#14532d" />
+            <GolfMeIcon size={26} dotColor="#f8faf8" flagColor="#4ade80" holeColor="#14532d" />
           </span>
           <h1 className="text-2xl font-extrabold text-slate-900">
             {mode === "signup" ? t("auth.createAccount") : session.hasOnboarded ? t("auth.welcomeBack") : t("auth.logIn")}

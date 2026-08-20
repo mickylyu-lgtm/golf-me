@@ -1,16 +1,49 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 48 48">
   <!-- Full-bleed, no baked-in corner rounding — iOS/Android apply their own
-       squircle/circle mask. Same "Open Fourth" geometry as GolfMeIcon.tsx
-       and favicon.svg (uniform viewBox scale keeps every circle perfectly
-       circular, never stretched), just pulled slightly closer to center
-       than the UI-context versions so all four spots stay inside the
-       maskable-icon safe zone (80%-diameter centered circle) even under an
-       aggressive circular/squircle crop. -->
-  <rect width="48" height="48" fill="#143621"/>
-  <circle cx="15" cy="15" r="5.5" fill="#f8faf8"/>
-  <circle cx="33" cy="15" r="5.5" fill="#f8faf8"/>
-  <circle cx="15" cy="33" r="5.5" fill="#f8faf8"/>
-  <circle cx="33" cy="33" r="5.5" fill="#5aa171"/>
-  <circle cx="33" cy="33" r="3.6" fill="#143621"/>
-  <circle cx="33" cy="33" r="1.6" fill="#5aa171"/>
+       squircle/circle mask. Same "Your Hole Is Waiting" geometry as
+       GolfMeIcon.tsx and favicon-v3.svg, just pulled closer to center (and
+       the flag shortened) than the UI-context versions so the design stays
+       inside the maskable-icon safe zone (80%-diameter centered circle)
+       under an aggressive circular/squircle crop. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1b4a2d"/>
+      <stop offset="1" stop-color="#0e2717"/>
+    </linearGradient>
+    <radialGradient id="ball" cx="0.32" cy="0.28" r="0.85">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#e4e9e1"/>
+    </radialGradient>
+    <linearGradient id="flagLit" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4fc169"/>
+      <stop offset="1" stop-color="#2c9247"/>
+    </linearGradient>
+    <linearGradient id="flagShade" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#237a3a"/>
+      <stop offset="1" stop-color="#14602a"/>
+    </linearGradient>
+    <linearGradient id="rimFace" x1="0.15" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#ffdd85"/>
+      <stop offset="0.5" stop-color="#f0b93f"/>
+      <stop offset="1" stop-color="#dc9d24"/>
+    </linearGradient>
+    <radialGradient id="cavity" cx="0.5" cy="0.15" r="1.05">
+      <stop offset="0" stop-color="#16321f"/>
+      <stop offset="0.4" stop-color="#0a1f13"/>
+      <stop offset="1" stop-color="#020805"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="48" height="48" fill="url(#bg)"/>
+
+  <circle cx="15" cy="15" r="5.5" fill="url(#ball)"/>
+  <circle cx="15" cy="33" r="5.5" fill="url(#ball)"/>
+
+  <circle cx="33" cy="15" r="5.5" fill="url(#ball)"/>
+  <line x1="33" y1="10" x2="33" y2="5" stroke="#2c9247" stroke-width="1.2" stroke-linecap="round"/>
+  <path d="M33 5.2 L38 6.9 L33 7.7 Z" fill="url(#flagLit)"/>
+  <path d="M33 7.7 L38 6.9 L33 9.4 Z" fill="url(#flagShade)"/>
+
+  <ellipse cx="33" cy="33" rx="7" ry="4.4" fill="url(#rimFace)"/>
+  <ellipse cx="33" cy="33.6" rx="6.4" ry="3.8" fill="url(#cavity)"/>
 </svg>

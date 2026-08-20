@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1b4a2d"/>
+      <stop offset="1" stop-color="#0e2717"/>
+    </linearGradient>
+    <radialGradient id="ball" cx="0.32" cy="0.28" r="0.85">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#e4e9e1"/>
+    </radialGradient>
+    <linearGradient id="flagLit" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4fc169"/>
+      <stop offset="1" stop-color="#2c9247"/>
+    </linearGradient>
+    <linearGradient id="flagShade" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#237a3a"/>
+      <stop offset="1" stop-color="#14602a"/>
+    </linearGradient>
+    <linearGradient id="rimFace" x1="0.15" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#ffdd85"/>
+      <stop offset="0.5" stop-color="#f0b93f"/>
+      <stop offset="1" stop-color="#dc9d24"/>
+    </linearGradient>
+    <radialGradient id="cavity" cx="0.5" cy="0.15" r="1.05">
+      <stop offset="0" stop-color="#16321f"/>
+      <stop offset="0.4" stop-color="#0a1f13"/>
+      <stop offset="1" stop-color="#020805"/>
+    </radialGradient>
+    <filter id="soft" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="0.7"/>
+    </filter>
+    <filter id="softer" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="0.35"/>
+    </filter>
+  </defs>
+
+  <rect width="48" height="48" rx="11" fill="url(#bg)"/>
+
+  <ellipse cx="14" cy="17.3" rx="5.4" ry="1.6" fill="#000000" opacity="0.22" filter="url(#soft)"/>
+  <circle cx="14" cy="14" r="6" fill="url(#ball)"/>
+
+  <ellipse cx="14" cy="37.3" rx="5.4" ry="1.6" fill="#000000" opacity="0.22" filter="url(#soft)"/>
+  <circle cx="14" cy="34" r="6" fill="url(#ball)"/>
+
+  <ellipse cx="34" cy="17.3" rx="5.4" ry="1.6" fill="#000000" opacity="0.22" filter="url(#soft)"/>
+  <circle cx="34" cy="14" r="6" fill="url(#ball)"/>
+  <line x1="34" y1="14" x2="34" y2="2" stroke="#2c9247" stroke-width="1.2" stroke-linecap="round"/>
+  <path d="M34 2.3 L40.4 4.3 L34 5.2 Z" fill="url(#flagLit)"/>
+  <path d="M34 5.2 L40.4 4.3 L34 7.4 Z" fill="url(#flagShade)"/>
+
+  <ellipse cx="34" cy="34" rx="7.6" ry="4.8" fill="url(#rimFace)"/>
+  <ellipse cx="34" cy="34.67" rx="7" ry="4.15" fill="url(#cavity)"/>
+  <path d="M27 34 A 7 4.15 0 0 1 41 34" fill="none" stroke="#04120a" stroke-width="0.4" opacity="0.45" filter="url(#softer)"/>
+</svg>

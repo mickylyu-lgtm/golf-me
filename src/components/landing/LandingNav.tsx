@@ -15,7 +15,7 @@ export function LandingNav() {
     <nav className="sticky top-0 z-20 border-b border-white/10 bg-fairway-950/90 backdrop-blur-sm">
       <div className="mx-auto flex max-w-5xl items-center justify-between gap-2 px-3 py-3 sm:gap-3 sm:px-6">
         <span className="flex min-w-0 shrink items-center gap-1.5 sm:gap-2">
-          <GolfMeIcon size={20} className="shrink-0" dotColor="#f8faf8" targetColor="#86efac" holeColor="#166534" />
+          <GolfMeIcon size={20} className="shrink-0" dotColor="#f8faf8" flagColor="#86efac" holeColor="#166534" />
           <span className="truncate text-sm font-extrabold tracking-tight sm:text-base">
             <GolfMeWordmark golfClassName="text-white" meClassName="text-sun-300" />
           </span>

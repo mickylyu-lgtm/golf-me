@@ -170,7 +170,7 @@ export function GolfMeLoader({ message, fullScreen = false, size = "md", classNa
           <span
             className={`flex h-11 w-11 items-center justify-center rounded-2xl bg-fairway-900 ${reducedMotion ? "animate-pop" : "animate-geometry-hop"}`}
           >
-            <GolfMeIcon size={24} dotColor="#f8faf8" targetColor="#4ade80" holeColor="#14532d" />
+            <GolfMeIcon size={24} dotColor="#f8faf8" flagColor="#4ade80" holeColor="#14532d" />
           </span>
           {reducedMotion ? (
             <ReducedMotionIndicator message={message} />
