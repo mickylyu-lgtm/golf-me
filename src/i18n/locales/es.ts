@@ -141,6 +141,7 @@ export const es: Record<TranslationKey, string> = {
   "caddie.emptyDescription": "Sube un swing o pídele a Caddie que analice una publicación de swing en la Comunidad.",
   "caddie.viewAnalysis": "Ver Análisis",
   "caddie.analyzing": "Caddie está revisando tu swing...",
+  "caddie.comingSoon": "Próximamente",
   "caddie.savedToCaddie": "Guardado en Caddie",
   "caddie.couldNotSave": "No se pudo guardar el análisis.",
   "caddie.uploadSwing": "Sube un video de tu swing",

@@ -141,6 +141,7 @@ export const ko: Record<TranslationKey, string> = {
   "caddie.emptyDescription": "스윙 영상을 업로드하거나 커뮤니티 스윙 게시물에서 캐디에게 물어보세요.",
   "caddie.viewAnalysis": "분석 보기",
   "caddie.analyzing": "캐디가 확인하고 있어요...",
+  "caddie.comingSoon": "출시 예정",
   "caddie.savedToCaddie": "캐디에 저장됨",
   "caddie.couldNotSave": "분석을 저장하지 못했습니다.",
   "caddie.uploadSwing": "스윙 영상 업로드",

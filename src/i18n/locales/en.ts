@@ -151,6 +151,7 @@ export const en = {
   "caddie.emptyDescription": "Upload a swing or ask Caddie from a Community swing post.",
   "caddie.viewAnalysis": "View Analysis",
   "caddie.analyzing": "Caddie is taking a look...",
+  "caddie.comingSoon": "Coming Soon",
   "caddie.savedToCaddie": "Saved to Caddie",
   "caddie.couldNotSave": "Could not save analysis.",
   "caddie.uploadSwing": "Upload a swing video",

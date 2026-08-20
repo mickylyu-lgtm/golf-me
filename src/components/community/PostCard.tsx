@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Bookmark,
-  Loader2,
+  Clock,
   MapPin,
   MessageCircle,
   MoreHorizontal,
@@ -59,7 +59,6 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
     isBlocked,
     blockUser,
     caddieAnalyses,
-    createCaddieAnalysis,
   } = useData();
   const { showToast } = useToast();
   const { t, locale } = useLocale();
@@ -69,7 +68,6 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
   const [imageOpen, setImageOpen] = useState(false);
-  const [askingCaddie, setAskingCaddie] = useState(false);
   const [videoMuted, setVideoMuted] = useState(true);
   const [fullscreenVideoOpen, setFullscreenVideoOpen] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -173,24 +171,6 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
   // open permissions question the brief flagged, so Ask Caddie is scoped
   // to the post's own author until that's revisited.
   const existingCaddieAnalysis = isOwn ? caddieAnalyses.find((a) => a.sourcePostId === post.id) : undefined;
-
-  async function askCaddie() {
-    if (!post.videoUrl || askingCaddie) return;
-    setAskingCaddie(true);
-    try {
-      const created = await createCaddieAnalysis({
-        sourceType: "community_post",
-        sourcePostId: post.id,
-        sourceMediaUrl: post.videoUrl,
-        thumbnailUrl: post.videoThumbnailUrl,
-      });
-      navigate(`/caddie/${created.id}`);
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : t("caddie.askCaddieError"), "warning");
-    } finally {
-      setAskingCaddie(false);
-    }
-  }
 
   return (
     <div
@@ -324,14 +304,8 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
                 <span className="text-xs font-semibold text-fairway-700">{t("caddie.viewAnalysis")}</span>
               </button>
             ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                icon={askingCaddie ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                onClick={askCaddie}
-                disabled={askingCaddie}
-              >
-                {t("caddie.askCaddie")}
+              <Button variant="outline" size="sm" icon={<Clock size={14} />} disabled>
+                {t("caddie.comingSoon")}
               </Button>
             ))}
         </div>

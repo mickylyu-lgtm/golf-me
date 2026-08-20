@@ -141,6 +141,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "caddie.emptyDescription": "上傳一段揮桿影片，或在社區的揮桿動態中向球僮提問。",
   "caddie.viewAnalysis": "查看分析",
   "caddie.analyzing": "球僮正在查看...",
+  "caddie.comingSoon": "即將推出",
   "caddie.savedToCaddie": "已儲存到球僮",
   "caddie.couldNotSave": "無法儲存分析結果。",
   "caddie.uploadSwing": "上傳揮桿影片",

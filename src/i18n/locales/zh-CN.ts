@@ -141,6 +141,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "caddie.emptyDescription": "上传一段挥杆视频，或在社区的挥杆动态中向球童提问。",
   "caddie.viewAnalysis": "查看分析",
   "caddie.analyzing": "球童正在查看...",
+  "caddie.comingSoon": "即将推出",
   "caddie.savedToCaddie": "已保存到球童",
   "caddie.couldNotSave": "无法保存分析结果。",
   "caddie.uploadSwing": "上传挥杆视频",
