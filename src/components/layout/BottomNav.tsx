@@ -8,7 +8,7 @@ export function BottomNav() {
   const { dmConversations } = useData();
   const unreadCount = dmConversations.filter((c) => c.unread).length;
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-slate-200 bg-white/95 backdrop-blur-sm sm:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:hidden">
       {MOBILE_NAV_ITEMS.map(({ labelKey, path, icon: Icon }) => (
         <NavLink
           key={path}
