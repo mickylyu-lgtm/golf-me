@@ -36,19 +36,19 @@
 
   <rect width="48" height="48" rx="11" fill="url(#bg)"/>
 
-  <ellipse cx="14" cy="17.3" rx="5.4" ry="1.6" fill="#000000" opacity="0.22" filter="url(#soft)"/>
-  <circle cx="14" cy="14" r="6" fill="url(#ball)"/>
+  <ellipse cx="12.8" cy="16.5" rx="6.05" ry="1.79" fill="#000000" opacity="0.22" filter="url(#soft)"/>
+  <circle cx="12.8" cy="12.8" r="6.7" fill="url(#ball)"/>
 
-  <ellipse cx="14" cy="37.3" rx="5.4" ry="1.6" fill="#000000" opacity="0.22" filter="url(#soft)"/>
-  <circle cx="14" cy="34" r="6" fill="url(#ball)"/>
+  <ellipse cx="12.8" cy="38.9" rx="6.05" ry="1.79" fill="#000000" opacity="0.22" filter="url(#soft)"/>
+  <circle cx="12.8" cy="35.2" r="6.7" fill="url(#ball)"/>
 
-  <ellipse cx="34" cy="17.3" rx="5.4" ry="1.6" fill="#000000" opacity="0.22" filter="url(#soft)"/>
-  <circle cx="34" cy="14" r="6" fill="url(#ball)"/>
-  <line x1="34" y1="14" x2="34" y2="2" stroke="#2c9247" stroke-width="1.2" stroke-linecap="round"/>
-  <path d="M34 2.3 L40.4 4.3 L34 5.2 Z" fill="url(#flagLit)"/>
-  <path d="M34 5.2 L40.4 4.3 L34 7.4 Z" fill="url(#flagShade)"/>
+  <ellipse cx="35.2" cy="16.5" rx="6.05" ry="1.79" fill="#000000" opacity="0.22" filter="url(#soft)"/>
+  <circle cx="35.2" cy="12.8" r="6.7" fill="url(#ball)"/>
+  <line x1="35.2" y1="12.8" x2="35.2" y2="1.2" stroke="#2c9247" stroke-width="1.3" stroke-linecap="round"/>
+  <path d="M35.2 1.4 L42.4 1.95 L35.2 2.95 Z" fill="url(#flagLit)"/>
+  <path d="M35.2 2.95 L42.4 1.95 L35.2 5.4 Z" fill="url(#flagShade)"/>
 
-  <ellipse cx="34" cy="34" rx="7.6" ry="4.8" fill="url(#rimFace)"/>
-  <ellipse cx="34" cy="34.67" rx="7" ry="4.15" fill="url(#cavity)"/>
-  <path d="M27 34 A 7 4.15 0 0 1 41 34" fill="none" stroke="#04120a" stroke-width="0.4" opacity="0.45" filter="url(#softer)"/>
+  <ellipse cx="35.2" cy="35.2" rx="8.5" ry="5.4" fill="url(#rimFace)"/>
+  <ellipse cx="35.2" cy="35.95" rx="7.8" ry="4.65" fill="url(#cavity)"/>
+  <path d="M27.4 35.2 A 7.8 4.65 0 0 1 43 35.2" fill="none" stroke="#04120a" stroke-width="0.4" opacity="0.45" filter="url(#softer)"/>
 </svg>

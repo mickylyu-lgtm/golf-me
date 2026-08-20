@@ -34,15 +34,15 @@ export function GolfMeIcon({ size = 24, className = "", dotColor = "#166534", fl
       className={className}
       style={{ aspectRatio: "1 / 1" }}
     >
-      <circle cx="14" cy="14" r="6" fill={dotColor} />
-      <circle cx="14" cy="34" r="6" fill={dotColor} />
-      <circle cx="34" cy="14" r="6" fill={dotColor} />
-      <line x1="34" y1="14" x2="34" y2="2" stroke={flagColor} strokeWidth="1.4" strokeLinecap="round" />
-      <path d="M34 2 L39.6 4.2 L34 6.4 Z" fill={flagColor} />
+      <circle cx="12.8" cy="12.8" r="6.7" fill={dotColor} />
+      <circle cx="12.8" cy="35.2" r="6.7" fill={dotColor} />
+      <circle cx="35.2" cy="12.8" r="6.7" fill={dotColor} />
+      <line x1="35.2" y1="12.8" x2="35.2" y2="1.2" stroke={flagColor} strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M35.2 1.4 L42.4 1.95 L35.2 2.95 Z" fill={flagColor} />
       {/* the hole: a gold ring with its dark interior offset down slightly,
           so it reads as a rim you're looking into rather than a flat disc */}
-      <ellipse cx="34" cy="34" rx="7.6" ry="4.8" fill="#d99a2e" />
-      <ellipse cx="34" cy="34.67" rx="7" ry="4.15" fill={holeColor} />
+      <ellipse cx="35.2" cy="35.2" rx="8.5" ry="5.4" fill="#d99a2e" />
+      <ellipse cx="35.2" cy="35.95" rx="7.8" ry="4.65" fill={holeColor} />
     </svg>
   );
 }
