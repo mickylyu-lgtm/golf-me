@@ -6,7 +6,8 @@ import { useData } from "../../context/DataContext";
 
 export function SideNav() {
   const { t } = useLocale();
-  const { hasUnreadMessages } = useData();
+  const { dmConversations } = useData();
+  const unreadCount = dmConversations.filter((c) => c.unread).length;
   return (
     <aside className="fixed inset-y-0 left-0 z-40 hidden w-20 flex-col border-r border-slate-200 bg-white py-6 sm:flex lg:w-60">
       <div className="mb-8 px-5">
@@ -32,8 +33,13 @@ export function SideNav() {
                 shift its label out of line with its siblings' labels. */}
             <span className="relative flex w-6 items-center justify-center">
               <Icon size={path === "/caddie" ? 24 : 20} />
-              {path === "/messages" && hasUnreadMessages && (
-                <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-fairway-500" aria-label="Unread messages" />
+              {path === "/messages" && unreadCount > 0 && (
+                <span
+                  className="absolute -right-1.5 -top-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-fairway-500 px-1 text-[9px] font-bold leading-none text-white"
+                  aria-label={`${unreadCount} unread messages`}
+                >
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
               )}
             </span>
             <span className="hidden lg:inline">{t(labelKey)}</span>
