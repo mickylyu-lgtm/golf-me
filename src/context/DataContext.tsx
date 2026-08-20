@@ -315,8 +315,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
   );
   const getGolfCall = useCallback((id: string) => golfCalls.find((c) => c.id === id), [golfCalls]);
   const messagesForCall = useCallback(
-    (callId: string) => data.messages.filter((m) => m.golfCallId === callId).sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
-    [data.messages],
+    (callId: string) => {
+      if (!auth.isDemo) return realRounds.messagesForCall(callId);
+      return data.messages.filter((m) => m.golfCallId === callId).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    },
+    [auth.isDemo, realRounds, data.messages],
   );
   const reviewsAbout = useCallback((golferId: string) => data.reviews.filter((r) => r.revieweeId === golferId), [data.reviews]);
 
@@ -632,6 +635,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
     (callId: string, text: string) => {
       const trimmed = text.trim();
       if (!trimmed) return;
+      if (!auth.isDemo) {
+        realRounds.sendRoundMessage(callId, trimmed).catch((err) => console.error("Golf Me: failed to send round message.", err));
+        return;
+      }
       setData((prev) => ({
         ...prev,
         messages: [
@@ -646,7 +653,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         ],
       }));
     },
-    [],
+    [auth.isDemo, realRounds],
   );
 
   const hasReviewed = useCallback(

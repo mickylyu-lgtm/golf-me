@@ -6,8 +6,20 @@ import { realRoundToGolfCall } from "../lib/golfCall";
 import type { RoundRow, ParticipantRow } from "../lib/golfCall";
 import { profileRowToGolferProfile } from "../lib/profile";
 import type { ProfileRow } from "../lib/profile";
-import type { GolfCall, GolferProfile } from "../types";
+import type { ChatMessage, GolfCall, GolferProfile } from "../types";
 import type { ReviewInput } from "./DataContext";
+
+interface RoundMessageRow {
+  id: string;
+  round_id: string;
+  sender_id: string;
+  text: string;
+  created_at: string;
+}
+
+function roundMessageRowToChatMessage(row: RoundMessageRow): ChatMessage {
+  return { id: row.id, golfCallId: row.round_id, senderId: row.sender_id, text: row.text, createdAt: row.created_at };
+}
 
 export interface HostRealRoundInput {
   courseId: string | null;
@@ -49,6 +61,8 @@ interface RealRoundsContextValue {
   editTeeTime: (roundId: string, input: EditTeeTimeInput) => Promise<{ proofInvalidated: boolean }>;
   hasReviewed: (roundId: string, revieweeId: string) => boolean;
   submitReview: (roundId: string, revieweeId: string, input: ReviewInput) => Promise<void>;
+  messagesForCall: (roundId: string) => ChatMessage[];
+  sendRoundMessage: (roundId: string, text: string) => Promise<void>;
 }
 
 function reviewKey(roundId: string, revieweeId: string): string {
@@ -61,28 +75,47 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
   const { isDemo, authUser, profile } = useAuth();
   const [rounds, setRounds] = useState<RoundRow[]>([]);
   const [participants, setParticipants] = useState<ParticipantRow[]>([]);
+  const [messageRows, setMessageRows] = useState<RoundMessageRow[]>([]);
   const [myReviewedKeys, setMyReviewedKeys] = useState<Set<string>>(new Set());
   const [profilesById, setProfilesById] = useState<Map<string, GolferProfile>>(new Map());
   const [isLoading, setIsLoading] = useState(false);
   const fetchingRef = useRef(false);
+  // Same fix as RealSocialContext's refetch(): a realtime event arriving
+  // while a refetch is already in flight used to just be dropped with
+  // nothing to trigger a follow-up. This now runs one more refetch right
+  // after the in-flight one finishes instead of losing the event.
+  const pendingRefetchRef = useRef(false);
 
   const refetch = useCallback(async () => {
-    if (fetchingRef.current) return;
+    if (fetchingRef.current) {
+      pendingRefetchRef.current = true;
+      return;
+    }
     fetchingRef.current = true;
     try {
-      const [{ data: roundRows, error: roundsError }, { data: participantRows, error: participantsError }, { data: myReviewRows, error: reviewsError }] = await Promise.all([
+      const [
+        { data: roundRows, error: roundsError },
+        { data: participantRows, error: participantsError },
+        { data: myReviewRows, error: reviewsError },
+        { data: messageRowsData, error: messagesError },
+      ] = await Promise.all([
         supabase.from("golf_calls").select("*"),
         supabase.from("round_participants").select("*"),
         authUser ? supabase.from("round_reviews").select("round_id, reviewed_user_id").eq("reviewer_user_id", authUser.id) : Promise.resolve({ data: [], error: null }),
+        // RLS (private.is_round_member) already scopes this to rounds the
+        // caller hosts or has joined — no round_id filter needed here.
+        supabase.from("round_messages").select("*").order("created_at", { ascending: true }),
       ]);
       if (roundsError) throw roundsError;
       if (participantsError) throw participantsError;
       if (reviewsError) throw reviewsError;
+      if (messagesError) throw messagesError;
 
       const nextRounds = (roundRows ?? []) as RoundRow[];
       const nextParticipants = (participantRows ?? []) as ParticipantRow[];
       setRounds(nextRounds);
       setParticipants(nextParticipants);
+      setMessageRows((messageRowsData ?? []) as RoundMessageRow[]);
       setMyReviewedKeys(new Set((myReviewRows ?? []).map((r: { round_id: string; reviewed_user_id: string }) => reviewKey(r.round_id, r.reviewed_user_id))));
 
       const ids = new Set<string>();
@@ -101,6 +134,10 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
       console.error("Golf Me: failed to load real rounds.", err);
     } finally {
       fetchingRef.current = false;
+      if (pendingRefetchRef.current) {
+        pendingRefetchRef.current = false;
+        refetch();
+      }
     }
   }, [authUser]);
 
@@ -108,6 +145,7 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
     if (isDemo || !authUser) {
       setRounds([]);
       setParticipants([]);
+      setMessageRows([]);
       setProfilesById(new Map());
       return;
     }
@@ -124,6 +162,7 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
       .channel("golf-calls-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "golf_calls" }, () => refetch())
       .on("postgres_changes", { event: "*", schema: "public", table: "round_participants" }, () => refetch())
+      .on("postgres_changes", { event: "*", schema: "public", table: "round_messages" }, () => refetch())
       .subscribe();
 
     return () => {
@@ -234,6 +273,26 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
     [refetch],
   );
 
+  const messagesForCall = useCallback(
+    (roundId: string) => messageRows.filter((m) => m.round_id === roundId).map(roundMessageRowToChatMessage),
+    [messageRows],
+  );
+
+  // No optimistic local echo here (unlike sendDirectMessage) — this file's
+  // other mutations (hostRound, joinRound, ...) all follow the same plain
+  // insert-then-let-realtime-catch-it convention rather than DMs' separate
+  // pending-message system, and a group chat message doesn't need the same
+  // instant-feedback treatment a 1:1 DM composer does.
+  const sendRoundMessage = useCallback(
+    async (roundId: string, text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed || !authUser) return;
+      const { error } = await supabase.from("round_messages").insert({ round_id: roundId, sender_id: authUser.id, text: trimmed });
+      if (error) throw new Error(error.message);
+    },
+    [authUser],
+  );
+
   const hasReviewed = useCallback((roundId: string, revieweeId: string) => myReviewedKeys.has(reviewKey(roundId, revieweeId)), [myReviewedKeys]);
 
   const submitReview = useCallback(
@@ -267,6 +326,8 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
     editTeeTime,
     hasReviewed,
     submitReview,
+    messagesForCall,
+    sendRoundMessage,
   };
   return <RealRoundsContext.Provider value={value}>{children}</RealRoundsContext.Provider>;
 }
