@@ -1,4 +1,4 @@
-import { Loader2, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import type { SwingAnalysisStatus } from "../../types";
 import type { SwingAnalysisSection } from "../../lib/swingAnalysis";
 import { useLocale } from "../../i18n/LocaleContext";
@@ -41,19 +41,13 @@ function BulletList({ items }: { items: string[] }) {
 // rather than a wall of text" requirement.
 export function SwingAnalysisPanel({ status, result }: SwingAnalysisPanelProps) {
   const { t } = useLocale();
-  if (!status) return null;
-
-  if (!result) {
-    return (
-      <div className="flex items-center gap-2.5 rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-3.5">
-        <Loader2 size={16} className="shrink-0 animate-spin text-fairway-600" />
-        <div>
-          <p className="text-sm font-semibold text-slate-700">{t("swingAnalysis.processingTitle")}</p>
-          <p className="text-xs text-slate-500">{t("swingAnalysis.processingDescription")}</p>
-        </div>
-      </div>
-    );
-  }
+  // No real analysis provider is connected, so a `status` with no `result`
+  // would otherwise sit at "processing" forever — hidden rather than
+  // showing a spinner that implies work is actively happening. Existing
+  // posts from before Caddie requests were disabled can carry this stuck
+  // "pending" status; hiding it here is the honest state until a real
+  // provider exists.
+  if (!status || !result) return null;
 
   return (
     <div className="flex flex-col gap-3 rounded-2xl border border-fairway-100 bg-fairway-50/40 p-4">
