@@ -173,6 +173,14 @@ body,
   height: 100%;
 }
 
+html,
+body {
+  /* Stops the rubber-band bounce past the end of short pages (mobile
+     Safari/Chrome) from revealing empty space beneath the content — reads
+     as unpolished on a page that's shorter than the viewport. */
+  overscroll-behavior-y: none;
+}
+
 body {
   margin: 0;
   font-family: var(--font-sans);
