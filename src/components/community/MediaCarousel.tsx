@@ -5,7 +5,8 @@ import type { PostMediaItem } from "../../types";
 interface MediaCarouselProps {
   media: PostMediaItem[];
   /** Card-scale rendering (fixed max height, cropped to fill) vs. fullscreen
-   * lightbox (uncropped, fit within the viewport, hold-right-to-2x on video). */
+   * lightbox (full-bleed edge to edge, also cropped to fill; hold-right-to-2x
+   * on video). */
   variant: "card" | "lightbox";
   /** Card variant only — double-tap opens the fullscreen lightbox at this index. */
   onItemClick?: (index: number) => void;
@@ -138,7 +139,7 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
       <div
         ref={trackRef}
         onScroll={handleScroll}
-        className={`no-scrollbar flex w-full snap-x snap-mandatory overflow-x-auto scroll-smooth ${variant === "card" ? "rounded-xl" : "h-[85dvh]"}`}
+        className={`no-scrollbar flex w-full snap-x snap-mandatory overflow-x-auto scroll-smooth ${variant === "card" ? "rounded-xl" : "h-dvh"}`}
       >
         {media.map((item, i) =>
           item.type === "video" ? (
@@ -161,70 +162,61 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
                 }}
               />
             ) : (
-              // A per-slide flex-centering box with the video sized off its
-              // own intrinsic aspect ratio, anchored directly to the
-              // viewport (max-h-[75dvh]) rather than a percentage chain
-              // through several ancestors — percentage max-height only
-              // resolves against an ancestor with an explicitly-defined
-              // (not auto/content-based) height, which an inline-block
-              // wrapper shrunk to its content doesn't provide. Also avoids
-              // relying on object-fit/object-position on a <video poster>,
-              // which WebKit has a history of not respecting — that was
-              // pinning landscape clips to the top-left instead of
-              // centering them, reading as mostly empty black below.
-              <div key={item.id} className="grid h-full w-full shrink-0 snap-center place-items-center">
-                <div className="relative inline-block">
-                  {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-                  <video
-                    ref={(el) => {
-                      if (el) videoElsRef.current.set(item.id, el);
-                      else videoElsRef.current.delete(item.id);
-                    }}
-                    src={item.url}
-                    poster={item.thumbnailUrl}
-                    playsInline
-                    loop
-                    preload="metadata"
-                    className="block max-h-[75dvh] max-w-full"
-                    onClick={(e) => togglePlay(item, e.currentTarget)}
-                  />
-                  {/* Right-half hold-for-2x zone, layered over the video —
-                      left half stays a plain tap-to-play/pause target. */}
-                  <div
-                    className="absolute inset-y-0 right-0 w-1/2"
-                    onPointerDown={() => {
-                      const el = videoElsRef.current.get(item.id);
-                      if (el) startHold(el);
-                    }}
-                    onPointerUp={() => {
-                      const el = videoElsRef.current.get(item.id);
-                      if (el) endHold(el);
-                    }}
-                    onPointerLeave={() => {
-                      const el = videoElsRef.current.get(item.id);
-                      if (el) endHold(el);
-                    }}
-                    onPointerCancel={() => {
-                      const el = videoElsRef.current.get(item.id);
-                      if (el) endHold(el);
-                    }}
-                    onClick={() => {
-                      if (wasHoldingRef.current) {
-                        wasHoldingRef.current = false;
-                        return;
-                      }
-                      const el = videoElsRef.current.get(item.id);
-                      if (el) togglePlay(item, el);
-                    }}
-                  />
-                  {!playingIds.has(item.id) && (
-                    <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                      <span className="flex h-14 w-14 items-center justify-center rounded-full bg-black/40 text-white">
-                        <Play size={24} fill="currentColor" />
-                      </span>
+              // Full-bleed, edge to edge — Instagram Stories style, not a
+              // letterboxed/contained frame. Cropping (object-cover) is the
+              // deliberate tradeoff that comes with that: the full frame
+              // isn't always visible, only the center-cropped fill.
+              <div key={item.id} className="relative h-full w-full shrink-0 snap-center">
+                {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                <video
+                  ref={(el) => {
+                    if (el) videoElsRef.current.set(item.id, el);
+                    else videoElsRef.current.delete(item.id);
+                  }}
+                  src={item.url}
+                  poster={item.thumbnailUrl}
+                  playsInline
+                  loop
+                  preload="metadata"
+                  className="h-full w-full object-cover"
+                  onClick={(e) => togglePlay(item, e.currentTarget)}
+                />
+                {/* Right-half hold-for-2x zone, layered over the video —
+                    left half stays a plain tap-to-play/pause target. */}
+                <div
+                  className="absolute inset-y-0 right-0 w-1/2"
+                  onPointerDown={() => {
+                    const el = videoElsRef.current.get(item.id);
+                    if (el) startHold(el);
+                  }}
+                  onPointerUp={() => {
+                    const el = videoElsRef.current.get(item.id);
+                    if (el) endHold(el);
+                  }}
+                  onPointerLeave={() => {
+                    const el = videoElsRef.current.get(item.id);
+                    if (el) endHold(el);
+                  }}
+                  onPointerCancel={() => {
+                    const el = videoElsRef.current.get(item.id);
+                    if (el) endHold(el);
+                  }}
+                  onClick={() => {
+                    if (wasHoldingRef.current) {
+                      wasHoldingRef.current = false;
+                      return;
+                    }
+                    const el = videoElsRef.current.get(item.id);
+                    if (el) togglePlay(item, el);
+                  }}
+                />
+                {!playingIds.has(item.id) && (
+                  <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                    <span className="flex h-14 w-14 items-center justify-center rounded-full bg-black/40 text-white">
+                      <Play size={24} fill="currentColor" />
                     </span>
-                  )}
-                </div>
+                  </span>
+                )}
               </div>
             )
           ) : variant === "card" ? (
@@ -237,9 +229,7 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
               onClick={() => handleCardTap(i)}
             />
           ) : (
-            <div key={item.id} className="grid h-full w-full shrink-0 snap-center place-items-center">
-              <img src={item.url} alt="" loading="lazy" className="block max-h-[75dvh] max-w-full" />
-            </div>
+            <img key={item.id} src={item.url} alt="" loading="lazy" className="h-full w-full shrink-0 snap-center object-cover" />
           ),
         )}
       </div>

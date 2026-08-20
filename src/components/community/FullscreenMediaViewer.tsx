@@ -1,5 +1,4 @@
 import { useRef, useState } from "react";
-import { X } from "lucide-react";
 import type { PostMediaItem } from "../../types";
 import { MediaCarousel } from "./MediaCarousel";
 
@@ -76,28 +75,15 @@ export function FullscreenMediaViewer({ media, initialIndex = 0, onClose }: Full
     <div
       role="dialog"
       aria-modal="true"
-      onClick={onClose}
-      className="fixed inset-0 z-[95] flex items-center justify-center"
+      className="fixed inset-0 z-[95] overflow-hidden"
       style={{ backgroundColor: `rgba(0,0,0,${backdropOpacity})` }}
     >
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onClose();
-        }}
-        aria-label="Close"
-        className="absolute right-4 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
-        style={{ top: "max(1rem, env(safe-area-inset-top))" }}
-      >
-        <X size={18} />
-      </button>
       <div
-        onClick={(e) => e.stopPropagation()}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
         onTouchCancel={onTouchEnd}
-        className={`h-[85dvh] w-full max-w-2xl ${dragging ? "" : "transition-transform duration-200 ease-out"}`}
+        className={`h-dvh w-full ${dragging ? "" : "transition-transform duration-200 ease-out"}`}
         style={{ transform: `translateY(${dragY}px)` }}
       >
         <MediaCarousel media={media} variant="lightbox" initialIndex={initialIndex} />
