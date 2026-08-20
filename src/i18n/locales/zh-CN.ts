@@ -171,6 +171,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "composer.askCaddieOnPost": "询问球童 Caddie",
   "composer.replace": "替换",
   "composer.remove": "移除",
+  "composer.addMore": "添加更多",
   "composer.replaceAttachmentTitle": "替换附件？",
   "composer.replaceAttachmentMessage": "这将移除当前附件，并改为添加这个。",
   "chat.clearHistory": "清除聊天记录",

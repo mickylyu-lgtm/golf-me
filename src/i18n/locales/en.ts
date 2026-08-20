@@ -181,6 +181,7 @@ export const en = {
   "composer.askCaddieOnPost": "Ask Caddie for feedback",
   "composer.replace": "Replace",
   "composer.remove": "Remove",
+  "composer.addMore": "Add more",
   "composer.replaceAttachmentTitle": "Replace attachment?",
   "composer.replaceAttachmentMessage": "This will remove your current attachment and add this one instead.",
   "chat.clearHistory": "Clear Chat History",

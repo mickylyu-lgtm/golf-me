@@ -23,6 +23,14 @@ type Attachment = "none" | "photo" | "course" | "round" | "swing";
 
 const COMMUNITY_MEDIA_BUCKET = "community-media";
 const MAX_SWING_VIDEO_BYTES = 200 * 1024 * 1024; // matches the Storage bucket's own file_size_limit
+const MAX_POST_MEDIA_ITEMS = 10; // matches Instagram's own carousel cap — a sensible, familiar limit, not an arbitrary one
+
+interface DraftMediaItem {
+  id: string;
+  kind: "image" | "video";
+  url: string;
+  thumbnailUrl?: string; // video items only
+}
 
 // Caddie's "Share to Community" hands off here via navigate(..., { state })
 // — a real video already sitting in community-media, so posting must reuse
@@ -50,8 +58,8 @@ export function CreatePost() {
   // the pills. It must never be the thing that decides what's attached;
   // that's exactly the bug being fixed here (see doc comment further down).
   const [activeTool, setActiveTool] = useState<Attachment>(prefill?.swingVideoUrl ? "swing" : "none");
-  const [imageUrl, setImageUrl] = useState<string | undefined>(undefined);
-  const [imageLoading, setImageLoading] = useState(false);
+  const [mediaItems, setMediaItems] = useState<DraftMediaItem[]>([]);
+  const [mediaUploading, setMediaUploading] = useState(false);
   const [videoFile, setVideoFile] = useState<File | undefined>(undefined);
   const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | undefined>(prefill?.swingVideoUrl);
   // Set only for a prefilled video that's already uploaded — publishing
@@ -93,7 +101,7 @@ export function CreatePost() {
   // "the swing video is the PRIMARY content" instruction.
   function attachedKind(): Attachment {
     if (videoFile || prefilledVideoUrl) return "swing";
-    if (imageUrl) return "photo";
+    if (mediaItems.length > 0) return "photo";
     if (courseTag) return "course";
     if (golfCallId) return "round";
     return "none";
@@ -113,36 +121,84 @@ export function CreatePost() {
     run();
   }
 
-  async function doAttachPhoto(file: File) {
-    setImageLoading(true);
+  // Uploads run one file at a time and each item is appended to
+  // mediaItems as soon as it finishes — a mixed batch of photos/videos
+  // shows up progressively rather than as one all-or-nothing wait, and one
+  // bad file (wrong type, too large, a failed upload) is skipped with a
+  // toast instead of losing the whole batch.
+  async function doAttachMedia(files: File[]) {
+    setMediaUploading(true);
+    setActiveTool("photo");
     try {
-      if (!isDemo && authUser) {
-        const blob = await resizeImageToBlob(file);
-        const path = `${authUser.id}/${crypto.randomUUID()}.jpg`;
-        const { error: uploadError } = await supabase.storage.from(COMMUNITY_MEDIA_BUCKET).upload(path, blob, { contentType: "image/jpeg" });
-        if (uploadError) throw uploadError;
-        const { data } = supabase.storage.from(COMMUNITY_MEDIA_BUCKET).getPublicUrl(path);
-        setImageUrl(data.publicUrl);
-      } else {
-        setImageUrl(await resizeImageToDataUrl(file));
+      for (const file of files) {
+        const isVideo = file.type.startsWith("video/");
+        const isImage = file.type.startsWith("image/");
+        if (!isVideo && !isImage) {
+          showToast(`"${file.name}" isn't a photo or video — skipped.`, "warning");
+          continue;
+        }
+        if (isVideo && file.size > MAX_SWING_VIDEO_BYTES) {
+          showToast(`"${file.name}" is too large — skipped.`, "warning");
+          continue;
+        }
+        if (isVideo && (isDemo || !authUser)) {
+          showToast("Video attachments need a real GolfMe account — skipped.", "warning");
+          continue;
+        }
+
+        try {
+          if (isVideo) {
+            const path = `${authUser!.id}/post-${crypto.randomUUID()}.${file.name.split(".").pop() ?? "mp4"}`;
+            const { error: uploadError } = await supabase.storage.from(COMMUNITY_MEDIA_BUCKET).upload(path, file, { contentType: file.type });
+            if (uploadError) throw uploadError;
+            const url = supabase.storage.from(COMMUNITY_MEDIA_BUCKET).getPublicUrl(path).data.publicUrl;
+
+            let thumbnailUrl: string | undefined;
+            try {
+              const thumbBlob = await captureVideoThumbnail(file);
+              const thumbPath = `${authUser!.id}/post-thumb-${crypto.randomUUID()}.jpg`;
+              const { error: thumbUploadError } = await supabase.storage
+                .from(COMMUNITY_MEDIA_BUCKET)
+                .upload(thumbPath, thumbBlob, { contentType: "image/jpeg" });
+              if (!thumbUploadError) thumbnailUrl = supabase.storage.from(COMMUNITY_MEDIA_BUCKET).getPublicUrl(thumbPath).data.publicUrl;
+            } catch (thumbErr) {
+              console.error("Golf Me: failed to capture a video thumbnail.", thumbErr);
+            }
+            setMediaItems((prev) => [...prev, { id: crypto.randomUUID(), kind: "video", url, thumbnailUrl }]);
+          } else {
+            let url: string;
+            if (!isDemo && authUser) {
+              const blob = await resizeImageToBlob(file);
+              const path = `${authUser.id}/${crypto.randomUUID()}.jpg`;
+              const { error: uploadError } = await supabase.storage.from(COMMUNITY_MEDIA_BUCKET).upload(path, blob, { contentType: "image/jpeg" });
+              if (uploadError) throw uploadError;
+              url = supabase.storage.from(COMMUNITY_MEDIA_BUCKET).getPublicUrl(path).data.publicUrl;
+            } else {
+              url = await resizeImageToDataUrl(file);
+            }
+            setMediaItems((prev) => [...prev, { id: crypto.randomUUID(), kind: "image", url }]);
+          }
+        } catch {
+          showToast(`Couldn't upload "${file.name}" — skipped.`, "warning");
+        }
       }
-      setActiveTool("photo");
-    } catch {
-      showToast("Couldn't load that image — try another.", "warning");
     } finally {
-      setImageLoading(false);
+      setMediaUploading(false);
     }
   }
 
   function handleFile(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+    const files = Array.from(e.target.files ?? []);
     e.target.value = "";
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      showToast("Please choose an image file.", "warning");
+    if (files.length === 0) return;
+    const remainingSlots = MAX_POST_MEDIA_ITEMS - mediaItems.length;
+    if (remainingSlots <= 0) {
+      showToast(`You can attach up to ${MAX_POST_MEDIA_ITEMS} photos/videos per post.`, "warning");
       return;
     }
-    requestAttach("photo", () => void doAttachPhoto(file));
+    const toAttach = files.slice(0, remainingSlots);
+    if (files.length > toAttach.length) showToast(`Only the first ${remainingSlots} were added — ${MAX_POST_MEDIA_ITEMS} per post max.`, "warning");
+    requestAttach("photo", () => void doAttachMedia(toAttach));
   }
 
   function doAttachVideo(file: File) {
@@ -178,9 +234,12 @@ export function CreatePost() {
     setActiveTool("round");
   }
 
-  function removePhoto() {
-    setImageUrl(undefined);
-    if (activeTool === "photo") setActiveTool("none");
+  function removeMediaItem(id: string) {
+    setMediaItems((prev) => {
+      const next = prev.filter((m) => m.id !== id);
+      if (next.length === 0 && activeTool === "photo") setActiveTool("none");
+      return next;
+    });
   }
 
   function removeVideo() {
@@ -202,7 +261,9 @@ export function CreatePost() {
   }
 
   function handlePhotoPillClick() {
-    if (attachedKind() === "photo") return; // already attached — managed via its own Replace/Remove
+    // Unlike the single-item swing video pill, this always reopens the
+    // picker — repeated use appends more items (up to the cap) rather than
+    // replacing, since a post can carry several photos/videos.
     fileInputRef.current?.click();
   }
 
@@ -216,7 +277,7 @@ export function CreatePost() {
   }
 
   const kind = attachedKind();
-  const canPost = text.trim().length > 0 && !imageLoading && (kind !== "swing" || Boolean(videoFile) || Boolean(prefilledVideoUrl));
+  const canPost = text.trim().length > 0 && !mediaUploading && (kind !== "swing" || Boolean(videoFile) || Boolean(prefilledVideoUrl));
 
   async function handlePost() {
     if (!canPost || posting) return;
@@ -275,7 +336,7 @@ export function CreatePost() {
       await createPost({
         type,
         text,
-        imageUrl: kind === "photo" ? imageUrl : undefined,
+        media: kind === "photo" ? mediaItems.map((m) => ({ type: m.kind, url: m.url, thumbnailUrl: m.thumbnailUrl })) : undefined,
         videoUrl,
         videoThumbnailUrl,
         courseTag: kind === "course" ? courseTag : undefined,
@@ -324,20 +385,38 @@ export function CreatePost() {
       {/* Persistent attachment previews — rendered whenever content exists,
           independent of which tool panel (activeTool) is currently open.
           Switching tabs above never unmounts these. */}
-      {imageUrl && (
-        <div className="relative overflow-hidden rounded-2xl border border-slate-100">
-          <img src={imageUrl} alt="" className="max-h-72 w-full object-cover" />
-          <button
-            onClick={removePhoto}
-            aria-label={t("composer.remove")}
-            className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-slate-900/60 text-white"
-          >
-            <X size={14} />
-          </button>
+      {mediaItems.length > 0 && (
+        <div className="no-scrollbar flex gap-2 overflow-x-auto">
+          {mediaItems.map((m) => (
+            <div key={m.id} className="relative h-28 w-28 shrink-0 overflow-hidden rounded-xl border border-slate-100 bg-black">
+              {m.kind === "video" ? (
+                // eslint-disable-next-line jsx-a11y/media-has-caption
+                <video src={m.url} poster={m.thumbnailUrl} className="h-full w-full object-cover" muted />
+              ) : (
+                <img src={m.url} alt="" className="h-full w-full object-cover" />
+              )}
+              <button
+                onClick={() => removeMediaItem(m.id)}
+                aria-label={t("composer.remove")}
+                className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-slate-900/60 text-white"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          ))}
+          {mediaItems.length < MAX_POST_MEDIA_ITEMS && !mediaUploading && (
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="flex h-28 w-28 shrink-0 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-slate-200 text-slate-400 transition-colors duration-150 hover:border-fairway-300 hover:text-fairway-600"
+            >
+              <ImagePlus size={18} />
+              <span className="text-[11px] font-semibold">{t("composer.addMore")}</span>
+            </button>
+          )}
         </div>
       )}
-      {imageLoading && !imageUrl && (
-        <div className="flex h-40 items-center justify-center rounded-2xl border border-slate-100 bg-slate-50">
+      {mediaUploading && (
+        <div className="flex h-28 w-28 items-center justify-center rounded-2xl border border-slate-100 bg-slate-50">
           <Loader2 size={20} className="animate-spin text-fairway-600" />
         </div>
       )}
@@ -467,7 +546,7 @@ export function CreatePost() {
           <Users size={13} className="mr-1 inline" /> GolfMe Round
         </Pill>
       </div>
-      <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+      <input ref={fileInputRef} type="file" accept="image/*,video/*" multiple className="hidden" onChange={handleFile} />
       <input ref={videoInputRef} type="file" accept="video/*" className="hidden" onChange={handleVideoFile} />
 
       <div>
@@ -496,7 +575,7 @@ export function CreatePost() {
             // Clear whatever's currently attached before running the new
             // attach — requestAttach() only queues this dialog when the
             // kinds genuinely differ, so the old one is always safe to drop.
-            setImageUrl(undefined);
+            setMediaItems([]);
             setVideoFile(undefined);
             if (videoPreviewUrl && !prefilledVideoUrl) URL.revokeObjectURL(videoPreviewUrl);
             setVideoPreviewUrl(undefined);

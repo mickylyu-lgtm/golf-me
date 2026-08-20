@@ -87,10 +87,17 @@ export interface ReviewInput {
   privateNote?: string;
 }
 
+export interface CreatePostMediaInput {
+  type: "image" | "video";
+  url: string;
+  thumbnailUrl?: string;
+}
+
 export interface CreatePostInput {
   type: PostType;
   text: string;
   imageUrl?: string;
+  media?: CreatePostMediaInput[]; // multi-photo/video posts, in display order
   videoUrl?: string; // swing posts only — real accounts, ignored by the demo path
   videoThumbnailUrl?: string; // real accounts only, ignored by the demo path
   courseTag?: string;
@@ -1137,6 +1144,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         type: input.type,
         text: input.text.trim(),
         imageUrl: input.imageUrl,
+        media: input.media?.map((m) => ({ id: generateId("postmedia"), type: m.type, url: m.url, thumbnailUrl: m.thumbnailUrl })),
         courseTag: input.courseTag,
         golfCallId: input.golfCallId,
         category: input.category,

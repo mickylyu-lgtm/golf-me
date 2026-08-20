@@ -365,12 +365,23 @@ export const POST_CATEGORIES: PostCategory[] = [
   "Looking to Play",
 ];
 
+// One item in a multi-photo/video post's carousel — see
+// community_post_media. Never used for swing posts (those stay on the
+// single videoUrl field, tied to Caddie/coach-review semantics).
+export interface PostMediaItem {
+  id: string;
+  type: "image" | "video";
+  url: string;
+  thumbnailUrl?: string; // videos only — a real captured frame, never a placeholder
+}
+
 export interface CommunityPost {
   id: string;
   authorId: string;
   type: PostType;
   text: string;
-  imageUrl?: string; // demo: local data-URL. Real: a public Supabase Storage URL.
+  imageUrl?: string; // legacy single-photo posts (demo: local data-URL, real: a public Supabase Storage URL) — new photo posts use `media` instead
+  media?: PostMediaItem[]; // multi-photo/video posts, in display order — a single-item array still renders (no swipe dots), so this is also how new single-photo posts are stored
   videoUrl?: string; // swing posts only — always a real Supabase Storage URL, real accounts only (demo has no swing-post equivalent)
   videoThumbnailUrl?: string; // a real captured frame from the video, never a placeholder — undefined only for posts made before this existed
   swingAnalysisStatus?: SwingAnalysisStatus; // present only on swing posts

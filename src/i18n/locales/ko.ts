@@ -171,6 +171,7 @@ export const ko: Record<TranslationKey, string> = {
   "composer.askCaddieOnPost": "캐디에게 물어보기",
   "composer.replace": "교체",
   "composer.remove": "제거",
+  "composer.addMore": "더 추가",
   "composer.replaceAttachmentTitle": "첨부 파일을 교체할까요?",
   "composer.replaceAttachmentMessage": "현재 첨부된 항목이 제거되고 이것으로 대체됩니다.",
   "chat.clearHistory": "채팅 기록 지우기",

@@ -4,7 +4,7 @@ import { supabase } from "../lib/supabase";
 import { useAuth } from "./AuthContext";
 import { profileRowToGolferProfile } from "../lib/profile";
 import type { ProfileRow } from "../lib/profile";
-import type { CommunityPost, PostComment, GolferProfile, PostType, PostCategory, SwingAnalysisStatus } from "../types";
+import type { CommunityPost, PostComment, GolferProfile, PostMediaItem, PostType, PostCategory, SwingAnalysisStatus } from "../types";
 
 interface PostRow {
   id: string;
@@ -22,6 +22,15 @@ interface PostRow {
   created_at: string;
 }
 
+interface MediaRow {
+  id: string;
+  post_id: string;
+  media_type: "image" | "video";
+  media_url: string;
+  thumbnail_url: string | null;
+  position: number;
+}
+
 interface CommentRow {
   id: string;
   post_id: string;
@@ -31,13 +40,22 @@ interface CommentRow {
   created_at: string;
 }
 
-function rowToPost(row: PostRow): CommunityPost {
+function rowToMediaItem(row: MediaRow): PostMediaItem {
+  return { id: row.id, type: row.media_type, url: row.media_url, thumbnailUrl: row.thumbnail_url ?? undefined };
+}
+
+function rowToPost(row: PostRow, mediaRows: MediaRow[]): CommunityPost {
+  const media = mediaRows
+    .filter((m) => m.post_id === row.id)
+    .sort((a, b) => a.position - b.position)
+    .map(rowToMediaItem);
   return {
     id: row.id,
     authorId: row.author_id,
     type: row.type,
     text: row.text,
     imageUrl: row.image_url ?? undefined,
+    media: media.length > 0 ? media : undefined,
     videoUrl: row.video_url ?? undefined,
     videoThumbnailUrl: row.video_thumbnail_url ?? undefined,
     swingAnalysisStatus: row.swing_analysis_status === "not_applicable" ? undefined : row.swing_analysis_status,
@@ -60,10 +78,17 @@ function rowToComment(row: CommentRow): PostComment {
   };
 }
 
+export interface CreateRealPostMediaInput {
+  type: "image" | "video";
+  url: string;
+  thumbnailUrl?: string;
+}
+
 export interface CreateRealPostInput {
   type: PostType;
   text: string;
   imageUrl?: string;
+  media?: CreateRealPostMediaInput[];
   videoUrl?: string;
   videoThumbnailUrl?: string;
   courseTag?: string;
@@ -108,6 +133,7 @@ const RealCommunityContext = createContext<RealCommunityContextValue | null>(nul
 export function RealCommunityProvider({ children }: { children: ReactNode }) {
   const { isDemo, authUser } = useAuth();
   const [postRows, setPostRows] = useState<PostRow[]>([]);
+  const [mediaRows, setMediaRows] = useState<MediaRow[]>([]);
   const [commentRows, setCommentRows] = useState<CommentRow[]>([]);
   const [postVotes, setPostVotes] = useState<{ post_id: string; voter_id: string }[]>([]);
   const [commentVotes, setCommentVotes] = useState<{ comment_id: string; voter_id: string }[]>([]);
@@ -130,6 +156,7 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
     try {
       const [
         { data: posts, error: postsErr },
+        { data: media, error: mediaErr },
         { data: comments, error: commentsErr },
         { data: pVotes, error: pVotesErr },
         { data: cVotes, error: cVotesErr },
@@ -137,6 +164,7 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
         { data: hidden, error: hiddenErr },
       ] = await Promise.all([
         supabase.from("community_posts").select("*").order("created_at", { ascending: false }),
+        supabase.from("community_post_media").select("*"),
         supabase.from("community_comments").select("*").order("created_at", { ascending: true }),
         supabase.from("community_post_votes").select("post_id, voter_id"),
         supabase.from("community_comment_votes").select("comment_id, voter_id"),
@@ -144,6 +172,7 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
         supabase.from("hidden_posts").select("post_id").eq("owner_id", selfId),
       ]);
       if (postsErr) throw postsErr;
+      if (mediaErr) throw mediaErr;
       if (commentsErr) throw commentsErr;
       if (pVotesErr) throw pVotesErr;
       if (cVotesErr) throw cVotesErr;
@@ -153,6 +182,7 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
       const nextPosts = (posts ?? []) as PostRow[];
       const nextComments = (comments ?? []) as CommentRow[];
       setPostRows(nextPosts);
+      setMediaRows((media ?? []) as MediaRow[]);
       setCommentRows(nextComments);
       setPostVotes((pVotes ?? []) as { post_id: string; voter_id: string }[]);
       setCommentVotes((cVotes ?? []) as { comment_id: string; voter_id: string }[]);
@@ -179,6 +209,7 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (isDemo || !selfId) {
       setPostRows([]);
+      setMediaRows([]);
       setCommentRows([]);
       setPostVotes([]);
       setCommentVotes([]);
@@ -195,6 +226,7 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
     const channel = supabase
       .channel("community-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "community_posts" }, () => refetch())
+      .on("postgres_changes", { event: "*", schema: "public", table: "community_post_media" }, () => refetch())
       .on("postgres_changes", { event: "*", schema: "public", table: "community_comments" }, () => refetch())
       .on("postgres_changes", { event: "*", schema: "public", table: "community_post_votes" }, () => refetch())
       .subscribe();
@@ -215,7 +247,7 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
     );
   }, [postRows, pendingPosts.length]);
 
-  const posts = useMemo(() => [...pendingPosts, ...postRows].map(rowToPost), [pendingPosts, postRows]);
+  const posts = useMemo(() => [...pendingPosts, ...postRows].map((row) => rowToPost(row, mediaRows)), [pendingPosts, postRows, mediaRows]);
   const comments = useMemo(() => commentRows.map(rowToComment), [commentRows]);
 
   const getPost = useCallback((id: string) => posts.find((p) => p.id === id), [posts]);
@@ -240,6 +272,17 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
         created_at: nowIso,
       };
       setPendingPosts((prev) => [pending, ...prev]);
+      // Optimistic media so the carousel shows immediately too, keyed to the
+      // pending row's own placeholder id — cleaned up alongside it below.
+      const pendingMedia: MediaRow[] = (input.media ?? []).map((m, i) => ({
+        id: `pending-${crypto.randomUUID()}`,
+        post_id: pending.id,
+        media_type: m.type,
+        media_url: m.url,
+        thumbnail_url: m.thumbnailUrl ?? null,
+        position: i,
+      }));
+      if (pendingMedia.length > 0) setMediaRows((prev) => [...pendingMedia, ...prev]);
 
       const { data, error } = await supabase
         .from("community_posts")
@@ -260,9 +303,36 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
         .single();
       if (error) {
         setPendingPosts((prev) => prev.filter((p) => p.id !== pending.id));
+        setMediaRows((prev) => prev.filter((m) => m.post_id !== pending.id));
         throw new Error(error.message);
       }
-      return rowToPost(data as PostRow);
+      const newPost = data as PostRow;
+
+      let insertedMedia: MediaRow[] = [];
+      if (input.media && input.media.length > 0) {
+        const { data: mediaData, error: mediaError } = await supabase
+          .from("community_post_media")
+          .insert(
+            input.media.map((m, i) => ({
+              post_id: newPost.id,
+              media_type: m.type,
+              media_url: m.url,
+              thumbnail_url: m.thumbnailUrl ?? null,
+              position: i,
+            })),
+          )
+          .select();
+        // The post itself is already live at this point — a media-insert
+        // failure must never look like the whole post failed to publish.
+        // Falls back to the optimistic pendingMedia rows (still keyed to
+        // the old pending.id) via the reconciliation effect below, same as
+        // any other refetch-driven cleanup.
+        if (mediaError) console.error("Golf Me: failed to attach post media.", mediaError);
+        else insertedMedia = (mediaData ?? []) as MediaRow[];
+      }
+      setMediaRows((prev) => [...insertedMedia, ...prev.filter((m) => m.post_id !== pending.id)]);
+
+      return rowToPost(newPost, insertedMedia);
     },
     [selfId],
   );

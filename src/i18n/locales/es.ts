@@ -171,6 +171,7 @@ export const es: Record<TranslationKey, string> = {
   "composer.askCaddieOnPost": "Preguntarle a Caddie",
   "composer.replace": "Reemplazar",
   "composer.remove": "Quitar",
+  "composer.addMore": "Añadir más",
   "composer.replaceAttachmentTitle": "¿Reemplazar contenido adjunto?",
   "composer.replaceAttachmentMessage": "Esto quitará tu contenido adjunto actual y añadirá este en su lugar.",
   "chat.clearHistory": "Borrar Historial del Chat",

@@ -171,6 +171,7 @@ export const ja: Record<TranslationKey, string> = {
   "composer.askCaddieOnPost": "キャディに相談する",
   "composer.replace": "差し替え",
   "composer.remove": "削除",
+  "composer.addMore": "追加",
   "composer.replaceAttachmentTitle": "添付を差し替えますか？",
   "composer.replaceAttachmentMessage": "現在の添付は削除され、代わりにこちらが追加されます。",
   "chat.clearHistory": "チャット履歴を削除",

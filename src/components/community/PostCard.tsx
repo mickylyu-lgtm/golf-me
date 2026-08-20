@@ -29,6 +29,7 @@ import { ReportModal } from "../trust/ReportModal";
 import { CLICKABLE_CARD_CLASS } from "../ui/cardStyles";
 import { GolfCallCard } from "../golfcall/GolfCallCard";
 import { SwingAnalysisPanel } from "./SwingAnalysisPanel";
+import { MediaCarousel } from "./MediaCarousel";
 import { formatRelativeTime } from "../../lib/format";
 import { postCategoryLabel } from "../../lib/enumLabels";
 import { areaForCourse } from "../../lib/courses";
@@ -68,6 +69,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
   const [imageOpen, setImageOpen] = useState(false);
+  const [mediaLightboxIndex, setMediaLightboxIndex] = useState<number | null>(null);
   const [videoMuted, setVideoMuted] = useState(true);
   const [fullscreenVideoOpen, setFullscreenVideoOpen] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -260,16 +262,22 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
 
       <p className="whitespace-pre-wrap text-sm text-slate-700">{post.text}</p>
 
-      {post.imageUrl && (
-        <button
-          onClick={(e) => {
-            stop(e);
-            setImageOpen(true);
-          }}
-          className="overflow-hidden rounded-xl border border-slate-100"
-        >
-          <img src={post.imageUrl} alt="" className="max-h-80 w-full object-cover" loading="lazy" />
-        </button>
+      {post.media && post.media.length > 0 ? (
+        <div onClick={stop} className="overflow-hidden rounded-xl border border-slate-100">
+          <MediaCarousel media={post.media} variant="card" onItemClick={(i) => setMediaLightboxIndex(i)} />
+        </div>
+      ) : (
+        post.imageUrl && (
+          <button
+            onClick={(e) => {
+              stop(e);
+              setImageOpen(true);
+            }}
+            className="overflow-hidden rounded-xl border border-slate-100"
+          >
+            <img src={post.imageUrl} alt="" className="max-h-80 w-full object-cover" loading="lazy" />
+          </button>
+        )
       )}
 
       {isSwingPost && post.videoUrl && (
@@ -385,6 +393,32 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
           className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-950/90 p-6"
         >
           <img src={post.imageUrl} alt="" className="max-h-full max-w-full rounded-lg object-contain" />
+        </div>
+      )}
+
+      {mediaLightboxIndex !== null && post.media && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={(e) => {
+            stop(e);
+            setMediaLightboxIndex(null);
+          }}
+          className="fixed inset-0 z-[95] flex items-center justify-center bg-slate-950/90 p-6"
+        >
+          <button
+            onClick={(e) => {
+              stop(e);
+              setMediaLightboxIndex(null);
+            }}
+            aria-label={t("common.close")}
+            className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white"
+          >
+            <X size={16} />
+          </button>
+          <div className="h-full max-h-[80vh] w-full max-w-2xl" onClick={stop}>
+            <MediaCarousel media={post.media} variant="lightbox" initialIndex={mediaLightboxIndex} />
+          </div>
         </div>
       )}
 
