@@ -18,6 +18,7 @@ interface PostRow {
   golf_call_id: string | null;
   category: PostCategory;
   swing_analysis_status: SwingAnalysisStatus | "not_applicable";
+  coach_review_requested: boolean;
   created_at: string;
 }
 
@@ -43,6 +44,7 @@ function rowToPost(row: PostRow): CommunityPost {
     courseTag: row.course_tag ?? undefined,
     golfCallId: row.golf_call_id ?? undefined,
     category: row.category,
+    coachReviewRequested: row.coach_review_requested,
     createdAt: row.created_at,
   };
 }
@@ -67,6 +69,7 @@ export interface CreateRealPostInput {
   courseTag?: string;
   golfCallId?: string;
   category: PostCategory;
+  coachReviewRequested?: boolean;
 }
 
 interface RealCommunityContextValue {
@@ -233,6 +236,7 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
         golf_call_id: input.golfCallId ?? null,
         category: input.category,
         swing_analysis_status: input.type === "swing" ? "pending" : "not_applicable",
+        coach_review_requested: input.coachReviewRequested ?? false,
         created_at: nowIso,
       };
       setPendingPosts((prev) => [pending, ...prev]);
@@ -250,6 +254,7 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
           golf_call_id: input.golfCallId ?? null,
           category: input.category,
           swing_analysis_status: input.type === "swing" ? "pending" : "not_applicable",
+          coach_review_requested: input.coachReviewRequested ?? false,
         })
         .select()
         .single();

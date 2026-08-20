@@ -170,6 +170,8 @@ export const en = {
   "profile.myGolf": "My Golf",
   "composer.swingVideo": "Swing Video",
   "composer.uploaded": "Uploaded",
+  "composer.requestCoachReview": "Request Coach Review",
+  "composer.askCaddieOnPost": "Ask Caddie for feedback",
   "composer.replace": "Replace",
   "composer.remove": "Remove",
   "composer.replaceAttachmentTitle": "Replace attachment?",

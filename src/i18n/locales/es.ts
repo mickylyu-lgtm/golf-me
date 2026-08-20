@@ -162,6 +162,8 @@ export const es: Record<TranslationKey, string> = {
   "profile.myGolf": "Mi Golf",
   "composer.swingVideo": "Video de Swing",
   "composer.uploaded": "Subido",
+  "composer.requestCoachReview": "Solicitar Revisión de Entrenador",
+  "composer.askCaddieOnPost": "Preguntarle a Caddie",
   "composer.replace": "Reemplazar",
   "composer.remove": "Quitar",
   "composer.replaceAttachmentTitle": "¿Reemplazar contenido adjunto?",

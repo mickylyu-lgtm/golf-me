@@ -162,6 +162,8 @@ export const zhCN: Record<TranslationKey, string> = {
   "profile.myGolf": "我的球局",
   "composer.swingVideo": "挥杆视频",
   "composer.uploaded": "已上传",
+  "composer.requestCoachReview": "请求教练点评",
+  "composer.askCaddieOnPost": "询问球童 Caddie",
   "composer.replace": "替换",
   "composer.remove": "移除",
   "composer.replaceAttachmentTitle": "替换附件？",

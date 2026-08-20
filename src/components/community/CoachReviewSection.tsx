@@ -130,6 +130,12 @@ export function CoachReviewSection({ post }: { post: CommunityPost }) {
         )}
       </div>
 
+      {post.coachReviewRequested && reviews.length === 0 && (
+        <p className="flex items-center gap-1.5 text-xs font-semibold text-fairway-700">
+          <ShieldCheck size={12} /> This golfer requested feedback on this swing.
+        </p>
+      )}
+
       {reviews.length === 0 ? (
         <p className="text-xs text-fairway-700/70">No Coach Reviews yet.</p>
       ) : (

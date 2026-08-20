@@ -162,6 +162,8 @@ export const ja: Record<TranslationKey, string> = {
   "profile.myGolf": "マイゴルフ",
   "composer.swingVideo": "スイング動画",
   "composer.uploaded": "アップロード済み",
+  "composer.requestCoachReview": "コーチレビューをリクエスト",
+  "composer.askCaddieOnPost": "キャディに相談する",
   "composer.replace": "差し替え",
   "composer.remove": "削除",
   "composer.replaceAttachmentTitle": "添付を差し替えますか？",

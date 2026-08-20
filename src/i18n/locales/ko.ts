@@ -162,6 +162,8 @@ export const ko: Record<TranslationKey, string> = {
   "profile.myGolf": "내 골프",
   "composer.swingVideo": "스윙 영상",
   "composer.uploaded": "업로드됨",
+  "composer.requestCoachReview": "코치 리뷰 요청",
+  "composer.askCaddieOnPost": "캐디에게 물어보기",
   "composer.replace": "교체",
   "composer.remove": "제거",
   "composer.replaceAttachmentTitle": "첨부 파일을 교체할까요?",

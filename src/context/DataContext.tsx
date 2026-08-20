@@ -96,6 +96,7 @@ export interface CreatePostInput {
   courseTag?: string;
   golfCallId?: string;
   category: PostCategory;
+  coachReviewRequested?: boolean; // real accounts only, ignored by the demo path (Coach Reviewer is a real-account-only role)
 }
 
 export interface NewGolferInput {

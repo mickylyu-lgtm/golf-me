@@ -36,7 +36,7 @@ export interface CreatePostSwingPrefill {
 export function CreatePost() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { currentUser, golfCalls, createPost } = useData();
+  const { currentUser, golfCalls, createPost, createCaddieAnalysis } = useData();
   const { isDemo, authUser } = useAuth();
   const { showToast } = useToast();
   const { t, locale } = useLocale();
@@ -63,6 +63,11 @@ export function CreatePost() {
   const [courseTag, setCourseTag] = useState<string | undefined>(undefined);
   const [golfCallId, setGolfCallId] = useState<string | undefined>(undefined);
   const [category, setCategory] = useState<PostCategory>("General");
+  // Swing-post-only, both optional — let a golfer ask for feedback right
+  // when they post instead of only after (a Coach Reviewer discovering the
+  // post organically, or a separate trip to Caddie afterward).
+  const [requestCoachReview, setRequestCoachReview] = useState(false);
+  const [askCaddieOnPost, setAskCaddieOnPost] = useState(false);
   const [posting, setPosting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<"idle" | "uploading" | "publishing">("idle");
   // Holds a not-yet-run attach action while we wait for the user to confirm
@@ -268,7 +273,7 @@ export function CreatePost() {
 
       setUploadProgress("publishing");
       const type: PostType = kind === "none" ? "text" : kind;
-      await createPost({
+      const created = await createPost({
         type,
         text,
         imageUrl: kind === "photo" ? imageUrl : undefined,
@@ -277,9 +282,30 @@ export function CreatePost() {
         courseTag: kind === "course" ? courseTag : undefined,
         golfCallId: kind === "round" ? golfCallId : undefined,
         category,
+        coachReviewRequested: kind === "swing" ? requestCoachReview : undefined,
       });
+
+      // Best-effort: asking Caddie right at post time reuses the exact same
+      // path as the "Ask Caddie" button on an already-published post
+      // (PostCard.tsx's askCaddie()) — never blocks publishing itself if it
+      // fails, since the post is already live either way.
+      let caddieAnalysisId: string | undefined;
+      if (kind === "swing" && askCaddieOnPost && videoUrl) {
+        try {
+          const analysis = await createCaddieAnalysis({
+            sourceType: "community_post",
+            sourcePostId: created.id,
+            sourceMediaUrl: videoUrl,
+            thumbnailUrl: videoThumbnailUrl,
+          });
+          caddieAnalysisId = analysis.id;
+        } catch (caddieErr) {
+          console.error("Golf Me: failed to start Caddie analysis at post time.", caddieErr);
+        }
+      }
+
       showToast("Post published.", "success");
-      navigate("/community");
+      navigate(caddieAnalysisId ? `/caddie/${caddieAnalysisId}` : "/community");
     } catch (err) {
       showToast(err instanceof Error ? err.message : "Couldn't publish your post. Please try again.", "warning");
       setPosting(false);
@@ -357,6 +383,27 @@ export function CreatePost() {
                 {t("composer.remove")}
               </button>
             </div>
+          </div>
+
+          <div className="flex flex-col gap-2 border-t border-fairway-100 pt-2.5">
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={requestCoachReview}
+                onChange={(e) => setRequestCoachReview(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-fairway-600 focus:ring-fairway-400"
+              />
+              {t("composer.requestCoachReview")}
+            </label>
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={askCaddieOnPost}
+                onChange={(e) => setAskCaddieOnPost(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-fairway-600 focus:ring-fairway-400"
+              />
+              {t("composer.askCaddieOnPost")}
+            </label>
           </div>
         </div>
       )}
