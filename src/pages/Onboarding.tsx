@@ -53,17 +53,27 @@ export function Onboarding() {
         </button>
       </div>
 
-      <div className="flex flex-1 flex-col items-center justify-center gap-5 text-center">
-        <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-fairway-50 text-fairway-600">
+      {/* key={step} forces a remount on every step change, so the gentle
+          slide-up-in (same animation/timing as the dashboard's Reveal
+          sections) replays each time instead of only ever playing once on
+          the first screen. */}
+      <div key={step} className="flex flex-1 flex-col items-center justify-center gap-5 text-center">
+        <span
+          className="flex h-16 w-16 items-center justify-center rounded-2xl bg-fairway-50 text-fairway-600 animate-slide-up-slow"
+          style={{ animationFillMode: "backwards" }}
+        >
           <Icon size={30} />
         </span>
-        <div>
+        <div className="animate-slide-up-slow" style={{ animationDelay: "150ms", animationFillMode: "backwards" }}>
           <h1 className="text-2xl font-extrabold text-slate-900">{t(screen.titleKey)}</h1>
           <p className="mx-auto mt-2 max-w-xs text-sm text-slate-500">{t(screen.bodyKey)}</p>
         </div>
 
         {"credibilityNote" in screen && screen.credibilityNote && (
-          <div className="mx-auto max-w-xs rounded-2xl border border-slate-100 bg-white p-4 text-left">
+          <div
+            className="mx-auto max-w-xs rounded-2xl border border-slate-100 bg-white p-4 text-left animate-slide-up-slow"
+            style={{ animationDelay: "300ms", animationFillMode: "backwards" }}
+          >
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t("onboarding.credibilityNoteTitle")}</p>
             <p className="mt-1.5 text-xs leading-relaxed text-slate-500">{t("onboarding.credibilityNoteBody")}</p>
           </div>

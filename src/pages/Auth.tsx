@@ -9,6 +9,7 @@ import { Button } from "../components/ui/Button";
 import { inputClass } from "../components/ui/FormControls";
 import { DEFAULT_CURRENT_USER_ID } from "../data/golfers";
 import { GolfMeIcon } from "../components/brand/GolfMeIcon";
+import { GoogleIcon } from "../components/icons/GoogleIcon";
 
 interface AuthProps {
   mode: "login" | "signup";
@@ -99,7 +100,7 @@ export function Auth({ mode }: AuthProps) {
               disabled={busy}
               className="flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition-all duration-200 ease-out hover:-translate-y-px hover:border-slate-300 hover:shadow-sm active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none disabled:opacity-50"
             >
-              {t("auth.continueWithGoogle")}
+              <GoogleIcon size={16} /> {t("auth.continueWithGoogle")}
             </button>
 
             {!showEmailField ? (
