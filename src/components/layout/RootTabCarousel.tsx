@@ -6,7 +6,8 @@ import { Inbox } from "../../pages/Inbox";
 import { Caddie } from "../../pages/Caddie";
 import { Profile } from "../../pages/Profile";
 
-// The 5 root sections, in swipe order — Home / Play / Chat / Caddie / Me.
+// The 5 root sections, in swipe order — Home / Chat / Play / Caddie / Me,
+// matching NAV_ITEMS (Play centered as the single most important tab).
 // Kept in this file (rather than deriving from MOBILE_NAV_ITEMS) because it
 // also needs the actual page components, not just icons/labels. Hosting a
 // round is reached via an action button, not a root tab, so it renders as a
@@ -19,8 +20,8 @@ import { Profile } from "../../pages/Profile";
 // pushed route instead of activating tab-swipe underneath it.
 const PANELS = [
   { path: "/", render: () => <Home /> },
-  { path: "/find", render: () => <Find /> },
   { path: "/messages", render: () => <Inbox /> },
+  { path: "/find", render: () => <Find /> },
   { path: "/caddie", render: () => <Caddie /> },
   { path: "/profile", render: () => <Profile /> },
 ] as const;
