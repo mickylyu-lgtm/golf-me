@@ -249,8 +249,31 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "blocks" }, () => refetch())
       .subscribe();
 
+    // Defense in depth against the realtime websocket silently dying —
+    // known to happen on mobile browsers when the tab is backgrounded
+    // (phone locked, app-switched away from) for a while, and Supabase's
+    // own client doesn't always reliably reconnect + catch up on its own.
+    // Without this, a message or notification that arrived while the
+    // socket was dead would only ever show up once something else (like
+    // manually opening the inbox, which does a real fetch) happened to
+    // trigger a refetch — reads as "the live popup never fired" even
+    // though the data was there all along. A refetch on regaining
+    // visibility, plus a modest poll while actively visible, means the
+    // user is never more than moments away from a fresh fetch either way.
+    function onVisible() {
+      if (document.visibilityState === "visible") refetch();
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    const pollInterval = window.setInterval(() => {
+      if (document.visibilityState === "visible") refetch();
+    }, 25000);
+
     return () => {
       supabase.removeChannel(channel);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+      window.clearInterval(pollInterval);
     };
   }, [isDemo, selfId, refetch]);
 

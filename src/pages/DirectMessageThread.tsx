@@ -196,17 +196,26 @@ export function DirectMessageThread() {
           <div ref={bottomRef} />
         </div>
 
-        {blocked ? (
-          <p className="border-t border-slate-100 px-4 py-3 text-center text-xs text-slate-500">
-            You've blocked {other.name}. Unblock them to send messages.
-          </p>
-        ) : !eligible ? (
-          <p className="border-t border-slate-100 px-4 py-3 text-center text-xs text-slate-500">
-            You can't message this golfer right now.
-          </p>
-        ) : (
-          <ChatComposer value={text} onChange={setText} onSend={handleSend} />
-        )}
+        {/* Sticky rather than just "the next element after a capped-height
+            message list" — on a long conversation, the card's natural
+            height (header + up to 65vh of messages + composer) can exceed
+            the viewport, which pushed the composer below the fold and
+            forced a page-level scroll just to find the box to type in.
+            Sticking it to the bottom of the viewport (just above the
+            mobile bottom nav) keeps it reachable at all times. */}
+        <div className="sticky bottom-20 z-10 rounded-b-2xl bg-white sm:bottom-4">
+          {blocked ? (
+            <p className="border-t border-slate-100 px-4 py-3 text-center text-xs text-slate-500">
+              You've blocked {other.name}. Unblock them to send messages.
+            </p>
+          ) : !eligible ? (
+            <p className="border-t border-slate-100 px-4 py-3 text-center text-xs text-slate-500">
+              You can't message this golfer right now.
+            </p>
+          ) : (
+            <ChatComposer value={text} onChange={setText} onSend={handleSend} />
+          )}
+        </div>
       </div>
 
       {reportOpen && <ReportModal reportedId={other.id} reportedName={other.name} context="chat" onClose={() => setReportOpen(false)} />}
