@@ -113,14 +113,14 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
     el.playbackRate = 1;
   }
 
-  const itemClass = variant === "card" ? "h-80 w-full shrink-0 snap-center object-cover" : "h-full w-full shrink-0 snap-center object-contain";
+  const itemClass = variant === "card" ? "h-80 w-full shrink-0 snap-center object-cover" : "";
 
   return (
     <div className="relative">
       <div
         ref={trackRef}
         onScroll={handleScroll}
-        className={`no-scrollbar flex w-full snap-x snap-mandatory overflow-x-auto scroll-smooth ${variant === "card" ? "rounded-xl" : "h-full"}`}
+        className={`no-scrollbar flex w-full snap-x snap-mandatory overflow-x-auto scroll-smooth ${variant === "card" ? "rounded-xl" : "h-full items-center"}`}
       >
         {media.map((item, i) =>
           item.type === "video" ? (
@@ -143,68 +143,85 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
                 }}
               />
             ) : (
-              <div key={item.id} className={`relative ${itemClass} shrink-0 snap-center`}>
-                {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-                <video
-                  ref={(el) => {
-                    if (el) videoElsRef.current.set(item.id, el);
-                    else videoElsRef.current.delete(item.id);
-                  }}
-                  src={item.url}
-                  poster={item.thumbnailUrl}
-                  playsInline
-                  loop
-                  preload="metadata"
-                  className="h-full w-full object-contain"
-                  onClick={(e) => togglePlay(item, e.currentTarget)}
-                />
-                {/* Right-half hold-for-2x zone, layered over the video —
-                    left half stays a plain tap-to-play/pause target. */}
-                <div
-                  className="absolute inset-y-0 right-0 w-1/2"
-                  onPointerDown={() => {
-                    const el = videoElsRef.current.get(item.id);
-                    if (el) startHold(el);
-                  }}
-                  onPointerUp={() => {
-                    const el = videoElsRef.current.get(item.id);
-                    if (el) endHold(el);
-                  }}
-                  onPointerLeave={() => {
-                    const el = videoElsRef.current.get(item.id);
-                    if (el) endHold(el);
-                  }}
-                  onPointerCancel={() => {
-                    const el = videoElsRef.current.get(item.id);
-                    if (el) endHold(el);
-                  }}
-                  onClick={() => {
-                    if (wasHoldingRef.current) {
-                      wasHoldingRef.current = false;
-                      return;
-                    }
-                    const el = videoElsRef.current.get(item.id);
-                    if (el) togglePlay(item, el);
-                  }}
-                />
-                {!playingIds.has(item.id) && (
-                  <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                    <span className="flex h-14 w-14 items-center justify-center rounded-full bg-black/40 text-white">
-                      <Play size={24} fill="currentColor" />
+              // A per-slide flex-centering box with the video sized off its
+              // own intrinsic aspect ratio, anchored directly to the
+              // viewport (max-h-[75dvh]) rather than a percentage chain
+              // through several ancestors — percentage max-height only
+              // resolves against an ancestor with an explicitly-defined
+              // (not auto/content-based) height, which an inline-block
+              // wrapper shrunk to its content doesn't provide. Also avoids
+              // relying on object-fit/object-position on a <video poster>,
+              // which WebKit has a history of not respecting — that was
+              // pinning landscape clips to the top-left instead of
+              // centering them, reading as mostly empty black below.
+              <div key={item.id} className="flex h-full w-full shrink-0 snap-center items-center justify-center">
+                <div className="relative inline-block">
+                  {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                  <video
+                    ref={(el) => {
+                      if (el) videoElsRef.current.set(item.id, el);
+                      else videoElsRef.current.delete(item.id);
+                    }}
+                    src={item.url}
+                    poster={item.thumbnailUrl}
+                    playsInline
+                    loop
+                    preload="metadata"
+                    className="block max-h-[75dvh] max-w-full"
+                    onClick={(e) => togglePlay(item, e.currentTarget)}
+                  />
+                  {/* Right-half hold-for-2x zone, layered over the video —
+                      left half stays a plain tap-to-play/pause target. */}
+                  <div
+                    className="absolute inset-y-0 right-0 w-1/2"
+                    onPointerDown={() => {
+                      const el = videoElsRef.current.get(item.id);
+                      if (el) startHold(el);
+                    }}
+                    onPointerUp={() => {
+                      const el = videoElsRef.current.get(item.id);
+                      if (el) endHold(el);
+                    }}
+                    onPointerLeave={() => {
+                      const el = videoElsRef.current.get(item.id);
+                      if (el) endHold(el);
+                    }}
+                    onPointerCancel={() => {
+                      const el = videoElsRef.current.get(item.id);
+                      if (el) endHold(el);
+                    }}
+                    onClick={() => {
+                      if (wasHoldingRef.current) {
+                        wasHoldingRef.current = false;
+                        return;
+                      }
+                      const el = videoElsRef.current.get(item.id);
+                      if (el) togglePlay(item, el);
+                    }}
+                  />
+                  {!playingIds.has(item.id) && (
+                    <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                      <span className="flex h-14 w-14 items-center justify-center rounded-full bg-black/40 text-white">
+                        <Play size={24} fill="currentColor" />
+                      </span>
                     </span>
-                  </span>
-                )}
+                  )}
+                </div>
               </div>
             )
-          ) : (
+          ) : variant === "card" ? (
             <img
               key={item.id}
               src={item.url}
               alt=""
               loading="lazy"
-              className={`${itemClass} ${variant === "card" ? "cursor-pointer" : ""} bg-slate-100`}
-              onClick={variant === "card" ? () => handleCardTap(i) : undefined}
+              className={`${itemClass} cursor-pointer bg-slate-100`}
+              onClick={() => handleCardTap(i)}
             />
+          ) : (
+            <div key={item.id} className="flex h-full w-full shrink-0 snap-center items-center justify-center">
+              <img src={item.url} alt="" loading="lazy" className="block max-h-[75dvh] max-w-full" />
+            </div>
           ),
         )}
       </div>

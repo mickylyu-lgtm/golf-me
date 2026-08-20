@@ -97,7 +97,7 @@ export function FullscreenMediaViewer({ media, initialIndex = 0, onClose }: Full
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
         onTouchCancel={onTouchEnd}
-        className={`h-full max-h-[85vh] w-full max-w-2xl ${dragging ? "" : "transition-transform duration-200 ease-out"}`}
+        className={`h-full max-h-[85dvh] w-full max-w-2xl ${dragging ? "" : "transition-transform duration-200 ease-out"}`}
         style={{ transform: `translateY(${dragY}px)` }}
       >
         <MediaCarousel media={media} variant="lightbox" initialIndex={initialIndex} />
