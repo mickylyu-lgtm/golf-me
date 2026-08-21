@@ -269,6 +269,24 @@ body {
       animation: none;
     }
   }
+  /* A landscape video, object-cover'd into a portrait phone screen, only
+     ever shows a cropped middle sliver of the real frame. Rotated 90° and
+     re-sized onto the screen's other axis, it fills with the actual
+     frame instead — a no-op the instant the phone is turned sideways for
+     real, since orientation:landscape no longer matches. !important because
+     this has to win over the h-full/w-full/object-cover utility classes
+     already on the same element, not just add alongside them. */
+  @media (orientation: portrait) {
+    .video-landscape-fill {
+      position: absolute !important;
+      top: 50% !important;
+      left: 50% !important;
+      width: 100dvh !important;
+      height: 100dvw !important;
+      max-width: none !important;
+      transform: translate(-50%, -50%) rotate(90deg);
+    }
+  }
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }

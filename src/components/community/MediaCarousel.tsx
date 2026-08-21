@@ -31,6 +31,16 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
   const wasHoldingRef = useRef(false);
   const videoElsRef = useRef<Map<string, HTMLVideoElement>>(new Map());
   const [playingIds, setPlayingIds] = useState<Set<string>>(new Set());
+  // A landscape swing video, object-cover'd to fill a portrait phone
+  // screen, only ever shows a cropped middle sliver of the frame — the
+  // request was to fill with the video's OWN shape instead. Rotating the
+  // element 90° and swapping its box to the screen's other axis (CSS only,
+  // scoped to `@media (orientation: portrait)` in index.css so it's a
+  // no-op the instant the phone is actually turned sideways) fills the
+  // screen with the real frame rather than a crop of it, without needing
+  // the Screen Orientation Lock API — iOS Safari has never supported
+  // locking orientation from web content.
+  const [landscapeIds, setLandscapeIds] = useState<Set<string>>(new Set());
 
   // Jump to the tapped slide instantly (no animated scroll) the moment the
   // lightbox mounts, rather than opening on slide 0 every time.
@@ -172,7 +182,7 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
               // tap-to-pause/hold-for-2x, and ordinary finger tremor during
               // those was otherwise nudging the whole viewer's drag state
               // too, producing a visible snap-back jitter on every touch.
-              <div key={item.id} className="relative h-full w-full shrink-0 snap-center" data-video-controls>
+              <div key={item.id} className="relative h-full w-full shrink-0 snap-center overflow-hidden" data-video-controls>
                 {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
                 <video
                   ref={(el) => {
@@ -184,7 +194,11 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
                   playsInline
                   loop
                   preload="metadata"
-                  className="h-full w-full object-cover"
+                  className={`h-full w-full object-cover ${landscapeIds.has(item.id) ? "video-landscape-fill" : ""}`}
+                  onLoadedMetadata={(e) => {
+                    const el = e.currentTarget;
+                    if (el.videoWidth > el.videoHeight) setLandscapeIds((prev) => new Set(prev).add(item.id));
+                  }}
                   onClick={(e) => togglePlay(item, e.currentTarget)}
                 />
                 {/* Right-half hold-for-2x zone, layered over the video —
