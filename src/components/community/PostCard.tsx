@@ -14,7 +14,6 @@ import {
   ThumbsUp,
   Trash2,
   Video,
-  Volume2,
   VolumeX,
 } from "lucide-react";
 import type { CommunityPost, PostMediaItem } from "../../types";
@@ -69,39 +68,17 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
   const [mediaLightboxIndex, setMediaLightboxIndex] = useState<number | null>(null);
-  const [videoMuted, setVideoMuted] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const lastVideoTapRef = useRef(0);
-  const singleTapTimerRef = useRef<number | null>(null);
 
-  // Reels-style double-tap: a tap toggles mute, but a SECOND tap within
-  // 300ms instead opens the fullscreen viewer — so a single tap has to wait
-  // out that window before committing to the mute toggle, standard
-  // double-tap-gesture tradeoff (Instagram does the same thing).
+  // One tap opens the fullscreen viewer directly — previously this waited
+  // out a double-tap window (a single tap toggled feed mute, a second tap
+  // opened fullscreen), but the feed video has no mute control of its own
+  // anymore: it always autoplays muted, and a single deliberate tap is all
+  // it takes to get to the real, unmuted, full-screen experience instead.
   function handleVideoTap(e: React.MouseEvent) {
     stop(e);
-    const now = Date.now();
-    const isDoubleTap = now - lastVideoTapRef.current < 300;
-    lastVideoTapRef.current = now;
-    if (isDoubleTap) {
-      if (singleTapTimerRef.current !== null) {
-        window.clearTimeout(singleTapTimerRef.current);
-        singleTapTimerRef.current = null;
-      }
-      setMediaLightboxIndex(0);
-      return;
-    }
-    singleTapTimerRef.current = window.setTimeout(() => {
-      setVideoMuted((prev) => !prev);
-      singleTapTimerRef.current = null;
-    }, 300);
+    setMediaLightboxIndex(0);
   }
-
-  useEffect(() => {
-    return () => {
-      if (singleTapTimerRef.current !== null) window.clearTimeout(singleTapTimerRef.current);
-    };
-  }, []);
 
   // Feed/Reels-style autoplay: the video itself plays/pauses based on
   // whether it's actually on-screen, not on a manual tap-to-start — matches
@@ -287,14 +264,16 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
               src={post.videoUrl}
               poster={post.videoThumbnailUrl}
               preload="metadata"
-              muted={videoMuted}
+              muted
               loop
               playsInline
               onClick={handleVideoTap}
               className="max-h-96 w-full cursor-pointer rounded-xl bg-black"
             />
+            {/* Always muted here by design (see handleVideoTap) — this just
+                signals that tapping through to fullscreen is how to get sound. */}
             <div className="pointer-events-none absolute bottom-2.5 right-2.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white">
-              {videoMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+              <VolumeX size={14} />
             </div>
           </div>
           <SwingAnalysisPanel status={post.swingAnalysisStatus} />

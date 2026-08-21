@@ -8,6 +8,7 @@ import { Button } from "../components/ui/Button";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 import { ReportModal } from "../components/trust/ReportModal";
 import { ChatComposer } from "../components/chat/ChatComposer";
+import { dmDraftKey, loadChatDraft, saveChatDraft } from "../lib/chatDraft";
 import { handicapLabel } from "../lib/format";
 import { useLocale } from "../i18n/LocaleContext";
 
@@ -30,7 +31,7 @@ export function DirectMessageThread() {
   const { showToast } = useToast();
   const { t } = useLocale();
 
-  const [text, setText] = useState("");
+  const [text, setText] = useState(() => (id ? loadChatDraft(dmDraftKey(id)) : ""));
   const [menuOpen, setMenuOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
@@ -68,6 +69,19 @@ export function DirectMessageThread() {
     bottomRef.current?.scrollIntoView({ block: "end" });
   }, [messages.length]);
 
+  // Switching straight from one thread to another reuses this same mounted
+  // component (only the `id` route param changes), so without this the
+  // previous thread's still-typed draft would just carry over into whatever
+  // conversation is opened next instead of that conversation's own draft.
+  useEffect(() => {
+    setText(id ? loadChatDraft(dmDraftKey(id)) : "");
+  }, [id]);
+
+  function updateText(value: string) {
+    setText(value);
+    if (id) saveChatDraft(dmDraftKey(id), value);
+  }
+
   if (id === currentUser.id) return <Navigate to="/profile" replace />;
   if (!other) {
     return (
@@ -85,10 +99,10 @@ export function DirectMessageThread() {
   async function handleSend() {
     if (!text.trim() || !other) return;
     const pendingText = text;
-    setText("");
+    updateText("");
     const sent = await sendDirectMessage(other.id, pendingText);
     if (!sent) {
-      setText(pendingText);
+      updateText(pendingText);
       showToast("Message didn't send — try again in a moment.", "info");
     }
   }
@@ -215,7 +229,7 @@ export function DirectMessageThread() {
               You can't message this golfer right now.
             </p>
           ) : (
-            <ChatComposer value={text} onChange={setText} onSend={handleSend} />
+            <ChatComposer value={text} onChange={updateText} onSend={handleSend} />
           )}
         </div>
       </div>

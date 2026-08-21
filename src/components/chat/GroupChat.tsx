@@ -2,12 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { useData } from "../../context/DataContext";
 import { Avatar } from "../ui/Avatar";
 import { ChatComposer } from "./ChatComposer";
+import { groupChatDraftKey, loadChatDraft, saveChatDraft } from "../../lib/chatDraft";
 import { useLocale } from "../../i18n/LocaleContext";
 
 export function GroupChat({ callId }: { callId: string }) {
   const { currentUser, getGolfer, messagesForCall, sendMessage } = useData();
   const { t } = useLocale();
-  const [text, setText] = useState("");
+  const [text, setText] = useState(() => loadChatDraft(groupChatDraftKey(callId)));
   const bottomRef = useRef<HTMLDivElement>(null);
   const messages = messagesForCall(callId);
 
@@ -15,10 +16,22 @@ export function GroupChat({ callId }: { callId: string }) {
     bottomRef.current?.scrollIntoView({ block: "end" });
   }, [messages.length]);
 
+  // Same golf call's chat can be revisited across navigations without this
+  // component staying mounted the whole time — restore whatever was typed
+  // but never sent, instead of always starting from a blank box.
+  useEffect(() => {
+    setText(loadChatDraft(groupChatDraftKey(callId)));
+  }, [callId]);
+
+  function updateText(value: string) {
+    setText(value);
+    saveChatDraft(groupChatDraftKey(callId), value);
+  }
+
   function handleSend() {
     if (!text.trim()) return;
     sendMessage(callId, text);
-    setText("");
+    updateText("");
   }
 
   return (
@@ -53,7 +66,7 @@ export function GroupChat({ callId }: { callId: string }) {
         })}
         <div ref={bottomRef} />
       </div>
-      <ChatComposer value={text} onChange={setText} onSend={handleSend} placeholder={t("chat.messagePlaceholder")} />
+      <ChatComposer value={text} onChange={updateText} onSend={handleSend} placeholder={t("chat.messagePlaceholder")} />
     </div>
   );
 }
