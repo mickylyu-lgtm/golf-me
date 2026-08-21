@@ -14,6 +14,7 @@ import {
   ThumbsUp,
   Trash2,
   Video,
+  Volume2,
   VolumeX,
 } from "lucide-react";
 import type { CommunityPost, PostMediaItem } from "../../types";
@@ -68,16 +69,24 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
   const [mediaLightboxIndex, setMediaLightboxIndex] = useState<number | null>(null);
+  const [feedMuted, setFeedMuted] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
 
-  // One tap opens the fullscreen viewer directly — previously this waited
-  // out a double-tap window (a single tap toggled feed mute, a second tap
-  // opened fullscreen), but the feed video has no mute control of its own
-  // anymore: it always autoplays muted, and a single deliberate tap is all
-  // it takes to get to the real, unmuted, full-screen experience instead.
+  // One tap anywhere on the video opens the fullscreen viewer directly —
+  // previously this waited out a double-tap window (a single tap toggled
+  // feed mute, a second tap opened fullscreen). The bottom-right mute
+  // button is a sibling of the video, not a click target inside it, so it
+  // has its own handler below and never reaches this one.
   function handleVideoTap(e: React.MouseEvent) {
     stop(e);
     setMediaLightboxIndex(0);
+  }
+
+  function toggleFeedMute(e: React.MouseEvent) {
+    stop(e);
+    const el = videoRef.current;
+    if (el) el.muted = !el.muted;
+    setFeedMuted((m) => !m);
   }
 
   // Feed/Reels-style autoplay: the video itself plays/pauses based on
@@ -264,17 +273,24 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
               src={post.videoUrl}
               poster={post.videoThumbnailUrl}
               preload="metadata"
-              muted
+              muted={feedMuted}
               loop
               playsInline
               onClick={handleVideoTap}
               className="max-h-96 w-full cursor-pointer rounded-xl bg-black"
             />
-            {/* Always muted here by design (see handleVideoTap) — this just
-                signals that tapping through to fullscreen is how to get sound. */}
-            <div className="pointer-events-none absolute bottom-2.5 right-2.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white">
-              <VolumeX size={14} />
-            </div>
+            {/* A real button, not a decorative overlay — it sits above the
+                video in stacking order and stops its own click from
+                bubbling, so tapping it toggles feed sound in place instead
+                of being caught by the video's own tap-to-fullscreen. */}
+            <button
+              type="button"
+              aria-label={feedMuted ? "Unmute" : "Mute"}
+              onClick={toggleFeedMute}
+              className="absolute bottom-2.5 right-2.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/50 text-white"
+            >
+              {feedMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+            </button>
           </div>
           <SwingAnalysisPanel status={post.swingAnalysisStatus} />
           {isOwn &&
