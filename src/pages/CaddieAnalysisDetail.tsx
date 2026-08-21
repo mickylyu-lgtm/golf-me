@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
-import { AlertCircle, ArrowLeft, ArrowUpRight, Check, Loader2, Share2, Sparkles } from "lucide-react";
+import { AlertCircle, ArrowLeft, ArrowUpRight, Check, Loader2, Share2 } from "lucide-react";
+import { CaddieNavIcon } from "../components/icons/CaddieNavIcon";
 import { useData } from "../context/DataContext";
 import { useToast } from "../context/ToastContext";
 import { useLocale } from "../i18n/LocaleContext";
@@ -150,7 +151,7 @@ export function CaddieAnalysisDetail() {
         <div className="flex flex-col gap-3.5 rounded-2xl border border-fairway-100 bg-fairway-50/40 p-4">
           <div className="flex items-center justify-between gap-2">
             <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-fairway-700">
-              <Sparkles size={13} /> {t("caddie.title")}
+              <CaddieNavIcon size={14} /> {t("caddie.title")}
             </p>
             <Badge tone="outline">{cameraAngleLabel[details.cameraAngle]}</Badge>
           </div>
@@ -205,7 +206,7 @@ export function CaddieAnalysisDetail() {
         // Legacy/demo row: no `details` (analysis_json), only the older flat columns.
         <div className="flex flex-col gap-3.5 rounded-2xl border border-fairway-100 bg-fairway-50/40 p-4">
           <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-fairway-700">
-            <Sparkles size={13} /> {t("caddie.title")}
+            <CaddieNavIcon size={14} /> {t("caddie.title")}
           </p>
           {analysis.analysisSummary && <p className="text-sm text-slate-700">{analysis.analysisSummary}</p>}
           <Section title={t("caddie.whatLooksGood")} items={analysis.strengths} />
