@@ -148,7 +148,7 @@ export function MatchPreferencesDetail() {
           the live-save version didn't have. Previously `fixed` to the
           screen bottom, which stayed visible over the content the whole
           time instead of just sitting where the form ends. */}
-      <div className="mt-4">
+      <div>
         <Button size="lg" fullWidth disabled={!isDirty || saving} onClick={handleSave}>
           {saving ? t("preferences.saving") : t("common.saveChanges")}
         </Button>
