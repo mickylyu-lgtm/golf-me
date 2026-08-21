@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowUp, MoreHorizontal, ShieldAlert, ShieldCheck, ShieldX, Trash2 } from "lucide-react";
+import { MoreHorizontal, ShieldAlert, ShieldCheck, ShieldX, ThumbsUp, Trash2 } from "lucide-react";
 import type { PostComment } from "../../types";
 import { useData } from "../../context/DataContext";
 import { useToast } from "../../context/ToastContext";
@@ -68,7 +68,7 @@ export function CommentItem({ comment, postId, replies }: CommentItemProps) {
               onClick={() => toggleCommentUpvote(comment.id)}
               className={`flex items-center gap-0.5 font-semibold transition-colors duration-150 ${upvoted ? "text-fairway-700" : "hover:text-slate-600"}`}
             >
-              <ArrowUp size={11} /> {commentUpvoteCount(comment.id)}
+              <ThumbsUp size={11} fill={upvoted ? "currentColor" : "none"} /> {commentUpvoteCount(comment.id)}
             </button>
             {!isReply && (
               <button onClick={() => setReplyOpen((v) => !v)} className="font-semibold hover:text-slate-600">
