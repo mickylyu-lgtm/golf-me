@@ -5,8 +5,9 @@ import type { PostMediaItem } from "../../types";
 interface MediaCarouselProps {
   media: PostMediaItem[];
   /** Card-scale rendering (fixed max height, cropped to fill) vs. fullscreen
-   * lightbox (full-bleed edge to edge, also cropped to fill; hold-right-to-2x
-   * on video). */
+   * lightbox (full-bleed edge to edge, video letterboxed/contained rather
+   * than cropped so the full frame is always visible; hold-right-to-2x on
+   * video). */
   variant: "card" | "lightbox";
   /** Card variant only — a tap opens the fullscreen lightbox at this index. */
   onItemClick?: (index: number) => void;
@@ -32,17 +33,6 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
   // element itself starts muted by default, and only the autoplay effect
   // below or an explicit tap flips one into this set).
   const [unmutedIds, setUnmutedIds] = useState<Set<string>>(new Set());
-  // A landscape swing video, object-cover'd to fill a portrait phone
-  // screen, only ever shows a cropped middle sliver of the frame — the
-  // request was to fill with the video's OWN shape instead. Rotating the
-  // element 90° and swapping its box to the screen's other axis (CSS only,
-  // scoped to `@media (orientation: portrait)` in index.css so it's a
-  // no-op the instant the phone is actually turned sideways) fills the
-  // screen with the real frame rather than a crop of it, without needing
-  // the Screen Orientation Lock API — iOS Safari has never supported
-  // locking orientation from web content.
-  const [landscapeIds, setLandscapeIds] = useState<Set<string>>(new Set());
-
   // Jump to the tapped slide instantly (no animated scroll) the moment the
   // lightbox mounts, rather than opening on slide 0 every time.
   useEffect(() => {
@@ -186,17 +176,16 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
                 }}
               />
             ) : (
-              // Full-bleed, edge to edge — Instagram Stories style, not a
-              // letterboxed/contained frame. Cropping (object-cover) is the
-              // deliberate tradeoff that comes with that: the full frame
-              // isn't always visible, only the center-cropped fill.
+              // Full-bleed, edge to edge, but the video itself is
+              // letterboxed/contained (object-contain on a black backdrop)
+              // so the full frame is always visible instead of cropped.
               // data-video-controls: tells FullscreenMediaViewer's own drag-
               // to-dismiss tracking to require a much more deliberate
               // vertical drag from here before engaging — this area owns
               // tap-to-pause/hold-for-2x, and ordinary finger tremor during
               // those was otherwise nudging the whole viewer's drag state
               // too, producing a visible snap-back jitter on every touch.
-              <div key={item.id} className="relative h-full w-full shrink-0 snap-center overflow-hidden" data-video-controls>
+              <div key={item.id} className="relative h-full w-full shrink-0 snap-center overflow-hidden bg-black" data-video-controls>
                 {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
                 <video
                   ref={(el) => {
@@ -208,11 +197,7 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
                   playsInline
                   loop
                   preload="metadata"
-                  className={`h-full w-full object-cover ${landscapeIds.has(item.id) ? "video-landscape-fill" : ""}`}
-                  onLoadedMetadata={(e) => {
-                    const el = e.currentTarget;
-                    if (el.videoWidth > el.videoHeight) setLandscapeIds((prev) => new Set(prev).add(item.id));
-                  }}
+                  className="h-full w-full object-contain"
                   onClick={(e) => togglePlay(item, e.currentTarget)}
                 />
                 {/* Right-half hold-for-2x zone, layered over the video —
