@@ -14,6 +14,17 @@ const DISMISS_VELOCITY = 0.5;
 // swipe-between-items gesture, not a dismiss drag — avoids fighting the
 // scroll-snap track over which axis "owns" a mostly-diagonal drag.
 const AXIS_LOCK_PX = 8;
+// A touch that starts on the video's own tap/hold controls (play/pause,
+// hold-for-2x — [data-video-controls]) needs a much more deliberate drag
+// before it's read as a dismiss rather than the video's own gesture, the
+// same "stricter threshold, not a full exclusion" pattern RootTabCarousel
+// uses for buttons/cards. A full exclusion isn't an option here the way it
+// is for a slider — the video is full-bleed, so it IS the entire dismiss
+// surface; excluding it would leave nothing to drag from at all. Without
+// this, ordinary finger tremor during a tap or hold nudged the whole
+// viewer's drag state just enough to snap back on release, reading as a
+// glitch on every touch.
+const INTERACTIVE_AXIS_LOCK_PX = 45;
 
 // The fullscreen home for both a swing post's single video and a
 // multi-photo/video post's carousel — same drag-down-to-dismiss gesture
@@ -23,13 +34,19 @@ const AXIS_LOCK_PX = 8;
 export function FullscreenMediaViewer({ media, initialIndex = 0, onClose }: FullscreenMediaViewerProps) {
   const [dragY, setDragY] = useState(0);
   const [dragging, setDragging] = useState(false);
-  const dragStateRef = useRef<{ startX: number; startY: number; startTime: number; lastY: number; axis: "none" | "vertical" | "horizontal" } | null>(
-    null,
-  );
+  const dragStateRef = useRef<{
+    startX: number;
+    startY: number;
+    startTime: number;
+    lastY: number;
+    axis: "none" | "vertical" | "horizontal";
+    startedOnInteractive: boolean;
+  } | null>(null);
 
   function onTouchStart(e: React.TouchEvent) {
+    const startedOnInteractive = e.target instanceof Element && e.target.closest("[data-video-controls]") !== null;
     const t = e.touches[0];
-    dragStateRef.current = { startX: t.clientX, startY: t.clientY, startTime: Date.now(), lastY: t.clientY, axis: "none" };
+    dragStateRef.current = { startX: t.clientX, startY: t.clientY, startTime: Date.now(), lastY: t.clientY, axis: "none", startedOnInteractive };
   }
 
   function onTouchMove(e: React.TouchEvent) {
@@ -38,8 +55,9 @@ export function FullscreenMediaViewer({ media, initialIndex = 0, onClose }: Full
     const t = e.touches[0];
     const dx = t.clientX - state.startX;
     const dy = t.clientY - state.startY;
+    const lockPx = state.startedOnInteractive ? INTERACTIVE_AXIS_LOCK_PX : AXIS_LOCK_PX;
 
-    if (state.axis === "none" && (Math.abs(dx) > AXIS_LOCK_PX || Math.abs(dy) > AXIS_LOCK_PX)) {
+    if (state.axis === "none" && (Math.abs(dx) > lockPx || Math.abs(dy) > lockPx)) {
       state.axis = Math.abs(dy) > Math.abs(dx) ? "vertical" : "horizontal";
     }
     if (state.axis !== "vertical") return;

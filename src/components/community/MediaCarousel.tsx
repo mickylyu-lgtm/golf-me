@@ -166,7 +166,13 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
               // letterboxed/contained frame. Cropping (object-cover) is the
               // deliberate tradeoff that comes with that: the full frame
               // isn't always visible, only the center-cropped fill.
-              <div key={item.id} className="relative h-full w-full shrink-0 snap-center">
+              // data-video-controls: tells FullscreenMediaViewer's own drag-
+              // to-dismiss tracking to require a much more deliberate
+              // vertical drag from here before engaging — this area owns
+              // tap-to-pause/hold-for-2x, and ordinary finger tremor during
+              // those was otherwise nudging the whole viewer's drag state
+              // too, producing a visible snap-back jitter on every touch.
+              <div key={item.id} className="relative h-full w-full shrink-0 snap-center" data-video-controls>
                 {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
                 <video
                   ref={(el) => {
