@@ -287,8 +287,11 @@ Deno.serve(async (req: Request) => {
       },
       body: JSON.stringify({ file: { display_name: `swing-${row.id}` } }),
     });
-    const uploadUrl = startRes.headers.get("x-goog-upload-url");
-    if (!startRes.ok || !uploadUrl) return await fail(`Gemini upload start ${startRes.status}`, "Caddie couldn't analyze this swing.", 502);
+    if (!startRes.ok || !startRes.headers.get("x-goog-upload-url")) {
+      const errBody = await startRes.text().catch(() => "");
+      return await fail(`Gemini upload start ${startRes.status}: ${errBody.slice(0, 500)}`, "Caddie couldn't analyze this swing.", 502);
+    }
+    const uploadUrl = startRes.headers.get("x-goog-upload-url")!;
 
     const uploadRes = await fetch(uploadUrl, {
       method: "POST",
@@ -299,7 +302,10 @@ Deno.serve(async (req: Request) => {
       },
       body: videoBytes,
     });
-    if (!uploadRes.ok) return await fail(`Gemini upload finalize ${uploadRes.status}`, "Caddie couldn't analyze this swing.", 502);
+    if (!uploadRes.ok) {
+      const errBody = await uploadRes.text().catch(() => "");
+      return await fail(`Gemini upload finalize ${uploadRes.status}: ${errBody.slice(0, 500)}`, "Caddie couldn't analyze this swing.", 502);
+    }
     const uploadBody = await uploadRes.json();
     const file = uploadBody.file;
     if (!file?.uri || !file?.name) return await fail("Gemini upload response missing file.uri/name", "Caddie couldn't analyze this swing.", 502);
@@ -357,7 +363,10 @@ Deno.serve(async (req: Request) => {
         },
       }),
     });
-    if (!genRes.ok) return await fail(`Gemini generateContent ${genRes.status}`, "Caddie couldn't analyze this swing.", 502);
+    if (!genRes.ok) {
+      const errBody = await genRes.text().catch(() => "");
+      return await fail(`Gemini generateContent ${genRes.status}: ${errBody.slice(0, 500)}`, "Caddie couldn't analyze this swing.", 502);
+    }
     const genBody = await genRes.json();
     const text = genBody?.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!text) return await fail("Gemini response had no text part", "Caddie couldn't analyze this swing.", 502);
