@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Play, Volume2, VolumeX } from "lucide-react";
 import type { PostMediaItem } from "../../types";
+import { enterNativeVideoFullscreen } from "../../lib/video";
 
 interface MediaCarouselProps {
   media: PostMediaItem[];
@@ -169,10 +170,14 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
                 className={`${itemClass} bg-black`}
                 onClickCapture={(e) => {
                   // Only a plain tap on the video body (not the native
-                  // controls bar) opens fullscreen — otherwise tapping
-                  // play/pause/scrub would also fire it.
-                  const target = e.target as HTMLElement;
-                  if (target.tagName === "VIDEO") onItemClick?.(i);
+                  // controls bar) triggers this — otherwise tapping
+                  // play/pause/scrub would also fire it. Goes straight to
+                  // the native fullscreen player (±10s skip, time bar) in
+                  // one tap, same as Caddie's own video, rather than the
+                  // custom in-app lightbox — that stays reserved for photo
+                  // posts and multi-item posts, where swiping between
+                  // items is the point.
+                  if (e.target instanceof HTMLVideoElement) enterNativeVideoFullscreen(e.target);
                 }}
               />
             ) : (
