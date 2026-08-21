@@ -417,6 +417,29 @@ export interface CaddieDrill {
   steps: string[];
 }
 
+// A single named phase's best-estimate timestamp — null when Roboflow's
+// per-frame pose data didn't support a confident identification, never a
+// guessed number. Every phase except impact is a point in time; impact is
+// deliberately a window (see CaddieSwingPhases.impact) since pose-only
+// analysis can't reliably pin an exact contact frame.
+export interface CaddiePhaseMoment {
+  timestampSeconds: number | null;
+  confidence: CaddieConfidence | null;
+}
+
+export interface CaddieSwingPhases {
+  address: CaddiePhaseMoment;
+  backswing: CaddiePhaseMoment;
+  top: CaddiePhaseMoment;
+  downswing: CaddiePhaseMoment;
+  impact: {
+    windowStartSeconds: number | null;
+    windowEndSeconds: number | null;
+    confidence: CaddieConfidence | null;
+  };
+  followThrough: CaddiePhaseMoment;
+}
+
 // The real Gemini structured response — see supabase/functions/analyze-swing.
 // Kept separate from the flat strengths/issues/recommendations/drills below
 // (which stay populated too, derived from this at write time) so every
@@ -429,6 +452,9 @@ export interface CaddieAnalysisDetails {
   focus: CaddieFocus;
   drill: CaddieDrill;
   limitations: string[];
+  // Undefined for analyses from before the Roboflow pipeline shipped —
+  // those have no phase timestamps to seek the replay video to.
+  phases?: CaddieSwingPhases;
 }
 
 export interface CaddieAnalysis {

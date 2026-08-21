@@ -14,7 +14,7 @@ import { supabase } from "../lib/supabase";
 
 const COMMUNITY_MEDIA_BUCKET = "community-media"; // same bucket CreatePost.tsx's Swing Post upload uses — no second media pipeline
 const MAX_SWING_VIDEO_BYTES = 200 * 1024 * 1024; // matches the Storage bucket's own file_size_limit
-const MAX_SWING_VIDEO_SECONDS = 30; // beta recommendation — short clips only, see analyze-swing's frame-sampling doc comment
+const MAX_SWING_VIDEO_SECONDS = 15; // Caddie's Roboflow pass calls once per sampled frame (~8fps) — a longer cap multiplies calls/latency per analysis, see analyze-swing's ANALYSIS_FPS comment
 
 // Direct-upload Caddie flow: pick a swing video, optionally label the club,
 // get real Gemini feedback. Reuses the exact community-media Storage upload

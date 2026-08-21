@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "./AuthContext";
 import { useLocale } from "../i18n/LocaleContext";
-import type { CaddieAnalysis, CaddieAnalysisDetails, CaddieAnalysisStatus, CaddieSourceType } from "../types";
+import type { CaddieAnalysis, CaddieAnalysisDetails, CaddieAnalysisStatus, CaddiePhaseMoment, CaddieSourceType, CaddieSwingPhases } from "../types";
 
 interface CaddieAnalysisRow {
   id: string;
@@ -31,6 +31,31 @@ interface CaddieAnalysisRow {
 // analysis_json is stored exactly as Gemini returned it (snake_case field
 // names) — this maps it into the camelCase shape the rest of the app uses.
 // Real rows only; demo mode's fixture data never sets analysis_json.
+function jsonToPhaseMoment(raw: Record<string, unknown> | undefined): CaddiePhaseMoment {
+  return {
+    timestampSeconds: typeof raw?.timestamp_seconds === "number" ? raw.timestamp_seconds : null,
+    confidence: (raw?.confidence as CaddiePhaseMoment["confidence"]) ?? null,
+  };
+}
+
+function jsonToPhases(raw: unknown): CaddieSwingPhases | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const phases = raw as Record<string, Record<string, unknown>>;
+  const impact = phases.impact ?? {};
+  return {
+    address: jsonToPhaseMoment(phases.address),
+    backswing: jsonToPhaseMoment(phases.backswing),
+    top: jsonToPhaseMoment(phases.top),
+    downswing: jsonToPhaseMoment(phases.downswing),
+    impact: {
+      windowStartSeconds: typeof impact.window_start_seconds === "number" ? impact.window_start_seconds : null,
+      windowEndSeconds: typeof impact.window_end_seconds === "number" ? impact.window_end_seconds : null,
+      confidence: (impact.confidence as CaddiePhaseMoment["confidence"]) ?? null,
+    },
+    followThrough: jsonToPhaseMoment(phases.follow_through),
+  };
+}
+
 function jsonToDetails(json: Record<string, unknown> | null): CaddieAnalysisDetails | undefined {
   if (!json) return undefined;
   const workOn = Array.isArray(json.work_on) ? (json.work_on as Record<string, unknown>[]) : [];
@@ -48,6 +73,7 @@ function jsonToDetails(json: Record<string, unknown> | null): CaddieAnalysisDeta
     focus: { title: String(focus.title ?? ""), instruction: String(focus.instruction ?? "") },
     drill: { name: String(drill.name ?? ""), steps: Array.isArray(drill.steps) ? (drill.steps as string[]) : [] },
     limitations: Array.isArray(json.limitations) ? (json.limitations as string[]) : [],
+    phases: jsonToPhases(json.phases),
   };
 }
 

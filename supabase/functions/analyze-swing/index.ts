@@ -1,24 +1,37 @@
-// Real Caddie swing analysis, server-side. GEMINI_API_KEY lives only here
-// (a Supabase Edge Function secret, injected into Deno.env automatically —
-// same posture as every other secret in this project, see delete-account
-// and course-search) and never reaches the client, a log line, or a
-// response body.
+// Real Caddie swing analysis, server-side. GEMINI_API_KEY, ROBOFLOW_API_KEY,
+// and FRAME_EXTRACT_SECRET live only here (Supabase Edge Function secrets,
+// injected into Deno.env automatically) and never reach the client, a log
+// line, or a response body.
 //
-// This function is the only integration point for a real analysis
-// provider — see src/lib/swingAnalysis.ts on the frontend, which this
-// replaces. It owns the full lifecycle of a caddie_analyses row for a
-// request: insert at 'processing' (so rate-limiting/duplicate-detection has
-// something to look at even mid-request), then update to 'complete' or
-// 'failed'. It never fabricates a result — a Gemini failure updates the row
-// to 'failed' with a safe, non-sensitive error_message, never invented
-// feedback (see REQUIRED TEST — FAILURE in the product brief).
+// Pipeline: fetch the swing video -> extract sampled frames via a separate
+// Vercel/Node function (api/extract-frames.ts — ffmpeg isn't available in
+// this Deno runtime) -> run Roboflow's validated six-phase pose workflow
+// per frame (its hosted HTTP API is stateless across calls, confirmed by
+// live testing, so no cross-frame session is assumed) -> filter out any
+// unreliable/unavailable metric before it ever reaches Gemini -> Gemini
+// gets the trusted pose time-series AND the original video, and identifies
+// the six phases + coaching feedback itself (no separate phase-detection
+// state machine reimplemented here — see DEVELOPMENT_STATUS for why).
+// It never fabricates a result — any failure deletes the row rather than
+// saving invented feedback (see REQUIRED TEST — FAILURE in the product
+// brief).
+//
+// This request/response can't stay open for the whole pipeline (frame
+// extraction + dozens of Roboflow calls + Gemini easily exceeds a
+// reasonable browser-request duration) — the row is inserted and returned
+// as 'processing' immediately, then the rest of the work continues via
+// EdgeRuntime.waitUntil() after the response is sent. The client's
+// existing realtime subscription on caddie_analyses already updates the UI
+// when the row later flips to 'complete'/'failed', so this needed no
+// frontend polling changes.
 //
 // Every DB operation here uses a client scoped to the CALLER's own JWT
 // (forwarded Authorization header against the anon key), not the service
-// role — caddie_analyses' existing RLS (owner-only select/insert/update)
-// and its ownership trigger (Ask Caddie only on your own community posts,
-// see migration 20260817091500) already enforce everything this function
-// needs, so there is no reason to bypass them with a service-role client.
+// role — caddie_analyses' existing RLS (owner-only select/insert/update/
+// delete) and its ownership trigger (Ask Caddie only on your own community
+// posts, see migration 20260817091500) already enforce everything this
+// function needs, so there is no reason to bypass them with a service-role
+// client.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -26,11 +39,29 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const GEMINI_MODEL = "gemini-3.6-flash"; // gemini-2.5-flash was retired for new API keys/projects (Gemini API started 404ing it with "no longer available to new users" on 2026-08-21); 3.6-flash is Google's named replacement, same video-understanding + structured-JSON-output support
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com";
 const COOLDOWN_SECONDS = 30; // blocks accidental double-taps/rapid re-asks
-const DAILY_LIMIT_PER_USER = 10; // caps worst-case per-user Gemini spend for the beta
+const DAILY_LIMIT_PER_USER = 10; // caps worst-case per-user Gemini+Roboflow spend for the beta — covers both providers together, not separately
 const MAX_VIDEO_BYTES = 200 * 1024 * 1024; // matches the community-media Storage bucket's own file_size_limit
 const STALE_PROCESSING_MINUTES = 5; // a 'processing' row older than this is treated as abandoned, not an active duplicate
 const FILE_ACTIVE_POLL_ATTEMPTS = 6;
 const FILE_ACTIVE_POLL_DELAY_MS = 2000;
+
+// Roboflow's validated, already-deployed six-phase pose workflow — do not
+// retrain/replace/rebuild this, see product brief point 37.
+const ROBOFLOW_WORKSPACE = "micky-lyu";
+const ROBOFLOW_WORKFLOW_ID = "golf-swing-six-phase-analysis-1787307394301";
+const ROBOFLOW_ENDPOINT = `https://serverless.roboflow.com/${ROBOFLOW_WORKSPACE}/workflows/${ROBOFLOW_WORKFLOW_ID}`;
+// The frame-extraction Node/Vercel function — see api/extract-frames.ts for
+// why frame extraction can't happen in this Deno runtime.
+const FRAME_EXTRACT_URL = "https://golfme.app/api/extract-frames";
+// Roboflow's own HTTP API confirmed stateless across calls (live-tested:
+// identical back-to-back requests never advanced frame_number or
+// current_phase) — the validated six-phase logic that ran during offline
+// testing isn't reproducible over independent per-frame HTTP calls, so
+// phase identification happens in the Gemini prompt below instead of a
+// reimplemented state machine here.
+const ANALYSIS_FPS = 8; // beta tradeoff vs. validation's full ~60fps/every-frame — see DEVELOPMENT_STATUS for the cost math (300+ calls/swing at 60fps vs. ~50-160 at 8fps)
+const ROBOFLOW_CONCURRENCY = 8; // parallel frame calls — keeps total wall-clock well inside this project's 400s (Pro plan) Edge Function budget without raising per-swing cost (concurrency doesn't add calls, just shortens wall time)
+const ROBOFLOW_MIN_SUCCESS_RATIO = 0.5; // below this fraction of frames successfully analyzed, fail honestly rather than hand Gemini a too-sparse pose signal
 
 const SUPPORTED_LOCALES = new Set(["en", "zh-CN", "zh-TW", "es", "ko", "ja"]);
 const LOCALE_NAMES: Record<string, string> = {
@@ -42,26 +73,30 @@ const LOCALE_NAMES: Record<string, string> = {
   ja: "Japanese",
 };
 
-// Gemini's Files API currently samples video at a fixed 1 frame/second with
-// no reliably-working way to raise that for a short, fast clip — the
-// documented `video_metadata.fps` request field returns a 500 on the
-// Gemini Developer API today (googleapis/python-genai#854, closed
-// "not planned"), so this function deliberately does not send it rather
-// than shipping a field that breaks every request. Mitigation instead:
-// the system prompt below tells the model explicitly that sampling is
-// coarse relative to how fast a swing moves, and to fold that into
-// per-item confidence/limitations rather than claiming precision the
-// frame rate can't support.
 const SYSTEM_PROMPT = `You are GolfMe Caddie, a conservative golf swing feedback assistant for recreational golfers. This is a BETA feature, not a professional biomechanics system or launch monitor.
 
+You are given two things: the swing video itself, and TRUSTED_POSE_DATA — a JSON time series of body-joint pose measurements for this exact swing, produced by a validated computer-vision pipeline (Roboflow) sampled at a fixed rate across the clip. TRUSTED_POSE_DATA is the authoritative source for body position/angle claims, not your own visual estimate of the video — but it only ever tracks BODY joints, never the club or ball.
+
 Rules:
-- Analyze only what is clearly, visibly supportable from the supplied video. Never invent measurements (exact clubface degrees, swing speed, attack angle, launch angle, shaft lean) unless a number is genuinely, visibly obvious.
-- The video is sampled at roughly 1 frame per second by the platform you're viewing it through. A full golf swing takes well under 2 seconds, so fast phases (transition, impact) may fall between sampled frames. When you're not confident you actually saw a fast phase clearly, say so — lower that item's confidence or note it in limitations rather than guessing.
+- Prefer TRUSTED_POSE_DATA over your own visual read whenever they could conflict. Never invent a body-angle or position number that isn't backed by TRUSTED_POSE_DATA.
+- TRUSTED_POSE_DATA already had unreliable/occluded/unavailable measurements removed before it reached you — if a frame or metric is simply absent, that means it was not reliably observed. Do not guess a value to fill the gap, and do not treat a gap as "zero" or "unchanged from the last frame."
+- Never estimate or state any of: exact clubface angle, exact club path, exact attack angle, exact swing speed, ball speed, launch angle, spin, strike location, or an exact club-ball contact frame/moment. TRUSTED_POSE_DATA never contains club or ball tracking, so none of these are ever supportable — not even approximately.
 - Never diagnose injuries or physical/medical conditions. Keep all wording golf-technique-focused (e.g. "your finish appears off-balance," never "you have a hip mobility problem").
 - Never claim professional certification or present yourself as a replacement for a human instructor.
 - Identify the camera angle (face_on, down_the_line, other, or uncertain) and only make claims that angle actually supports: face-on supports weight shift/lateral movement observations; down-the-line supports posture/swing-plane-tendency observations. Don't make a claim a camera angle wouldn't support.
+- Using TRUSTED_POSE_DATA's timestamps and the body movement they show, identify the approximate timestamp (in seconds, matching TRUSTED_POSE_DATA's own timestamp_seconds values) of each swing phase: address, backswing, top, downswing, follow_through. For any phase you cannot confidently place from the data, return a null timestamp rather than guessing.
+- Impact is the one phase you must NOT give an exact timestamp for — pose-only analysis (no club/ball tracking) cannot reliably pin the exact contact instant. Give a window (window_start_seconds/window_end_seconds) you're reasonably confident contains impact instead, with its own confidence, or null/null if you can't place it at all.
 - Be concise. Prioritize the most meaningful observations over listing every possible issue: up to 3 strengths, up to 3 work-on items, exactly 1 main focus, exactly 1 drill.
 - Respond with feedback suitable for a recreational golfer, not jargon-heavy technical analysis.`;
+
+const PHASE_MOMENT_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    timestamp_seconds: { type: "NUMBER", nullable: true },
+    confidence: { type: "STRING", enum: ["high", "medium", "low"], nullable: true },
+  },
+  required: ["timestamp_seconds", "confidence"],
+};
 
 const RESPONSE_SCHEMA = {
   type: "OBJECT",
@@ -97,10 +132,32 @@ const RESPONSE_SCHEMA = {
     limitations: {
       type: "ARRAY",
       items: { type: "STRING" },
-      description: "Honest caveats — e.g. camera angle or video quality prevented a confident read on something.",
+      description: "Honest caveats — e.g. camera angle, video quality, or sparse pose data prevented a confident read on something.",
+    },
+    phases: {
+      type: "OBJECT",
+      description: "Best-estimate timestamps for each swing phase, from TRUSTED_POSE_DATA. Null fields where not confidently identifiable — never a guess.",
+      properties: {
+        address: PHASE_MOMENT_SCHEMA,
+        backswing: PHASE_MOMENT_SCHEMA,
+        top: PHASE_MOMENT_SCHEMA,
+        downswing: PHASE_MOMENT_SCHEMA,
+        impact: {
+          type: "OBJECT",
+          description: "A window, never an exact timestamp — pose-only analysis can't reliably pin exact contact.",
+          properties: {
+            window_start_seconds: { type: "NUMBER", nullable: true },
+            window_end_seconds: { type: "NUMBER", nullable: true },
+            confidence: { type: "STRING", enum: ["high", "medium", "low"], nullable: true },
+          },
+          required: ["window_start_seconds", "window_end_seconds", "confidence"],
+        },
+        follow_through: PHASE_MOMENT_SCHEMA,
+      },
+      required: ["address", "backswing", "top", "downswing", "impact", "follow_through"],
     },
   },
-  required: ["summary", "camera_angle", "strengths", "work_on", "focus", "drill", "limitations"],
+  required: ["summary", "camera_angle", "strengths", "work_on", "focus", "drill", "limitations", "phases"],
 };
 
 const corsHeaders = {
@@ -113,8 +170,8 @@ function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", ...corsHeaders } });
 }
 
-// Development-only, safe fields — never the API key, a full video URL, an
-// auth token, or Gemini's raw error body.
+// Development-only, safe fields — never a key, a full video URL, an auth
+// token, or a raw provider error body.
 const DEV = Deno.env.get("SUPABASE_ENV") !== "production" && Deno.env.get("ENVIRONMENT") !== "production";
 function devLog(event: string, fields: Record<string, unknown> = {}) {
   if (DEV) console.log(`[analyze-swing] ${event}`, fields);
@@ -141,13 +198,87 @@ interface CaddieAnalysisRow {
   created_at: string;
 }
 
+interface ExtractedFrame {
+  frameIndex: number;
+  timestampSeconds: number;
+  base64: string;
+}
+
+// The filtered, trustworthy slice of one frame's Roboflow output — only
+// what's safe to hand to Gemini as fact. Never includes the raw
+// visualization image (huge, unneeded) or current_phase/phase_events
+// (Roboflow's own per-call state, which live testing showed doesn't carry
+// across independent HTTP calls — treating it as meaningful here would be
+// exactly the kind of invented signal this pipeline is built to avoid).
+interface TrustedFrame {
+  frame_index: number;
+  timestamp_seconds: number;
+  person_confidence: number | null;
+  keypoints: Record<string, { x: number; y: number; confidence: number }>;
+  body_metrics: Record<string, unknown>;
+}
+
+const KEEP_BODY_METRICS = new Set([
+  "spine_lean_degrees",
+  "left_elbow_angle_degrees",
+  "right_elbow_angle_degrees",
+  "left_knee_angle_degrees",
+  "right_knee_angle_degrees",
+  "shoulder_tilt_ratio",
+  "hip_tilt_ratio",
+  "normalized_wrist_y",
+  "wrist_vertical_velocity_normalized_per_frame",
+  "metrics_unavailable",
+]);
+
+function filterRoboflowFrame(frameIndex: number, timestampSeconds: number, output: Record<string, unknown>): TrustedFrame {
+  const rawKeypoints = (output.body_keypoints as Record<string, Record<string, unknown>>) ?? {};
+  const keypoints: TrustedFrame["keypoints"] = {};
+  for (const [name, kp] of Object.entries(rawKeypoints)) {
+    if (kp.metric_reliable === true && kp.available !== false && typeof kp.x === "number" && typeof kp.y === "number") {
+      keypoints[name] = { x: kp.x as number, y: kp.y as number, confidence: (kp.confidence as number) ?? 0 };
+    }
+  }
+  const rawMetrics = (output.body_metrics as Record<string, unknown>) ?? {};
+  const bodyMetrics: Record<string, unknown> = {};
+  for (const key of KEEP_BODY_METRICS) {
+    if (rawMetrics[key] !== undefined) bodyMetrics[key] = rawMetrics[key];
+  }
+  return {
+    frame_index: frameIndex,
+    timestamp_seconds: timestampSeconds,
+    person_confidence: typeof rawMetrics.person_confidence === "number" ? (rawMetrics.person_confidence as number) : null,
+    keypoints,
+    body_metrics: bodyMetrics,
+  };
+}
+
+async function mapWithConcurrency<T, R>(items: T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, worker));
+  return results;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
   if (req.method !== "POST") return jsonResponse({ error: "Method not allowed" }, 405);
 
   const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
-  if (!geminiApiKey) {
-    console.error("[analyze-swing] GEMINI_API_KEY is not configured.");
+  const roboflowApiKey = Deno.env.get("ROBOFLOW_API_KEY");
+  const frameExtractSecret = Deno.env.get("FRAME_EXTRACT_SECRET");
+  if (!geminiApiKey || !roboflowApiKey || !frameExtractSecret) {
+    console.error("[analyze-swing] a required secret is not configured.", {
+      geminiApiKey: !!geminiApiKey,
+      roboflowApiKey: !!roboflowApiKey,
+      frameExtractSecret: !!frameExtractSecret,
+    });
     return jsonResponse({ error: "Caddie isn't configured yet. Please try again later." }, 500);
   }
 
@@ -211,9 +342,9 @@ Deno.serve(async (req: Request) => {
 
   // Duplicate-tap protection: an active (recent, still-processing) request
   // for the exact same source already exists — hand that back instead of
-  // starting a second Gemini call. A stale 'processing' row (crashed mid-
-  // request, never reached the update step) doesn't count — it must not
-  // permanently block retries.
+  // starting a second Roboflow+Gemini run. A stale 'processing' row
+  // (crashed mid-request, never reached the update step) doesn't count —
+  // it must not permanently block retries.
   const staleCutoff = new Date(Date.now() - STALE_PROCESSING_MINUTES * 60 * 1000).toISOString();
   let inFlightQuery = supabase.from("caddie_analyses").select("*").eq("status", "processing").gte("created_at", staleCutoff);
   inFlightQuery =
@@ -249,170 +380,226 @@ Deno.serve(async (req: Request) => {
   }
   const row = inserted as CaddieAnalysisRow;
 
-  // A failed attempt is deleted outright rather than left behind as a
-  // 'failed' row — a golfer's Caddie history would otherwise accumulate
-  // "Caddie couldn't analyze this swing" entries from transient provider
-  // issues (rate limits, a bad model name, a flaky upload) that have
-  // nothing to do with their swing. The full reason still reaches the
-  // function logs via console.error below, which is enough for debugging;
-  // it just never needs to persist as a permanent, user-visible row.
-  async function fail(errorMessage: string, publicMessage: string, status: number): Promise<Response> {
+  async function fail(errorMessage: string): Promise<void> {
     console.error("[analyze-swing] analysis failed.", { rowId: row.id, reason: errorMessage });
     await supabase.from("caddie_analyses").delete().eq("id", row.id);
-    return jsonResponse({ error: publicMessage }, status);
   }
 
-  // Fetch the swing video. community-media is a public-read bucket (same
-  // as every other post's media in this app today), so a plain server-side
-  // GET is the correct, simplest approach — no signed URL needed, and this
-  // function never makes a private video public to satisfy Gemini.
-  let videoBytes: ArrayBuffer;
-  let videoContentType: string;
-  try {
-    const videoRes = await fetch(row.source_media_url);
-    if (!videoRes.ok) return await fail(`video fetch ${videoRes.status}`, "Caddie couldn't access this swing video.", 502);
-    videoContentType = videoRes.headers.get("content-type") ?? "video/mp4";
-    videoBytes = await videoRes.arrayBuffer();
-  } catch (err) {
-    return await fail(`video fetch threw: ${err instanceof Error ? err.message : String(err)}`, "Caddie couldn't access this swing video.", 502);
-  }
-  if (videoBytes.byteLength === 0) return await fail("video fetch returned 0 bytes", "This swing video looks empty. Please try a different clip.", 400);
-  if (videoBytes.byteLength > MAX_VIDEO_BYTES) return await fail("video too large", "This video is too large for Caddie.", 400);
-  devLog("video fetched", { bytes: videoBytes.byteLength, contentType: videoContentType });
+  // ---- Everything from here runs AFTER the response below is already
+  // sent — this request can't stay open for the full pipeline. The client
+  // already has the 'processing' row via the response and via realtime. ----
+  async function runPipeline(): Promise<void> {
+    // Fetch the swing video. community-media is a public-read bucket (same
+    // as every other post's media in this app today), so a plain
+    // server-side GET is correct — no signed URL needed, and this function
+    // never makes a private video public to satisfy Gemini.
+    let videoBytes: ArrayBuffer;
+    let videoContentType: string;
+    try {
+      const videoRes = await fetch(row.source_media_url);
+      if (!videoRes.ok) return await fail(`video fetch ${videoRes.status}`);
+      videoContentType = videoRes.headers.get("content-type") ?? "video/mp4";
+      videoBytes = await videoRes.arrayBuffer();
+    } catch (err) {
+      return await fail(`video fetch threw: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    if (videoBytes.byteLength === 0) return await fail("video fetch returned 0 bytes");
+    if (videoBytes.byteLength > MAX_VIDEO_BYTES) return await fail("video too large");
+    devLog("video fetched", { bytes: videoBytes.byteLength, contentType: videoContentType });
 
-  // --- Gemini Files API: resumable upload, then poll for ACTIVE. ---
-  let geminiFile: { name: string; uri: string; mimeType: string };
-  try {
-    const startRes = await fetch(`${GEMINI_API_BASE}/upload/v1beta/files?key=${geminiApiKey}`, {
-      method: "POST",
-      headers: {
-        "X-Goog-Upload-Protocol": "resumable",
-        "X-Goog-Upload-Command": "start",
-        "X-Goog-Upload-Header-Content-Length": String(videoBytes.byteLength),
-        "X-Goog-Upload-Header-Content-Type": videoContentType,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ file: { display_name: `swing-${row.id}` } }),
+    // --- Frame extraction (Vercel/Node — see api/extract-frames.ts). ---
+    let frames: ExtractedFrame[];
+    try {
+      const extractRes = await fetch(FRAME_EXTRACT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${frameExtractSecret}` },
+        body: JSON.stringify({ videoUrl: row.source_media_url, fps: ANALYSIS_FPS }),
+      });
+      if (!extractRes.ok) {
+        const errBody = await extractRes.text().catch(() => "");
+        return await fail(`frame extraction ${extractRes.status}: ${errBody.slice(0, 500)}`);
+      }
+      const extractBody = await extractRes.json();
+      frames = (extractBody.frames ?? []).map((f: { frameIndex: number; timestampSeconds: number; base64: string }) => ({
+        frameIndex: f.frameIndex,
+        timestampSeconds: f.timestampSeconds,
+        base64: f.base64,
+      }));
+      if (frames.length === 0) return await fail("frame extraction returned 0 frames");
+      devLog("frames extracted", { count: frames.length, fps: extractBody.analysisFps });
+    } catch (err) {
+      return await fail(`frame extraction threw: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
+    // --- Roboflow: one call per frame, stateless, moderate concurrency. ---
+    const roboflowResults = await mapWithConcurrency(frames, ROBOFLOW_CONCURRENCY, async (frame) => {
+      try {
+        const res = await fetch(ROBOFLOW_ENDPOINT, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ api_key: roboflowApiKey, inputs: { image: { type: "base64", value: frame.base64 } } }),
+        });
+        if (!res.ok) return null;
+        const body = await res.json();
+        const output = body?.outputs?.[0];
+        if (!output) return null;
+        return filterRoboflowFrame(frame.frameIndex, frame.timestampSeconds, output);
+      } catch {
+        return null;
+      }
     });
-    if (!startRes.ok || !startRes.headers.get("x-goog-upload-url")) {
-      const errBody = await startRes.text().catch(() => "");
-      return await fail(`Gemini upload start ${startRes.status}: ${errBody.slice(0, 500)}`, "Caddie couldn't analyze this swing.", 502);
+    const trustedFrames = roboflowResults.filter((f): f is TrustedFrame => f !== null);
+    const successRatio = trustedFrames.length / frames.length;
+    devLog("roboflow pass complete", { requested: frames.length, succeeded: trustedFrames.length, successRatio });
+    if (successRatio < ROBOFLOW_MIN_SUCCESS_RATIO) {
+      return await fail(`roboflow success ratio too low: ${trustedFrames.length}/${frames.length}`);
     }
-    const uploadUrl = startRes.headers.get("x-goog-upload-url")!;
 
-    const uploadRes = await fetch(uploadUrl, {
-      method: "POST",
-      headers: {
-        "Content-Length": String(videoBytes.byteLength),
-        "X-Goog-Upload-Offset": "0",
-        "X-Goog-Upload-Command": "upload, finalize",
+    const trustedPoseData = {
+      video: {
+        analysis_fps: ANALYSIS_FPS,
+        frames_requested: frames.length,
+        frames_analyzed: trustedFrames.length,
       },
-      body: videoBytes,
-    });
-    if (!uploadRes.ok) {
-      const errBody = await uploadRes.text().catch(() => "");
-      return await fail(`Gemini upload finalize ${uploadRes.status}: ${errBody.slice(0, 500)}`, "Caddie couldn't analyze this swing.", 502);
-    }
-    const uploadBody = await uploadRes.json();
-    const file = uploadBody.file;
-    if (!file?.uri || !file?.name) return await fail("Gemini upload response missing file.uri/name", "Caddie couldn't analyze this swing.", 502);
-    geminiFile = { name: file.name, uri: file.uri, mimeType: file.mimeType ?? videoContentType };
+      frames: trustedFrames,
+      limitations:
+        trustedFrames.length < frames.length
+          ? [`${frames.length - trustedFrames.length} of ${frames.length} sampled frames could not be reliably analyzed and were excluded.`]
+          : [],
+    };
 
-    let state = file.state as string;
-    for (let attempt = 0; state === "PROCESSING" && attempt < FILE_ACTIVE_POLL_ATTEMPTS; attempt++) {
-      await new Promise((resolve) => setTimeout(resolve, FILE_ACTIVE_POLL_DELAY_MS));
-      const pollRes = await fetch(`${GEMINI_API_BASE}/v1beta/${geminiFile.name}?key=${geminiApiKey}`);
-      if (!pollRes.ok) break;
-      const pollBody = await pollRes.json();
-      state = pollBody.state;
-    }
-    if (state !== "ACTIVE") return await fail(`Gemini file never reached ACTIVE (last state: ${state})`, "Caddie is taking longer than usual — please try again.", 504);
-    devLog("gemini file active", { name: geminiFile.name });
-  } catch (err) {
-    return await fail(`Gemini upload threw: ${err instanceof Error ? err.message : String(err)}`, "Caddie couldn't analyze this swing.", 502);
-  }
-
-  // --- generateContent: structured JSON output. ---
-  let parsed: {
-    summary: string;
-    camera_angle: string;
-    strengths: string[];
-    work_on: { issue: string; why_it_matters: string; confidence: string }[];
-    focus: { title: string; instruction: string };
-    drill: { name: string; steps: string[] };
-    limitations: string[];
-  };
-  const genStart = Date.now();
-  try {
-    const userPromptParts = [
-      body.swingType ? `The golfer says this is a: ${body.swingType}.` : "",
-      `Respond in ${LOCALE_NAMES[locale]}, in the JSON shape you were given — field names stay in English, but summary/issue/why_it_matters/instruction/name/steps/limitations text should be written in ${LOCALE_NAMES[locale]}.`,
-      "Analyze this golf swing video and return your structured feedback.",
-    ]
-      .filter(Boolean)
-      .join(" ");
-
-    const genRes = await fetch(`${GEMINI_API_BASE}/v1beta/models/${GEMINI_MODEL}:generateContent?key=${geminiApiKey}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-        contents: [
-          {
-            role: "user",
-            parts: [{ fileData: { fileUri: geminiFile.uri, mimeType: geminiFile.mimeType } }, { text: userPromptParts }],
-          },
-        ],
-        generationConfig: {
-          temperature: 0.4,
-          responseMimeType: "application/json",
-          responseSchema: RESPONSE_SCHEMA,
+    // --- Gemini: structured JSON output, now given the trusted pose data too. ---
+    let parsed: {
+      summary: string;
+      camera_angle: string;
+      strengths: string[];
+      work_on: { issue: string; why_it_matters: string; confidence: string }[];
+      focus: { title: string; instruction: string };
+      drill: { name: string; steps: string[] };
+      limitations: string[];
+      phases: Record<string, unknown>;
+    };
+    const genStart = Date.now();
+    let geminiFile: { name: string; uri: string; mimeType: string } | undefined;
+    try {
+      const startRes = await fetch(`${GEMINI_API_BASE}/upload/v1beta/files?key=${geminiApiKey}`, {
+        method: "POST",
+        headers: {
+          "X-Goog-Upload-Protocol": "resumable",
+          "X-Goog-Upload-Command": "start",
+          "X-Goog-Upload-Header-Content-Length": String(videoBytes.byteLength),
+          "X-Goog-Upload-Header-Content-Type": videoContentType,
+          "Content-Type": "application/json",
         },
-      }),
-    });
-    if (!genRes.ok) {
-      const errBody = await genRes.text().catch(() => "");
-      return await fail(`Gemini generateContent ${genRes.status}: ${errBody.slice(0, 500)}`, "Caddie couldn't analyze this swing.", 502);
+        body: JSON.stringify({ file: { display_name: `swing-${row.id}` } }),
+      });
+      if (!startRes.ok || !startRes.headers.get("x-goog-upload-url")) {
+        const errBody = await startRes.text().catch(() => "");
+        return await fail(`Gemini upload start ${startRes.status}: ${errBody.slice(0, 500)}`);
+      }
+      const uploadUrl = startRes.headers.get("x-goog-upload-url")!;
+
+      const uploadRes = await fetch(uploadUrl, {
+        method: "POST",
+        headers: {
+          "Content-Length": String(videoBytes.byteLength),
+          "X-Goog-Upload-Offset": "0",
+          "X-Goog-Upload-Command": "upload, finalize",
+        },
+        body: videoBytes,
+      });
+      if (!uploadRes.ok) {
+        const errBody = await uploadRes.text().catch(() => "");
+        return await fail(`Gemini upload finalize ${uploadRes.status}: ${errBody.slice(0, 500)}`);
+      }
+      const uploadBody = await uploadRes.json();
+      const file = uploadBody.file;
+      if (!file?.uri || !file?.name) return await fail("Gemini upload response missing file.uri/name");
+      geminiFile = { name: file.name, uri: file.uri, mimeType: file.mimeType ?? videoContentType };
+
+      let state = file.state as string;
+      for (let attempt = 0; state === "PROCESSING" && attempt < FILE_ACTIVE_POLL_ATTEMPTS; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, FILE_ACTIVE_POLL_DELAY_MS));
+        const pollRes = await fetch(`${GEMINI_API_BASE}/v1beta/${geminiFile.name}?key=${geminiApiKey}`);
+        if (!pollRes.ok) break;
+        const pollBody = await pollRes.json();
+        state = pollBody.state;
+      }
+      if (state !== "ACTIVE") return await fail(`Gemini file never reached ACTIVE (last state: ${state})`);
+      devLog("gemini file active", { name: geminiFile.name });
+
+      const userPromptParts = [
+        body.swingType ? `The golfer says this is a: ${body.swingType}.` : "",
+        `Respond in ${LOCALE_NAMES[locale]}, in the JSON shape you were given — field names stay in English, but summary/issue/why_it_matters/instruction/name/steps/limitations text should be written in ${LOCALE_NAMES[locale]}.`,
+        "Analyze this golf swing video and return your structured feedback, using TRUSTED_POSE_DATA below as the authoritative source for body-position claims and phase timestamps.",
+        `TRUSTED_POSE_DATA: ${JSON.stringify(trustedPoseData)}`,
+      ]
+        .filter(Boolean)
+        .join(" ");
+
+      const genRes = await fetch(`${GEMINI_API_BASE}/v1beta/models/${GEMINI_MODEL}:generateContent?key=${geminiApiKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+          contents: [
+            {
+              role: "user",
+              parts: [{ fileData: { fileUri: geminiFile.uri, mimeType: geminiFile.mimeType } }, { text: userPromptParts }],
+            },
+          ],
+          generationConfig: {
+            temperature: 0.4,
+            responseMimeType: "application/json",
+            responseSchema: RESPONSE_SCHEMA,
+          },
+        }),
+      });
+      if (!genRes.ok) {
+        const errBody = await genRes.text().catch(() => "");
+        return await fail(`Gemini generateContent ${genRes.status}: ${errBody.slice(0, 500)}`);
+      }
+      const genBody = await genRes.json();
+      const text = genBody?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) return await fail("Gemini response had no text part");
+      parsed = JSON.parse(text);
+      devLog("gemini responded", { latencyMs: Date.now() - genStart });
+    } catch (err) {
+      return await fail(`Gemini call threw: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      // Best-effort cleanup — never blocks either way.
+      if (geminiFile) fetch(`${GEMINI_API_BASE}/v1beta/${geminiFile.name}?key=${geminiApiKey}`, { method: "DELETE" }).catch(() => {});
     }
-    const genBody = await genRes.json();
-    const text = genBody?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) return await fail("Gemini response had no text part", "Caddie couldn't analyze this swing.", 502);
-    parsed = JSON.parse(text);
-    devLog("gemini responded", { latencyMs: Date.now() - genStart });
-  } catch (err) {
-    return await fail(`Gemini generateContent threw: ${err instanceof Error ? err.message : String(err)}`, "Caddie couldn't analyze this swing.", 502);
-  } finally {
-    // Best-effort cleanup — never blocks the response either way.
-    fetch(`${GEMINI_API_BASE}/v1beta/${geminiFile.name}?key=${geminiApiKey}`, { method: "DELETE" }).catch(() => {});
+
+    if (!parsed?.summary || !Array.isArray(parsed.work_on) || !parsed.focus || !parsed.drill || !parsed.phases) {
+      return await fail("Gemini response failed shape validation");
+    }
+
+    const { error: updateError } = await supabase
+      .from("caddie_analyses")
+      .update({
+        status: "complete",
+        analysis_json: parsed,
+        roboflow_analysis_json: trustedPoseData,
+        analysis_summary: parsed.summary,
+        strengths: (parsed.strengths ?? []).slice(0, 3),
+        issues: parsed.work_on.map((w) => w.issue),
+        recommendations: parsed.work_on.map((w) => w.why_it_matters),
+        drills: parsed.drill?.name ? [parsed.drill.name] : [],
+        camera_angle: parsed.camera_angle,
+        model: GEMINI_MODEL,
+      })
+      .eq("id", row.id);
+    if (updateError) {
+      // Roboflow+Gemini succeeded but the save failed — no fallback claim
+      // of success, and no point deleting a row whose analysis genuinely
+      // completed; leave it for a manual look rather than silently losing it.
+      console.error("[analyze-swing] save after successful analysis failed.", { rowId: row.id, reason: updateError.message });
+      return;
+    }
+    devLog("saved", { id: row.id });
   }
 
-  if (!parsed?.summary || !Array.isArray(parsed.work_on) || !parsed.focus || !parsed.drill) {
-    return await fail("Gemini response failed shape validation", "Caddie couldn't analyze this swing.", 502);
-  }
-
-  const { data: updated, error: updateError } = await supabase
-    .from("caddie_analyses")
-    .update({
-      status: "complete",
-      analysis_json: parsed,
-      analysis_summary: parsed.summary,
-      strengths: (parsed.strengths ?? []).slice(0, 3),
-      issues: parsed.work_on.map((w) => w.issue),
-      recommendations: parsed.work_on.map((w) => w.why_it_matters),
-      drills: parsed.drill?.name ? [parsed.drill.name] : [],
-      camera_angle: parsed.camera_angle,
-      model: GEMINI_MODEL,
-    })
-    .eq("id", row.id)
-    .select()
-    .single();
-  if (updateError || !updated) {
-    // Gemini succeeded but the save failed — report a save failure
-    // honestly (per the brief) rather than claiming success.
-    console.error("[analyze-swing] save after successful analysis failed.", updateError?.message);
-    return jsonResponse({ error: "Caddie analyzed your swing but saving it failed. Please try again." }, 500);
-  }
-
-  devLog("saved", { id: updated.id });
-  return jsonResponse({ analysis: updated }, 200);
+  EdgeRuntime.waitUntil(runPipeline());
+  return jsonResponse({ analysis: row }, 200);
 });
