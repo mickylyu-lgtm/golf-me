@@ -1,8 +1,9 @@
 // An unsent message a golfer typed but didn't send shouldn't vanish just
-// because they navigated to another conversation or backgrounded the app —
-// this persists one draft per conversation so switching away and back (or
-// closing and reopening the app) restores exactly what was typed, same idea
-// as onboardingDraft.ts but keyed per-conversation instead of a single slot.
+// because they navigated away or backgrounded the app — this persists one
+// draft per composer (a DM thread, a golf call's group chat, a post's
+// comment box, a single comment's reply box) so switching away and back
+// restores exactly what was typed, same idea as onboardingDraft.ts but
+// keyed per-composer instead of a single slot.
 const DRAFTS_KEY = "golfme:chatDrafts";
 
 function readAll(): Record<string, string> {
@@ -37,4 +38,12 @@ export function dmDraftKey(golferId: string): string {
 
 export function groupChatDraftKey(callId: string): string {
   return `call:${callId}`;
+}
+
+export function postCommentDraftKey(postId: string): string {
+  return `postComment:${postId}`;
+}
+
+export function commentReplyDraftKey(commentId: string): string {
+  return `commentReply:${commentId}`;
 }

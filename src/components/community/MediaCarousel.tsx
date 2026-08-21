@@ -14,8 +14,6 @@ interface MediaCarouselProps {
 }
 
 const HOLD_TO_SPEED_UP_MS = 180;
-const MAX_ZOOM = 4;
-const MIN_ZOOM_TO_STAY_ENGAGED = 1.05;
 
 // Instagram-style swipeable media — a single item still renders (just no
 // dots/scroll-snap overhead beyond what one slide needs), so PostCard can
@@ -44,13 +42,6 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
   // the Screen Orientation Lock API — iOS Safari has never supported
   // locking orientation from web content.
   const [landscapeIds, setLandscapeIds] = useState<Set<string>>(new Set());
-  // Pinch-to-zoom + one-finger pan on a fullscreen photo — only ever the
-  // active slide, reset the moment the golfer swipes to a different one.
-  // Gesture math lives in a ref (updated every touchmove, far too often to
-  // put in React state without janking the pinch itself); only the values
-  // that actually need to repaint the transform are state.
-  const [zoom, setZoom] = useState({ scale: 1, x: 0, y: 0 });
-  const pinchRef = useRef<{ startDist: number; startScale: number; startX: number; startY: number; touchX: number; touchY: number } | null>(null);
 
   // Jump to the tapped slide instantly (no animated scroll) the moment the
   // lightbox mounts, rather than opening on slide 0 every time.
@@ -89,12 +80,6 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Swiping to a different photo always starts that photo at 1x, never
-  // carrying over whatever zoom/pan was left on the previous one.
-  useEffect(() => {
-    setZoom({ scale: 1, x: 0, y: 0 });
-  }, [activeIndex]);
-
   useEffect(() => {
     return () => {
       if (holdTimerRef.current !== null) window.clearTimeout(holdTimerRef.current);
@@ -130,72 +115,6 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
       else next.add(item.id);
       return next;
     });
-  }
-
-  function touchDistance(touches: React.TouchList): number {
-    const [a, b] = [touches[0], touches[1]];
-    return Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY);
-  }
-
-  // Two fingers pinch to zoom; one finger pans, but only once already
-  // zoomed in — at 1x a single finger is the horizontal swipe-between-
-  // photos gesture instead, so this leaves that alone entirely.
-  function onImageTouchStart(e: React.TouchEvent) {
-    if (e.touches.length === 2) {
-      pinchRef.current = {
-        startDist: touchDistance(e.touches),
-        startScale: zoom.scale,
-        startX: zoom.x,
-        startY: zoom.y,
-        touchX: (e.touches[0].clientX + e.touches[1].clientX) / 2,
-        touchY: (e.touches[0].clientY + e.touches[1].clientY) / 2,
-      };
-    } else if (e.touches.length === 1 && zoom.scale > 1) {
-      pinchRef.current = {
-        startDist: 0,
-        startScale: zoom.scale,
-        startX: zoom.x,
-        startY: zoom.y,
-        touchX: e.touches[0].clientX,
-        touchY: e.touches[0].clientY,
-      };
-    } else {
-      pinchRef.current = null;
-    }
-  }
-
-  function onImageTouchMove(e: React.TouchEvent) {
-    const start = pinchRef.current;
-    if (!start) return;
-    // Own this gesture outright once it's underway — otherwise the browser
-    // tries to additionally interpret it as its own native pinch-zoom or
-    // scroll, fighting the transform being driven by hand here.
-    e.preventDefault();
-    if (e.touches.length === 2) {
-      const scale = Math.min(MAX_ZOOM, Math.max(1, start.startScale * (touchDistance(e.touches) / start.startDist)));
-      setZoom({ scale, x: start.startX, y: start.startY });
-    } else if (e.touches.length === 1 && start.startScale > 1) {
-      const dx = e.touches[0].clientX - start.touchX;
-      const dy = e.touches[0].clientY - start.touchY;
-      // Panning range grows with zoom level — more room to explore a more
-      // zoomed-in image, none at all right at 1x.
-      const track = trackRef.current;
-      const maxX = track ? ((start.startScale - 1) * track.clientWidth) / 2 : 0;
-      const maxY = track ? ((start.startScale - 1) * track.clientHeight) / 2 : 0;
-      setZoom({
-        scale: start.startScale,
-        x: Math.min(maxX, Math.max(-maxX, start.startX + dx)),
-        y: Math.min(maxY, Math.max(-maxY, start.startY + dy)),
-      });
-    }
-  }
-
-  function onImageTouchEnd() {
-    pinchRef.current = null;
-    // Pinching back down past a hair over 1x snaps fully back to 1x/
-    // centered — re-enabling swipe-between-photos and drag-to-dismiss,
-    // both of which defer to a zoomed image while it's actively engaged.
-    if (zoom.scale < MIN_ZOOM_TO_STAY_ENGAGED) setZoom({ scale: 1, x: 0, y: 0 });
   }
 
   // Hold anywhere on the right half of a fullscreen video to watch it at 2x
@@ -346,27 +265,8 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
               onClick={() => onItemClick?.(i)}
             />
           ) : (
-            // data-video-controls: same stricter-drag-to-dismiss threshold
-            // video's own controls get, so an in-progress pan/pinch here
-            // never gets misread as the start of a dismiss drag.
-            <div key={item.id} className="h-full w-full shrink-0 snap-center overflow-hidden" data-video-controls>
-              <img
-                src={item.url}
-                alt=""
-                loading="lazy"
-                onTouchStart={i === activeIndex ? onImageTouchStart : undefined}
-                onTouchMove={i === activeIndex ? onImageTouchMove : undefined}
-                onTouchEnd={i === activeIndex ? onImageTouchEnd : undefined}
-                onTouchCancel={i === activeIndex ? onImageTouchEnd : undefined}
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "cover",
-                  touchAction: i === activeIndex && zoom.scale > 1 ? "none" : "pan-x",
-                  transform: i === activeIndex ? `translate(${zoom.x}px, ${zoom.y}px) scale(${zoom.scale})` : undefined,
-                  transition: pinchRef.current ? "none" : "transform 200ms ease-out",
-                }}
-              />
+            <div key={item.id} className="h-full w-full shrink-0 snap-center overflow-hidden">
+              <img src={item.url} alt="" loading="lazy" className="h-full w-full object-cover" />
             </div>
           ),
         )}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import { useData } from "../context/DataContext";
@@ -9,6 +9,7 @@ import { Avatar } from "../components/ui/Avatar";
 import { PostCard } from "../components/community/PostCard";
 import { CommentItem } from "../components/community/CommentItem";
 import { CoachReviewSection } from "../components/community/CoachReviewSection";
+import { loadChatDraft, postCommentDraftKey, saveChatDraft } from "../lib/chatDraft";
 
 export function PostDetail() {
   const { id } = useParams<{ id: string }>();
@@ -16,10 +17,23 @@ export function PostDetail() {
   const { getPost, commentsForPost, createComment, currentUser } = useData();
   const { showToast } = useToast();
   const { t } = useLocale();
-  const [commentText, setCommentText] = useState("");
+  const [commentText, setCommentText] = useState(() => (id ? loadChatDraft(postCommentDraftKey(id)) : ""));
   const [submitting, setSubmitting] = useState(false);
 
   const post = id ? getPost(id) : undefined;
+
+  // Following a link straight from one post to another reuses this same
+  // mounted component (only the `id` route param changes) — without this,
+  // whatever was typed for the previous post would carry over into the new
+  // one's comment box instead of that post's own draft.
+  useEffect(() => {
+    setCommentText(id ? loadChatDraft(postCommentDraftKey(id)) : "");
+  }, [id]);
+
+  function updateCommentText(value: string) {
+    setCommentText(value);
+    if (id) saveChatDraft(postCommentDraftKey(id), value);
+  }
 
   if (!post) {
     return (
@@ -42,11 +56,11 @@ export function PostDetail() {
     if (!commentText.trim() || !post || submitting) return;
     setSubmitting(true);
     const text = commentText;
-    setCommentText("");
+    updateCommentText("");
     try {
       await createComment(post.id, text);
     } catch (err) {
-      setCommentText(text);
+      updateCommentText(text);
       showToast(err instanceof Error ? err.message : "Couldn't post your comment. Please try again.", "warning");
     } finally {
       setSubmitting(false);
@@ -100,7 +114,7 @@ export function PostDetail() {
         <input
           id="comment-composer-input"
           value={commentText}
-          onChange={(e) => setCommentText(e.target.value)}
+          onChange={(e) => updateCommentText(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && submitComment()}
           placeholder={t("community.writeCommentPlaceholder")}
           className="flex-1 bg-transparent px-1.5 text-sm outline-none"

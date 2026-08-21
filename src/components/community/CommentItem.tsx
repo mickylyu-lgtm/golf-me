@@ -8,6 +8,7 @@ import { Avatar } from "../ui/Avatar";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { ReportModal } from "../trust/ReportModal";
 import { formatRelativeTime } from "../../lib/format";
+import { commentReplyDraftKey, loadChatDraft, saveChatDraft } from "../../lib/chatDraft";
 import { useLocale } from "../../i18n/LocaleContext";
 
 interface CommentItemProps {
@@ -26,7 +27,7 @@ export function CommentItem({ comment, postId, replies }: CommentItemProps) {
   const { t, locale } = useLocale();
   const navigate = useNavigate();
   const [replyOpen, setReplyOpen] = useState(false);
-  const [replyText, setReplyText] = useState("");
+  const [replyText, setReplyText] = useState(() => loadChatDraft(commentReplyDraftKey(comment.id)));
   const [menuOpen, setMenuOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
@@ -38,10 +39,15 @@ export function CommentItem({ comment, postId, replies }: CommentItemProps) {
   const upvoted = isCommentUpvoted(comment.id);
   const isReply = Boolean(comment.parentCommentId);
 
+  function updateReplyText(value: string) {
+    setReplyText(value);
+    saveChatDraft(commentReplyDraftKey(comment.id), value);
+  }
+
   function submitReply() {
     if (!replyText.trim()) return;
     createComment(postId, replyText, comment.id);
-    setReplyText("");
+    updateReplyText("");
     setReplyOpen(false);
   }
 
@@ -124,7 +130,7 @@ export function CommentItem({ comment, postId, replies }: CommentItemProps) {
               <input
                 autoFocus
                 value={replyText}
-                onChange={(e) => setReplyText(e.target.value)}
+                onChange={(e) => updateReplyText(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && submitReply()}
                 placeholder={`Reply to ${author.name.split(" ")[0]}...`}
                 className="flex-1 rounded-full border border-slate-200 bg-white px-3.5 py-1.5 text-sm outline-none focus:border-fairway-400"
