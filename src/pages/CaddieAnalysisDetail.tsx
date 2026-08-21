@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { AlertCircle, ArrowLeft, ArrowUpRight, Check, Loader2, Share2 } from "lucide-react";
 import { CaddieNavIcon } from "../components/icons/CaddieNavIcon";
+import { CaddieThinking } from "../components/caddie/CaddieThinking";
 import { useData } from "../context/DataContext";
 import { useToast } from "../context/ToastContext";
 import { useLocale } from "../i18n/LocaleContext";
@@ -221,12 +222,9 @@ export function CaddieAnalysisDetail() {
           </Button>
         </div>
       ) : (
-        <div className="flex items-center gap-2.5 rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-3.5">
-          <Loader2 size={16} className="shrink-0 animate-spin text-fairway-600" />
-          <div>
-            <p className="text-sm font-semibold text-slate-700">{t("swingAnalysis.processingTitle")}</p>
-            <p className="text-xs text-slate-500">{t("swingAnalysis.processingDescription")}</p>
-          </div>
+        <div className="flex flex-col gap-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-3.5">
+          <CaddieThinking />
+          <p className="pl-12 text-xs text-slate-500">{t("swingAnalysis.processingDescription")}</p>
         </div>
       )}
 

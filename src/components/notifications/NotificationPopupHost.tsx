@@ -19,6 +19,7 @@ const POPUP_TYPES = new Set<NotificationType>([
   "booking_proof_attached",
   "tee_time_updated",
   "booking_proof_removed",
+  "caddie_analysis_complete",
 ]);
 
 const AUTO_DISMISS_MS = 4500;
@@ -90,6 +91,10 @@ export function NotificationPopupHost() {
     const poppable = fresh.filter((n) => {
       if (!POPUP_TYPES.has(n.type)) return false;
       if (n.type === "new_message" && n.actorId && pathnameRef.current === `/messages/${n.actorId}`) return false;
+      // Already watching this exact analysis finish live via realtime —
+      // a popup on top of the page that's already updating would be
+      // redundant, same reasoning as the new_message case above.
+      if (n.type === "caddie_analysis_complete" && pathnameRef.current === n.linkTo) return false;
       return true;
     });
     if (poppable.length > 0) {

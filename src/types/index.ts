@@ -537,7 +537,8 @@ export type NotificationType =
   | "new_message"
   | "booking_proof_attached"
   | "tee_time_updated"
-  | "booking_proof_removed";
+  | "booking_proof_removed"
+  | "caddie_analysis_complete";
 
 export interface AppNotification {
   id: string;

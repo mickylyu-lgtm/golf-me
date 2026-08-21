@@ -20,6 +20,7 @@ const ICONS: Record<NotificationType, typeof Bell> = {
   booking_proof_attached: ShieldCheck,
   tee_time_updated: Clock,
   booking_proof_removed: ShieldOff,
+  caddie_analysis_complete: Sparkles,
 };
 
 export function NotificationsPanel({ onClose }: { onClose: () => void }) {
