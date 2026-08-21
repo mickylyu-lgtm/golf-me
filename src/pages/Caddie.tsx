@@ -48,7 +48,11 @@ export function Caddie() {
                     <span className="block text-xs text-slate-500">{formatShortDate(a.createdAt, locale)}</span>
                   </span>
                   {a.status === "complete" ? (
-                    <span className="shrink-0 text-xs font-semibold text-slate-500">{t("caddie.thingsToWorkOn", { count: issueCount })}</span>
+                    a.score !== undefined ? (
+                      <span className="shrink-0 text-sm font-bold text-fairway-700">{t("caddie.scoreOutOf100", { score: a.score })}</span>
+                    ) : (
+                      <span className="shrink-0 text-xs font-semibold text-slate-500">{t("caddie.thingsToWorkOn", { count: issueCount })}</span>
+                    )
                   ) : a.status === "failed" ? (
                     <span className="shrink-0 text-xs font-semibold text-red-500">{t("caddie.askCaddieError")}</span>
                   ) : (

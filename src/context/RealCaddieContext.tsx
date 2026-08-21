@@ -9,6 +9,8 @@ import type {
   CaddieAnalysisStatus,
   CaddiePhaseMoment,
   CaddiePoseData,
+  CaddieScore,
+  CaddieScoreCriterionKey,
   CaddieSourceType,
   CaddieSwingPhases,
 } from "../types";
@@ -30,6 +32,7 @@ interface CaddieAnalysisRow {
   analysis_json: Record<string, unknown> | null;
   roboflow_analysis_json: Record<string, unknown> | null;
   camera_angle: string | null;
+  score: number | null;
   model: string | null;
   error_message: string | null;
   shared_to_community: boolean;
@@ -65,7 +68,26 @@ function jsonToPhases(raw: unknown): CaddieSwingPhases | undefined {
   };
 }
 
-function jsonToDetails(json: Record<string, unknown> | null): CaddieAnalysisDetails | undefined {
+const SCORE_CRITERION_KEYS: [string, CaddieScoreCriterionKey][] = [
+  ["setup_and_posture", "setupAndPosture"],
+  ["backswing", "backswing"],
+  ["downswing_sequencing", "downswingSequencing"],
+  ["balance_and_weight_transfer", "balanceAndWeightTransfer"],
+  ["finish", "finish"],
+];
+
+function jsonToScore(raw: unknown, total: number | null): CaddieScore | undefined {
+  if (!raw || typeof raw !== "object" || total === null) return undefined;
+  const json = raw as Record<string, Record<string, unknown>>;
+  const criteria = {} as Record<CaddieScoreCriterionKey, { points: number; reason: string }>;
+  for (const [jsonKey, key] of SCORE_CRITERION_KEYS) {
+    const c = json[jsonKey] ?? {};
+    criteria[key] = { points: typeof c.points === "number" ? c.points : 0, reason: String(c.reason ?? "") };
+  }
+  return { total, criteria };
+}
+
+function jsonToDetails(json: Record<string, unknown> | null, scoreTotal: number | null): CaddieAnalysisDetails | undefined {
   if (!json) return undefined;
   const workOn = Array.isArray(json.work_on) ? (json.work_on as Record<string, unknown>[]) : [];
   const focus = (json.focus as Record<string, unknown>) ?? {};
@@ -83,6 +105,7 @@ function jsonToDetails(json: Record<string, unknown> | null): CaddieAnalysisDeta
     drill: { name: String(drill.name ?? ""), steps: Array.isArray(drill.steps) ? (drill.steps as string[]) : [] },
     limitations: Array.isArray(json.limitations) ? (json.limitations as string[]) : [],
     phases: jsonToPhases(json.phases),
+    score: jsonToScore(json.score, scoreTotal),
   };
 }
 
@@ -124,8 +147,9 @@ function rowToAnalysis(row: CaddieAnalysisRow): CaddieAnalysis {
     issues: row.issues,
     recommendations: row.recommendations,
     drills: row.drills,
-    details: jsonToDetails(row.analysis_json),
+    details: jsonToDetails(row.analysis_json, row.score),
     poseData: jsonToPoseData(row.roboflow_analysis_json),
+    score: row.score ?? undefined,
     model: row.model ?? undefined,
     errorMessage: row.error_message ?? undefined,
     sharedToCommunity: row.shared_to_community,

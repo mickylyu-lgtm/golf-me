@@ -87,7 +87,8 @@ Rules:
 - Using TRUSTED_POSE_DATA's timestamps and the body movement they show, identify the approximate timestamp (in seconds, matching TRUSTED_POSE_DATA's own timestamp_seconds values) of each swing phase: address, backswing, top, downswing, follow_through. For any phase you cannot confidently place from the data, return a null timestamp rather than guessing.
 - Impact is the one phase you must NOT give an exact timestamp for — pose-only analysis (no club/ball tracking) cannot reliably pin the exact contact instant. Give a window (window_start_seconds/window_end_seconds) you're reasonably confident contains impact instead, with its own confidence, or null/null if you can't place it at all.
 - Be concise. Prioritize the most meaningful observations over listing every possible issue: up to 3 strengths, up to 3 work-on items, exactly 1 main focus, exactly 1 drill.
-- Respond with feedback suitable for a recreational golfer, not jargon-heavy technical analysis.`;
+- Respond with feedback suitable for a recreational golfer, not jargon-heavy technical analysis.
+- Score the swing across exactly these 5 categories, 0-20 points each (100 total): setup_and_posture (address position, balance, alignment), backswing (shoulder turn, structure, tempo into transition), downswing_sequencing (hip/shoulder rotation order, lower-body initiation — only from what TRUSTED_POSE_DATA's angles/timing actually show), balance_and_weight_transfer (weight shift through the swing and into the finish), finish (balance, control, extension at the end). Give each a short one-sentence reason tied to something TRUSTED_POSE_DATA or the video actually shows — never a generic reason. Score conservatively: a phase with sparse/missing pose data should score in the middle of the range with a reason that says so, not a confident extreme in either direction.`;
 
 const PHASE_MOMENT_SCHEMA = {
   type: "OBJECT",
@@ -96,6 +97,15 @@ const PHASE_MOMENT_SCHEMA = {
     confidence: { type: "STRING", enum: ["high", "medium", "low"], nullable: true },
   },
   required: ["timestamp_seconds", "confidence"],
+};
+
+const SCORE_CRITERION_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    points: { type: "INTEGER", description: "0-20." },
+    reason: { type: "STRING", description: "One sentence, tied to something actually observed." },
+  },
+  required: ["points", "reason"],
 };
 
 const RESPONSE_SCHEMA = {
@@ -156,8 +166,20 @@ const RESPONSE_SCHEMA = {
       },
       required: ["address", "backswing", "top", "downswing", "impact", "follow_through"],
     },
+    score: {
+      type: "OBJECT",
+      description: "5 categories, 0-20 points each. The app computes the 0-100 total as their sum — do not include a separate total field.",
+      properties: {
+        setup_and_posture: SCORE_CRITERION_SCHEMA,
+        backswing: SCORE_CRITERION_SCHEMA,
+        downswing_sequencing: SCORE_CRITERION_SCHEMA,
+        balance_and_weight_transfer: SCORE_CRITERION_SCHEMA,
+        finish: SCORE_CRITERION_SCHEMA,
+      },
+      required: ["setup_and_posture", "backswing", "downswing_sequencing", "balance_and_weight_transfer", "finish"],
+    },
   },
-  required: ["summary", "camera_angle", "strengths", "work_on", "focus", "drill", "limitations", "phases"],
+  required: ["summary", "camera_angle", "strengths", "work_on", "focus", "drill", "limitations", "phases", "score"],
 };
 
 const corsHeaders = {
@@ -478,6 +500,7 @@ Deno.serve(async (req: Request) => {
       drill: { name: string; steps: string[] };
       limitations: string[];
       phases: Record<string, unknown>;
+      score: Record<string, { points: number; reason: string }>;
     };
     const genStart = Date.now();
     let geminiFile: { name: string; uri: string; mimeType: string } | undefined;
@@ -571,9 +594,17 @@ Deno.serve(async (req: Request) => {
       if (geminiFile) fetch(`${GEMINI_API_BASE}/v1beta/${geminiFile.name}?key=${geminiApiKey}`, { method: "DELETE" }).catch(() => {});
     }
 
-    if (!parsed?.summary || !Array.isArray(parsed.work_on) || !parsed.focus || !parsed.drill || !parsed.phases) {
+    if (!parsed?.summary || !Array.isArray(parsed.work_on) || !parsed.focus || !parsed.drill || !parsed.phases || !parsed.score) {
       return await fail("Gemini response failed shape validation");
     }
+
+    // The 0-100 total is computed here, not trusted from Gemini's own
+    // arithmetic — sum of the 5 criteria, each clamped to 0-20 first so a
+    // single malformed value can't skew the total outside 0-100 (the
+    // score column's own check constraint would otherwise reject the
+    // whole save over one bad field).
+    const scoreCriteria = Object.values(parsed.score ?? {});
+    const totalScore = scoreCriteria.reduce((sum, c) => sum + Math.max(0, Math.min(20, Math.round(c.points ?? 0))), 0);
 
     const { error: updateError } = await supabase
       .from("caddie_analyses")
@@ -587,6 +618,7 @@ Deno.serve(async (req: Request) => {
         recommendations: parsed.work_on.map((w) => w.why_it_matters),
         drills: parsed.drill?.name ? [parsed.drill.name] : [],
         camera_angle: parsed.camera_angle,
+        score: totalScore,
         model: GEMINI_MODEL,
       })
       .eq("id", row.id);

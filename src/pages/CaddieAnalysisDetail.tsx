@@ -10,8 +10,17 @@ import { useLocale } from "../i18n/LocaleContext";
 import { Button } from "../components/ui/Button";
 import { Badge } from "../components/ui/Badge";
 import { formatShortDate } from "../lib/format";
-import type { CaddieConfidence, CaddieCameraAngle } from "../types";
+import type { CaddieConfidence, CaddieCameraAngle, CaddieScoreCriterionKey } from "../types";
 import type { CreatePostSwingPrefill } from "./CreatePost";
+import type { TranslationKey } from "../i18n/locales/en";
+
+const SCORE_CRITERIA_ORDER: [CaddieScoreCriterionKey, TranslationKey][] = [
+  ["setupAndPosture", "caddie.scoreSetupAndPosture"],
+  ["backswing", "caddie.scoreBackswing"],
+  ["downswingSequencing", "caddie.scoreDownswingSequencing"],
+  ["balanceAndWeightTransfer", "caddie.scoreBalanceAndWeightTransfer"],
+  ["finish", "caddie.scoreFinish"],
+];
 
 function Section({ title, items }: { title: string; items: string[] }) {
   if (items.length === 0) return null;
@@ -161,6 +170,26 @@ export function CaddieAnalysisDetail() {
             </p>
             <Badge tone="outline">{cameraAngleLabel[details.cameraAngle]}</Badge>
           </div>
+          {details.score && (
+            <div>
+              <p className="text-3xl font-bold text-fairway-800">{t("caddie.scoreOutOf100", { score: details.score.total })}</p>
+              <p className="mb-1.5 mt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t("caddie.scoreBreakdown")}</p>
+              <div className="flex flex-col gap-2">
+                {SCORE_CRITERIA_ORDER.map(([key, labelKey]) => {
+                  const c = details.score!.criteria[key];
+                  return (
+                    <div key={key} className="rounded-xl border border-slate-100 bg-white p-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-semibold text-slate-700">{t(labelKey)}</p>
+                        <p className="text-xs font-bold text-fairway-700">{c.points}/20</p>
+                      </div>
+                      <p className="mt-0.5 text-xs text-slate-500">{c.reason}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <p className="text-sm text-slate-700">{details.summary}</p>
           <Section title={t("caddie.whatLooksGood")} items={details.strengths} />
           {details.workOn.length > 0 && (

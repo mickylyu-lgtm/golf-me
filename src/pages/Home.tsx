@@ -158,9 +158,14 @@ export function Home() {
             <span className="block text-sm font-semibold text-slate-900">
               {latestCaddieAnalysis.swingType || t("caddie.homeCardTitle")} · {formatShortDate(latestCaddieAnalysis.createdAt, locale)}
             </span>
-            {latestCaddieAnalysis.status === "complete" && latestCaddieAnalysis.issues.length > 0 && (
-              <span className="block text-xs text-slate-500">{t("caddie.thingsToWorkOn", { count: latestCaddieAnalysis.issues.length })}</span>
-            )}
+            {latestCaddieAnalysis.status === "complete" &&
+              (latestCaddieAnalysis.score !== undefined ? (
+                <span className="block text-xs font-bold text-fairway-700">{t("caddie.scoreOutOf100", { score: latestCaddieAnalysis.score })}</span>
+              ) : (
+                latestCaddieAnalysis.issues.length > 0 && (
+                  <span className="block text-xs text-slate-500">{t("caddie.thingsToWorkOn", { count: latestCaddieAnalysis.issues.length })}</span>
+                )
+              ))}
           </span>
           <span className="shrink-0 text-xs font-semibold text-fairway-700">{t("caddie.continueInCaddie")}</span>
         </button>

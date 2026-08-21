@@ -440,6 +440,18 @@ export interface CaddieSwingPhases {
   followThrough: CaddiePhaseMoment;
 }
 
+export type CaddieScoreCriterionKey = "setupAndPosture" | "backswing" | "downswingSequencing" | "balanceAndWeightTransfer" | "finish";
+
+export interface CaddieScoreCriterion {
+  points: number; // 0-20
+  reason: string;
+}
+
+export interface CaddieScore {
+  total: number; // 0-100, sum of the 5 criteria — computed server-side, not trusted from Gemini's own arithmetic
+  criteria: Record<CaddieScoreCriterionKey, CaddieScoreCriterion>;
+}
+
 // The real Gemini structured response — see supabase/functions/analyze-swing.
 // Kept separate from the flat strengths/issues/recommendations/drills below
 // (which stay populated too, derived from this at write time) so every
@@ -455,6 +467,8 @@ export interface CaddieAnalysisDetails {
   // Undefined for analyses from before the Roboflow pipeline shipped —
   // those have no phase timestamps to seek the replay video to.
   phases?: CaddieSwingPhases;
+  // Same vintage cutoff as phases — undefined for pre-scoring analyses.
+  score?: CaddieScore;
 }
 
 export interface CaddiePoseKeypoint {
@@ -498,6 +512,11 @@ export interface CaddieAnalysis {
   // if analysis_json existed but this column didn't get written for some
   // other reason — the replay overlay simply doesn't render without it.
   poseData?: CaddiePoseData;
+  // Flat mirror of details.score.total, same reasoning as strengths/issues/
+  // recommendations/drills below being flat too — list views (Caddie's
+  // recent list, Home's latest-swing card) need just the number, not the
+  // full per-criterion breakdown. Undefined for pre-scoring analyses.
+  score?: number;
   model?: string;
   errorMessage?: string; // safe, non-sensitive — present only when status is "failed"
   sharedToCommunity: boolean;
