@@ -249,9 +249,16 @@ Deno.serve(async (req: Request) => {
   }
   const row = inserted as CaddieAnalysisRow;
 
+  // A failed attempt is deleted outright rather than left behind as a
+  // 'failed' row — a golfer's Caddie history would otherwise accumulate
+  // "Caddie couldn't analyze this swing" entries from transient provider
+  // issues (rate limits, a bad model name, a flaky upload) that have
+  // nothing to do with their swing. The full reason still reaches the
+  // function logs via console.error below, which is enough for debugging;
+  // it just never needs to persist as a permanent, user-visible row.
   async function fail(errorMessage: string, publicMessage: string, status: number): Promise<Response> {
     console.error("[analyze-swing] analysis failed.", { rowId: row.id, reason: errorMessage });
-    await supabase.from("caddie_analyses").update({ status: "failed", error_message: errorMessage }).eq("id", row.id);
+    await supabase.from("caddie_analyses").delete().eq("id", row.id);
     return jsonResponse({ error: publicMessage }, status);
   }
 
