@@ -59,10 +59,16 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
   // as React allows, before the browser paints — autoplay-with-sound
   // policies are stricter the further a play() call drifts from the
   // original gesture, and effects that fire after paint are the more
-  // likely of the two to get rejected on some platforms. Graceful
-  // fallback either way: if the browser still blocks it, this just leaves
-  // the paused/muted state as-is rather than breaking anything, and the
-  // normal tap-to-play and hold-for-2x controls are right there.
+  // likely of the two to get rejected on some platforms.
+  //
+  // The unmuted play() can still get rejected (the gesture window from tap
+  // -> React re-render -> this component mounting is often already too
+  // long, especially on iOS Safari) — when it does, the browser rejects
+  // play() entirely, not just the audio, which used to leave the video
+  // sitting paused on its poster with nothing but the play button to fix
+  // it. Falling back to a muted play() guarantees it actually starts
+  // (every browser allows muted autoplay), matching "opens already
+  // playing" over "opens with sound" when the two can't both be had.
   useLayoutEffect(() => {
     if (variant !== "lightbox") return;
     const item = media[initialIndex];
@@ -70,12 +76,20 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
     const el = videoElsRef.current.get(item.id);
     if (!el) return;
     el.muted = false;
-    setUnmutedIds((prev) => new Set(prev).add(item.id));
     el.play()
-      .then(() => setPlayingIds((prev) => new Set(prev).add(item.id)))
+      .then(() => {
+        setPlayingIds((prev) => new Set(prev).add(item.id));
+        setUnmutedIds((prev) => new Set(prev).add(item.id));
+      })
       .catch(() => {
-        // Blocked autoplay-with-sound isn't an error state — the play/pause
-        // overlay and normal controls just stay available as a fallback.
+        el.muted = true;
+        el.play()
+          .then(() => setPlayingIds((prev) => new Set(prev).add(item.id)))
+          .catch(() => {
+            // Autoplay blocked entirely even muted — rare, but not an error
+            // state. The play/pause overlay and normal controls are still
+            // right there as a fallback.
+          });
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
