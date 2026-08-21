@@ -177,7 +177,14 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
                   // custom in-app lightbox — that stays reserved for photo
                   // posts and multi-item posts, where swiping between
                   // items is the point.
-                  if (e.target instanceof HTMLVideoElement) enterNativeVideoFullscreen(e.target);
+                  if (e.target instanceof HTMLVideoElement) {
+                    // Without this, the native controls' own click-to-toggle-
+                    // play/pause default action still fires right after —
+                    // colliding with fullscreen entry and showing as a
+                    // glitch/flash in and back out.
+                    e.preventDefault();
+                    enterNativeVideoFullscreen(e.target);
+                  }
                 }}
               />
             ) : (

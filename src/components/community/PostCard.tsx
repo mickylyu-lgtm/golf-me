@@ -33,6 +33,7 @@ import { FullscreenMediaViewer } from "./FullscreenMediaViewer";
 import { formatRelativeTime } from "../../lib/format";
 import { postCategoryLabel } from "../../lib/enumLabels";
 import { areaForCourse } from "../../lib/courses";
+import { enterNativeVideoFullscreen } from "../../lib/video";
 import { useLocale } from "../../i18n/LocaleContext";
 
 interface PostCardProps {
@@ -81,7 +82,8 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
   // has its own handler below and never reaches this one.
   function handleVideoTap(e: React.MouseEvent) {
     stop(e);
-    setMediaLightboxIndex(0);
+    e.preventDefault();
+    if (videoRef.current) enterNativeVideoFullscreen(videoRef.current);
   }
 
   function toggleFeedMute(e: React.MouseEvent) {
