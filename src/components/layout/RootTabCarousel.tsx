@@ -101,8 +101,29 @@ export function RootTabCarousel({ activePath }: { activePath: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const touchRef = useRef<TouchTrack | null>(null);
+  const panelRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [dragOffsetPct, setDragOffsetPct] = useState(0);
   const [dragging, setDragging] = useState(false);
+  // All 5 panels stay mounted side-by-side (see comment below), so a plain
+  // flex row's height would always be the TALLEST panel (usually Home's
+  // feed) no matter which tab is active — e.g. Chat with one conversation
+  // would inherit Home's height and leave a big dead-scroll zone below its
+  // actual content. Measuring each panel's own height and clamping the
+  // container to just the active one's fixes that.
+  const [heights, setHeights] = useState<number[]>(() => PANELS.map(() => 0));
+
+  useEffect(() => {
+    const observers = panelRefs.current.map((el, i) => {
+      if (!el) return undefined;
+      const ro = new ResizeObserver((entries) => {
+        const h = Math.ceil(entries[0].contentRect.height);
+        setHeights((prev) => (prev[i] === h ? prev : prev.map((v, j) => (j === i ? h : v))));
+      });
+      ro.observe(el);
+      return ro;
+    });
+    return () => observers.forEach((ro) => ro?.disconnect());
+  }, []);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -207,8 +228,17 @@ export function RootTabCarousel({ activePath }: { activePath: string }) {
   const reducedMotion = prefersReducedMotion();
   const leftPct = -activeIndex * 100 + dragOffsetPct;
 
+  const activeHeight = heights[activeIndex];
+
   return (
-    <div ref={containerRef} className="overflow-x-hidden">
+    <div
+      ref={containerRef}
+      className="overflow-hidden"
+      style={{
+        height: activeHeight > 0 ? `${activeHeight}px` : "auto",
+        transition: dragging || reducedMotion ? "none" : "height 260ms cubic-bezier(0.22, 1, 0.36, 1)",
+      }}
+    >
       <div
         ref={trackRef}
         className="flex items-start"
@@ -219,8 +249,15 @@ export function RootTabCarousel({ activePath }: { activePath: string }) {
           transition: dragging || reducedMotion ? "none" : "left 260ms cubic-bezier(0.22, 1, 0.36, 1)",
         }}
       >
-        {PANELS.map(({ path, render }) => (
-          <div key={path} style={{ width: `${100 / PANELS.length}%` }} className="min-w-0 shrink-0">
+        {PANELS.map(({ path, render }, i) => (
+          <div
+            key={path}
+            ref={(el) => {
+              panelRefs.current[i] = el;
+            }}
+            style={{ width: `${100 / PANELS.length}%` }}
+            className="min-w-0 shrink-0"
+          >
             {render()}
           </div>
         ))}

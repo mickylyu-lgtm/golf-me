@@ -50,6 +50,12 @@ import { useRealCaddie } from "./RealCaddieContext";
 import type { CreateAnalysisInput } from "./RealCaddieContext";
 import { buildDemoCaddieAnalyses } from "../data/caddie";
 
+export interface DraftSwingVideo {
+  file: File;
+  previewUrl: string;
+  swingType: string;
+}
+
 export interface DmConversation {
   conversationId: string;
   otherGolfer: GolferProfile;
@@ -244,6 +250,12 @@ interface DataContextValue {
   getCaddieAnalysis: (id: string) => CaddieAnalysis | undefined;
   createCaddieAnalysis: (input: CreateAnalysisInput) => Promise<CaddieAnalysis>;
   markCaddieAnalysisShared: (id: string) => Promise<void>;
+  // Lives here (DataProvider is mounted for the whole app session, unlike
+  // AnalyzeSwing itself) so a video someone picked but hasn't submitted yet
+  // survives navigating away from /caddie/analyze and back instead of being
+  // silently lost.
+  draftSwingVideo: DraftSwingVideo | undefined;
+  setDraftSwingVideo: (draft: DraftSwingVideo | undefined) => void;
 
   notifications: AppNotification[];
   unreadNotificationCount: number;
@@ -262,6 +274,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const realCommunity = useRealCommunity();
   const realCaddie = useRealCaddie();
   const [demoCaddieAnalyses, setDemoCaddieAnalyses] = useState<CaddieAnalysis[]>(() => buildDemoCaddieAnalyses());
+  const [draftSwingVideo, setDraftSwingVideoState] = useState<DraftSwingVideo | undefined>(undefined);
+  const draftSwingVideoRef = useRef<DraftSwingVideo | undefined>(undefined);
+  draftSwingVideoRef.current = draftSwingVideo;
+  const setDraftSwingVideo = useCallback((draft: DraftSwingVideo | undefined) => {
+    const previous = draftSwingVideoRef.current;
+    if (previous && previous.previewUrl !== draft?.previewUrl) URL.revokeObjectURL(previous.previewUrl);
+    setDraftSwingVideoState(draft);
+  }, []);
   const [data, setData] = useState<AppData>(() => loadData());
   const [isLoading, setIsLoading] = useState(true);
   // Serializes real-account profile saves — see updateCurrentUserProfile
@@ -1607,6 +1627,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       getCaddieAnalysis,
       createCaddieAnalysis,
       markCaddieAnalysisShared,
+      draftSwingVideo,
+      setDraftSwingVideo,
       notifications,
       unreadNotificationCount,
       markNotificationRead,
@@ -1692,6 +1714,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       getCaddieAnalysis,
       createCaddieAnalysis,
       markCaddieAnalysisShared,
+      draftSwingVideo,
+      setDraftSwingVideo,
       notifications,
       unreadNotificationCount,
       markNotificationRead,

@@ -22,16 +22,26 @@ const MAX_SWING_VIDEO_SECONDS = 30; // beta recommendation — short clips only,
 // bucket, same path convention, same thumbnail capture) — no second media
 // pipeline for what's conceptually the same "upload a swing video" action.
 export function AnalyzeSwing() {
-  const { createCaddieAnalysis } = useData();
+  const { createCaddieAnalysis, draftSwingVideo, setDraftSwingVideo } = useData();
   const { isDemo, authUser } = useAuth();
   const { showToast } = useToast();
   const { t } = useLocale();
   const navigate = useNavigate();
   const videoInputRef = useRef<HTMLInputElement>(null);
 
-  const [videoFile, setVideoFile] = useState<File | undefined>(undefined);
-  const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | undefined>(undefined);
-  const [swingType, setSwingType] = useState("");
+  // The video itself is backed by DataContext (mounted for the whole app
+  // session), not local state — so a video picked here but not yet
+  // submitted survives navigating away from this route and back instead of
+  // being lost. The swing-type text stays local (seeded from any existing
+  // draft) since it's trivial to retype and doesn't need the same guarantee
+  // before a video has even been picked to attach it to.
+  const videoFile = draftSwingVideo?.file;
+  const videoPreviewUrl = draftSwingVideo?.previewUrl;
+  const [swingType, setSwingTypeState] = useState(draftSwingVideo?.swingType ?? "");
+  function setSwingType(next: string) {
+    setSwingTypeState(next);
+    if (videoFile && videoPreviewUrl) setDraftSwingVideo({ file: videoFile, previewUrl: videoPreviewUrl, swingType: next });
+  }
   const [submitting, setSubmitting] = useState(false);
 
   if (isDemo || !authUser) {
@@ -71,14 +81,11 @@ export function AnalyzeSwing() {
       // and format checks above already ran; let it through rather than
       // blocking a real, valid clip over a metadata quirk.
     }
-    setVideoFile(file);
-    setVideoPreviewUrl(URL.createObjectURL(file));
+    setDraftSwingVideo({ file, previewUrl: URL.createObjectURL(file), swingType });
   }
 
   function removeVideo() {
-    setVideoFile(undefined);
-    if (videoPreviewUrl) URL.revokeObjectURL(videoPreviewUrl);
-    setVideoPreviewUrl(undefined);
+    setDraftSwingVideo(undefined);
   }
 
   async function handleAnalyze() {
@@ -106,6 +113,7 @@ export function AnalyzeSwing() {
         thumbnailUrl,
         swingType: swingType.trim() || undefined,
       });
+      setDraftSwingVideo(undefined);
       navigate(`/caddie/${created.id}`, { replace: true });
     } catch (err) {
       showToast(err instanceof Error ? err.message : t("caddie.askCaddieError"), "warning");
