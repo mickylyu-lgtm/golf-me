@@ -457,6 +457,28 @@ export interface CaddieAnalysisDetails {
   phases?: CaddieSwingPhases;
 }
 
+export interface CaddiePoseKeypoint {
+  x: number;
+  y: number;
+  confidence: number;
+}
+
+// One sampled frame's filtered, trusted pose data — same shape
+// analyze-swing persists into roboflow_analysis_json. keypoints only ever
+// contains joints Roboflow itself marked reliable; a missing joint means
+// "not confidently observed," not "at position 0,0."
+export interface CaddiePoseFrame {
+  frameIndex: number;
+  timestampSeconds: number;
+  personConfidence: number | null;
+  keypoints: Record<string, CaddiePoseKeypoint>;
+}
+
+export interface CaddiePoseData {
+  analysisFps: number;
+  frames: CaddiePoseFrame[];
+}
+
 export interface CaddieAnalysis {
   id: string;
   ownerId: string;
@@ -472,6 +494,10 @@ export interface CaddieAnalysis {
   recommendations: string[];
   drills: string[];
   details?: CaddieAnalysisDetails; // present only once status is "complete" and a real Gemini response exists
+  // Undefined for analyses from before the Roboflow pipeline shipped, or
+  // if analysis_json existed but this column didn't get written for some
+  // other reason — the replay overlay simply doesn't render without it.
+  poseData?: CaddiePoseData;
   model?: string;
   errorMessage?: string; // safe, non-sensitive — present only when status is "failed"
   sharedToCommunity: boolean;

@@ -3,7 +3,15 @@ import type { ReactNode } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "./AuthContext";
 import { useLocale } from "../i18n/LocaleContext";
-import type { CaddieAnalysis, CaddieAnalysisDetails, CaddieAnalysisStatus, CaddiePhaseMoment, CaddieSourceType, CaddieSwingPhases } from "../types";
+import type {
+  CaddieAnalysis,
+  CaddieAnalysisDetails,
+  CaddieAnalysisStatus,
+  CaddiePhaseMoment,
+  CaddiePoseData,
+  CaddieSourceType,
+  CaddieSwingPhases,
+} from "../types";
 
 interface CaddieAnalysisRow {
   id: string;
@@ -20,6 +28,7 @@ interface CaddieAnalysisRow {
   recommendations: string[];
   drills: string[];
   analysis_json: Record<string, unknown> | null;
+  roboflow_analysis_json: Record<string, unknown> | null;
   camera_angle: string | null;
   model: string | null;
   error_message: string | null;
@@ -77,6 +86,29 @@ function jsonToDetails(json: Record<string, unknown> | null): CaddieAnalysisDeta
   };
 }
 
+function jsonToPoseData(raw: Record<string, unknown> | null): CaddiePoseData | undefined {
+  if (!raw || !Array.isArray(raw.frames)) return undefined;
+  const video = (raw.video as Record<string, unknown>) ?? {};
+  return {
+    analysisFps: typeof video.analysis_fps === "number" ? video.analysis_fps : 8,
+    frames: (raw.frames as Record<string, unknown>[]).map((f) => {
+      const rawKeypoints = (f.keypoints as Record<string, Record<string, unknown>>) ?? {};
+      const keypoints: CaddiePoseData["frames"][number]["keypoints"] = {};
+      for (const [name, kp] of Object.entries(rawKeypoints)) {
+        if (typeof kp.x === "number" && typeof kp.y === "number") {
+          keypoints[name] = { x: kp.x, y: kp.y, confidence: typeof kp.confidence === "number" ? kp.confidence : 0 };
+        }
+      }
+      return {
+        frameIndex: typeof f.frame_index === "number" ? f.frame_index : 0,
+        timestampSeconds: typeof f.timestamp_seconds === "number" ? f.timestamp_seconds : 0,
+        personConfidence: typeof f.person_confidence === "number" ? f.person_confidence : null,
+        keypoints,
+      };
+    }),
+  };
+}
+
 function rowToAnalysis(row: CaddieAnalysisRow): CaddieAnalysis {
   return {
     id: row.id,
@@ -93,6 +125,7 @@ function rowToAnalysis(row: CaddieAnalysisRow): CaddieAnalysis {
     recommendations: row.recommendations,
     drills: row.drills,
     details: jsonToDetails(row.analysis_json),
+    poseData: jsonToPoseData(row.roboflow_analysis_json),
     model: row.model ?? undefined,
     errorMessage: row.error_message ?? undefined,
     sharedToCommunity: row.shared_to_community,

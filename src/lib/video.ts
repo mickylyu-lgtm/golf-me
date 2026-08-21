@@ -14,3 +14,29 @@ export function enterNativeVideoFullscreen(video: HTMLVideoElement): void {
     video.requestFullscreen().catch(() => {});
   }
 }
+
+/** The actual displayed content rectangle within a <video> element's own
+ * box, in CSS pixels relative to that box's top-left — i.e. undoing the
+ * letterboxing a video with an aspect ratio different from its container
+ * produces by default (browsers keep the real video content
+ * aspect-ratio-correct and centered, not stretched, exactly like
+ * object-fit: contain, even with no CSS object-fit set at all). Needed to
+ * position a keypoint overlay canvas over the real video pixels, not the
+ * element's full (possibly letterboxed) box. */
+export function getVideoContentRect(video: HTMLVideoElement): { left: number; top: number; width: number; height: number } {
+  const boxWidth = video.clientWidth;
+  const boxHeight = video.clientHeight;
+  const videoRatio = video.videoWidth && video.videoHeight ? video.videoWidth / video.videoHeight : boxWidth / boxHeight;
+  const boxRatio = boxWidth / boxHeight;
+  if (!videoRatio || !boxRatio || boxWidth === 0 || boxHeight === 0) {
+    return { left: 0, top: 0, width: boxWidth, height: boxHeight };
+  }
+  if (videoRatio > boxRatio) {
+    // Video is relatively wider than its box — full width, letterboxed top/bottom.
+    const height = boxWidth / videoRatio;
+    return { left: 0, top: (boxHeight - height) / 2, width: boxWidth, height };
+  }
+  // Video is relatively taller than its box — full height, pillarboxed left/right.
+  const width = boxHeight * videoRatio;
+  return { left: (boxWidth - width) / 2, top: 0, width, height: boxHeight };
+}

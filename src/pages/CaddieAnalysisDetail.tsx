@@ -3,7 +3,7 @@ import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { AlertCircle, ArrowLeft, ArrowUpRight, Check, Loader2, Share2 } from "lucide-react";
 import { CaddieNavIcon } from "../components/icons/CaddieNavIcon";
 import { CaddieThinking } from "../components/caddie/CaddieThinking";
-import { enterNativeVideoFullscreen } from "../lib/video";
+import { CaddieSwingReplay } from "../components/caddie/CaddieSwingReplay";
 import { useData } from "../context/DataContext";
 import { useToast } from "../context/ToastContext";
 import { useLocale } from "../i18n/LocaleContext";
@@ -145,26 +145,11 @@ export function CaddieAnalysisDetail() {
       </div>
 
       {analysis.sourceMediaUrl && (
-        // eslint-disable-next-line jsx-a11y/media-has-caption
-        <video
-          src={analysis.sourceMediaUrl}
-          poster={analysis.thumbnailUrl}
-          preload="metadata"
-          controls
-          className="max-h-80 w-full rounded-2xl bg-black"
-          onClickCapture={(e) => {
-            // Only a plain tap on the video body (not the native controls
-            // bar) jumps straight to the native fullscreen player — tapping
-            // play/pause/scrub should stay a normal inline interaction.
-            if (e.target instanceof HTMLVideoElement) {
-              // Without this, the native controls' own click-to-toggle-
-              // play/pause default action still fires right after —
-              // colliding with fullscreen entry and showing as a
-              // glitch/flash in and back out instead of a clean transition.
-              e.preventDefault();
-              enterNativeVideoFullscreen(e.target);
-            }
-          }}
+        <CaddieSwingReplay
+          sourceMediaUrl={analysis.sourceMediaUrl}
+          thumbnailUrl={analysis.thumbnailUrl}
+          poseData={analysis.poseData}
+          phases={details?.phases}
         />
       )}
 
