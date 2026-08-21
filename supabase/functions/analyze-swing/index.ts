@@ -23,7 +23,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 // ---- Centralized config — change these, nothing else, to retune Caddie. ----
-const GEMINI_MODEL = "gemini-2.5-flash"; // supports video understanding + structured JSON output; far cheaper/faster than 2.5-pro, appropriate for an unknown-volume beta
+const GEMINI_MODEL = "gemini-3.6-flash"; // gemini-2.5-flash was retired for new API keys/projects (Gemini API started 404ing it with "no longer available to new users" on 2026-08-21); 3.6-flash is Google's named replacement, same video-understanding + structured-JSON-output support
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com";
 const COOLDOWN_SECONDS = 30; // blocks accidental double-taps/rapid re-asks
 const DAILY_LIMIT_PER_USER = 10; // caps worst-case per-user Gemini spend for the beta
