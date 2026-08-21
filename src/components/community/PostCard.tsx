@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Bookmark,
-  Clock,
+  Loader2,
   MapPin,
   MessageCircle,
   MoreHorizontal,
@@ -60,6 +60,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
     isBlocked,
     blockUser,
     caddieAnalyses,
+    createCaddieAnalysis,
   } = useData();
   const { showToast } = useToast();
   const { t, locale } = useLocale();
@@ -70,6 +71,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
   const [mediaLightboxIndex, setMediaLightboxIndex] = useState<number | null>(null);
   const [feedMuted, setFeedMuted] = useState(true);
+  const [askingCaddie, setAskingCaddie] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   // One tap anywhere on the video opens the fullscreen viewer directly —
@@ -157,6 +159,29 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
   // open permissions question the brief flagged, so Ask Caddie is scoped
   // to the post's own author until that's revisited.
   const existingCaddieAnalysis = isOwn ? caddieAnalyses.find((a) => a.sourcePostId === post.id) : undefined;
+
+  async function askCaddie(e: React.MouseEvent) {
+    stop(e);
+    if (askingCaddie || !post.videoUrl) return;
+    setAskingCaddie(true);
+    try {
+      const created = await createCaddieAnalysis({
+        sourceType: "community_post",
+        sourcePostId: post.id,
+        sourceMediaUrl: post.videoUrl,
+        thumbnailUrl: post.videoThumbnailUrl,
+      });
+      if (created.status === "complete") navigate(`/caddie/${created.id}`);
+      // 'processing'/'failed' just falls through — the row now exists in
+      // caddieAnalyses (realtime already delivered it), so the render below
+      // picks up existingCaddieAnalysis on the next render and shows the
+      // right state without a second navigation.
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : t("caddie.askCaddieError"), "warning");
+    } finally {
+      setAskingCaddie(false);
+    }
+  }
 
   // Normalizes every post's media into one shape for the fullscreen viewer
   // — a multi-item carousel, a swing post's single video, or a legacy
@@ -294,9 +319,12 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
           </div>
           <SwingAnalysisPanel status={post.swingAnalysisStatus} />
           {isOwn &&
-            (existingCaddieAnalysis ? (
+            (existingCaddieAnalysis?.status === "complete" ? (
               <button
-                onClick={() => navigate(`/caddie/${existingCaddieAnalysis.id}`)}
+                onClick={(e) => {
+                  stop(e);
+                  navigate(`/caddie/${existingCaddieAnalysis.id}`);
+                }}
                 className="flex items-center justify-between gap-2 rounded-xl border border-fairway-100 bg-fairway-50/50 px-3.5 py-2.5 text-left transition-colors duration-150 hover:border-fairway-300"
               >
                 <span className="flex items-center gap-1.5 text-sm font-semibold text-fairway-800">
@@ -304,9 +332,21 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
                 </span>
                 <span className="text-xs font-semibold text-fairway-700">{t("caddie.viewAnalysis")}</span>
               </button>
+            ) : existingCaddieAnalysis?.status === "failed" ? (
+              <div className="flex items-center justify-between gap-2 rounded-xl border border-red-100 bg-red-50/50 px-3.5 py-2.5" onClick={stop}>
+                <span className="text-xs font-semibold text-red-700">{t("caddie.askCaddieError")}</span>
+                <Button variant="outline" size="sm" onClick={askCaddie} disabled={askingCaddie}>
+                  {t("caddie.tryAgain")}
+                </Button>
+              </div>
+            ) : existingCaddieAnalysis?.status === "processing" || askingCaddie ? (
+              <div className="flex items-center gap-2 rounded-xl border border-fairway-100 bg-fairway-50/50 px-3.5 py-2.5" onClick={stop}>
+                <Loader2 size={14} className="animate-spin text-fairway-600" />
+                <span className="text-sm font-semibold text-fairway-800">{t("caddie.analyzing")}</span>
+              </div>
             ) : (
-              <Button variant="outline" size="sm" icon={<Clock size={14} />} disabled>
-                {t("caddie.comingSoon")}
+              <Button variant="outline" size="sm" icon={<Sparkles size={14} />} onClick={askCaddie}>
+                {t("caddie.askCaddie")}
               </Button>
             ))}
         </div>

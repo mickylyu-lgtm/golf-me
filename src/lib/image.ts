@@ -85,6 +85,30 @@ export function captureVideoThumbnail(file: File, maxDimension = 640): Promise<B
   });
 }
 
+// Reads a video file's duration without uploading it — used to enforce
+// Caddie's beta clip-length recommendation (see analyze-swing's frame-
+// sampling doc comment: Gemini's Files API samples at a fixed ~1 FPS, so
+// keeping clips short matters for actually covering the whole swing).
+// Applied both to Swing Post uploads (CreatePost.tsx) and Caddie's
+// direct-upload flow (AnalyzeSwing.tsx), since a Swing Post's video is
+// exactly what Ask Caddie later runs on.
+export function readVideoDuration(file: File): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    const url = URL.createObjectURL(file);
+    video.src = url;
+    video.onloadedmetadata = () => {
+      URL.revokeObjectURL(url);
+      resolve(video.duration);
+    };
+    video.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Could not read video metadata"));
+    };
+  });
+}
+
 // Same downsize-and-encode as resizeImageToDataUrl but resolving a Blob —
 // real accounts upload the actual bytes to Supabase Storage rather than
 // ever writing a data-URL/base64 string into the database, same reasoning

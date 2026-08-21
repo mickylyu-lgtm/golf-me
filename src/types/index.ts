@@ -398,6 +398,38 @@ export interface CommunityPost {
 // is never readable by anyone but its owner.
 export type CaddieSourceType = "direct_upload" | "community_post";
 export type CaddieAnalysisStatus = "pending" | "processing" | "complete" | "failed";
+export type CaddieCameraAngle = "face_on" | "down_the_line" | "other" | "uncertain";
+export type CaddieConfidence = "high" | "medium" | "low";
+
+export interface CaddieWorkOnItem {
+  issue: string;
+  whyItMatters: string;
+  confidence: CaddieConfidence;
+}
+
+export interface CaddieFocus {
+  title: string;
+  instruction: string;
+}
+
+export interface CaddieDrill {
+  name: string;
+  steps: string[];
+}
+
+// The real Gemini structured response — see supabase/functions/analyze-swing.
+// Kept separate from the flat strengths/issues/recommendations/drills below
+// (which stay populated too, derived from this at write time) so every
+// existing render path keeps working while new UI can read the richer shape.
+export interface CaddieAnalysisDetails {
+  summary: string;
+  cameraAngle: CaddieCameraAngle;
+  strengths: string[];
+  workOn: CaddieWorkOnItem[];
+  focus: CaddieFocus;
+  drill: CaddieDrill;
+  limitations: string[];
+}
 
 export interface CaddieAnalysis {
   id: string;
@@ -413,6 +445,9 @@ export interface CaddieAnalysis {
   issues: string[];
   recommendations: string[];
   drills: string[];
+  details?: CaddieAnalysisDetails; // present only once status is "complete" and a real Gemini response exists
+  model?: string;
+  errorMessage?: string; // safe, non-sensitive — present only when status is "failed"
   sharedToCommunity: boolean;
   createdAt: string;
   updatedAt: string;

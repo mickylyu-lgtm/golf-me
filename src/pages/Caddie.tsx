@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Clock, Video } from "lucide-react";
+import { Clock, Sparkles, Video } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useLocale } from "../i18n/LocaleContext";
 import { EmptyState } from "../components/ui/EmptyState";
@@ -11,12 +11,6 @@ import { formatShortDate } from "../lib/format";
 // most obvious action is always "Analyze a Swing"). Reuses the same
 // CaddieAnalysis data DataContext already branches demo/real on; this page
 // never talks to Supabase or the mock data directly.
-//
-// New submissions are disabled — no real analysis provider is connected
-// yet, so a real account starting a new analysis would only ever get
-// stuck at "pending" forever. Marked "Coming Soon" and non-clickable
-// rather than letting anyone start something that can't finish, per
-// explicit instruction. Existing/demo history still displays normally.
 export function Caddie() {
   const { caddieAnalyses } = useData();
   const { t, locale } = useLocale();
@@ -31,8 +25,8 @@ export function Caddie() {
         <p className="text-sm text-slate-500">{t("caddie.tagline")}</p>
       </div>
 
-      <Button size="lg" fullWidth disabled icon={<Clock size={16} />}>
-        {t("caddie.comingSoon")}
+      <Button size="lg" fullWidth icon={<Sparkles size={16} />} onClick={() => navigate("/caddie/analyze")}>
+        {t("caddie.analyzeSwing")}
       </Button>
 
       <section>
@@ -42,8 +36,7 @@ export function Caddie() {
         ) : (
           <div className="flex flex-col gap-3">
             {recent.map((a) => {
-              const issueCount = a.issues.length;
-              const fixCount = a.recommendations.length;
+              const issueCount = a.details?.workOn.length ?? a.issues.length;
               return (
                 <button
                   key={a.id}
@@ -55,12 +48,12 @@ export function Caddie() {
                     <span className="block text-xs text-slate-500">{formatShortDate(a.createdAt, locale)}</span>
                   </span>
                   {a.status === "complete" ? (
-                    <span className="shrink-0 text-xs font-semibold text-slate-500">
-                      {issueCount} · {fixCount}
-                    </span>
+                    <span className="shrink-0 text-xs font-semibold text-slate-500">{t("caddie.thingsToWorkOn", { count: issueCount })}</span>
+                  ) : a.status === "failed" ? (
+                    <span className="shrink-0 text-xs font-semibold text-red-500">{t("caddie.askCaddieError")}</span>
                   ) : (
                     <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-slate-400">
-                      <Clock size={12} /> {t("caddie.comingSoon")}
+                      <Clock size={12} /> {t("caddie.analyzing")}
                     </span>
                   )}
                 </button>

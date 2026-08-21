@@ -243,6 +243,7 @@ interface DataContextValue {
   caddieAnalyses: CaddieAnalysis[];
   getCaddieAnalysis: (id: string) => CaddieAnalysis | undefined;
   createCaddieAnalysis: (input: CreateAnalysisInput) => Promise<CaddieAnalysis>;
+  markCaddieAnalysisShared: (id: string) => Promise<void>;
 
   notifications: AppNotification[];
   unreadNotificationCount: number;
@@ -1477,6 +1478,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
     },
     [auth.isDemo, currentUser.id, realCaddie],
   );
+  const markCaddieAnalysisShared = useCallback(
+    async (id: string) => {
+      if (auth.isDemo) {
+        setDemoCaddieAnalyses((prev) => prev.map((a) => (a.id === id ? { ...a, sharedToCommunity: true } : a)));
+        return;
+      }
+      await realCaddie.markShared(id);
+    },
+    [auth.isDemo, realCaddie],
+  );
 
   const mockNotifications = useMemo(
     () => data.notifications.filter((n) => n.userId === currentUser.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
@@ -1595,6 +1606,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       caddieAnalyses,
       getCaddieAnalysis,
       createCaddieAnalysis,
+      markCaddieAnalysisShared,
       notifications,
       unreadNotificationCount,
       markNotificationRead,
@@ -1679,6 +1691,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       caddieAnalyses,
       getCaddieAnalysis,
       createCaddieAnalysis,
+      markCaddieAnalysisShared,
       notifications,
       unreadNotificationCount,
       markNotificationRead,

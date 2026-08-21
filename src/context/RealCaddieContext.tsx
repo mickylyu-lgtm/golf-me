@@ -2,8 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { ReactNode } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "./AuthContext";
-import { swingAnalysisProvider } from "../lib/swingAnalysis";
-import type { CaddieAnalysis, CaddieAnalysisStatus, CaddieSourceType } from "../types";
+import { useLocale } from "../i18n/LocaleContext";
+import type { CaddieAnalysis, CaddieAnalysisDetails, CaddieAnalysisStatus, CaddieSourceType } from "../types";
 
 interface CaddieAnalysisRow {
   id: string;
@@ -19,9 +19,36 @@ interface CaddieAnalysisRow {
   issues: string[];
   recommendations: string[];
   drills: string[];
+  analysis_json: Record<string, unknown> | null;
+  camera_angle: string | null;
+  model: string | null;
+  error_message: string | null;
   shared_to_community: boolean;
   created_at: string;
   updated_at: string;
+}
+
+// analysis_json is stored exactly as Gemini returned it (snake_case field
+// names) — this maps it into the camelCase shape the rest of the app uses.
+// Real rows only; demo mode's fixture data never sets analysis_json.
+function jsonToDetails(json: Record<string, unknown> | null): CaddieAnalysisDetails | undefined {
+  if (!json) return undefined;
+  const workOn = Array.isArray(json.work_on) ? (json.work_on as Record<string, unknown>[]) : [];
+  const focus = (json.focus as Record<string, unknown>) ?? {};
+  const drill = (json.drill as Record<string, unknown>) ?? {};
+  return {
+    summary: String(json.summary ?? ""),
+    cameraAngle: (json.camera_angle as CaddieAnalysisDetails["cameraAngle"]) ?? "uncertain",
+    strengths: Array.isArray(json.strengths) ? (json.strengths as string[]) : [],
+    workOn: workOn.map((w) => ({
+      issue: String(w.issue ?? ""),
+      whyItMatters: String(w.why_it_matters ?? ""),
+      confidence: (w.confidence as CaddieAnalysisDetails["workOn"][number]["confidence"]) ?? "medium",
+    })),
+    focus: { title: String(focus.title ?? ""), instruction: String(focus.instruction ?? "") },
+    drill: { name: String(drill.name ?? ""), steps: Array.isArray(drill.steps) ? (drill.steps as string[]) : [] },
+    limitations: Array.isArray(json.limitations) ? (json.limitations as string[]) : [],
+  };
 }
 
 function rowToAnalysis(row: CaddieAnalysisRow): CaddieAnalysis {
@@ -39,6 +66,9 @@ function rowToAnalysis(row: CaddieAnalysisRow): CaddieAnalysis {
     issues: row.issues,
     recommendations: row.recommendations,
     drills: row.drills,
+    details: jsonToDetails(row.analysis_json),
+    model: row.model ?? undefined,
+    errorMessage: row.error_message ?? undefined,
     sharedToCommunity: row.shared_to_community,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -58,12 +88,14 @@ interface RealCaddieContextValue {
   isLoading: boolean;
   getAnalysis: (id: string) => CaddieAnalysis | undefined;
   createAnalysis: (input: CreateAnalysisInput) => Promise<CaddieAnalysis>;
+  markShared: (id: string) => Promise<void>;
 }
 
 const RealCaddieContext = createContext<RealCaddieContextValue | null>(null);
 
 export function RealCaddieProvider({ children }: { children: ReactNode }) {
   const { isDemo, authUser } = useAuth();
+  const { locale } = useLocale();
   const [rows, setRows] = useState<CaddieAnalysisRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const fetchingRef = useRef(false);
@@ -115,42 +147,55 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
   const createAnalysis = useCallback(
     async (input: CreateAnalysisInput): Promise<CaddieAnalysis> => {
       if (!selfId) throw new Error("Not signed in.");
-      const { data, error } = await supabase
-        .from("caddie_analyses")
-        .insert({
-          owner_id: selfId,
-          source_type: input.sourceType,
-          source_post_id: input.sourcePostId ?? null,
-          source_media_url: input.sourceMediaUrl,
-          thumbnail_url: input.thumbnailUrl ?? null,
-          swing_type: input.swingType ?? null,
-          status: "pending",
-        })
-        .select()
-        .single();
-      if (error) throw new Error(error.message);
-      const created = rowToAnalysis(data as CaddieAnalysisRow);
-      setRows((prev) => [data as CaddieAnalysisRow, ...prev]);
-
-      // Real integration point: attempt the real analysis provider. Today
-      // this always throws (see src/lib/swingAnalysis.ts — no real
-      // CV/AI provider is connected), so the row is deliberately left at
-      // 'pending' rather than writing a fabricated result. The day a real
-      // provider exists, only this block changes — everything else
-      // (schema, UI, history) is already correct for a genuine 'complete'
-      // result to show up here.
-      swingAnalysisProvider.analyze(input.sourceMediaUrl).catch(() => {
-        // Expected today. Silently leaves status at 'pending' — this is
-        // not an error state for the user, it's the honest current state
-        // of the product (no real provider connected yet).
+      // The Edge Function owns the whole row lifecycle (insert at
+      // 'processing', then update to 'complete'/'failed') — see
+      // supabase/functions/analyze-swing. It reads GEMINI_API_KEY
+      // server-side only and validates ownership via existing RLS/triggers
+      // using this same caller's JWT (supabase.functions.invoke forwards
+      // the current session's Authorization header automatically).
+      const { data, error } = await supabase.functions.invoke("analyze-swing", {
+        body: {
+          sourceType: input.sourceType,
+          sourcePostId: input.sourcePostId,
+          sourceMediaUrl: input.sourceMediaUrl,
+          thumbnailUrl: input.thumbnailUrl,
+          swingType: input.swingType,
+          locale,
+        },
       });
-
+      if (error) {
+        // supabase-js's FunctionsHttpError carries the JSON error body on
+        // `context` for non-2xx responses — surface that message (it's
+        // always one of this function's own safe, user-facing strings,
+        // never a raw provider error) instead of a generic "Edge Function
+        // returned a non-2xx status code."
+        let message = error.message;
+        try {
+          const body = await error.context?.json();
+          if (body?.error) message = body.error;
+        } catch {
+          // Falls back to error.message below.
+        }
+        throw new Error(message);
+      }
+      const row = (data as { analysis: CaddieAnalysisRow }).analysis;
+      const created = rowToAnalysis(row);
+      setRows((prev) => {
+        const withoutDuplicate = prev.filter((r) => r.id !== row.id);
+        return [row, ...withoutDuplicate];
+      });
       return created;
     },
-    [selfId],
+    [selfId, locale],
   );
 
-  const value: RealCaddieContextValue = { analyses, isLoading, getAnalysis, createAnalysis };
+  const markShared = useCallback(async (id: string) => {
+    const { error } = await supabase.from("caddie_analyses").update({ shared_to_community: true }).eq("id", id);
+    if (error) throw new Error(error.message);
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, shared_to_community: true } : r)));
+  }, []);
+
+  const value: RealCaddieContextValue = { analyses, isLoading, getAnalysis, createAnalysis, markShared };
 
   return <RealCaddieContext.Provider value={value}>{children}</RealCaddieContext.Provider>;
 }

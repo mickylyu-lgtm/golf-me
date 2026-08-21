@@ -14,7 +14,7 @@ import { inputClass, labelClass } from "../components/ui/FormControls";
 import { POST_CATEGORIES } from "../types";
 import type { PostCategory, PostType } from "../types";
 import { COURSES } from "../lib/courses";
-import { resizeImageToDataUrl, resizeImageToBlob, captureVideoThumbnail } from "../lib/image";
+import { resizeImageToDataUrl, resizeImageToBlob, captureVideoThumbnail, readVideoDuration } from "../lib/image";
 import { formatDate, formatMoney } from "../lib/format";
 import { postCategoryLabel } from "../lib/enumLabels";
 import { supabase } from "../lib/supabase";
@@ -23,6 +23,7 @@ type Attachment = "none" | "photo" | "course" | "round" | "swing";
 
 const COMMUNITY_MEDIA_BUCKET = "community-media";
 const MAX_SWING_VIDEO_BYTES = 200 * 1024 * 1024; // matches the Storage bucket's own file_size_limit
+const MAX_SWING_VIDEO_SECONDS = 30; // beta recommendation — see analyze-swing's frame-sampling doc comment
 const MAX_POST_MEDIA_ITEMS = 10; // matches Instagram's own carousel cap — a sensible, familiar limit, not an arbitrary one
 
 interface DraftMediaItem {
@@ -208,7 +209,7 @@ export function CreatePost() {
     setActiveTool("swing");
   }
 
-  function handleVideoFile(e: ChangeEvent<HTMLInputElement>) {
+  async function handleVideoFile(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
@@ -219,6 +220,18 @@ export function CreatePost() {
     if (file.size > MAX_SWING_VIDEO_BYTES) {
       showToast("That video is too large — please choose a shorter clip.", "warning");
       return;
+    }
+    // A Swing Post's video is exactly what Ask Caddie later analyzes — same
+    // beta clip-length recommendation as Caddie's own direct-upload flow
+    // (AnalyzeSwing.tsx), enforced here too rather than only at analysis time.
+    try {
+      const duration = await readVideoDuration(file);
+      if (duration > MAX_SWING_VIDEO_SECONDS) {
+        showToast(t("caddie.videoTooLong"), "warning");
+        return;
+      }
+    } catch {
+      // Metadata read failing isn't itself disqualifying — let it through.
     }
     requestAttach("swing", () => doAttachVideo(file));
   }
