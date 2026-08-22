@@ -12,7 +12,7 @@ import { ArrowLeft, Lock } from "lucide-react";
 // directly against the schema and code rather than written from a generic
 // template — update this file (and the date) if the data collected or the
 // third parties involved change.
-const LAST_UPDATED = "August 20, 2026";
+const LAST_UPDATED = "August 22, 2026";
 const CONTACT_EMAIL = "mickylyu@gmail.com";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -78,6 +78,11 @@ export function PrivacyPolicy() {
           you've played with, reports you file, and booking-proof screenshots you attach to a round.
         </p>
         <p>
+          <span className="font-semibold text-slate-800">Caddie swing videos:</span> Swing videos you upload to Caddie, and the
+          AI-generated analysis (score, feedback, and pose data) produced from them. See "Who we share it with" for the third parties
+          that process a swing video to generate that analysis.
+        </p>
+        <p>
           <span className="font-semibold text-slate-800">What we don't collect:</span> We don't have any advertising or analytics
           tracking in the app, and we don't collect payment or financial information — GolfMe doesn't process payments.
         </p>
@@ -99,7 +104,17 @@ export function PrivacyPolicy() {
             messaging infrastructure. Nearly everything described above is stored here.
           </li>
           <li>
-            <span className="font-semibold text-slate-800">Google</span> — only if you choose "Continue with Google" to sign in.
+            <span className="font-semibold text-slate-800">Google (sign-in)</span> — only if you choose "Continue with Google" to sign
+            in.
+          </li>
+          <li>
+            <span className="font-semibold text-slate-800">Google Gemini API</span> — a separate Google service used only if you use
+            Caddie: your swing video is temporarily uploaded to it to generate your written feedback (deleted from Google's side right
+            after), and if you translate feedback into another language, that text is sent to it to translate.
+          </li>
+          <li>
+            <span className="font-semibold text-slate-800">Roboflow</span> — used only if you use Caddie: frames extracted from your
+            swing video are sent to it to detect your body position/pose for the analysis.
           </li>
           <li>
             <span className="font-semibold text-slate-800">Geoapify</span> — powers course search and location lookup; your search
