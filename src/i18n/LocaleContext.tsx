@@ -60,6 +60,19 @@ interface LocaleContextValue {
 
 const LocaleContext = createContext<LocaleContextValue | null>(null);
 
+function buildT(locale: Locale) {
+  const dict = DICTIONARIES[locale];
+  return (key: TranslationKey, vars?: Record<string, string | number>) => {
+    let str = dict[key] ?? en[key];
+    if (vars) {
+      for (const [k, v] of Object.entries(vars)) {
+        str = str.replace(`{${k}}`, String(v));
+      }
+    }
+    return str;
+  };
+}
+
 export function LocaleProvider({ children }: { children: ReactNode }) {
   // A stored explicit choice always wins; only a first-ever visit falls
   // back to browser-language detection — once picked, language never
@@ -71,21 +84,22 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
   }, [locale]);
 
-  const t = useMemo(() => {
-    const dict = DICTIONARIES[locale];
-    return (key: TranslationKey, vars?: Record<string, string | number>) => {
-      let str = dict[key] ?? en[key];
-      if (vars) {
-        for (const [k, v] of Object.entries(vars)) {
-          str = str.replace(`{${k}}`, String(v));
-        }
-      }
-      return str;
-    };
-  }, [locale]);
+  const t = useMemo(() => buildT(locale), [locale]);
 
   const value = useMemo(() => ({ locale, setLocale: setLocaleState, t }), [locale, t]);
 
+  return <LocaleContext.Provider value={value}>{children}</LocaleContext.Provider>;
+}
+
+// Pins a subtree to a fixed locale regardless of the device/account-wide
+// choice in LocaleProvider above — e.g. the admin dashboard, which is an
+// internal tool for the (English-speaking) GolfMe team and shouldn't
+// re-render in whatever language the logged-in admin's own account happens
+// to be set to. setLocale is a no-op since these subtrees never expose a
+// language switcher.
+export function ForceLocale({ locale, children }: { locale: Locale; children: ReactNode }) {
+  const t = useMemo(() => buildT(locale), [locale]);
+  const value = useMemo(() => ({ locale, setLocale: () => {}, t }), [locale, t]);
   return <LocaleContext.Provider value={value}>{children}</LocaleContext.Provider>;
 }
 

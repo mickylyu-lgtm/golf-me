@@ -8,7 +8,7 @@ import { RealSocialProvider } from "./context/RealSocialContext";
 import { RealCommunityProvider } from "./context/RealCommunityContext";
 import { RealCaddieProvider } from "./context/RealCaddieContext";
 import { ToastProvider } from "./context/ToastContext";
-import { LocaleProvider, useLocale, LOCALES } from "./i18n/LocaleContext";
+import { LocaleProvider, ForceLocale, useLocale, LOCALES } from "./i18n/LocaleContext";
 import type { Locale } from "./i18n/LocaleContext";
 import { AppShell } from "./components/layout/AppShell";
 import { ScrollToTop } from "./components/layout/ScrollToTop";
@@ -63,17 +63,23 @@ import { usePendingReviewerInviteRedemption } from "./lib/usePendingReviewerInvi
 // session + onboarded -> the app.
 function AuthedLayout() {
   const { session } = useData();
+  const location = useLocation();
   if (!session.isLoggedIn) {
     return <Navigate to="/welcome" replace />;
   }
   if (!session.hasOnboarded) {
     return <Navigate to="/profile-setup" replace />;
   }
-  return (
+  const shell = (
     <AppShell>
       <Outlet />
     </AppShell>
   );
+  // Admin tools (dashboard, coach-reviewer management) stay pinned to
+  // English — see ForceLocale's own comment — which also forces the
+  // surrounding nav chrome (TopBar/SideNav/BottomNav) to English since
+  // they read useLocale() too and AppShell is inside this override.
+  return location.pathname.startsWith("/admin") ? <ForceLocale locale="en">{shell}</ForceLocale> : shell;
 }
 
 // Welcome/onboarding/auth screens: no point revisiting these once signed in
