@@ -138,32 +138,33 @@ export function TutorialOverlay() {
         </div>
 
         <div className="flex items-center justify-between gap-3 pt-1">
-          {!isFirstStep && !isLastStep ? (
+          {!isLastStep ? (
             <button
-              onClick={back}
-              className="rounded-full px-3 py-2 text-sm font-semibold text-slate-500 transition-colors duration-150 hover:bg-slate-100"
+              onClick={skip}
+              className="text-xs font-semibold text-slate-400 underline-offset-2 transition-colors duration-150 hover:text-slate-600 hover:underline"
             >
-              {t("tutorial.back")}
+              {t("tutorial.skip")}
             </button>
           ) : (
             <span />
           )}
-          <button
-            onClick={next}
-            className="rounded-full bg-fairway-600 px-5 py-2 text-sm font-bold text-white shadow-sm shadow-fairway-900/10 transition-all duration-150 hover:bg-fairway-700"
-          >
-            {isLastStep ? t("tutorial.startExploring") : t("tutorial.next")}
-          </button>
+          <div className="flex items-center gap-2">
+            {!isFirstStep && !isLastStep && (
+              <button
+                onClick={back}
+                className="rounded-full px-3 py-2 text-sm font-semibold text-slate-500 transition-colors duration-150 hover:bg-slate-100"
+              >
+                {t("tutorial.back")}
+              </button>
+            )}
+            <button
+              onClick={next}
+              className="rounded-full bg-fairway-600 px-5 py-2 text-sm font-bold text-white shadow-sm shadow-fairway-900/10 transition-all duration-150 hover:bg-fairway-700"
+            >
+              {isLastStep ? t("tutorial.startExploring") : t("tutorial.next")}
+            </button>
+          </div>
         </div>
-
-        {!isLastStep && (
-          <button
-            onClick={skip}
-            className="self-center text-xs font-semibold text-slate-400 underline-offset-2 transition-colors duration-150 hover:text-slate-600 hover:underline"
-          >
-            {t("tutorial.skip")}
-          </button>
-        )}
       </div>
     </div>
   );
