@@ -150,6 +150,7 @@ export const ko: Record<TranslationKey, string> = {
   "caddie.couldNotSave": "분석을 저장하지 못했습니다.",
   "caddie.uploadSwing": "스윙 영상 업로드",
   "caddie.selectVideo": "영상 선택",
+  "caddie.cameraAngleTip": "더 유용한 피드백을 위해 뒤에서가 아니라 정면(페이스온)에서 촬영해 주세요 — 캐디는 이 각도에서 체중 이동과 몸의 움직임을 가장 잘 읽어냅니다.",
   "caddie.fromCommunityPost": "커뮤니티 게시물에서",
   "caddie.viewSourcePost": "원본 게시물 보기",
   "caddie.whatLooksGood": "잘하고 있는 점",

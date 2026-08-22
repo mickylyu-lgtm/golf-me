@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Loader2, Sparkles, Video, X } from "lucide-react";
+import { ArrowLeft, Info, Loader2, Sparkles, Video, X } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
@@ -132,6 +132,11 @@ export function AnalyzeSwing() {
 
       <div>
         <h1 className="text-xl font-bold text-slate-900">{t("caddie.uploadSwing")}</h1>
+      </div>
+
+      <div className="flex items-start gap-2 rounded-xl bg-fairway-50/60 px-3 py-2.5 text-xs text-fairway-800">
+        <Info size={14} className="mt-0.5 shrink-0" />
+        <span>{t("caddie.cameraAngleTip")}</span>
       </div>
 
       {videoFile && videoPreviewUrl ? (

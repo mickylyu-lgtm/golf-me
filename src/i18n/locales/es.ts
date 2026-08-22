@@ -150,6 +150,7 @@ export const es: Record<TranslationKey, string> = {
   "caddie.couldNotSave": "No se pudo guardar el análisis.",
   "caddie.uploadSwing": "Sube un video de tu swing",
   "caddie.selectVideo": "Seleccionar Video",
+  "caddie.cameraAngleTip": "Para obtener los comentarios más útiles, graba de frente (de cara) en lugar de por detrás — Caddie interpreta mejor el desplazamiento de peso y el movimiento corporal desde ese ángulo.",
   "caddie.fromCommunityPost": "Desde una Publicación de Comunidad",
   "caddie.viewSourcePost": "Ver publicación original",
   "caddie.whatLooksGood": "Lo Que Va Bien",

@@ -150,6 +150,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "caddie.couldNotSave": "無法儲存分析結果。",
   "caddie.uploadSwing": "上傳揮桿影片",
   "caddie.selectVideo": "選擇影片",
+  "caddie.cameraAngleTip": "為了獲得更有用的回饋，請從正面（面對鏡頭）拍攝，而不是從背後拍攝 — Caddie 從這個角度能更好地讀取重心轉移和身體動作。",
   "caddie.fromCommunityPost": "來自社區動態",
   "caddie.viewSourcePost": "查看原動態",
   "caddie.whatLooksGood": "表現不錯的地方",

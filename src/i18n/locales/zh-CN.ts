@@ -150,6 +150,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "caddie.couldNotSave": "无法保存分析结果。",
   "caddie.uploadSwing": "上传挥杆视频",
   "caddie.selectVideo": "选择视频",
+  "caddie.cameraAngleTip": "为了获得更有用的反馈，请从正面（面对镜头）拍摄，而不是从背后拍摄 — Caddie 从这个角度能更好地读取重心转移和身体动作。",
   "caddie.fromCommunityPost": "来自社区动态",
   "caddie.viewSourcePost": "查看原动态",
   "caddie.whatLooksGood": "表现不错的地方",

@@ -160,6 +160,7 @@ export const en = {
   "caddie.couldNotSave": "Could not save analysis.",
   "caddie.uploadSwing": "Upload a swing video",
   "caddie.selectVideo": "Select Video",
+  "caddie.cameraAngleTip": "For the most useful feedback, film from the front (face-on) rather than from behind — Caddie reads weight shift and body movement best from that angle.",
   "caddie.fromCommunityPost": "From Community Post",
   "caddie.viewSourcePost": "View original post",
   "caddie.whatLooksGood": "What Looks Good",
