@@ -16,6 +16,27 @@ const COMMUNITY_MEDIA_BUCKET = "community-media"; // same bucket CreatePost.tsx'
 const MAX_SWING_VIDEO_BYTES = 200 * 1024 * 1024; // matches the Storage bucket's own file_size_limit
 const MAX_SWING_VIDEO_SECONDS = 10; // hard product limit (2026-08-22 credit-efficiency pass) — Caddie's Roboflow pass calls once per sampled frame, so a longer clip directly multiplies calls/latency/credit spend; see analyze-swing's ANALYSIS_FPS comment. Was 15s.
 
+// A fixed dropdown instead of free typing — standard bag, driver through
+// putter. English club names throughout (not per-locale) matches how
+// real users already entered this field before ("3 wood", "4 hybrid")
+// even on non-English locales, and keeps the stored swing_type value a
+// stable, simple string rather than something locale-dependent.
+const CLUB_OPTIONS = [
+  "Driver",
+  "3 Wood",
+  "5 Wood",
+  "4 Iron",
+  "5 Iron",
+  "6 Iron",
+  "7 Iron",
+  "8 Iron",
+  "9 Iron",
+  "Pitching Wedge",
+  "Sand Wedge",
+  "Lob Wedge",
+  "Putter",
+] as const;
+
 // Direct-upload Caddie flow: pick a swing video, optionally label the club,
 // get real Gemini feedback. Reuses the exact community-media Storage upload
 // mechanics CreatePost.tsx already established for Swing Posts (same
@@ -167,7 +188,14 @@ export function AnalyzeSwing() {
 
       <div>
         <label className={labelClass}>{t("caddie.swingTypePlaceholder")}</label>
-        <input value={swingType} onChange={(e) => setSwingType(e.target.value)} placeholder={t("caddie.swingTypePlaceholder")} className={inputClass} />
+        <select value={swingType} onChange={(e) => setSwingType(e.target.value)} className={inputClass}>
+          <option value="">{t("caddie.swingTypePlaceholder")}</option>
+          {CLUB_OPTIONS.map((club) => (
+            <option key={club} value={club}>
+              {club}
+            </option>
+          ))}
+        </select>
       </div>
 
       <Button
