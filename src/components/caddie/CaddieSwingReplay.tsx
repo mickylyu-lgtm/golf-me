@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CaddiePoseData, CaddieSwingPhases } from "../../types";
 import { enterNativeVideoFullscreen, getVideoContentRect } from "../../lib/video";
 import { useLocale } from "../../i18n/LocaleContext";
@@ -58,11 +58,21 @@ export interface CaddieSwingReplayProps {
   phases?: CaddieSwingPhases;
 }
 
-// Original video + a live keypoint/skeleton overlay synced to playback,
-// plus tap-to-seek phase buttons — Caddie's "analyzed replay." The overlay
-// is dynamic (drawn fresh each frame from stored coordinates), not a
-// second rendered/re-encoded video, per the product brief's "avoid
-// doubling video storage" guidance.
+// Two views of the same one video, not two separate rendered/stored files
+// (that would double storage for every analysis — see the product brief's
+// explicit "avoid doubling video storage" guidance, and it's unnecessary:
+// <video>'s native playbackRate already gives a real slow-motion feel).
+// "Original" plays at normal speed with no overlay — just the swing as
+// shot. "0.5x Analysis" halves playback AND turns on the live keypoint/
+// skeleton overlay, since a short (5-15s) swing at full speed makes each
+// phase flash by too fast to actually study, even with the jump-to-phase
+// buttons below. The overlay only shows in analysis mode so the normal
+// view stays clean, uncluttered by dots/lines someone didn't ask to see.
+const REPLAY_MODES = [
+  { speed: 1, labelKey: "caddie.replayOriginal", showOverlay: false },
+  { speed: 0.5, labelKey: "caddie.replaySlowAnalysis", showOverlay: true },
+] as const;
+
 export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phases }: CaddieSwingReplayProps) {
   const { t } = useLocale();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -70,6 +80,14 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
   const containerRef = useRef<HTMLDivElement>(null);
   const framesRef = useRef(poseData?.frames ?? []);
   framesRef.current = poseData?.frames ?? [];
+  const [mode, setMode] = useState<(typeof REPLAY_MODES)[number]>(REPLAY_MODES[0]);
+  const speed = mode.speed;
+  const showOverlay = mode.showOverlay && !!poseData && poseData.frames.length > 0;
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video) video.playbackRate = speed;
+  }, [speed]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -161,7 +179,7 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
       video.removeEventListener("timeupdate", draw);
       video.removeEventListener("seeked", draw);
     };
-  }, [poseData?.analysisFps]);
+  }, [poseData?.analysisFps, showOverlay]);
 
   const buttons = phaseButtons(phases);
 
@@ -184,10 +202,25 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
             if (e.target instanceof HTMLVideoElement) enterNativeVideoFullscreen(e.target);
           }}
         />
-        {poseData && poseData.frames.length > 0 && (
-          <canvas ref={canvasRef} className="pointer-events-none absolute inset-0" aria-hidden="true" />
-        )}
+        {showOverlay && <canvas ref={canvasRef} className="pointer-events-none absolute inset-0" aria-hidden="true" />}
       </div>
+      {poseData && poseData.frames.length > 0 && (
+        <div className="flex items-center gap-1.5">
+          {REPLAY_MODES.map((m) => (
+            <button
+              key={m.labelKey}
+              onClick={() => setMode(m)}
+              className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors duration-150 ${
+                mode.labelKey === m.labelKey
+                  ? "bg-fairway-700 text-white"
+                  : "border border-slate-200 text-slate-600 hover:border-fairway-300 hover:text-fairway-700"
+              }`}
+            >
+              {t(m.labelKey)}
+            </button>
+          ))}
+        </div>
+      )}
       {buttons.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {buttons.map((b) => (

@@ -172,6 +172,8 @@ export const zhCN: Record<TranslationKey, string> = {
   "caddie.scoreDownswingSequencing": "下杆顺序",
   "caddie.scoreBalanceAndWeightTransfer": "平衡与重心转移",
   "caddie.scoreFinish": "收杆",
+  "caddie.replayOriginal": "原始视频",
+  "caddie.replaySlowAnalysis": "0.5倍速分析",
   "caddie.noVideoSelected": "选择一段视频开始吧（最长15秒）。",
   "caddie.unsupportedVideo": "该文件不是支持的视频格式。",
   "caddie.videoTooLarge": "视频过大（最大 200MB）。",
