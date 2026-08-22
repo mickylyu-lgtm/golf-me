@@ -263,6 +263,19 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
           poster={thumbnailUrl}
           preload="metadata"
           controls
+          // playsInline: without it, iOS Safari can auto-promote playback
+          // into its OWN real native fullscreen the instant play() fires —
+          // on top of (separate from) our own customFullscreen CSS state —
+          // and real native fullscreen can never show the canvas overlay,
+          // no matter what we do on our side.
+          playsInline
+          // translateZ(0) forces both the video and its overlay canvas
+          // onto explicit GPU compositing layers in a predictable stacking
+          // order. Without it, WebKit's own hardware video-decode layer can
+          // occlude a plain sibling canvas specifically WHILE PLAYING (paused
+          // frames render through the normal software path and composite
+          // fine) — the standard mitigation for that class of bug.
+          style={{ transform: "translateZ(0)" }}
           className={customFullscreen ? "block h-full w-full object-contain" : "block max-h-80 w-full"}
           onClick={(e) => {
             if (!(e.target instanceof HTMLVideoElement)) return;
@@ -280,7 +293,14 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
             }
           }}
         />
-        {showOverlay && <canvas ref={canvasRef} className="pointer-events-none absolute inset-0" aria-hidden="true" />}
+        {showOverlay && (
+          <canvas
+            ref={canvasRef}
+            className="pointer-events-none absolute inset-0"
+            aria-hidden="true"
+            style={{ transform: "translateZ(0)" }}
+          />
+        )}
         {customFullscreen && (
           <button
             onClick={(e) => {
