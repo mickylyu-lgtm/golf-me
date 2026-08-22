@@ -33,6 +33,9 @@ export function CaddiePracticeSwingIcon({ size = 56, className = "", animated = 
         strokeWidth="1.8"
         strokeLinejoin="round"
       />
+      {/* rounded ear-flaps at the cap's base corners, matching CaddieNavIcon */}
+      <circle cx="23" cy="13.4" r="1.8" fill="white" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="41" cy="13.4" r="1.8" fill="white" stroke="currentColor" strokeWidth="1.8" />
       <path d="M24.3 11.7 Q32 13.6 39.7 11.7" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
       {/* "AI" lettering, matching CaddieNavIcon's cap treatment so the
           same mascot reads consistently across the nav tab and this
