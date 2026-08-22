@@ -168,7 +168,7 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
                 playsInline
                 preload="metadata"
                 className={`${itemClass} bg-black`}
-                onClickCapture={(e) => {
+                onClick={(e) => {
                   // Only a plain tap on the video body (not the native
                   // controls bar) triggers this — otherwise tapping
                   // play/pause/scrub would also fire it. Goes straight to
@@ -177,14 +177,14 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
                   // custom in-app lightbox — that stays reserved for photo
                   // posts and multi-item posts, where swiping between
                   // items is the point.
-                  if (e.target instanceof HTMLVideoElement) {
-                    // Without this, the native controls' own click-to-toggle-
-                    // play/pause default action still fires right after —
-                    // colliding with fullscreen entry and showing as a
-                    // glitch/flash in and back out.
-                    e.preventDefault();
-                    enterNativeVideoFullscreen(e.target);
-                  }
+                  //
+                  // No preventDefault, and bubble phase (not capture) —
+                  // WebKit only treats webkitEnterFullscreen() as a real
+                  // user gesture when nothing upstream in the same event
+                  // called preventDefault and it runs after the browser's
+                  // own handling of the click; either one broke fullscreen
+                  // entirely, not just the glitch/flash this was meant to fix.
+                  if (e.target instanceof HTMLVideoElement) enterNativeVideoFullscreen(e.target);
                 }}
               />
             ) : (

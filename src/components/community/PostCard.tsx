@@ -82,7 +82,11 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
   // has its own handler below and never reaches this one.
   function handleVideoTap(e: React.MouseEvent) {
     stop(e);
-    e.preventDefault();
+    // No preventDefault here — WebKit only honors webkitEnterFullscreen()
+    // as a real user gesture when it's called with nothing upstream of it
+    // in the same event having called preventDefault; doing so was
+    // silently breaking fullscreen entirely (not just the earlier
+    // glitch/flash it was meant to fix).
     if (videoRef.current) enterNativeVideoFullscreen(videoRef.current);
   }
 

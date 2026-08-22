@@ -176,11 +176,12 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
           preload="metadata"
           controls
           className="block max-h-80 w-full"
-          onClickCapture={(e) => {
-            if (e.target instanceof HTMLVideoElement) {
-              e.preventDefault();
-              enterNativeVideoFullscreen(e.target);
-            }
+          onClick={(e) => {
+            // No preventDefault, bubble phase — WebKit only honors
+            // webkitEnterFullscreen() as a real user gesture without
+            // either of those; both broke fullscreen entirely rather than
+            // just fixing the glitch/flash they were meant to address.
+            if (e.target instanceof HTMLVideoElement) enterNativeVideoFullscreen(e.target);
           }}
         />
         {poseData && poseData.frames.length > 0 && (
