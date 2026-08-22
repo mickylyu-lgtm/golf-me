@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CaddieNavIcon } from "../icons/CaddieNavIcon";
+import { CaddiePracticeSwingIcon } from "./CaddiePracticeSwingIcon";
 import { useLocale } from "../../i18n/LocaleContext";
 
 const THINKING_KEYS = ["caddie.thinking1", "caddie.thinking2", "caddie.thinking3", "caddie.thinking4"] as const;
@@ -36,10 +36,8 @@ export function CaddieThinking() {
 
   return (
     <div className="flex items-center gap-3">
-      <span
-        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-fairway-900 text-white ${reducedMotion ? "" : "animate-caddie-think"}`}
-      >
-        <CaddieNavIcon size={20} />
+      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-fairway-50 text-fairway-800">
+        <CaddiePracticeSwingIcon size={40} animated={!reducedMotion} />
       </span>
       <div className="min-w-0">
         <p className="text-sm font-semibold text-slate-700">{t("swingAnalysis.processingTitle")}</p>

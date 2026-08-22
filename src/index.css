@@ -67,6 +67,11 @@
      wheel actually rolling; this is a mascot idly "thinking" for up to a
      minute or two, so it needs to read as patient, not busy). */
   --animate-caddie-think: caddie-think 2.4s ease-in-out infinite;
+  /* A believable swing tempo, not a linear metronome: slow, deliberate
+     takeaway (0-40%) into a fast downswing/impact (40-58%), then a beat
+     of rest at the top before repeating — real swings are slow-back,
+     fast-down, not symmetric. */
+  --animate-caddie-swing-club: caddie-swing-club 2.2s cubic-bezier(0.45, 0, 0.2, 1) infinite;
 
   @keyframes fade-in {
     from {
@@ -155,6 +160,21 @@
     }
     75% {
       transform: translateY(-3px) rotate(4deg);
+    }
+  }
+  @keyframes caddie-swing-club {
+    0% {
+      transform: rotate(-8deg);
+    }
+    40% {
+      transform: rotate(-100deg);
+    }
+    58% {
+      transform: rotate(25deg);
+    }
+    75%,
+    100% {
+      transform: rotate(-8deg);
     }
   }
   @keyframes wheel-spin {
@@ -269,6 +289,9 @@ body {
   }
   .animate-caddie-think {
     animation: var(--animate-caddie-think);
+  }
+  .animate-caddie-swing-club {
+    animation: var(--animate-caddie-swing-club);
   }
   /* Onboarding's per-step entrance — mobile only. Desktop rendering was
      reading as an abrupt pop instead of a fade for reasons that resisted a
