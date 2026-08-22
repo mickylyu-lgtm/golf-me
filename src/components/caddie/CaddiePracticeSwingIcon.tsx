@@ -34,6 +34,12 @@ export function CaddiePracticeSwingIcon({ size = 56, className = "", animated = 
         strokeLinejoin="round"
       />
       <path d="M24.3 11.7 Q32 13.6 39.7 11.7" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      {/* "AI" lettering, matching CaddieNavIcon's cap treatment so the
+          same mascot reads consistently across the nav tab and this
+          processing-screen icon */}
+      <text x="32" y="10.2" textAnchor="middle" fontSize="6.2" fontWeight="900" fill="currentColor" stroke="none" fontFamily="system-ui, sans-serif" letterSpacing="-0.3">
+        AI
+      </text>
       <rect x="24.5" y="13" width="15" height="10.5" rx="3.6" fill="currentColor" />
       <rect x="27.8" y="16.6" width="2.2" height="3.6" rx="1.1" fill="white" />
       <rect x="34" y="16.6" width="2.2" height="3.6" rx="1.1" fill="white" />

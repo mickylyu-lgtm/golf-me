@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { X } from "lucide-react";
 import type { CaddiePoseData, CaddieSwingPhases } from "../../types";
 import { enterNativeVideoFullscreen, getVideoContentRect } from "../../lib/video";
 import { useLocale } from "../../i18n/LocaleContext";
@@ -83,6 +84,16 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
   const [mode, setMode] = useState<(typeof REPLAY_MODES)[number]>(REPLAY_MODES[0]);
   const speed = mode.speed;
   const showOverlay = mode.showOverlay && !!poseData && poseData.frames.length > 0;
+  // The overlay canvas is a sibling DOM element positioned on top of the
+  // video — that composites fine in normal page flow, but the OS-native
+  // fullscreen player (webkitEnterFullscreen/requestFullscreen) takes over
+  // the whole screen showing ONLY the <video> itself, no page DOM can
+  // render on top of it. So 0.5x Analysis mode (where the overlay is the
+  // whole point) uses an in-app "fullscreen" instead — the same video
+  // element expanded to fill the viewport via CSS, canvas included, rather
+  // than handing off to the OS player. Original mode keeps the real native
+  // player (no overlay to lose, and it's the nicer/native experience).
+  const [customFullscreen, setCustomFullscreen] = useState(false);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -90,18 +101,41 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
   }, [speed]);
 
   useEffect(() => {
+    if (!customFullscreen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [customFullscreen]);
+
+  // Leaving analysis mode (or losing pose data) while mid-custom-fullscreen
+  // would otherwise strand the video pinned full-viewport with no overlay
+  // reason to be there anymore.
+  useEffect(() => {
+    if (!showOverlay) setCustomFullscreen(false);
+  }, [showOverlay]);
+
+  useEffect(() => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
     const container = containerRef.current;
     if (!video || !canvas || !container) return;
 
+    // Sized off the CONTAINER, not the video element directly — in
+    // customFullscreen the video is h-full w-full (exactly matches the
+    // container), and in the normal inline layout the video is also
+    // block w-full within the container, so this is equivalent there too,
+    // but staying container-relative means the canvas (itself positioned
+    // inset-0 against the container) never drifts out of alignment with
+    // whatever box the video actually occupies.
     function resizeCanvas() {
-      if (!video || !canvas) return;
+      if (!container || !canvas) return;
       const dpr = window.devicePixelRatio || 1;
-      canvas.width = video.clientWidth * dpr;
-      canvas.height = video.clientHeight * dpr;
-      canvas.style.width = `${video.clientWidth}px`;
-      canvas.style.height = `${video.clientHeight}px`;
+      canvas.width = container.clientWidth * dpr;
+      canvas.height = container.clientHeight * dpr;
+      canvas.style.width = `${container.clientWidth}px`;
+      canvas.style.height = `${container.clientHeight}px`;
       draw();
     }
 
@@ -166,8 +200,12 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
       }
     }
 
+    // Observes the container (not the video) — its size is what actually
+    // determines canvas dimensions now, and it's the node whose box
+    // changes size when customFullscreen toggles (small card <-> full
+    // viewport), which ResizeObserver picks up automatically either way.
     const resizeObserver = new ResizeObserver(resizeCanvas);
-    resizeObserver.observe(video);
+    resizeObserver.observe(container);
     video.addEventListener("loadedmetadata", resizeCanvas);
     video.addEventListener("timeupdate", draw);
     video.addEventListener("seeked", draw);
@@ -185,7 +223,10 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
 
   return (
     <div className="flex flex-col gap-2">
-      <div ref={containerRef} className="relative overflow-hidden rounded-2xl bg-black">
+      <div
+        ref={containerRef}
+        className={customFullscreen ? "fixed inset-0 z-[200] bg-black" : "relative overflow-hidden rounded-2xl bg-black"}
+      >
         {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
         <video
           ref={videoRef}
@@ -193,16 +234,37 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
           poster={thumbnailUrl}
           preload="metadata"
           controls
-          className="block max-h-80 w-full"
+          className={customFullscreen ? "block h-full w-full object-contain" : "block max-h-80 w-full"}
           onClick={(e) => {
-            // No preventDefault, bubble phase — WebKit only honors
-            // webkitEnterFullscreen() as a real user gesture without
-            // either of those; both broke fullscreen entirely rather than
-            // just fixing the glitch/flash they were meant to address.
-            if (e.target instanceof HTMLVideoElement) enterNativeVideoFullscreen(e.target);
+            if (!(e.target instanceof HTMLVideoElement)) return;
+            if (showOverlay) {
+              // In-app fullscreen (see the customFullscreen comment above)
+              // — only the FIRST tap opens it; once already full-viewport,
+              // a tap should just do the normal play/pause toggle.
+              if (!customFullscreen) setCustomFullscreen(true);
+            } else {
+              // No preventDefault, bubble phase — WebKit only honors
+              // webkitEnterFullscreen() as a real user gesture without
+              // either of those; both broke fullscreen entirely rather
+              // than just fixing the glitch/flash they were meant to fix.
+              enterNativeVideoFullscreen(e.target);
+            }
           }}
         />
         {showOverlay && <canvas ref={canvasRef} className="pointer-events-none absolute inset-0" aria-hidden="true" />}
+        {customFullscreen && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setCustomFullscreen(false);
+            }}
+            aria-label={t("common.close")}
+            className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white"
+            style={{ top: "max(0.75rem, env(safe-area-inset-top))" }}
+          >
+            <X size={18} />
+          </button>
+        )}
       </div>
       {poseData && poseData.frames.length > 0 && (
         <div className="flex items-center gap-1.5">
