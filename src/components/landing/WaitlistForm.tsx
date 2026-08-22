@@ -13,7 +13,7 @@ import { inputClass, labelClass } from "../ui/FormControls";
 // is a different, generic city list for the authenticated app's course
 // search and doesn't even contain most of these areas (Long Island, New
 // Jersey as distinct from NYC proper, etc).
-const WAITLIST_REGIONS = ["New York / Long Island", "Boston", "New Jersey", "Los Angeles", "Miami"];
+const WAITLIST_REGIONS = ["New York / Long Island", "Boston", "New Jersey", "Los Angeles", "Miami", "Hong Kong"];
 const OTHER = "__other__";
 
 export function WaitlistForm() {
