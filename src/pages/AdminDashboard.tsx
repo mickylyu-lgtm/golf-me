@@ -1,6 +1,7 @@
+import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { ShieldCheck, Users, Wand2 } from "lucide-react";
+import { ShieldCheck, TrendingDown, TrendingUp, Users, Wand2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useRoles } from "../lib/useRoles";
 import { supabase } from "../lib/supabase";
@@ -39,13 +40,34 @@ interface UserRow {
 interface CaddieStats {
   total_analyses: number;
   analyses_last_24h: number;
+  analyses_prev_24h: number;
   analyses_last_7d: number;
+  analyses_prev_7d: number;
   processing_now: number;
   unique_users: number;
   avg_score: number | null;
+  avg_score_prev_7d: number | null;
   score_low_count: number;
   score_mid_count: number;
   score_high_count: number;
+}
+
+// current vs the immediately-preceding comparable period (e.g. last 24h vs
+// the 24h before that) — null previous means there's no prior-period data
+// yet to compare against, so no arrow rather than a misleading one.
+function TrendIndicator({ current, previous }: { current: number; previous: number | null }) {
+  if (previous === null) return null;
+  const delta = Math.round((current - previous) * 10) / 10;
+  if (delta === 0) return <span className="text-xs font-semibold text-slate-400">—</span>;
+  const isUp = delta > 0;
+  const Icon = isUp ? TrendingUp : TrendingDown;
+  return (
+    <span className={`inline-flex items-center gap-0.5 text-xs font-semibold ${isUp ? "text-fairway-600" : "text-rose-600"}`}>
+      <Icon size={12} />
+      {isUp ? "+" : ""}
+      {delta}
+    </span>
+  );
 }
 
 interface CaddieAnalysisRow {
@@ -245,20 +267,39 @@ export function AdminDashboard() {
         {caddieStats && (
           <>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {[
-                { label: "Total analyses", value: caddieStats.total_analyses },
-                { label: "Last 24h", value: caddieStats.analyses_last_24h },
-                { label: "Last 7d", value: caddieStats.analyses_last_7d },
-                { label: "Processing now", value: caddieStats.processing_now },
-                { label: "Unique users", value: caddieStats.unique_users },
-                { label: "Avg score", value: caddieStats.avg_score ?? "—" },
-              ].map((stat) => (
+              {(
+                [
+                  { label: "Total analyses", value: caddieStats.total_analyses, trend: null },
+                  {
+                    label: "Last 24h",
+                    value: caddieStats.analyses_last_24h,
+                    trend: <TrendIndicator current={caddieStats.analyses_last_24h} previous={caddieStats.analyses_prev_24h} />,
+                  },
+                  {
+                    label: "Last 7d",
+                    value: caddieStats.analyses_last_7d,
+                    trend: <TrendIndicator current={caddieStats.analyses_last_7d} previous={caddieStats.analyses_prev_7d} />,
+                  },
+                  { label: "Processing now", value: caddieStats.processing_now, trend: null },
+                  { label: "Unique users", value: caddieStats.unique_users, trend: null },
+                  {
+                    label: "Avg score",
+                    value: caddieStats.avg_score ?? "—",
+                    trend:
+                      caddieStats.avg_score !== null ? <TrendIndicator current={caddieStats.avg_score} previous={caddieStats.avg_score_prev_7d} /> : null,
+                  },
+                ] satisfies { label: string; value: number | string; trend: ReactNode }[]
+              ).map((stat) => (
                 <div key={stat.label} className="rounded-2xl border border-slate-100 bg-white p-3">
-                  <p className="text-lg font-bold text-slate-800">{stat.value}</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-lg font-bold text-slate-800">{stat.value}</p>
+                    {stat.trend}
+                  </div>
                   <p className="text-xs text-slate-500">{stat.label}</p>
                 </div>
               ))}
             </div>
+            <p className="text-[11px] text-slate-400">Last 24h/7d and avg score trends compare against the immediately preceding period of the same length.</p>
             {/* Failure rate isn't tracked here on purpose — a failed
                 analysis deletes its own row (see analyze-swing/index.ts's
                 fail()) rather than leaving a 'failed' entry behind, so
