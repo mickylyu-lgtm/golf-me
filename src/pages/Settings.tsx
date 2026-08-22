@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, ArrowLeft, Bell, ChevronRight, CircleHelp, Globe, Info, Lock, LogOut, MapPin, RotateCcw, ShieldCheck, ShieldOff, Sparkles, User, Users } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Bell, ChevronRight, CircleHelp, Compass, Globe, Info, Lock, LogOut, MapPin, RotateCcw, ShieldCheck, ShieldOff, Sparkles, User, Users } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
+import { useTutorial } from "../context/TutorialContext";
 import { useToast } from "../context/ToastContext";
 import { useLocale, LOCALES } from "../i18n/LocaleContext";
 import { supabase } from "../lib/supabase";
@@ -19,6 +20,7 @@ export function Settings() {
   const { showToast } = useToast();
   const { locale, t } = useLocale();
   const navigate = useNavigate();
+  const { start: startTutorial } = useTutorial();
 
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
@@ -194,6 +196,14 @@ export function Settings() {
         >
           <Info size={16} className="shrink-0 text-slate-400" />
           <span className="flex-1 text-sm font-semibold text-slate-800">{t("settings.about")}</span>
+          <ChevronRight size={16} className="shrink-0 text-slate-300" />
+        </button>
+        <button
+          onClick={startTutorial}
+          className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white p-4 text-left transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-fairway-200 hover:shadow-md active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2"
+        >
+          <Compass size={16} className="shrink-0 text-slate-400" />
+          <span className="flex-1 text-sm font-semibold text-slate-800">{t("settings.replayTutorial")}</span>
           <ChevronRight size={16} className="shrink-0 text-slate-300" />
         </button>
       </section>

@@ -26,6 +26,7 @@ interface AuthContextValue {
   authUser: Session["user"] | null;
   profile: GolferProfile | null;
   hasOnboarded: boolean;
+  onboardingTutorialCompleted: boolean;
   // Not part of GolferProfile (that type is UI-shaped, never had a language
   // field) — exposed separately for the device-locale<->profile sync in
   // App.tsx.
@@ -166,6 +167,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     authUser,
     profile,
     hasOnboarded: profileRow?.has_onboarded ?? false,
+    onboardingTutorialCompleted: profileRow?.onboarding_tutorial_completed ?? false,
     profileLanguage: profileRow?.language ?? null,
     isAuthenticated: isDemo || Boolean(authUser),
     signInWithGoogle,

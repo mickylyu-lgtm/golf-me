@@ -1,5 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { NAV_ITEMS } from "../../lib/nav";
+import { NAV_TUTORIAL_ID_BY_PATH } from "../../lib/tutorialSteps";
 import { GolfMeLogo } from "../brand/GolfMeLogo";
 import { useLocale } from "../../i18n/LocaleContext";
 import { useData } from "../../context/DataContext";
@@ -19,6 +20,7 @@ export function SideNav() {
             key={path}
             to={path}
             end={path === "/"}
+            data-tutorial-id={NAV_TUTORIAL_ID_BY_PATH[path]}
             className={({ isActive }) =>
               `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none ${
                 isActive

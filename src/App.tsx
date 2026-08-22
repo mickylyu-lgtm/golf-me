@@ -11,6 +11,8 @@ import { ToastProvider } from "./context/ToastContext";
 import { LocaleProvider, ForceLocale, useLocale, LOCALES } from "./i18n/LocaleContext";
 import type { Locale } from "./i18n/LocaleContext";
 import { AppShell } from "./components/layout/AppShell";
+import { TutorialProvider } from "./context/TutorialContext";
+import { TutorialOverlay } from "./components/tutorial/TutorialOverlay";
 import { ScrollToTop } from "./components/layout/ScrollToTop";
 import { GolfMeLoader } from "./components/loading/GolfMeLoader";
 import { Welcome } from "./pages/Welcome";
@@ -71,9 +73,12 @@ function AuthedLayout() {
     return <Navigate to="/profile-setup" replace />;
   }
   const shell = (
-    <AppShell>
-      <Outlet />
-    </AppShell>
+    <TutorialProvider>
+      <AppShell>
+        <Outlet />
+      </AppShell>
+      <TutorialOverlay />
+    </TutorialProvider>
   );
   // Admin tools (dashboard, coach-reviewer management) stay pinned to
   // English — see ForceLocale's own comment — which also forces the

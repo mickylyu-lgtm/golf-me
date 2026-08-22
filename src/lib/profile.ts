@@ -50,6 +50,7 @@ export interface ProfileRow {
   good_pace_pct: number;
   circle_size: number;
   has_onboarded: boolean;
+  onboarding_tutorial_completed: boolean;
   member_since: string;
 }
 

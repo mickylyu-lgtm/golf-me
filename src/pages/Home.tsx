@@ -1,8 +1,9 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, Plus, Search, Sparkles, UserPlus } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useLocale } from "../i18n/LocaleContext";
+import { useTutorial, useTutorialEligibility } from "../context/TutorialContext";
 import { GolfCallCard } from "../components/golfcall/GolfCallCard";
 import { PostCard } from "../components/community/PostCard";
 import { AddToHomeScreenPrompt } from "../components/layout/AddToHomeScreenPrompt";
@@ -11,6 +12,7 @@ import { CLICKABLE_CARD_CLASS } from "../components/ui/cardStyles";
 import { firstName, greetingKeyForHour, isThisWeekend } from "../lib/greeting";
 import { MIN_PREFERENCES_FOR_AUTO_MATCH, selectedPreferenceCount } from "../lib/preferenceMatch";
 import { formatShortDate } from "../lib/format";
+import { COMMUNITY_TUTORIAL_ID } from "../lib/tutorialSteps";
 
 const HOME_RADIUS_MILES = 25;
 const NEARBY_ROUNDS_SHOWN = 3;
@@ -27,6 +29,19 @@ export function Home() {
   const { currentUser, golfCalls, visiblePosts, caddieAnalyses } = useData();
   const { t, locale } = useLocale();
   const navigate = useNavigate();
+  const { start: startTutorial } = useTutorial();
+  const { eligible: tutorialEligible } = useTutorialEligibility();
+
+  // Home stays mounted for the whole session (RootTabCarousel keeps all 5
+  // root panels alive, see its own header comment), so this only ever runs
+  // once per app load -- exactly "Home loads successfully -> tutorial
+  // begins" from the brief, with no separate signup-completion hook needed.
+  const tutorialStartedRef = useRef(false);
+  useEffect(() => {
+    if (tutorialStartedRef.current || !tutorialEligible) return;
+    tutorialStartedRef.current = true;
+    startTutorial();
+  }, [tutorialEligible, startTutorial]);
 
   // Only the single latest analysis, and only if one exists — Home stays
   // uncluttered for anyone who's never used Caddie (per explicit instruction).
@@ -172,7 +187,7 @@ export function Home() {
       )}
 
       <section>
-        <div className="mb-3 flex items-center justify-between gap-2">
+        <div data-tutorial-id={COMMUNITY_TUTORIAL_ID} className="mb-3 flex items-center justify-between gap-2">
           <h2 className="text-lg font-bold text-slate-900">{t("community.title")}</h2>
           <div className="flex shrink-0 items-center gap-3">
             <Button size="sm" icon={<Plus size={14} />} onClick={() => navigate("/community/new")}>
