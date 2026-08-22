@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
-import { AlertCircle, ArrowLeft, ArrowUpRight, Check, Loader2, Share2 } from "lucide-react";
+import { AlertCircle, ArrowLeft, ArrowUpRight, Check, Languages, Loader2, Share2 } from "lucide-react";
 import { CaddieNavIcon } from "../components/icons/CaddieNavIcon";
 import { CaddieThinking } from "../components/caddie/CaddieThinking";
 import { CaddieSwingReplay } from "../components/caddie/CaddieSwingReplay";
 import { useData } from "../context/DataContext";
 import { useToast } from "../context/ToastContext";
-import { useLocale } from "../i18n/LocaleContext";
+import { useLocale, LOCALES } from "../i18n/LocaleContext";
 import { Button } from "../components/ui/Button";
 import { Badge } from "../components/ui/Badge";
 import { formatShortDate } from "../lib/format";
@@ -50,12 +50,13 @@ const CONFIDENCE_TONE: Record<CaddieConfidence, "fairway" | "outline" | "rose"> 
 // is the "From Community Post" breadcrumb.
 export function CaddieAnalysisDetail() {
   const { analysisId } = useParams<{ analysisId: string }>();
-  const { getCaddieAnalysis, getPost, createCaddieAnalysis, markCaddieAnalysisShared, createPost } = useData();
+  const { getCaddieAnalysis, getPost, createCaddieAnalysis, markCaddieAnalysisShared, translateCaddieAnalysis, createPost } = useData();
   const { t, locale } = useLocale();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const [retrying, setRetrying] = useState(false);
   const [sharingFeedback, setSharingFeedback] = useState(false);
+  const [translating, setTranslating] = useState(false);
 
   const analysis = analysisId ? getCaddieAnalysis(analysisId) : undefined;
 
@@ -103,6 +104,24 @@ export function CaddieAnalysisDetail() {
       showToast(err instanceof Error ? err.message : t("caddie.askCaddieError"), "warning");
     } finally {
       setRetrying(false);
+    }
+  }
+
+  // Re-translates this ONE saved analysis's feedback text into whatever
+  // language is currently selected — feedback text is written once, at
+  // analysis time, in whatever language was active then, and never
+  // retroactively changes just because the app's UI language is switched
+  // afterward (see analyze-swing/translate-caddie-analysis comments). This
+  // is the explicit, on-demand fix for that on an existing analysis.
+  async function translateFeedback() {
+    if (!analysis || translating) return;
+    setTranslating(true);
+    try {
+      await translateCaddieAnalysis(analysis.id, locale);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : t("caddie.askCaddieError"), "warning");
+    } finally {
+      setTranslating(false);
     }
   }
 
@@ -182,7 +201,19 @@ export function CaddieAnalysisDetail() {
             <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-fairway-700">
               <CaddieNavIcon size={14} /> {t("caddie.title")}
             </p>
-            <Badge tone="outline">{cameraAngleLabel[details.cameraAngle]}</Badge>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={translateFeedback}
+                disabled={translating}
+                className="flex items-center gap-1 text-xs font-semibold text-fairway-700 hover:underline disabled:opacity-60"
+              >
+                {translating ? <Loader2 size={12} className="animate-spin" /> : <Languages size={12} />}
+                {translating
+                  ? t("caddie.translating")
+                  : t("caddie.translateTo", { language: LOCALES.find((l) => l.value === locale)?.nativeName ?? locale })}
+              </button>
+              <Badge tone="outline">{cameraAngleLabel[details.cameraAngle]}</Badge>
+            </div>
           </div>
           {details.score && (
             <div>

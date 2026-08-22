@@ -172,6 +172,7 @@ interface RealCaddieContextValue {
   getAnalysis: (id: string) => CaddieAnalysis | undefined;
   createAnalysis: (input: CreateAnalysisInput) => Promise<CaddieAnalysis>;
   markShared: (id: string) => Promise<void>;
+  translateAnalysis: (id: string, locale: string) => Promise<void>;
 }
 
 const RealCaddieContext = createContext<RealCaddieContextValue | null>(null);
@@ -278,7 +279,27 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, shared_to_community: true } : r)));
   }, []);
 
-  const value: RealCaddieContextValue = { analyses, isLoading, getAnalysis, createAnalysis, markShared };
+  const translateAnalysis = useCallback(async (id: string, locale: string) => {
+    // Text-only Gemini call on the SAVED analysis — no video, no Roboflow —
+    // see supabase/functions/translate-caddie-analysis. Updates the row's
+    // free-text fields in place; realtime (or the local merge below) picks
+    // up the change without a page reload.
+    const { data, error } = await supabase.functions.invoke("translate-caddie-analysis", { body: { analysisId: id, locale } });
+    if (error) {
+      let message = error.message;
+      try {
+        const body = await error.context?.json();
+        if (body?.error) message = body.error;
+      } catch {
+        // Falls back to error.message below.
+      }
+      throw new Error(message);
+    }
+    const row = (data as { analysis: CaddieAnalysisRow }).analysis;
+    setRows((prev) => prev.map((r) => (r.id === row.id ? row : r)));
+  }, []);
+
+  const value: RealCaddieContextValue = { analyses, isLoading, getAnalysis, createAnalysis, markShared, translateAnalysis };
 
   return <RealCaddieContext.Provider value={value}>{children}</RealCaddieContext.Provider>;
 }

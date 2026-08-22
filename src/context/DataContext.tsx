@@ -250,6 +250,7 @@ interface DataContextValue {
   getCaddieAnalysis: (id: string) => CaddieAnalysis | undefined;
   createCaddieAnalysis: (input: CreateAnalysisInput) => Promise<CaddieAnalysis>;
   markCaddieAnalysisShared: (id: string) => Promise<void>;
+  translateCaddieAnalysis: (id: string, locale: string) => Promise<void>;
   // Lives here (DataProvider is mounted for the whole app session, unlike
   // AnalyzeSwing itself) so a video someone picked but hasn't submitted yet
   // survives navigating away from /caddie/analyze and back instead of being
@@ -1508,6 +1509,15 @@ export function DataProvider({ children }: { children: ReactNode }) {
     },
     [auth.isDemo, realCaddie],
   );
+  const translateCaddieAnalysis = useCallback(
+    async (id: string, locale: string) => {
+      // Demo's history is static fixture data with no real Gemini pipeline
+      // behind it (see src/data/caddie.ts) — nothing to actually call.
+      if (auth.isDemo) return;
+      await realCaddie.translateAnalysis(id, locale);
+    },
+    [auth.isDemo, realCaddie],
+  );
 
   const mockNotifications = useMemo(
     () => data.notifications.filter((n) => n.userId === currentUser.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
@@ -1627,6 +1637,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       getCaddieAnalysis,
       createCaddieAnalysis,
       markCaddieAnalysisShared,
+      translateCaddieAnalysis,
       draftSwingVideo,
       setDraftSwingVideo,
       notifications,
@@ -1714,6 +1725,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       getCaddieAnalysis,
       createCaddieAnalysis,
       markCaddieAnalysisShared,
+      translateCaddieAnalysis,
       draftSwingVideo,
       setDraftSwingVideo,
       notifications,
