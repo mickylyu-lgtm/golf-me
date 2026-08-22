@@ -199,19 +199,19 @@ export function NotificationPopupHost() {
       >
         <button
           onClick={handleTap}
-          className="flex w-full items-center gap-2.5 rounded-2xl bg-slate-900/90 p-3 text-left shadow-lg shadow-black/30 backdrop-blur-md"
+          className="flex w-full items-center gap-2.5 rounded-2xl border border-white/60 bg-white/70 p-3 text-left shadow-lg shadow-slate-900/10 backdrop-blur-xl"
         >
           <span className="shrink-0">
             {actor ? (
               <Avatar golfer={actor} size="sm" showVerified={false} />
             ) : (
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white">
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900/5 text-slate-600">
                 <Bell size={16} />
               </span>
             )}
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-medium text-white">{current.text}</span>
+            <span className="block truncate text-sm font-medium text-slate-800">{current.text}</span>
           </span>
           <button
             onClick={(e) => {
@@ -219,7 +219,7 @@ export function NotificationPopupHost() {
               dismissNow();
             }}
             aria-label="Dismiss"
-            className="shrink-0 rounded-full p-1 text-white/60 hover:bg-white/10 hover:text-white"
+            className="shrink-0 rounded-full p-1 text-slate-400 hover:bg-slate-900/5 hover:text-slate-600"
           >
             <X size={14} />
           </button>
