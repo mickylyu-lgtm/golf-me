@@ -26,8 +26,14 @@ export function AppShell({ children }: { children: ReactNode }) {
       <SideNav />
       <div className="flex min-h-screen flex-col sm:pl-20 lg:pl-60">
         <TopBar />
-        <main className="flex-1 pb-24 sm:pb-10">
-          <div className="mx-auto w-full max-w-3xl px-4 py-5 sm:px-6 sm:py-8">
+        <main className="flex flex-1 flex-col pb-24 sm:pb-10">
+          {/* flex-1 on both this wrapper and, for root tabs, on
+              RootTabCarousel's own root — lets the swipe-detection region
+              fill any leftover viewport space below a short tab's actual
+              content (e.g. Chat with few conversations) without growing
+              the page's scrollable height, since flex-1 only claims space
+              already available in this column, never adds to it. */}
+          <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 py-5 sm:px-6 sm:py-8">
             {isRootTab ? <RootTabCarousel activePath={pathname} /> : children}
           </div>
         </main>

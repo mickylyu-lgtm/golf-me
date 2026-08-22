@@ -98,6 +98,15 @@ export function RootTabCarousel({ activePath }: { activePath: string }) {
     PANELS.findIndex((p) => p.path === activePath),
   );
 
+  // swipeRegionRef is where touches are tracked — it's flex-1 (see
+  // AppShell), so it fills whatever viewport space is actually left below
+  // the active panel's own content, letting a swipe start from that blank
+  // area too. containerRef is the separate, visually-clipped box (height
+  // pinned to the active panel only) that determines page scroll length —
+  // keeping these two concerns on different elements is what lets "you can
+  // swipe from empty space" and "no dead-scroll void below short tabs"
+  // both be true at once.
+  const swipeRegionRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
   const touchRef = useRef<TouchTrack | null>(null);
@@ -126,11 +135,11 @@ export function RootTabCarousel({ activePath }: { activePath: string }) {
   }, []);
 
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
+    const swipeRegion = swipeRegionRef.current;
+    if (!swipeRegion) return;
 
     function offsetPctFromDx(dx: number): number {
-      const width = container!.clientWidth || 1;
+      const width = swipeRegion!.clientWidth || 1;
       let pct = (dx / width) * 100;
       // Resist (rather than ignore) dragging past the first/last tab —
       // "Home + swipe right stays on Home" reads as a soft edge, not a wall.
@@ -213,15 +222,15 @@ export function RootTabCarousel({ activePath }: { activePath: string }) {
     // touchmove must be non-passive for preventDefault() to actually stop
     // native scroll once we've claimed the gesture — React's JSX touch
     // handlers are passive by default and silently ignore preventDefault.
-    container.addEventListener("touchstart", onTouchStart, { passive: true });
-    container.addEventListener("touchmove", onTouchMove, { passive: false });
-    container.addEventListener("touchend", finishGesture, { passive: true });
-    container.addEventListener("touchcancel", finishGesture, { passive: true });
+    swipeRegion.addEventListener("touchstart", onTouchStart, { passive: true });
+    swipeRegion.addEventListener("touchmove", onTouchMove, { passive: false });
+    swipeRegion.addEventListener("touchend", finishGesture, { passive: true });
+    swipeRegion.addEventListener("touchcancel", finishGesture, { passive: true });
     return () => {
-      container.removeEventListener("touchstart", onTouchStart);
-      container.removeEventListener("touchmove", onTouchMove);
-      container.removeEventListener("touchend", finishGesture);
-      container.removeEventListener("touchcancel", finishGesture);
+      swipeRegion.removeEventListener("touchstart", onTouchStart);
+      swipeRegion.removeEventListener("touchmove", onTouchMove);
+      swipeRegion.removeEventListener("touchend", finishGesture);
+      swipeRegion.removeEventListener("touchcancel", finishGesture);
     };
   }, [activeIndex, navigate]);
 
@@ -231,36 +240,38 @@ export function RootTabCarousel({ activePath }: { activePath: string }) {
   const activeHeight = heights[activeIndex];
 
   return (
-    <div
-      ref={containerRef}
-      className="overflow-hidden"
-      style={{
-        height: activeHeight > 0 ? `${activeHeight}px` : "auto",
-        transition: dragging || reducedMotion ? "none" : "height 260ms cubic-bezier(0.22, 1, 0.36, 1)",
-      }}
-    >
+    <div ref={swipeRegionRef} className="flex flex-1 flex-col">
       <div
-        ref={trackRef}
-        className="flex items-start"
+        ref={containerRef}
+        className="overflow-hidden"
         style={{
-          width: `${PANELS.length * 100}%`,
-          position: "relative",
-          left: `${leftPct}%`,
-          transition: dragging || reducedMotion ? "none" : "left 260ms cubic-bezier(0.22, 1, 0.36, 1)",
+          height: activeHeight > 0 ? `${activeHeight}px` : "auto",
+          transition: dragging || reducedMotion ? "none" : "height 260ms cubic-bezier(0.22, 1, 0.36, 1)",
         }}
       >
-        {PANELS.map(({ path, render }, i) => (
-          <div
-            key={path}
-            ref={(el) => {
-              panelRefs.current[i] = el;
-            }}
-            style={{ width: `${100 / PANELS.length}%` }}
-            className="min-w-0 shrink-0"
-          >
-            {render()}
-          </div>
-        ))}
+        <div
+          ref={trackRef}
+          className="flex items-start"
+          style={{
+            width: `${PANELS.length * 100}%`,
+            position: "relative",
+            left: `${leftPct}%`,
+            transition: dragging || reducedMotion ? "none" : "left 260ms cubic-bezier(0.22, 1, 0.36, 1)",
+          }}
+        >
+          {PANELS.map(({ path, render }, i) => (
+            <div
+              key={path}
+              ref={(el) => {
+                panelRefs.current[i] = el;
+              }}
+              style={{ width: `${100 / PANELS.length}%` }}
+              className="min-w-0 shrink-0"
+            >
+              {render()}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
