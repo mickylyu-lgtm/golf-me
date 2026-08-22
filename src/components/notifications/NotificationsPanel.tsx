@@ -6,8 +6,15 @@ import { Modal } from "../ui/Modal";
 import { EmptyState } from "../ui/EmptyState";
 import { formatRelativeTime } from "../../lib/format";
 import { useLocale } from "../../i18n/LocaleContext";
+import { CaddieNavIcon } from "../icons/CaddieNavIcon";
 
-const ICONS: Record<NotificationType, typeof Bell> = {
+// Icon type is the common shape actually invoked below (just `size`), not
+// `typeof Bell` — that would reject CaddieNavIcon, a hand-built SVG rather
+// than a lucide-react ForwardRefExoticComponent (same reasoning as
+// lib/nav.ts's NavIconComponent for the bottom nav's own Caddie icon).
+type NotificationIconComponent = (props: { size?: number | string }) => React.ReactNode;
+
+const ICONS: Record<NotificationType, NotificationIconComponent> = {
   post_reply: MessageCircle,
   comment_reply: MessageCircle,
   new_follower: UserPlus,
@@ -20,7 +27,7 @@ const ICONS: Record<NotificationType, typeof Bell> = {
   booking_proof_attached: ShieldCheck,
   tee_time_updated: Clock,
   booking_proof_removed: ShieldOff,
-  caddie_analysis_complete: Sparkles,
+  caddie_analysis_complete: CaddieNavIcon,
 };
 
 export function NotificationsPanel({ onClose }: { onClose: () => void }) {
