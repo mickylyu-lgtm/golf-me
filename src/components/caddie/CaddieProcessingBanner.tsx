@@ -64,13 +64,13 @@ export function CaddieProcessingBanner() {
     >
       <button
         onClick={() => targetId && navigate(`/caddie/${targetId}`)}
-        className="flex w-full max-w-sm items-center gap-2.5 rounded-2xl bg-slate-900/90 p-3 text-left shadow-lg shadow-black/30 backdrop-blur-md transition-opacity duration-200"
+        className="flex w-full max-w-sm items-center gap-2.5 rounded-2xl border border-white/60 bg-white/70 p-3 text-left shadow-lg shadow-slate-900/10 backdrop-blur-xl transition-opacity duration-200"
         style={{ pointerEvents: "auto" }}
       >
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-white">
-          {phase === "processing" ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} className="text-fairway-400" />}
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-900/5 text-slate-600">
+          {phase === "processing" ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} className="text-fairway-600" />}
         </span>
-        <span className="min-w-0 flex-1 text-sm font-medium text-white">
+        <span className="min-w-0 flex-1 text-sm font-medium text-slate-800">
           {phase === "processing" ? t("caddie.bannerProcessing") : t("caddie.bannerDone")}
         </span>
       </button>
