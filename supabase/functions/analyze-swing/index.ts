@@ -131,88 +131,110 @@ const PHASE_MOMENT_SCHEMA = {
   required: ["timestamp_seconds", "confidence"],
 };
 
-const SCORE_CRITERION_SCHEMA = {
-  type: "OBJECT",
-  properties: {
-    points: { type: "INTEGER", description: "0-20." },
-    reason: { type: "STRING", description: "One sentence, tied to something actually observed." },
-  },
-  required: ["points", "reason"],
-};
+// The response schema is now a function of locale, not a static const —
+// the system-prompt-level language instruction (buildSystemPrompt) was
+// observed NOT reliably followed for free text in a real production
+// analysis (Chinese requested, English returned for summary/strengths/
+// score reasons, while the enum/JSON-key fields correctly stayed
+// English). A per-FIELD language reminder inside each free-text
+// property's own `description` is a second, independent instruction
+// channel — schema field descriptions directly shape structured-output
+// generation for that exact field, rather than competing for attention
+// across an entire system prompt. Enum/number fields are untouched, they
+// were never the problem.
+function buildScoreCriterionSchema(localeName: string) {
+  return {
+    type: "OBJECT",
+    properties: {
+      points: { type: "INTEGER", description: "0-20." },
+      reason: { type: "STRING", description: `One sentence, tied to something actually observed. Write this in ${localeName}.` },
+    },
+    required: ["points", "reason"],
+  };
+}
 
-const RESPONSE_SCHEMA = {
-  type: "OBJECT",
-  properties: {
-    summary: { type: "STRING", description: "1-2 sentence overall take." },
-    camera_angle: { type: "STRING", enum: ["face_on", "down_the_line", "other", "uncertain"] },
-    strengths: { type: "ARRAY", items: { type: "STRING" }, description: "Up to 3 clearly visible strengths." },
-    work_on: {
-      type: "ARRAY",
-      description: "Up to 3 areas to work on, most important first.",
-      items: {
-        type: "OBJECT",
-        properties: {
-          issue: { type: "STRING" },
-          why_it_matters: { type: "STRING" },
-          confidence: { type: "STRING", enum: ["high", "medium", "low"] },
-        },
-        required: ["issue", "why_it_matters", "confidence"],
-      },
-    },
-    focus: {
-      type: "OBJECT",
-      description: "The single most important thing to focus on next.",
-      properties: { title: { type: "STRING" }, instruction: { type: "STRING" } },
-      required: ["title", "instruction"],
-    },
-    drill: {
-      type: "OBJECT",
-      description: "One simple drill supporting the focus.",
-      properties: { name: { type: "STRING" }, steps: { type: "ARRAY", items: { type: "STRING" } } },
-      required: ["name", "steps"],
-    },
-    limitations: {
-      type: "ARRAY",
-      items: { type: "STRING" },
-      description: "Honest caveats — e.g. camera angle, video quality, or sparse pose data prevented a confident read on something.",
-    },
-    phases: {
-      type: "OBJECT",
-      description: "Best-estimate timestamps for each swing phase, from TRUSTED_POSE_DATA. Null fields where not confidently identifiable — never a guess.",
-      properties: {
-        address: PHASE_MOMENT_SCHEMA,
-        backswing: PHASE_MOMENT_SCHEMA,
-        top: PHASE_MOMENT_SCHEMA,
-        downswing: PHASE_MOMENT_SCHEMA,
-        impact: {
+function buildResponseSchema(localeName: string) {
+  const scoreCriterionSchema = buildScoreCriterionSchema(localeName);
+  return {
+    type: "OBJECT",
+    properties: {
+      summary: { type: "STRING", description: `1-2 sentence overall take. Write this in ${localeName}.` },
+      camera_angle: { type: "STRING", enum: ["face_on", "down_the_line", "other", "uncertain"] },
+      strengths: { type: "ARRAY", items: { type: "STRING" }, description: `Up to 3 clearly visible strengths. Write each in ${localeName}.` },
+      work_on: {
+        type: "ARRAY",
+        description: `Up to 3 areas to work on, most important first. Write issue/why_it_matters in ${localeName}.`,
+        items: {
           type: "OBJECT",
-          description: "A window, never an exact timestamp — pose-only analysis can't reliably pin exact contact.",
           properties: {
-            window_start_seconds: { type: "NUMBER", nullable: true },
-            window_end_seconds: { type: "NUMBER", nullable: true },
-            confidence: { type: "STRING", enum: ["high", "medium", "low"], nullable: true },
+            issue: { type: "STRING", description: `Write in ${localeName}.` },
+            why_it_matters: { type: "STRING", description: `Write in ${localeName}.` },
+            confidence: { type: "STRING", enum: ["high", "medium", "low"] },
           },
-          required: ["window_start_seconds", "window_end_seconds", "confidence"],
+          required: ["issue", "why_it_matters", "confidence"],
         },
-        follow_through: PHASE_MOMENT_SCHEMA,
       },
-      required: ["address", "backswing", "top", "downswing", "impact", "follow_through"],
-    },
-    score: {
-      type: "OBJECT",
-      description: "5 categories, 0-20 points each. The app computes the 0-100 total as their sum — do not include a separate total field.",
-      properties: {
-        setup_and_posture: SCORE_CRITERION_SCHEMA,
-        backswing: SCORE_CRITERION_SCHEMA,
-        downswing_sequencing: SCORE_CRITERION_SCHEMA,
-        balance_and_weight_transfer: SCORE_CRITERION_SCHEMA,
-        finish: SCORE_CRITERION_SCHEMA,
+      focus: {
+        type: "OBJECT",
+        description: `The single most important thing to focus on next. Write title/instruction in ${localeName}.`,
+        properties: {
+          title: { type: "STRING", description: `Write in ${localeName}.` },
+          instruction: { type: "STRING", description: `Write in ${localeName}.` },
+        },
+        required: ["title", "instruction"],
       },
-      required: ["setup_and_posture", "backswing", "downswing_sequencing", "balance_and_weight_transfer", "finish"],
+      drill: {
+        type: "OBJECT",
+        description: `One simple drill supporting the focus. Write name/steps in ${localeName}.`,
+        properties: {
+          name: { type: "STRING", description: `Write in ${localeName}.` },
+          steps: { type: "ARRAY", items: { type: "STRING" }, description: `Write each step in ${localeName}.` },
+        },
+        required: ["name", "steps"],
+      },
+      limitations: {
+        type: "ARRAY",
+        items: { type: "STRING" },
+        description: `Honest caveats — e.g. camera angle, video quality, or sparse pose data prevented a confident read on something. Write each in ${localeName}.`,
+      },
+      phases: {
+        type: "OBJECT",
+        description: "Best-estimate timestamps for each swing phase, from TRUSTED_POSE_DATA. Null fields where not confidently identifiable — never a guess.",
+        properties: {
+          address: PHASE_MOMENT_SCHEMA,
+          backswing: PHASE_MOMENT_SCHEMA,
+          top: PHASE_MOMENT_SCHEMA,
+          downswing: PHASE_MOMENT_SCHEMA,
+          impact: {
+            type: "OBJECT",
+            description: "A window, never an exact timestamp — pose-only analysis can't reliably pin exact contact.",
+            properties: {
+              window_start_seconds: { type: "NUMBER", nullable: true },
+              window_end_seconds: { type: "NUMBER", nullable: true },
+              confidence: { type: "STRING", enum: ["high", "medium", "low"], nullable: true },
+            },
+            required: ["window_start_seconds", "window_end_seconds", "confidence"],
+          },
+          follow_through: PHASE_MOMENT_SCHEMA,
+        },
+        required: ["address", "backswing", "top", "downswing", "impact", "follow_through"],
+      },
+      score: {
+        type: "OBJECT",
+        description: "5 categories, 0-20 points each. The app computes the 0-100 total as their sum — do not include a separate total field.",
+        properties: {
+          setup_and_posture: scoreCriterionSchema,
+          backswing: scoreCriterionSchema,
+          downswing_sequencing: scoreCriterionSchema,
+          balance_and_weight_transfer: scoreCriterionSchema,
+          finish: scoreCriterionSchema,
+        },
+        required: ["setup_and_posture", "backswing", "downswing_sequencing", "balance_and_weight_transfer", "finish"],
+      },
     },
-  },
-  required: ["summary", "camera_angle", "strengths", "work_on", "focus", "drill", "limitations", "phases", "score"],
-};
+    required: ["summary", "camera_angle", "strengths", "work_on", "focus", "drill", "limitations", "phases", "score"],
+  };
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -753,7 +775,7 @@ Deno.serve(async (req: Request) => {
           generationConfig: {
             temperature: 0.4,
             responseMimeType: "application/json",
-            responseSchema: RESPONSE_SCHEMA,
+            responseSchema: buildResponseSchema(localeName),
           },
         }),
       });
