@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Bell, X } from "lucide-react";
 import { useData } from "../../context/DataContext";
+import { useTutorial } from "../../context/TutorialContext";
 import { Avatar } from "../ui/Avatar";
 import type { AppNotification, NotificationType } from "../../types";
 
@@ -42,6 +43,7 @@ const BASELINE_GRACE_MS = 1200;
 // the same field. Never invents an event the backend didn't produce.
 export function NotificationPopupHost() {
   const { notifications, getGolfer } = useData();
+  const { active: tutorialActive } = useTutorial();
   const navigate = useNavigate();
   const location = useLocation();
   const seenIds = useRef<Set<string> | null>(null);
@@ -124,7 +126,13 @@ export function NotificationPopupHost() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current?.id]);
 
-  if (!current) return null;
+  // Onboarding brief is explicit: don't stack a popup over the tutorial --
+  // the unread badge on Chat already covers it quietly. Still consumes the
+  // queue entry rather than deferring it; a stray "New message" banner
+  // appearing right as the tutorial finishes would be its own kind of
+  // jarring, and the founder welcome DM is exactly the kind of message this
+  // would otherwise interrupt onboarding for.
+  if (!current || tutorialActive) return null;
 
   function dismissNow() {
     setVisible(false);
