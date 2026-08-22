@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { AlertCircle, ArrowLeft, ArrowUpRight, Check, Loader2, Share2 } from "lucide-react";
 import { CaddieNavIcon } from "../components/icons/CaddieNavIcon";
@@ -58,6 +58,20 @@ export function CaddieAnalysisDetail() {
   const [sharingFeedback, setSharingFeedback] = useState(false);
 
   const analysis = analysisId ? getCaddieAnalysis(analysisId) : undefined;
+
+  // The edge function deletes the row outright on a failed analysis (see
+  // analyze-swing/index.ts) rather than leaving a visible 'failed' entry —
+  // so from here that reads as this exact row vanishing out from under a
+  // user who's sitting on its "Caddie is analyzing your swing" screen.
+  // Silently bouncing back to /caddie with zero explanation is exactly
+  // what made a one-off Roboflow failure look like an indefinite hang.
+  const wasProcessingRef = useRef(false);
+  if (analysis?.status === "processing") wasProcessingRef.current = true;
+  useEffect(() => {
+    if (analysis || !analysisId || !wasProcessingRef.current) return;
+    showToast(t("caddie.askCaddieError"), "warning");
+  }, [analysis, analysisId, showToast, t]);
+
   if (!analysis) return <Navigate to="/caddie" replace />;
 
   const sourcePost = analysis.sourcePostId ? getPost(analysis.sourcePostId) : undefined;

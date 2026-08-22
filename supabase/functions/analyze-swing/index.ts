@@ -470,6 +470,12 @@ Deno.serve(async (req: Request) => {
     }
 
     // --- Roboflow: one call per frame, stateless, moderate concurrency. ---
+    // firstFailureDetail captures only the FIRST failure's cause (status
+    // code + truncated body, or thrown error) — logging every one of
+    // dozens of per-frame failures would be noise, but a total wipeout
+    // (0/45, seen in production) is otherwise a black box: was it auth,
+    // quota, a malformed request, or Roboflow itself erroring?
+    let firstFailureDetail: string | undefined;
     const roboflowResults = await mapWithConcurrency(frames, ROBOFLOW_CONCURRENCY, async (frame) => {
       try {
         const res = await fetch(ROBOFLOW_ENDPOINT, {
@@ -477,20 +483,30 @@ Deno.serve(async (req: Request) => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ api_key: roboflowApiKey, inputs: { image: { type: "base64", value: frame.base64 } } }),
         });
-        if (!res.ok) return null;
+        if (!res.ok) {
+          if (!firstFailureDetail) {
+            const errBody = await res.text().catch(() => "");
+            firstFailureDetail = `HTTP ${res.status}: ${errBody.slice(0, 300)}`;
+          }
+          return null;
+        }
         const body = await res.json();
         const output = body?.outputs?.[0];
-        if (!output) return null;
+        if (!output) {
+          if (!firstFailureDetail) firstFailureDetail = `no outputs[0] in response: ${JSON.stringify(body).slice(0, 300)}`;
+          return null;
+        }
         return filterRoboflowFrame(frame.frameIndex, frame.timestampSeconds, output);
-      } catch {
+      } catch (err) {
+        if (!firstFailureDetail) firstFailureDetail = `threw: ${err instanceof Error ? err.message : String(err)}`;
         return null;
       }
     });
     const trustedFrames = roboflowResults.filter((f): f is TrustedFrame => f !== null);
     const successRatio = trustedFrames.length / frames.length;
-    devLog("roboflow pass complete", { requested: frames.length, succeeded: trustedFrames.length, successRatio });
+    devLog("roboflow pass complete", { requested: frames.length, succeeded: trustedFrames.length, successRatio, firstFailureDetail });
     if (successRatio < ROBOFLOW_MIN_SUCCESS_RATIO) {
-      return await fail(`roboflow success ratio too low: ${trustedFrames.length}/${frames.length}`);
+      return await fail(`roboflow success ratio too low: ${trustedFrames.length}/${frames.length}${firstFailureDetail ? ` (${firstFailureDetail})` : ""}`);
     }
 
     const trustedPoseData = {
