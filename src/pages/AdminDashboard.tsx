@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { ShieldCheck, Users } from "lucide-react";
+import { ShieldCheck, Users, Wand2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useRoles } from "../lib/useRoles";
 import { supabase } from "../lib/supabase";
@@ -36,6 +36,33 @@ interface UserRow {
   member_since: string;
 }
 
+interface CaddieStats {
+  total_analyses: number;
+  analyses_last_24h: number;
+  analyses_last_7d: number;
+  processing_now: number;
+  unique_users: number;
+  avg_score: number | null;
+  score_low_count: number;
+  score_mid_count: number;
+  score_high_count: number;
+}
+
+interface CaddieAnalysisRow {
+  id: string;
+  owner_name: string | null;
+  owner_email: string;
+  swing_type: string | null;
+  status: string;
+  score: number | null;
+  created_at: string;
+}
+
+const CADDIE_STATUS_STYLES: Record<string, string> = {
+  complete: "bg-fairway-50 text-fairway-700",
+  processing: "bg-sky-50 text-sky-700",
+};
+
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
@@ -53,18 +80,26 @@ export function AdminDashboard() {
 
   const [waitlist, setWaitlist] = useState<WaitlistRow[]>([]);
   const [users, setUsers] = useState<UserRow[]>([]);
+  const [caddieStats, setCaddieStats] = useState<CaddieStats | null>(null);
+  const [caddieAnalyses, setCaddieAnalyses] = useState<CaddieAnalysisRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [{ data: w, error: wErr }, { data: u, error: uErr }] = await Promise.all([
+    const [{ data: w, error: wErr }, { data: u, error: uErr }, { data: cs, error: csErr }, { data: ca, error: caErr }] = await Promise.all([
       supabase.rpc("admin_list_waitlist_signups"),
       supabase.rpc("admin_list_users"),
+      supabase.rpc("admin_caddie_stats"),
+      supabase.rpc("admin_list_caddie_analyses", { p_limit: 50 }),
     ]);
     if (wErr) console.error("Golf Me: admin_list_waitlist_signups failed.", wErr);
     if (uErr) console.error("Golf Me: admin_list_users failed.", uErr);
+    if (csErr) console.error("Golf Me: admin_caddie_stats failed.", csErr);
+    if (caErr) console.error("Golf Me: admin_list_caddie_analyses failed.", caErr);
     setWaitlist((w ?? []) as WaitlistRow[]);
     setUsers((u ?? []) as UserRow[]);
+    setCaddieStats(((cs as CaddieStats[]) ?? [])[0] ?? null);
+    setCaddieAnalyses((ca ?? []) as CaddieAnalysisRow[]);
     setLoading(false);
   }, []);
 
@@ -196,6 +231,71 @@ export function AdminDashboard() {
               </div>
             ))}
             {users.length > 100 && <p className="text-center text-xs text-slate-400">+{users.length - 100} more</p>}
+          </div>
+        )}
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <h2 className="flex items-center gap-1.5 text-sm font-bold text-slate-800">
+            <Wand2 size={15} className="text-fairway-600" /> Caddie Usage
+          </h2>
+        </div>
+
+        {caddieStats && (
+          <>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {[
+                { label: "Total analyses", value: caddieStats.total_analyses },
+                { label: "Last 24h", value: caddieStats.analyses_last_24h },
+                { label: "Last 7d", value: caddieStats.analyses_last_7d },
+                { label: "Processing now", value: caddieStats.processing_now },
+                { label: "Unique users", value: caddieStats.unique_users },
+                { label: "Avg score", value: caddieStats.avg_score ?? "—" },
+              ].map((stat) => (
+                <div key={stat.label} className="rounded-2xl border border-slate-100 bg-white p-3">
+                  <p className="text-lg font-bold text-slate-800">{stat.value}</p>
+                  <p className="text-xs text-slate-500">{stat.label}</p>
+                </div>
+              ))}
+            </div>
+            {/* Failure rate isn't tracked here on purpose — a failed
+                analysis deletes its own row (see analyze-swing/index.ts's
+                fail()) rather than leaving a 'failed' entry behind, so
+                there's nothing left to count after the fact. Tracking that
+                for real would mean retaining failed rows or a separate
+                event log — a deliberate follow-up if it's ever wanted. */}
+            <div>
+              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Score distribution (complete analyses)</p>
+              <div className="flex overflow-hidden rounded-xl border border-slate-100 bg-white text-xs font-semibold">
+                <div className="flex-1 bg-rose-50 p-2 text-center text-rose-700">0-39: {caddieStats.score_low_count}</div>
+                <div className="flex-1 border-x border-slate-100 bg-sun-50 p-2 text-center text-sun-700">40-69: {caddieStats.score_mid_count}</div>
+                <div className="flex-1 bg-fairway-50 p-2 text-center text-fairway-700">70-100: {caddieStats.score_high_count}</div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {caddieAnalyses.length === 0 ? (
+          <EmptyState icon={<Wand2 size={20} />} title="No Caddie analyses yet." />
+        ) : (
+          <div className="flex flex-col gap-2">
+            {caddieAnalyses.map((a) => (
+              <div key={a.id} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white p-3">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-slate-800">{a.owner_name ?? "Unnamed"} {a.swing_type && <span className="font-normal text-slate-500">· {a.swing_type}</span>}</p>
+                  <p className="truncate text-xs text-slate-500">
+                    {a.owner_email} · {fmtDate(a.created_at)}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  {a.score !== null && <span className="text-sm font-bold text-slate-700">{a.score}/100</span>}
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${CADDIE_STATUS_STYLES[a.status] ?? "bg-slate-100 text-slate-500"}`}>
+                    {a.status}
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </section>
