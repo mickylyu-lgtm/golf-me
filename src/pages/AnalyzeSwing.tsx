@@ -14,7 +14,7 @@ import { supabase } from "../lib/supabase";
 
 const COMMUNITY_MEDIA_BUCKET = "community-media"; // same bucket CreatePost.tsx's Swing Post upload uses — no second media pipeline
 const MAX_SWING_VIDEO_BYTES = 200 * 1024 * 1024; // matches the Storage bucket's own file_size_limit
-const MAX_SWING_VIDEO_SECONDS = 15; // Caddie's Roboflow pass calls once per sampled frame (~8fps) — a longer cap multiplies calls/latency per analysis, see analyze-swing's ANALYSIS_FPS comment
+const MAX_SWING_VIDEO_SECONDS = 10; // hard product limit (2026-08-22 credit-efficiency pass) — Caddie's Roboflow pass calls once per sampled frame, so a longer clip directly multiplies calls/latency/credit spend; see analyze-swing's ANALYSIS_FPS comment. Was 15s.
 
 // Direct-upload Caddie flow: pick a swing video, optionally label the club,
 // get real Gemini feedback. Reuses the exact community-media Storage upload
@@ -160,6 +160,7 @@ export function AnalyzeSwing() {
           <Video size={22} />
           <span className="text-sm font-semibold">{t("caddie.selectVideo")}</span>
           <span className="text-xs text-slate-400">{t("caddie.noVideoSelected")}</span>
+          <span className="text-xs text-slate-400">{t("caddie.recommendedLength")}</span>
         </button>
       )}
       <input ref={videoInputRef} type="file" accept="video/*" className="hidden" onChange={handleVideoFile} />

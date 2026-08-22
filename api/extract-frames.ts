@@ -30,7 +30,7 @@ export const config = {
   api: { bodyParser: { sizeLimit: "200mb" } },
 };
 
-const MAX_DURATION_SECONDS = 20; // hard ceiling — analyze-swing's own video-length limit is the real gate, this is just a backstop
+const MAX_DURATION_SECONDS = 11; // hard ceiling — analyze-swing's own 10s upload-time limit is the real gate, this is just a backstop with 1s of slack for metadata/rounding imprecision
 const DEFAULT_FPS = 8;
 
 function runFfmpeg(args: string[]): Promise<void> {

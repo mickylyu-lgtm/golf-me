@@ -62,6 +62,8 @@ const FRAME_EXTRACT_URL = "https://golfme.app/api/extract-frames";
 const ANALYSIS_FPS = 8; // beta tradeoff vs. validation's full ~60fps/every-frame — see DEVELOPMENT_STATUS for the cost math (300+ calls/swing at 60fps vs. ~50-160 at 8fps)
 const ROBOFLOW_CONCURRENCY = 8; // parallel frame calls — keeps total wall-clock well inside this project's 400s (Pro plan) Edge Function budget without raising per-swing cost (concurrency doesn't add calls, just shortens wall time)
 const ROBOFLOW_MIN_SUCCESS_RATIO = 0.5; // below this fraction of frames successfully analyzed, fail honestly rather than hand Gemini a too-sparse pose signal
+const ROBOFLOW_FRAME_RETRY_ATTEMPTS = 2; // total attempts per frame (1 retry) — a transient network/5xx blip on one frame shouldn't cost the whole analysis when a single retry would likely succeed
+const MAX_ANALYSIS_FRAMES = 150; // hard ceiling, independent of the 10s upload-time limit — a defense against a misreported video duration slipping past that client-side check and generating an unexpectedly large, expensive frame set
 
 const SUPPORTED_LOCALES = new Set(["en", "zh-CN", "zh-TW", "es", "ko", "ja"]);
 const LOCALE_NAMES: Record<string, string> = {
@@ -395,6 +397,24 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ analysis: inFlightRows[0] }, 200);
   }
 
+  // Idempotency: reuse an already-COMPLETE analysis for the exact same
+  // source instead of re-spending Roboflow+Gemini credits on a rerun. The
+  // client's own community_post UI already avoids re-triggering this (it
+  // shows "View Analysis" once one exists), but this is a server-side
+  // backstop against any other path — e.g. re-selecting the identical
+  // file on the direct-upload screen — burning credits pointlessly on a
+  // swing Caddie has already analyzed.
+  let completedQuery = supabase.from("caddie_analyses").select("*").eq("status", "complete").order("created_at", { ascending: false });
+  completedQuery =
+    body.sourceType === "community_post"
+      ? completedQuery.eq("source_post_id", body.sourcePostId!)
+      : completedQuery.eq("source_type", "direct_upload").eq("source_media_url", body.sourceMediaUrl);
+  const { data: completedRows } = await completedQuery.limit(1);
+  if (completedRows && completedRows.length > 0) {
+    devLog("already-complete analysis exists, reusing", { id: completedRows[0].id });
+    return jsonResponse({ analysis: completedRows[0] }, 200);
+  }
+
   const { data: inserted, error: insertError } = await supabase
     .from("caddie_analyses")
     .insert({
@@ -417,9 +437,10 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: message }, status);
   }
   const row = inserted as CaddieAnalysisRow;
+  const pipelineStart = Date.now(); // credit-budget/latency logging (dev only) — see devLog calls below
 
   async function fail(errorMessage: string): Promise<void> {
-    console.error("[analyze-swing] analysis failed.", { rowId: row.id, reason: errorMessage });
+    console.error("[analyze-swing] analysis failed.", { rowId: row.id, reason: errorMessage, processingSeconds: (Date.now() - pipelineStart) / 1000 });
     await supabase.from("caddie_analyses").delete().eq("id", row.id);
   }
 
@@ -464,47 +485,65 @@ Deno.serve(async (req: Request) => {
         base64: f.base64,
       }));
       if (frames.length === 0) return await fail("frame extraction returned 0 frames");
+      if (frames.length > MAX_ANALYSIS_FRAMES) {
+        return await fail(`frame extraction returned ${frames.length} frames, exceeding the ${MAX_ANALYSIS_FRAMES} safety cap (misreported video duration?)`);
+      }
       devLog("frames extracted", { count: frames.length, fps: extractBody.analysisFps });
     } catch (err) {
       return await fail(`frame extraction threw: ${err instanceof Error ? err.message : String(err)}`);
     }
 
-    // --- Roboflow: one call per frame, stateless, moderate concurrency. ---
+    // --- Roboflow: one call per frame, stateless, moderate concurrency,
+    // each frame retried once on failure before being given up on. ---
     // firstFailureDetail captures only the FIRST failure's cause (status
     // code + truncated body, or thrown error) — logging every one of
     // dozens of per-frame failures would be noise, but a total wipeout
-    // (0/45, seen in production) is otherwise a black box: was it auth,
-    // quota, a malformed request, or Roboflow itself erroring?
+    // (0/45, seen in production — that day it was Roboflow's own
+    // credit_cap_exceeded) is otherwise a black box: was it auth, quota,
+    // a malformed request, or Roboflow itself erroring? A quota/auth
+    // error fails identically on every retry (not transient), so this
+    // still surfaces that root cause immediately rather than masking it
+    // behind two attempts per frame.
     let firstFailureDetail: string | undefined;
-    const roboflowResults = await mapWithConcurrency(frames, ROBOFLOW_CONCURRENCY, async (frame) => {
-      try {
-        const res = await fetch(ROBOFLOW_ENDPOINT, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ api_key: roboflowApiKey, inputs: { image: { type: "base64", value: frame.base64 } } }),
-        });
-        if (!res.ok) {
-          if (!firstFailureDetail) {
-            const errBody = await res.text().catch(() => "");
-            firstFailureDetail = `HTTP ${res.status}: ${errBody.slice(0, 300)}`;
-          }
-          return null;
-        }
-        const body = await res.json();
-        const output = body?.outputs?.[0];
-        if (!output) {
-          if (!firstFailureDetail) firstFailureDetail = `no outputs[0] in response: ${JSON.stringify(body).slice(0, 300)}`;
-          return null;
-        }
-        return filterRoboflowFrame(frame.frameIndex, frame.timestampSeconds, output);
-      } catch (err) {
-        if (!firstFailureDetail) firstFailureDetail = `threw: ${err instanceof Error ? err.message : String(err)}`;
-        return null;
+    let roboflowRetryCount = 0;
+    async function callRoboflowOnce(frame: ExtractedFrame): Promise<TrustedFrame | null> {
+      const res = await fetch(ROBOFLOW_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ api_key: roboflowApiKey, inputs: { image: { type: "base64", value: frame.base64 } } }),
+      });
+      if (!res.ok) {
+        const errBody = await res.text().catch(() => "");
+        throw new Error(`HTTP ${res.status}: ${errBody.slice(0, 300)}`);
       }
+      const body = await res.json();
+      const output = body?.outputs?.[0];
+      if (!output) throw new Error(`no outputs[0] in response: ${JSON.stringify(body).slice(0, 300)}`);
+      return filterRoboflowFrame(frame.frameIndex, frame.timestampSeconds, output);
+    }
+    const roboflowResults = await mapWithConcurrency(frames, ROBOFLOW_CONCURRENCY, async (frame) => {
+      let lastErr: unknown;
+      for (let attempt = 1; attempt <= ROBOFLOW_FRAME_RETRY_ATTEMPTS; attempt++) {
+        try {
+          return await callRoboflowOnce(frame);
+        } catch (err) {
+          lastErr = err;
+          if (attempt < ROBOFLOW_FRAME_RETRY_ATTEMPTS) roboflowRetryCount++;
+        }
+      }
+      if (!firstFailureDetail) firstFailureDetail = lastErr instanceof Error ? lastErr.message : String(lastErr);
+      return null;
     });
     const trustedFrames = roboflowResults.filter((f): f is TrustedFrame => f !== null);
     const successRatio = trustedFrames.length / frames.length;
-    devLog("roboflow pass complete", { requested: frames.length, succeeded: trustedFrames.length, successRatio, firstFailureDetail });
+    devLog("roboflow pass complete", {
+      requested: frames.length,
+      succeeded: trustedFrames.length,
+      successRatio,
+      retryCount: roboflowRetryCount,
+      workflowId: ROBOFLOW_WORKFLOW_ID,
+      firstFailureDetail,
+    });
     if (successRatio < ROBOFLOW_MIN_SUCCESS_RATIO) {
       return await fail(`roboflow success ratio too low: ${trustedFrames.length}/${frames.length}${firstFailureDetail ? ` (${firstFailureDetail})` : ""}`);
     }
@@ -662,7 +701,15 @@ Deno.serve(async (req: Request) => {
       console.error("[analyze-swing] save after successful analysis failed.", { rowId: row.id, reason: updateError.message });
       return;
     }
-    devLog("saved", { id: row.id });
+    devLog("saved", {
+      id: row.id,
+      processingSeconds: (Date.now() - pipelineStart) / 1000,
+      framesRequested: frames.length,
+      framesAnalyzed: trustedFrames.length,
+      analysisFps: ANALYSIS_FPS,
+      roboflowRetryCount,
+      workflowId: ROBOFLOW_WORKFLOW_ID,
+    });
   }
 
   EdgeRuntime.waitUntil(runPipeline());
