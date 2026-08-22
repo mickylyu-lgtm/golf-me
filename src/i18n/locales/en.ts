@@ -155,6 +155,8 @@ export const en = {
   "caddie.thinking2": "Tracking your positions...",
   "caddie.thinking3": "Studying your phases...",
   "caddie.thinking4": "Writing your feedback...",
+  "caddie.bannerProcessing": "Caddie is analyzing your swing...",
+  "caddie.bannerDone": "Caddie finished analyzing your swing.",
   "caddie.comingSoon": "Coming Soon",
   "caddie.savedToCaddie": "Saved to Caddie",
   "caddie.couldNotSave": "Could not save analysis.",

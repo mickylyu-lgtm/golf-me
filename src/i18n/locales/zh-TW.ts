@@ -145,6 +145,8 @@ export const zhTW: Record<TranslationKey, string> = {
   "caddie.thinking2": "正在追蹤你的姿勢...",
   "caddie.thinking3": "正在分析各階段...",
   "caddie.thinking4": "正在撰寫回饋...",
+  "caddie.bannerProcessing": "Caddie 正在分析你的揮桿...",
+  "caddie.bannerDone": "Caddie 已完成揮桿分析。",
   "caddie.comingSoon": "即將推出",
   "caddie.savedToCaddie": "已儲存到球僮",
   "caddie.couldNotSave": "無法儲存分析結果。",

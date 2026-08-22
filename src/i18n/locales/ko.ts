@@ -145,6 +145,8 @@ export const ko: Record<TranslationKey, string> = {
   "caddie.thinking2": "자세를 추적하고 있어요...",
   "caddie.thinking3": "단계를 분석하고 있어요...",
   "caddie.thinking4": "피드백을 작성하고 있어요...",
+  "caddie.bannerProcessing": "캐디가 스윙을 분석하고 있어요...",
+  "caddie.bannerDone": "캐디가 스윙 분석을 완료했어요.",
   "caddie.comingSoon": "출시 예정",
   "caddie.savedToCaddie": "캐디에 저장됨",
   "caddie.couldNotSave": "분석을 저장하지 못했습니다.",

@@ -5,6 +5,7 @@ import { BottomNav } from "./BottomNav";
 import { TopBar } from "./TopBar";
 import { RootTabCarousel } from "./RootTabCarousel";
 import { NotificationPopupHost } from "../notifications/NotificationPopupHost";
+import { CaddieProcessingBanner } from "../caddie/CaddieProcessingBanner";
 import { MOBILE_NAV_ITEMS } from "../../lib/nav";
 
 const ROOT_PATHS = new Set<string>(MOBILE_NAV_ITEMS.map((item) => item.path));
@@ -21,6 +22,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-[#faf9f6]">
       <NotificationPopupHost />
+      <CaddieProcessingBanner />
       <SideNav />
       <div className="flex min-h-screen flex-col sm:pl-20 lg:pl-60">
         <TopBar />

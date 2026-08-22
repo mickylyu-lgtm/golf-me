@@ -145,6 +145,8 @@ export const es: Record<TranslationKey, string> = {
   "caddie.thinking2": "Rastreando tus posiciones...",
   "caddie.thinking3": "Estudiando tus fases...",
   "caddie.thinking4": "Escribiendo tu feedback...",
+  "caddie.bannerProcessing": "Caddie está analizando tu swing...",
+  "caddie.bannerDone": "Caddie terminó de analizar tu swing.",
   "caddie.comingSoon": "Próximamente",
   "caddie.savedToCaddie": "Guardado en Caddie",
   "caddie.couldNotSave": "No se pudo guardar el análisis.",

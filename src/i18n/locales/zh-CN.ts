@@ -145,6 +145,8 @@ export const zhCN: Record<TranslationKey, string> = {
   "caddie.thinking2": "正在追踪你的姿势...",
   "caddie.thinking3": "正在分析各阶段...",
   "caddie.thinking4": "正在撰写反馈...",
+  "caddie.bannerProcessing": "Caddie 正在分析你的挥杆...",
+  "caddie.bannerDone": "Caddie 已完成挥杆分析。",
   "caddie.comingSoon": "即将推出",
   "caddie.savedToCaddie": "已保存到球童",
   "caddie.couldNotSave": "无法保存分析结果。",

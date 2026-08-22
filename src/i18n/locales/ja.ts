@@ -145,6 +145,8 @@ export const ja: Record<TranslationKey, string> = {
   "caddie.thinking2": "姿勢を追跡しています...",
   "caddie.thinking3": "フェーズを分析しています...",
   "caddie.thinking4": "フィードバックを作成しています...",
+  "caddie.bannerProcessing": "Caddieがスイングを分析中です...",
+  "caddie.bannerDone": "Caddieがスイングの分析を完了しました。",
   "caddie.comingSoon": "近日公開",
   "caddie.savedToCaddie": "キャディに保存しました",
   "caddie.couldNotSave": "分析を保存できませんでした。",
