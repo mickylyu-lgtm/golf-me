@@ -65,6 +65,20 @@ const ROBOFLOW_MIN_SUCCESS_RATIO = 0.5; // below this fraction of frames success
 const ROBOFLOW_FRAME_RETRY_ATTEMPTS = 2; // total attempts per frame (1 retry) — a transient network/5xx blip on one frame shouldn't cost the whole analysis when a single retry would likely succeed
 const MAX_ANALYSIS_FRAMES = 150; // hard ceiling, independent of the 10s upload-time limit — a defense against a misreported video duration slipping past that client-side check and generating an unexpectedly large, expensive frame set
 
+// --- Adaptive two-stage sampling (2026-08-22 credit-efficiency pass). ---
+// Stage 1 (coarse, above) already covers the whole active swing window at
+// ANALYSIS_FPS. Stage 2 spends a SMALL number of additional calls at
+// higher temporal resolution only around the fast, hard-to-pin part of the
+// swing — found from the coarse pass's own wrist-velocity metric, not a
+// second Gemini call (Gemini still only runs once, after both stages are
+// merged — see product brief point 18). This directly targets the thing
+// pose-only analysis struggles most with (impact timing) without paying
+// dense-fps cost across the whole clip.
+const ADAPTIVE_DENSE_SAMPLING_ENABLED = true;
+const DENSE_IMPACT_WINDOW_SECONDS = 0.5; // +/- around the coarse pass's peak-wrist-velocity frame
+const DENSE_IMPACT_FPS = 20;
+const MIN_COARSE_WINDOW_FOR_DENSE_PASS_SECONDS = 2; // an already-tiny coarse window leaves little room for a distinct dense refinement to add value over the coarse pass alone
+
 const SUPPORTED_LOCALES = new Set(["en", "zh-CN", "zh-TW", "es", "ko", "ja"]);
 const LOCALE_NAMES: Record<string, string> = {
   en: "English",
@@ -548,13 +562,88 @@ Deno.serve(async (req: Request) => {
       return await fail(`roboflow success ratio too low: ${trustedFrames.length}/${frames.length}${firstFailureDetail ? ` (${firstFailureDetail})` : ""}`);
     }
 
+    // --- Stage 2: dense sampling around the fastest part of the swing.
+    // Finds the coarse frame with peak wrist velocity — a metric Roboflow
+    // already computed, no extra call needed to estimate it — then
+    // requests a small number of additional frames at higher fps in a
+    // tight window around it. This refines exactly the phase pose-only
+    // analysis is weakest at (impact timing) without paying dense-fps
+    // cost across the whole clip, and never runs a second Gemini call
+    // (both stages feed the single Gemini call below). A failure or
+    // no-op here never fails the analysis — it's a refinement on top of
+    // an already-sufficient coarse pass, not a requirement.
+    let denseTrustedFrames: TrustedFrame[] = [];
+    let denseRetryCount = 0;
+    const coarseWindowStart = frames[0]?.timestampSeconds ?? 0;
+    const coarseWindowEnd = frames[frames.length - 1]?.timestampSeconds ?? coarseWindowStart;
+    if (ADAPTIVE_DENSE_SAMPLING_ENABLED && coarseWindowEnd - coarseWindowStart >= MIN_COARSE_WINDOW_FOR_DENSE_PASS_SECONDS) {
+      let peakFrame: TrustedFrame | undefined;
+      let peakAbsVelocity = -1;
+      for (const f of trustedFrames) {
+        const v = f.body_metrics.wrist_vertical_velocity_normalized_per_frame;
+        if (typeof v === "number" && Math.abs(v) > peakAbsVelocity) {
+          peakAbsVelocity = Math.abs(v);
+          peakFrame = f;
+        }
+      }
+      if (peakFrame) {
+        const denseStart = Math.max(coarseWindowStart, peakFrame.timestamp_seconds - DENSE_IMPACT_WINDOW_SECONDS);
+        const denseEnd = Math.min(coarseWindowEnd, peakFrame.timestamp_seconds + DENSE_IMPACT_WINDOW_SECONDS);
+        if (denseEnd - denseStart >= 0.2) {
+          try {
+            const denseExtractRes = await fetch(FRAME_EXTRACT_URL, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${frameExtractSecret}` },
+              body: JSON.stringify({ videoUrl: row.source_media_url, fps: DENSE_IMPACT_FPS, startSeconds: denseStart, endSeconds: denseEnd }),
+            });
+            if (denseExtractRes.ok) {
+              const denseExtractBody = await denseExtractRes.json();
+              const denseFrames: ExtractedFrame[] = (denseExtractBody.frames ?? []).map(
+                (f: { frameIndex: number; timestampSeconds: number; base64: string }) => ({
+                  frameIndex: frames.length + f.frameIndex,
+                  timestampSeconds: f.timestampSeconds,
+                  base64: f.base64,
+                }),
+              );
+              const denseResults = await mapWithConcurrency(denseFrames, ROBOFLOW_CONCURRENCY, async (frame) => {
+                let lastErr: unknown;
+                for (let attempt = 1; attempt <= ROBOFLOW_FRAME_RETRY_ATTEMPTS; attempt++) {
+                  try {
+                    return await callRoboflowOnce(frame);
+                  } catch (err) {
+                    lastErr = err;
+                    if (attempt < ROBOFLOW_FRAME_RETRY_ATTEMPTS) denseRetryCount++;
+                  }
+                }
+                devLog("dense frame failed after retries", { error: lastErr instanceof Error ? lastErr.message : String(lastErr) });
+                return null;
+              });
+              denseTrustedFrames = denseResults.filter((f): f is TrustedFrame => f !== null);
+              devLog("dense impact-window pass complete", {
+                windowStart: denseStart,
+                windowEnd: denseEnd,
+                requested: denseFrames.length,
+                succeeded: denseTrustedFrames.length,
+              });
+            }
+          } catch (err) {
+            devLog("dense impact-window pass failed, continuing with coarse-only data", {
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        }
+      }
+    }
+
+    const allTrustedFrames = [...trustedFrames, ...denseTrustedFrames].sort((a, b) => a.timestamp_seconds - b.timestamp_seconds);
     const trustedPoseData = {
       video: {
         analysis_fps: ANALYSIS_FPS,
         frames_requested: frames.length,
         frames_analyzed: trustedFrames.length,
+        dense_impact_window_frames_analyzed: denseTrustedFrames.length,
       },
-      frames: trustedFrames,
+      frames: allTrustedFrames,
       limitations:
         trustedFrames.length < frames.length
           ? [`${frames.length - trustedFrames.length} of ${frames.length} sampled frames could not be reliably analyzed and were excluded.`]
@@ -706,8 +795,10 @@ Deno.serve(async (req: Request) => {
       processingSeconds: (Date.now() - pipelineStart) / 1000,
       framesRequested: frames.length,
       framesAnalyzed: trustedFrames.length,
+      denseFramesAnalyzed: denseTrustedFrames.length,
+      totalRoboflowCalls: frames.length + denseTrustedFrames.length,
       analysisFps: ANALYSIS_FPS,
-      roboflowRetryCount,
+      roboflowRetryCount: roboflowRetryCount + denseRetryCount,
       workflowId: ROBOFLOW_WORKFLOW_ID,
     });
   }
