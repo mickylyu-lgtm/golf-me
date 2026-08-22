@@ -141,7 +141,7 @@ export function TutorialOverlay() {
           {!isLastStep ? (
             <button
               onClick={skip}
-              className="rounded-full px-3 py-2 text-sm font-semibold text-slate-400 transition-colors duration-150 hover:bg-slate-100 hover:text-slate-600"
+              className="rounded-full border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-500 transition-colors duration-150 hover:bg-slate-100"
             >
               {t("tutorial.skip")}
             </button>

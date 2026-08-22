@@ -213,8 +213,15 @@ export function ProfileSetup() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#faf9f6] px-6 py-8">
-      <div className="flex items-center justify-between">
+    // Fixed to the real visible viewport (dvh, not vh/min-h-screen -- mobile
+    // Safari's 100vh includes space the collapsible address bar is actually
+    // covering, which was exactly why a short step's Continue button needed
+    // a scroll to reach even though its content alone fit on screen). The
+    // step content scrolls independently in the middle; the button stays a
+    // non-shrinking footer, always reachable without hunting for it,
+    // however long a given step's content gets.
+    <div className="flex h-[100dvh] flex-col bg-[#faf9f6]">
+      <div className="flex items-center justify-between px-6 pt-8">
         <button
           onClick={() => (step === 0 ? navigate(-1) : setStep((s) => s - 1))}
           className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
@@ -228,7 +235,8 @@ export function ProfileSetup() {
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col gap-5 py-6">
+      <div className="min-h-0 flex-1 overflow-y-auto px-6">
+        <div className="flex flex-col gap-5 py-6">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-fairway-600">{t("host.step", { step: step + 1, total: STEP_LABEL_KEYS.length })}</p>
           <h1 className="text-xl font-bold text-slate-900">{t(STEP_LABEL_KEYS[step])}</h1>
@@ -451,11 +459,14 @@ export function ProfileSetup() {
             <p className="text-xs text-slate-400">{t("profileSetup.optionalPreferencesNote")}</p>
           </div>
         )}
+        </div>
       </div>
 
-      <Button size="lg" fullWidth disabled={!stepValid || submitting} onClick={next}>
-        {step === STEP_LABEL_KEYS.length - 1 ? t("profileSetup.startGolfing") : t("common.continue")}
-      </Button>
+      <div className="shrink-0 px-6 pb-8 pt-3">
+        <Button size="lg" fullWidth disabled={!stepValid || submitting} onClick={next}>
+          {step === STEP_LABEL_KEYS.length - 1 ? t("profileSetup.startGolfing") : t("common.continue")}
+        </Button>
+      </div>
 
       {locationPickerMode !== "none" && (
         <LocationPicker
