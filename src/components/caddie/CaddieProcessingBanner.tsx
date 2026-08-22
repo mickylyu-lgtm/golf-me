@@ -64,7 +64,7 @@ export function CaddieProcessingBanner() {
     >
       <button
         onClick={() => targetId && navigate(`/caddie/${targetId}`)}
-        className="flex w-full max-w-sm items-center gap-2.5 rounded-2xl border border-white/60 bg-white/70 p-3 text-left shadow-lg shadow-slate-900/10 backdrop-blur-xl transition-opacity duration-200"
+        className="flex w-full max-w-sm items-center gap-2.5 rounded-2xl border border-slate-200/80 bg-slate-100/90 p-3 text-left shadow-lg shadow-slate-900/15 backdrop-blur-xl transition-opacity duration-200"
         style={{ pointerEvents: "auto" }}
       >
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-900/5 text-slate-600">

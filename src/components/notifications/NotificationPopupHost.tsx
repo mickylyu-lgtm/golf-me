@@ -199,7 +199,7 @@ export function NotificationPopupHost() {
       >
         <button
           onClick={handleTap}
-          className="flex w-full items-center gap-2.5 rounded-2xl border border-white/60 bg-white/70 p-3 text-left shadow-lg shadow-slate-900/10 backdrop-blur-xl"
+          className="flex w-full items-center gap-2.5 rounded-2xl border border-slate-200/80 bg-slate-100/90 p-3 text-left shadow-lg shadow-slate-900/15 backdrop-blur-xl"
         >
           <span className="shrink-0">
             {actor ? (
