@@ -17,7 +17,7 @@ const TABS: { value: FeedTab; labelKey: "community.tabForYou" | "community.tabFo
 ];
 
 export function Community() {
-  const { currentUser, getGolfer, visiblePosts, followingGolfers, circleGolfers, postUpvoteCount } = useData();
+  const { currentUser, getGolfer, visiblePosts, followingGolfers } = useData();
   const { t } = useLocale();
   const navigate = useNavigate();
   const [tab, setTab] = useState<FeedTab>("forYou");
@@ -27,12 +27,9 @@ export function Community() {
   const ctx: FeedContext = useMemo(
     () => ({
       followingIds: new Set(followingGolfers.map((g) => g.id)),
-      circleIds: new Set(circleGolfers.map((g) => g.id)),
-      preferredCourses: currentUser.preferredCourses,
       areaLabel: currentUser.areaLabel,
-      upvoteCount: postUpvoteCount,
     }),
-    [followingGolfers, circleGolfers, currentUser.preferredCourses, currentUser.areaLabel, postUpvoteCount],
+    [followingGolfers, currentUser.areaLabel],
   );
 
   const basePosts = useMemo(() => visiblePosts(), [visiblePosts]);
@@ -54,7 +51,7 @@ export function Community() {
   const feed = useMemo(() => {
     if (tab === "following") return rankFollowing(searched, ctx);
     if (tab === "nearby") return rankNearby(searched, ctx, getGolfer);
-    return rankForYou(searched, ctx, getGolfer);
+    return rankForYou(searched);
   }, [tab, searched, ctx, getGolfer]);
 
   return (

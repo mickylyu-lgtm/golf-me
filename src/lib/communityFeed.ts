@@ -5,10 +5,7 @@ import type { CommunityPost, GolferProfile } from "../types";
 // touching the feed page.
 export interface FeedContext {
   followingIds: Set<string>;
-  circleIds: Set<string>;
-  preferredCourses: string[];
   areaLabel: string;
-  upvoteCount: (postId: string) => number;
 }
 
 // Coarse "same general area" check via the trailing state/region token
@@ -25,17 +22,13 @@ function byRecency(a: CommunityPost, b: CommunityPost): number {
   return b.createdAt.localeCompare(a.createdAt);
 }
 
-export function rankForYou(posts: CommunityPost[], ctx: FeedContext, getGolfer: (id: string) => GolferProfile | undefined): CommunityPost[] {
-  const scoreFor = (p: CommunityPost): number => {
-    let score = 0;
-    if (ctx.followingIds.has(p.authorId)) score += 3;
-    if (ctx.circleIds.has(p.authorId)) score += 2;
-    if (p.courseTag && ctx.preferredCourses.includes(p.courseTag)) score += 2;
-    if (isNearby(p, ctx, getGolfer)) score += 1;
-    score += ctx.upvoteCount(p.id) * 0.1;
-    return score;
-  };
-  return [...posts].sort((a, b) => scoreFor(b) - scoreFor(a) || byRecency(a, b));
+// Was a follow/circle/course-match/upvote-weighted score, recency only as a
+// tiebreaker — meant an older post from someone followed could rank above
+// a genuinely newer one, which read as "the feed isn't showing latest
+// first." Explicit product decision: For You is plain reverse-chronological
+// now, same as Following/Nearby below.
+export function rankForYou(posts: CommunityPost[]): CommunityPost[] {
+  return [...posts].sort(byRecency);
 }
 
 export function rankFollowing(posts: CommunityPost[], ctx: FeedContext): CommunityPost[] {
