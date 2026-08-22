@@ -25,6 +25,17 @@ const AXIS_LOCK_PX = 8;
 // viewer's drag state just enough to snap back on release, reading as a
 // glitch on every touch.
 const INTERACTIVE_AXIS_LOCK_PX = 45;
+// The tap that OPENS this viewer and the drag-to-dismiss gesture that
+// CLOSES it share the same touch surface (this is full-bleed — there's no
+// separate "outside" to tap). If this component mounts while that opening
+// tap's touch sequence is still resolving (synthetic click delay, a
+// slightly-held tap, etc.), a trailing touchmove/touchend from that same
+// gesture can reach this component's own listeners the instant it mounts
+// and get misread as an immediate dismiss drag — the viewer flickers open
+// and shut on a single tap. Refusing to dismiss for a brief window after
+// mount is the standard guard for this class of bug: real dismiss drags
+// take real user reaction time, well past this window.
+const IGNORE_DISMISS_MS = 300;
 
 // The fullscreen home for both a swing post's single video and a
 // multi-photo/video post's carousel — same drag-down-to-dismiss gesture
@@ -34,6 +45,7 @@ const INTERACTIVE_AXIS_LOCK_PX = 45;
 export function FullscreenMediaViewer({ media, initialIndex = 0, onClose }: FullscreenMediaViewerProps) {
   const [dragY, setDragY] = useState(0);
   const [dragging, setDragging] = useState(false);
+  const mountedAtRef = useRef(Date.now());
   const dragStateRef = useRef<{
     startX: number;
     startY: number;
@@ -44,6 +56,10 @@ export function FullscreenMediaViewer({ media, initialIndex = 0, onClose }: Full
   } | null>(null);
 
   function onTouchStart(e: React.TouchEvent) {
+    // A touchstart landing inside the ignore window is the same physical
+    // gesture that opened this viewer leaking in, not a real new touch —
+    // never start tracking it as a potential dismiss.
+    if (Date.now() - mountedAtRef.current < IGNORE_DISMISS_MS) return;
     const startedOnInteractive = e.target instanceof Element && e.target.closest("[data-video-controls]") !== null;
     const t = e.touches[0];
     dragStateRef.current = { startX: t.clientX, startY: t.clientY, startTime: Date.now(), lastY: t.clientY, axis: "none", startedOnInteractive };
