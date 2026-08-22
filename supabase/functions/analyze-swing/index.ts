@@ -73,7 +73,20 @@ const LOCALE_NAMES: Record<string, string> = {
   ja: "Japanese",
 };
 
-const SYSTEM_PROMPT = `You are GolfMe Caddie, a conservative golf swing feedback assistant for recreational golfers. This is a BETA feature, not a professional biomechanics system or launch monitor.
+// A function of locale, not a static string — the earlier version only
+// mentioned the target language once, in the USER message (built fresh
+// per request anyway). Gemini was observed reliably translating the fixed
+// JSON *field names* correctly (those come from the schema/UI, not
+// Gemini) while leaving the free-text values it generates (summary,
+// issue text, drill steps, limitations...) in English regardless of the
+// requested locale — the instruction just wasn't weighted heavily enough.
+// Stating it in the SYSTEM instruction, both first and last (models
+// attend more reliably to the very start and very end of a long system
+// prompt than to a single mention buried in the middle), fixes that.
+function buildSystemPrompt(localeName: string): string {
+  return `You are GolfMe Caddie, a conservative golf swing feedback assistant for recreational golfers. This is a BETA feature, not a professional biomechanics system or launch monitor.
+
+CRITICAL LANGUAGE REQUIREMENT: every piece of free text you write — summary, strengths, work_on issue/why_it_matters, focus title/instruction, drill name/steps, limitations, score reasons — MUST be written in ${localeName}. Only JSON field/key names and enum values (e.g. "high"/"medium"/"low", "face_on") stay in English exactly as specified in the schema. This applies even if the video, TRUSTED_POSE_DATA, or golfer's club name below are in English — the OUTPUT language is ${localeName}, full stop.
 
 You are given two things: the swing video itself, and TRUSTED_POSE_DATA — a JSON time series of body-joint pose measurements for this exact swing, produced by a validated computer-vision pipeline (Roboflow) sampled at a fixed rate across the clip. TRUSTED_POSE_DATA is the authoritative source for body position/angle claims, not your own visual estimate of the video — but it only ever tracks BODY joints, never the club or ball.
 
@@ -88,7 +101,10 @@ Rules:
 - Impact is the one phase you must NOT give an exact timestamp for — pose-only analysis (no club/ball tracking) cannot reliably pin the exact contact instant. Give a window (window_start_seconds/window_end_seconds) you're reasonably confident contains impact instead, with its own confidence, or null/null if you can't place it at all.
 - Be concise. Prioritize the most meaningful observations over listing every possible issue: up to 3 strengths, up to 3 work-on items, exactly 1 main focus, exactly 1 drill.
 - Respond with feedback suitable for a recreational golfer, not jargon-heavy technical analysis.
-- Score the swing across exactly these 5 categories, 0-20 points each (100 total): setup_and_posture (address position, balance, alignment), backswing (shoulder turn, structure, tempo into transition), downswing_sequencing (hip/shoulder rotation order, lower-body initiation — only from what TRUSTED_POSE_DATA's angles/timing actually show), balance_and_weight_transfer (weight shift through the swing and into the finish), finish (balance, control, extension at the end). Give each a short one-sentence reason tied to something TRUSTED_POSE_DATA or the video actually shows — never a generic reason. Score conservatively: a phase with sparse/missing pose data should score in the middle of the range with a reason that says so, not a confident extreme in either direction.`;
+- Score the swing across exactly these 5 categories, 0-20 points each (100 total): setup_and_posture (address position, balance, alignment), backswing (shoulder turn, structure, tempo into transition), downswing_sequencing (hip/shoulder rotation order, lower-body initiation — only from what TRUSTED_POSE_DATA's angles/timing actually show), balance_and_weight_transfer (weight shift through the swing and into the finish), finish (balance, control, extension at the end). Give each a short one-sentence reason tied to something TRUSTED_POSE_DATA or the video actually shows — never a generic reason. Score conservatively: a phase with sparse/missing pose data should score in the middle of the range with a reason that says so, not a confident extreme in either direction.
+
+REMINDER: write summary, strengths, work_on, focus, drill, limitations, and score reasons in ${localeName}. This is not optional.`;
+}
 
 const PHASE_MOMENT_SCHEMA = {
   type: "OBJECT",
@@ -551,9 +567,10 @@ Deno.serve(async (req: Request) => {
       if (state !== "ACTIVE") return await fail(`Gemini file never reached ACTIVE (last state: ${state})`);
       devLog("gemini file active", { name: geminiFile.name });
 
+      const localeName = LOCALE_NAMES[locale];
       const userPromptParts = [
         body.swingType ? `The golfer says this is a: ${body.swingType}.` : "",
-        `Respond in ${LOCALE_NAMES[locale]}, in the JSON shape you were given — field names stay in English, but summary/issue/why_it_matters/instruction/name/steps/limitations text should be written in ${LOCALE_NAMES[locale]}.`,
+        `Remember: respond in ${localeName} (see the system instruction's language requirement).`,
         "Analyze this golf swing video and return your structured feedback, using TRUSTED_POSE_DATA below as the authoritative source for body-position claims and phase timestamps.",
         `TRUSTED_POSE_DATA: ${JSON.stringify(trustedPoseData)}`,
       ]
@@ -564,7 +581,7 @@ Deno.serve(async (req: Request) => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+          systemInstruction: { parts: [{ text: buildSystemPrompt(localeName) }] },
           contents: [
             {
               role: "user",
