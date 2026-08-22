@@ -577,13 +577,31 @@ Deno.serve(async (req: Request) => {
     const coarseWindowStart = frames[0]?.timestampSeconds ?? 0;
     const coarseWindowEnd = frames[frames.length - 1]?.timestampSeconds ?? coarseWindowStart;
     if (ADAPTIVE_DENSE_SAMPLING_ENABLED && coarseWindowEnd - coarseWindowStart >= MIN_COARSE_WINDOW_FOR_DENSE_PASS_SECONDS) {
+      // Roboflow's own wrist_vertical_velocity_normalized_per_frame metric
+      // was observed null on every frame of a real production analysis
+      // (0/45) despite normalized_wrist_y — the raw position — being
+      // present on 40/45. Computing velocity ourselves from consecutive
+      // coarse frames' wrist_y is far more robust than depending on a
+      // Roboflow-computed field that's apparently rarely populated.
       let peakFrame: TrustedFrame | undefined;
       let peakAbsVelocity = -1;
+      let prevY: number | undefined;
+      let prevT: number | undefined;
       for (const f of trustedFrames) {
-        const v = f.body_metrics.wrist_vertical_velocity_normalized_per_frame;
-        if (typeof v === "number" && Math.abs(v) > peakAbsVelocity) {
-          peakAbsVelocity = Math.abs(v);
-          peakFrame = f;
+        const y = f.body_metrics.normalized_wrist_y;
+        if (typeof y === "number") {
+          if (typeof prevY === "number" && typeof prevT === "number") {
+            const dt = f.timestamp_seconds - prevT;
+            if (dt > 0) {
+              const velocity = Math.abs((y - prevY) / dt);
+              if (velocity > peakAbsVelocity) {
+                peakAbsVelocity = velocity;
+                peakFrame = f;
+              }
+            }
+          }
+          prevY = y;
+          prevT = f.timestamp_seconds;
         }
       }
       if (peakFrame) {
