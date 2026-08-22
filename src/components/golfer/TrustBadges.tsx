@@ -1,4 +1,4 @@
-import { ShieldCheck, Sparkles } from "lucide-react";
+import { Crown, ShieldCheck, Sparkles } from "lucide-react";
 import type { GolferProfile } from "../../types";
 import { isNewAccount } from "../../lib/format";
 import { Badge } from "../ui/Badge";
@@ -9,6 +9,15 @@ export function VerifiedBadge() {
   return (
     <Badge tone="fairway" icon={<ShieldCheck size={12} />}>
       {t("trust.verifiedGolfer")}
+    </Badge>
+  );
+}
+
+export function FounderBadge() {
+  const { t } = useLocale();
+  return (
+    <Badge tone="fairway" icon={<Crown size={12} />}>
+      {t("trust.founder")}
     </Badge>
   );
 }

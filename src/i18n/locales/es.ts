@@ -70,6 +70,7 @@ export const es: Record<TranslationKey, string> = {
   "golfCallCard.miAway": "a {miles} mi",
   "golfCallDetail.pricePerPerson": "{price}/persona",
   "trust.verifiedGolfer": "Golfista Verificado",
+  "trust.founder": "Fundador",
   "trust.newToGolfMe": "Nuevo en Golf Me",
   "credibility.excellent": "Credibilidad Excelente",
   "credibility.good": "Buena Credibilidad",

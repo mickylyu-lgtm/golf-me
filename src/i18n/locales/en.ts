@@ -80,6 +80,7 @@ export const en = {
   "golfCallCard.miAway": "{miles} mi away",
   "golfCallDetail.pricePerPerson": "{price}/person",
   "trust.verifiedGolfer": "Verified Golfer",
+  "trust.founder": "Founder",
   "trust.newToGolfMe": "New to Golf Me",
   "credibility.excellent": "Excellent Credibility",
   "credibility.good": "Good Credibility",

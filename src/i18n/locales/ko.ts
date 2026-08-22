@@ -70,6 +70,7 @@ export const ko: Record<TranslationKey, string> = {
   "golfCallCard.miAway": "{miles}마일 거리",
   "golfCallDetail.pricePerPerson": "{price}/인",
   "trust.verifiedGolfer": "인증된 골퍼",
+  "trust.founder": "창업자",
   "trust.newToGolfMe": "Golf Me 신규",
   "credibility.excellent": "매우 높은 신뢰도",
   "credibility.good": "좋은 신뢰도",

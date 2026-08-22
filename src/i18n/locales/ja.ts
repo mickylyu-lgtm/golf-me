@@ -70,6 +70,7 @@ export const ja: Record<TranslationKey, string> = {
   "golfCallCard.miAway": "{miles} mi 先",
   "golfCallDetail.pricePerPerson": "{price}/人",
   "trust.verifiedGolfer": "認証済みゴルファー",
+  "trust.founder": "創設者",
   "trust.newToGolfMe": "Golf Me新規",
   "credibility.excellent": "非常に高い信頼度",
   "credibility.good": "高い信頼度",

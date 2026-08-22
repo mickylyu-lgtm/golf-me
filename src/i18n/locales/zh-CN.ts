@@ -70,6 +70,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "golfCallCard.miAway": "{miles} 英里外",
   "golfCallDetail.pricePerPerson": "{price}/人",
   "trust.verifiedGolfer": "已认证球友",
+  "trust.founder": "创始人",
   "trust.newToGolfMe": "Golf Me 新用户",
   "credibility.excellent": "极佳口碑",
   "credibility.good": "良好口碑",

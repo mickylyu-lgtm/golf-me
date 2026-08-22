@@ -6,7 +6,9 @@ import { Avatar } from "../components/ui/Avatar";
 import { Button } from "../components/ui/Button";
 import { EmptyState } from "../components/ui/EmptyState";
 import { CLICKABLE_CARD_CLASS } from "../components/ui/cardStyles";
+import { FounderBadge } from "../components/golfer/TrustBadges";
 import { formatRelativeTime } from "../lib/format";
+import { isFounder } from "../lib/founder";
 import { useLocale } from "../i18n/LocaleContext";
 
 // Chat — the real DM inbox, now a first-class root tab instead of a row
@@ -66,7 +68,11 @@ export function Inbox() {
               <div className="min-w-0 flex-1">
                 <p className="flex items-center gap-1 text-sm font-semibold text-slate-800">
                   <span className="truncate">{c.otherGolfer.name}</span>
-                  {c.otherGolfer.verification.verifiedGolfer && <ShieldCheck size={13} className="shrink-0 text-fairway-500" />}
+                  {isFounder(c.otherGolfer.id) ? (
+                    <FounderBadge />
+                  ) : (
+                    c.otherGolfer.verification.verifiedGolfer && <ShieldCheck size={13} className="shrink-0 text-fairway-500" />
+                  )}
                 </p>
                 <p className={`truncate text-xs ${c.unread ? "font-semibold text-slate-700" : "text-slate-500"}`}>
                   {c.lastMessage.senderId === c.otherGolfer.id ? "" : t("chatInbox.youPrefix")}
