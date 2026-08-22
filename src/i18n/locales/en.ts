@@ -186,7 +186,7 @@ export const en = {
   "caddie.scoreBalanceAndWeightTransfer": "Balance & Weight Transfer",
   "caddie.scoreFinish": "Finish",
   "caddie.replayOriginal": "Original",
-  "caddie.replaySlowAnalysis": "0.5x Analysis",
+  "caddie.replaySlowAnalysis": "0.25x Analysis",
   "caddie.noVideoSelected": "Choose a video to get started (10 seconds max).",
   "caddie.unsupportedVideo": "That file isn't a supported video format.",
   "caddie.videoTooLarge": "That video is too large (200MB max).",

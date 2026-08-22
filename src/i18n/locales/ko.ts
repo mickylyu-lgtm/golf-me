@@ -176,7 +176,7 @@ export const ko: Record<TranslationKey, string> = {
   "caddie.scoreBalanceAndWeightTransfer": "균형 & 체중 이동",
   "caddie.scoreFinish": "피니시",
   "caddie.replayOriginal": "원본",
-  "caddie.replaySlowAnalysis": "0.5배속 분석",
+  "caddie.replaySlowAnalysis": "0.25배속 분석",
   "caddie.noVideoSelected": "시작하려면 영상을 선택하세요 (최대 10초).",
   "caddie.unsupportedVideo": "지원되지 않는 영상 형식입니다.",
   "caddie.videoTooLarge": "영상이 너무 큽니다 (최대 200MB).",

@@ -176,7 +176,7 @@ export const ja: Record<TranslationKey, string> = {
   "caddie.scoreBalanceAndWeightTransfer": "バランスと体重移動",
   "caddie.scoreFinish": "フィニッシュ",
   "caddie.replayOriginal": "オリジナル",
-  "caddie.replaySlowAnalysis": "0.5倍速分析",
+  "caddie.replaySlowAnalysis": "0.25倍速分析",
   "caddie.noVideoSelected": "動画を選択して開始してください（最大10秒）。",
   "caddie.unsupportedVideo": "対応していない動画形式です。",
   "caddie.videoTooLarge": "動画のサイズが大きすぎます（最大200MB）。",

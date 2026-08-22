@@ -176,7 +176,7 @@ export const es: Record<TranslationKey, string> = {
   "caddie.scoreBalanceAndWeightTransfer": "Equilibrio y transferencia de peso",
   "caddie.scoreFinish": "Finalización",
   "caddie.replayOriginal": "Original",
-  "caddie.replaySlowAnalysis": "Análisis a 0.5x",
+  "caddie.replaySlowAnalysis": "Análisis a 0.25x",
   "caddie.noVideoSelected": "Elige un video para comenzar (10 segundos máximo).",
   "caddie.unsupportedVideo": "Ese archivo no es un formato de video compatible.",
   "caddie.videoTooLarge": "Ese video es demasiado grande (máximo 200MB).",

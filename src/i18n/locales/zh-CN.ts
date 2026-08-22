@@ -176,7 +176,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "caddie.scoreBalanceAndWeightTransfer": "平衡与重心转移",
   "caddie.scoreFinish": "收杆",
   "caddie.replayOriginal": "原始视频",
-  "caddie.replaySlowAnalysis": "0.5倍速分析",
+  "caddie.replaySlowAnalysis": "0.25倍速分析",
   "caddie.noVideoSelected": "选择一段视频开始吧（最长10秒）。",
   "caddie.unsupportedVideo": "该文件不是支持的视频格式。",
   "caddie.videoTooLarge": "视频过大（最大 200MB）。",

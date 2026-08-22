@@ -71,7 +71,7 @@ export interface CaddieSwingReplayProps {
 // view stays clean, uncluttered by dots/lines someone didn't ask to see.
 const REPLAY_MODES = [
   { speed: 1, labelKey: "caddie.replayOriginal", showOverlay: false },
-  { speed: 0.5, labelKey: "caddie.replaySlowAnalysis", showOverlay: true },
+  { speed: 0.25, labelKey: "caddie.replaySlowAnalysis", showOverlay: true },
 ] as const;
 
 export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phases }: CaddieSwingReplayProps) {
