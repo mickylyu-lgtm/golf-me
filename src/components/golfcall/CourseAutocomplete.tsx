@@ -4,6 +4,7 @@ import { useNearbyCourses, useCourseTextSearch } from "../../lib/useCourseSearch
 import type { PlayingArea } from "../../lib/geo";
 import { inputClass, labelClass } from "../ui/FormControls";
 import { CourseSearchStatus } from "../ui/CourseSearchStatus";
+import { useLocale } from "../../i18n/LocaleContext";
 
 interface CoursePick {
   id?: string; // courses.id — only present for a real (Geoapify-backed) pick
@@ -34,6 +35,7 @@ const NEARBY_RADIUS_MILES = 30;
 // CourseSearchService. Picking any known course also reports its area/
 // distance so the caller can auto-fill those fields.
 export function CourseAutocomplete({ value, onChange, onPickKnownCourse, recentCourses = [], preferredCourses = [], location }: CourseAutocompleteProps) {
+  const { t } = useLocale();
   const [focused, setFocused] = useState(false);
 
   const nearbyState = useNearbyCourses(location, NEARBY_RADIUS_MILES);
@@ -45,20 +47,20 @@ export function CourseAutocomplete({ value, onChange, onPickKnownCourse, recentC
     for (const name of recentCourses) {
       if (seen.has(name)) continue;
       seen.add(name);
-      picks.push({ label: "Recent", name, ...nearbyByName.get(name) });
+      picks.push({ label: t("courseAutocomplete.recent"), name, ...nearbyByName.get(name) });
     }
     for (const name of preferredCourses) {
       if (seen.has(name)) continue;
       seen.add(name);
-      picks.push({ label: "Preferred", name, ...nearbyByName.get(name) });
+      picks.push({ label: t("courseAutocomplete.preferred"), name, ...nearbyByName.get(name) });
     }
     for (const r of nearbyState.results) {
       if (seen.has(r.name)) continue;
       seen.add(r.name);
-      picks.push({ label: "Near You", ...r });
+      picks.push({ label: t("courseAutocomplete.nearYou"), ...r });
     }
     return picks.slice(0, 6);
-  }, [recentCourses, preferredCourses, nearbyState.results, nearbyByName]);
+  }, [recentCourses, preferredCourses, nearbyState.results, nearbyByName, t]);
 
   const searchState = useCourseTextSearch(value, location, 6);
   const filtered = searchState.results;
@@ -74,7 +76,7 @@ export function CourseAutocomplete({ value, onChange, onPickKnownCourse, recentC
       <CourseSearchStatus loading={nearbyState.loading} error={nearbyState.error} onRetry={nearbyState.retry} />
       {quickPicks.length > 0 ? (
         <div>
-          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Quick Picks</p>
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t("courseAutocomplete.quickPicks")}</p>
           <div className="flex flex-wrap gap-1.5">
             {quickPicks.map((p) => (
               <button
@@ -95,18 +97,18 @@ export function CourseAutocomplete({ value, onChange, onPickKnownCourse, recentC
         </div>
       ) : (
         location?.coords && !nearbyState.loading && !nearbyState.error && (
-          <p className="text-xs text-slate-500">No known courses nearby yet — search for any course below.</p>
+          <p className="text-xs text-slate-500">{t("courseAutocomplete.noNearbyCourses")}</p>
         )
       )}
       <div className="relative">
-        {quickPicks.length > 0 && <label className={labelClass}>Search All Courses</label>}
+        {quickPicks.length > 0 && <label className={labelClass}>{t("courseAutocomplete.searchAllCourses")}</label>}
         <input
           className={inputClass}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onFocus={() => setFocused(true)}
           onBlur={() => window.setTimeout(() => setFocused(false), 150)}
-          placeholder="e.g. Bethpage Red"
+          placeholder={t("courseAutocomplete.placeholder")}
         />
         {focused && value.trim() && (searchState.loading || searchState.error || filtered.length > 0) && (
           <div className="absolute z-10 mt-1.5 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">

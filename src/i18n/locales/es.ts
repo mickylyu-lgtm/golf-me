@@ -598,6 +598,13 @@ export const es: Record<TranslationKey, string> = {
   "autoMatch.browseAll": "Explorar Todas las Rondas",
   "autoMatch.closestAvailable": "Ronda Disponible Más Cercana",
 
+  "courseAutocomplete.quickPicks": "Accesos rápidos",
+  "courseAutocomplete.recent": "Reciente",
+  "courseAutocomplete.preferred": "Favorito",
+  "courseAutocomplete.nearYou": "Cerca de ti",
+  "courseAutocomplete.searchAllCourses": "Buscar todos los campos",
+  "courseAutocomplete.noNearbyCourses": "Aún no hay campos conocidos cerca — busca cualquier campo abajo.",
+  "courseAutocomplete.placeholder": "p. ej. Bethpage Red",
   "host.titleFresh": "Organizar una Ronda",
   "host.titleFill": "Completar Mi Grupo",
   "host.step": "Paso {step} de {total}",

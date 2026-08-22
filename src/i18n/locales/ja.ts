@@ -598,6 +598,13 @@ export const ja: Record<TranslationKey, string> = {
   "autoMatch.browseAll": "全てのラウンドを見る",
   "autoMatch.closestAvailable": "最も近いラウンド",
 
+  "courseAutocomplete.quickPicks": "クイック選択",
+  "courseAutocomplete.recent": "最近",
+  "courseAutocomplete.preferred": "お気に入り",
+  "courseAutocomplete.nearYou": "近くのコース",
+  "courseAutocomplete.searchAllCourses": "すべてのコースを検索",
+  "courseAutocomplete.noNearbyCourses": "近くに登録済みのコースがまだありません — 下から検索してください。",
+  "courseAutocomplete.placeholder": "例：Bethpage Red",
   "host.titleFresh": "ラウンドを作成",
   "host.titleFill": "メンバーを募集",
   "host.step": "ステップ {step}／{total}",

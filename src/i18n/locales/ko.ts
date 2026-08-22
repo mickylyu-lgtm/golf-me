@@ -598,6 +598,13 @@ export const ko: Record<TranslationKey, string> = {
   "autoMatch.browseAll": "전체 라운드 보기",
   "autoMatch.closestAvailable": "가장 가까운 라운드",
 
+  "courseAutocomplete.quickPicks": "빠른 선택",
+  "courseAutocomplete.recent": "최근",
+  "courseAutocomplete.preferred": "즐겨찾기",
+  "courseAutocomplete.nearYou": "내 주변",
+  "courseAutocomplete.searchAllCourses": "모든 코스 검색",
+  "courseAutocomplete.noNearbyCourses": "근처에 등록된 코스가 아직 없어요 — 아래에서 코스를 검색해 보세요.",
+  "courseAutocomplete.placeholder": "예: Bethpage Red",
   "host.titleFresh": "라운드 만들기",
   "host.titleFill": "조 채우기",
   "host.step": "{total}단계 중 {step}단계",

@@ -502,6 +502,13 @@ export const en = {
   "autoMatch.closestAvailable": "Closest Available Round",
 
   // Host wizard
+  "courseAutocomplete.quickPicks": "Quick Picks",
+  "courseAutocomplete.recent": "Recent",
+  "courseAutocomplete.preferred": "Preferred",
+  "courseAutocomplete.nearYou": "Near You",
+  "courseAutocomplete.searchAllCourses": "Search All Courses",
+  "courseAutocomplete.noNearbyCourses": "No known courses nearby yet — search for any course below.",
+  "courseAutocomplete.placeholder": "e.g. Bethpage Red",
   "host.titleFresh": "Host a Round",
   "host.titleFill": "Fill My Foursome",
   "host.step": "Step {step} of {total}",

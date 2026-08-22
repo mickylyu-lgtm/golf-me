@@ -276,8 +276,8 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
               onClick={() => onItemClick?.(i)}
             />
           ) : (
-            <div key={item.id} className="h-full w-full shrink-0 snap-center overflow-hidden">
-              <img src={item.url} alt="" loading="lazy" className="h-full w-full object-cover" />
+            <div key={item.id} className="h-full w-full shrink-0 snap-center overflow-hidden bg-black">
+              <img src={item.url} alt="" loading="lazy" className="h-full w-full object-contain" />
             </div>
           ),
         )}

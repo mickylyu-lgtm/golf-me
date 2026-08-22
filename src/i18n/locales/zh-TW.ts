@@ -598,6 +598,13 @@ export const zhTW: Record<TranslationKey, string> = {
   "autoMatch.browseAll": "瀏覽全部球局",
   "autoMatch.closestAvailable": "最接近的球局",
 
+  "courseAutocomplete.quickPicks": "快速選擇",
+  "courseAutocomplete.recent": "最近",
+  "courseAutocomplete.preferred": "常用",
+  "courseAutocomplete.nearYou": "附近",
+  "courseAutocomplete.searchAllCourses": "搜尋所有球場",
+  "courseAutocomplete.noNearbyCourses": "附近暫無已知球場 — 請在下方搜尋球場。",
+  "courseAutocomplete.placeholder": "例如：Bethpage Red",
   "host.titleFresh": "揪球局",
   "host.titleFill": "招募球友補齊四人組",
   "host.step": "第 {step} 步（共 {total} 步）",
