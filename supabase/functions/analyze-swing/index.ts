@@ -39,7 +39,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const GEMINI_MODEL = "gemini-3.6-flash"; // gemini-2.5-flash was retired for new API keys/projects (Gemini API started 404ing it with "no longer available to new users" on 2026-08-21); 3.6-flash is Google's named replacement, same video-understanding + structured-JSON-output support
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com";
 const COOLDOWN_SECONDS = 30; // blocks accidental double-taps/rapid re-asks
-const DAILY_LIMIT_PER_USER = 10; // caps worst-case per-user Gemini+Roboflow spend for the beta — covers both providers together, not separately
+const DAILY_LIMIT_PER_USER = 30; // caps worst-case per-user Gemini+Roboflow spend for the beta — covers both providers together, not separately; raised from 10 for active beta testing (2026-08-22)
 const MAX_VIDEO_BYTES = 200 * 1024 * 1024; // matches the community-media Storage bucket's own file_size_limit
 const STALE_PROCESSING_MINUTES = 5; // a 'processing' row older than this is treated as abandoned, not an active duplicate
 const FILE_ACTIVE_POLL_ATTEMPTS = 6;
