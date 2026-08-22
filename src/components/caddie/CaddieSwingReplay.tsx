@@ -200,6 +200,29 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
       }
     }
 
+    // `timeupdate` only fires a few times a second (browser-throttled),
+    // which is coarse enough that the skeleton visibly lagged behind the
+    // actual video frame during playback — looking "broken"/desynced
+    // while playing, then snapping into place the instant playback
+    // stopped and one final draw() caught up. Driving the redraw off
+    // requestAnimationFrame while the video is actually playing keeps it
+    // synced every rendered frame instead; `seeked` still covers the
+    // paused-scrub case, where no rAF loop is running.
+    let rafId: number | null = null;
+    function loop() {
+      draw();
+      if (video && !video.paused && !video.ended) rafId = requestAnimationFrame(loop);
+      else rafId = null;
+    }
+    function startLoop() {
+      if (rafId === null) rafId = requestAnimationFrame(loop);
+    }
+    function stopLoop() {
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      rafId = null;
+      draw(); // one final draw at the exact paused/ended position
+    }
+
     // Observes the container (not the video) — its size is what actually
     // determines canvas dimensions now, and it's the node whose box
     // changes size when customFullscreen toggles (small card <-> full
@@ -207,15 +230,21 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
     const resizeObserver = new ResizeObserver(resizeCanvas);
     resizeObserver.observe(container);
     video.addEventListener("loadedmetadata", resizeCanvas);
-    video.addEventListener("timeupdate", draw);
     video.addEventListener("seeked", draw);
+    video.addEventListener("play", startLoop);
+    video.addEventListener("pause", stopLoop);
+    video.addEventListener("ended", stopLoop);
     resizeCanvas();
+    if (!video.paused) startLoop();
 
     return () => {
       resizeObserver.disconnect();
       video.removeEventListener("loadedmetadata", resizeCanvas);
-      video.removeEventListener("timeupdate", draw);
       video.removeEventListener("seeked", draw);
+      video.removeEventListener("play", startLoop);
+      video.removeEventListener("pause", stopLoop);
+      video.removeEventListener("ended", stopLoop);
+      if (rafId !== null) cancelAnimationFrame(rafId);
     };
   }, [poseData?.analysisFps, showOverlay]);
 
