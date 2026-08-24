@@ -183,6 +183,22 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
     hip_sway: "unknown",
   });
   const liveStatusRef = useRef(liveStatus);
+
+  // Landing in Slow Mode at the clip's start (t=0) almost never coincides
+  // with an assessed phase (Top or Impact) — every segment reads "not
+  // enough data" the instant the overlay turns on, with no obvious reason
+  // why. Jump straight to Top (3 of the 4 segments anchor there) the first
+  // time Slow Mode is entered so there's actually something to see; only
+  // fires from a fresh t=0 so it never yanks the video away from wherever
+  // the user has already scrubbed to.
+  useEffect(() => {
+    if (!showOverlay) return;
+    const video = videoRef.current;
+    const topT = phases?.top.timestampSeconds;
+    if (video && video.currentTime === 0 && topT !== null && topT !== undefined) {
+      video.currentTime = topT;
+    }
+  }, [showOverlay, phases]);
   // The overlay canvas is a sibling DOM element positioned on top of the
   // video — that composites fine in normal page flow, but the OS-native
   // fullscreen player (webkitEnterFullscreen/requestFullscreen) takes over
@@ -499,6 +515,9 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
               </span>
             </div>
           </div>
+          {SEGMENT_ORDER.every((id) => liveStatus[id] === "unknown") && (
+            <p className="text-xs text-slate-400">{t("swingAssessment.jumpToPhaseHint")}</p>
+          )}
           <div className="flex flex-col divide-y divide-slate-50">
             {SEGMENT_ORDER.map((id) => (
               <div key={id} className="flex items-start justify-between gap-3 py-2 first:pt-0 last:pb-0">

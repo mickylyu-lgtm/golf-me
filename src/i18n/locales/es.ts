@@ -195,6 +195,7 @@ export const es: Record<TranslationKey, string> = {
   "swingAssessment.description.hipSwayGood": "Se mantuvo centrado hasta el impacto.",
   "swingAssessment.description.hipSwayNeedsImprovement": "Desplazamiento notable hacia el impacto.",
   "swingAssessment.description.unknown": "Datos insuficientes para evaluar.",
+  "swingAssessment.jumpToPhaseHint": "Ve a \"Cima del backswing\" o \"Impacto\" abajo para ver tu revisión del swing.",
   "swingAssessment.focusTipTitle": "Consejo clave",
   "swingAssessment.focusTip.torso": "Intenta mantener el ángulo de tu columna estable desde la posición inicial hasta el impacto, sin enderezarte ni agacharte.",
   "swingAssessment.focusTip.leftArm": "Intenta mantener el brazo izquierdo más extendido en la parte alta de tu backswing.",

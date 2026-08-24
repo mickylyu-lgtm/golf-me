@@ -205,6 +205,7 @@ export const en = {
   "swingAssessment.description.hipSwayGood": "Stayed centered through impact.",
   "swingAssessment.description.hipSwayNeedsImprovement": "Noticeable sway through impact.",
   "swingAssessment.description.unknown": "Not enough data to evaluate.",
+  "swingAssessment.jumpToPhaseHint": "Jump to Top of Backswing or Impact below to see your swing check.",
   "swingAssessment.focusTipTitle": "Focus Tip",
   "swingAssessment.focusTip.torso": "Try to keep your spine angle steady from address through impact, rather than standing up or dipping down.",
   "swingAssessment.focusTip.leftArm": "Try to keep your left arm more extended at the top of your backswing.",

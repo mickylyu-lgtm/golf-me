@@ -195,6 +195,7 @@ export const ja: Record<TranslationKey, string> = {
   "swingAssessment.description.hipSwayGood": "インパクトまで軸がぶれていません。",
   "swingAssessment.description.hipSwayNeedsImprovement": "インパクトにかけて明らかなスウェーが見られます。",
   "swingAssessment.description.unknown": "評価するデータが不足しています。",
+  "swingAssessment.jumpToPhaseHint": "下の「トップ」または「インパクト」に移動するとスイングチェックが表示されます。",
   "swingAssessment.focusTipTitle": "フォーカスのヒント",
   "swingAssessment.focusTip.torso": "アドレスからインパクトまで、起き上がったり沈み込んだりせず、背骨の角度を一定に保つよう意識しましょう。",
   "swingAssessment.focusTip.leftArm": "バックスイングのトップで左腕をもっと伸ばすよう意識しましょう。",

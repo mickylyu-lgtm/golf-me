@@ -195,6 +195,7 @@ export const ko: Record<TranslationKey, string> = {
   "swingAssessment.description.hipSwayGood": "임팩트까지 중심이 잘 유지됐습니다.",
   "swingAssessment.description.hipSwayNeedsImprovement": "임팩트까지 눈에 띄는 좌우 흔들림이 있습니다.",
   "swingAssessment.description.unknown": "평가할 데이터가 충분하지 않습니다.",
+  "swingAssessment.jumpToPhaseHint": "아래에서 \"탑\" 또는 \"임팩트\"로 이동하면 스윙 체크를 볼 수 있습니다.",
   "swingAssessment.focusTipTitle": "포커스 팁",
   "swingAssessment.focusTip.torso": "어드레스부터 임팩트까지 몸을 일으키거나 가라앉히지 말고 척추 각도를 일정하게 유지해 보세요.",
   "swingAssessment.focusTip.leftArm": "백스윙 탑에서 왼팔을 좀 더 펴도록 신경 써보세요.",

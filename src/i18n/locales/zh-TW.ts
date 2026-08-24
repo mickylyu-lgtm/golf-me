@@ -195,6 +195,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "swingAssessment.description.hipSwayGood": "直到擊球都保持居中。",
   "swingAssessment.description.hipSwayNeedsImprovement": "擊球前有明顯的左右晃動。",
   "swingAssessment.description.unknown": "資料不足，無法評估。",
+  "swingAssessment.jumpToPhaseHint": "跳轉到下方的「上桿頂點」或「擊球瞬間」即可查看揮桿檢查結果。",
   "swingAssessment.focusTipTitle": "重點提示",
   "swingAssessment.focusTip.torso": "嘗試從預備姿勢到擊球保持脊椎角度穩定，不要起身或下沉。",
   "swingAssessment.focusTip.leftArm": "嘗試在上桿頂點時讓左臂更伸展。",
