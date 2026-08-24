@@ -203,7 +203,7 @@ export const ko: Record<TranslationKey, string> = {
   "caddie.noVideoSelected": "시작하려면 영상을 선택하세요 (최대 10초).",
   "caddie.unsupportedVideo": "지원되지 않는 영상 형식입니다.",
   "caddie.videoTooLarge": "영상이 너무 큽니다 (최대 200MB).",
-  "caddie.swingTypePlaceholder": "드라이버, 7번 아이언, 퍼터...",
+  "caddie.swingTypePlaceholder": "클럽 선택",
   "caddie.videoTooLong": "이 동영상은 캐디가 분석하기에 너무 깁니다. 스윙을 10초 이하로 잘라서 다시 시도해 주세요.",
   "caddie.needsRealAccount": "스윙 분석은 실제 GolfMe 계정이 필요합니다.",
   "caddie.cameraAngleFaceOn": "정면 각도",

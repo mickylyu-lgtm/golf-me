@@ -203,7 +203,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "caddie.noVideoSelected": "選擇一段影片開始吧（最長10秒）。",
   "caddie.unsupportedVideo": "該檔案不是支援的影片格式。",
   "caddie.videoTooLarge": "影片過大（最大 200MB）。",
-  "caddie.swingTypePlaceholder": "一號木、7號鐵桿、推桿...",
+  "caddie.swingTypePlaceholder": "選擇球桿",
   "caddie.videoTooLong": "這段影片對球僮來說太長了。請將揮桿片段剪輯到10秒以內後再試一次。",
   "caddie.needsRealAccount": "分析揮桿需要真實的 GolfMe 帳號。",
   "caddie.cameraAngleFaceOn": "正面視角",
