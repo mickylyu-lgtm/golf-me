@@ -7,6 +7,7 @@ import { useLocale } from "../../i18n/LocaleContext";
 import { computeSwingAssessment, segmentStatusAtTime } from "../../lib/swingAssessment";
 import type { SwingSegmentId, SwingSegmentStatus } from "../../lib/swingAssessment";
 import type { TranslationKey } from "../../i18n/locales/en";
+import { Badge } from "../ui/Badge";
 
 // Standard COCO-17 joint pairs — only drawn when BOTH ends are present in
 // that frame's keypoints. Roboflow's output already had unreliable joints
@@ -88,6 +89,23 @@ const FOCUS_TIP_KEYS: Record<SwingSegmentId, TranslationKey> = {
   hip_sway: "swingAssessment.focusTip.hipSway",
 };
 const SEGMENT_ORDER: SwingSegmentId[] = ["torso", "left_arm", "right_arm", "hip_sway"];
+const STATUS_BADGE_TONE: Record<SwingSegmentStatus, "fairway" | "rose" | "slate"> = {
+  good: "fairway",
+  needs_improvement: "rose",
+  unknown: "slate",
+};
+
+// "unknown" reuses one generic description across every segment (same
+// wording regardless of which segment lacks data) rather than 4 separate
+// near-identical sentences; left_arm/right_arm share one description pair
+// too since the same cue applies to either arm — only the segment's own
+// title (SEGMENT_LABEL_KEYS) differs between them.
+function descriptionKey(segment: SwingSegmentId, status: SwingSegmentStatus): TranslationKey {
+  if (status === "unknown") return "swingAssessment.description.unknown";
+  if (segment === "torso") return status === "good" ? "swingAssessment.description.torsoGood" : "swingAssessment.description.torsoNeedsImprovement";
+  if (segment === "hip_sway") return status === "good" ? "swingAssessment.description.hipSwayGood" : "swingAssessment.description.hipSwayNeedsImprovement";
+  return status === "good" ? "swingAssessment.description.armGood" : "swingAssessment.description.armNeedsImprovement";
+}
 
 function StatusIcon({ status, size = 12 }: { status: SwingSegmentStatus; size?: number }) {
   if (status === "good") return <Check size={size} className="text-fairway-700" />;
@@ -481,12 +499,21 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
               </span>
             </div>
           </div>
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col divide-y divide-slate-50">
             {SEGMENT_ORDER.map((id) => (
-              <div key={id} className="flex items-center gap-2 text-sm">
-                <StatusIcon status={liveStatus[id]} />
-                <span className="font-medium text-slate-700">{t(SEGMENT_LABEL_KEYS[id])}</span>
-                <span className="text-xs text-slate-400">— {t(STATUS_LABEL_KEYS[liveStatus[id]])}</span>
+              <div key={id} className="flex items-start justify-between gap-3 py-2 first:pt-0 last:pb-0">
+                <div className="flex items-start gap-2.5">
+                  <span className="mt-0.5 shrink-0">
+                    <StatusIcon status={liveStatus[id]} size={16} />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-slate-800">{t(SEGMENT_LABEL_KEYS[id])}</p>
+                    <p className="text-xs text-slate-500">{t(descriptionKey(id, liveStatus[id]))}</p>
+                  </div>
+                </div>
+                <Badge tone={STATUS_BADGE_TONE[liveStatus[id]]} className="shrink-0">
+                  {t(STATUS_LABEL_KEYS[liveStatus[id]])}
+                </Badge>
               </div>
             ))}
           </div>
