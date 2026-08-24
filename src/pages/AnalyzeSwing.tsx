@@ -25,6 +25,7 @@ const CLUB_OPTIONS = [
   "Driver",
   "3 Wood",
   "5 Wood",
+  "Hybrid",
   "4 Iron",
   "5 Iron",
   "6 Iron",
