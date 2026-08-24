@@ -1,8 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Check, Minus, TriangleAlert } from "lucide-react";
 import { X } from "lucide-react";
 import type { CaddiePoseData, CaddieSwingPhases } from "../../types";
 import { enterNativeVideoFullscreen, getVideoContentRect } from "../../lib/video";
 import { useLocale } from "../../i18n/LocaleContext";
+import { computeSwingAssessment, segmentStatusAtTime } from "../../lib/swingAssessment";
+import type { SwingSegmentId, SwingSegmentStatus } from "../../lib/swingAssessment";
+import type { TranslationKey } from "../../i18n/locales/en";
 
 // Standard COCO-17 joint pairs — only drawn when BOTH ends are present in
 // that frame's keypoints. Roboflow's output already had unreliable joints
@@ -27,6 +31,69 @@ const SKELETON_EDGES: [string, string][] = [
   ["right_hip", "right_knee"],
   ["right_knee", "right_ankle"],
 ];
+
+// Which two edges visually represent each assessed segment — only these
+// ever pick up a green/red color; every other edge (face, shoulder line,
+// knee/ankle) always stays the neutral base color. Deliberately a small,
+// fixed set (see swingAssessment.ts's own header comment) rather than
+// trying to color the whole skeleton.
+const SEGMENT_EDGES: Record<SwingSegmentId, [string, string][]> = {
+  torso: [
+    ["left_shoulder", "left_hip"],
+    ["right_shoulder", "right_hip"],
+  ],
+  left_arm: [
+    ["left_shoulder", "left_elbow"],
+    ["left_elbow", "left_wrist"],
+  ],
+  right_arm: [
+    ["right_shoulder", "right_elbow"],
+    ["right_elbow", "right_wrist"],
+  ],
+  hip_sway: [["left_hip", "right_hip"]],
+};
+
+// Professional, muted tones (not neon) per the brief's own explicit
+// instruction — close to the existing brand green, not a debugging-tool
+// palette. "unknown" and the neutral base skeleton intentionally share the
+// same subdued tone: an unassessed edge and a low-confidence one should
+// both read as "nothing to see here," not draw the eye.
+const NEUTRAL_STROKE = "rgba(203, 213, 225, 0.85)"; // slate-300ish
+const STATUS_STROKE: Record<SwingSegmentStatus, string> = {
+  good: "rgba(21, 128, 61, 0.9)", // fairway-700ish
+  needs_improvement: "rgba(220, 38, 38, 0.88)", // red-600ish
+  unknown: NEUTRAL_STROKE,
+};
+const STATUS_DOT: Record<SwingSegmentStatus, string> = {
+  good: "rgba(21, 128, 61, 0.95)",
+  needs_improvement: "rgba(220, 38, 38, 0.95)",
+  unknown: "#ffffff",
+};
+
+const SEGMENT_LABEL_KEYS: Record<SwingSegmentId, TranslationKey> = {
+  torso: "swingAssessment.segment.torso",
+  left_arm: "swingAssessment.segment.leftArm",
+  right_arm: "swingAssessment.segment.rightArm",
+  hip_sway: "swingAssessment.segment.hipSway",
+};
+const STATUS_LABEL_KEYS: Record<SwingSegmentStatus, TranslationKey> = {
+  good: "swingAssessment.status.good",
+  needs_improvement: "swingAssessment.status.needsImprovement",
+  unknown: "swingAssessment.status.unknown",
+};
+const FOCUS_TIP_KEYS: Record<SwingSegmentId, TranslationKey> = {
+  torso: "swingAssessment.focusTip.torso",
+  left_arm: "swingAssessment.focusTip.leftArm",
+  right_arm: "swingAssessment.focusTip.rightArm",
+  hip_sway: "swingAssessment.focusTip.hipSway",
+};
+const SEGMENT_ORDER: SwingSegmentId[] = ["torso", "left_arm", "right_arm", "hip_sway"];
+
+function StatusIcon({ status, size = 12 }: { status: SwingSegmentStatus; size?: number }) {
+  if (status === "good") return <Check size={size} className="text-fairway-700" />;
+  if (status === "needs_improvement") return <TriangleAlert size={size} className="text-red-600" />;
+  return <Minus size={size} className="text-slate-400" />;
+}
 
 interface PhaseButton {
   labelKey: "swingAnalysis.address" | "swingAnalysis.backswing" | "swingAnalysis.topOfBackswing" | "swingAnalysis.downswing" | "swingAnalysis.impact" | "swingAnalysis.followThrough";
@@ -84,6 +151,20 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
   const [mode, setMode] = useState<(typeof REPLAY_MODES)[number]>(REPLAY_MODES[0]);
   const speed = mode.speed;
   const showOverlay = mode.showOverlay && !!poseData && poseData.frames.length > 0;
+  // Pure function of already-fetched poseData/phases (see swingAssessment.ts)
+  // — computed once per analysis, not per frame.
+  const assessment = useMemo(() => computeSwingAssessment(poseData, phases), [poseData, phases]);
+  // Drives the summary panel/legend/focus tip below the video. Updated from
+  // inside draw() (see the effect below) only when it actually changes —
+  // not on every rAF tick — so this never causes more re-renders than the
+  // segment colors visibly changing.
+  const [liveStatus, setLiveStatus] = useState<Record<SwingSegmentId, SwingSegmentStatus>>({
+    torso: "unknown",
+    left_arm: "unknown",
+    right_arm: "unknown",
+    hip_sway: "unknown",
+  });
+  const liveStatusRef = useRef(liveStatus);
   // The overlay canvas is a sibling DOM element positioned on top of the
   // video — that composites fine in normal page flow, but the OS-native
   // fullscreen player (webkitEnterFullscreen/requestFullscreen) takes over
@@ -177,13 +258,38 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
       const scaleY = rect.height / video.videoHeight;
       const toCanvas = (x: number, y: number): [number, number] => [rect.left + x * scaleX, rect.top + y * scaleY];
 
-      ctx.strokeStyle = "rgba(74, 222, 128, 0.85)"; // fairway-400-ish, readable on any footage
+      const statusNow = segmentStatusAtTime(assessment, phases, video.currentTime);
+      if (
+        statusNow.torso !== liveStatusRef.current.torso ||
+        statusNow.left_arm !== liveStatusRef.current.left_arm ||
+        statusNow.right_arm !== liveStatusRef.current.right_arm ||
+        statusNow.hip_sway !== liveStatusRef.current.hip_sway
+      ) {
+        liveStatusRef.current = statusNow;
+        setLiveStatus(statusNow);
+      }
+      // A joint gets flagged (small colored ring, see below) only if it's
+      // an endpoint of a needs_improvement segment — good/unknown segments
+      // communicate entirely through their line color, never a joint
+      // marker, so attention naturally goes to the areas that need it
+      // (brief's own visual-priority ordering: red areas before green).
+      const flaggedJoints = new Set<string>();
+      for (const id of SEGMENT_ORDER) {
+        if (statusNow[id] !== "needs_improvement") continue;
+        for (const [a, b] of SEGMENT_EDGES[id]) {
+          flaggedJoints.add(a);
+          flaggedJoints.add(b);
+        }
+      }
+
       ctx.lineWidth = 2.5;
       ctx.lineCap = "round";
       for (const [a, b] of SKELETON_EDGES) {
         const kpA = frame.keypoints[a];
         const kpB = frame.keypoints[b];
         if (!kpA || !kpB) continue;
+        const segmentId = SEGMENT_ORDER.find((id) => SEGMENT_EDGES[id].some(([x, y]) => (x === a && y === b) || (x === b && y === a)));
+        ctx.strokeStyle = segmentId ? STATUS_STROKE[statusNow[segmentId]] : NEUTRAL_STROKE;
         const [ax, ay] = toCanvas(kpA.x, kpA.y);
         const [bx, by] = toCanvas(kpB.x, kpB.y);
         ctx.beginPath();
@@ -191,11 +297,15 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
         ctx.lineTo(bx, by);
         ctx.stroke();
       }
-      ctx.fillStyle = "#ffffff";
-      for (const kp of Object.values(frame.keypoints)) {
+      // Small dots throughout (point 9: never giant colored joint circles)
+      // — only a flagged joint's dot picks up the "needs improvement" red;
+      // every other joint stays a plain small white dot regardless of a
+      // nearby segment's color, keeping the base skeleton readable.
+      for (const [name, kp] of Object.entries(frame.keypoints)) {
         const [x, y] = toCanvas(kp.x, kp.y);
+        ctx.fillStyle = flaggedJoints.has(name) ? STATUS_DOT.needs_improvement : "#ffffff";
         ctx.beginPath();
-        ctx.arc(x, y, 3.5, 0, Math.PI * 2);
+        ctx.arc(x, y, flaggedJoints.has(name) ? 4 : 3, 0, Math.PI * 2);
         ctx.fill();
       }
     }
@@ -246,7 +356,7 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
       video.removeEventListener("ended", stopLoop);
       if (rafId !== null) cancelAnimationFrame(rafId);
     };
-  }, [poseData?.analysisFps, showOverlay]);
+  }, [poseData?.analysisFps, showOverlay, assessment, phases]);
 
   const buttons = phaseButtons(phases);
 
@@ -346,6 +456,50 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
               {t(b.labelKey)}
             </button>
           ))}
+        </div>
+      )}
+      {/* Never shown in fullscreen (point 21 of the brief) — a card this
+          size over the video would defeat the point of a minimal fullscreen
+          view; exit fullscreen to see it. */}
+      {showOverlay && assessment && !customFullscreen && (
+        <div className="flex flex-col gap-2 rounded-2xl border border-slate-100 bg-white p-3">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{t("swingAssessment.summaryTitle")}</p>
+            {/* One compact legend, not repeated per card (point 19). */}
+            <div className="flex items-center gap-2.5 text-[11px] text-slate-500">
+              <span className="flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-fairway-700" />
+                {t("swingAssessment.status.good")}
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-red-600" />
+                {t("swingAssessment.status.needsImprovement")}
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-slate-300" />
+                {t("swingAssessment.status.unknown")}
+              </span>
+            </div>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            {SEGMENT_ORDER.map((id) => (
+              <div key={id} className="flex items-center gap-2 text-sm">
+                <StatusIcon status={liveStatus[id]} />
+                <span className="font-medium text-slate-700">{t(SEGMENT_LABEL_KEYS[id])}</span>
+                <span className="text-xs text-slate-400">— {t(STATUS_LABEL_KEYS[liveStatus[id]])}</span>
+              </div>
+            ))}
+          </div>
+          {(() => {
+            const focusSegment = SEGMENT_ORDER.find((id) => liveStatus[id] === "needs_improvement");
+            if (!focusSegment) return null;
+            return (
+              <div className="mt-1 rounded-xl bg-red-50 p-2.5">
+                <p className="text-xs font-bold text-red-700">{t("swingAssessment.focusTipTitle")}</p>
+                <p className="mt-0.5 text-xs text-red-700/90">{t(FOCUS_TIP_KEYS[focusSegment])}</p>
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>
