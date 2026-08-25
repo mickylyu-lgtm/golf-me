@@ -221,7 +221,7 @@ export function ProfileSetup() {
     // non-shrinking footer, always reachable without hunting for it,
     // however long a given step's content gets.
     <div className="flex h-[100dvh] flex-col bg-[#faf9f6]">
-      <div className="flex items-center justify-between px-6 pt-8">
+      <div className="flex items-center justify-between px-6" style={{ paddingTop: "max(2rem, env(safe-area-inset-top))" }}>
         <button
           onClick={() => (step === 0 ? navigate(-1) : setStep((s) => s - 1))}
           className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"

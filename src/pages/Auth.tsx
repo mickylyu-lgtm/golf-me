@@ -59,7 +59,10 @@ export function Auth({ mode }: AuthProps) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#faf9f6] px-6 py-8">
+    <div
+      className="flex min-h-screen flex-col bg-[#faf9f6] px-6 pb-8"
+      style={{ paddingTop: "max(2rem, env(safe-area-inset-top))" }}
+    >
       <button
         onClick={() => navigate(-1)}
         className="flex items-center gap-1.5 self-start text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"

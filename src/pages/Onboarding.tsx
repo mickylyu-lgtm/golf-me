@@ -34,7 +34,10 @@ export function Onboarding() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#faf9f6] px-6 py-8">
+    <div
+      className="flex min-h-screen flex-col bg-[#faf9f6] px-6 pb-8"
+      style={{ paddingTop: "max(2rem, env(safe-area-inset-top))" }}
+    >
       <div className="mb-5 flex items-center gap-2">
         <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-fairway-600">
           <GolfMeIcon size={15} dotColor="#f8faf8" flagColor="#4ade80" holeColor="#14532d" />

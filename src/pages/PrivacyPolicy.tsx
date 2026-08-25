@@ -28,7 +28,10 @@ export function PrivacyPolicy() {
   const navigate = useNavigate();
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-6 sm:px-6">
+    <div
+      className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 pb-6 sm:px-6"
+      style={{ paddingTop: "max(1.5rem, env(safe-area-inset-top))" }}
+    >
       <button
         onClick={() => navigate(-1)}
         className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
