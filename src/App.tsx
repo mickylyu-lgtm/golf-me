@@ -76,13 +76,6 @@ function AuthedLayout() {
   if (!session.hasOnboarded) {
     return <Navigate to="/profile-setup" replace />;
   }
-  // Admin tools are an internal, browser-only surface (never linked from
-  // anywhere in the app's own nav) -- the installed app additionally
-  // refuses to load them at all even if someone has a direct link/bookmark,
-  // rather than relying only on "nothing points here" for that boundary.
-  if (location.pathname.startsWith("/admin") && isStandalone()) {
-    return <Navigate to="/" replace />;
-  }
   const shell = (
     <TutorialProvider>
       <AppShell>
