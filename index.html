@@ -11,6 +11,32 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32-v3.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16-v3.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon-v3.png" />
+    <!-- iOS has no auto-generated PWA launch splash from the manifest the
+         way Android/Chrome do — without these, the native launch transition
+         (tap the home-screen icon -> WebView's first paint) shows nothing
+         branded at all, so whatever page loads first (the marketing/Welcome
+         page for a logged-out visit) is the first thing seen. These fill
+         that specific gap with the logo on the app's own background,
+         matching GolfMeLoader's fullScreen look so the transition into the
+         real in-app loader is seamless. Media queries match Apple's own
+         documented device-width/height (logical pixels) + pixel-ratio
+         pattern; three sizes cover the great majority of current iPhones
+         (SE-class, standard, Pro Max) — not exhaustive of every model. -->
+    <link
+      rel="apple-touch-startup-image"
+      href="/splash/iphone-se.png"
+      media="screen and (device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)"
+    />
+    <link
+      rel="apple-touch-startup-image"
+      href="/splash/iphone-standard.png"
+      media="screen and (device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
+    />
+    <link
+      rel="apple-touch-startup-image"
+      href="/splash/iphone-promax.png"
+      media="screen and (device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)"
+    />
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#166534" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
