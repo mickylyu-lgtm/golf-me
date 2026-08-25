@@ -12,6 +12,7 @@ import { LocaleProvider, ForceLocale, useLocale, LOCALES } from "./i18n/LocaleCo
 import type { Locale } from "./i18n/LocaleContext";
 import { AppShell } from "./components/layout/AppShell";
 import { TutorialProvider } from "./context/TutorialContext";
+import { isStandalone } from "./lib/pwa";
 import { TutorialOverlay } from "./components/tutorial/TutorialOverlay";
 import { ScrollToTop } from "./components/layout/ScrollToTop";
 import { GolfMeLoader } from "./components/loading/GolfMeLoader";
@@ -60,14 +61,17 @@ import { CoachInvite } from "./pages/CoachInvite";
 import { usePendingReviewerInviteRedemption } from "./lib/usePendingReviewerInviteRedemption";
 
 // Logged-in area: sidebar/bottom nav shell. Three real states, not two —
-// no session -> Welcome; session but onboarding incomplete (real accounts
-// only reach this mid-signup) -> back to /profile-setup rather than Home;
-// session + onboarded -> the app.
+// no session -> Welcome (or straight to Login if this is the installed
+// app — someone who already added GolfMe to their home screen has already
+// seen the marketing pitch; they just want to log in, not sit through it
+// again); session but onboarding incomplete (real accounts only reach this
+// mid-signup) -> back to /profile-setup rather than Home; session +
+// onboarded -> the app.
 function AuthedLayout() {
   const { session } = useData();
   const location = useLocation();
   if (!session.isLoggedIn) {
-    return <Navigate to="/welcome" replace />;
+    return <Navigate to={isStandalone() ? "/login" : "/welcome"} replace />;
   }
   if (!session.hasOnboarded) {
     return <Navigate to="/profile-setup" replace />;

@@ -2,18 +2,9 @@ import { useEffect, useState } from "react";
 import { Share, SquarePlus, X } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useLocale } from "../../i18n/LocaleContext";
+import { isStandalone } from "../../lib/pwa";
 
 const DISMISSED_KEY = "golfme:a2hsDismissed";
-
-function isStandalone(): boolean {
-  if (typeof window === "undefined") return false;
-  // iOS Safari exposes navigator.standalone; every other install-capable
-  // browser follows the display-mode media query instead.
-  return (
-    (window.navigator as Navigator & { standalone?: boolean }).standalone === true ||
-    window.matchMedia?.("(display-mode: standalone)").matches === true
-  );
-}
 
 function isIOS(): boolean {
   if (typeof navigator === "undefined") return false;
@@ -29,7 +20,7 @@ function isIOS(): boolean {
 // Screen is a manual step only the user can take, so this can only show
 // instructions, never trigger it directly. Android/desktop Chrome DO
 // support beforeinstallprompt, so those get a real one-tap Install button.
-export function AddToHomeScreenPrompt() {
+export function AddToHomeScreenPrompt({ forceShow = false }: { forceShow?: boolean } = {}) {
   const { isDemo, authUser } = useAuth();
   const { t } = useLocale();
   const [dismissed, setDismissed] = useState(() => typeof window !== "undefined" && window.localStorage.getItem(DISMISSED_KEY) === "1");
@@ -44,7 +35,12 @@ export function AddToHomeScreenPrompt() {
     return () => window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
   }, []);
 
-  if (isDemo || !authUser || dismissed || isStandalone()) return null;
+  // forceShow is for Settings' own "Add to Home Screen" row -- someone who
+  // already dismissed the auto-nudge on Home once shouldn't be permanently
+  // unable to find these instructions again just because they tapped the X.
+  // isStandalone/isDemo/authUser stay real gates either way (nothing to
+  // show someone who's already installed it, in demo mode, or signed out).
+  if (isDemo || !authUser || isStandalone() || (dismissed && !forceShow)) return null;
   const ios = isIOS();
   if (!ios && !installEvent) return null; // nothing actionable to show elsewhere
 

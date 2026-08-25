@@ -13,7 +13,16 @@ export function LandingNav() {
 
   return (
     <nav className="sticky top-0 z-20 border-b border-white/10 bg-fairway-950/90 backdrop-blur-sm">
-      <div className="mx-auto flex max-w-5xl items-center justify-between gap-2 px-3 py-3 sm:gap-3 sm:px-6">
+      {/* Installed-PWA/native-wrapper standalone mode has no browser chrome
+          above this nav — it sits flush under the status bar/notch without
+          safe-area padding, which visibly collided with the clock/battery
+          icons and made Log In/Join Waitlist hard to tap (reported live).
+          Same max(fallback, env(...)) pattern already used for BottomNav/
+          CaddieProcessingBanner/NotificationPopupHost. */}
+      <div
+        className="mx-auto flex max-w-5xl items-center justify-between gap-2 px-3 pb-3 sm:gap-3 sm:px-6"
+        style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}
+      >
         <div className="flex min-w-0 shrink items-center gap-5 sm:gap-8">
           <span className="flex min-w-0 shrink items-center gap-1.5 sm:gap-2">
             <GolfMeIcon size={20} className="shrink-0" dotColor="#f8faf8" flagColor="#86efac" holeColor="#166534" />

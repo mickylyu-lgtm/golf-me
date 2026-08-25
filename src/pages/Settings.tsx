@@ -12,6 +12,7 @@ import { Button } from "../components/ui/Button";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 import { Toggle } from "../components/ui/Toggle";
 import { ProfileSwitcher } from "../components/layout/ProfileSwitcher";
+import { AddToHomeScreenPrompt } from "../components/layout/AddToHomeScreenPrompt";
 import { clearOnboardingDraft } from "../lib/onboardingDraft";
 
 export function Settings() {
@@ -182,6 +183,11 @@ export function Settings() {
 
       <section className="flex flex-col gap-3">
         <p className="px-1 text-xs font-bold uppercase tracking-wide text-slate-400">{t("settings.support")}</p>
+        {/* forceShow: this is a deliberate, user-initiated view of the same
+            install instructions Home shows once and lets you dismiss for
+            good — dismissing it there shouldn't mean losing the ability to
+            ever find it again. */}
+        <AddToHomeScreenPrompt forceShow />
         <button
           onClick={() => navigate("/help")}
           className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white p-4 text-left transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-fairway-200 hover:shadow-md active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2"
