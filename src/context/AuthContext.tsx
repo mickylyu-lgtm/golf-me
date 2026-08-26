@@ -74,28 +74,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
 
-    supabase.auth
-      .getSession()
-      .then(({ data }) => {
-        if (cancelled) return;
-        setAuthUser(data.session?.user ?? null);
-        setSessionChecked(true);
-        if (data.session?.user) fetchProfile(data.session.user.id);
-        else setProfileChecked(true);
-      })
-      .catch((err) => {
-        // A rejected getSession() (network hiccup, a restrictive in-app
-        // browser blocking storage/cookies, etc.) must never leave the app
-        // stuck on the loading screen forever — treat it as "no session"
-        // so a real visitor still reaches Welcome instead of a blank
-        // spinner with no way out.
-        if (cancelled) return;
-        console.error("Golf Me: getSession() failed, treating as signed out.", err);
-        setAuthUser(null);
-        setSessionChecked(true);
-        setProfileChecked(true);
-      });
-
+    // Single source of truth — onAuthStateChange fires an INITIAL_SESSION
+    // event immediately on subscription with whatever session is currently
+    // stored, then real events after that (sign-in, sign-out, token
+    // refresh). This used to run ALONGSIDE a separate getSession() call,
+    // which raced it: getSession() resolving first could let a logged-out
+    // visitor reach a guest-only page (e.g. Login) before this listener's
+    // own initial event landed a moment later with a stale cached session
+    // and flipped them to logged-in mid-visit — reported live as "Back"
+    // suddenly jumping to Home right after the Login page had already
+    // rendered, with no login action taken in between. One listener, one
+    // state update path, no race.
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (cancelled) return;
       setAuthUser(session?.user ?? null);
