@@ -71,6 +71,22 @@ export function DirectMessageThread() {
     bottomRef.current?.scrollIntoView({ block: "end" });
   }, [messages.length]);
 
+  // The chat box below is sized to fit the viewport exactly (see its own
+  // comment), but that's a best-effort calc(), not a hard guarantee --
+  // reported live as the page itself still being scrollable even once the
+  // composer was reliably on-screen. A real chat UI (iMessage, WhatsApp)
+  // never scrolls as a whole page; only the message list does. Locking body
+  // scroll while this thread is open (same technique already used for
+  // CaddieSwingReplay's fullscreen mode) makes that true regardless of
+  // whether the height math above is ever slightly off.
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
+
   // Switching straight from one thread to another reuses this same mounted
   // component (only the `id` route param changes), so without this the
   // previous thread's still-typed draft would just carry over into whatever
