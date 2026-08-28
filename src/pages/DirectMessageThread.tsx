@@ -199,8 +199,19 @@ export function DirectMessageThread() {
           (hiding) the message list's own last message instead of sitting
           cleanly below it. flex-1 + min-h-0 here makes the message list the
           only thing that scrolls, and the composer just always sits after
-          it, guaranteed never overlapping. */}
-      <div className="flex h-[calc(100dvh-13rem)] flex-col rounded-2xl border border-slate-100 bg-white">
+          it, guaranteed never overlapping.
+
+          The 13rem baseline was calibrated against TopBar/BottomNav's
+          height with zero safe-area inset (a plain browser tab) -- on a
+          real notch/Dynamic Island device with no browser chrome
+          (installed app), both of those grow taller by their own real
+          safe-area padding, so this box needs to shrink by that same
+          extra amount or the composer ends up pushed below the fold,
+          reachable only by scrolling the whole page (reported live). */}
+      <div
+        className="flex flex-col rounded-2xl border border-slate-100 bg-white"
+        style={{ height: "calc(100dvh - 13rem - env(safe-area-inset-top) - env(safe-area-inset-bottom))" }}
+      >
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4">
           {messages.length === 0 && (
             <p className="my-auto text-center text-sm text-slate-400">
