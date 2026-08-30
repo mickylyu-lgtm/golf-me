@@ -215,6 +215,7 @@ export const en = {
   "caddie.unsupportedVideo": "That file isn't a supported video format.",
   "caddie.videoTooLarge": "That video is too large (200MB max).",
   "caddie.swingTypePlaceholder": "Club Choice",
+  "caddie.swingTypeSelectPlaceholder": "I'm hitting…",
   "caddie.videoTooLong": "This video is too long for Caddie. Trim your swing to 10 seconds or less and try again.",
   "caddie.needsRealAccount": "Analyzing a swing needs a real GolfMe account.",
   "caddie.cameraAngleFaceOn": "Face-on",

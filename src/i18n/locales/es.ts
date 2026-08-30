@@ -205,6 +205,7 @@ export const es: Record<TranslationKey, string> = {
   "caddie.unsupportedVideo": "Ese archivo no es un formato de video compatible.",
   "caddie.videoTooLarge": "Ese video es demasiado grande (máximo 200MB).",
   "caddie.swingTypePlaceholder": "Selección de palo",
+  "caddie.swingTypeSelectPlaceholder": "Estoy usando…",
   "caddie.videoTooLong": "Este video es demasiado largo para Caddie. Recorta tu swing a 10 segundos o menos e inténtalo de nuevo.",
   "caddie.needsRealAccount": "Analizar un swing requiere una cuenta real de GolfMe.",
   "caddie.cameraAngleFaceOn": "De frente",

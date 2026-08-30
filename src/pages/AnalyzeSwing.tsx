@@ -193,7 +193,7 @@ export function AnalyzeSwing() {
       <div>
         <label className={labelClass}>{t("caddie.swingTypePlaceholder")}</label>
         <select value={swingType} onChange={(e) => setSwingType(e.target.value)} className={inputClass}>
-          <option value="">{t("caddie.swingTypePlaceholder")}</option>
+          <option value="">{t("caddie.swingTypeSelectPlaceholder")}</option>
           {CLUB_OPTIONS.map((club) => (
             <option key={club} value={club}>
               {club}

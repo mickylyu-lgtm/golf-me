@@ -205,6 +205,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "caddie.unsupportedVideo": "该文件不是支持的视频格式。",
   "caddie.videoTooLarge": "视频过大（最大 200MB）。",
   "caddie.swingTypePlaceholder": "选择球杆",
+  "caddie.swingTypeSelectPlaceholder": "我正在打…",
   "caddie.videoTooLong": "这段视频对球童来说太长了。请将挥杆片段剪辑到10秒以内后重试。",
   "caddie.needsRealAccount": "分析挥杆需要真实的 GolfMe 账号。",
   "caddie.cameraAngleFaceOn": "正面视角",

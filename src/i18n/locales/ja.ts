@@ -205,6 +205,7 @@ export const ja: Record<TranslationKey, string> = {
   "caddie.unsupportedVideo": "対応していない動画形式です。",
   "caddie.videoTooLarge": "動画のサイズが大きすぎます（最大200MB）。",
   "caddie.swingTypePlaceholder": "クラブを選択",
+  "caddie.swingTypeSelectPlaceholder": "使用クラブ…",
   "caddie.videoTooLong": "この動画はCaddieには長すぎます。スイングを10秒以内にトリミングしてもう一度お試しください。",
   "caddie.needsRealAccount": "スイングを分析するには実際のGolfMeアカウントが必要です。",
   "caddie.cameraAngleFaceOn": "正面アングル",
