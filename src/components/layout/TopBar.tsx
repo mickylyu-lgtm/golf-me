@@ -21,15 +21,15 @@ export function TopBar() {
 
   return (
     // No backdrop-blur-sm here (deliberately) — a backdrop-filter on this
-    // header establishes a containing block for NotificationsPanel's
-    // `position: fixed` Modal in Chromium, so instead of positioning
-    // against the viewport it positions against this ~60px-tall header,
-    // pushing the panel almost entirely off-screen. bg-[#faf9f6]/95 makes
-    // up the visual difference without that side effect. Keeping the panel
-    // nested inside <header> (rather than a sibling) is what lets the
-    // bell's z-[95] below win against the panel's own z-[90] backdrop —
-    // moving it out would drop both into separate stacking contexts and
-    // make the bell unclickable while the panel is open.
+    // header establishes a containing block for descendant `position:
+    // fixed` elements in Chromium. bg-[#faf9f6]/95 makes up the visual
+    // difference without that side effect. NotificationsPanel's Modal is
+    // portaled straight to document.body (see Modal.tsx) rather than
+    // rendered here in place — this header's own `position: sticky`
+    // turned out to cause the same class of containing-block hijack on
+    // iOS Safari specifically (reported live as the notification sheet
+    // only showing its first couple rows), so the panel no longer lives
+    // in this DOM subtree at all.
     <header className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-200/70 bg-[#faf9f6]/95 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-6">
       <div className="sm:hidden">
         <GolfMeLogo size={18} />
@@ -37,22 +37,17 @@ export function TopBar() {
       <div className="hidden sm:block" />
       <div className="flex items-center gap-2">
         <button
-          onClick={() => setNotificationsOpen((v) => !v)}
+          // Open-only, not a toggle: now that the panel portals to
+          // document.body (see Modal.tsx comment above), it's no longer a
+          // sibling in this header's stacking context, so this button can't
+          // reliably stay paintable above its backdrop to catch a "close"
+          // tap. Modal already renders its own visible close (X) button,
+          // plus backdrop-tap/Escape/route-change all close it too — a
+          // second bell tap isn't the only way out.
+          onClick={() => setNotificationsOpen(true)}
           aria-label="Notifications"
           aria-expanded={notificationsOpen}
-          // z-[95] keeps this button paintable/clickable ABOVE the
-          // NotificationsPanel's own backdrop (Modal is fixed inset-0
-          // z-[90], rendered as a sibling right below in this same header)
-          // — without it, once the panel is open the backdrop visually
-          // covers the bell, so a second click meant to toggle it closed
-          // actually lands on the backdrop instead: that mousedown closes
-          // the panel first, then the click event re-targets to the now-
-          // exposed bell underneath and its own onClick toggle fires too,
-          // flipping the state straight back open. Net effect: clicking the
-          // bell to close it looked "stuck." Scoped to header's own
-          // stacking context, so this can never punch through unrelated
-          // modals mounted elsewhere in the tree.
-          className="relative z-[95] flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition-all duration-200 ease-out hover:border-fairway-300 hover:text-fairway-700 hover:shadow active:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none"
+          className="relative flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition-all duration-200 ease-out hover:border-fairway-300 hover:text-fairway-700 hover:shadow active:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none"
         >
           <Bell size={16} />
           {unreadNotificationCount > 0 && <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-fairway-500" aria-label="Unread notifications" />}
