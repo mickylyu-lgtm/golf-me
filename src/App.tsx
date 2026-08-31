@@ -17,6 +17,7 @@ import { TutorialOverlay } from "./components/tutorial/TutorialOverlay";
 import { ScrollToTop } from "./components/layout/ScrollToTop";
 import { GolfMeLoader } from "./components/loading/GolfMeLoader";
 import { Welcome } from "./pages/Welcome";
+import { Splash } from "./pages/Splash";
 import { Onboarding } from "./pages/Onboarding";
 import { Auth } from "./pages/Auth";
 import { ProfileSetup } from "./pages/ProfileSetup";
@@ -71,7 +72,7 @@ function AuthedLayout() {
   const { session } = useData();
   const location = useLocation();
   if (!session.isLoggedIn) {
-    return <Navigate to={isStandalone() ? "/login" : "/welcome"} replace />;
+    return <Navigate to={isStandalone() ? "/splash" : "/welcome"} replace />;
   }
   if (!session.hasOnboarded) {
     return <Navigate to="/profile-setup" replace />;
@@ -191,6 +192,7 @@ export default function App() {
                 <Route path="/privacy" element={<PrivacyPolicy />} />
                 <Route element={<GuestOnly />}>
                   <Route path="/welcome" element={<Welcome />} />
+                  <Route path="/splash" element={<Splash />} />
                   <Route path="/onboarding" element={<Onboarding />} />
                   <Route path="/login" element={<Auth mode="login" />} />
                   <Route path="/signup" element={<Auth mode="signup" />} />
