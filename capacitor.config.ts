@@ -1,7 +1,14 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
-  appId: "com.golfme.app",
+  // Not "com.golfme.app" -- Xcode's App Store Connect registration
+  // consistently rejects that identifier as "not available" even though it
+  // doesn't appear in this account's Identifiers list, App Store Connect
+  // apps, or any second Apple ID on this Mac -- some Apple-side reservation
+  // we can't see or clear. Changed 2026-08-31 to unblock upload; harmless
+  // otherwise since nothing else keys off this string (auth redirects use
+  // window.location.origin, not a custom URL scheme).
+  appId: "com.golfme.ios",
   appName: "GolfMe",
   webDir: "dist",
   // Loads the live site instead of the bundled dist/ snapshot, so every
