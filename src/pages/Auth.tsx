@@ -5,6 +5,7 @@ import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { useLocale } from "../i18n/LocaleContext";
+import { isStandalone } from "../lib/pwa";
 import { Button } from "../components/ui/Button";
 import { inputClass } from "../components/ui/FormControls";
 import { DEFAULT_CURRENT_USER_ID } from "../data/golfers";
@@ -63,18 +64,20 @@ export function Auth({ mode }: AuthProps) {
       className="flex min-h-screen flex-col bg-[#faf9f6] px-6 pb-8"
       style={{ paddingTop: "max(2rem, env(safe-area-inset-top))" }}
     >
-      <button
-        // Deliberately a fixed destination, not navigate(-1) -- the
-        // installed app now lands a logged-out visitor straight on this
-        // page (see AuthedLayout's isStandalone() redirect), so there's
-        // often no real "previous page" in history to go back to. Welcome
-        // (with the logo) is always the sensible target regardless of how
-        // this page was reached.
-        onClick={() => navigate("/welcome")}
-        className="flex items-center gap-1.5 self-start text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
-      >
-        <ArrowLeft size={16} /> {t("auth.back")}
-      </button>
+      {!isStandalone() && (
+        // No Back button at all on the native/installed app -- there's
+        // nothing to go back TO there anymore. The marketing Welcome page
+        // (the waitlist pitch) is deliberately mobile-web-only now, so
+        // sending a native visitor "back" to it would resurface a page
+        // they were never meant to see and can't get back out of the same
+        // way. Regular web visitors still have Welcome, so they keep Back.
+        <button
+          onClick={() => navigate("/welcome")}
+          className="flex items-center gap-1.5 self-start text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
+        >
+          <ArrowLeft size={16} /> {t("auth.back")}
+        </button>
+      )}
 
       <div className="flex flex-1 flex-col justify-center gap-8">
         <div className="text-center">
