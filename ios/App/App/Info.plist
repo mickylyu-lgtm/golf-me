@@ -74,5 +74,14 @@
 	<string>GolfMe needs camera access so you can take a photo or record a swing video to share.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>GolfMe needs microphone access to record audio when you capture a swing video.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.golfme.ios</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

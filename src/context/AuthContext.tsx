@@ -1,10 +1,18 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
+import { Capacitor } from "@capacitor/core";
+import { App as CapacitorApp } from "@capacitor/app";
+import { Browser } from "@capacitor/browser";
 import { supabase } from "../lib/supabase";
 import { profileRowToGolferProfile } from "../lib/profile";
 import type { ProfileRow } from "../lib/profile";
 import type { GolferProfile } from "../types";
+
+// Must match the CFBundleURLTypes scheme registered in
+// ios/App/App/Info.plist -- also has to be added to Supabase's Auth ->
+// URL Configuration -> Redirect URLs allowlist, same as the https origin.
+const NATIVE_OAUTH_REDIRECT = "com.golfme.ios://auth-callback";
 
 // "Try Demo" is a deliberately separate, entirely local concept from real
 // Supabase auth — it never touches supabase.auth, so it can't leak into or
@@ -104,7 +112,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [fetchProfile]);
 
+  useEffect(() => {
+    // Google refuses to sign in from inside an embedded WKWebView (the
+    // native app's own content view), so signInWithGoogle below hands the
+    // OAuth flow to a real system browser instead. That browser has no way
+    // to navigate back into the app on its own once Google redirects to
+    // NATIVE_OAUTH_REDIRECT -- iOS itself does that hand-off (because the
+    // scheme is registered in Info.plist), landing here as an appUrlOpen
+    // event with the session tokens Supabase appended as a URL fragment
+    // (implicit flow, this client's default -- no flowType override in
+    // lib/supabase.ts).
+    if (!Capacitor.isNativePlatform()) return;
+    const listener = CapacitorApp.addListener("appUrlOpen", async ({ url }) => {
+      if (!url.startsWith(NATIVE_OAUTH_REDIRECT)) return;
+      await Browser.close().catch(() => {});
+      const fragment = url.split("#")[1];
+      const params = new URLSearchParams(fragment);
+      const access_token = params.get("access_token");
+      const refresh_token = params.get("refresh_token");
+      if (access_token && refresh_token) {
+        await supabase.auth.setSession({ access_token, refresh_token });
+      }
+    });
+    return () => {
+      listener.then((l) => l.remove());
+    };
+  }, []);
+
   const signInWithGoogle = useCallback(async () => {
+    if (Capacitor.isNativePlatform()) {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: NATIVE_OAUTH_REDIRECT, skipBrowserRedirect: true },
+      });
+      if (error) throw error;
+      if (data.url) await Browser.open({ url: data.url });
+      return;
+    }
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo: window.location.origin },
