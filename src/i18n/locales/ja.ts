@@ -333,6 +333,9 @@ export const ja: Record<TranslationKey, string> = {
   "auth.resendEmail": "メールを再送信",
   "auth.sendMagicLink": "サインインリンクを送信",
   "auth.authError": "サインイン中に問題が発生しました。もう一度お試しください。",
+  "auth.signInWithPassword": "パスワードでサインイン",
+  "auth.passwordPlaceholder": "パスワード",
+  "auth.signIn": "サインイン",
 
   "avatarUpload.invalidFile": "画像ファイルを選択してください。",
   "avatarUpload.loadError": "画像を読み込めませんでした — 別の画像をお試しください。",

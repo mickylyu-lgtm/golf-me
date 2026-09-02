@@ -19,13 +19,20 @@ interface AuthProps {
 export function Auth({ mode }: AuthProps) {
   const navigate = useNavigate();
   const { logIn, session } = useData();
-  const { signInWithGoogle, signInWithEmailOtp } = useAuth();
+  const { signInWithGoogle, signInWithEmailOtp, signInWithPassword } = useAuth();
   const { showToast } = useToast();
   const { t } = useLocale();
   const [showEmailField, setShowEmailField] = useState(false);
   const [email, setEmail] = useState("");
   const [emailSent, setEmailSent] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Secondary, low-visibility path alongside Google/magic-link -- for
+  // accounts that need a fixed, typeable credential rather than an inbox or
+  // a Google account (Apple's App Review reviewer is the reason this
+  // exists; regular users have no reason to notice or use it).
+  const [showPasswordField, setShowPasswordField] = useState(false);
+  const [passwordEmail, setPasswordEmail] = useState("");
+  const [password, setPassword] = useState("");
 
   async function continueWithGoogle() {
     setBusy(true);
@@ -46,6 +53,21 @@ export function Auth({ mode }: AuthProps) {
     try {
       await signInWithEmailOtp(email.trim());
       setEmailSent(true);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : t("auth.authError"), "warning");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function continueWithPassword() {
+    if (!passwordEmail.includes("@") || !password) return;
+    setBusy(true);
+    try {
+      await signInWithPassword(passwordEmail.trim(), password);
+      // No further action on success — the onAuthStateChange listener in
+      // AuthContext picks up the new session and App.tsx's route guards
+      // take it from there, same as every other sign-in method here.
     } catch (err) {
       showToast(err instanceof Error ? err.message : t("auth.authError"), "warning");
     } finally {
@@ -151,6 +173,35 @@ export function Auth({ mode }: AuthProps) {
                 >
                   <Check size={16} /> {t("auth.tryDemoAccount")}
                 </button>
+
+                {!showPasswordField ? (
+                  <button
+                    onClick={() => setShowPasswordField(true)}
+                    className="mt-1 self-center text-xs font-semibold text-slate-400 transition-colors duration-200 hover:text-slate-600"
+                  >
+                    {t("auth.signInWithPassword")}
+                  </button>
+                ) : (
+                  <div className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-3">
+                    <input
+                      type="email"
+                      value={passwordEmail}
+                      onChange={(e) => setPasswordEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      className={inputClass}
+                    />
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder={t("auth.passwordPlaceholder")}
+                      className={inputClass}
+                    />
+                    <Button onClick={continueWithPassword} disabled={!passwordEmail.includes("@") || !password || busy} fullWidth>
+                      {t("auth.signIn")}
+                    </Button>
+                  </div>
+                )}
               </>
             )}
           </div>

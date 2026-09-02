@@ -9,7 +9,8 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "ios:sync": "npm run build && npx cap sync ios",
-    "ios:open": "npx cap open ios"
+    "ios:open": "npx cap open ios",
+    "apple-review:setup": "npx tsx scripts/setup-apple-review-account.ts"
   },
   "dependencies": {
     "@capacitor/app": "^8.1.1",

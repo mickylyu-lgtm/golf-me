@@ -333,6 +333,9 @@ export const es: Record<TranslationKey, string> = {
   "auth.resendEmail": "Reenviar correo",
   "auth.sendMagicLink": "Enviar enlace de acceso",
   "auth.authError": "Hubo un problema al iniciar sesión. Inténtalo de nuevo.",
+  "auth.signInWithPassword": "Iniciar sesión con contraseña",
+  "auth.passwordPlaceholder": "Contraseña",
+  "auth.signIn": "Iniciar sesión",
 
   "avatarUpload.invalidFile": "Elige un archivo de imagen.",
   "avatarUpload.loadError": "No se pudo cargar esa imagen — prueba con otra.",

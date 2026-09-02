@@ -333,6 +333,9 @@ export const ko: Record<TranslationKey, string> = {
   "auth.resendEmail": "이메일 다시 보내기",
   "auth.sendMagicLink": "로그인 링크 보내기",
   "auth.authError": "로그인 중 문제가 발생했습니다. 다시 시도해 주세요.",
+  "auth.signInWithPassword": "비밀번호로 로그인",
+  "auth.passwordPlaceholder": "비밀번호",
+  "auth.signIn": "로그인",
 
   "avatarUpload.invalidFile": "이미지 파일을 선택해주세요.",
   "avatarUpload.loadError": "이미지를 불러올 수 없어요 — 다른 이미지를 시도해보세요.",

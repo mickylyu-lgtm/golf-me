@@ -333,6 +333,9 @@ export const zhCN: Record<TranslationKey, string> = {
   "auth.resendEmail": "重新发送邮件",
   "auth.sendMagicLink": "发送登录链接",
   "auth.authError": "登录时出了点问题,请重试。",
+  "auth.signInWithPassword": "使用密码登录",
+  "auth.passwordPlaceholder": "密码",
+  "auth.signIn": "登录",
 
   "avatarUpload.invalidFile": "请选择一张图片文件。",
   "avatarUpload.loadError": "图片加载失败——换一张试试。",

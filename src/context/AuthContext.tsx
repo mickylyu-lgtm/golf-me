@@ -43,6 +43,7 @@ interface AuthContextValue {
 
   signInWithGoogle: () => Promise<void>;
   signInWithEmailOtp: (email: string) => Promise<void>;
+  signInWithPassword: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   enterDemoMode: () => void;
   exitDemoMode: () => void;
@@ -164,6 +165,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw error;
   }, []);
 
+  // Password sign-in, alongside (not instead of) Google/magic-link -- exists
+  // for accounts that specifically need a fixed, typeable credential rather
+  // than an inbox or a Google account, e.g. Apple's App Review reviewer.
+  // onAuthStateChange above is still the single source of truth for what
+  // happens after this resolves.
+  const signInWithPassword = useCallback(async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+  }, []);
+
   const signOut = useCallback(async () => {
     await supabase.auth.signOut();
   }, []);
@@ -205,6 +216,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isAuthenticated: isDemo || Boolean(authUser),
     signInWithGoogle,
     signInWithEmailOtp,
+    signInWithPassword,
     signOut,
     enterDemoMode,
     exitDemoMode,

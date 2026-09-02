@@ -333,6 +333,9 @@ export const zhTW: Record<TranslationKey, string> = {
   "auth.resendEmail": "重新發送郵件",
   "auth.sendMagicLink": "發送登入連結",
   "auth.authError": "登入時發生問題,請再試一次。",
+  "auth.signInWithPassword": "使用密碼登入",
+  "auth.passwordPlaceholder": "密碼",
+  "auth.signIn": "登入",
 
   "avatarUpload.invalidFile": "請選擇一張圖片檔案。",
   "avatarUpload.loadError": "圖片載入失敗——換一張試試。",
