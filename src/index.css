@@ -232,6 +232,22 @@ body {
   scrollbar-color: theme(colors.fairway.200) transparent;
 }
 
+/* iOS auto-zooms the whole page when a focused input's font-size is under
+   16px (meant to make small text legible while typing). Real mobile
+   Safari resets that zoom on blur; the native app's bare WKWebView
+   doesn't do so reliably, so it was getting stuck zoomed in -- every
+   screen oversized and clipped, not a live pinch state -- the moment any
+   text-sm/text-xs input or textarea (there are many) was focused. One
+   rule here instead of hunting down every className individually, and
+   !important because this is a hard floor no per-field utility class
+   should be able to quietly undercut again later.
+*/
+input,
+textarea,
+select {
+  font-size: max(16px, 1em) !important;
+}
+
 /* Baseline visible focus ring for every interactive element — buttons and
    pills layer their own tighter focus-visible:ring on top of this. */
 :focus-visible {
