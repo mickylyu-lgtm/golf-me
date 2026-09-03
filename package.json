@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "ios:sync": "npm run build && npx cap sync ios",
     "ios:open": "npx cap open ios",
+    "sync": "node scripts/auto-sync.js",
     "apple-review:setup": "npx tsx scripts/setup-apple-review-account.ts"
   },
   "dependencies": {
