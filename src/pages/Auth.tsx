@@ -75,6 +75,15 @@ export function Auth({ mode }: AuthProps) {
     }
   }
 
+  function useDifferentMethod() {
+    setEmailSent(false);
+    setShowEmailField(false);
+    setEmail("");
+    setShowPasswordField(false);
+    setPasswordEmail("");
+    setPassword("");
+  }
+
   function loginAsDemo() {
     logIn(DEFAULT_CURRENT_USER_ID);
     showToast(t("auth.signedInAs", { name: t("auth.demoAccountLabel", { name: "Jordan" }) }), "success");
@@ -125,6 +134,12 @@ export function Auth({ mode }: AuthProps) {
               className="mt-1 text-xs font-semibold text-fairway-700 hover:underline disabled:opacity-50"
             >
               {t("auth.resendEmail")}
+            </button>
+            <button
+              onClick={useDifferentMethod}
+              className="text-xs font-semibold text-slate-400 hover:text-slate-600 hover:underline"
+            >
+              {t("auth.useDifferentMethod")}
             </button>
           </div>
         ) : (

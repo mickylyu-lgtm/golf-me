@@ -331,6 +331,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "auth.checkEmailTitle": "請查看你的電子郵件",
   "auth.checkEmailBody": "我們已將登入連結寄至 {email},請在此裝置上開啟以繼續。",
   "auth.resendEmail": "重新發送郵件",
+  "auth.useDifferentMethod": "使用其他方式",
   "auth.sendMagicLink": "發送登入連結",
   "auth.authError": "登入時發生問題,請再試一次。",
   "auth.signInWithPassword": "使用密碼登入",
