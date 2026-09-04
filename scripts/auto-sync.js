@@ -23,6 +23,8 @@ function log(msg) {
 }
 
 let paused = false;
+let lastAheadLogged = -1;
+let lastUntrackedLogged = "";
 
 async function tick() {
   if (paused) return;
@@ -33,9 +35,20 @@ async function tick() {
     return;
   }
 
-  if (status.out.length > 0) {
+  // Only auto-stage changes to files git already tracks (-u), never new files.
+  // A blind `git add -A` would also sweep up untracked scratch/debug files
+  // (e.g. one-off .tmp.cjs scripts) into commits without you ever asking for it.
+  const trackedChanges = status.out
+    .split("\n")
+    .filter((l) => l && !l.startsWith("??"));
+  const untracked = status.out
+    .split("\n")
+    .filter((l) => l.startsWith("??"))
+    .map((l) => l.slice(3));
+
+  if (trackedChanges.length > 0) {
     const commitMsg = `auto-sync: ${new Date().toISOString()}`;
-    const add = tryRun("git add -A");
+    const add = tryRun("git add -u");
     if (!add.ok) {
       log(`git add failed: ${add.out}`);
       return;
@@ -46,6 +59,16 @@ async function tick() {
       return;
     }
     log(`committed local changes (${commitMsg})`);
+  }
+
+  if (untracked.length > 0) {
+    const key = untracked.join(",");
+    if (key !== lastUntrackedLogged) {
+      log(`new untracked file(s) NOT auto-added (add them yourself if intentional): ${untracked.join(", ")}`);
+      lastUntrackedLogged = key;
+    }
+  } else {
+    lastUntrackedLogged = "";
   }
 
   const pull = tryRun("git pull --rebase --autostash");
@@ -59,8 +82,12 @@ async function tick() {
   }
 
   const ahead = tryRun("git rev-list --count @{u}..HEAD");
-  if (ahead.ok && Number(ahead.out) > 0) {
-    log(`${ahead.out} commit(s) ready to push — run 'git push' yourself when ready (auto-sync never pushes).`);
+  if (ahead.ok) {
+    const n = Number(ahead.out);
+    if (n > 0 && n !== lastAheadLogged) {
+      log(`${n} commit(s) ready to push — run 'git push' yourself when ready (auto-sync never pushes).`);
+    }
+    lastAheadLogged = n;
   }
 }
 
