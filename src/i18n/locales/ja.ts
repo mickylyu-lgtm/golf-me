@@ -331,6 +331,7 @@ export const ja: Record<TranslationKey, string> = {
   "auth.checkEmailTitle": "メールを確認してください",
   "auth.checkEmailBody": "{email} にサインインリンクを送信しました。このデバイスで開いて続行してください。",
   "auth.resendEmail": "メールを再送信",
+  "auth.useDifferentMethod": "別の方法を使う",
   "auth.sendMagicLink": "サインインリンクを送信",
   "auth.authError": "サインイン中に問題が発生しました。もう一度お試しください。",
   "auth.signInWithPassword": "パスワードでサインイン",

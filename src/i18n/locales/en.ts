@@ -345,6 +345,7 @@ export const en = {
   "auth.checkEmailTitle": "Check your email",
   "auth.checkEmailBody": "We sent a sign-in link to {email}. Open it on this device to continue.",
   "auth.resendEmail": "Resend email",
+  "auth.useDifferentMethod": "Use a different method",
   "auth.sendMagicLink": "Send sign-in link",
   "auth.authError": "Something went wrong signing you in. Please try again.",
   "auth.signInWithPassword": "Sign in with a password",
