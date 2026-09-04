@@ -17,7 +17,7 @@ import { clearOnboardingDraft } from "../lib/onboardingDraft";
 
 export function Settings() {
   const { currentUser, golfers, blockedIds, getGolfer, unblockUser, logOut, resetDemoData } = useData();
-  const { isDemo } = useAuth();
+  const { isDemo, pushEnabled: realPushEnabled, saveProfile } = useAuth();
   const { showToast } = useToast();
   const { locale, t } = useLocale();
   const navigate = useNavigate();
@@ -28,7 +28,24 @@ export function Settings() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
-  const [pushEnabled, setPushEnabled] = useState(true);
+  // Demo accounts never had a real profiles.push_enabled row to persist
+  // against, so they keep the old local-only toggle; real accounts persist
+  // through AuthContext (see push_enabled's own migration comment for why
+  // this actually gates anything, unlike emailEnabled/profileDiscoverable
+  // below which remain cosmetic-only).
+  const [demoPushEnabled, setDemoPushEnabled] = useState(true);
+  const pushEnabled = isDemo ? demoPushEnabled : realPushEnabled;
+  async function handlePushToggle(value: boolean) {
+    if (isDemo) {
+      setDemoPushEnabled(value);
+      return;
+    }
+    try {
+      await saveProfile({ push_enabled: value });
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : t("auth.authError"), "warning");
+    }
+  }
   const [emailEnabled, setEmailEnabled] = useState(true);
   const [profileDiscoverable, setProfileDiscoverable] = useState(true);
 
@@ -92,7 +109,7 @@ export function Settings() {
                 <p className="text-sm font-semibold text-slate-800">{t("settings.pushNotifications")}</p>
                 <p className="text-xs text-slate-500">{t("settings.pushNotificationsDesc")}</p>
               </div>
-              <Toggle checked={pushEnabled} onChange={setPushEnabled} label={t("settings.pushNotifications")} />
+              <Toggle checked={pushEnabled} onChange={handlePushToggle} label={t("settings.pushNotifications")} />
             </div>
             <div className="flex items-center gap-3">
               <Bell size={16} className="text-slate-400" />

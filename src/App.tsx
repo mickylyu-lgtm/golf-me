@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
-import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
+import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { DataProvider, useData } from "./context/DataContext";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { RealRoundsProvider } from "./context/RealRoundsContext";
@@ -13,6 +13,9 @@ import type { Locale } from "./i18n/LocaleContext";
 import { AppShell } from "./components/layout/AppShell";
 import { TutorialProvider } from "./context/TutorialContext";
 import { isStandalone } from "./lib/pwa";
+import { registerPushNotifications } from "./lib/push";
+import { Capacitor } from "@capacitor/core";
+import { PushNotifications } from "@capacitor/push-notifications";
 import { TutorialOverlay } from "./components/tutorial/TutorialOverlay";
 import { ScrollToTop } from "./components/layout/ScrollToTop";
 import { GolfMeLoader } from "./components/loading/GolfMeLoader";
@@ -141,6 +144,45 @@ function useLanguageProfileSync() {
   }, [locale, isDemo, authUser]);
 }
 
+// Registers this device for real APNs push once a real, opted-in account is
+// signed in. Deliberately not gated on hasOnboarded (same reasoning as
+// usePendingReviewerInviteRedemption) -- there's no harm registering a
+// device slightly before onboarding finishes, and no message can arrive for
+// this account before then anyway. Re-checks pushEnabled so toggling it off
+// in Settings (a real profiles.push_enabled write) stops registering new
+// devices without needing a separate unregister path -- the server-side
+// trigger already skips anyone with push_enabled false.
+function usePushRegistration() {
+  const { isDemo, authUser, pushEnabled } = useAuth();
+  const registeredForUser = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (isDemo || !authUser || !pushEnabled) return;
+    if (registeredForUser.current === authUser.id) return;
+    registeredForUser.current = authUser.id;
+    registerPushNotifications(authUser.id);
+  }, [isDemo, authUser, pushEnabled]);
+}
+
+// Rendered inside BrowserRouter (unlike usePushRegistration, which only
+// needs authUser) because tapping a delivered push has to navigate -- the
+// route is carried as a custom top-level "link_to" field alongside "aps",
+// which Capacitor surfaces under notification.data, not notification.aps.
+function PushNotificationRouting() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    const listener = PushNotifications.addListener("pushNotificationActionPerformed", (action) => {
+      const linkTo = (action.notification.data as { link_to?: string } | undefined)?.link_to;
+      if (linkTo) navigate(linkTo);
+    });
+    return () => {
+      listener.then((l) => l.remove());
+    };
+  }, [navigate]);
+  return null;
+}
+
 // Real gate, not a fixed timer — mock data loads synchronously from
 // localStorage (near-instant), but real session restore is a network round
 // trip (getSession + the initial profiles fetch); both block here so the
@@ -154,6 +196,7 @@ function AppGate({ children }: { children: ReactNode }) {
   // Coach Reviewer invite isn't gated on has_onboarded) — see the hook's
   // own comment for why this can't wait for AuthedLayout to mount.
   usePendingReviewerInviteRedemption();
+  usePushRegistration();
   if (isLoading || authLoading) return <GolfMeLoader fullScreen message={t("loading.gettingReady")} />;
   return <>{children}</>;
 }
@@ -171,6 +214,7 @@ export default function App() {
             <AppGate>
               <BrowserRouter>
               <ScrollToTop />
+              <PushNotificationRouting />
               <Routes>
                 {/* Standalone, outside both GuestOnly and AuthedLayout — by the
                     time signUpNewGolfer() lands here the session is already

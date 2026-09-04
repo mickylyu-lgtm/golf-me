@@ -39,6 +39,10 @@ interface AuthContextValue {
   // field) — exposed separately for the device-locale<->profile sync in
   // App.tsx.
   profileLanguage: string | null;
+  // Not part of GolferProfile, same reasoning as profileLanguage — an
+  // account-level setting the UI type was never shaped to carry. Defaults
+  // true so a not-yet-loaded/demo profile doesn't read as opted out.
+  pushEnabled: boolean;
   isAuthenticated: boolean;
 
   signInWithGoogle: () => Promise<void>;
@@ -213,6 +217,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     hasOnboarded: profileRow?.has_onboarded ?? false,
     onboardingTutorialCompleted: profileRow?.onboarding_tutorial_completed ?? false,
     profileLanguage: profileRow?.language ?? null,
+    pushEnabled: profileRow?.push_enabled ?? true,
     isAuthenticated: isDemo || Boolean(authUser),
     signInWithGoogle,
     signInWithEmailOtp,

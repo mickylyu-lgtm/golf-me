@@ -20,6 +20,7 @@ export interface ProfileRow {
   handicap: number | null;
   skill_level: string | null;
   language: string | null;
+  push_enabled: boolean;
   favorite_courses: string[];
   walk_or_cart: string | null;
   vibes: string[];
