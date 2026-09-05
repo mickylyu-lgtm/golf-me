@@ -36,7 +36,10 @@ export function GroupChat({ callId }: { callId: string }) {
 
   return (
     <div className="flex flex-col rounded-2xl border border-slate-100 bg-white">
-      <div className="flex max-h-96 flex-col gap-3 overflow-y-auto px-4 py-4">
+      {/* justify-end bottom-anchors a short thread against the composer
+          (same fix as DirectMessageThread) instead of stacking from the top
+          and leaving the gap below instead. */}
+      <div className="flex max-h-96 flex-col justify-end gap-3 overflow-y-auto px-4 py-4">
         {messages.length === 0 && <p className="text-center text-sm text-slate-400">{t("chat.noMessagesYet")}</p>}
         {messages.map((m) => {
           if (m.system) {

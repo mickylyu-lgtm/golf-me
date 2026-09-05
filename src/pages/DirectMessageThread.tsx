@@ -253,7 +253,12 @@ export function DirectMessageThread() {
           keyboard, so this box used to keep its full pre-keyboard height
           whether or not BottomNav was still actually visible underneath it. */}
       <div ref={boxRef} className="flex flex-col rounded-2xl border border-slate-100 bg-white" style={{ height: boxHeight }}>
-        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4">
+        {/* justify-end bottom-anchors a short thread against the composer
+            (empty space above, like every real chat app), instead of
+            stacking from the top and leaving the gap below instead -- with
+            enough messages to overflow, this has no effect on the normal
+            top-to-bottom scroll. */}
+        <div className="flex min-h-0 flex-1 flex-col justify-end gap-3 overflow-y-auto px-4 py-4">
           {messages.length === 0 && (
             <p className="my-auto text-center text-sm text-slate-400">
               {eligible ? "No messages yet — say hello." : "You can't message this golfer."}
