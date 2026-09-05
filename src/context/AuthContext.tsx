@@ -144,11 +144,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // prompt: "select_account" forces Google's account chooser every time,
+  // instead of Google silently reusing whichever Google account last
+  // authorized this app on the device — the default behavior otherwise, and
+  // not what you want when you're deliberately testing/switching accounts.
   const signInWithGoogle = useCallback(async () => {
     if (Capacitor.isNativePlatform()) {
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo: NATIVE_OAUTH_REDIRECT, skipBrowserRedirect: true },
+        options: { redirectTo: NATIVE_OAUTH_REDIRECT, skipBrowserRedirect: true, queryParams: { prompt: "select_account" } },
       });
       if (error) throw error;
       if (data.url) await Browser.open({ url: data.url });
@@ -156,15 +160,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: window.location.origin },
+      options: { redirectTo: window.location.origin, queryParams: { prompt: "select_account" } },
     });
     if (error) throw error;
   }, []);
 
+  // Same native-vs-web redirect split as signInWithGoogle, and for the same
+  // reason: on the native app, window.location.origin is still just
+  // "https://golfme.app" (the WKWebView is displaying that live URL), so a
+  // magic link built from it opens in Safari on tap instead of handing back
+  // to the app -- there's no Associated Domains/Universal Link wiring for
+  // that https origin, only the com.golfme.ios:// custom scheme (registered
+  // for Google's OAuth callback). Reusing that same scheme here needs no new
+  // native config or listener code: appUrlOpen above already parses
+  // access_token/refresh_token out of any com.golfme.ios://auth-callback
+  // URL's fragment, and Supabase puts the session there the same way
+  // regardless of whether the sign-in was a magic link or OAuth.
   const signInWithEmailOtp = useCallback(async (email: string) => {
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: window.location.origin },
+      options: { emailRedirectTo: Capacitor.isNativePlatform() ? NATIVE_OAUTH_REDIRECT : window.location.origin },
     });
     if (error) throw error;
   }, []);
