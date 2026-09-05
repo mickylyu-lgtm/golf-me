@@ -222,12 +222,26 @@ export function ProfileSetup() {
     // however long a given step's content gets.
     <div className="flex h-[100dvh] flex-col bg-[#faf9f6]">
       <div className="flex items-center justify-between px-6" style={{ paddingTop: "max(2rem, env(safe-area-inset-top))" }}>
-        <button
-          onClick={() => (step === 0 ? navigate(-1) : setStep((s) => s - 1))}
-          className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
-        >
-          <ArrowLeft size={16} /> {t("common.back")}
-        </button>
+        {/* No real destination at step 0: this page only exists for an
+            already-authenticated, not-yet-onboarded account, and every
+            guest-only route (Welcome/Login/Signup) redirects straight back
+            here for exactly that session state (see GuestOnly in App.tsx) --
+            so navigate(-1) always bounced right back, looking like a dead
+            button (reported live). Kept in the DOM (just made invisible)
+            rather than conditionally unrendered, so the step-dots indicator
+            to its right doesn't jump over into its place. */}
+        {step > 0 ? (
+          <button
+            onClick={() => setStep((s) => s - 1)}
+            className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
+          >
+            <ArrowLeft size={16} /> {t("common.back")}
+          </button>
+        ) : (
+          <span className="invisible flex items-center gap-1.5 text-sm font-semibold" aria-hidden="true">
+            <ArrowLeft size={16} /> {t("common.back")}
+          </span>
+        )}
         <div className="flex gap-1.5">
           {STEP_LABEL_KEYS.map((_, i) => (
             <span key={i} className={`h-1.5 w-5 rounded-full transition-colors duration-300 ${i <= step ? "bg-fairway-600" : "bg-slate-200"}`} />
