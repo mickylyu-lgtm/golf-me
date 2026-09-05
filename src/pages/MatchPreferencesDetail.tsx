@@ -38,7 +38,17 @@ export function MatchPreferencesDetail() {
 
   const availabilityChanged =
     draftAvailability.length !== currentUser.availability.length || draftAvailability.some((s) => !currentUser.availability.includes(s));
-  const areaChanged = draftArea.label !== currentUser.areaLabel;
+  // Label-only comparison missed real changes: "Use My Current Location"
+  // resolves to the nearest curated region's label (see LocationPicker's
+  // nearestRegion()), so re-fixing your location while still within that
+  // same ~60mi radius produces an identical label but different (more
+  // precise, real GPS) coords — Save stayed disabled and the profile kept
+  // the old coordinates forever, the exact "location doesn't update" bug
+  // reported live.
+  const areaChanged =
+    draftArea.label !== currentUser.areaLabel ||
+    draftArea.coords?.lat !== currentUser.playingAreaCoords?.lat ||
+    draftArea.coords?.lng !== currentUser.playingAreaCoords?.lng;
   const prefsChanged = JSON.stringify(draftPrefs) !== JSON.stringify(matchPreferencesFromGolfer(currentUser));
   const isDirty = availabilityChanged || areaChanged || prefsChanged;
 
