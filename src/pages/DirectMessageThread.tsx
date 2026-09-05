@@ -41,7 +41,32 @@ export function DirectMessageThread() {
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [boxTop, setBoxTop] = useState<number | null>(null);
   const viewportHeight = useVisualViewportHeight();
+
+  // The 13rem chrome reserve below (TopBar + this page's own header row +
+  // BottomNav) is only correct while BottomNav is actually visible.
+  // BottomNav is `fixed bottom-0` against the LAYOUT viewport, which the
+  // keyboard doesn't shrink — so once the keyboard is open, BottomNav sits
+  // off-screen under it, no longer competing for space at all, but the
+  // fixed 13rem reserve kept leaving that same now-unused gap between the
+  // last message and the keyboard (reported live). document.documentElement's
+  // height stays the pre-keyboard layout size regardless, so comparing it
+  // against the (keyboard-shrunk) visual viewport height is a reliable
+  // "is the keyboard actually open" signal.
+  useEffect(() => {
+    const measure = () => setBoxTop(boxRef.current?.getBoundingClientRect().top ?? null);
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
+  const layoutHeight = typeof document !== "undefined" ? document.documentElement.clientHeight : 0;
+  const keyboardOpen = layoutHeight - viewportHeight > 100;
+  const boxHeight =
+    keyboardOpen && boxTop !== null
+      ? `${viewportHeight - boxTop}px`
+      : `calc(${viewportHeight}px - 13rem - env(safe-area-inset-top) - env(safe-area-inset-bottom))`;
 
   const other = id ? getGolfer(id) : undefined;
   const messages = id ? messagesWithGolfer(id) : [];
@@ -213,39 +238,21 @@ export function DirectMessageThread() {
         </div>
       </div>
 
-      {/* Bounded to the actual visible viewport (dvh, not vh -- accounts for
-          mobile browser chrome) rather than the message list having its own
-          separately-scrolling max-height with the composer just sticky
-          against the page below it -- those were two different scroll
-          contexts, so the sticky composer could end up floating on top of
-          (hiding) the message list's own last message instead of sitting
-          cleanly below it. flex-1 + min-h-0 here makes the message list the
-          only thing that scrolls, and the composer just always sits after
-          it, guaranteed never overlapping.
+      {/* Bounded to the actual visible viewport rather than the message list
+          having its own separately-scrolling max-height with the composer
+          just sticky against the page below it -- those were two different
+          scroll contexts, so the sticky composer could end up floating on
+          top of (hiding) the message list's own last message instead of
+          sitting cleanly below it. flex-1 + min-h-0 here makes the message
+          list the only thing that scrolls, and the composer just always
+          sits after it, guaranteed never overlapping.
 
-          The 13rem baseline was calibrated against TopBar/BottomNav's
-          height with zero safe-area inset (a plain browser tab) -- on a
-          real notch/Dynamic Island device with no browser chrome
-          (installed app), both of those grow taller by their own real
-          safe-area padding, so this box needs to shrink by that same
-          extra amount or the composer ends up pushed below the fold,
-          reachable only by scrolling the whole page (reported live).
-
-          Built off visualViewport's height (see useVisualViewportHeight),
-          not 100dvh -- 100dvh only reacts to browser-chrome changes, not
-          the on-screen keyboard (the keyboard overlays content instead of
-          resizing the page), so on-keyboard-open this box previously kept
-          its full pre-keyboard height while iOS's own "scroll the focused
-          input into view" fought with the overflow:hidden lock below,
-          landing on a scroll position that showed blank space above the
-          composer instead of the actual last messages (reported live).
-          Sizing directly off the real visual viewport means this box
-          already shrinks to the keyboard-safe height, so there's nothing
-          left for iOS to auto-scroll into view in the first place. */}
-      <div
-        className="flex flex-col rounded-2xl border border-slate-100 bg-white"
-        style={{ height: `calc(${viewportHeight}px - 13rem - env(safe-area-inset-top) - env(safe-area-inset-bottom))` }}
-      >
+          Height comes from boxHeight above (visualViewport-based, keyboard-
+          aware -- see the comment by its calculation), not a fixed dvh calc:
+          100dvh only reacts to browser-chrome changes, not the on-screen
+          keyboard, so this box used to keep its full pre-keyboard height
+          whether or not BottomNav was still actually visible underneath it. */}
+      <div ref={boxRef} className="flex flex-col rounded-2xl border border-slate-100 bg-white" style={{ height: boxHeight }}>
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4">
           {messages.length === 0 && (
             <p className="my-auto text-center text-sm text-slate-400">
