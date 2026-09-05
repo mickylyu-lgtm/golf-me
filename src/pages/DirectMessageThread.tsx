@@ -10,6 +10,7 @@ import { ReportModal } from "../components/trust/ReportModal";
 import { ChatComposer } from "../components/chat/ChatComposer";
 import { FounderBadge } from "../components/golfer/TrustBadges";
 import { dmDraftKey, loadChatDraft, saveChatDraft } from "../lib/chatDraft";
+import { useVisualViewportHeight } from "../lib/useVisualViewportHeight";
 import { handicapLabel } from "../lib/format";
 import { isFounder } from "../lib/founder";
 import { useLocale } from "../i18n/LocaleContext";
@@ -40,6 +41,7 @@ export function DirectMessageThread() {
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const viewportHeight = useVisualViewportHeight();
 
   const other = id ? getGolfer(id) : undefined;
   const messages = id ? messagesWithGolfer(id) : [];
@@ -69,7 +71,11 @@ export function DirectMessageThread() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
-  }, [messages.length]);
+    // Also re-pin to the latest message whenever the box's own height
+    // changes (keyboard opening/closing) -- otherwise the keyboard shrinking
+    // this box could leave the scroll position sitting mid-thread instead
+    // of back at the messages nearest the now-visible composer.
+  }, [messages.length, viewportHeight]);
 
   // The chat box below is sized to fit the viewport exactly (see its own
   // comment), but that's a best-effort calc(), not a hard guarantee --
@@ -223,10 +229,22 @@ export function DirectMessageThread() {
           (installed app), both of those grow taller by their own real
           safe-area padding, so this box needs to shrink by that same
           extra amount or the composer ends up pushed below the fold,
-          reachable only by scrolling the whole page (reported live). */}
+          reachable only by scrolling the whole page (reported live).
+
+          Built off visualViewport's height (see useVisualViewportHeight),
+          not 100dvh -- 100dvh only reacts to browser-chrome changes, not
+          the on-screen keyboard (the keyboard overlays content instead of
+          resizing the page), so on-keyboard-open this box previously kept
+          its full pre-keyboard height while iOS's own "scroll the focused
+          input into view" fought with the overflow:hidden lock below,
+          landing on a scroll position that showed blank space above the
+          composer instead of the actual last messages (reported live).
+          Sizing directly off the real visual viewport means this box
+          already shrinks to the keyboard-safe height, so there's nothing
+          left for iOS to auto-scroll into view in the first place. */}
       <div
         className="flex flex-col rounded-2xl border border-slate-100 bg-white"
-        style={{ height: "calc(100dvh - 13rem - env(safe-area-inset-top) - env(safe-area-inset-bottom))" }}
+        style={{ height: `calc(${viewportHeight}px - 13rem - env(safe-area-inset-top) - env(safe-area-inset-bottom))` }}
       >
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4">
           {messages.length === 0 && (
