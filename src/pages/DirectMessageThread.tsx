@@ -118,6 +118,29 @@ export function DirectMessageThread() {
     };
   }, []);
 
+  // overflow:hidden above stops the DOCUMENT from scrolling, but iOS/WKWebView
+  // has a separate, independent behavior on focusing an input: it pans the
+  // VISUAL viewport itself to keep the focused element clear of the
+  // keyboard, regardless of any overflow setting -- this box's height is
+  // already keyboard-safe (see boxHeight above) so there's nothing for it to
+  // reveal, but the pan still happens, and since TopBar is `position: sticky`
+  // against the (unpanned) layout viewport, the pan pushes it up out of the
+  // visible area -- what was on-screen at the top disappears and whatever
+  // was below slides up to take its place, reported live as "the top of the
+  // screen jumps down." Forcing the scroll position back to (0, 0) on every
+  // visualViewport pan/resize cancels it back out immediately.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const resetScroll = () => window.scrollTo(0, 0);
+    vv.addEventListener("scroll", resetScroll);
+    vv.addEventListener("resize", resetScroll);
+    return () => {
+      vv.removeEventListener("scroll", resetScroll);
+      vv.removeEventListener("resize", resetScroll);
+    };
+  }, []);
+
   // Switching straight from one thread to another reuses this same mounted
   // component (only the `id` route param changes), so without this the
   // previous thread's still-typed draft would just carry over into whatever
