@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, Minus, TriangleAlert } from "lucide-react";
+import type { ReactNode } from "react";
+import { Check, Info, Minus, TriangleAlert } from "lucide-react";
 import { X } from "lucide-react";
 import type { CaddiePoseData, CaddieSwingPhases } from "../../types";
 import { enterNativeVideoFullscreen, getVideoContentRect } from "../../lib/video";
@@ -137,6 +138,29 @@ function phaseButtons(phases: CaddieSwingPhases | undefined): PhaseButton[] {
   return buttons;
 }
 
+// Every SwingSegmentAssessment already carries its own anchorPhase ("top" or
+// "impact" — see swingAssessment.ts); this just maps a tapped phase BUTTON
+// to the same vocabulary so Swing Check can show only the segments that are
+// actually anchored to whichever phase is selected, never all 4 regardless
+// of relevance. Address/Backswing/Downswing/Follow-through have no segment
+// anchored to them at all today — "none" — which renders the noAnchor card
+// rather than an empty or misleading metrics list.
+type AnchorGroup = "top" | "impact" | "none";
+function anchorGroupForLabelKey(labelKey: PhaseButton["labelKey"]): AnchorGroup {
+  if (labelKey === "swingAnalysis.topOfBackswing") return "top";
+  if (labelKey === "swingAnalysis.impact") return "impact";
+  return "none";
+}
+const RECORDING_TIP_KEYS: Record<"top" | "impact", TranslationKey> = {
+  top: "swingAssessment.recordingTip.top",
+  impact: "swingAssessment.recordingTip.impact",
+};
+// 1 unavailable segment alongside others that DID resolve reads fine as a
+// normal row ("Limited visibility" is just one more badge state); a wall of
+// 2+ blank rows is what actually looked broken (reported live) — that's
+// collapsed into one informational card instead.
+const COLLAPSE_UNKNOWN_THRESHOLD = 2;
+
 export interface CaddieSwingReplayProps {
   sourceMediaUrl: string;
   thumbnailUrl?: string;
@@ -172,17 +196,15 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
   // Pure function of already-fetched poseData/phases (see swingAssessment.ts)
   // — computed once per analysis, not per frame.
   const assessment = useMemo(() => computeSwingAssessment(poseData, phases), [poseData, phases]);
-  // Drives the summary panel/legend/focus tip below the video. Updated from
-  // inside draw() (see the effect below) only when it actually changes —
-  // not on every rAF tick — so this never causes more re-renders than the
-  // segment colors visibly changing.
-  const [liveStatus, setLiveStatus] = useState<Record<SwingSegmentId, SwingSegmentStatus>>({
-    torso: "unknown",
-    left_arm: "unknown",
-    right_arm: "unknown",
-    hip_sway: "unknown",
-  });
-  const liveStatusRef = useRef(liveStatus);
+
+  // Which phase's breakdown the Swing Check card below shows — driven by
+  // an explicit tap on one of the phase buttons, not by continuous video
+  // scrubbing (a live-scrub-driven panel used to flicker between "real
+  // data" and "not enough data" as the video passed through Top/Impact
+  // naturally, which read as broken rather than intentional). The skeleton
+  // overlay itself stays fully live/time-based (see draw() below) — only
+  // this summary card is phase-selection-based.
+  const [selectedPhaseKey, setSelectedPhaseKey] = useState<PhaseButton["labelKey"] | undefined>(undefined);
 
   // Landing in Slow Mode at the clip's start (t=0) almost never coincides
   // with an assessed phase (Top or Impact) — every segment reads "not
@@ -197,8 +219,20 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
     const topT = phases?.top.timestampSeconds;
     if (video && video.currentTime === 0 && topT !== null && topT !== undefined) {
       video.currentTime = topT;
+      setSelectedPhaseKey("swingAnalysis.topOfBackswing");
     }
   }, [showOverlay, phases]);
+
+  // Default the Swing Check card to SOMETHING as soon as there's an
+  // analysis to show, even before the effect above's video-seek condition
+  // fires (e.g. Top has no confident timestamp at all, so there's nothing
+  // to seek to) — falls back to Impact, then leaves it unselected (the
+  // noAnchor card) only if neither anchor phase exists.
+  useEffect(() => {
+    if (selectedPhaseKey !== undefined || !showOverlay || !phases) return;
+    if (phases.top.timestampSeconds !== null) setSelectedPhaseKey("swingAnalysis.topOfBackswing");
+    else if (phases.impact.windowStartSeconds !== null) setSelectedPhaseKey("swingAnalysis.impact");
+  }, [showOverlay, phases, selectedPhaseKey]);
   // The overlay canvas is a sibling DOM element positioned on top of the
   // video — that composites fine in normal page flow, but the OS-native
   // fullscreen player (webkitEnterFullscreen/requestFullscreen) takes over
@@ -293,15 +327,6 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
       const toCanvas = (x: number, y: number): [number, number] => [rect.left + x * scaleX, rect.top + y * scaleY];
 
       const statusNow = segmentStatusAtTime(assessment, phases, video.currentTime);
-      if (
-        statusNow.torso !== liveStatusRef.current.torso ||
-        statusNow.left_arm !== liveStatusRef.current.left_arm ||
-        statusNow.right_arm !== liveStatusRef.current.right_arm ||
-        statusNow.hip_sway !== liveStatusRef.current.hip_sway
-      ) {
-        liveStatusRef.current = statusNow;
-        setLiveStatus(statusNow);
-      }
       // A joint gets flagged (small colored ring, see below) only if it's
       // an endpoint of a needs_improvement segment — good/unknown segments
       // communicate entirely through their line color, never a joint
@@ -484,8 +509,13 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
               onClick={() => {
                 const video = videoRef.current;
                 if (video) video.currentTime = b.timestampSeconds;
+                setSelectedPhaseKey(b.labelKey);
               }}
-              className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 transition-colors duration-150 hover:border-fairway-300 hover:text-fairway-700"
+              className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors duration-150 ${
+                selectedPhaseKey === b.labelKey
+                  ? "border-transparent bg-fairway-700 text-white"
+                  : "border-slate-200 text-slate-600 hover:border-fairway-300 hover:text-fairway-700"
+              }`}
             >
               {t(b.labelKey)}
             </button>
@@ -496,58 +526,146 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
           size over the video would defeat the point of a minimal fullscreen
           view; exit fullscreen to see it. */}
       {showOverlay && assessment && !customFullscreen && (
-        <div className="flex flex-col gap-2 rounded-2xl border border-slate-100 bg-white p-3">
-          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-            <p className="text-xs font-bold uppercase tracking-wide text-slate-400">{t("swingAssessment.summaryTitle")}</p>
-            {/* One compact legend, not repeated per card (point 19). */}
-            <div className="flex items-center gap-2.5 text-[11px] text-slate-500">
-              <span className="flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-fairway-700" />
-                {t("swingAssessment.status.good")}
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-red-600" />
-                {t("swingAssessment.status.needsImprovement")}
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-slate-300" />
-                {t("swingAssessment.status.unknown")}
-              </span>
+        <SwingCheckCard assessment={assessment} selectedPhaseKey={selectedPhaseKey} />
+      )}
+    </div>
+  );
+}
+
+// Split out of the main component purely to keep CaddieSwingReplay's own
+// body (video/canvas/fullscreen/rAF wiring) from being buried under this —
+// no shared state, just assessment + whichever phase is selected in.
+function SwingCheckCard({
+  assessment,
+  selectedPhaseKey,
+}: {
+  assessment: ReturnType<typeof computeSwingAssessment>;
+  selectedPhaseKey: PhaseButton["labelKey"] | undefined;
+}) {
+  const { t } = useLocale();
+  if (!assessment) return null;
+
+  const anchorGroup = selectedPhaseKey ? anchorGroupForLabelKey(selectedPhaseKey) : "none";
+  const relevantSegments = anchorGroup === "none" ? [] : assessment.segments.filter((s) => s.anchorPhase === anchorGroup);
+  const knownSegments = relevantSegments.filter((s) => s.status !== "unknown");
+  const unknownSegments = relevantSegments.filter((s) => s.status === "unknown");
+  const collapseUnknowns = unknownSegments.length >= COLLAPSE_UNKNOWN_THRESHOLD;
+
+  // Computed once from ALL 4 segments regardless of the selected phase — a
+  // whole-swing take, not a per-phase one. Omitted entirely (not a vague
+  // "some things look fine") when nothing at all resolved confidently.
+  const allKnown = assessment.segments.filter((s) => s.status !== "unknown");
+  const allGoodCount = allKnown.filter((s) => s.status === "good").length;
+  const allIssueCount = allKnown.filter((s) => s.status === "needs_improvement").length;
+  const overallKey: TranslationKey | undefined =
+    allKnown.length === 0
+      ? undefined
+      : allIssueCount === 0
+        ? "swingAssessment.overallAllGood"
+        : allGoodCount === 0
+          ? "swingAssessment.overallAllIssues"
+          : "swingAssessment.overallMixed";
+
+  // One tip, only when there's something useful to say: real coaching
+  // feedback takes priority over a recording-quality tip, since a confirmed
+  // issue is more actionable than a guess at why visibility was limited.
+  const tipSegment = relevantSegments.find((s) => s.status === "needs_improvement");
+  const recordingTipKey = anchorGroup === "top" || anchorGroup === "impact" ? RECORDING_TIP_KEYS[anchorGroup] : undefined;
+  const showRecordingTip = !tipSegment && unknownSegments.length > 0;
+
+  return (
+    <div className="flex flex-col gap-2.5 rounded-2xl border border-slate-100 bg-white p-3">
+      <p className="text-xs font-bold uppercase tracking-wide text-slate-400">
+        {t("swingAssessment.summaryTitle")}
+        {selectedPhaseKey && (
+          <span className="text-slate-500">
+            {t("swingAssessment.headerPhaseSeparator")}
+            {t(selectedPhaseKey)}
+          </span>
+        )}
+      </p>
+
+      {overallKey && (
+        <div>
+          <p className="text-xs font-bold text-slate-800">{t("swingAssessment.overallTitle")}</p>
+          <p className="text-xs text-slate-500">{t(overallKey)}</p>
+        </div>
+      )}
+
+      {anchorGroup === "none" ? (
+        <InfoCard icon={<Info size={14} />} title={t("swingAssessment.noAnchorTitle")} body={t("swingAssessment.noAnchorBody")} />
+      ) : (
+        <>
+          {knownSegments.length > 0 && (
+            <div className="flex flex-col divide-y divide-slate-50">
+              {knownSegments.map((seg) => (
+                <div key={seg.segment} className="flex items-start justify-between gap-3 py-2 first:pt-0 last:pb-0">
+                  <div className="flex items-start gap-2.5">
+                    <span className="mt-0.5 shrink-0">
+                      <StatusIcon status={seg.status} size={16} />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-slate-800">{t(SEGMENT_LABEL_KEYS[seg.segment])}</p>
+                      <p className="text-xs text-slate-500">{t(descriptionKey(seg.segment, seg.status))}</p>
+                    </div>
+                  </div>
+                  <Badge tone={STATUS_BADGE_TONE[seg.status]} className="shrink-0">
+                    {t(STATUS_LABEL_KEYS[seg.status])}
+                  </Badge>
+                </div>
+              ))}
             </div>
-          </div>
-          {SEGMENT_ORDER.every((id) => liveStatus[id] === "unknown") && (
-            <p className="text-xs text-slate-400">{t("swingAssessment.jumpToPhaseHint")}</p>
           )}
-          <div className="flex flex-col divide-y divide-slate-50">
-            {SEGMENT_ORDER.map((id) => (
-              <div key={id} className="flex items-start justify-between gap-3 py-2 first:pt-0 last:pb-0">
+          {!collapseUnknowns &&
+            unknownSegments.map((seg) => (
+              <div key={seg.segment} className="flex items-start justify-between gap-3 border-t border-slate-50 py-2 first:border-t-0 first:pt-0">
                 <div className="flex items-start gap-2.5">
                   <span className="mt-0.5 shrink-0">
-                    <StatusIcon status={liveStatus[id]} size={16} />
+                    <StatusIcon status="unknown" size={16} />
                   </span>
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-slate-800">{t(SEGMENT_LABEL_KEYS[id])}</p>
-                    <p className="text-xs text-slate-500">{t(descriptionKey(id, liveStatus[id]))}</p>
+                    <p className="text-sm font-semibold text-slate-800">{t(SEGMENT_LABEL_KEYS[seg.segment])}</p>
+                    <p className="text-xs text-slate-500">{t(descriptionKey(seg.segment, "unknown"))}</p>
                   </div>
                 </div>
-                <Badge tone={STATUS_BADGE_TONE[liveStatus[id]]} className="shrink-0">
-                  {t(STATUS_LABEL_KEYS[liveStatus[id]])}
+                <Badge tone="slate" className="shrink-0">
+                  {t(STATUS_LABEL_KEYS.unknown)}
                 </Badge>
               </div>
             ))}
-          </div>
-          {(() => {
-            const focusSegment = SEGMENT_ORDER.find((id) => liveStatus[id] === "needs_improvement");
-            if (!focusSegment) return null;
-            return (
-              <div className="mt-1 rounded-xl bg-red-50 p-2.5">
-                <p className="text-xs font-bold text-red-700">{t("swingAssessment.focusTipTitle")}</p>
-                <p className="mt-0.5 text-xs text-red-700/90">{t(FOCUS_TIP_KEYS[focusSegment])}</p>
-              </div>
-            );
-          })()}
+          {collapseUnknowns && (
+            <InfoCard icon={<Info size={14} />} title={t("swingAssessment.limitedAnalysisTitle")} body={t("swingAssessment.limitedAnalysisBody")} />
+          )}
+        </>
+      )}
+
+      {tipSegment && (
+        <div className="rounded-xl bg-fairway-50/70 p-2.5">
+          <p className="text-xs font-bold text-fairway-800">{t("swingAssessment.focusTipTitle")}</p>
+          <p className="mt-0.5 text-xs text-fairway-800/90">{t(FOCUS_TIP_KEYS[tipSegment.segment])}</p>
         </div>
       )}
+      {showRecordingTip && recordingTipKey && (
+        <div className="rounded-xl bg-fairway-50/70 p-2.5">
+          <p className="text-xs font-bold text-fairway-800">{t("swingAssessment.focusTipTitle")}</p>
+          <p className="mt-0.5 text-xs text-fairway-800/90">{t(recordingTipKey)}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Shared shape for both "not tracked at this moment" and "limited
+// analysis" — deliberately plain/neutral (slate, not red/yellow) so this
+// reads as informational, never as an error or a warning.
+function InfoCard({ icon, title, body }: { icon: ReactNode; title: string; body: string }) {
+  return (
+    <div className="flex gap-2 rounded-xl bg-slate-50 p-2.5">
+      <span className="mt-0.5 shrink-0 text-slate-400">{icon}</span>
+      <div className="min-w-0">
+        <p className="text-xs font-bold text-slate-700">{title}</p>
+        <p className="mt-0.5 text-xs text-slate-500">{body}</p>
+      </div>
     </div>
   );
 }
