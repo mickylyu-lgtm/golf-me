@@ -31,6 +31,20 @@ export function resizeImageToDataUrl(file: File, maxDimension = 1000): Promise<s
   });
 }
 
+// Some real device-recorded video files never fire the browser events these
+// two functions below depend on (loadedmetadata/seeked/error all silently
+// never happening -- observed as a real, if intermittent, WebKit quirk on
+// certain .mov encodings) -- without this, that hung the returned promise
+// forever, which both call sites treat as "let it through"/"skip the
+// thumbnail" on a caught rejection, but a promise that never settles at all
+// isn't a rejection; it just permanently stalls whatever awaited it (Caddie
+// upload's whole submit, in the duration-check case), looking exactly like
+// "upload doesn't work" with no error to explain why (reported live).
+const VIDEO_METADATA_TIMEOUT_MS = 8000;
+function withTimeout<T>(promise: Promise<T>, message: string): Promise<T> {
+  return Promise.race([promise, new Promise<T>((_, reject) => setTimeout(() => reject(new Error(message)), VIDEO_METADATA_TIMEOUT_MS))]);
+}
+
 // Captures a real frame from an actual uploaded video file as a JPEG blob —
 // never a placeholder/fake image. Seeks a touch past frame 0 (some
 // encoders leave the very first frame black), same idea as Instagram's own
@@ -38,7 +52,7 @@ export function resizeImageToDataUrl(file: File, maxDimension = 1000): Promise<s
 // already sitting in Storage (Caddie's "Share to Community" handoff) isn't
 // covered by this — see CreatePost.tsx's prefilledVideoUrl branch.
 export function captureVideoThumbnail(file: File, maxDimension = 640): Promise<Blob> {
-  return new Promise((resolve, reject) => {
+  return withTimeout(new Promise<Blob>((resolve, reject) => {
     const video = document.createElement("video");
     video.preload = "metadata";
     video.muted = true;
@@ -82,7 +96,7 @@ export function captureVideoThumbnail(file: File, maxDimension = 640): Promise<B
       cleanup();
       reject(new Error("Could not load video"));
     };
-  });
+  }), "Timed out reading video for a thumbnail");
 }
 
 // Reads a video file's duration without uploading it — used to enforce
@@ -93,20 +107,23 @@ export function captureVideoThumbnail(file: File, maxDimension = 640): Promise<B
 // direct-upload flow (AnalyzeSwing.tsx), since a Swing Post's video is
 // exactly what Ask Caddie later runs on.
 export function readVideoDuration(file: File): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const video = document.createElement("video");
-    video.preload = "metadata";
-    const url = URL.createObjectURL(file);
-    video.src = url;
-    video.onloadedmetadata = () => {
-      URL.revokeObjectURL(url);
-      resolve(video.duration);
-    };
-    video.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("Could not read video metadata"));
-    };
-  });
+  return withTimeout(
+    new Promise<number>((resolve, reject) => {
+      const video = document.createElement("video");
+      video.preload = "metadata";
+      const url = URL.createObjectURL(file);
+      video.src = url;
+      video.onloadedmetadata = () => {
+        URL.revokeObjectURL(url);
+        resolve(video.duration);
+      };
+      video.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error("Could not read video metadata"));
+      };
+    }),
+    "Timed out reading video duration",
+  );
 }
 
 // Same downsize-and-encode as resizeImageToDataUrl but resolving a Blob —
