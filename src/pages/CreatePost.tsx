@@ -233,7 +233,19 @@ export function CreatePost() {
     } catch {
       // Metadata read failing isn't itself disqualifying — let it through.
     }
-    requestAttach("swing", () => doAttachVideo(file));
+
+    // Same iOS/WKWebView file-eviction risk as AnalyzeSwing.tsx's identical
+    // fix (see its comment) — this attaches to the draft post, which can
+    // sit around for a while before actually posting.
+    let stableFile = file;
+    try {
+      const bytes = await file.arrayBuffer();
+      stableFile = new File([bytes], file.name, { type: file.type });
+    } catch (err) {
+      console.error("Golf Me: failed to read the video into memory.", err);
+    }
+
+    requestAttach("swing", () => doAttachVideo(stableFile));
   }
 
   function doAttachCourse(c: string) {

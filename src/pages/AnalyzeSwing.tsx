@@ -114,7 +114,29 @@ export function AnalyzeSwing() {
       // and format checks above already ran; let it through rather than
       // blocking a real, valid clip over a metadata quirk.
     }
-    setDraftSwingVideo({ file, previewUrl: URL.createObjectURL(file), swingType });
+
+    // iOS/WKWebView can evict the actual data behind a picked File's handle
+    // if it just sits in memory for a while (this draft deliberately
+    // survives navigating away and back, so there's no bound on how long)
+    // -- a real, documented WebKit quirk for large video files. Surfaced
+    // live as the upload failing at submit time with the raw browser error
+    // "Load failed", sometimes well after picking, with zero server-side
+    // trace (the request never even goes out -- the browser can't read
+    // the file's bytes to send). Reading the bytes into a fresh File right
+    // now, while the OS-backed handle is still guaranteed fresh, sidesteps
+    // it: this new File is backed by our own in-memory copy, not the
+    // original lazy disk-backed reference, so later eviction of that
+    // original reference can't affect it. Falls back to the original file
+    // if this itself fails (rare) rather than blocking selection over it.
+    let stableFile = file;
+    try {
+      const bytes = await file.arrayBuffer();
+      stableFile = new File([bytes], file.name, { type: file.type });
+    } catch (err) {
+      console.error("Golf Me: failed to read the video into memory.", err);
+    }
+
+    setDraftSwingVideo({ file: stableFile, previewUrl: URL.createObjectURL(stableFile), swingType });
   }
 
   function removeVideo() {
