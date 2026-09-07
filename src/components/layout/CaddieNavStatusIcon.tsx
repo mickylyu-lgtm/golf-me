@@ -3,7 +3,8 @@ import { CaddieNavIcon } from "../icons/CaddieNavIcon";
 import { useData } from "../../context/DataContext";
 import { useCaddieNavStatus } from "../../lib/useCaddieNavStatus";
 
-const PULSE_MS = 400;
+const PULSE_MS = 700;
+const SPARK_ANGLES = [-18, 0, 18];
 const SNAP_MS = 350;
 // analyze-swing's own comment: the real pipeline "can take up to a minute
 // or two." There's no real progress percentage available from the backend
@@ -126,17 +127,33 @@ export function CaddieNavStatusIcon({ size, strokeWidth }: CaddieNavStatusIconPr
   const radius = ringSize / 2 - 1.5;
 
   return (
-    <span
-      className={`relative flex shrink-0 items-center justify-center rounded-full ${pulsing ? "animate-caddie-pulse-glow" : ""}`}
-      style={{ width: ringSize, height: ringSize }}
-    >
+    <span className="relative flex shrink-0 items-center justify-center" style={{ width: ringSize, height: ringSize }}>
       <CaddieNavIcon size={size} strokeWidth={strokeWidth} className={pulsing ? "animate-caddie-pulse" : undefined} />
+      {/* One soft outward halo — distinct from the processing ring below
+          (which fills in place) — plus 2-3 small spark marks above the
+          mascot, both firing only during the same ~700ms completion
+          window as the icon's own scale. */}
+      {pulsing && (
+        <>
+          <span className="pointer-events-none absolute inset-0 animate-caddie-pulse-halo rounded-full bg-fairway-500" aria-hidden="true" />
+          {SPARK_ANGLES.map((angle, i) => (
+            <span
+              key={angle}
+              className="pointer-events-none absolute left-1/2 top-0"
+              style={{ transform: `translateX(-50%) translateY(-4px) rotate(${angle}deg)` }}
+              aria-hidden="true"
+            >
+              <span className="block h-1.5 w-0.5 animate-caddie-pulse-spark rounded-full bg-fairway-500" style={{ animationDelay: `${i * 40}ms` }} />
+            </span>
+          ))}
+        </>
+      )}
       {ringVisible && (
         <svg
           width={ringSize}
           height={ringSize}
           viewBox={`0 0 ${ringSize} ${ringSize}`}
-          className="pointer-events-none absolute text-fairway-600"
+          className={`pointer-events-none absolute text-fairway-600 transition-opacity duration-300 ${pulsing ? "opacity-0" : "opacity-100"}`}
           aria-hidden="true"
         >
           {/* pathLength=1 makes stroke-dasharray/dashoffset simple 0-1

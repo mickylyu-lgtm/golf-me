@@ -72,18 +72,19 @@
      of rest at the top before repeating — real swings are slow-back,
      fast-down, not symmetric. */
   --animate-caddie-swing-club: caddie-swing-club 2.2s cubic-bezier(0.45, 0, 0.2, 1) infinite;
-  /* Bottom-nav Caddie icon's one-shot "analysis just finished" pulse — NOT
-     the mascot's own idle "thinking" loop above. Plays once (no infinite)
-     when a caddie_analyses row flips out of 'processing'; the global
-     prefers-reduced-motion rule below already collapses this to a no-op
-     for anyone who needs that, same as every other animation here. */
-  --animate-caddie-pulse: caddie-pulse 400ms ease-out;
-  /* Soft green halo accompanying the scale pulse above (on the icon's
-     wrapper, not the icon itself, so the glow reads as a bloom around it
-     rather than being clipped to the mascot's own SVG bounds) — matches
-     the reference design's "Complete" state, which is a glow, not just a
-     scale change. */
-  --animate-caddie-pulse-glow: caddie-pulse-glow 400ms ease-out;
+  /* Bottom-nav Caddie icon's one-shot "analysis just finished" sequence —
+     NOT the mascot's own idle "thinking" loop above. Plays once (no
+     infinite) when a caddie_analyses row flips out of 'processing' into
+     'complete'; the global prefers-reduced-motion rule below already
+     collapses every duration here to a no-op for anyone who needs that.
+     Three pieces, all timed within the same ~700ms window: the mascot's
+     own scale, an outward-expanding halo ring, and 2-3 small spark marks
+     above it — a plain scale-only pulse read as invisible in practice
+     (reported live), so the halo+sparks are what actually make the
+     moment unmistakable, not a bigger scale number. */
+  --animate-caddie-pulse: caddie-pulse 700ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  --animate-caddie-pulse-halo: caddie-pulse-halo 700ms ease-out;
+  --animate-caddie-pulse-spark: caddie-pulse-spark 700ms ease-out;
 
   @keyframes fade-in {
     from {
@@ -194,17 +195,46 @@
     100% {
       transform: scale(1);
     }
-    50% {
-      transform: scale(1.08);
+    30% {
+      transform: scale(1.12);
     }
   }
-  @keyframes caddie-pulse-glow {
+  /* A ring that expands outward from the icon and fades — distinct from
+     the processing ring (which fills in place) and from a plain glow
+     (which just brightens without moving) — reads as "one pulse of
+     energy released," matching "one soft outward green pulse/halo." */
+  @keyframes caddie-pulse-halo {
     0%,
-    100% {
-      box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+    15% {
+      transform: scale(0.5);
+      opacity: 0;
     }
-    50% {
-      box-shadow: 0 0 10px 4px rgba(34, 197, 94, 0.35);
+    35% {
+      transform: scale(0.75);
+      opacity: 0.45;
+    }
+    100% {
+      transform: scale(1.9);
+      opacity: 0;
+    }
+  }
+  /* Applied individually to each of the 2-3 small spark marks above the
+     mascot (see CaddieNavStatusIcon) -- appear right as the halo begins,
+     hold briefly, then fade quickly, well within the ~700ms total. */
+  @keyframes caddie-pulse-spark {
+    0%,
+    15% {
+      opacity: 0;
+      transform: scale(0.6);
+    }
+    35% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    70%,
+    100% {
+      opacity: 0;
+      transform: scale(1);
     }
   }
   @keyframes wheel-spin {
@@ -341,9 +371,17 @@ select {
   }
   .animate-caddie-pulse {
     animation: var(--animate-caddie-pulse);
+    /* SVG elements default transform-origin to 0 0 (top-left), not center —
+       without this the scale above pivots from the corner instead of
+       growing cleanly in place. */
+    transform-box: fill-box;
+    transform-origin: center;
   }
-  .animate-caddie-pulse-glow {
-    animation: var(--animate-caddie-pulse-glow);
+  .animate-caddie-pulse-halo {
+    animation: var(--animate-caddie-pulse-halo);
+  }
+  .animate-caddie-pulse-spark {
+    animation: var(--animate-caddie-pulse-spark);
   }
   /* Onboarding's per-step entrance — mobile only. Desktop rendering was
      reading as an abrupt pop instead of a fade for reasons that resisted a
