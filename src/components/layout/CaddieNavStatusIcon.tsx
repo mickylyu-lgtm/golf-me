@@ -42,7 +42,8 @@ export function CaddieNavStatusIcon({ size, strokeWidth }: CaddieNavStatusIconPr
   const wasProcessingRef = useRef(false);
 
   useEffect(() => {
-    const processingIds = new Set(caddieAnalyses.filter((a) => a.status === "processing").map((a) => a.id));
+    const processingRows = caddieAnalyses.filter((a) => a.status === "processing");
+    const processingIds = new Set(processingRows.map((a) => a.id));
     const prevIds = prevProcessingIdsRef.current;
     // Tracked by ID, not just a processing/not-processing boolean, so a
     // FAILED analysis can't trigger the completion snap+pulse: analyze-swing
@@ -81,15 +82,27 @@ export function CaddieNavStatusIcon({ size, strokeWidth }: CaddieNavStatusIconPr
     }
 
     if (nowProcessing && !wasProcessing) {
-      // Fresh start — reset to empty instantly, then kick off the long
-      // fill one frame later so the browser actually paints the empty
-      // state before the long transition begins (both changes landing in
-      // the same paint would skip the visible animation entirely).
+      // Fires both on a genuine fresh start AND after a page reload mid-
+      // analysis (this component just remounted with no memory of when the
+      // fill actually began) — reported live as the ring restarting from
+      // empty on every refresh. createdAt is real, persisted data (not
+      // component-local state), so computing elapsed time from it instead
+      // of always assuming "just started now" fixes both cases at once:
+      // resume from wherever the real elapsed time already puts it, then
+      // keep filling for only whatever's left of the estimate.
       setRingVisible(true);
+      const earliestCreatedAt = Math.min(...processingRows.map((a) => new Date(a.createdAt).getTime()));
+      const elapsedMs = Math.max(Date.now() - earliestCreatedAt, 0);
+      const progress = Math.min(elapsedMs / ESTIMATED_DURATION_MS, 1);
+      const currentOffset = 1 - progress * (1 - ESTIMATED_MOSTLY_DONE_OFFSET);
+      const remainingMs = Math.max(ESTIMATED_DURATION_MS - elapsedMs, 0);
       setFillTransitionMs(0);
-      setFillOffset(1);
+      setFillOffset(currentOffset);
+      // Next frame so the browser actually paints the resumed-from-here
+      // state before the remaining transition begins (both changes landing
+      // in the same paint would skip the visible animation entirely).
       const raf = requestAnimationFrame(() => {
-        setFillTransitionMs(ESTIMATED_DURATION_MS);
+        setFillTransitionMs(remainingMs);
         setFillOffset(ESTIMATED_MOSTLY_DONE_OFFSET);
       });
       return () => cancelAnimationFrame(raf);
@@ -113,7 +126,10 @@ export function CaddieNavStatusIcon({ size, strokeWidth }: CaddieNavStatusIconPr
   const radius = ringSize / 2 - 1.5;
 
   return (
-    <span className="relative flex shrink-0 items-center justify-center" style={{ width: ringSize, height: ringSize }}>
+    <span
+      className={`relative flex shrink-0 items-center justify-center rounded-full ${pulsing ? "animate-caddie-pulse-glow" : ""}`}
+      style={{ width: ringSize, height: ringSize }}
+    >
       <CaddieNavIcon size={size} strokeWidth={strokeWidth} className={pulsing ? "animate-caddie-pulse" : undefined} />
       {ringVisible && (
         <svg
