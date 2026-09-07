@@ -44,12 +44,12 @@ export function CaddieNavStatusIcon({ size, strokeWidth }: CaddieNavStatusIconPr
     return () => clearTimeout(timer);
   }, [caddieAnalyses]);
 
-  // Visually separated from the mascot (not touching it), sized off the
-  // icon's own size so it scales correctly between the bottom nav (28px)
-  // and the desktop sidebar (24px).
-  const ringSize = size + 14;
+  // Visually separated from the mascot but hugging it closely (reported
+  // live as too large a gap in an earlier pass) — sized off the icon's own
+  // size so it scales correctly between the bottom nav (28px) and the
+  // desktop sidebar (24px).
+  const ringSize = size + 7;
   const radius = ringSize / 2 - 1.5;
-  const circumference = 2 * Math.PI * radius;
 
   return (
     <span className="relative flex shrink-0 items-center justify-center" style={{ width: ringSize, height: ringSize }}>
@@ -59,25 +59,28 @@ export function CaddieNavStatusIcon({ size, strokeWidth }: CaddieNavStatusIconPr
           width={ringSize}
           height={ringSize}
           viewBox={`0 0 ${ringSize} ${ringSize}`}
-          className="pointer-events-none absolute animate-spin text-fairway-600"
-          style={{ animationDuration: "1.6s" }}
+          className="pointer-events-none absolute text-fairway-600"
           aria-hidden="true"
         >
-          {/* A partial arc (~72% of the circumference), not a full circle —
-              rotating the whole (otherwise-static) SVG makes that arc sweep
-              around the stationary mascot underneath. prefers-reduced-motion
-              is already handled globally (index.css collapses every
-              animation-duration to ~0), so this renders as a static partial
-              ring for anyone who needs that, with no extra variant here. */}
+          {/* pathLength=1 makes stroke-dasharray/dashoffset simple 0-1
+              fractions of this circle's own length, regardless of its
+              actual pixel radius — see the animate-caddie-ring comment in
+              index.css for why that lets one fixed keyframe pair work at
+              both this icon's sizes. prefers-reduced-motion is already
+              handled globally there too (collapses every animation-duration
+              app-wide), so this renders as a static partial ring for anyone
+              who needs that, with no extra variant here. */}
           <circle
             cx={ringSize / 2}
             cy={ringSize / 2}
             r={radius}
+            pathLength={1}
             fill="none"
             stroke="currentColor"
             strokeWidth={2}
             strokeLinecap="round"
-            strokeDasharray={`${circumference * 0.72} ${circumference}`}
+            strokeDasharray={1}
+            className="animate-caddie-ring"
           />
         </svg>
       )}

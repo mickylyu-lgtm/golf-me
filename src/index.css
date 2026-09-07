@@ -78,6 +78,16 @@
      prefers-reduced-motion rule below already collapses this to a no-op
      for anyone who needs that, same as every other animation here. */
   --animate-caddie-pulse: caddie-pulse 400ms ease-out;
+  /* The processing ring's arc itself: grows and shrinks (stroke-dashoffset)
+     while continuously rotating (transform) — the standard two-part
+     "indeterminate circular progress" composition (Material's spinner,
+     macOS's) so it reads as actively sweeping/completing laps, not just a
+     fixed-length dash spinning in place. Uses pathLength="1" on the circle
+     (see CaddieNavStatusIcon) so these offsets are simple 0-1 fractions of
+     the circle's own length, independent of its actual pixel radius —
+     same animation works unchanged at the bottom nav's and sidebar's
+     different icon sizes. */
+  --animate-caddie-ring: caddie-ring-rotate 1.6s linear infinite, caddie-ring-dash 1.6s ease-in-out infinite;
 
   @keyframes fade-in {
     from {
@@ -190,6 +200,22 @@
     }
     50% {
       transform: scale(1.08);
+    }
+  }
+  @keyframes caddie-ring-rotate {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @keyframes caddie-ring-dash {
+    0% {
+      stroke-dashoffset: 0.95;
+    }
+    50% {
+      stroke-dashoffset: 0.2;
+    }
+    100% {
+      stroke-dashoffset: 0.95;
     }
   }
   @keyframes wheel-spin {
@@ -326,6 +352,11 @@ select {
   }
   .animate-caddie-pulse {
     animation: var(--animate-caddie-pulse);
+  }
+  .animate-caddie-ring {
+    animation: var(--animate-caddie-ring);
+    transform-origin: center;
+    transform-box: fill-box;
   }
   /* Onboarding's per-step entrance — mobile only. Desktop rendering was
      reading as an abrupt pop instead of a fade for reasons that resisted a
