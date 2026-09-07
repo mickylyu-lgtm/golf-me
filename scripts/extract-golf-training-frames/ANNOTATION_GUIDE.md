@@ -105,8 +105,10 @@ than carrying two rarely-populated fields.
 
 ## Club-model scoping note
 
-Whether club keypoints end up in the *same* Roboflow project as the body
-keypoints or a *separate* one is an open engineering decision (see the
-tradeoffs write-up already discussed for this project) — label according to
-whichever your current Roboflow project schema defines. The anatomical rules
-above hold either way.
+Decided: club keypoints (grip center, shaft midpoint, club head) live in a
+**separate** Roboflow project from the body keypoints, not folded into the
+same model — see the tradeoffs write-up already discussed for this
+project. In practice this means labeling the same source frame twice, once
+in each project: body keypoints in the existing-schema project, club
+keypoints in a new dedicated one. The anatomical rules above are identical
+either way.
