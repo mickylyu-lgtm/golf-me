@@ -1,52 +1,78 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import { NAV_ITEMS } from "../../lib/nav";
 import { NAV_TUTORIAL_ID_BY_PATH } from "../../lib/tutorialSteps";
 import { GolfMeLogo } from "../brand/GolfMeLogo";
 import { useLocale } from "../../i18n/LocaleContext";
 import { useData } from "../../context/DataContext";
+import { useCaddieNavStatus } from "../../lib/useCaddieNavStatus";
+import { CaddieNavStatusIcon } from "./CaddieNavStatusIcon";
 
 export function SideNav() {
   const { t } = useLocale();
-  const { dmConversations } = useData();
+  const navigate = useNavigate();
+  const { dmConversations, markNotificationRead } = useData();
   const unreadCount = dmConversations.filter((c) => c.unread).length;
+  const { isProcessing: caddieProcessing, unseenNotification: caddieUnseen } = useCaddieNavStatus();
   return (
     <aside className="fixed inset-y-0 left-0 z-40 hidden w-20 flex-col border-r border-slate-200 bg-white py-6 sm:flex lg:w-60">
       <div className="mb-8 px-5">
         <GolfMeLogo size={20} wordmarkClassName="hidden text-lg font-extrabold tracking-tight lg:inline" />
       </div>
       <nav className="flex flex-1 flex-col gap-1 px-3">
-        {NAV_ITEMS.map(({ labelKey, path, icon: Icon }) => (
-          <NavLink
-            key={path}
-            to={path}
-            end={path === "/"}
-            data-tutorial-id={NAV_TUTORIAL_ID_BY_PATH[path]}
-            className={({ isActive }) =>
-              `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none ${
-                isActive
-                  ? "bg-fairway-50 text-fairway-700"
-                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-800 active:bg-slate-100"
-              }`
-            }
-          >
-            {/* Fixed-width wrapper keeps every label starting at the same
-                x-offset regardless of icon size — Caddie's icon renders
-                larger (so its "AI" lettering stays legible) but must not
-                shift its label out of line with its siblings' labels. */}
-            <span className="relative flex w-6 items-center justify-center">
-              <Icon size={path === "/caddie" ? 24 : 20} />
-              {path === "/messages" && unreadCount > 0 && (
-                <span
-                  className="absolute -right-1.5 -top-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-fairway-500 px-1 text-[9px] font-bold leading-none text-white"
-                  aria-label={`${unreadCount} unread messages`}
-                >
-                  {unreadCount > 9 ? "9+" : unreadCount}
-                </span>
-              )}
-            </span>
-            <span className="hidden lg:inline">{t(labelKey)}</span>
-          </NavLink>
-        ))}
+        {NAV_ITEMS.map(({ labelKey, path, icon: Icon }) => {
+          const isCaddie = path === "/caddie";
+          const caddieAriaLabel = isCaddie
+            ? caddieProcessing
+              ? t("caddie.navAnalyzing")
+              : caddieUnseen
+                ? t("caddie.navResultReady")
+                : undefined
+            : undefined;
+          return (
+            <NavLink
+              key={path}
+              to={path}
+              end={path === "/"}
+              data-tutorial-id={NAV_TUTORIAL_ID_BY_PATH[path]}
+              aria-label={caddieAriaLabel}
+              onClick={(e) => {
+                if (isCaddie && caddieUnseen) {
+                  e.preventDefault();
+                  markNotificationRead(caddieUnseen.id);
+                  navigate(caddieUnseen.linkTo);
+                }
+              }}
+              className={({ isActive }) =>
+                `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none ${
+                  isActive
+                    ? "bg-fairway-50 text-fairway-700"
+                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-800 active:bg-slate-100"
+                }`
+              }
+            >
+              {/* Fixed-width wrapper keeps every label starting at the same
+                  x-offset regardless of icon size — Caddie's icon renders
+                  larger (so its "AI" lettering stays legible) but must not
+                  shift its label out of line with its siblings' labels. */}
+              <span className="relative flex w-6 items-center justify-center">
+                {isCaddie ? (
+                  <CaddieNavStatusIcon size={24} strokeWidth={2} />
+                ) : (
+                  <Icon size={20} />
+                )}
+                {path === "/messages" && unreadCount > 0 && (
+                  <span
+                    className="absolute -right-1.5 -top-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-fairway-500 px-1 text-[9px] font-bold leading-none text-white"
+                    aria-label={`${unreadCount} unread messages`}
+                  >
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
+              </span>
+              <span className="hidden lg:inline">{t(labelKey)}</span>
+            </NavLink>
+          );
+        })}
       </nav>
     </aside>
   );

@@ -50,7 +50,8 @@ const CONFIDENCE_TONE: Record<CaddieConfidence, "fairway" | "outline" | "rose"> 
 // is the "From Community Post" breadcrumb.
 export function CaddieAnalysisDetail() {
   const { analysisId } = useParams<{ analysisId: string }>();
-  const { getCaddieAnalysis, getPost, createCaddieAnalysis, markCaddieAnalysisShared, translateCaddieAnalysis, createPost } = useData();
+  const { getCaddieAnalysis, getPost, createCaddieAnalysis, markCaddieAnalysisShared, translateCaddieAnalysis, createPost, notifications, markNotificationRead } =
+    useData();
   const { t, locale } = useLocale();
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -72,6 +73,17 @@ export function CaddieAnalysisDetail() {
     if (analysis || !analysisId || !wasProcessingRef.current) return;
     showToast(t("caddie.askCaddieError"), "warning");
   }, [analysis, analysisId, showToast, t]);
+
+  // Clears the bottom-nav "result ready" dot regardless of HOW someone got
+  // here (the nav tap shortcut already marks it read too, but this covers
+  // every other path — the Caddie hub list, Home's "Continue in Caddie"
+  // card, a direct link) — viewing the result is what the spec says should
+  // clear it, not just tapping one specific entry point.
+  useEffect(() => {
+    if (!analysisId) return;
+    const match = notifications.find((n) => n.type === "caddie_analysis_complete" && n.linkTo === `/caddie/${analysisId}` && !n.read);
+    if (match) markNotificationRead(match.id);
+  }, [analysisId, notifications, markNotificationRead]);
 
   if (!analysis) return <Navigate to="/caddie" replace />;
 

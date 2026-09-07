@@ -72,6 +72,12 @@
      of rest at the top before repeating — real swings are slow-back,
      fast-down, not symmetric. */
   --animate-caddie-swing-club: caddie-swing-club 2.2s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+  /* Bottom-nav Caddie icon's one-shot "analysis just finished" pulse — NOT
+     the mascot's own idle "thinking" loop above. Plays once (no infinite)
+     when a caddie_analyses row flips out of 'processing'; the global
+     prefers-reduced-motion rule below already collapses this to a no-op
+     for anyone who needs that, same as every other animation here. */
+  --animate-caddie-pulse: caddie-pulse 400ms ease-out;
 
   @keyframes fade-in {
     from {
@@ -175,6 +181,15 @@
     75%,
     100% {
       transform: rotate(-8deg);
+    }
+  }
+  @keyframes caddie-pulse {
+    0%,
+    100% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.08);
     }
   }
   @keyframes wheel-spin {
@@ -308,6 +323,9 @@ select {
   }
   .animate-caddie-swing-club {
     animation: var(--animate-caddie-swing-club);
+  }
+  .animate-caddie-pulse {
+    animation: var(--animate-caddie-pulse);
   }
   /* Onboarding's per-step entrance — mobile only. Desktop rendering was
      reading as an abrupt pop instead of a fade for reasons that resisted a
