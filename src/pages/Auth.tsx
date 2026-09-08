@@ -38,12 +38,18 @@ export function Auth({ mode }: AuthProps) {
     setBusy(true);
     try {
       await signInWithGoogle();
-      // No further action here on success — signInWithGoogle() redirects the
-      // whole page to Google, so this component unmounts. The post-redirect
-      // route guards (App.tsx) decide where a returning session lands.
+      // On WEB this really does navigate the whole page away (component
+      // unmounts, so resetting busy would be moot) -- but on native,
+      // signInWithGoogle() just opens the in-app browser as a separate
+      // overlay and returns immediately; this component stays mounted
+      // underneath the whole time. Without the finally below, closing that
+      // browser without completing sign-in (reported live) left this
+      // button permanently disabled — busy was never reset because
+      // nothing here ever threw, and there was no unmount to make it moot.
     } catch (err) {
-      setBusy(false);
       showToast(err instanceof Error ? err.message : t("auth.authError"), "warning");
+    } finally {
+      setBusy(false);
     }
   }
 
