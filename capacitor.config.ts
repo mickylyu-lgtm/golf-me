@@ -20,6 +20,16 @@ const config: CapacitorConfig = {
   server: {
     url: "https://golfme.app",
   },
+  // WKWebView's own background defaults to black. iOS pans the visual
+  // viewport to keep a focused textbox clear of the keyboard independent of
+  // any in-page CSS/JS -- during that pan there's a brief moment where the
+  // WebView shows its native background instead of page content, which
+  // read as a black flash/drop on every textbox tap (reported live). This
+  // paints that native layer the app's own cream instead, so the same
+  // momentary reveal is invisible against the page rather than a black
+  // flash. This is a native (Capacitor config) change -- needs `npx cap
+  // sync ios` + a fresh Xcode archive, not just a Vercel deploy.
+  backgroundColor: "#faf9f6",
 };
 
 export default config;
