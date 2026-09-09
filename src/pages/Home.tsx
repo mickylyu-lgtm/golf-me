@@ -69,8 +69,12 @@ export function Home() {
         : t("home.roundsNeedPlayers", { count: nearbyThisWeekend.length })
       : t("home.readyToGolf");
 
+  // Newest-posted first, same fix and same reasoning as GolfCalls.tsx's
+  // own defaultResults — a round hosted moments ago should show up here
+  // immediately rather than being buried under rounds happening sooner but
+  // posted long ago.
   const nearbyRounds = useMemo(
-    () => [...nearbyAnytime].sort((a, b) => a.dateISO.localeCompare(b.dateISO)).slice(0, NEARBY_ROUNDS_SHOWN),
+    () => [...nearbyAnytime].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, NEARBY_ROUNDS_SHOWN),
     [nearbyAnytime],
   );
 
