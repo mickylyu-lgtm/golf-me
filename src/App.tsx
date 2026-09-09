@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { Analytics } from "@vercel/analytics/react";
 import { DataProvider, useData } from "./context/DataContext";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { RealRoundsProvider } from "./context/RealRoundsContext";
@@ -296,6 +297,7 @@ export default function App() {
         </RealSocialProvider>
         </RealRoundsProvider>
       </AuthProvider>
+      <Analytics />
     </LocaleProvider>
   );
 }
