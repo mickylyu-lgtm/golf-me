@@ -78,8 +78,12 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
       .sort((a, b) => b.matchScore - a.matchScore);
   }, [isMatched, baseResults, radius, when, customDate, intent, budgetMax, skill, vibeFilter, walk, currentUser, effectiveLoc]);
 
+  // Newest-posted first (not soonest tee time) -- a freshly hosted round
+  // should show up at the top of the feed immediately, the same
+  // expectation as a social post, rather than being buried under rounds
+  // happening sooner but posted long ago.
   const defaultResults = useMemo(
-    () => [...baseResults].sort((a, b) => a.dateISO.localeCompare(b.dateISO)),
+    () => [...baseResults].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     [baseResults],
   );
 

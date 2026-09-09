@@ -23,6 +23,8 @@ import { coordsForCourse } from "../lib/courses";
 import { haversineMiles } from "../lib/geo";
 import { track } from "../lib/analytics";
 import { attachBookingProofDirect } from "../lib/useBookingProof";
+import { clearHostRoundDraft, loadHostRoundDraft, saveHostRoundDraft } from "../lib/hostRoundDraft";
+import type { LookingFor, WhenChoice } from "../lib/hostRoundDraft";
 
 const BOOKING_SOURCES = ["Course Website", "GolfNow", "Lightspeed / Chronogolf", "Phone Reservation", "Other"] as const;
 
@@ -43,8 +45,6 @@ function bookingSourceLabel(source: string, t: (key: TranslationKey) => string):
 
 const SKILL_OPTIONS: SkillFilter[] = ["Any Skill Level", "Beginner", "Intermediate", "Advanced"];
 const WALK_OPTIONS: WalkOrCart[] = ["Either", "Walking", "Cart"];
-type LookingFor = "anyone" | "similar" | "custom";
-type WhenChoice = "today" | "tomorrow" | "weekend" | "date";
 
 const WHEN_OPTIONS: { value: WhenChoice; labelKey: "filters.today" | "filters.tomorrow" | "filters.thisWeekend" | "filters.chooseDate" }[] = [
   { value: "today", labelKey: "filters.today" },
@@ -88,50 +88,122 @@ export function CreateGolfCall() {
   const [searchParams] = useSearchParams();
   const fromPostId = searchParams.get("fromPost");
 
-  const [step, setStep] = useState(1);
+  // Resumes an in-progress draft (see hostRoundDraft.ts) across a native
+  // photo-picker round trip, an accidental back-out, or just closing the
+  // app mid-wizard — reported live as every typed field vanishing in
+  // exactly those cases. Only consulted once per mount; a deep link's own
+  // params (below) still win when there's no draft to resume.
+  const initial = loadHostRoundDraft();
+
+  const [step, setStep] = useState(initial?.step ?? 1);
   // Fill My Foursome (pre-inviting specific players at creation time) needs
   // a real Golf Circle/Following to invite by id, which doesn't exist yet —
   // real hosting this phase is "Starting Fresh" only. Demo mode keeps both.
-  const [fillMode, setFillMode] = useState(isDemo && searchParams.get("mode") === "fill");
-  const [course, setCourse] = useState(() => searchParams.get("course") ?? "");
-  const [pickedCourseId, setPickedCourseId] = useState<string | null>(null);
-  const [pickedCourseLat, setPickedCourseLat] = useState<number | null>(null);
-  const [pickedCourseLng, setPickedCourseLng] = useState<number | null>(null);
+  const [fillMode, setFillMode] = useState(initial?.fillMode ?? (isDemo && searchParams.get("mode") === "fill"));
+  const [course, setCourse] = useState(() => initial?.course ?? searchParams.get("course") ?? "");
+  const [pickedCourseId, setPickedCourseId] = useState<string | null>(initial?.pickedCourseId ?? null);
+  const [pickedCourseLat, setPickedCourseLat] = useState<number | null>(initial?.pickedCourseLat ?? null);
+  const [pickedCourseLng, setPickedCourseLng] = useState<number | null>(initial?.pickedCourseLng ?? null);
   const [submitting, setSubmitting] = useState(false);
-  const [areaLabel, setAreaLabel] = useState(() => currentUser.areaLabel);
+  const [areaLabel, setAreaLabel] = useState(() => initial?.areaLabel ?? currentUser.areaLabel);
   const [editingArea, setEditingArea] = useState(false);
   // "" is a valid mid-edit state — never coerced to 0 until handleSubmit, so
   // an intentional 0 can't get stuck un-clearable.
-  const [distanceMiles, setDistanceMiles] = useState<number | "">(5);
+  const [distanceMiles, setDistanceMiles] = useState<number | "">(initial?.distanceMiles ?? 5);
   const [when, setWhen] = useState<WhenChoice>(
-    () => (searchParams.get("when") as WhenChoice | null) ?? (searchParams.get("date") ? "date" : "today"),
+    () => initial?.when ?? (searchParams.get("when") as WhenChoice | null) ?? (searchParams.get("date") ? "date" : "today"),
   );
   // Derived from the resolved `when` above (not the raw URL param) so the
   // default "Today" pill and the actual date value always agree — the URL
   // param is absent on a plain visit, but `when` still resolves to "today".
-  const [date, setDate] = useState(() => prefillDateFromWhen(when, searchParams.get("date")));
-  const [timeLabel, setTimeLabel] = useState("");
-  const [price, setPrice] = useState<number | "">(50);
-  const [totalSpots, setTotalSpots] = useState(4);
-  const [joinMode, setJoinMode] = useState<JoinMode>("instant");
-  const [lookingFor, setLookingFor] = useState<LookingFor>("anyone");
-  const [skillLevel, setSkillLevel] = useState<SkillFilter>("Any Skill Level");
-  const [vibe, setVibe] = useState<GolfVibe>("Casual & Social");
-  const [walkOrCart, setWalkOrCart] = useState<WalkOrCart>("Either");
-  const [holes, setHoles] = useState<Holes>(18);
-  const [gameFormat, setGameFormat] = useState<GameFormat>("Standard Stroke Play");
-  const [notes, setNotes] = useState("");
-  const [friendIds, setFriendIds] = useState<string[]>([]);
+  const [date, setDate] = useState(() => initial?.date ?? prefillDateFromWhen(when, searchParams.get("date")));
+  const [timeLabel, setTimeLabel] = useState(initial?.timeLabel ?? "");
+  const [price, setPrice] = useState<number | "">(initial?.price ?? 50);
+  const [totalSpots, setTotalSpots] = useState(initial?.totalSpots ?? 4);
+  const [joinMode, setJoinMode] = useState<JoinMode>(initial?.joinMode ?? "instant");
+  const [lookingFor, setLookingFor] = useState<LookingFor>(initial?.lookingFor ?? "anyone");
+  const [skillLevel, setSkillLevel] = useState<SkillFilter>(initial?.skillLevel ?? "Any Skill Level");
+  const [vibe, setVibe] = useState<GolfVibe>(initial?.vibe ?? "Casual & Social");
+  const [walkOrCart, setWalkOrCart] = useState<WalkOrCart>(initial?.walkOrCart ?? "Either");
+  const [holes, setHoles] = useState<Holes>(initial?.holes ?? 18);
+  const [gameFormat, setGameFormat] = useState<GameFormat>(initial?.gameFormat ?? "Standard Stroke Play");
+  const [notes, setNotes] = useState(initial?.notes ?? "");
+  const [friendIds, setFriendIds] = useState<string[]>(initial?.friendIds ?? []);
   const [showAdvanced, setShowAdvanced] = useState(false);
   // Optional booking-proof capture — never blocks canSubmit, matching the
   // brief's explicit "a host must still be able to create a Golf Call
   // without verification." Uploaded only after the round itself exists
   // (see handleSubmit), since golf_call_id is required for the Storage
   // path/attach RPC.
-  const [proofExpanded, setProofExpanded] = useState(false);
+  const [proofExpanded, setProofExpanded] = useState(initial?.proofExpanded ?? false);
+  // Never persisted (see hostRoundDraft.ts) — a File can't survive
+  // localStorage's JSON round trip, and this is exactly the field a native
+  // photo-picker round trip was clobbering the REST of the form over.
   const [proofFile, setProofFile] = useState<File | null>(null);
-  const [proofSource, setProofSource] = useState<string>(BOOKING_SOURCES[0]);
-  const [proofReference, setProofReference] = useState("");
+  const [proofSource, setProofSource] = useState<string>(initial?.proofSource ?? BOOKING_SOURCES[0]);
+  const [proofReference, setProofReference] = useState(initial?.proofReference ?? "");
+
+  // Persist a resumable draft on every change (not proofFile — see its own
+  // state comment above) so a native photo-picker round trip, an
+  // accidental back-out, or closing the app mid-wizard never loses what was
+  // already typed — same "didn't send, but it's still there" idea as a
+  // chat composer's draft. Cleared only once the round is actually posted
+  // (see handleSubmit).
+  useEffect(() => {
+    saveHostRoundDraft({
+      step,
+      fillMode,
+      course,
+      pickedCourseId,
+      pickedCourseLat,
+      pickedCourseLng,
+      areaLabel,
+      distanceMiles,
+      when,
+      date,
+      timeLabel,
+      price,
+      totalSpots,
+      joinMode,
+      lookingFor,
+      skillLevel,
+      vibe,
+      walkOrCart,
+      holes,
+      gameFormat,
+      notes,
+      friendIds,
+      proofExpanded,
+      proofSource,
+      proofReference,
+    });
+  }, [
+    step,
+    fillMode,
+    course,
+    pickedCourseId,
+    pickedCourseLat,
+    pickedCourseLng,
+    areaLabel,
+    distanceMiles,
+    when,
+    date,
+    timeLabel,
+    price,
+    totalSpots,
+    joinMode,
+    lookingFor,
+    skillLevel,
+    vibe,
+    walkOrCart,
+    holes,
+    gameFormat,
+    notes,
+    friendIds,
+    proofExpanded,
+    proofSource,
+    proofReference,
+  ]);
 
   const maxFriends = Math.max(0, totalSpots - 2); // leave room for host + at least 1 open spot
   const openSpotsRemaining = totalSpots - 1 - friendIds.length;
@@ -244,6 +316,7 @@ export function CreateGolfCall() {
       });
       if (fromPostId) attachGolfCallToPost(fromPostId, call.id).catch((err) => console.error("Golf Me: failed to attach round to post.", err));
       track("first_round_hosted");
+      clearHostRoundDraft();
       showToast(fillMode ? t("host.postedFillToast") : t("host.postedFreshToast"), "success");
       navigate(fromPostId ? `/community/${fromPostId}` : `/golf-calls/${call.id}`);
       return;
@@ -269,6 +342,7 @@ export function CreateGolfCall() {
         notes: notes.trim() || undefined,
       });
       track("first_round_hosted");
+      clearHostRoundDraft();
       // Best-effort: the round itself already exists and is posted either
       // way — a failed proof upload here must never look like the whole
       // hosting action failed, since from the golfer's perspective it
