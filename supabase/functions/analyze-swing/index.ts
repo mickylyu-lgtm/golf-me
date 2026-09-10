@@ -44,6 +44,7 @@ const MAX_VIDEO_BYTES = 200 * 1024 * 1024; // matches the community-media Storag
 const STALE_PROCESSING_MINUTES = 5; // a 'processing' row older than this is treated as abandoned, not an active duplicate
 const FILE_ACTIVE_POLL_ATTEMPTS = 6;
 const FILE_ACTIVE_POLL_DELAY_MS = 2000;
+const MAX_TRIM_WINDOW_SECONDS = 10; // matches AnalyzeSwing.tsx's own MAX_SWING_VIDEO_SECONDS — a client-sent startSeconds/endSeconds window is validated against this, never trusted as-is
 
 // Roboflow's validated, already-deployed six-phase pose workflow — do not
 // retrain/replace/rebuild this, see product brief point 37.
@@ -262,6 +263,10 @@ interface RequestBody {
   thumbnailUrl?: string;
   swingType?: string;
   locale?: string;
+  // A golfer-picked window within a longer source video (see
+  // VideoTrimSelector) — validated/clamped below, never trusted as-is.
+  startSeconds?: number;
+  endSeconds?: number;
 }
 
 interface CaddieAnalysisRow {
@@ -389,6 +394,18 @@ Deno.serve(async (req: Request) => {
   }
   const locale = body.locale && SUPPORTED_LOCALES.has(body.locale) ? body.locale : "en";
 
+  // A trimmed window from VideoTrimSelector, re-validated server-side
+  // rather than trusted from the client — malformed/out-of-range values
+  // are silently ignored (falls back to analyzing the whole source video)
+  // rather than failing the request over what's just a cost-control input,
+  // not a correctness one.
+  const clientWindow =
+    typeof body.startSeconds === "number" && typeof body.endSeconds === "number" && body.endSeconds > body.startSeconds
+      ? { startSeconds: Math.max(0, body.startSeconds), endSeconds: body.endSeconds }
+      : undefined;
+  const trimWindow =
+    clientWindow && clientWindow.endSeconds - clientWindow.startSeconds <= MAX_TRIM_WINDOW_SECONDS + 0.5 ? clientWindow : undefined;
+
   // Rate limiting — scoped to this user's own rows only, RLS does that for
   // free since `supabase` here carries the caller's JWT, not service role.
   const { data: recentRows, error: recentError } = await supabase
@@ -510,7 +527,14 @@ Deno.serve(async (req: Request) => {
       const extractRes = await fetch(FRAME_EXTRACT_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${frameExtractSecret}` },
-        body: JSON.stringify({ videoUrl: row.source_media_url, fps: ANALYSIS_FPS }),
+        // An explicit trimWindow (golfer-picked, see VideoTrimSelector) skips
+        // extract-frames' own freezedetect-based auto-trim entirely (see its
+        // "explicit window" comment) — the golfer already decided the window.
+        body: JSON.stringify({
+          videoUrl: row.source_media_url,
+          fps: ANALYSIS_FPS,
+          ...(trimWindow ? { startSeconds: trimWindow.startSeconds, endSeconds: trimWindow.endSeconds } : {}),
+        }),
       });
       if (!extractRes.ok) {
         const errBody = await extractRes.text().catch(() => "");
@@ -758,6 +782,14 @@ Deno.serve(async (req: Request) => {
         body.swingType ? `The golfer says this is a: ${body.swingType}.` : "",
         `Remember: respond in ${localeName} (see the system instruction's language requirement).`,
         "Analyze this golf swing video and return your structured feedback, using TRUSTED_POSE_DATA below as the authoritative source for body-position claims and phase timestamps.",
+        // The uploaded file is the golfer's ORIGINAL, untrimmed source video
+        // (VideoTrimSelector never re-encodes) — only TRUSTED_POSE_DATA's own
+        // frames were sampled from the window they actually picked. Without
+        // this, footage outside that window (walking up, other swings, etc.
+        // if the source was long) could otherwise read as part of the swing.
+        trimWindow
+          ? `The golfer's swing of interest is only within roughly ${trimWindow.startSeconds.toFixed(1)}s-${trimWindow.endSeconds.toFixed(1)}s of this video (that's exactly the range TRUSTED_POSE_DATA's timestamps cover) — ignore any footage before or after that window.`
+          : "",
         `TRUSTED_POSE_DATA: ${JSON.stringify(trustedPoseData)}`,
       ]
         .filter(Boolean)

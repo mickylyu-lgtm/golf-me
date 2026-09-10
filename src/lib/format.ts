@@ -40,6 +40,15 @@ export function formatMoney(n: number): string {
   return `$${n.toFixed(0)}`;
 }
 
+// m:ss, rounded to the nearest second — used by VideoTrimSelector's
+// selected-range label, where sub-second precision would just be noise.
+export function formatClock(seconds: number): string {
+  const s = Math.max(0, Math.round(seconds));
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  return `${m}:${rem.toString().padStart(2, "0")}`;
+}
+
 // BUDGET_PREF_MAX (300) is the slider's uncapped "+" ceiling — shown as
 // "$300+" rather than a hard limit. noBudgetPreference is a distinct state
 // from a literal $0 minimum, never collapsed into it.

@@ -164,6 +164,10 @@ export interface CreateAnalysisInput {
   sourceMediaUrl: string;
   thumbnailUrl?: string;
   swingType?: string;
+  // A golfer-picked window within a longer source video (see
+  // VideoTrimSelector) — undefined means "analyze the whole clip."
+  startSeconds?: number;
+  endSeconds?: number;
 }
 
 interface RealCaddieContextValue {
@@ -244,6 +248,8 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
           sourceMediaUrl: input.sourceMediaUrl,
           thumbnailUrl: input.thumbnailUrl,
           swingType: input.swingType,
+          startSeconds: input.startSeconds,
+          endSeconds: input.endSeconds,
           locale,
         },
       });

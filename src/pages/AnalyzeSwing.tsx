@@ -9,12 +9,14 @@ import { useLocale } from "../i18n/LocaleContext";
 import { Button } from "../components/ui/Button";
 import { EmptyState } from "../components/ui/EmptyState";
 import { inputClass, labelClass } from "../components/ui/FormControls";
+import { VideoTrimSelector } from "../components/caddie/VideoTrimSelector";
 import { captureVideoThumbnail, readVideoDuration } from "../lib/image";
+import { formatClock } from "../lib/format";
 import { supabase } from "../lib/supabase";
 
 const COMMUNITY_MEDIA_BUCKET = "community-media"; // same bucket CreatePost.tsx's Swing Post upload uses — no second media pipeline
 const MAX_SWING_VIDEO_BYTES = 200 * 1024 * 1024; // matches the Storage bucket's own file_size_limit
-const MAX_SWING_VIDEO_SECONDS = 10; // hard product limit (2026-08-22 credit-efficiency pass) — Caddie's Roboflow pass calls once per sampled frame, so a longer clip directly multiplies calls/latency/credit spend; see analyze-swing's ANALYSIS_FPS comment. Was 15s.
+const MAX_SWING_VIDEO_SECONDS = 10; // max length of the WINDOW actually analyzed (2026-08-22 credit-efficiency pass) — Caddie's Roboflow pass calls once per sampled frame, so a longer clip directly multiplies calls/latency/credit spend; see analyze-swing's ANALYSIS_FPS comment. Was 15s. A source video longer than this is no longer rejected outright — VideoTrimSelector lets the golfer pick which 10s window to analyze instead.
 
 // A fixed dropdown instead of free typing — standard bag, driver through
 // putter. English club names throughout (not per-locale) matches how
@@ -73,9 +75,22 @@ export function AnalyzeSwing() {
   const [swingType, setSwingTypeState] = useState(draftSwingVideo?.swingType ?? "");
   function setSwingType(next: string) {
     setSwingTypeState(next);
-    if (videoFile && videoPreviewUrl) setDraftSwingVideo({ file: videoFile, previewUrl: videoPreviewUrl, swingType: next });
+    if (videoFile && videoPreviewUrl) {
+      setDraftSwingVideo({
+        file: videoFile,
+        previewUrl: videoPreviewUrl,
+        swingType: next,
+        trimStartSeconds: draftSwingVideo?.trimStartSeconds,
+        trimEndSeconds: draftSwingVideo?.trimEndSeconds,
+      });
+    }
   }
   const [submitting, setSubmitting] = useState(false);
+  // A picked video longer than MAX_SWING_VIDEO_SECONDS lands here first
+  // (not directly in draftSwingVideo) so VideoTrimSelector has something to
+  // show without yet committing to an analyzed window — confirming it is
+  // what actually writes the trim range into the real draft.
+  const [pendingTrim, setPendingTrim] = useState<{ file: File; previewUrl: string; duration: number } | undefined>(undefined);
 
   if (isDemo || !authUser) {
     return (
@@ -103,16 +118,15 @@ export function AnalyzeSwing() {
       showToast(t("caddie.videoTooLarge"), "warning");
       return;
     }
+
+    let duration: number | undefined;
     try {
-      const duration = await readVideoDuration(file);
-      if (duration > MAX_SWING_VIDEO_SECONDS) {
-        showToast(t("caddie.videoTooLong"), "warning");
-        return;
-      }
+      duration = await readVideoDuration(file);
     } catch {
       // Metadata read failing isn't itself disqualifying — the file-size
-      // and format checks above already ran; let it through rather than
-      // blocking a real, valid clip over a metadata quirk.
+      // and format checks above already ran; let it through as an
+      // untrimmed clip rather than blocking a real, valid file over a
+      // metadata quirk.
     }
 
     // iOS/WKWebView can evict the actual data behind a picked File's handle
@@ -135,8 +149,26 @@ export function AnalyzeSwing() {
     } catch (err) {
       console.error("Golf Me: failed to read the video into memory.", err);
     }
+    const previewUrl = URL.createObjectURL(stableFile);
 
-    setDraftSwingVideo({ file: stableFile, previewUrl: URL.createObjectURL(stableFile), swingType });
+    if (pendingTrim) URL.revokeObjectURL(pendingTrim.previewUrl);
+    if (duration !== undefined && duration > MAX_SWING_VIDEO_SECONDS) {
+      setPendingTrim({ file: stableFile, previewUrl, duration });
+      return;
+    }
+    setPendingTrim(undefined);
+    setDraftSwingVideo({ file: stableFile, previewUrl, swingType });
+  }
+
+  function confirmTrim(trimStartSeconds: number, trimEndSeconds: number) {
+    if (!pendingTrim) return;
+    setDraftSwingVideo({ file: pendingTrim.file, previewUrl: pendingTrim.previewUrl, swingType, trimStartSeconds, trimEndSeconds });
+    setPendingTrim(undefined);
+  }
+
+  function cancelTrim() {
+    if (pendingTrim) URL.revokeObjectURL(pendingTrim.previewUrl);
+    setPendingTrim(undefined);
   }
 
   function removeVideo() {
@@ -154,7 +186,7 @@ export function AnalyzeSwing() {
 
       let thumbnailUrl: string | undefined;
       try {
-        const thumbBlob = await captureVideoThumbnail(videoFile);
+        const thumbBlob = await captureVideoThumbnail(videoFile, 640, draftSwingVideo?.trimStartSeconds);
         const thumbPath = `${authUser.id}/caddie-thumb-${crypto.randomUUID()}.jpg`;
         const { error: thumbUploadError } = await supabase.storage.from(COMMUNITY_MEDIA_BUCKET).upload(thumbPath, thumbBlob, { contentType: "image/jpeg" });
         if (!thumbUploadError) thumbnailUrl = supabase.storage.from(COMMUNITY_MEDIA_BUCKET).getPublicUrl(thumbPath).data.publicUrl;
@@ -167,6 +199,8 @@ export function AnalyzeSwing() {
         sourceMediaUrl,
         thumbnailUrl,
         swingType: swingType.trim() || undefined,
+        startSeconds: draftSwingVideo?.trimStartSeconds,
+        endSeconds: draftSwingVideo?.trimEndSeconds,
       });
       setDraftSwingVideo(undefined);
       navigate(`/caddie/${created.id}`, { replace: true });
@@ -194,7 +228,15 @@ export function AnalyzeSwing() {
         <span>{t("caddie.cameraAngleTip")}</span>
       </div>
 
-      {videoFile && videoPreviewUrl ? (
+      {pendingTrim ? (
+        <VideoTrimSelector
+          previewUrl={pendingTrim.previewUrl}
+          duration={pendingTrim.duration}
+          maxSeconds={MAX_SWING_VIDEO_SECONDS}
+          onConfirm={confirmTrim}
+          onCancel={cancelTrim}
+        />
+      ) : videoFile && videoPreviewUrl ? (
         <div className="flex flex-col gap-2.5 rounded-2xl border border-fairway-200 bg-fairway-50/40 p-3">
           <div className="overflow-hidden rounded-xl">
             {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
@@ -206,6 +248,14 @@ export function AnalyzeSwing() {
               <X size={12} /> {t("composer.remove")}
             </button>
           </div>
+          {draftSwingVideo?.trimStartSeconds !== undefined && draftSwingVideo?.trimEndSeconds !== undefined && (
+            <p className="text-center text-xs font-semibold text-fairway-700">
+              {t("caddie.trimSelectedLabel", {
+                start: formatClock(draftSwingVideo.trimStartSeconds),
+                end: formatClock(draftSwingVideo.trimEndSeconds),
+              })}
+            </p>
+          )}
         </div>
       ) : (
         <button

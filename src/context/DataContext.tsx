@@ -54,6 +54,11 @@ export interface DraftSwingVideo {
   file: File;
   previewUrl: string;
   swingType: string;
+  // Set only when the source video was longer than Caddie's clip-length cap
+  // and the golfer picked a window with VideoTrimSelector — undefined means
+  // "analyze the whole (already-short) clip," not "starts at 0."
+  trimStartSeconds?: number;
+  trimEndSeconds?: number;
 }
 
 export interface DmConversation {

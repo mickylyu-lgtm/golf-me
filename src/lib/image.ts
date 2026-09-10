@@ -51,7 +51,7 @@ function withTimeout<T>(promise: Promise<T>, message: string): Promise<T> {
 // auto-thumbnail. Used only for the direct-upload Swing Post path; a video
 // already sitting in Storage (Caddie's "Share to Community" handoff) isn't
 // covered by this — see CreatePost.tsx's prefilledVideoUrl branch.
-export function captureVideoThumbnail(file: File, maxDimension = 640): Promise<Blob> {
+export function captureVideoThumbnail(file: File, maxDimension = 640, seekSeconds?: number): Promise<Blob> {
   return withTimeout(new Promise<Blob>((resolve, reject) => {
     const video = document.createElement("video");
     video.preload = "metadata";
@@ -65,8 +65,11 @@ export function captureVideoThumbnail(file: File, maxDimension = 640): Promise<B
     }
 
     video.onloadedmetadata = () => {
-      const seekTime = Math.min(0.3, (video.duration || 0.6) / 2);
-      video.currentTime = seekTime;
+      // A caller that trimmed a longer source video (VideoTrimSelector)
+      // passes the trim's own start instead — grabbing a frame near 0
+      // would otherwise show whatever preceded the actual analyzed swing.
+      const seekTime = seekSeconds ?? Math.min(0.3, (video.duration || 0.6) / 2);
+      video.currentTime = Math.min(seekTime, Math.max(0, (video.duration || seekTime) - 0.05));
     };
 
     video.onseeked = () => {
