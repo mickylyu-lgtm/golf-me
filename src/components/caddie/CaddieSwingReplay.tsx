@@ -246,7 +246,14 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
 
   useEffect(() => {
     const video = videoRef.current;
-    if (video) video.playbackRate = speed;
+    if (!video) return;
+    video.playbackRate = speed;
+    // Slowed-down audio pitch-shifts into a distorted drone (reported live)
+    // — Slow Mode's whole point is studying the skeleton overlay, not the
+    // sound, so muting it there is a clear improvement, never a loss.
+    // Original mode keeps real audio, the normal expectation for a replay
+    // played at its own actual speed.
+    video.muted = speed !== 1;
   }, [speed]);
 
   useEffect(() => {
