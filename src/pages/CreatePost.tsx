@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ArrowLeft, Check, ImagePlus, Loader2, MapPin, Users, Video, X } from "lucide-react";
@@ -18,6 +18,8 @@ import { resizeImageToDataUrl, resizeImageToBlob, captureVideoThumbnail, readVid
 import { formatDate, formatMoney } from "../lib/format";
 import { postCategoryLabel } from "../lib/enumLabels";
 import { supabase } from "../lib/supabase";
+import { clearCommunityPostDraft, loadCommunityPostDraft, saveCommunityPostDraft } from "../lib/communityPostDraft";
+import type { DraftMediaItem } from "../lib/communityPostDraft";
 
 type Attachment = "none" | "photo" | "course" | "round" | "swing";
 
@@ -25,13 +27,6 @@ const COMMUNITY_MEDIA_BUCKET = "community-media";
 const MAX_SWING_VIDEO_BYTES = 200 * 1024 * 1024; // matches the Storage bucket's own file_size_limit
 const MAX_SWING_VIDEO_SECONDS = 15; // Caddie's Roboflow pass calls once per sampled frame (~8fps) — a longer cap multiplies calls/latency per analysis, see analyze-swing's ANALYSIS_FPS comment
 const MAX_POST_MEDIA_ITEMS = 10; // matches Instagram's own carousel cap — a sensible, familiar limit, not an arbitrary one
-
-interface DraftMediaItem {
-  id: string;
-  kind: "image" | "video";
-  url: string;
-  thumbnailUrl?: string; // video items only
-}
 
 // Caddie's "Share to Community" hands off here via navigate(..., { state })
 // — a real video already sitting in community-media, so posting must reuse
@@ -53,34 +48,52 @@ export function CreatePost() {
   const videoInputRef = useRef<HTMLInputElement>(null);
 
   const prefill = location.state as CreatePostSwingPrefill | null;
+  // A fresh Caddie "Share to Community" handoff always wins over an old
+  // abandoned draft — it's a deliberate new action, not something to
+  // silently bury under whatever was left over from before. Otherwise,
+  // resumes a draft left by leaving this screen (photo picker round trip,
+  // a call, closing the app) and coming back — same idea as
+  // hostRoundDraft.ts. Only consulted once per mount.
+  const draft = prefill ? null : loadCommunityPostDraft();
 
-  const [text, setText] = useState(prefill?.caption ?? "");
+  const [text, setText] = useState(prefill?.caption ?? draft?.text ?? "");
   // activeTool is UI-only — which picker panel is currently expanded below
   // the pills. It must never be the thing that decides what's attached;
   // that's exactly the bug being fixed here (see doc comment further down).
-  const [activeTool, setActiveTool] = useState<Attachment>(prefill?.swingVideoUrl ? "swing" : "none");
-  const [mediaItems, setMediaItems] = useState<DraftMediaItem[]>([]);
+  const [activeTool, setActiveTool] = useState<Attachment>(prefill?.swingVideoUrl ? "swing" : (draft?.activeTool ?? "none"));
+  const [mediaItems, setMediaItems] = useState<DraftMediaItem[]>(draft?.mediaItems ?? []);
   const [mediaUploading, setMediaUploading] = useState(false);
+  // Never restored from the draft — a File can't survive localStorage's
+  // JSON round trip (see communityPostDraft.ts). A golfer resuming a swing
+  // Post draft re-picks the video; everything else about the draft is
+  // still there.
   const [videoFile, setVideoFile] = useState<File | undefined>(undefined);
-  const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | undefined>(prefill?.swingVideoUrl);
+  const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | undefined>(prefill?.swingVideoUrl ?? draft?.prefilledVideoUrl);
   // Set only for a prefilled video that's already uploaded — publishing
   // must skip the upload step and reuse this URL as-is. Cleared the moment
   // the user picks a different video file, since that's a genuinely new
   // upload no longer represented by this URL.
-  const [prefilledVideoUrl, setPrefilledVideoUrl] = useState<string | undefined>(prefill?.swingVideoUrl);
+  const [prefilledVideoUrl, setPrefilledVideoUrl] = useState<string | undefined>(prefill?.swingVideoUrl ?? draft?.prefilledVideoUrl);
   const [courseQuery, setCourseQuery] = useState("");
-  const [courseTag, setCourseTag] = useState<string | undefined>(undefined);
-  const [golfCallId, setGolfCallId] = useState<string | undefined>(undefined);
-  const [category, setCategory] = useState<PostCategory>("General");
+  const [courseTag, setCourseTag] = useState<string | undefined>(draft?.courseTag);
+  const [golfCallId, setGolfCallId] = useState<string | undefined>(draft?.golfCallId);
+  const [category, setCategory] = useState<PostCategory>(draft?.category ?? "General");
   // Swing-post-only, both optional — let a golfer ask for feedback right
   // when they post instead of only after (a Coach Reviewer discovering the
   // post organically, or a separate trip to Caddie afterward).
-  const [requestCoachReview, setRequestCoachReview] = useState(false);
+  const [requestCoachReview, setRequestCoachReview] = useState(draft?.requestCoachReview ?? false);
   const [posting, setPosting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<"idle" | "uploading" | "publishing">("idle");
   // Holds a not-yet-run attach action while we wait for the user to confirm
   // replacing whatever's already attached — see requestAttach() below.
   const [pendingAttach, setPendingAttach] = useState<(() => void) | null>(null);
+
+  // Persists a resumable draft on every change (not videoFile — see its
+  // own state comment above). Cleared only once the post actually
+  // publishes (see handlePost).
+  useEffect(() => {
+    saveCommunityPostDraft({ text, activeTool, mediaItems, prefilledVideoUrl, courseTag, golfCallId, category, requestCoachReview });
+  }, [text, activeTool, mediaItems, prefilledVideoUrl, courseTag, golfCallId, category, requestCoachReview]);
 
   const myCalls = useMemo(
     () => golfCalls.filter((c) => c.hostId === currentUser.id || c.joinedGolferIds.includes(currentUser.id)),
@@ -370,6 +383,7 @@ export function CreatePost() {
         coachReviewRequested: kind === "swing" ? requestCoachReview : undefined,
       });
 
+      clearCommunityPostDraft();
       showToast("Post published.", "success");
       navigate("/community");
     } catch (err) {
