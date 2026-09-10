@@ -221,6 +221,8 @@ export const zhCN: Record<TranslationKey, string> = {
   "caddie.trimInstructions": "此视频长于{max}秒。拖动以选择Caddie要分析的部分。",
   "caddie.trimSelectedLabel": "已选择 {start} – {end}",
   "caddie.trimConfirm": "使用此片段",
+  "caddie.trimStartLabel": "开始",
+  "caddie.trimEndLabel": "结束",
   "caddie.needsRealAccount": "分析挥杆需要真实的 GolfMe 账号。",
   "caddie.cameraAngleFaceOn": "正面视角",
   "caddie.cameraAngleDownTheLine": "沿线视角",

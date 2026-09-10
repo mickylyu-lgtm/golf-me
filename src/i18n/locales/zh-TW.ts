@@ -221,6 +221,8 @@ export const zhTW: Record<TranslationKey, string> = {
   "caddie.trimInstructions": "此影片長於{max}秒。拖曳以選擇Caddie要分析的部分。",
   "caddie.trimSelectedLabel": "已選擇 {start} – {end}",
   "caddie.trimConfirm": "使用此片段",
+  "caddie.trimStartLabel": "開始",
+  "caddie.trimEndLabel": "結束",
   "caddie.needsRealAccount": "分析揮桿需要真實的 GolfMe 帳號。",
   "caddie.cameraAngleFaceOn": "正面視角",
   "caddie.cameraAngleDownTheLine": "沿線視角",

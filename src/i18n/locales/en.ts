@@ -231,6 +231,8 @@ export const en = {
   "caddie.trimInstructions": "This video is longer than {max}s. Drag to pick which part Caddie should analyze.",
   "caddie.trimSelectedLabel": "{start} – {end} selected",
   "caddie.trimConfirm": "Use This Clip",
+  "caddie.trimStartLabel": "Start",
+  "caddie.trimEndLabel": "End",
   "caddie.needsRealAccount": "Analyzing a swing needs a real GolfMe account.",
   "caddie.cameraAngleFaceOn": "Face-on",
   "caddie.cameraAngleDownTheLine": "Down-the-line",

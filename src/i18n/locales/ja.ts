@@ -221,6 +221,8 @@ export const ja: Record<TranslationKey, string> = {
   "caddie.trimInstructions": "この動画は{max}秒より長いです。Caddieが分析する部分をドラッグして選んでください。",
   "caddie.trimSelectedLabel": "{start} 〜 {end} を選択中",
   "caddie.trimConfirm": "このクリップを使う",
+  "caddie.trimStartLabel": "開始",
+  "caddie.trimEndLabel": "終了",
   "caddie.needsRealAccount": "スイングを分析するには実際のGolfMeアカウントが必要です。",
   "caddie.cameraAngleFaceOn": "正面アングル",
   "caddie.cameraAngleDownTheLine": "後方アングル",

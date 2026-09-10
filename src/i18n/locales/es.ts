@@ -221,6 +221,8 @@ export const es: Record<TranslationKey, string> = {
   "caddie.trimInstructions": "Este video dura más de {max}s. Arrastra para elegir qué parte debe analizar Caddie.",
   "caddie.trimSelectedLabel": "{start} – {end} seleccionado",
   "caddie.trimConfirm": "Usar este clip",
+  "caddie.trimStartLabel": "Inicio",
+  "caddie.trimEndLabel": "Fin",
   "caddie.needsRealAccount": "Analizar un swing requiere una cuenta real de GolfMe.",
   "caddie.cameraAngleFaceOn": "De frente",
   "caddie.cameraAngleDownTheLine": "En línea con el swing",
