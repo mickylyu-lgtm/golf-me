@@ -45,6 +45,7 @@ const STALE_PROCESSING_MINUTES = 5; // a 'processing' row older than this is tre
 const FILE_ACTIVE_POLL_ATTEMPTS = 6;
 const FILE_ACTIVE_POLL_DELAY_MS = 2000;
 const MAX_TRIM_WINDOW_SECONDS = 10; // matches AnalyzeSwing.tsx's own MAX_SWING_VIDEO_SECONDS — a client-sent startSeconds/endSeconds window is validated against this, never trusted as-is
+const COMMUNITY_MEDIA_BUCKET = "community-media"; // same bucket the client's own direct-upload/Swing Post flows use — no second media pipeline
 
 // Roboflow's validated, already-deployed six-phase pose workflow — do not
 // retrain/replace/rebuild this, see product brief point 37.
@@ -54,6 +55,12 @@ const ROBOFLOW_ENDPOINT = `https://serverless.roboflow.com/${ROBOFLOW_WORKSPACE}
 // The frame-extraction Node/Vercel function — see api/extract-frames.ts for
 // why frame extraction can't happen in this Deno runtime.
 const FRAME_EXTRACT_URL = "https://golfme.app/api/extract-frames";
+// Real server-side trimming (ffmpeg re-encode, not just a sampling-window
+// hint) for a golfer-picked window within a longer source video — see
+// api/trim-video.ts for why this exists (the original approach left the
+// UNtrimmed video as the row's stored source_media_url, so a saved
+// analysis replayed the whole original clip, not the picked window).
+const TRIM_VIDEO_URL = "https://golfme.app/api/trim-video";
 // Roboflow's own HTTP API confirmed stateless across calls (live-tested:
 // identical back-to-back requests never advanced frame_number or
 // current_phase) — the validated six-phase logic that ran during offline
@@ -521,20 +528,57 @@ Deno.serve(async (req: Request) => {
     if (videoBytes.byteLength > MAX_VIDEO_BYTES) return await fail("video too large");
     devLog("video fetched", { bytes: videoBytes.byteLength, contentType: videoContentType });
 
+    // If the golfer picked a window (VideoTrimSelector), actually trim the
+    // video server-side and re-upload the result as this row's real
+    // source_media_url — NOT just a sampling-window hint passed to frame
+    // extraction. That was the original approach, and it left the
+    // untrimmed original as source_media_url, reported live as "the crop
+    // isn't applied" once someone replayed the saved analysis and saw the
+    // whole original clip. `effectiveVideoUrl`/`videoBytes` below are what
+    // every later step (frame extraction, Gemini) actually uses, and
+    // effectiveVideoUrl also becomes the row's saved source_media_url.
+    let effectiveVideoUrl = row.source_media_url;
+    if (trimWindow) {
+      try {
+        const trimRes = await fetch(TRIM_VIDEO_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${frameExtractSecret}` },
+          body: JSON.stringify({ videoUrl: row.source_media_url, startSeconds: trimWindow.startSeconds, endSeconds: trimWindow.endSeconds }),
+        });
+        if (!trimRes.ok) {
+          const errBody = await trimRes.text().catch(() => "");
+          return await fail(`video trim ${trimRes.status}: ${errBody.slice(0, 500)}`);
+        }
+        const trimmedBytes = await trimRes.arrayBuffer();
+        if (trimmedBytes.byteLength === 0) return await fail("video trim returned 0 bytes");
+
+        const trimmedPath = `${row.owner_id}/caddie-trimmed-${row.id}.mp4`;
+        const { error: trimUploadError } = await supabase.storage
+          .from(COMMUNITY_MEDIA_BUCKET)
+          .upload(trimmedPath, trimmedBytes, { contentType: "video/mp4" });
+        if (trimUploadError) return await fail(`trimmed video upload failed: ${trimUploadError.message}`);
+
+        effectiveVideoUrl = supabase.storage.from(COMMUNITY_MEDIA_BUCKET).getPublicUrl(trimmedPath).data.publicUrl;
+        videoBytes = trimmedBytes;
+        videoContentType = "video/mp4";
+        devLog("video trimmed", { bytes: videoBytes.byteLength, window: trimWindow });
+      } catch (err) {
+        return await fail(`video trim threw: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
     // --- Frame extraction (Vercel/Node — see api/extract-frames.ts). ---
     let frames: ExtractedFrame[];
     try {
       const extractRes = await fetch(FRAME_EXTRACT_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${frameExtractSecret}` },
-        // An explicit trimWindow (golfer-picked, see VideoTrimSelector) skips
-        // extract-frames' own freezedetect-based auto-trim entirely (see its
-        // "explicit window" comment) — the golfer already decided the window.
-        body: JSON.stringify({
-          videoUrl: row.source_media_url,
-          fps: ANALYSIS_FPS,
-          ...(trimWindow ? { startSeconds: trimWindow.startSeconds, endSeconds: trimWindow.endSeconds } : {}),
-        }),
+        // effectiveVideoUrl is already exactly the analyzed window once
+        // trimmed above, so no explicit startSeconds/endSeconds needed here
+        // — extract-frames' own freezedetect-based auto-trim still runs for
+        // an UNtrimmed video (nothing was picked, or duration was already
+        // under the cap), same as before this feature existed.
+        body: JSON.stringify({ videoUrl: effectiveVideoUrl, fps: ANALYSIS_FPS }),
       });
       if (!extractRes.ok) {
         const errBody = await extractRes.text().catch(() => "");
@@ -660,7 +704,7 @@ Deno.serve(async (req: Request) => {
             const denseExtractRes = await fetch(FRAME_EXTRACT_URL, {
               method: "POST",
               headers: { "Content-Type": "application/json", Authorization: `Bearer ${frameExtractSecret}` },
-              body: JSON.stringify({ videoUrl: row.source_media_url, fps: DENSE_IMPACT_FPS, startSeconds: denseStart, endSeconds: denseEnd }),
+              body: JSON.stringify({ videoUrl: effectiveVideoUrl, fps: DENSE_IMPACT_FPS, startSeconds: denseStart, endSeconds: denseEnd }),
             });
             if (denseExtractRes.ok) {
               const denseExtractBody = await denseExtractRes.json();
@@ -782,14 +826,6 @@ Deno.serve(async (req: Request) => {
         body.swingType ? `The golfer says this is a: ${body.swingType}.` : "",
         `Remember: respond in ${localeName} (see the system instruction's language requirement).`,
         "Analyze this golf swing video and return your structured feedback, using TRUSTED_POSE_DATA below as the authoritative source for body-position claims and phase timestamps.",
-        // The uploaded file is the golfer's ORIGINAL, untrimmed source video
-        // (VideoTrimSelector never re-encodes) — only TRUSTED_POSE_DATA's own
-        // frames were sampled from the window they actually picked. Without
-        // this, footage outside that window (walking up, other swings, etc.
-        // if the source was long) could otherwise read as part of the swing.
-        trimWindow
-          ? `The golfer's swing of interest is only within roughly ${trimWindow.startSeconds.toFixed(1)}s-${trimWindow.endSeconds.toFixed(1)}s of this video (that's exactly the range TRUSTED_POSE_DATA's timestamps cover) — ignore any footage before or after that window.`
-          : "",
         `TRUSTED_POSE_DATA: ${JSON.stringify(trustedPoseData)}`,
       ]
         .filter(Boolean)
@@ -845,6 +881,12 @@ Deno.serve(async (req: Request) => {
       .from("caddie_analyses")
       .update({
         status: "complete",
+        // Only actually changes anything when trimWindow was set (the trim
+        // step above already re-pointed effectiveVideoUrl at the newly
+        // uploaded, ACTUALLY trimmed file) — a no-op write of the same
+        // value otherwise, so this is safe unconditionally rather than
+        // needing its own branch.
+        source_media_url: effectiveVideoUrl,
         analysis_json: parsed,
         roboflow_analysis_json: trustedPoseData,
         analysis_summary: parsed.summary,
