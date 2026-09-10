@@ -223,6 +223,8 @@ export const zhTW: Record<TranslationKey, string> = {
   "caddie.trimConfirm": "使用此片段",
   "caddie.trimStartLabel": "開始",
   "caddie.trimEndLabel": "結束",
+  "caddie.trimPreview": "預覽裁剪",
+  "caddie.trimPause": "暫停預覽",
   "caddie.needsRealAccount": "分析揮桿需要真實的 GolfMe 帳號。",
   "caddie.cameraAngleFaceOn": "正面視角",
   "caddie.cameraAngleDownTheLine": "沿線視角",

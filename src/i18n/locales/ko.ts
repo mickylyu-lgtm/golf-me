@@ -223,6 +223,8 @@ export const ko: Record<TranslationKey, string> = {
   "caddie.trimConfirm": "이 클립 사용",
   "caddie.trimStartLabel": "시작",
   "caddie.trimEndLabel": "종료",
+  "caddie.trimPreview": "크롭 미리보기",
+  "caddie.trimPause": "미리보기 일시정지",
   "caddie.needsRealAccount": "스윙 분석은 실제 GolfMe 계정이 필요합니다.",
   "caddie.cameraAngleFaceOn": "정면 각도",
   "caddie.cameraAngleDownTheLine": "다운더라인 각도",

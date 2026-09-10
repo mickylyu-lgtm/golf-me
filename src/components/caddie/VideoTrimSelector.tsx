@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Pause, Play } from "lucide-react";
 import { useLocale } from "../../i18n/LocaleContext";
 import { Button } from "../ui/Button";
 import { formatClock } from "../../lib/format";
@@ -46,6 +47,7 @@ export function VideoTrimSelector({
   const [end, setEnd] = useState(initialLength);
   const [previewTime, setPreviewTime] = useState(0);
   const [thumbnails, setThumbnails] = useState<string[] | undefined>(undefined);
+  const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -90,6 +92,43 @@ export function VideoTrimSelector({
     };
   }, [previewTime]);
 
+  // Stops the preview exactly at the selected end, so "Preview crop" always
+  // plays exactly the window that will actually be analyzed -- not the
+  // whole source video running past it.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    function handleTimeUpdate() {
+      if (video!.currentTime >= end) {
+        video!.pause();
+        setIsPreviewPlaying(false);
+      }
+    }
+    video.addEventListener("timeupdate", handleTimeUpdate);
+    return () => video.removeEventListener("timeupdate", handleTimeUpdate);
+  }, [end]);
+
+  function togglePreview() {
+    const video = videoRef.current;
+    if (!video) return;
+    if (isPreviewPlaying) {
+      video.pause();
+      setIsPreviewPlaying(false);
+      return;
+    }
+    // Always restarts from the current start, even if playback previously
+    // stopped sitting right at the old end -- pressing play should always
+    // mean "show me the crop from the top," not "resume from wherever."
+    video.currentTime = start;
+    video
+      .play()
+      .then(() => setIsPreviewPlaying(true))
+      .catch(() => {
+        // Autoplay can still be blocked in rare contexts; nothing more to
+        // do here since this IS a direct user tap, not a background attempt.
+      });
+  }
+
   const dragRef = useRef<{ mode: DragMode; startAtDragBegin: number; endAtDragBegin: number; originClientX: number }>({
     mode: null,
     startAtDragBegin: 0,
@@ -107,6 +146,13 @@ export function VideoTrimSelector({
   function beginDrag(mode: DragMode, e: React.PointerEvent) {
     e.currentTarget.setPointerCapture(e.pointerId);
     dragRef.current = { mode, startAtDragBegin: start, endAtDragBegin: end, originClientX: e.clientX };
+    // Dragging any handle while the crop preview is playing would otherwise
+    // fight over the video's currentTime with the live-seek-while-dragging
+    // behavior below.
+    if (isPreviewPlaying) {
+      videoRef.current?.pause();
+      setIsPreviewPlaying(false);
+    }
   }
 
   function handlePointerMove(e: React.PointerEvent) {
@@ -149,9 +195,19 @@ export function VideoTrimSelector({
         <p className="mt-1 text-xs text-slate-500">{t("caddie.trimInstructions", { max: maxSeconds })}</p>
       </div>
 
-      <div className="overflow-hidden rounded-xl">
+      <div className="relative overflow-hidden rounded-xl">
         {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
         <video ref={videoRef} src={previewUrl} muted playsInline className="max-h-72 w-full rounded-xl bg-black" />
+        <button
+          type="button"
+          onClick={togglePreview}
+          aria-label={isPreviewPlaying ? t("caddie.trimPause") : t("caddie.trimPreview")}
+          className="absolute inset-0 flex items-center justify-center"
+        >
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm">
+            {isPreviewPlaying ? <Pause size={22} fill="currentColor" /> : <Play size={22} fill="currentColor" className="ml-0.5" />}
+          </span>
+        </button>
       </div>
 
       <div className="flex flex-col gap-1.5">

@@ -233,6 +233,8 @@ export const en = {
   "caddie.trimConfirm": "Use This Clip",
   "caddie.trimStartLabel": "Start",
   "caddie.trimEndLabel": "End",
+  "caddie.trimPreview": "Preview crop",
+  "caddie.trimPause": "Pause preview",
   "caddie.needsRealAccount": "Analyzing a swing needs a real GolfMe account.",
   "caddie.cameraAngleFaceOn": "Face-on",
   "caddie.cameraAngleDownTheLine": "Down-the-line",
