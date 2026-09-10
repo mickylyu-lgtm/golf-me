@@ -10,6 +10,7 @@ import { useLocale, LOCALES } from "../i18n/LocaleContext";
 import { Button } from "../components/ui/Button";
 import { Badge } from "../components/ui/Badge";
 import { formatShortDate } from "../lib/format";
+import { isStaleProcessing, usePeriodicRerender } from "../lib/caddieAnalysis";
 import type { CaddieConfidence, CaddieCameraAngle, CaddieScoreCriterionKey } from "../types";
 import type { CreatePostSwingPrefill } from "./CreatePost";
 import type { TranslationKey } from "../i18n/locales/en";
@@ -73,6 +74,8 @@ export function CaddieAnalysisDetail() {
     if (analysis || !analysisId || !wasProcessingRef.current) return;
     showToast(t("caddie.askCaddieError"), "warning");
   }, [analysis, analysisId, showToast, t]);
+
+  usePeriodicRerender(analysis?.status === "processing");
 
   // Clears the bottom-nav "result ready" dot regardless of HOW someone got
   // here (the nav tap shortcut already marks it read too, but this covers
@@ -305,7 +308,7 @@ export function CaddieAnalysisDetail() {
           <Section title={t("caddie.workOn")} items={analysis.issues} />
           <Section title={t("caddie.caddiesFix")} items={analysis.recommendations} />
         </div>
-      ) : analysis.status === "failed" ? (
+      ) : analysis.status === "failed" || isStaleProcessing(analysis) ? (
         <div className="flex flex-col items-start gap-2.5 rounded-2xl border border-red-100 bg-red-50/60 px-4 py-3.5">
           <p className="text-sm font-semibold text-red-700">{t("caddie.askCaddieError")}</p>
           <Button variant="outline" size="sm" onClick={retry} disabled={retrying} icon={retrying ? <Loader2 size={14} className="animate-spin" /> : undefined}>
