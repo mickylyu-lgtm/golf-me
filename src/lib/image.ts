@@ -102,6 +102,79 @@ export function captureVideoThumbnail(file: File, maxDimension = 640, seekSecond
   }), "Timed out reading video for a thumbnail");
 }
 
+// A row of real evenly-spaced frames across the whole clip -- the visual
+// "filmstrip" VideoTrimSelector draws its trim handles over, so dragging
+// them has something concrete to line up against instead of a bare track.
+// Sequential seeks on one hidden <video> (a canvas can only ever hold
+// whatever frame is currently decoded, so there's no way to grab several
+// frames from one seek) -- fine for the handful of frames the UI actually
+// needs, not meant for a long film. Own timeout, longer than
+// VIDEO_METADATA_TIMEOUT_MS above: several sequential decode-and-draw
+// round trips need more headroom than a single metadata read.
+const FILMSTRIP_TIMEOUT_MS = 20000;
+
+export function generateVideoFilmstrip(file: File, count: number, maxHeightPx = 80): Promise<string[]> {
+  return Promise.race([
+    new Promise<string[]>((resolve, reject) => {
+      const video = document.createElement("video");
+      video.preload = "auto";
+      video.muted = true;
+      video.playsInline = true;
+      const url = URL.createObjectURL(file);
+      video.src = url;
+      const frames: string[] = [];
+
+      function cleanup() {
+        URL.revokeObjectURL(url);
+      }
+
+      video.onloadedmetadata = () => {
+        const duration = video.duration || 0;
+        const scale = Math.min(1, maxHeightPx / (video.videoHeight || maxHeightPx));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round((video.videoWidth || maxHeightPx) * scale));
+        canvas.height = Math.max(1, Math.round((video.videoHeight || maxHeightPx) * scale));
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          cleanup();
+          reject(new Error("Canvas not supported"));
+          return;
+        }
+
+        let i = 0;
+        function seekNext() {
+          if (i >= count) {
+            cleanup();
+            resolve(frames);
+            return;
+          }
+          // Evenly spaced across the clip, each nudged a touch past its
+          // exact slot (same reasoning as captureVideoThumbnail's own 0.3s
+          // offset) so a frame landing right on a hard cut still shows
+          // something rather than a black encoder artifact.
+          const t = Math.min(Math.max(0, duration - 0.05), (duration * i) / count + 0.05);
+          video.currentTime = t;
+        }
+
+        video.onseeked = () => {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          frames.push(canvas.toDataURL("image/jpeg", 0.6));
+          i++;
+          seekNext();
+        };
+
+        seekNext();
+      };
+
+      video.onerror = () => {
+        cleanup();
+        reject(new Error("Could not load video"));
+      };
+    }),
+    new Promise<string[]>((_, reject) => setTimeout(() => reject(new Error("Timed out generating a video filmstrip")), FILMSTRIP_TIMEOUT_MS)),
+  ]);
+}
+
 // Reads a video file's duration without uploading it — used to enforce
 // Caddie's beta clip-length recommendation (see analyze-swing's frame-
 // sampling doc comment: Gemini's Files API samples at a fixed ~1 FPS, so

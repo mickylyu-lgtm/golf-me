@@ -2,29 +2,36 @@ import { useEffect, useRef, useState } from "react";
 import { useLocale } from "../../i18n/LocaleContext";
 import { Button } from "../ui/Button";
 import { formatClock } from "../../lib/format";
+import { generateVideoFilmstrip } from "../../lib/image";
 
 const MIN_WINDOW_SECONDS = 2; // a full swing (address through follow-through) rarely fits under this -- prevents dragging both handles down to a near-zero, useless selection
+const FILMSTRIP_FRAME_COUNT = 10;
+const HANDLE_WIDTH_PX = 14;
+
+type DragMode = "start" | "end" | "middle" | null;
 
 // A picked video longer than Caddie's clip-length cap used to just get
 // rejected outright (see AnalyzeSwing.tsx's own MAX_SWING_VIDEO_SECONDS
 // comment history) -- reported live as wanting to crop a long clip down
-// rather than having to go find a separate trimming app first. Both ends
-// are independently draggable (reported live: the start of the selected
-// window needed cropping too, not just where a fixed-length window
-// began) -- start/end each clamp the other so the window never exceeds
-// maxSeconds or drops under MIN_WINDOW_SECONDS. The window is passed to
-// analyze-swing as startSeconds/endSeconds, which the existing
-// frame-extraction pipeline already supports (see extract-frames.ts's
-// "explicit window" path, previously only used for the adaptive dense
-// pass) -- no client-side re-encoding needed, the original file uploads
-// unchanged.
+// rather than having to go find a separate trimming app first. Modeled
+// after a standard mobile video editor's trim UI (reported live, with a
+// reference screenshot): one filmstrip of real frames across the whole
+// clip, a single draggable selection window over it (drag either edge to
+// resize, drag the middle to shift both at once, preserving length), not
+// two separate slider tracks. The window is passed to analyze-swing as
+// startSeconds/endSeconds, which the existing frame-extraction pipeline
+// already supports (see extract-frames.ts's "explicit window" path,
+// previously only used for the adaptive dense pass) -- no client-side
+// re-encoding needed, the original file uploads unchanged.
 export function VideoTrimSelector({
+  file,
   previewUrl,
   duration,
   maxSeconds,
   onConfirm,
   onCancel,
 }: {
+  file: File;
   previewUrl: string;
   duration: number;
   maxSeconds: number;
@@ -33,27 +40,34 @@ export function VideoTrimSelector({
 }) {
   const { t } = useLocale();
   const videoRef = useRef<HTMLVideoElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
   const initialLength = Math.min(maxSeconds, duration);
   const [start, setStart] = useState(0);
   const [end, setEnd] = useState(initialLength);
-
-  // Seeks the preview to whichever handle moved, so dragging either one
-  // shows the actual frame at that point rather than a static thumbnail.
   const [previewTime, setPreviewTime] = useState(0);
+  const [thumbnails, setThumbnails] = useState<string[] | undefined>(undefined);
 
-  function handleStartChange(next: number) {
-    const clampedStart = Math.max(0, Math.min(next, end - MIN_WINDOW_SECONDS));
-    setStart(clampedStart);
-    if (end - clampedStart > maxSeconds) setEnd(clampedStart + maxSeconds);
-    setPreviewTime(clampedStart);
-  }
+  useEffect(() => {
+    let cancelled = false;
+    generateVideoFilmstrip(file, FILMSTRIP_FRAME_COUNT)
+      .then((frames) => {
+        if (!cancelled) setThumbnails(frames);
+      })
+      .catch((err) => {
+        console.error("Golf Me: failed to build a trim filmstrip.", err);
+        if (!cancelled) setThumbnails([]); // falls back to a bare track, never blocks trimming
+      });
+    return () => {
+      cancelled = true;
+    };
+    // file is a fresh object per pick (AnalyzeSwing never mutates it in place) -- safe to run once per mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  function handleEndChange(next: number) {
-    const clampedEnd = Math.min(duration, Math.max(next, start + MIN_WINDOW_SECONDS));
-    setEnd(clampedEnd);
-    if (clampedEnd - start > maxSeconds) setStart(clampedEnd - maxSeconds);
-    setPreviewTime(clampedEnd);
-  }
+  // Forces the preview to actually decode/paint the seeked-to frame -- see
+  // captureVideoThumbnail's own comment on why currentTime alone isn't
+  // enough on some mobile WebViews, especially when the value doesn't
+  // change (e.g. staying at 0 on first mount).
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -61,18 +75,11 @@ export function VideoTrimSelector({
     async function showFrame() {
       if (!video) return;
       video.currentTime = previewTime;
-      // Some mobile WebViews (notably iOS) leave the canvas fully black
-      // until the video actually decodes a frame through playback -- a
-      // currentTime assignment alone doesn't guarantee a repaint,
-      // especially when the value doesn't change (e.g. staying at 0).
-      // Muted autoplay is allowed without a user gesture; pausing again
-      // immediately after keeps this a static preview, not a playing video.
       try {
         await video.play();
         if (!cancelled) video.pause();
       } catch {
-        // Autoplay can still be blocked in rare contexts -- the seek above
-        // is the best effort left in that case.
+        // Best effort -- the seek above is what's left if autoplay is blocked.
       }
     }
     if (video.readyState >= 1) showFrame();
@@ -82,6 +89,58 @@ export function VideoTrimSelector({
       video.removeEventListener("loadedmetadata", showFrame);
     };
   }, [previewTime]);
+
+  const dragRef = useRef<{ mode: DragMode; startAtDragBegin: number; endAtDragBegin: number; originClientX: number }>({
+    mode: null,
+    startAtDragBegin: 0,
+    endAtDragBegin: 0,
+    originClientX: 0,
+  });
+
+  function clientXToSeconds(clientX: number): number {
+    const rect = trackRef.current?.getBoundingClientRect();
+    if (!rect || rect.width === 0) return 0;
+    const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    return ratio * duration;
+  }
+
+  function beginDrag(mode: DragMode, e: React.PointerEvent) {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragRef.current = { mode, startAtDragBegin: start, endAtDragBegin: end, originClientX: e.clientX };
+  }
+
+  function handlePointerMove(e: React.PointerEvent) {
+    const drag = dragRef.current;
+    if (!drag.mode) return;
+    if (drag.mode === "start") {
+      const next = Math.max(0, Math.min(clientXToSeconds(e.clientX), end - MIN_WINDOW_SECONDS));
+      setStart(next);
+      if (end - next > maxSeconds) setEnd(next + maxSeconds);
+      setPreviewTime(next);
+    } else if (drag.mode === "end") {
+      const next = Math.min(duration, Math.max(clientXToSeconds(e.clientX), start + MIN_WINDOW_SECONDS));
+      setEnd(next);
+      if (next - start > maxSeconds) setStart(next - maxSeconds);
+      setPreviewTime(next);
+    } else if (drag.mode === "middle") {
+      const rect = trackRef.current?.getBoundingClientRect();
+      const secondsPerPx = rect && rect.width > 0 ? duration / rect.width : 0;
+      const deltaSeconds = (e.clientX - drag.originClientX) * secondsPerPx;
+      const windowLength = drag.endAtDragBegin - drag.startAtDragBegin;
+      const nextStart = Math.min(duration - windowLength, Math.max(0, drag.startAtDragBegin + deltaSeconds));
+      setStart(nextStart);
+      setEnd(nextStart + windowLength);
+      setPreviewTime(nextStart);
+    }
+  }
+
+  function endDrag(e: React.PointerEvent) {
+    if (dragRef.current.mode) e.currentTarget.releasePointerCapture(e.pointerId);
+    dragRef.current.mode = null;
+  }
+
+  const startPct = duration > 0 ? (start / duration) * 100 : 0;
+  const endPct = duration > 0 ? (end / duration) * 100 : 100;
 
   return (
     <div className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-4">
@@ -95,34 +154,76 @@ export function VideoTrimSelector({
         <video ref={videoRef} src={previewUrl} muted playsInline className="max-h-72 w-full rounded-xl bg-black" />
       </div>
 
-      <div className="flex flex-col gap-2.5">
-        <div>
-          <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-            {t("caddie.trimStartLabel")} · {formatClock(start)}
-          </label>
-          <input
-            type="range"
-            min={0}
-            max={duration}
-            step={0.1}
-            value={start}
-            onChange={(e) => handleStartChange(Number(e.target.value))}
-            className="w-full accent-fairway-600"
-          />
-        </div>
-        <div>
-          <label className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-            {t("caddie.trimEndLabel")} · {formatClock(end)}
-          </label>
-          <input
-            type="range"
-            min={0}
-            max={duration}
-            step={0.1}
-            value={end}
-            onChange={(e) => handleEndChange(Number(e.target.value))}
-            className="w-full accent-fairway-600"
-          />
+      <div className="flex flex-col gap-1.5">
+        {/* trackRef stays on this OUTER, unclipped element -- its bounding
+            box is what clientXToSeconds measures against, and the edge
+            handles (below) are its direct children so they can extend
+            slightly past 0%/100% without being cut off. Everything that
+            should visually clip to the rounded track (filmstrip, dim
+            overlays, the middle drag box) lives in the INNER wrapper
+            instead. Getting this backwards was a real bug caught live: at
+            the default start=0, the left handle's `calc(0% - 14px)`
+            position pushed half of it outside an overflow-hidden track,
+            silently making it unclickable exactly where a user would
+            first reach for it. */}
+        <div ref={trackRef} className="relative h-16 touch-none select-none">
+          <div className="absolute inset-0 overflow-hidden rounded-lg bg-slate-900">
+            {thumbnails === undefined ? (
+              <div className="flex h-full w-full items-center justify-center text-[11px] text-slate-400">…</div>
+            ) : thumbnails.length > 0 ? (
+              <div className="flex h-full w-full">
+                {thumbnails.map((src, i) => (
+                  <img key={i} src={src} alt="" draggable={false} className="h-full flex-1 object-cover" />
+                ))}
+              </div>
+            ) : null}
+
+            {/* Dim the excluded portions on either side of the selection. */}
+            <div className="pointer-events-none absolute inset-y-0 left-0 bg-black/55" style={{ width: `${startPct}%` }} />
+            <div className="pointer-events-none absolute inset-y-0 right-0 bg-black/55" style={{ width: `${100 - endPct}%` }} />
+
+            {/* The selection window itself -- dragging it shifts both edges together. */}
+            <div
+              className="absolute inset-y-0 cursor-grab border-y-2 border-fairway-400 bg-fairway-400/10 active:cursor-grabbing"
+              style={{ left: `${startPct}%`, right: `${100 - endPct}%` }}
+              onPointerDown={(e) => beginDrag("middle", e)}
+              onPointerMove={handlePointerMove}
+              onPointerUp={endDrag}
+              onPointerCancel={endDrag}
+            />
+          </div>
+
+          {/* Edge handles -- each resizes just its own side. */}
+          <div
+            role="slider"
+            aria-label={t("caddie.trimStartLabel")}
+            aria-valuemin={0}
+            aria-valuemax={duration}
+            aria-valuenow={start}
+            className="absolute inset-y-0 flex cursor-ew-resize items-center justify-center rounded-l-md bg-fairway-500"
+            style={{ left: `calc(${startPct}% - ${HANDLE_WIDTH_PX}px)`, width: HANDLE_WIDTH_PX }}
+            onPointerDown={(e) => beginDrag("start", e)}
+            onPointerMove={handlePointerMove}
+            onPointerUp={endDrag}
+            onPointerCancel={endDrag}
+          >
+            <div className="h-6 w-1 rounded-full bg-white/80" />
+          </div>
+          <div
+            role="slider"
+            aria-label={t("caddie.trimEndLabel")}
+            aria-valuemin={0}
+            aria-valuemax={duration}
+            aria-valuenow={end}
+            className="absolute inset-y-0 flex cursor-ew-resize items-center justify-center rounded-r-md bg-fairway-500"
+            style={{ left: `${endPct}%`, width: HANDLE_WIDTH_PX }}
+            onPointerDown={(e) => beginDrag("end", e)}
+            onPointerMove={handlePointerMove}
+            onPointerUp={endDrag}
+            onPointerCancel={endDrag}
+          >
+            <div className="h-6 w-1 rounded-full bg-white/80" />
+          </div>
         </div>
         <p className="text-center text-xs font-semibold text-slate-600">
           {t("caddie.trimSelectedLabel", { start: formatClock(start), end: formatClock(end) })}

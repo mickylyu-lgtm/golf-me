@@ -230,6 +230,7 @@ export function AnalyzeSwing() {
 
       {pendingTrim ? (
         <VideoTrimSelector
+          file={pendingTrim.file}
           previewUrl={pendingTrim.previewUrl}
           duration={pendingTrim.duration}
           maxSeconds={MAX_SWING_VIDEO_SECONDS}
