@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Pause, Play } from "lucide-react";
+import { Loader2, Pause, Play } from "lucide-react";
 import { useLocale } from "../../i18n/LocaleContext";
 import { Button } from "../ui/Button";
 import { formatClock } from "../../lib/format";
@@ -48,6 +48,14 @@ export function VideoTrimSelector({
   const [previewTime, setPreviewTime] = useState(0);
   const [thumbnails, setThumbnails] = useState<string[] | undefined>(undefined);
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
+  // Real footage from a phone is often 60fps/high-resolution — seeking to
+  // an arbitrary (non-keyframe) point means the browser has to decode
+  // forward from the nearest preceding keyframe before it can actually
+  // start playing, which reported live as "press play, nothing happens
+  // for a while." That decode time is real and can't be eliminated here,
+  // but a visible loading state at least confirms it's working rather
+  // than looking stuck/broken.
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -110,23 +118,44 @@ export function VideoTrimSelector({
 
   function togglePreview() {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || isPreviewLoading) return;
     if (isPreviewPlaying) {
       video.pause();
       setIsPreviewPlaying(false);
       return;
     }
+    setIsPreviewLoading(true);
+    // Waits for the seek to actually land before calling play() — starting
+    // playback immediately would begin from wherever currentTime happened
+    // to already be until the seek finishes, a visible stutter/jump on a
+    // clip that takes a moment to seek in the first place.
+    function onSeeked() {
+      video!.removeEventListener("seeked", onSeeked);
+      // A handle drag started while this was still seeking -- that drag's
+      // own beginDrag already stopped any playing preview, so starting
+      // playback now (from a since-superseded position) would just fight
+      // with it.
+      if (dragRef.current.mode) {
+        setIsPreviewLoading(false);
+        return;
+      }
+      video!
+        .play()
+        .then(() => {
+          setIsPreviewPlaying(true);
+          setIsPreviewLoading(false);
+        })
+        .catch(() => {
+          // Autoplay can still be blocked in rare contexts; nothing more to
+          // do here since this IS a direct user tap, not a background attempt.
+          setIsPreviewLoading(false);
+        });
+    }
+    video.addEventListener("seeked", onSeeked);
     // Always restarts from the current start, even if playback previously
     // stopped sitting right at the old end -- pressing play should always
     // mean "show me the crop from the top," not "resume from wherever."
     video.currentTime = start;
-    video
-      .play()
-      .then(() => setIsPreviewPlaying(true))
-      .catch(() => {
-        // Autoplay can still be blocked in rare contexts; nothing more to
-        // do here since this IS a direct user tap, not a background attempt.
-      });
   }
 
   const dragRef = useRef<{ mode: DragMode; startAtDragBegin: number; endAtDragBegin: number; originClientX: number }>({
@@ -205,7 +234,13 @@ export function VideoTrimSelector({
           className="absolute inset-0 flex items-center justify-center"
         >
           <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm">
-            {isPreviewPlaying ? <Pause size={22} fill="currentColor" /> : <Play size={22} fill="currentColor" className="ml-0.5" />}
+            {isPreviewLoading ? (
+              <Loader2 size={22} className="animate-spin" />
+            ) : isPreviewPlaying ? (
+              <Pause size={22} fill="currentColor" />
+            ) : (
+              <Play size={22} fill="currentColor" className="ml-0.5" />
+            )}
           </span>
         </button>
       </div>
