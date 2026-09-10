@@ -266,7 +266,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "chatInbox.emptyDescription": "打开一位球友的主页即可开始对话。",
   "chatInbox.noSearchResults": "没有符合搜索条件的对话。",
   "chatInbox.youPrefix": "你：",
-  "discover.searchPlaceholder": "我想找...",
+  "discover.searchPlaceholder": "搜索球友",
 
   "welcome.tagline": "找到你的下一场球局。",
   "welcome.subtitle": "想打就打，即使你的老球友们没空。",

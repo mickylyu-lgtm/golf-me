@@ -57,6 +57,7 @@ export function FindFriends() {
       <div className="relative">
         <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
         <input
+          autoFocus
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={t("findFriends.searchPlaceholder")}
