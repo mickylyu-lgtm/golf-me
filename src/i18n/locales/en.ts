@@ -174,6 +174,7 @@ export const en = {
   "caddie.shareFeedback": "Share Caddie Feedback",
   "caddie.askCaddie": "Ask Caddie",
   "caddie.askCaddieError": "Caddie couldn't analyze this swing.",
+  "caddie.uploadInterrupted": "Your last swing upload didn't finish — please try again.",
   "caddie.tryAgain": "Try Again",
   "caddie.back": "Back to Caddie",
   "caddie.homeCardTitle": "Your latest swing",

@@ -164,6 +164,7 @@ export const ko: Record<TranslationKey, string> = {
   "caddie.shareFeedback": "캐디 피드백 공유",
   "caddie.askCaddie": "캐디에게 물어보기",
   "caddie.askCaddieError": "캐디가 이 스윙을 분석하지 못했습니다.",
+  "caddie.uploadInterrupted": "지난번 스윙 업로드가 완료되지 않았습니다 — 다시 시도해 주세요.",
   "caddie.tryAgain": "다시 시도",
   "caddie.back": "캐디로 돌아가기",
   "caddie.homeCardTitle": "최근 스윙",

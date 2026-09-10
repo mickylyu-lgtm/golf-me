@@ -164,6 +164,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "caddie.shareFeedback": "分享球童反馈",
   "caddie.askCaddie": "问问球童",
   "caddie.askCaddieError": "球童暂时无法分析这段挥杆。",
+  "caddie.uploadInterrupted": "上次的挥杆视频没有上传完成——请重试。",
   "caddie.tryAgain": "重试",
   "caddie.back": "返回球童",
   "caddie.homeCardTitle": "你最近的挥杆",

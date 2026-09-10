@@ -164,6 +164,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "caddie.shareFeedback": "分享球僮回饋",
   "caddie.askCaddie": "問問球僮",
   "caddie.askCaddieError": "球僮暫時無法分析這段揮桿。",
+  "caddie.uploadInterrupted": "上次的揮桿影片沒有上傳完成——請再試一次。",
   "caddie.tryAgain": "重試",
   "caddie.back": "返回球僮",
   "caddie.homeCardTitle": "你最近的揮桿",

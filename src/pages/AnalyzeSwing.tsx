@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Info, Loader2, Sparkles, Video, X } from "lucide-react";
@@ -17,6 +17,16 @@ import { supabase } from "../lib/supabase";
 const COMMUNITY_MEDIA_BUCKET = "community-media"; // same bucket CreatePost.tsx's Swing Post upload uses — no second media pipeline
 const MAX_SWING_VIDEO_BYTES = 200 * 1024 * 1024; // matches the Storage bucket's own file_size_limit
 const MAX_SWING_VIDEO_SECONDS = 10; // max length of the WINDOW actually analyzed (2026-08-22 credit-efficiency pass) — Caddie's Roboflow pass calls once per sampled frame, so a longer clip directly multiplies calls/latency/credit spend; see analyze-swing's ANALYSIS_FPS comment. Was 15s. A source video longer than this is no longer rejected outright — VideoTrimSelector lets the golfer pick which 10s window to analyze instead.
+// Once analyze-swing actually creates the 'processing' row, the real
+// analysis runs server-side (EdgeRuntime.waitUntil) independent of this
+// app staying open — closing the app doesn't stop it. The one real gap is
+// the upload-and-start-analysis call ITSELF: if the app is killed mid
+// upload (reported live as "it shouldn't just disappear"), no row is ever
+// created, and there was no trace afterward that anything had been
+// attempted. This flag brackets that exact window so a golfer who reopens
+// the app after an interruption gets an honest "that didn't finish, try
+// again" instead of silence that reads as data loss.
+const UPLOAD_IN_PROGRESS_KEY = "golfme:caddieUploadInProgress";
 
 // A fixed dropdown instead of free typing — standard bag, driver through
 // putter. English club names throughout (not per-locale) matches how
@@ -63,6 +73,7 @@ export function AnalyzeSwing() {
   const { t } = useLocale();
   const navigate = useNavigate();
   const videoInputRef = useRef<HTMLInputElement>(null);
+  const previewVideoRef = useRef<HTMLVideoElement>(null);
 
   // The video itself is backed by DataContext (mounted for the whole app
   // session), not local state — so a video picked here but not yet
@@ -91,6 +102,44 @@ export function AnalyzeSwing() {
   // show without yet committing to an analyzed window — confirming it is
   // what actually writes the trim range into the real draft.
   const [pendingTrim, setPendingTrim] = useState<{ file: File; previewUrl: string; duration: number } | undefined>(undefined);
+
+  useEffect(() => {
+    if (localStorage.getItem(UPLOAD_IN_PROGRESS_KEY)) {
+      localStorage.removeItem(UPLOAD_IN_PROGRESS_KEY);
+      showToast(t("caddie.uploadInterrupted"), "warning");
+    }
+    // Only ever meant to catch the PREVIOUS session's interruption once, on
+    // arrival — not re-checked on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Reported live as "pitch black" — a <video> with no poster and nothing
+  // forcing a decode doesn't paint any frame at all on some mobile
+  // WebViews until playback actually starts (same root cause already
+  // fixed in VideoTrimSelector's own preview). A picked video sits here,
+  // unplayed, for a while before anyone taps Ask Caddie, so it needs the
+  // same forced seek+play+pause treatment, not just VideoTrimSelector's.
+  useEffect(() => {
+    const video = previewVideoRef.current;
+    if (!video || !videoPreviewUrl) return;
+    let cancelled = false;
+    async function showFrame() {
+      if (!video) return;
+      video.currentTime = draftSwingVideo?.trimStartSeconds ?? 0;
+      try {
+        await video.play();
+        if (!cancelled) video.pause();
+      } catch {
+        // Best effort — nothing else to do if autoplay is blocked here.
+      }
+    }
+    if (video.readyState >= 1) showFrame();
+    else video.addEventListener("loadedmetadata", showFrame, { once: true });
+    return () => {
+      cancelled = true;
+      video.removeEventListener("loadedmetadata", showFrame);
+    };
+  }, [videoPreviewUrl, draftSwingVideo?.trimStartSeconds]);
 
   if (isDemo || !authUser) {
     return (
@@ -178,6 +227,11 @@ export function AnalyzeSwing() {
   async function handleAnalyze() {
     if (!videoFile || submitting || !authUser) return;
     setSubmitting(true);
+    // Brackets the one real gap where an app exit could genuinely lose a
+    // swing with no trace — see UPLOAD_IN_PROGRESS_KEY's own comment.
+    // Cleared in every exit from this function below, success or failure;
+    // only stays set if the app itself was killed before either happened.
+    localStorage.setItem(UPLOAD_IN_PROGRESS_KEY, "1");
     try {
       const path = `${authUser.id}/caddie-${crypto.randomUUID()}.${videoFile.name.split(".").pop() ?? "mp4"}`;
       const { error: uploadError } = await supabase.storage.from(COMMUNITY_MEDIA_BUCKET).upload(path, videoFile, { contentType: videoFile.type });
@@ -202,9 +256,11 @@ export function AnalyzeSwing() {
         startSeconds: draftSwingVideo?.trimStartSeconds,
         endSeconds: draftSwingVideo?.trimEndSeconds,
       });
+      localStorage.removeItem(UPLOAD_IN_PROGRESS_KEY);
       setDraftSwingVideo(undefined);
       navigate(`/caddie/${created.id}`, { replace: true });
     } catch (err) {
+      localStorage.removeItem(UPLOAD_IN_PROGRESS_KEY);
       showToast(err instanceof Error ? err.message : t("caddie.askCaddieError"), "warning");
       setSubmitting(false);
     }
@@ -241,7 +297,7 @@ export function AnalyzeSwing() {
         <div className="flex flex-col gap-2.5 rounded-2xl border border-fairway-200 bg-fairway-50/40 p-3">
           <div className="overflow-hidden rounded-xl">
             {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-            <video src={videoPreviewUrl} controls className="max-h-72 w-full rounded-xl bg-black" />
+            <video ref={previewVideoRef} src={videoPreviewUrl} controls className="max-h-72 w-full rounded-xl bg-black" />
           </div>
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs font-semibold text-fairway-700">{videoFile.name}</span>

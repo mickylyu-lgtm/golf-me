@@ -164,6 +164,7 @@ export const ja: Record<TranslationKey, string> = {
   "caddie.shareFeedback": "キャディのフィードバックを共有",
   "caddie.askCaddie": "キャディに聞く",
   "caddie.askCaddieError": "キャディはこのスイングを分析できませんでした。",
+  "caddie.uploadInterrupted": "前回のスイングのアップロードが完了しませんでした。もう一度お試しください。",
   "caddie.tryAgain": "再試行",
   "caddie.back": "キャディに戻る",
   "caddie.homeCardTitle": "最新のスイング",

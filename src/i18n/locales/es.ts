@@ -164,6 +164,7 @@ export const es: Record<TranslationKey, string> = {
   "caddie.shareFeedback": "Compartir Feedback de Caddie",
   "caddie.askCaddie": "Preguntar a Caddie",
   "caddie.askCaddieError": "Caddie no pudo analizar este swing.",
+  "caddie.uploadInterrupted": "Tu última subida de swing no se completó — inténtalo de nuevo.",
   "caddie.tryAgain": "Intentar de Nuevo",
   "caddie.back": "Volver a Caddie",
   "caddie.homeCardTitle": "Tu último swing",
