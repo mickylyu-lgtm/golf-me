@@ -878,14 +878,14 @@ export const en = {
   "common.following": "Following",
 
   // Find Friends
-  "findFriends.title": "Find Friends",
-  "findFriends.subtitle": "Search for golfers you already know on GolfMe.",
-  "findFriends.entryPoint": "Find Friends",
+  "findFriends.title": "Find Golfers",
+  "findFriends.subtitle": "Search for golfers or discover people to play with.",
+  "findFriends.entryPoint": "Find Golfers",
+  "findFriends.suggestedForYou": "Suggested for you",
   "findFriends.searchPlaceholder": "Search name or @username",
   "findFriends.searching": "Searching...",
   "findFriends.noResults": "No golfers found.",
   "findFriends.noResultsDesc": "Try a different name or username.",
-  "findFriends.startTyping": "Start typing a name or @username to search.",
   "findFriends.followFailed": "Couldn't update follow status. Please try again.",
   "findFriends.copyUsername": "Copy @{username}",
   "findFriends.usernameCopiedToast": "Copied to clipboard.",
