@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, Plus, Search, Sparkles, UserPlus } from "lucide-react";
 import { useData } from "../context/DataContext";
+import { useAuth } from "../context/AuthContext";
 import { useLocale } from "../i18n/LocaleContext";
 import { useTutorial, useTutorialEligibility } from "../context/TutorialContext";
 import { GolfCallCard } from "../components/golfcall/GolfCallCard";
@@ -27,6 +28,7 @@ const PRIMARY_ACTION_CLASS =
 
 export function Home() {
   const { currentUser, golfCalls, visiblePosts, caddieAnalyses } = useData();
+  const { isDemo } = useAuth();
   const { t, locale } = useLocale();
   const navigate = useNavigate();
   const { start: startTutorial } = useTutorial();
@@ -93,6 +95,24 @@ export function Home() {
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Same fast entry point into FindFriends' own dedicated golfer-search
+          screen used by Discover.tsx's shortcut — not a second search
+          implementation. A plain button styled like a search bar, rather
+          than a real input, so tapping it always navigates away immediately
+          instead of ever having two live golfer-search UIs on screen at
+          once. Hidden for demo accounts because FindFriends itself redirects
+          them straight back out (no demo-mode search backend to hit). */}
+      {!isDemo && (
+        <button
+          type="button"
+          onClick={() => navigate("/profile/following/find")}
+          className="relative w-full rounded-2xl border border-slate-200 bg-white py-3 pl-10 pr-3.5 text-left text-sm text-slate-400 shadow-sm transition hover:border-fairway-300"
+        >
+          <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+          {t("discover.searchPlaceholder")}
+        </button>
+      )}
+
       <div>
         <p className="text-sm font-medium text-slate-500">
           {t(greetingKeyForHour(new Date().getHours()))}, {firstName(currentUser.name)}
