@@ -414,7 +414,7 @@ export const ko: Record<TranslationKey, string> = {
   "home.readyToGolf": "라운드 나갈 준비 되셨나요?",
   "home.roundsNeedPlayers": "이번 주말 근처에서 {count}개의 라운드가 플레이어를 찾고 있어요.",
   "home.roundNeedsPlayers": "이번 주말 근처에서 1개의 라운드가 플레이어를 찾고 있어요.",
-  "home.searchGolfersPlaceholder": "골퍼 찾기",
+  "home.searchGolfersPlaceholder": "골퍼 찾기...",
   "home.findRound": "라운드 찾기",
   "home.findRoundSubtitle": "근처 골퍼와 빈 라운드를 찾아보세요.",
   "home.hostRound": "라운드 만들기",
