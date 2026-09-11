@@ -109,7 +109,7 @@ export function Home() {
           className="relative w-full rounded-2xl border border-slate-200 bg-white py-3 pl-10 pr-3.5 text-left text-sm text-slate-400 shadow-sm transition hover:border-fairway-300"
         >
           <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          {t("discover.searchPlaceholder")}
+          {t("home.searchGolfersPlaceholder")}
         </button>
       )}
 

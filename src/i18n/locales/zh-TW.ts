@@ -414,6 +414,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "home.readyToGolf": "準備好打球了嗎？",
   "home.roundsNeedPlayers": "本週末附近有 {count} 個球局正在招募球友。",
   "home.roundNeedsPlayers": "本週末附近有 1 個球局正在招募球友。",
+  "home.searchGolfersPlaceholder": "找球友",
   "home.findRound": "找球局",
   "home.findRoundSubtitle": "尋找附近的球友和空缺球局。",
   "home.hostRound": "揪球局",

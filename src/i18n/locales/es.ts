@@ -414,6 +414,7 @@ export const es: Record<TranslationKey, string> = {
   "home.readyToGolf": "¿Listo para jugar?",
   "home.roundsNeedPlayers": "{count} rondas necesitan jugadores cerca de ti este fin de semana.",
   "home.roundNeedsPlayers": "1 ronda necesita jugadores cerca de ti este fin de semana.",
+  "home.searchGolfersPlaceholder": "Buscar Golfistas",
   "home.findRound": "Buscar una Ronda",
   "home.findRoundSubtitle": "Encuentra golfistas y rondas abiertas cerca de ti.",
   "home.hostRound": "Organizar una Ronda",

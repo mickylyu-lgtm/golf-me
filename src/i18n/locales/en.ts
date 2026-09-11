@@ -436,6 +436,7 @@ export const en = {
   "home.readyToGolf": "Ready to golf?",
   "home.roundsNeedPlayers": "{count} rounds need players near you this weekend.",
   "home.roundNeedsPlayers": "1 round needs players near you this weekend.",
+  "home.searchGolfersPlaceholder": "Find Golfers",
   "home.findRound": "Find a Round",
   "home.findRoundSubtitle": "Find golfers and open rounds nearby.",
   "home.hostRound": "Host a Round",

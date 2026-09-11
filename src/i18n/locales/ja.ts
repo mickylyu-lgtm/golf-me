@@ -414,6 +414,7 @@ export const ja: Record<TranslationKey, string> = {
   "home.readyToGolf": "ラウンドの準備はできましたか？",
   "home.roundsNeedPlayers": "今週末、近くで{count}件のラウンドがメンバーを募集中です。",
   "home.roundNeedsPlayers": "今週末、近くで1件のラウンドがメンバーを募集中です。",
+  "home.searchGolfersPlaceholder": "ゴルファーを探す",
   "home.findRound": "ラウンドを探す",
   "home.findRoundSubtitle": "近くのゴルファーと空きのあるラウンドを探せます。",
   "home.hostRound": "ラウンドを作成",
