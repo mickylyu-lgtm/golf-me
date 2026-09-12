@@ -38,7 +38,7 @@ export function Inbox() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t("chatInbox.searchPlaceholder")}
-            className="w-full rounded-xl border border-slate-200 py-2.5 pl-9 pr-3.5 text-sm outline-none transition focus:border-fairway-400"
+            className="w-full rounded-xl border border-slate-200 py-2.5 pl-9 pr-3.5 text-sm outline-none transition focus:border-fairway-400 focus:ring-1 focus:ring-fairway-400"
           />
         </div>
       )}
@@ -57,12 +57,12 @@ export function Inbox() {
       ) : filtered.length === 0 ? (
         <p className="px-1 text-sm text-slate-500">{t("chatInbox.noSearchResults")}</p>
       ) : (
-        <div className="flex flex-col gap-2.5">
+        <div className="flex flex-col gap-2">
           {filtered.map((c) => (
             <button
               key={c.conversationId}
               onClick={() => navigate(`/messages/${c.otherGolfer.id}`)}
-              className={`flex w-full items-center gap-3 p-3.5 text-left ${CLICKABLE_CARD_CLASS}`}
+              className={`flex w-full items-center gap-3 p-3 text-left ${CLICKABLE_CARD_CLASS}`}
             >
               <Avatar golfer={c.otherGolfer} size="md" />
               <div className="min-w-0 flex-1">

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Plus, Search, Sparkles, UserPlus } from "lucide-react";
+import { ArrowRight, CalendarClock, Plus, Search, Sparkles, UserPlus } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
 import { useLocale } from "../i18n/LocaleContext";
@@ -9,11 +9,13 @@ import { GolfCallCard } from "../components/golfcall/GolfCallCard";
 import { PostCard } from "../components/community/PostCard";
 import { AddToHomeScreenPrompt } from "../components/layout/AddToHomeScreenPrompt";
 import { Button } from "../components/ui/Button";
+import { Badge } from "../components/ui/Badge";
 import { CLICKABLE_CARD_CLASS } from "../components/ui/cardStyles";
 import { firstName, greetingKeyForHour, isThisWeekend } from "../lib/greeting";
 import { MIN_PREFERENCES_FOR_AUTO_MATCH, selectedPreferenceCount } from "../lib/preferenceMatch";
 import { formatShortDate } from "../lib/format";
 import { COMMUNITY_TUTORIAL_ID } from "../lib/tutorialSteps";
+import { SUPPORTED_TEE_TIME_COURSES } from "../services/teeTimes/types";
 
 const HOME_RADIUS_MILES = 25;
 const NEARBY_ROUNDS_SHOWN = 3;
@@ -95,34 +97,38 @@ export function Home() {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Same fast entry point into FindFriends' own dedicated golfer-search
-          screen used by Discover.tsx's shortcut — not a second search
-          implementation. A plain button styled like a search bar, rather
-          than a real input, so tapping it always navigates away immediately
-          instead of ever having two live golfer-search UIs on screen at
-          once. Hidden for demo accounts because FindFriends itself redirects
-          them straight back out (no demo-mode search backend to hit). */}
-      {!isDemo && (
-        <button
-          type="button"
-          onClick={() => navigate("/profile/following/find")}
-          className="relative w-full rounded-2xl border border-slate-200 bg-white py-3 pl-10 pr-3.5 text-left text-sm text-slate-400 shadow-sm transition hover:border-fairway-300"
-        >
-          <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          {t("home.searchGolfersPlaceholder")}
-        </button>
-      )}
-
-      <div>
-        <p className="text-sm font-medium text-slate-500">
-          {t(greetingKeyForHour(new Date().getHours()))}, {firstName(currentUser.name)}
-        </p>
-        <p className="mt-0.5 text-lg font-bold text-slate-900">{subtitle}</p>
-      </div>
-
-      <AddToHomeScreenPrompt />
-
+      {/* Search bar, greeting, and the primary action cards are meant to
+          read as one tight "top of Home" block (per product direction) —
+          gap-3 here instead of inheriting the outer gap-6, which stays for
+          spacing between this block and the sections below it. */}
       <div className="flex flex-col gap-3">
+        {/* Same fast entry point into FindFriends' own dedicated golfer-search
+            screen used by Discover.tsx's shortcut — not a second search
+            implementation. A plain button styled like a search bar, rather
+            than a real input, so tapping it always navigates away immediately
+            instead of ever having two live golfer-search UIs on screen at
+            once. Hidden for demo accounts because FindFriends itself redirects
+            them straight back out (no demo-mode search backend to hit). */}
+        {!isDemo && (
+          <button
+            type="button"
+            onClick={() => navigate("/profile/following/find")}
+            className="relative w-full rounded-2xl border border-slate-200 bg-white py-3 pl-10 pr-3.5 text-left text-sm text-slate-400 shadow-sm transition hover:border-fairway-300"
+          >
+            <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            {t("home.searchGolfersPlaceholder")}
+          </button>
+        )}
+
+        <div>
+          <p className="text-sm font-medium text-slate-500">
+            {t(greetingKeyForHour(new Date().getHours()))}, {firstName(currentUser.name)}
+          </p>
+          <p className="mt-0.5 text-lg font-bold text-slate-900">{subtitle}</p>
+        </div>
+
+        <AddToHomeScreenPrompt />
+
         <button
           onClick={() => navigate("/find")}
           className={`flex w-full items-center gap-3 p-4 text-left ${PRIMARY_ACTION_CLASS}`}
@@ -147,6 +153,27 @@ export function Home() {
           <span className="min-w-0 flex-1">
             <span className="block text-base font-bold text-slate-900">{t("home.hostRound")}</span>
             <span className="block text-sm text-slate-500">{t("home.hostRoundSubtitle")}</span>
+          </span>
+          <ArrowRight size={16} className="shrink-0 text-slate-400" />
+        </button>
+
+        {/* GolfMe's tee-time integration is deliberately narrow — see
+            SUPPORTED_TEE_TIME_COURSES — so this badge is always the real,
+            current count, never a hardcoded "2" that would go stale the
+            moment a third course is added. */}
+        <button
+          onClick={() => navigate("/tee-times")}
+          className={`flex w-full items-center gap-3 p-4 text-left ${CLICKABLE_CARD_CLASS}`}
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-fairway-50 text-fairway-700">
+            <CalendarClock size={18} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center gap-2">
+              <span className="block text-base font-bold text-slate-900">{t("teeTimes.title")}</span>
+              <Badge tone="fairway">{t("home.teeTimesCourseCount", { count: SUPPORTED_TEE_TIME_COURSES.length })}</Badge>
+            </span>
+            <span className="block text-sm text-slate-500">{t("teeTimes.subtitle")}</span>
           </span>
           <ArrowRight size={16} className="shrink-0 text-slate-400" />
         </button>

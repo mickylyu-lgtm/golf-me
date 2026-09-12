@@ -20,6 +20,7 @@ import { Avatar } from "../components/ui/Avatar";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Modal } from "../components/ui/Modal";
+import { CLICKABLE_CARD_CLASS } from "../components/ui/cardStyles";
 import { inputClass, labelClass } from "../components/ui/FormControls";
 import { AvatarUpload } from "../components/profile/AvatarUpload";
 import { HighlightGolfMe } from "../components/brand/HighlightGolfMe";
@@ -33,10 +34,7 @@ import { useRoles } from "../lib/useRoles";
 
 function ProfileRow({ icon, label, value, onClick }: { icon: ReactNode; label: string; value?: string; onClick: () => void }) {
   return (
-    <button
-      onClick={onClick}
-      className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white p-4 text-left transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-fairway-200 hover:shadow-md active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
-    >
+    <button onClick={onClick} className={`flex items-center gap-3 p-4 text-left ${CLICKABLE_CARD_CLASS}`}>
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-fairway-50 text-fairway-700">{icon}</span>
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-semibold text-slate-800">{label}</span>
@@ -44,6 +42,15 @@ function ProfileRow({ icon, label, value, onClick }: { icon: ReactNode; label: s
       </span>
       <ChevronRight size={16} className="shrink-0 text-slate-300" />
     </button>
+  );
+}
+
+function ProfileSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="flex flex-col gap-2.5">
+      <h2 className="px-1 text-xs font-bold uppercase tracking-wide text-slate-400">{title}</h2>
+      <div className="flex flex-col gap-2.5">{children}</div>
+    </section>
   );
 }
 
@@ -164,40 +171,53 @@ export function Profile() {
         )}
       </div>
 
-      <div className="flex flex-col gap-2.5">
-        <ProfileRow icon={<ClipboardList size={16} />} label={t("profile.myGolf")} onClick={() => navigate("/my-rounds")} />
-        <ProfileRow
-          icon={<Users size={16} />}
-          label={t("profile.reputation")}
-          value={credibilityLabel(credibility.tier, t)}
-          onClick={() => navigate("/profile/reputation")}
-        />
-        <ProfileRow
-          icon={<Users size={16} />}
-          label={t("profile.golfCircle")}
-          value={circleGolfers.length === 1 ? t("profile.golferCountSingular") : t("profile.golferCount", { count: circleGolfers.length })}
-          onClick={() => navigate("/profile/circle")}
-        />
-        <ProfileRow
-          icon={<UserRoundPlus size={16} />}
-          label={t("profile.following")}
-          value={`${followingGolfers.length}`}
-          onClick={() => navigate("/profile/following")}
-        />
-        <ProfileRow
-          icon={<MessageSquareText size={16} />}
-          label={t("profile.myPosts")}
-          value={myPostCount === 1 ? t("profile.postCountSingular") : t("profile.postCount", { count: myPostCount })}
-          onClick={() => navigate("/profile/posts")}
-        />
-        <ProfileRow icon={<SlidersHorizontal size={16} />} label={t("profile.matchPreferences")} onClick={() => navigate("/profile/preferences")} />
-        <ProfileRow icon={<SettingsIcon size={16} />} label={t("profile.settings")} onClick={() => navigate("/settings")} />
-        {isCoachReviewer && <ProfileRow icon={<ShieldCheck size={16} />} label="Coach Review Queue" onClick={() => navigate("/coach-reviews")} />}
-        {isAdmin && (
-          <>
-            <ProfileRow icon={<ShieldCheck size={16} />} label="Coach Reviewers" onClick={() => navigate("/admin/coach-reviewers")} />
-            <ProfileRow icon={<LayoutDashboard size={16} />} label="Platform Dashboard" onClick={() => navigate("/admin/dashboard")} />
-          </>
+      <div className="flex flex-col gap-5">
+        <ProfileSection title={t("profile.sectionGolf")}>
+          <ProfileRow icon={<ClipboardList size={16} />} label={t("profile.myGolf")} onClick={() => navigate("/my-rounds")} />
+          <ProfileRow icon={<SlidersHorizontal size={16} />} label={t("profile.matchPreferences")} onClick={() => navigate("/profile/preferences")} />
+        </ProfileSection>
+
+        <ProfileSection title={t("profile.sectionSocial")}>
+          <ProfileRow
+            icon={<Users size={16} />}
+            label={t("profile.reputation")}
+            value={credibilityLabel(credibility.tier, t)}
+            onClick={() => navigate("/profile/reputation")}
+          />
+          <ProfileRow
+            icon={<Users size={16} />}
+            label={t("profile.golfCircle")}
+            value={circleGolfers.length === 1 ? t("profile.golferCountSingular") : t("profile.golferCount", { count: circleGolfers.length })}
+            onClick={() => navigate("/profile/circle")}
+          />
+          <ProfileRow
+            icon={<UserRoundPlus size={16} />}
+            label={t("profile.following")}
+            value={`${followingGolfers.length}`}
+            onClick={() => navigate("/profile/following")}
+          />
+          <ProfileRow
+            icon={<MessageSquareText size={16} />}
+            label={t("profile.myPosts")}
+            value={myPostCount === 1 ? t("profile.postCountSingular") : t("profile.postCount", { count: myPostCount })}
+            onClick={() => navigate("/profile/posts")}
+          />
+        </ProfileSection>
+
+        <ProfileSection title={t("profile.sectionAccount")}>
+          <ProfileRow icon={<SettingsIcon size={16} />} label={t("profile.settings")} onClick={() => navigate("/settings")} />
+        </ProfileSection>
+
+        {(isCoachReviewer || isAdmin) && (
+          <ProfileSection title={t("profile.sectionAdmin")}>
+            {isCoachReviewer && <ProfileRow icon={<ShieldCheck size={16} />} label="Coach Review Queue" onClick={() => navigate("/coach-reviews")} />}
+            {isAdmin && (
+              <>
+                <ProfileRow icon={<ShieldCheck size={16} />} label="Coach Reviewers" onClick={() => navigate("/admin/coach-reviewers")} />
+                <ProfileRow icon={<LayoutDashboard size={16} />} label="Platform Dashboard" onClick={() => navigate("/admin/dashboard")} />
+              </>
+            )}
+          </ProfileSection>
         )}
       </div>
 

@@ -64,9 +64,17 @@ export function Caddie() {
                 <button
                   key={a.id}
                   onClick={() => navigate(`/caddie/${a.id}`)}
-                  className={`flex w-full items-center justify-between gap-3 p-4 text-left ${CLICKABLE_CARD_CLASS}`}
+                  className={`flex w-full items-center gap-3 p-4 text-left ${CLICKABLE_CARD_CLASS}`}
                 >
-                  <span className="min-w-0">
+                  {/* Only when a real captured frame already exists (see
+                      CaddieAnalysis.thumbnailUrl) — never generated here,
+                      per explicit instruction not to add processing just
+                      for this. Older/incomplete analyses simply fall back
+                      to the text-only layout below. */}
+                  {a.thumbnailUrl && (
+                    <img src={a.thumbnailUrl} alt="" className="h-12 w-12 shrink-0 rounded-xl object-cover" />
+                  )}
+                  <span className="min-w-0 flex-1">
                     <span className="block text-sm font-bold text-slate-900">{a.swingType || t("caddie.title")}</span>
                     <span className="block text-xs text-slate-500">{formatShortDate(a.createdAt, locale)}</span>
                   </span>
