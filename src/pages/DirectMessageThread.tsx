@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Eraser, MoreHorizontal, ShieldAlert, ShieldCheck, ShieldOff, Trash2 } from "lucide-react";
 import { useData } from "../context/DataContext";
@@ -139,16 +139,25 @@ export function DirectMessageThread() {
   }, [id]);
 
   // The list's own height changes for reasons that have nothing to do with
-  // new messages arriving -- the keyboard opening/closing (boxHeight above),
-  // the composer growing to a second line, even a plain window resize/
-  // rotation. A ResizeObserver on the list itself is one signal that covers
-  // all of those instead of trying to separately track each cause. Same
-  // near-bottom rule as message arrival: only re-pin if that's where the
-  // user already was; otherwise a plain height change leaves scrollTop
-  // untouched on its own, which is exactly "preserve their reading
-  // position" for free. Deliberately instant (no smooth scroll) -- an
-  // animated correction here is the "visible double jump" the spec called
-  // out to avoid, not a nicety.
+  // new messages arriving -- the composer growing to a second line, a
+  // plain window resize/rotation. A ResizeObserver on the list itself is
+  // one signal that covers all of those instead of trying to separately
+  // track each cause. Same near-bottom rule as message arrival: only
+  // re-pin if that's where the user already was; otherwise a plain height
+  // change leaves scrollTop untouched on its own, which is exactly
+  // "preserve their reading position" for free.
+  //
+  // NOT the keyboard's own resize anymore -- that used to also flow
+  // through here, but ResizeObserver callbacks fire asynchronously after
+  // layout (effectively a frame behind), so the box would visibly resize
+  // first and the scroll correction would snap a moment later: a real,
+  // mechanically-explained two-stage jump, not a guess. keyboardHeight
+  // below handles that case synchronously instead, before paint, so
+  // there's only one visible step. This effect still exists and still
+  // fires for a keyboard-driven resize (the list's size changes either
+  // way), but by then scrollTop is already correct, making its own
+  // assignment a harmless no-op -- not a second competing mechanism, just
+  // the same safety net still covering the cases keyboardHeight doesn't.
   useEffect(() => {
     const el = listRef.current;
     if (!el) return;
@@ -158,6 +167,19 @@ export function DirectMessageThread() {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  // The keyboard opening/closing is the one resize cause we already know
+  // about directly (via keyboardHeight, not by waiting to notice the list
+  // changed size) -- useLayoutEffect runs synchronously right after the
+  // boxHeight/DOM update above but before the browser paints, so the
+  // scroll correction lands in the SAME visual frame as the resize itself
+  // instead of one frame later. This is the single source of truth for
+  // keyboard-triggered scroll correction now; the ResizeObserver above
+  // keeps its own, different job (composer growth, rotation).
+  useLayoutEffect(() => {
+    const el = listRef.current;
+    if (el && nearBottomRef.current) el.scrollTop = el.scrollHeight;
+  }, [keyboardHeight]);
 
   // The chat box below is sized to fit the viewport exactly (see its own
   // comment), but that's a best-effort calc(), not a hard guarantee --
