@@ -4,7 +4,7 @@ import { NAV_TUTORIAL_ID_BY_PATH } from "../../lib/tutorialSteps";
 import { useLocale } from "../../i18n/LocaleContext";
 import { useData } from "../../context/DataContext";
 import { useCaddieNavStatus } from "../../lib/useCaddieNavStatus";
-import { useKeyboardOpen } from "../../lib/useKeyboardOpen";
+import { useKeyboardHeight } from "../../lib/useKeyboardHeight";
 import { CaddieNavStatusIcon } from "./CaddieNavStatusIcon";
 
 export function BottomNav() {
@@ -13,12 +13,14 @@ export function BottomNav() {
   const { dmConversations, markNotificationRead } = useData();
   const unreadCount = dmConversations.filter((c) => c.unread).length;
   const { isProcessing: caddieProcessing, unseenNotification: caddieUnseen } = useCaddieNavStatus();
-  // `fixed bottom-0` re-anchors to the real (now keyboard-shrunk) frame
-  // under resize:"body" instead of going off-screen the way it used to —
-  // hiding it here is what makes a focused composer/textarea anywhere in
-  // the app sit directly above the keyboard, iMessage/Instagram style,
-  // instead of a redundant tab bar sitting between them.
-  const keyboardOpen = useKeyboardOpen();
+  // `fixed bottom-0` is anchored against the LAYOUT viewport, which
+  // resize:"body" doesn't actually change (see useKeyboardHeight's own
+  // comment) -- so without hiding it, BottomNav would sit behind/under the
+  // keyboard, not above it. Hiding it here is what makes a focused
+  // composer/textarea anywhere in the app read as the keyboard's own
+  // bottom edge, iMessage/Instagram style, instead of a stray tab bar
+  // showing through or competing for space.
+  const keyboardOpen = useKeyboardHeight() > 0;
   if (keyboardOpen) return null;
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:hidden">

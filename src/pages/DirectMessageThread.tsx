@@ -10,8 +10,7 @@ import { ReportModal } from "../components/trust/ReportModal";
 import { ChatComposer } from "../components/chat/ChatComposer";
 import { FounderBadge } from "../components/golfer/TrustBadges";
 import { dmDraftKey, loadChatDraft, saveChatDraft } from "../lib/chatDraft";
-import { useVisualViewportHeight } from "../lib/useVisualViewportHeight";
-import { useKeyboardOpen } from "../lib/useKeyboardOpen";
+import { useKeyboardHeight } from "../lib/useKeyboardHeight";
 import { handicapLabel } from "../lib/format";
 import { isFounder } from "../lib/founder";
 import { useLocale } from "../i18n/LocaleContext";
@@ -51,30 +50,34 @@ export function DirectMessageThread() {
   const nearBottomRef = useRef(true);
   const boxRef = useRef<HTMLDivElement>(null);
   const [boxTop, setBoxTop] = useState<number | null>(null);
-  const viewportHeight = useVisualViewportHeight();
 
-  // The 13rem chrome reserve below (TopBar + this page's own header row +
-  // BottomNav) is only correct while BottomNav is actually visible.
-  // BottomNav now hides itself whenever the keyboard is open (see
-  // BottomNav.tsx's own useKeyboardOpen() call) so it's never competing for
-  // space at that point — the fixed 13rem reserve would otherwise leave that
-  // same now-unused gap between the last message and the keyboard (reported
-  // live). keyboardOpen here comes from the same shared hook, backed by
-  // @capacitor/keyboard's native show/hide events (with resize:"body" now
-  // configured — see capacitor.config.ts — the WKWebView frame itself
-  // shrinks for the keyboard instead of panning, so this is a real,
-  // reliable signal rather than a height-diff guess).
+  // boxTop is the one remaining JS measurement here -- this page's own
+  // header row isn't sticky/fixed, so nothing else knows where the box
+  // starts. Only re-measured on a real window resize/rotation, not per
+  // keyboard event.
   useEffect(() => {
     const measure = () => setBoxTop(boxRef.current?.getBoundingClientRect().top ?? null);
     measure();
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
   }, []);
-  const keyboardOpen = useKeyboardOpen();
+  const keyboardHeight = useKeyboardHeight();
+  // Available height = window.innerHeight - boxTop - whatever's actually
+  // eating space at the bottom: the keyboard's real height (reported
+  // directly by iOS via the plugin) when it's open, or BottomNav's own
+  // footprint (it reappears once the keyboard closes -- see BottomNav.tsx)
+  // otherwise. Deliberately NOT viewport/dvh-based: confirmed live that
+  // window.innerHeight (and, previously, visualViewport.height and 100dvh)
+  // all stay at their full pre-keyboard values under resize:"body" -- its
+  // own docs say "the viewport does not change" -- so keyboardHeight from
+  // the plugin's own event payload is the only value here actually
+  // reported by iOS itself, not inferred from one that doesn't update.
   const boxHeight =
-    keyboardOpen && boxTop !== null
-      ? `${viewportHeight - boxTop}px`
-      : `calc(${viewportHeight}px - 13rem - env(safe-area-inset-top) - env(safe-area-inset-bottom))`;
+    boxTop === null
+      ? undefined
+      : keyboardHeight > 0
+        ? `${window.innerHeight - boxTop - keyboardHeight}px`
+        : `calc(${window.innerHeight}px - ${boxTop}px - 4.25rem - env(safe-area-inset-bottom))`;
 
   const other = id ? getGolfer(id) : undefined;
   const messages = id ? messagesWithGolfer(id) : [];
@@ -307,11 +310,10 @@ export function DirectMessageThread() {
           list the only thing that scrolls, and the composer just always
           sits after it, guaranteed never overlapping.
 
-          Height comes from boxHeight above (visualViewport-based, keyboard-
-          aware -- see the comment by its calculation), not a fixed dvh calc:
-          100dvh only reacts to browser-chrome changes, not the on-screen
-          keyboard, so this box used to keep its full pre-keyboard height
-          whether or not BottomNav was still actually visible underneath it. */}
+          Height comes from boxHeight above -- window.innerHeight minus
+          boxTop minus the real keyboard height (see the comment by its
+          calculation for why viewport/dvh-based values don't work under
+          resize:"body"). */}
       <div ref={boxRef} className="flex flex-col rounded-2xl border border-slate-100 bg-white" style={{ height: boxHeight }}>
         {/* A leading mt-auto spacer bottom-anchors a short thread against the
             composer (empty space above, like every real chat app) instead of
