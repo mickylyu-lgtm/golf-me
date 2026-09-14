@@ -64,7 +64,6 @@ import { AdminReviewers } from "./pages/AdminReviewers";
 import { AdminDashboard } from "./pages/AdminDashboard";
 import { CoachInvite } from "./pages/CoachInvite";
 import { usePendingReviewerInviteRedemption } from "./lib/usePendingReviewerInviteRedemption";
-import { useCancelKeyboardViewportPan } from "./lib/useCancelKeyboardViewportPan";
 
 // Logged-in area: sidebar/bottom nav shell. Three real states, not two —
 // no session -> Welcome (or straight to Login if this is the installed
@@ -199,7 +198,6 @@ function AppGate({ children }: { children: ReactNode }) {
   // own comment for why this can't wait for AuthedLayout to mount.
   usePendingReviewerInviteRedemption();
   usePushRegistration();
-  useCancelKeyboardViewportPan();
   if (isLoading || authLoading) return <GolfMeLoader fullScreen message={t("loading.gettingReady")} />;
   return <>{children}</>;
 }

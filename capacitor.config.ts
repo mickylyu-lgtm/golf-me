@@ -1,4 +1,5 @@
 import type { CapacitorConfig } from "@capacitor/cli";
+import { KeyboardResize } from "@capacitor/keyboard";
 
 const config: CapacitorConfig = {
   // Not "com.golfme.app" -- Xcode's App Store Connect registration
@@ -30,6 +31,27 @@ const config: CapacitorConfig = {
   // flash. This is a native (Capacitor config) change -- needs `npx cap
   // sync ios` + a fresh Xcode archive, not just a Vercel deploy.
   backgroundColor: "#faf9f6",
+  // Body resize mode makes WKWebView's own frame shrink to fit above the
+  // keyboard (like Android's adjustResize) instead of the default native
+  // behavior of panning the visual viewport over a fixed-size frame -- the
+  // pan is what caused the reported black gap / whole-page-drag on textbox
+  // focus, since app CSS (sticky TopBar, fixed BottomNav) is laid out
+  // against the unpanned frame and the pan just slides it out from under
+  // that layout. With the frame genuinely resizing instead, `fixed`/`sticky`
+  // elements and visualViewport-based height calcs (see
+  // useKeyboardOpen/DirectMessageThread) track the real keyboard-open
+  // viewport correctly with no JS fighting a native pan. resizeOnFullScreen
+  // keeps this working for any full-screen native views (camera, etc.), not
+  // just the main webview. Needs `npx cap sync ios` + a fresh Xcode archive
+  // to take effect -- this replaces the old scrollTo(0,0) pan-cancel hack
+  // (useCancelKeyboardViewportPan), which is now removed rather than kept
+  // alongside this as a second, now-redundant workaround.
+  plugins: {
+    Keyboard: {
+      resize: KeyboardResize.Body,
+      resizeOnFullScreen: true,
+    },
+  },
 };
 
 export default config;

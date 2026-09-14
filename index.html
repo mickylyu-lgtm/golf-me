@@ -42,7 +42,13 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Golf Me" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- interactive-widget=resizes-content: tells a supporting engine (WKWebView
+         on iOS 17.4+, recent Chrome) to genuinely resize the layout viewport
+         for the on-screen keyboard rather than just overlaying/panning over
+         it -- the same effect as Capacitor's own Keyboard resize:"body"
+         config (see capacitor.config.ts) but at the web-platform level, so
+         the plain browser/PWA path (not just the native app) benefits too. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="description" content="Golf Me — Find your next foursome." />
     <title>Golf Me</title>
   </head>

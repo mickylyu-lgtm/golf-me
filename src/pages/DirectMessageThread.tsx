@@ -11,6 +11,7 @@ import { ChatComposer } from "../components/chat/ChatComposer";
 import { FounderBadge } from "../components/golfer/TrustBadges";
 import { dmDraftKey, loadChatDraft, saveChatDraft } from "../lib/chatDraft";
 import { useVisualViewportHeight } from "../lib/useVisualViewportHeight";
+import { useKeyboardOpen } from "../lib/useKeyboardOpen";
 import { handicapLabel } from "../lib/format";
 import { isFounder } from "../lib/founder";
 import { useLocale } from "../i18n/LocaleContext";
@@ -40,29 +41,36 @@ export function DirectMessageThread() {
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  // Whether the user was scrolled at (or very near) the newest message the
+  // last time they touched the list themselves -- captured continuously on
+  // scroll, not re-derived after the fact, so it reflects their intent
+  // rather than wherever a resize happens to have left scrollTop. Starts
+  // true so a freshly opened thread opens pinned to its latest message, same
+  // as before.
+  const nearBottomRef = useRef(true);
   const boxRef = useRef<HTMLDivElement>(null);
   const [boxTop, setBoxTop] = useState<number | null>(null);
   const viewportHeight = useVisualViewportHeight();
 
   // The 13rem chrome reserve below (TopBar + this page's own header row +
   // BottomNav) is only correct while BottomNav is actually visible.
-  // BottomNav is `fixed bottom-0` against the LAYOUT viewport, which the
-  // keyboard doesn't shrink — so once the keyboard is open, BottomNav sits
-  // off-screen under it, no longer competing for space at all, but the
-  // fixed 13rem reserve kept leaving that same now-unused gap between the
-  // last message and the keyboard (reported live). document.documentElement's
-  // height stays the pre-keyboard layout size regardless, so comparing it
-  // against the (keyboard-shrunk) visual viewport height is a reliable
-  // "is the keyboard actually open" signal.
+  // BottomNav now hides itself whenever the keyboard is open (see
+  // BottomNav.tsx's own useKeyboardOpen() call) so it's never competing for
+  // space at that point — the fixed 13rem reserve would otherwise leave that
+  // same now-unused gap between the last message and the keyboard (reported
+  // live). keyboardOpen here comes from the same shared hook, backed by
+  // @capacitor/keyboard's native show/hide events (with resize:"body" now
+  // configured — see capacitor.config.ts — the WKWebView frame itself
+  // shrinks for the keyboard instead of panning, so this is a real,
+  // reliable signal rather than a height-diff guess).
   useEffect(() => {
     const measure = () => setBoxTop(boxRef.current?.getBoundingClientRect().top ?? null);
     measure();
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
   }, []);
-  const layoutHeight = typeof document !== "undefined" ? document.documentElement.clientHeight : 0;
-  const keyboardOpen = layoutHeight - viewportHeight > 100;
+  const keyboardOpen = useKeyboardOpen();
   const boxHeight =
     keyboardOpen && boxTop !== null
       ? `${viewportHeight - boxTop}px`
@@ -94,13 +102,59 @@ export function DirectMessageThread() {
     if (id) markConversationReadRef.current(id);
   }, [id, messages.length]);
 
+  // Tracks nearBottomRef off the list's own scroll position -- cheap, and
+  // the only thing that should ever decide "was the user reading the
+  // newest message or something older," independent of why the list's
+  // height might later change.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ block: "end" });
-    // Also re-pin to the latest message whenever the box's own height
-    // changes (keyboard opening/closing) -- otherwise the keyboard shrinking
-    // this box could leave the scroll position sitting mid-thread instead
-    // of back at the messages nearest the now-visible composer.
-  }, [messages.length, viewportHeight]);
+    const el = listRef.current;
+    if (!el) return;
+    const NEAR_BOTTOM_PX = 120;
+    const update = () => {
+      nearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX;
+    };
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    return () => el.removeEventListener("scroll", update);
+  }, [id]);
+
+  // A new message (sent or received) only pins to the bottom if the user
+  // was already there -- someone reading older messages shouldn't get
+  // yanked down just because a new one arrived (see nearBottomRef above).
+  useEffect(() => {
+    const el = listRef.current;
+    if (el && nearBottomRef.current) el.scrollTop = el.scrollHeight;
+  }, [messages.length]);
+
+  // Switching to a different thread always opens at its latest message,
+  // same as opening any chat app fresh -- not gated on nearBottomRef, which
+  // still holds the *previous* thread's state at this point.
+  useEffect(() => {
+    nearBottomRef.current = true;
+    const el = listRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [id]);
+
+  // The list's own height changes for reasons that have nothing to do with
+  // new messages arriving -- the keyboard opening/closing (boxHeight above),
+  // the composer growing to a second line, even a plain window resize/
+  // rotation. A ResizeObserver on the list itself is one signal that covers
+  // all of those instead of trying to separately track each cause. Same
+  // near-bottom rule as message arrival: only re-pin if that's where the
+  // user already was; otherwise a plain height change leaves scrollTop
+  // untouched on its own, which is exactly "preserve their reading
+  // position" for free. Deliberately instant (no smooth scroll) -- an
+  // animated correction here is the "visible double jump" the spec called
+  // out to avoid, not a nicety.
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      if (nearBottomRef.current) el.scrollTop = el.scrollHeight;
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // The chat box below is sized to fit the viewport exactly (see its own
   // comment), but that's a best-effort calc(), not a hard guarantee --
@@ -118,9 +172,11 @@ export function DirectMessageThread() {
     };
   }, []);
 
-  // (The WKWebView keyboard-pan-vs-sticky-TopBar cancel-scroll fix that used
-  // to live here is now mounted once app-wide -- see
-  // useCancelKeyboardViewportPan and its App.tsx call site.)
+  // (The old WKWebView keyboard-pan-vs-sticky-TopBar cancel-scroll hack --
+  // useCancelKeyboardViewportPan, force-scrolling to (0,0) on every
+  // visualViewport pan -- is gone. capacitor.config.ts's Keyboard
+  // resize:"body" config fixes the actual pan at the native layer instead
+  // of fighting it in JS after the fact.)
 
   // Switching straight from one thread to another reuses this same mounted
   // component (only the `id` route param changes), so without this the
@@ -257,12 +313,24 @@ export function DirectMessageThread() {
           keyboard, so this box used to keep its full pre-keyboard height
           whether or not BottomNav was still actually visible underneath it. */}
       <div ref={boxRef} className="flex flex-col rounded-2xl border border-slate-100 bg-white" style={{ height: boxHeight }}>
-        {/* justify-end bottom-anchors a short thread against the composer
-            (empty space above, like every real chat app), instead of
-            stacking from the top and leaving the gap below instead -- with
-            enough messages to overflow, this has no effect on the normal
-            top-to-bottom scroll. */}
-        <div className="flex min-h-0 flex-1 flex-col justify-end gap-3 overflow-y-auto px-4 py-4">
+        {/* A leading mt-auto spacer bottom-anchors a short thread against the
+            composer (empty space above, like every real chat app) instead of
+            stacking from the top. This used to be justify-end on the
+            scrollable div itself, which turned out to be a real bug, not
+            just visually irrelevant once overflowing as the old comment
+            assumed: justify-content: flex-end on an overflow-y-auto flex
+            column makes the browser misreport scrollHeight as equal to
+            clientHeight (confirmed live via the GolfMe:run skill --
+            removing justify-end alone took a genuinely-overflowing list's
+            reported scrollHeight from 239 to 876), i.e. the browser doesn't
+            think there's anything to scroll even when there plainly is.
+            margin-top: auto on a leading spacer gets the same "pack to the
+            bottom when short" visual result without touching the
+            container's own justify-content, so real overflow scrolling
+            (and everything built on it above -- near-bottom detection,
+            scrollTop math) actually works. */}
+        <div ref={listRef} className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4">
+          <div className="mt-auto" />
           {messages.length === 0 && (
             <p className="my-auto text-center text-sm text-slate-400">
               {eligible ? "No messages yet — say hello." : "You can't message this golfer."}
@@ -283,7 +351,6 @@ export function DirectMessageThread() {
               </div>
             );
           })}
-          <div ref={bottomRef} />
         </div>
 
         <div className="shrink-0 rounded-b-2xl bg-white">
