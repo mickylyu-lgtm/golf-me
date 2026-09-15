@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Eraser, MoreHorizontal, ShieldAlert, ShieldCheck, ShieldOff, Trash2 } from "lucide-react";
 import { useData } from "../context/DataContext";
@@ -61,25 +61,25 @@ export function DirectMessageThread() {
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
   }, []);
-  // Native resize:"body" (capacitor.config.ts) is the single source of
-  // truth for available height now -- the WKWebView frame itself shrinks
-  // for the keyboard, and CSS's 100dvh tracks that natively, so there's no
-  // JS keyboard-height pixel value in this calc at all. keyboardOpen is
-  // only a boolean (same signal BottomNav already uses to hide itself),
-  // toggling whether BottomNav's footprint needs reserving below the box --
-  // it disappears once the keyboard is open, so reserving it then would
-  // leave an unused gap between the last message and the keyboard.
-  //
-  // An earlier attempt at exactly this (0e51cb9, reverted 13 min later at
-  // 648fbeb) was tested against a build where @capacitor/keyboard was never
-  // actually linked into the native iOS project -- ios/App/CapApp-SPM/
-  // Package.swift never listed it until this pass (`npx cap sync ios`), so
-  // resize:"body" could never have been active during that test. This is a
-  // deliberate re-test now that the plugin is genuinely linked, not a
-  // guess -- per explicit instruction, needs physical-iPhone verification,
-  // not assumed working from this recompute alone.
-  const keyboardOpen = useKeyboardHeight() > 0;
-  const boxHeight = boxTop === null ? undefined : `calc(100dvh - ${boxTop}px${keyboardOpen ? "" : " - 4.25rem - env(safe-area-inset-bottom)"})`;
+  const keyboardHeight = useKeyboardHeight();
+  // Confirmed live on a physical iPhone, on a build where the Keyboard
+  // plugin is genuinely linked (accessory bar correctly disappears, proving
+  // native events do fire): 100dvh does NOT track resize:"body"'s frame
+  // shrink -- boxHeight stayed at its pre-keyboard size, pushing the
+  // composer off-screen below the keyboard with a large blank gap above it.
+  // This isolates the earlier revert (0e51cb9/648fbeb) as a real finding,
+  // not just a symptom of the plugin being unlinked at the time -- the two
+  // questions (is the plugin linked / does dvh track its resize) are now
+  // answered separately and dvh genuinely doesn't work here. keyboardHeight
+  // from the plugin's own keyboardWillShow/Hide event payload is real,
+  // native-reported data and the only value that reliably reflects the
+  // keyboard's actual height on this device.
+  const boxHeight =
+    boxTop === null
+      ? undefined
+      : keyboardHeight > 0
+        ? `${window.innerHeight - boxTop - keyboardHeight}px`
+        : `calc(${window.innerHeight}px - ${boxTop}px - 4.25rem - env(safe-area-inset-bottom))`;
 
   const other = id ? getGolfer(id) : undefined;
   const messages = id ? messagesWithGolfer(id) : [];
@@ -142,14 +142,23 @@ export function DirectMessageThread() {
 
   // The list's own height changes for reasons that have nothing to do with
   // new messages arriving -- the composer growing to a second line, a
-  // plain window resize/rotation, or now the keyboard opening/closing
-  // (boxHeight's own dvh recompute above resizes the box, which resizes
-  // this list). One signal covers all of those instead of separately
-  // tracking each cause -- deliberately the single owner for keyboard
-  // geometry, not one of two competing correction paths. Same near-bottom
-  // rule as message arrival: only re-pin if that's where the user already
-  // was; otherwise a plain height change leaves scrollTop untouched on its
-  // own, which is exactly "preserve their reading position" for free.
+  // plain window resize/rotation. A ResizeObserver on the list itself is
+  // one signal that covers all of those instead of trying to separately
+  // track each cause. Same near-bottom rule as message arrival: only
+  // re-pin if that's where the user already was; otherwise a plain height
+  // change leaves scrollTop untouched on its own, which is exactly
+  // "preserve their reading position" for free.
+  //
+  // NOT the keyboard's own resize -- ResizeObserver callbacks fire
+  // asynchronously after layout (effectively a frame behind), so the box
+  // would visibly resize first and the scroll correction would snap a
+  // moment later: a real, mechanically-explained two-stage jump. keyboardHeight
+  // below handles that case synchronously instead, before paint, so
+  // there's only one visible step. This effect still fires for a
+  // keyboard-driven resize too (the list's size changes either way), but
+  // by then scrollTop is already correct, making its own assignment a
+  // harmless no-op -- not a second competing mechanism, just the same
+  // safety net still covering the cases keyboardHeight doesn't.
   useEffect(() => {
     const el = listRef.current;
     if (!el) return;
@@ -159,6 +168,19 @@ export function DirectMessageThread() {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  // The keyboard opening/closing is the one resize cause already known
+  // about directly (via keyboardHeight, not by waiting to notice the list
+  // changed size) -- useLayoutEffect runs synchronously right after the
+  // boxHeight/DOM update above but before the browser paints, so the
+  // scroll correction lands in the SAME visual frame as the resize itself
+  // instead of one frame later. This is the single source of truth for
+  // keyboard-triggered scroll correction; the ResizeObserver above keeps
+  // its own, different job (composer growth, rotation).
+  useLayoutEffect(() => {
+    const el = listRef.current;
+    if (el && nearBottomRef.current) el.scrollTop = el.scrollHeight;
+  }, [keyboardHeight]);
 
   // The chat box below is sized to fit the viewport exactly (see its own
   // comment), but that's a best-effort calc(), not a hard guarantee --
