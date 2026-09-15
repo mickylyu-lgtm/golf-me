@@ -5,11 +5,14 @@ import { COURSES, areaForCourse, coordsForCourse } from "./courses";
 
 // Real distance from an effective (saved or temporary) playing area to a
 // Golf Call's course, when both have known coordinates — otherwise falls
-// straight back to the call's existing mock distanceMiles, so nothing
-// regresses for golfers without a coordinate-backed location. Used to make
-// location/radius the first eligibility factor in Auto-Match and Golf
-// Calls, ahead of preference compatibility.
-export function resolveCallDistanceMiles(call: GolfCall, location: PlayingArea): number {
+// back to the call's own distanceMiles (real rounds: undefined when the
+// course's coordinates aren't known; mock rounds: their fixture value), so
+// nothing regresses for golfers without a coordinate-backed location. Used
+// to make location/radius the first eligibility factor in Auto-Match and
+// Golf Calls, ahead of preference compatibility. Undefined means "unknown,"
+// never a fabricated distance — callers filtering by radius must treat it
+// as not matching, not as 0 mi.
+export function resolveCallDistanceMiles(call: GolfCall, location: PlayingArea): number | undefined {
   const courseCoords = coordsForCourse(call.course);
   if (location.coords && courseCoords) return haversineMiles(location.coords, courseCoords);
   return call.distanceMiles;

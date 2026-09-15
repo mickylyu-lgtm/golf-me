@@ -22,7 +22,11 @@ function scheduleScore(a: GolferProfile, b: GolferProfile): number {
   return Math.round(ratio * 100);
 }
 
-function distanceScore(distanceMiles: number): number {
+// Unknown distance (course coordinates not yet known) is scored neutrally
+// -- never as "close" (would misrepresent it) or "far" (would unfairly bury
+// an otherwise-good match just because a coordinate hasn't resolved yet).
+function distanceScore(distanceMiles: number | undefined): number {
+  if (distanceMiles === undefined) return 50;
   if (distanceMiles <= 5) return 100;
   if (distanceMiles <= 10) return 85;
   if (distanceMiles <= 15) return 70;

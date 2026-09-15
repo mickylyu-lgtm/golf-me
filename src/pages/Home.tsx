@@ -59,12 +59,17 @@ export function Home() {
     [golfCalls],
   );
 
+  // Unknown-distance rounds (coordinates not yet known) never qualify as
+  // "nearby" -- omitted rather than treated as 0 mi / always-nearby.
   const nearbyThisWeekend = useMemo(
-    () => openCalls.filter((c) => c.distanceMiles <= HOME_RADIUS_MILES && isThisWeekend(c.dateISO)),
+    () => openCalls.filter((c) => c.distanceMiles !== undefined && c.distanceMiles <= HOME_RADIUS_MILES && isThisWeekend(c.dateISO)),
     [openCalls],
   );
 
-  const nearbyAnytime = useMemo(() => openCalls.filter((c) => c.distanceMiles <= HOME_RADIUS_MILES), [openCalls]);
+  const nearbyAnytime = useMemo(
+    () => openCalls.filter((c) => c.distanceMiles !== undefined && c.distanceMiles <= HOME_RADIUS_MILES),
+    [openCalls],
+  );
 
   const subtitle =
     nearbyThisWeekend.length > 0

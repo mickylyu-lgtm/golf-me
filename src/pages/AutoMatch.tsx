@@ -139,7 +139,12 @@ export function AutoMatch() {
   // labeled and ordered by step.
   const eligibleCalls = useMemo(() => {
     let list = joinableCalls;
-    if (radius) list = list.filter((c) => resolveCallDistanceMiles(c, effectiveLoc) <= Number(radius));
+    if (radius) {
+      list = list.filter((c) => {
+        const distance = resolveCallDistanceMiles(c, effectiveLoc);
+        return distance !== undefined && distance <= Number(radius);
+      });
+    }
     if (when) list = list.filter((c) => matchesWhen(c, when, customDate));
     if (budgetMax) list = list.filter((c) => c.estimatedPricePerPerson <= Number(budgetMax));
     if (skill) list = list.filter((c) => c.skillLevel === skill || c.skillLevel === "Any Skill Level");

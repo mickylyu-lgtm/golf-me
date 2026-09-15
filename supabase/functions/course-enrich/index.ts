@@ -11,7 +11,14 @@
 // This function is purely a secondary, best-effort enrichment step: given a
 // course GolfMe already knows about (found via Geoapify), try to find the
 // same physical course by name in GolfCourseAPI's ~30k-course dataset and
-// attach its real hole-count data if a confident match exists.
+// attach its real hole-count data if a confident match exists. Geoapify
+// still owns discovery and still supplies the courses row's initial
+// latitude/longitude; a confirmed match's own coordinates (v1.1, optional,
+// validated in validCoordinates() below) are preferred over Geoapify's once
+// found, since they're specific to the course rather than a general places
+// lookup -- but Geoapify's value is never cleared/zeroed when GolfCourseAPI
+// doesn't have coordinates for a course, only ever overwritten when a
+// better one is confidently available.
 //
 // Called on-demand (one course_id per request, never a batch over search
 // results) because the free tier is 50 requests/day -- calling this for
@@ -34,8 +41,23 @@ interface GolfCourseApiCourse {
   id: number | string;
   club_name?: string;
   course_name?: string;
-  location?: { city?: string; state?: string; country?: string };
+  // latitude/longitude are v1.1 additions (announced 2026), additive and
+  // optional per GolfCourseAPI's own changelog -- omitted for some courses,
+  // so never assumed present. See scoreMatch()/MATCH_THRESHOLD above this
+  // for why location is otherwise only used for city/state cross-checking.
+  location?: { city?: string; state?: string; country?: string; latitude?: number; longitude?: number };
   tees?: { male?: GolfCourseApiTeeSet[]; female?: GolfCourseApiTeeSet[] };
+}
+
+// v1.1 coordinates are optional and provider-supplied -- never trust them
+// without checking they're real, finite numbers in valid lat/lng ranges.
+// Failing silently (return null, no error) matches this function's existing
+// "best-effort enrichment, never something a caller should see an error
+// for" posture (see enrichRealCourse() in realCourseSearch.ts).
+function validCoordinates(lat: unknown, lng: unknown): { latitude: number; longitude: number } | null {
+  if (typeof lat !== "number" || typeof lng !== "number" || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+  return { latitude: lat, longitude: lng };
 }
 
 // x-client-info is sent on every real supabase.functions.invoke() call by
@@ -165,6 +187,29 @@ Deno.serve(async (req: Request) => {
     p_holes: teeSet?.number_of_holes ?? null,
   });
   if (attachError) return jsonResponse({ error: attachError.message }, 500);
+
+  // GolfCourseAPI coordinates are preferred over Geoapify's when valid --
+  // GolfCourseAPI's data is course-specific and hand-curated, vs. Geoapify's
+  // general places-API geocoding, which can land on a clubhouse/parking lot
+  // rather than the actual course. Written as a plain, RLS-scoped update
+  // (courses_update_authenticated already permits this) rather than a new
+  // RPC/migration -- no new column needed, this only ever overwrites
+  // latitude/longitude on the same row attach_external_course_mapping just
+  // touched. Missing/invalid coordinates are silently discarded and simply
+  // leave Geoapify's existing values in place -- the fallback is "do
+  // nothing," never a fabricated or zeroed value, and never a user-facing
+  // error just because a provider didn't have coordinates.
+  // Written against updated.id, not course.id -- attach_external_course_
+  // mapping() can return a DIFFERENT canonical course than the caller's own
+  // (see its own comment: this GolfCourseAPI id was already mapped to
+  // another course_id). Coordinates belong on whichever course the mapping
+  // actually landed on, same as `holes` above.
+  const coords = validCoordinates(best.candidate.location?.latitude, best.candidate.location?.longitude);
+  if (coords) {
+    const { error: coordError } = await supabase.from("courses").update(coords).eq("id", updated.id);
+    if (coordError) return jsonResponse({ error: coordError.message }, 500);
+    return jsonResponse({ matched: true, course: { ...updated, ...coords } });
+  }
 
   return jsonResponse({ matched: true, course: updated });
 });

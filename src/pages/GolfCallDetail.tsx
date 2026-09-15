@@ -181,7 +181,9 @@ export function GolfCallDetail() {
         </div>
         <h1 className="text-2xl font-extrabold text-slate-900">{call.course}</h1>
         <p className="flex items-center gap-1 text-sm text-slate-500">
-          <MapPin size={13} /> {t("golfCallCard.miAway", { miles: call.distanceMiles.toFixed(0) })} · {call.areaLabel}
+          <MapPin size={13} />
+          {call.distanceMiles !== undefined && `${t("golfCallCard.miAway", { miles: call.distanceMiles.toFixed(0) })} · `}
+          {call.areaLabel}
         </p>
       </div>
 

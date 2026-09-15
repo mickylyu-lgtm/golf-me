@@ -67,13 +67,18 @@ export function callMatchReasons(call: GolfCall, breakdown: CompatibilityBreakdo
     });
   }
 
-  factors.push(
-    {
+  // Omitted entirely (rather than shown with a fabricated number) when the
+  // course's coordinates aren't known yet.
+  if (call.distanceMiles !== undefined) {
+    factors.push({
       key: "distance",
       score: breakdown.distance,
       positive: breakdown.distance >= 70,
       text: `${call.distanceMiles.toFixed(0)} miles away`,
-    },
+    });
+  }
+
+  factors.push(
     {
       key: "skill",
       score: breakdown.skill,

@@ -110,7 +110,8 @@ export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
           <span>· {call.timeLabel}</span>
           <span className="text-slate-300">·</span>
           <span>
-            {t("golfCallCard.miAway", { miles: call.distanceMiles.toFixed(0) })} · ~{formatMoney(call.estimatedPricePerPerson)}
+            {call.distanceMiles !== undefined && `${t("golfCallCard.miAway", { miles: call.distanceMiles.toFixed(0) })} · `}~
+            {formatMoney(call.estimatedPricePerPerson)}
           </span>
         </p>
       </div>

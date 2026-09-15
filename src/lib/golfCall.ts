@@ -48,10 +48,12 @@ export function realRoundToGolfCall(round: RoundRow, participants: ParticipantRo
     .map((p) => p.user_id)
     .sort((a) => (a === round.host_user_id ? -1 : 0));
 
+  // undefined (never 0) when coordinates aren't known -- a round with no
+  // course coordinates is unknown-distance, not "right next to the user."
   const distanceMiles =
     viewerLocation && round.course_lat != null && round.course_lng != null
       ? haversineMiles(viewerLocation, { lat: round.course_lat, lng: round.course_lng })
-      : 0;
+      : undefined;
 
   return {
     id: round.id,

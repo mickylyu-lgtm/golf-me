@@ -55,7 +55,12 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
     if (!isMatched) return null;
     let list = [...baseResults];
 
-    if (radius) list = list.filter((c) => resolveCallDistanceMiles(c, effectiveLoc) <= Number(radius));
+    if (radius) {
+      list = list.filter((c) => {
+        const distance = resolveCallDistanceMiles(c, effectiveLoc);
+        return distance !== undefined && distance <= Number(radius);
+      });
+    }
     if (when) list = list.filter((c) => matchesWhen(c, when, customDate));
 
     if (intent === "join") list = list.filter((c) => c.totalSpots - c.joinedGolferIds.length > 0);
