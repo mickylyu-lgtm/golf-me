@@ -31,13 +31,13 @@ export function Caddie() {
             set to at the moment "Ask Caddie" is tapped. A plain native
             <select> rather than a custom dropdown: full accessibility/mobile
             picker behavior for free, no positioning logic to get wrong. */}
-        <label className="flex shrink-0 items-center gap-1 rounded-full border border-slate-200 py-1.5 pl-2.5 pr-1.5 text-xs font-semibold text-slate-600">
+        <label className="flex shrink-0 items-center gap-1 rounded-full border border-slate-200 py-1.5 pl-2.5 pr-1.5 text-xs font-semibold text-slate-600 focus-within:border-fairway-400 focus-within:ring-2 focus-within:ring-fairway-400 focus-within:ring-offset-2">
           <Globe size={13} className="text-slate-400" />
           <select
             value={locale}
             onChange={(e) => setLocale(e.target.value as (typeof LOCALES)[number]["value"])}
             aria-label={t("language.title")}
-            className="appearance-none bg-transparent pr-1 text-xs font-semibold text-slate-700 outline-none"
+            className="appearance-none bg-transparent pr-1 text-xs font-semibold text-slate-700 focus-visible:outline-none"
           >
             {LOCALES.map((l) => (
               <option key={l.value} value={l.value}>
