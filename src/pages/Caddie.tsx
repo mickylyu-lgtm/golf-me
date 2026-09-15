@@ -37,7 +37,7 @@ export function Caddie() {
             value={locale}
             onChange={(e) => setLocale(e.target.value as (typeof LOCALES)[number]["value"])}
             aria-label={t("language.title")}
-            className="appearance-none bg-transparent pr-1 text-xs font-semibold text-slate-700 focus-visible:outline-none"
+            className="appearance-none bg-transparent pr-1 text-xs font-semibold text-slate-700 !outline-none"
           >
             {LOCALES.map((l) => (
               <option key={l.value} value={l.value}>
