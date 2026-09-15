@@ -10,6 +10,7 @@ interface ChatComposerProps {
   onChange: (value: string) => void;
   onSend: () => void;
   placeholder?: string;
+  onBlur?: () => void;
 }
 
 // Shared by DirectMessageThread and GroupChat. Auto-expanding textarea
@@ -17,7 +18,7 @@ interface ChatComposerProps {
 // internally), a desktop-only emoji button that inserts at the current
 // cursor position, and a 16px+ font at mobile widths (text-base, stepping
 // down to text-sm at sm:) so iOS Safari never auto-zooms the page on focus.
-export function ChatComposer({ value, onChange, onSend, placeholder = "Type a message..." }: ChatComposerProps) {
+export function ChatComposer({ value, onChange, onSend, placeholder = "Type a message...", onBlur }: ChatComposerProps) {
   const [emojiOpen, setEmojiOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const emojiButtonRef = useRef<HTMLButtonElement>(null);
@@ -72,6 +73,7 @@ export function ChatComposer({ value, onChange, onSend, placeholder = "Type a me
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={handleKeyDown}
+        onBlur={onBlur}
         placeholder={placeholder}
         rows={1}
         className="max-h-[120px] flex-1 resize-none overflow-y-auto rounded-2xl bg-slate-100 px-3.5 py-2 text-base leading-snug outline-none focus:bg-slate-50 focus:ring-2 focus:ring-fairway-100 sm:text-sm"

@@ -87,6 +87,13 @@ interface RealSocialContextValue {
   clearChatHistory: (otherId: string) => Promise<void>;
   deleteConversation: (otherId: string) => Promise<void>;
 
+  // Ephemeral, in-memory only -- never persisted, never a real message.
+  // See the "typing" broadcast handler in the provider body for how this is
+  // populated/expired.
+  isOtherTyping: (otherId: string) => boolean;
+  typingConversationIds: Set<string>;
+  sendTypingSignal: (otherId: string, active: boolean) => void;
+
   reportUser: (
     reportedId: string,
     category: ReportCategory,
@@ -146,6 +153,23 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
   // finishes, so nothing is ever lost.
   const pendingRefetchRef = useRef(false);
   const selfId = authUser?.id;
+
+  // Typing indicator -- ephemeral, in-memory, never written to Postgres.
+  // conversation_id set of who's currently "typing" per the last broadcast
+  // this client received. channelRef lets sendTypingSignal below reuse the
+  // one already-open realtime channel (created in the effect further down)
+  // instead of opening a second subscription. typingTimeoutsRef is the
+  // receiver-side safety net (see the broadcast handler) so a missed
+  // typing:stop can never strand an indicator forever. participantsRef
+  // mirrors `participants` state for the broadcast handler's closure, which
+  // is created once per channel (re)subscribe, not per participants change.
+  const [typingConversationIds, setTypingConversationIds] = useState<Set<string>>(new Set());
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const typingTimeoutsRef = useRef<Map<string, number>>(new Map());
+  const participantsRef = useRef(participants);
+  useEffect(() => {
+    participantsRef.current = participants;
+  }, [participants]);
 
   const refetch = useCallback(async () => {
     if (!selfId) return;
@@ -242,12 +266,63 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     refetch().finally(() => setIsLoading(false));
 
+    // Receiver-side timeout: cleared/reset every time a fresh typing:start
+    // for a conversation arrives, so a single missed typing:stop (dropped
+    // event, sender's app killed mid-type, connection loss) can never
+    // strand "X is typing..." forever -- the indicator always self-clears
+    // within this window regardless of what the sender does.
+    const TYPING_EXPIRY_MS = 4000;
+
+    function clearTypingConversation(conversationId: string) {
+      setTypingConversationIds((prev) => {
+        if (!prev.has(conversationId)) return prev;
+        const next = new Set(prev);
+        next.delete(conversationId);
+        return next;
+      });
+    }
+
     const channel = supabase
       .channel("social-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => refetch())
       .on("postgres_changes", { event: "*", schema: "public", table: "notifications" }, () => refetch())
       .on("postgres_changes", { event: "*", schema: "public", table: "blocks" }, () => refetch())
+      // Ephemeral typing signal -- never written to Postgres, no message
+      // row, no schema. Broadcast on this channel isn't RLS-scoped the way
+      // postgres_changes above is (every signed-in client shares the same
+      // channel name), so anything for a conversation this client isn't
+      // actually a participant in is dropped here rather than trusted.
+      .on("broadcast", { event: "typing" }, ({ payload }) => {
+        const { conversationId, senderId, status } = (payload ?? {}) as {
+          conversationId?: string;
+          senderId?: string;
+          status?: "start" | "stop";
+        };
+        if (!conversationId || !senderId || senderId === selfId) return;
+        const isMine = participantsRef.current.some((p) => p.conversation_id === conversationId && p.user_id === selfId);
+        if (!isMine) return;
+
+        const existingTimeout = typingTimeoutsRef.current.get(conversationId);
+        if (existingTimeout !== undefined) window.clearTimeout(existingTimeout);
+
+        if (status === "stop") {
+          typingTimeoutsRef.current.delete(conversationId);
+          clearTypingConversation(conversationId);
+          return;
+        }
+
+        setTypingConversationIds((prev) => (prev.has(conversationId) ? prev : new Set(prev).add(conversationId)));
+        typingTimeoutsRef.current.set(
+          conversationId,
+          window.setTimeout(() => {
+            typingTimeoutsRef.current.delete(conversationId);
+            clearTypingConversation(conversationId);
+          }, TYPING_EXPIRY_MS),
+        );
+      })
       .subscribe();
+
+    channelRef.current = channel;
 
     // Defense in depth against the realtime websocket silently dying —
     // known to happen on mobile browsers when the tab is backgrounded
@@ -268,12 +343,21 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     const pollInterval = window.setInterval(() => {
       if (document.visibilityState === "visible") refetch();
     }, 6000);
+    // Captured here (not re-read via typingTimeoutsRef.current inside the
+    // cleanup below) since this ref's Map is mutated in place, never
+    // reassigned -- same object reference throughout, so this stays valid
+    // by the time cleanup runs.
+    const typingTimeouts = typingTimeoutsRef.current;
 
     return () => {
       supabase.removeChannel(channel);
+      channelRef.current = null;
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
       window.clearInterval(pollInterval);
+      for (const timeout of typingTimeouts.values()) window.clearTimeout(timeout);
+      typingTimeouts.clear();
+      setTypingConversationIds(new Set());
     };
   }, [isDemo, selfId, refetch]);
 
@@ -385,6 +469,32 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       return [...canonical, ...pending].sort((a, b) => a.created_at.localeCompare(b.created_at)).map(messageRowToDirectMessage);
     },
     [conversationIdWith, messages, pendingMessages],
+  );
+
+  const isOtherTyping = useCallback(
+    (otherId: string) => {
+      const convId = conversationIdWith(otherId);
+      return convId ? typingConversationIds.has(convId) : false;
+    },
+    [conversationIdWith, typingConversationIds],
+  );
+
+  // No conversation row exists yet (this pair has never exchanged a real
+  // message) -- conversationIdWith returns undefined and there's nothing to
+  // signal against. Typing indicators simply don't apply until the first
+  // real message creates the conversation via get_or_create_dm_conversation.
+  const sendTypingSignal = useCallback(
+    (otherId: string, active: boolean) => {
+      if (!selfId || !channelRef.current) return;
+      const convId = conversationIdWith(otherId);
+      if (!convId) return;
+      void channelRef.current.send({
+        type: "broadcast",
+        event: "typing",
+        payload: { conversationId: convId, senderId: selfId, status: active ? "start" : "stop" },
+      });
+    },
+    [selfId, conversationIdWith],
   );
 
   const sendDirectMessage = useCallback(
@@ -593,6 +703,9 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     markConversationRead,
     clearChatHistory,
     deleteConversation,
+    isOtherTyping,
+    typingConversationIds,
+    sendTypingSignal,
     reportUser,
     notifications,
     unreadNotificationCount,

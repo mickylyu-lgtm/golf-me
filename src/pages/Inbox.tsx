@@ -8,6 +8,7 @@ import { EmptyState } from "../components/ui/EmptyState";
 import { CLICKABLE_CARD_CLASS } from "../components/ui/cardStyles";
 import { FounderBadge } from "../components/golfer/TrustBadges";
 import { formatRelativeTime } from "../lib/format";
+import { firstName } from "../lib/greeting";
 import { isFounder } from "../lib/founder";
 import { useLocale } from "../i18n/LocaleContext";
 
@@ -17,7 +18,7 @@ import { useLocale } from "../i18n/LocaleContext";
 // RealSocialContext), so this page never needs to already know who the
 // other golfer is — it's the canonical entry point for that.
 export function Inbox() {
-  const { dmConversations } = useData();
+  const { dmConversations, typingConversationIds } = useData();
   const navigate = useNavigate();
   const { t, locale } = useLocale();
   const [query, setQuery] = useState("");
@@ -74,9 +75,19 @@ export function Inbox() {
                     c.otherGolfer.verification.verifiedGolfer && <ShieldCheck size={13} className="shrink-0 text-fairway-500" />
                   )}
                 </p>
-                <p className={`truncate text-xs ${c.unread ? "font-semibold text-slate-700" : "text-slate-500"}`}>
-                  {c.lastMessage.senderId === c.otherGolfer.id ? "" : t("chatInbox.youPrefix")}
-                  {c.lastMessage.text}
+                <p
+                  className={`truncate text-xs ${
+                    typingConversationIds.has(c.conversationId) ? "font-semibold text-fairway-600" : c.unread ? "font-semibold text-slate-700" : "text-slate-500"
+                  }`}
+                >
+                  {typingConversationIds.has(c.conversationId) ? (
+                    t("chatInbox.typingPreview", { name: firstName(c.otherGolfer.name) })
+                  ) : (
+                    <>
+                      {c.lastMessage.senderId === c.otherGolfer.id ? "" : t("chatInbox.youPrefix")}
+                      {c.lastMessage.text}
+                    </>
+                  )}
                 </p>
               </div>
               <div className="flex shrink-0 flex-col items-end gap-1.5">

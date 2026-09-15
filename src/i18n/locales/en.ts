@@ -276,6 +276,7 @@ export const en = {
   "chatInbox.emptyDescription": "Open a golfer's profile to start a conversation.",
   "chatInbox.noSearchResults": "No conversations match your search.",
   "chatInbox.youPrefix": "You: ",
+  "chatInbox.typingPreview": "{name} is typing...",
   "discover.searchPlaceholder": "Search golfers",
 
   // Welcome (first open, no session)

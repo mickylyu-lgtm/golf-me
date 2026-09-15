@@ -266,6 +266,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "chatInbox.emptyDescription": "打開一位球友的主頁即可開始對話。",
   "chatInbox.noSearchResults": "沒有符合搜尋條件的對話。",
   "chatInbox.youPrefix": "你：",
+  "chatInbox.typingPreview": "{name} 正在輸入...",
   "discover.searchPlaceholder": "搜尋球友",
 
   "welcome.tagline": "找到你的下一場球局。",

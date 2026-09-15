@@ -266,6 +266,7 @@ export const ko: Record<TranslationKey, string> = {
   "chatInbox.emptyDescription": "골퍼의 프로필을 열어 대화를 시작하세요.",
   "chatInbox.noSearchResults": "검색과 일치하는 대화가 없습니다.",
   "chatInbox.youPrefix": "나: ",
+  "chatInbox.typingPreview": "{name}님이 입력 중...",
   "discover.searchPlaceholder": "골퍼 검색",
 
   "welcome.tagline": "다음 라운드를 찾아보세요.",

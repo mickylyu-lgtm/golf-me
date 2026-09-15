@@ -266,6 +266,7 @@ export const ja: Record<TranslationKey, string> = {
   "chatInbox.emptyDescription": "ゴルファーのプロフィールを開いて会話を始めましょう。",
   "chatInbox.noSearchResults": "検索に一致する会話はありません。",
   "chatInbox.youPrefix": "自分: ",
+  "chatInbox.typingPreview": "{name}が入力中...",
   "discover.searchPlaceholder": "ゴルファーを検索",
 
   "welcome.tagline": "次のラウンドを見つけよう。",

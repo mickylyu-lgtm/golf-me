@@ -222,6 +222,12 @@ interface DataContextValue {
   clearChatHistory: (golferId: string) => Promise<void>;
   deleteConversation: (golferId: string) => Promise<void>;
 
+  // Ephemeral typing indicator -- real accounts only; demo has no real
+  // second person to type, so this is always false/no-op there.
+  isOtherTyping: (golferId: string) => boolean;
+  typingConversationIds: Set<string>;
+  sendTypingSignal: (golferId: string, active: boolean) => void;
+
   // --- Community — a social/discussion layer embedded in the core loop.
   // Votes are popularity signals only; they never touch reputation/credibility. ---
   posts: CommunityPost[];
@@ -272,6 +278,11 @@ interface DataContextValue {
 }
 
 const DataContext = createContext<DataContextValue | null>(null);
+
+// Stable empty-Set reference for demo mode's typingConversationIds -- avoids
+// handing consumers a brand-new Set() (and therefore a new reference) on
+// every render, which would defeat any memoization keyed on it.
+const EMPTY_TYPING_SET = new Set<string>();
 
 export function DataProvider({ children }: { children: ReactNode }) {
   const auth = useAuth();
@@ -997,6 +1008,17 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [auth.isDemo, realSocial, canMessage, canSendMessageNow, currentUser.id],
   );
 
+  // Demo accounts have no real second person who could be typing -- always
+  // false/no-op rather than simulating a fake typing partner.
+  const isOtherTyping = useCallback((golferId: string) => (auth.isDemo ? false : realSocial.isOtherTyping(golferId)), [auth.isDemo, realSocial]);
+  const typingConversationIds = auth.isDemo ? EMPTY_TYPING_SET : realSocial.typingConversationIds;
+  const sendTypingSignal = useCallback(
+    (golferId: string, active: boolean) => {
+      if (!auth.isDemo) realSocial.sendTypingSignal(golferId, active);
+    },
+    [auth.isDemo, realSocial],
+  );
+
   const markConversationRead = useCallback(
     async (golferId: string) => {
       if (!auth.isDemo) {
@@ -1616,6 +1638,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
       markConversationRead,
       clearChatHistory,
       deleteConversation,
+      isOtherTyping,
+      typingConversationIds,
+      sendTypingSignal,
       posts,
       getPost,
       visiblePosts,
@@ -1704,6 +1729,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
       markConversationRead,
       clearChatHistory,
       deleteConversation,
+      isOtherTyping,
+      typingConversationIds,
+      sendTypingSignal,
       posts,
       comments,
       getPost,

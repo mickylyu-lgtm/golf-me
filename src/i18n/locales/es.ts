@@ -266,6 +266,7 @@ export const es: Record<TranslationKey, string> = {
   "chatInbox.emptyDescription": "Abre el perfil de un golfista para iniciar una conversación.",
   "chatInbox.noSearchResults": "Ninguna conversación coincide con tu búsqueda.",
   "chatInbox.youPrefix": "Tú: ",
+  "chatInbox.typingPreview": "{name} está escribiendo...",
   "discover.searchPlaceholder": "Buscar golfistas",
 
   "welcome.tagline": "Encuentra tu próxima ronda.",

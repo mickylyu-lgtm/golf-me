@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Eraser, MoreHorizontal, ShieldAlert, ShieldCheck, ShieldOff, Trash2 } from "lucide-react";
 import { useData } from "../context/DataContext";
@@ -11,6 +11,8 @@ import { ChatComposer } from "../components/chat/ChatComposer";
 import { FounderBadge } from "../components/golfer/TrustBadges";
 import { dmDraftKey, loadChatDraft, saveChatDraft } from "../lib/chatDraft";
 import { useKeyboardHeight } from "../lib/useKeyboardHeight";
+import { useTypingIndicator } from "../lib/useTypingIndicator";
+import { TypingBubble } from "../components/chat/TypingBubble";
 import { handicapLabel } from "../lib/format";
 import { isFounder } from "../lib/founder";
 import { useLocale } from "../i18n/LocaleContext";
@@ -30,6 +32,8 @@ export function DirectMessageThread() {
     markConversationRead,
     clearChatHistory,
     deleteConversation,
+    isOtherTyping,
+    sendTypingSignal,
   } = useData();
   const { showToast } = useToast();
   const { t } = useLocale();
@@ -85,6 +89,35 @@ export function DirectMessageThread() {
   const messages = id ? messagesWithGolfer(id) : [];
   const blocked = id ? isBlocked(id) : false;
   const eligible = id ? canMessage(id) : false;
+  const otherTyping = other ? isOtherTyping(other.id) : false;
+
+  // Ephemeral only -- never a persisted message, never touches unread
+  // counts/notifications. useTypingIndicator reads this via a ref (see its
+  // own comment), so this closure's identity churning on every unrelated
+  // refetch is harmless.
+  const sendTypingSignalForThread = useCallback(
+    (active: boolean) => {
+      if (other) sendTypingSignal(other.id, active);
+    },
+    [other, sendTypingSignal],
+  );
+  const { notifyTyping, stop: stopTyping } = useTypingIndicator(sendTypingSignalForThread);
+
+  // DirectMessageThread reuses one mounted component instance across a
+  // thread switch (only the `id` route param changes -- see the draft-
+  // loading effect below), so useTypingIndicator's own unmount-only cleanup
+  // never fires on a plain switch. This explicitly stops typing for the
+  // conversation being LEFT when that happens -- gated on the actual
+  // previous/next golfer id (a stable primitive), not on `other`'s object
+  // identity or sendTypingSignal's function identity, both of which churn
+  // on every unrelated realtime refetch and would otherwise fire this far
+  // too often.
+  const previousOtherIdRef = useRef<string | undefined>(other?.id);
+  useEffect(() => {
+    const previousOtherId = previousOtherIdRef.current;
+    previousOtherIdRef.current = other?.id;
+    if (previousOtherId && previousOtherId !== other?.id) sendTypingSignal(previousOtherId, false);
+  }, [other?.id, sendTypingSignal]);
 
   // markConversationRead's own identity changes on every refetch (it's
   // built from conversationIdWith, which depends on the `participants`
@@ -217,6 +250,15 @@ export function DirectMessageThread() {
     if (id) saveChatDraft(dmDraftKey(id), value);
   }
 
+  // Only the composer's own onChange (real keystrokes) should ever signal
+  // typing -- updateText() alone is also called to clear/restore text
+  // programmatically (send, failed-send rollback), which must never look
+  // like the user just typed something.
+  function handleComposerChange(value: string) {
+    updateText(value);
+    notifyTyping();
+  }
+
   if (id === currentUser.id) return <Navigate to="/profile" replace />;
   if (!other) {
     return (
@@ -235,6 +277,7 @@ export function DirectMessageThread() {
     if (!text.trim() || !other) return;
     const pendingText = text;
     updateText("");
+    stopTyping();
     const sent = await sendDirectMessage(other.id, pendingText);
     if (!sent) {
       updateText(pendingText);
@@ -376,6 +419,19 @@ export function DirectMessageThread() {
               </div>
             );
           })}
+          {/* Just another item at the end of the same list the messages
+              themselves render in -- no separate positioning, no new scroll
+              code. The existing ResizeObserver on this list (see above)
+              already re-pins to bottom on any size change, including this
+              bubble appearing/disappearing, but only when nearBottomRef was
+              already true -- someone reading older messages never gets
+              snapped down just because the other person started typing. */}
+          {otherTyping && (
+            <div className="flex items-end gap-2">
+              <Avatar golfer={other} size="xs" showVerified={false} />
+              <TypingBubble />
+            </div>
+          )}
         </div>
 
         <div className="shrink-0 rounded-b-2xl bg-white">
@@ -388,7 +444,7 @@ export function DirectMessageThread() {
               You can't message this golfer right now.
             </p>
           ) : (
-            <ChatComposer value={text} onChange={updateText} onSend={handleSend} />
+            <ChatComposer value={text} onChange={handleComposerChange} onSend={handleSend} onBlur={stopTyping} />
           )}
         </div>
       </div>

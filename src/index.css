@@ -85,6 +85,10 @@
   --animate-caddie-pulse: caddie-pulse 700ms cubic-bezier(0.34, 1.56, 0.64, 1);
   --animate-caddie-pulse-halo: caddie-pulse-halo 700ms ease-out;
   --animate-caddie-pulse-spark: caddie-pulse-spark 700ms ease-out;
+  /* Chat typing-indicator dots (DirectMessageThread's TypingBubble) -- three
+     of these staggered via inline animationDelay, not three separate
+     keyframes. */
+  --animate-typing-dot: typing-dot 1.2s ease-in-out infinite;
 
   @keyframes fade-in {
     from {
@@ -237,6 +241,21 @@
       transform: scale(1);
     }
   }
+  /* 0%/60%/100% share the same resting frame (not just 0%/100%) so a
+     collapsed, single-iteration play under prefers-reduced-motion (see the
+     global rule below) lands back on the neutral/dim dot, not mid-bounce. */
+  @keyframes typing-dot {
+    0%,
+    60%,
+    100% {
+      transform: translateY(0);
+      opacity: 0.4;
+    }
+    30% {
+      transform: translateY(-3px);
+      opacity: 1;
+    }
+  }
   @keyframes wheel-spin {
     from {
       transform: rotate(0deg);
@@ -382,6 +401,9 @@ select {
   }
   .animate-caddie-pulse-spark {
     animation: var(--animate-caddie-pulse-spark);
+  }
+  .animate-typing-dot {
+    animation: var(--animate-typing-dot);
   }
   /* Onboarding's per-step entrance — mobile only. Desktop rendering was
      reading as an abrupt pop instead of a fade for reasons that resisted a
