@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Eraser, MoreHorizontal, ShieldAlert, ShieldCheck, ShieldOff, Trash2 } from "lucide-react";
 import { useData } from "../context/DataContext";
@@ -61,23 +61,25 @@ export function DirectMessageThread() {
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
   }, []);
-  const keyboardHeight = useKeyboardHeight();
-  // Available height = window.innerHeight - boxTop - whatever's actually
-  // eating space at the bottom: the keyboard's real height (reported
-  // directly by iOS via the plugin) when it's open, or BottomNav's own
-  // footprint (it reappears once the keyboard closes -- see BottomNav.tsx)
-  // otherwise. Deliberately NOT viewport/dvh-based: confirmed live that
-  // window.innerHeight (and, previously, visualViewport.height and 100dvh)
-  // all stay at their full pre-keyboard values under resize:"body" -- its
-  // own docs say "the viewport does not change" -- so keyboardHeight from
-  // the plugin's own event payload is the only value here actually
-  // reported by iOS itself, not inferred from one that doesn't update.
-  const boxHeight =
-    boxTop === null
-      ? undefined
-      : keyboardHeight > 0
-        ? `${window.innerHeight - boxTop - keyboardHeight}px`
-        : `calc(${window.innerHeight}px - ${boxTop}px - 4.25rem - env(safe-area-inset-bottom))`;
+  // Native resize:"body" (capacitor.config.ts) is the single source of
+  // truth for available height now -- the WKWebView frame itself shrinks
+  // for the keyboard, and CSS's 100dvh tracks that natively, so there's no
+  // JS keyboard-height pixel value in this calc at all. keyboardOpen is
+  // only a boolean (same signal BottomNav already uses to hide itself),
+  // toggling whether BottomNav's footprint needs reserving below the box --
+  // it disappears once the keyboard is open, so reserving it then would
+  // leave an unused gap between the last message and the keyboard.
+  //
+  // An earlier attempt at exactly this (0e51cb9, reverted 13 min later at
+  // 648fbeb) was tested against a build where @capacitor/keyboard was never
+  // actually linked into the native iOS project -- ios/App/CapApp-SPM/
+  // Package.swift never listed it until this pass (`npx cap sync ios`), so
+  // resize:"body" could never have been active during that test. This is a
+  // deliberate re-test now that the plugin is genuinely linked, not a
+  // guess -- per explicit instruction, needs physical-iPhone verification,
+  // not assumed working from this recompute alone.
+  const keyboardOpen = useKeyboardHeight() > 0;
+  const boxHeight = boxTop === null ? undefined : `calc(100dvh - ${boxTop}px${keyboardOpen ? "" : " - 4.25rem - env(safe-area-inset-bottom)"})`;
 
   const other = id ? getGolfer(id) : undefined;
   const messages = id ? messagesWithGolfer(id) : [];
@@ -140,24 +142,14 @@ export function DirectMessageThread() {
 
   // The list's own height changes for reasons that have nothing to do with
   // new messages arriving -- the composer growing to a second line, a
-  // plain window resize/rotation. A ResizeObserver on the list itself is
-  // one signal that covers all of those instead of trying to separately
-  // track each cause. Same near-bottom rule as message arrival: only
-  // re-pin if that's where the user already was; otherwise a plain height
-  // change leaves scrollTop untouched on its own, which is exactly
-  // "preserve their reading position" for free.
-  //
-  // NOT the keyboard's own resize anymore -- that used to also flow
-  // through here, but ResizeObserver callbacks fire asynchronously after
-  // layout (effectively a frame behind), so the box would visibly resize
-  // first and the scroll correction would snap a moment later: a real,
-  // mechanically-explained two-stage jump, not a guess. keyboardHeight
-  // below handles that case synchronously instead, before paint, so
-  // there's only one visible step. This effect still exists and still
-  // fires for a keyboard-driven resize (the list's size changes either
-  // way), but by then scrollTop is already correct, making its own
-  // assignment a harmless no-op -- not a second competing mechanism, just
-  // the same safety net still covering the cases keyboardHeight doesn't.
+  // plain window resize/rotation, or now the keyboard opening/closing
+  // (boxHeight's own dvh recompute above resizes the box, which resizes
+  // this list). One signal covers all of those instead of separately
+  // tracking each cause -- deliberately the single owner for keyboard
+  // geometry, not one of two competing correction paths. Same near-bottom
+  // rule as message arrival: only re-pin if that's where the user already
+  // was; otherwise a plain height change leaves scrollTop untouched on its
+  // own, which is exactly "preserve their reading position" for free.
   useEffect(() => {
     const el = listRef.current;
     if (!el) return;
@@ -167,19 +159,6 @@ export function DirectMessageThread() {
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-
-  // The keyboard opening/closing is the one resize cause we already know
-  // about directly (via keyboardHeight, not by waiting to notice the list
-  // changed size) -- useLayoutEffect runs synchronously right after the
-  // boxHeight/DOM update above but before the browser paints, so the
-  // scroll correction lands in the SAME visual frame as the resize itself
-  // instead of one frame later. This is the single source of truth for
-  // keyboard-triggered scroll correction now; the ResizeObserver above
-  // keeps its own, different job (composer growth, rotation).
-  useLayoutEffect(() => {
-    const el = listRef.current;
-    if (el && nearBottomRef.current) el.scrollTop = el.scrollHeight;
-  }, [keyboardHeight]);
 
   // The chat box below is sized to fit the viewport exactly (see its own
   // comment), but that's a best-effort calc(), not a hard guarantee --
