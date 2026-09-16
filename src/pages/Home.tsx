@@ -19,7 +19,7 @@ import { SUPPORTED_TEE_TIME_COURSES } from "../services/teeTimes/types";
 
 const HOME_RADIUS_MILES = 25;
 const NEARBY_ROUNDS_SHOWN = 3;
-const HOME_POSTS_SHOWN = 3;
+const HOME_POSTS_SHOWN = 6;
 
 // A standalone class list (rather than layering overrides onto
 // CLICKABLE_CARD_CLASS) — Tailwind's generated stylesheet order doesn't
