@@ -61,9 +61,25 @@ export function Home() {
 
   // Unknown-distance rounds (coordinates not yet known) never qualify as
   // "nearby" -- omitted rather than treated as 0 mi / always-nearby.
+  // Also excludes rounds the current user already hosts or has joined
+  // (joinedGolferIds always includes the host, see RealRoundsContext) --
+  // this count specifically drives "1 round needs players" -> "Find a
+  // Round," which only makes sense for a round you could actually join.
+  // Your own round showing as needing one more player is real, but the
+  // fix for that is sharing/filling it (still surfaced, correctly labeled
+  // "hosted by you," in the Rounds near you list below via nearbyAnytime,
+  // which is deliberately NOT filtered this way), not being nudged to go
+  // find a different round to join.
   const nearbyThisWeekend = useMemo(
-    () => openCalls.filter((c) => c.distanceMiles !== undefined && c.distanceMiles <= HOME_RADIUS_MILES && isThisWeekend(c.dateISO)),
-    [openCalls],
+    () =>
+      openCalls.filter(
+        (c) =>
+          c.distanceMiles !== undefined &&
+          c.distanceMiles <= HOME_RADIUS_MILES &&
+          isThisWeekend(c.dateISO) &&
+          !c.joinedGolferIds.includes(currentUser.id),
+      ),
+    [openCalls, currentUser.id],
   );
 
   const nearbyAnytime = useMemo(
