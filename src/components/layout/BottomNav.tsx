@@ -164,13 +164,19 @@ export function BottomNav() {
     function onTouchStart(e: TouchEvent) {
       const touch = e.touches[0];
       gestureRef.current = { startX: touch.clientX, startY: touch.clientY, dragging: false, lastHapticIndex: null };
-      // Touching the nav always expands it, even before a tap/drag is
-      // decided -- per spec, "acceptable/preferred" so labels are visible
-      // the instant someone starts interacting. Harmless to call every
-      // touch (React bails out when already expanded), and doesn't
-      // interfere with the drag gesture itself, which is tracked
-      // separately via gestureRef regardless of this.
-      setCollapsed(false);
+      // Deliberately NOT expanding on touch anymore (an earlier pass did).
+      // indexFromClientX re-measures getBoundingClientRect() live on every
+      // touchmove, so it always reflects the nav's CURRENT width -- fine
+      // normally, but this pass adds a width change between states (not
+      // just padding/label height before), and expanding right as a drag
+      // starts would mean measuring mid-CSS-transition on some frames,
+      // which can shift the computed tab index under the finger with no
+      // finger movement at all. Per spec ("if expanding on touch makes
+      // drag math unstable, keep it collapsed until gesture completion and
+      // expand afterward, choose the technically stable behavior"): the
+      // nav simply stays in whatever state it was already in for the
+      // entire gesture, and only re-evaluates via the normal scroll/route
+      // logic afterward.
     }
 
     function onTouchMove(e: TouchEvent) {
@@ -262,7 +268,20 @@ export function BottomNav() {
       // each NavLink individually. select-none for the same "feels native,
       // not a webpage" reason -- nothing in a tab bar should ever become
       // text-selected by a long press.
-      className="fixed inset-x-4 bottom-[calc(env(safe-area-inset-bottom)+8px)] z-40 flex select-none overflow-hidden rounded-full border border-slate-200 bg-white/95 shadow-sm shadow-slate-900/[0.03] backdrop-blur-sm [-webkit-touch-callout:none] sm:hidden"
+      // Switched from inset-x-4 (fixed 16px side margins) to left-1/2 +
+      // -translate-x-1/2 + an explicit width, so the bar can also narrow
+      // ~20% when collapsed while staying centered -- inset-x-4 alone
+      // can't animate a width change since it doesn't express one. Both
+      // width values are computed against the viewport (this element is
+      // `fixed`, so % in an arbitrary-value width resolves against the
+      // initial containing block, same effective width inset-x-4 used to
+      // give). Percentage-based math elsewhere (the indicator's `left`,
+      // and indexFromClientX's live getBoundingClientRect() reads) both
+      // already adapt automatically to whatever the nav's current width
+      // is -- neither needed a change for this.
+      className={`fixed bottom-[calc(env(safe-area-inset-bottom)+8px)] left-1/2 z-40 flex -translate-x-1/2 select-none overflow-hidden rounded-full border border-slate-200 bg-white/95 backdrop-blur-sm transition-[width,box-shadow] duration-200 ease-out [-webkit-touch-callout:none] motion-reduce:transition-none sm:hidden ${
+        collapsed ? "w-[calc(80%-2rem)] shadow-none" : "w-[calc(100%-2rem)] shadow-sm shadow-slate-900/[0.03]"
+      }`}
     >
       {/* Compact capsule -- hugs just the icon, not the full tab slot (was
           a full-height/full-width pill spanning the whole slot; per polish
@@ -314,22 +333,25 @@ export function BottomNav() {
               }
             }}
             className={`relative flex flex-1 flex-col items-center text-[10px] font-medium transition-[padding,color] duration-200 ease-out active:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-inset motion-reduce:transition-none ${
-              collapsed ? "py-1" : "py-1.5"
+              collapsed ? "py-0.5" : "py-1.5"
             } ${isHighlighted ? "text-fairway-700" : "text-slate-400"}`}
           >
             {/* Fixed-height wrapper keeps every label starting at the
                 same offset regardless of icon size -- Caddie's icon
                 renders larger (so its "AI" lettering stays legible)
                 but must not push its label out of line with its
-                siblings' labels below. Sized down from the original
-                h-7/22px/28px trio (~20-25% smaller throughout) per the
-                compact-nav polish pass -- Caddie stays proportionally
-                larger than the other four so its identity still reads. */}
-            <span className="relative flex h-6 items-center justify-center">
+                siblings' labels below. Icons shrink a further, modest
+                step in the collapsed state (comfortably, not
+                aggressively -- per spec) on top of the padding/label
+                changes, so the two states read as clearly, substantially
+                different rather than a subtle nudge; Caddie stays
+                proportionally larger than the other four in both states
+                so its identity still reads. */}
+            <span className={`relative flex items-center justify-center transition-[height] duration-200 ease-out motion-reduce:transition-none ${collapsed ? "h-5" : "h-6"}`}>
               {isCaddie ? (
-                <CaddieNavStatusIcon size={24} strokeWidth={isHighlighted ? 2.5 : 2} />
+                <CaddieNavStatusIcon size={collapsed ? 21 : 24} strokeWidth={isHighlighted ? 2.5 : 2} />
               ) : (
-                <Icon size={19} strokeWidth={isHighlighted ? 2.5 : 2} />
+                <Icon size={collapsed ? 17 : 19} strokeWidth={isHighlighted ? 2.5 : 2} />
               )}
               {path === "/messages" && unreadCount > 0 && (
                 <span
@@ -344,11 +366,22 @@ export function BottomNav() {
                 auto, neither of which can transition smoothly) -- fades out
                 and the bar's own height shrinks as a natural side effect of
                 this shrinking, no explicit height animation needed on the
-                <nav> itself. Icon size/wrapper height are untouched in
-                either state, per "do not aggressively shrink the icons." */}
+                <nav> itself.
+
+                ROOT CAUSE of the previous pass's barely-visible collapse,
+                found on review (not just reasserting the same fix): this
+                span had no explicit line-height, so text-[10px] inherited
+                the ambient ~1.5 default (~15px tall) while max-h-3 (12px)
+                capped it below that -- the label was almost certainly
+                already clipped even in the "expanded" state, shrinking the
+                real visual delta between states to just the ~4px padding
+                change, nowhere near "obvious." leading-none pins the
+                actual text height to the font size (10px), and max-h-3.5
+                (14px) now gives it real headroom instead of sitting right
+                at the clipping boundary. */}
             <span
-              className={`overflow-hidden text-center transition-[max-height,opacity,margin-top] duration-200 ease-out motion-reduce:transition-none ${
-                collapsed ? "mt-0 max-h-0 opacity-0" : "mt-0.5 max-h-3 opacity-100"
+              className={`overflow-hidden text-center leading-none transition-[max-height,opacity,margin-top] duration-200 ease-out motion-reduce:transition-none ${
+                collapsed ? "mt-0 max-h-0 opacity-0" : "mt-1 max-h-3.5 opacity-100"
               }`}
             >
               {t(labelKey)}
