@@ -17,6 +17,17 @@ import { CaddieNavStatusIcon } from "./CaddieNavStatusIcon";
 // movement past the deadzone unambiguously means "drag across the tabs").
 const DRAG_DEADZONE_PX = 10;
 
+// Always expanded at/near the very top of the page, regardless of the last
+// scroll direction -- matches "if the user is very close to the top, prefer
+// EXPANDED."
+const NEAR_TOP_PX = 16;
+// Cumulative downward movement (since the last direction change) needed to
+// collapse -- within the doc's 50-80px range. Deliberately larger than the
+// expand threshold below: collapsing should take a clear, deliberate scroll,
+// while re-expanding (getting labels back) should feel more forgiving.
+const COLLAPSE_THRESHOLD_PX = 64;
+const EXPAND_THRESHOLD_PX = 24;
+
 function prefersReducedMotion(): boolean {
   return typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
 }
@@ -72,6 +83,73 @@ export function BottomNav() {
   // onClick, nothing here ever calls preventDefault or navigate() for it.
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
 
+  // Scroll-aware collapse. Listens on `window`, not a dedicated container --
+  // confirmed live (no overflow rule anywhere between html/body/#root and
+  // AppShell) that Home/Chat-list/Play/Caddie/Me all genuinely scroll at
+  // the plain window level; only DirectMessageThread locks body scroll to
+  // scroll its own internal message list instead, so this listener simply
+  // never fires there -- the nav just stays in whatever state it was last
+  // in on that screen, which is the "preserve existing behavior" outcome
+  // for chat threads without any special-casing.
+  const [collapsed, setCollapsed] = useState(false);
+  const lastScrollYRef = useRef(0);
+  // Cumulative movement since the last direction reversal -- positive while
+  // scrolling down, negative while scrolling up. This (not raw per-pixel
+  // deltas) is what gives the hysteresis: a few pixels of wobble in the
+  // "wrong" direction never crosses either threshold on its own.
+  const scrollAccumRef = useRef(0);
+
+  useEffect(() => {
+    lastScrollYRef.current = window.scrollY;
+    let ticking = false;
+
+    function handleScroll() {
+      // rAF-throttled: at most one state check per animation frame no
+      // matter how many scroll events fire in a burst -- this is the "no
+      // high-frequency React state updates for every scroll pixel"
+      // requirement. setCollapsed itself only actually re-renders on the
+      // (rare) frames where the discrete state truly flips, since React
+      // bails out a set to the same boolean value.
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        ticking = false;
+        const y = window.scrollY;
+        const delta = y - lastScrollYRef.current;
+        lastScrollYRef.current = y;
+
+        if (y <= NEAR_TOP_PX) {
+          scrollAccumRef.current = 0;
+          setCollapsed(false);
+          return;
+        }
+        if (delta === 0) return;
+        if (Math.sign(delta) !== Math.sign(scrollAccumRef.current)) scrollAccumRef.current = 0;
+        scrollAccumRef.current += delta;
+
+        if (scrollAccumRef.current >= COLLAPSE_THRESHOLD_PX) {
+          scrollAccumRef.current = 0;
+          setCollapsed(true);
+        } else if (scrollAccumRef.current <= -EXPAND_THRESHOLD_PX) {
+          scrollAccumRef.current = 0;
+          setCollapsed(false);
+        }
+      });
+    }
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  // "page opens -> EXPANDED" + "reset state appropriately when changing
+  // tabs/routes" -- a fresh screen always starts expanded regardless of
+  // where the previous one left off.
+  useEffect(() => {
+    setCollapsed(false);
+    scrollAccumRef.current = 0;
+    lastScrollYRef.current = window.scrollY;
+  }, [location.pathname]);
+
   useEffect(() => {
     const el = navRef.current;
     if (!el) return;
@@ -86,6 +164,13 @@ export function BottomNav() {
     function onTouchStart(e: TouchEvent) {
       const touch = e.touches[0];
       gestureRef.current = { startX: touch.clientX, startY: touch.clientY, dragging: false, lastHapticIndex: null };
+      // Touching the nav always expands it, even before a tap/drag is
+      // decided -- per spec, "acceptable/preferred" so labels are visible
+      // the instant someone starts interacting. Harmless to call every
+      // touch (React bails out when already expanded), and doesn't
+      // interfere with the drag gesture itself, which is tracked
+      // separately via gestureRef regardless of this.
+      setCollapsed(false);
     }
 
     function onTouchMove(e: TouchEvent) {
@@ -228,9 +313,9 @@ export function BottomNav() {
                 navigate(caddieUnseen.linkTo);
               }
             }}
-            className={`relative flex flex-1 flex-col items-center gap-0.5 py-1.5 text-[10px] font-medium transition-colors duration-200 ease-out active:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-inset motion-reduce:transition-none ${
-              isHighlighted ? "text-fairway-700" : "text-slate-400"
-            }`}
+            className={`relative flex flex-1 flex-col items-center text-[10px] font-medium transition-[padding,color] duration-200 ease-out active:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-inset motion-reduce:transition-none ${
+              collapsed ? "py-1" : "py-1.5"
+            } ${isHighlighted ? "text-fairway-700" : "text-slate-400"}`}
           >
             {/* Fixed-height wrapper keeps every label starting at the
                 same offset regardless of icon size -- Caddie's icon
@@ -255,7 +340,19 @@ export function BottomNav() {
                 </span>
               )}
             </span>
-            {t(labelKey)}
+            {/* Collapses via max-height + opacity (not display:none/height:
+                auto, neither of which can transition smoothly) -- fades out
+                and the bar's own height shrinks as a natural side effect of
+                this shrinking, no explicit height animation needed on the
+                <nav> itself. Icon size/wrapper height are untouched in
+                either state, per "do not aggressively shrink the icons." */}
+            <span
+              className={`overflow-hidden text-center transition-[max-height,opacity,margin-top] duration-200 ease-out motion-reduce:transition-none ${
+                collapsed ? "mt-0 max-h-0 opacity-0" : "mt-0.5 max-h-3 opacity-100"
+              }`}
+            >
+              {t(labelKey)}
+            </span>
           </NavLink>
         );
       })}
