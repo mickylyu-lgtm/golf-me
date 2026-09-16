@@ -4,10 +4,10 @@ import { ArrowLeft, CalendarClock, ExternalLink, MapPin, RotateCcw } from "lucid
 import { useLocale } from "../i18n/LocaleContext";
 import { SUPPORTED_TEE_TIME_COURSES } from "../services/teeTimes/types";
 import { useTeeTimes } from "../lib/useTeeTimes";
-import { formatRelativeTime } from "../lib/format";
 import { GolfMeLoader } from "../components/loading/GolfMeLoader";
 import { EmptyState } from "../components/ui/EmptyState";
-import { Button } from "../components/ui/Button";
+import { CourseHero } from "../components/courses/CourseHero";
+import { ExternalBookingCard } from "../components/courses/ExternalBookingCard";
 import { inputClass, labelClass } from "../components/ui/FormControls";
 
 function todayISO(): string {
@@ -17,7 +17,7 @@ function todayISO(): string {
 
 export function TeeTimeCourseDetail() {
   const { courseId } = useParams<{ courseId: string }>();
-  const { t, locale } = useLocale();
+  const { t } = useLocale();
   const navigate = useNavigate();
   const [date, setDate] = useState(todayISO());
 
@@ -25,6 +25,15 @@ export function TeeTimeCourseDetail() {
   const { data, loading, error, retry } = useTeeTimes(course?.id ?? null, date);
 
   if (!course) return <Navigate to="/tee-times" replace />;
+
+  // Both existing providers (Skyway, Dyker Beach) hardcode liveAvailability:
+  // false -- neither has a real partner-API integration yet (see
+  // services/teeTimes/providers/*.ts). This is read from the fetched
+  // response, not a static per-course flag, so the moment a provider
+  // genuinely starts returning real availability, this page automatically
+  // switches to the live-integrated presentation below with no further
+  // change needed here.
+  const isLiveIntegrated = Boolean(data?.liveAvailability);
 
   return (
     <div className="flex flex-col gap-5 pb-6">
@@ -46,10 +55,20 @@ export function TeeTimeCourseDetail() {
         </p>
       </div>
 
-      <div>
-        <label className={labelClass}>{t("teeTimes.selectDate")}</label>
-        <input type="date" min={todayISO()} className={`${inputClass} mt-2 w-full`} value={date} onChange={(e) => setDate(e.target.value)} />
-      </div>
+      <CourseHero courseName={course.name} city={course.city} state={course.state} imageUrl={course.heroImageUrl} imageCredit={course.heroImageCredit} />
+
+      {/* Only shown once a course is actually live-integrated -- for an
+          external-booking-only course (both today), the selected date
+          can't reach the official booking destination at all (neither
+          provider's getBookingUrl() consumes it, confirmed by reading the
+          code, not assumed), so showing a picker that silently does
+          nothing would misrepresent what GolfMe can do. */}
+      {isLiveIntegrated && (
+        <div>
+          <label className={labelClass}>{t("teeTimes.selectDate")}</label>
+          <input type="date" min={todayISO()} className={`${inputClass} mt-2 w-full`} value={date} onChange={(e) => setDate(e.target.value)} />
+        </div>
+      )}
 
       {loading && <GolfMeLoader size="sm" message={t("teeTimes.loading")} />}
 
@@ -68,44 +87,46 @@ export function TeeTimeCourseDetail() {
 
       {!loading && !error && data && (
         <>
-          {data.teeTimes.length > 0 ? (
-            <div className="flex flex-col gap-2">
-              <p className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-fairway-700">
-                <CalendarClock size={12} /> {t("teeTimes.liveInsideGolfMe")}
-              </p>
-              {data.teeTimes.map((slot) => (
-                <a
-                  key={slot.id}
-                  href={slot.bookingUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white p-4 transition-colors duration-150 hover:border-fairway-300"
-                >
-                  <span className="font-semibold text-slate-800">{slot.time}</span>
-                  <span className="flex items-center gap-3 text-sm text-slate-500">
-                    {slot.price != null && <span>${slot.price}</span>}
-                    {slot.availableSpots != null && <span>{slot.availableSpots}</span>}
-                    <ExternalLink size={14} />
-                  </span>
-                </a>
-              ))}
-            </div>
+          {isLiveIntegrated ? (
+            data.teeTimes.length > 0 ? (
+              <div className="flex flex-col gap-2">
+                <p className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-fairway-700">
+                  <CalendarClock size={12} /> {t("teeTimes.liveInsideGolfMe")}
+                </p>
+                {data.teeTimes.map((slot) => (
+                  <a
+                    key={slot.id}
+                    href={slot.bookingUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white p-4 transition-colors duration-150 hover:border-fairway-300"
+                  >
+                    <span className="font-semibold text-slate-800">{slot.time}</span>
+                    <span className="flex items-center gap-3 text-sm text-slate-500">
+                      {slot.price != null && <span>${slot.price}</span>}
+                      {slot.availableSpots != null && <span>{slot.availableSpots}</span>}
+                      <ExternalLink size={14} />
+                    </span>
+                  </a>
+                ))}
+              </div>
+            ) : (
+              // Genuinely live-integrated, just nothing open this date --
+              // a real empty result, not a "we don't support this" one, so
+              // EmptyState's dashed-border treatment is still the right
+              // fit here (same reasoning as Inbox's "no messages yet").
+              <EmptyState icon={<CalendarClock size={20} />} title={t("teeTimes.noTimesThisDate")} description={t("teeTimes.tryAnotherDate")} />
+            )
+          ) : data.bookingUrl ? (
+            <>
+              <ExternalBookingCard courseName={course.name} bookingUrl={data.bookingUrl} />
+              <p className="text-center text-[11px] text-slate-400">{t("teeTimes.officialCourseBooking")}</p>
+            </>
           ) : (
-            <EmptyState
-              icon={<CalendarClock size={20} />}
-              title={t("teeTimes.emptyTitle")}
-              description={t("teeTimes.emptyDescription")}
-              action={
-                <Button size="sm" icon={<ExternalLink size={14} />} onClick={() => window.open(data.bookingUrl, "_blank", "noopener,noreferrer")}>
-                  {t("teeTimes.viewLiveTeeTimes")}
-                </Button>
-              }
-            />
+            // Missing/invalid booking URL -- graceful fallback per spec:
+            // never a dead/broken CTA button.
+            <p className="text-center text-sm text-slate-500">{t("teeTimes.noBookingLinkAvailable", { name: course.name })}</p>
           )}
-
-          <p className="text-center text-[11px] text-slate-400">
-            {t("teeTimes.checkOnCourseWebsite")} · {t("teeTimes.lastUpdated", { time: formatRelativeTime(data.lastUpdated, locale, t) })}
-          </p>
         </>
       )}
     </div>
