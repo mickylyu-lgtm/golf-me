@@ -283,18 +283,33 @@ export function BottomNav() {
         collapsed ? "w-[calc(80%-2rem)] shadow-none" : "w-[calc(100%-2rem)] shadow-sm shadow-slate-900/[0.03]"
       }`}
     >
-      {/* Compact capsule -- hugs just the icon, not the full tab slot (was
-          a full-height/full-width pill spanning the whole slot; per polish
-          feedback that read as too much green surface area). `left` is a
+      {/* Compact capsule, sized to the tab CONTENT, not the bar. `left` is a
           percentage to the CENTER of slot N (indicatorIndex + 0.5 slots
-          in), and the static translate(-50%, -50%) centers this
-          fixed-size box on that point regardless of the bar's actual pixel
-          width -- only `left` itself is what animates. */}
+          in); translateX(-50%) centers this fixed-width box on that point
+          regardless of the bar's actual pixel width -- only `left` itself
+          animates for the horizontal glide.
+
+          ROOT CAUSE of "sits too high, only covers the icon" (found on
+          review): height used to be a fixed h-8 centered on the WHOLE bar
+          via top-1/2/-translate-y-1/2, independent of where the label
+          actually rendered -- so it always covered the same fixed region
+          around the icon no matter how tall the bar's real content was,
+          and never reached the label at all. inset-y-1 replaces that: top
+          and bottom are pinned a fixed 4px from the BAR's own edges, so
+          the browser computes this element's height as
+          (bar height - 8px) on every layout pass, continuously -- as the
+          bar's own height smoothly animates between collapsed/expanded
+          (via its children's transitioning padding/max-height, see
+          below), this height rides along automatically, no separate
+          state or transition needed on the indicator itself. In collapsed
+          state the bar is already just icon-height + a little padding (no
+          label rendered at all), so this naturally becomes "icon-only,
+          vertically centered" for free -- not a special case. */}
       <div
-        className="pointer-events-none absolute top-1/2 h-8 w-11 -translate-y-1/2 rounded-full bg-fairway-50"
+        className="pointer-events-none absolute inset-y-1 w-11 rounded-full bg-fairway-50"
         style={{
           left: `${(indicatorIndex + 0.5) * (100 / MOBILE_NAV_ITEMS.length)}%`,
-          transform: "translate(-50%, -50%)",
+          transform: "translateX(-50%)",
           transition: dragging || reducedMotion ? "none" : "left 260ms cubic-bezier(0.22, 1, 0.36, 1)",
         }}
         aria-hidden="true"
