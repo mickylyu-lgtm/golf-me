@@ -27,7 +27,8 @@ export function GolferCard({ golfer, compatibility, onClick }: GolferCardProps) 
           <Avatar golfer={golfer} size="lg" />
           <div>
             <p className="font-bold text-slate-900">
-              {golfer.name} <span className="font-normal text-slate-400">· {golfer.ageRange}</span>
+              {golfer.name}
+              {golfer.ageRange && <span className="font-normal text-slate-400"> · {golfer.ageRange}</span>}
             </p>
             <p className="flex items-center gap-1 text-xs text-slate-500">
               <MapPin size={12} /> {t("golfCallCard.miAway", { miles: golfer.distanceMiles.toFixed(1) })} · {golfer.areaLabel}

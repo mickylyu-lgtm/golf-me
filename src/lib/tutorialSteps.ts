@@ -23,20 +23,18 @@ export interface TutorialStep {
   textKey: TranslationKey;
 }
 
-// Home / Play / Chat / Community / Caddie, the same 5 features + order the
-// product brief called out, plus a closing screen. Both nav-tab targets
-// (Play/Chat/Caddie) and the on-page Community section stay spotlight-able
-// because RootTabCarousel keeps all 5 root panels mounted at once (see its
-// own header comment) -- navigating between steps here is a fast in-place
-// slide, never a real remount, so the target element is already in the DOM
-// before TutorialOverlay measures it.
+// Shortened to 3 short, dismissible, one-time contextual hints (Play / Chat
+// / Caddie) instead of a longer mandatory walkthrough -- no opening welcome
+// screen, no closing screen, straight to spotlighting the real nav tabs.
+// These nav-tab targets stay spotlight-able because RootTabCarousel keeps
+// all 5 root panels mounted at once (see its own header comment) --
+// navigating between steps here is a fast in-place slide, never a real
+// remount, so the target element is already in the DOM before
+// TutorialOverlay measures it.
 export const TUTORIAL_STEPS: TutorialStep[] = [
-  { route: "/", targetId: null, titleKey: "tutorial.home.title", textKey: "tutorial.home.text" },
   { route: "/find", targetId: "nav-play", titleKey: "tutorial.play.title", textKey: "tutorial.play.text" },
   { route: "/messages", targetId: "nav-messages", titleKey: "tutorial.chat.title", textKey: "tutorial.chat.text" },
-  { route: "/", targetId: COMMUNITY_TUTORIAL_ID, titleKey: "tutorial.community.title", textKey: "tutorial.community.text" },
   { route: "/caddie", targetId: "nav-caddie", titleKey: "tutorial.caddie.title", textKey: "tutorial.caddie.text" },
-  { route: "/", targetId: null, titleKey: "tutorial.done.title", textKey: "tutorial.done.text" },
 ];
 
 // The last index is the closing screen -- no spotlight, no progress

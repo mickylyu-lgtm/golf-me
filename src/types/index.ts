@@ -129,7 +129,11 @@ export interface GolferProfile {
   avatarColor: string; // css gradient token for placeholder avatar
   avatarInitials: string;
   photoUrl?: string; // local data-URL from device upload; falls back to initials avatar when absent
-  ageRange: AgeRange;
+  // Optional: no longer collected during Quick Profile onboarding (see
+  // ProfileSetup.tsx) — absent for any account that hasn't set it from
+  // Profile settings. Every consumer must handle that gracefully (never
+  // fabricate a band — see autoMatch.ts's backgroundBonus).
+  ageRange?: AgeRange;
   gender: string; // self-reported only; one of GENDER_OPTIONS or a custom value
   areaLabel: string; // general area only, e.g. "Long Island, NY" — never exact address
   // Optional real coordinates behind areaLabel — city/region granularity

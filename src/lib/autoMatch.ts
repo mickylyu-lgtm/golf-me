@@ -60,8 +60,14 @@ function backgroundBonus(user: GolferProfile, roster: GolferProfile[]): number {
     bonus += (avgWouldPlayAgain / 100) * 6; // up to +6
   }
 
+  // Only golfers who've actually set an age range count here — no fabricated
+  // band is substituted for one who hasn't, so the bonus/penalty is simply
+  // skipped (neutral) when nobody in the roster has real data.
   if (!user.noAgePreference && roster.length > 0) {
-    bonus += roster.some((g) => ageMatchesPreference(g.ageRange, user.agePreferenceMin, user.agePreferenceMax)) ? 3 : -2;
+    const rosterWithAge = roster.filter((g): g is GolferProfile & { ageRange: AgeRange } => Boolean(g.ageRange));
+    if (rosterWithAge.length > 0) {
+      bonus += rosterWithAge.some((g) => ageMatchesPreference(g.ageRange, user.agePreferenceMin, user.agePreferenceMax)) ? 3 : -2;
+    }
   }
 
   // A full-span handicap range is the slider's "no preference" state —

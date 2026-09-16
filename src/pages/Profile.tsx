@@ -25,7 +25,8 @@ import { inputClass, labelClass } from "../components/ui/FormControls";
 import { AvatarUpload } from "../components/profile/AvatarUpload";
 import { HighlightGolfMe } from "../components/brand/HighlightGolfMe";
 import { CredibilityBadge } from "../components/golfer/CredibilityBadge";
-import { AGE_RANGES } from "../types";
+import { Pill } from "../components/ui/Pill";
+import { AGE_RANGES, GENDER_OPTIONS } from "../types";
 import type { AgeRange } from "../types";
 import { memberSinceLabel } from "../lib/format";
 import { computeCredibility, credibilityLabel } from "../lib/credibility";
@@ -70,6 +71,8 @@ export function Profile() {
   function buildForm(g: typeof currentUser) {
     return {
       ageRange: g.ageRange,
+      gender: g.gender,
+      customGender: !(GENDER_OPTIONS as readonly string[]).includes(g.gender),
       handicap: g.handicap,
       favoriteCourses: g.favoriteCourses.join(", "),
       bio: g.bio,
@@ -117,6 +120,7 @@ export function Profile() {
 
     updateCurrentUserProfile({
       ageRange: form.ageRange,
+      gender: form.gender,
       handicap: form.handicap,
       favoriteCourses: form.favoriteCourses
         .split(",")
@@ -259,10 +263,40 @@ export function Profile() {
                 <p className="mt-1 text-xs text-slate-400">{t("username.help")}</p>
               </div>
             )}
+            <div>
+              <label className={labelClass}>{t("profileSetup.genderOptional")}</label>
+              <div className="flex flex-wrap gap-1.5">
+                {GENDER_OPTIONS.map((g) => (
+                  <Pill
+                    key={g}
+                    active={!form.customGender && form.gender === g}
+                    onClick={() => setForm((f) => ({ ...f, gender: g, customGender: false }))}
+                  >
+                    {g}
+                  </Pill>
+                ))}
+                <Pill active={form.customGender} onClick={() => setForm((f) => ({ ...f, customGender: true }))}>
+                  {t("host.custom")}
+                </Pill>
+              </div>
+              {form.customGender && (
+                <input
+                  className={`${inputClass} mt-2`}
+                  value={form.gender}
+                  onChange={(e) => setForm((f) => ({ ...f, gender: e.target.value }))}
+                  placeholder={t("profileSetup.genderCustomPlaceholder")}
+                />
+              )}
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={labelClass}>{t("profile.ageRange")}</label>
-                <select className={inputClass} value={form.ageRange} onChange={(e) => setForm((f) => ({ ...f, ageRange: e.target.value as AgeRange }))}>
+                <select
+                  className={inputClass}
+                  value={form.ageRange ?? ""}
+                  onChange={(e) => setForm((f) => ({ ...f, ageRange: e.target.value ? (e.target.value as AgeRange) : undefined }))}
+                >
+                  <option value="">{t("profile.ageRangeNotSet")}</option>
                   {AGE_RANGES.map((a) => (
                     <option key={a} value={a}>
                       {a}

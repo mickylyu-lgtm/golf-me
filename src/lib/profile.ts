@@ -65,7 +65,6 @@ export function placeholderGolferProfile(id: string, name: string): GolferProfil
     name,
     avatarColor: avatarColorForName(name),
     avatarInitials: initialsFromName(name),
-    ageRange: "25-34",
     gender: "Prefer not to say",
     areaLabel: "",
     distanceMiles: 0,
@@ -115,7 +114,10 @@ export function golferPatchToProfileRow(patch: Partial<GolferProfile>): Record<s
   if ("avatarColor" in patch) row.avatar_color = patch.avatarColor;
   if ("avatarInitials" in patch) row.avatar_initials = patch.avatarInitials;
   if ("photoUrl" in patch) row.photo_url = patch.photoUrl ?? null;
-  if ("ageRange" in patch) row.age_range = patch.ageRange;
+  // `?? null` (not a bare passthrough): a patch clearing ageRange back to
+  // unset carries `undefined`, which JSON.stringify silently drops from the
+  // request body — leaving the old value in place instead of clearing it.
+  if ("ageRange" in patch) row.age_range = patch.ageRange ?? null;
   if ("gender" in patch) row.gender = patch.gender;
   if ("areaLabel" in patch) row.area_label = patch.areaLabel;
   if ("playingAreaCoords" in patch) {
@@ -164,7 +166,7 @@ export function profileRowToGolferProfile(row: ProfileRow): GolferProfile {
     avatarColor: row.avatar_color || avatarColorForName(name),
     avatarInitials: row.avatar_initials || initialsFromName(name),
     photoUrl: row.photo_url ?? undefined,
-    ageRange: (row.age_range as GolferProfile["ageRange"]) || "25-34",
+    ageRange: (row.age_range as GolferProfile["ageRange"]) || undefined,
     gender: row.gender || "Prefer not to say",
     areaLabel: row.area_label || "",
     playingAreaCoords:

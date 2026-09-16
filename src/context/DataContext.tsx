@@ -120,7 +120,7 @@ export interface CreatePostInput {
 export interface NewGolferInput {
   name: string;
   photoUrl?: string;
-  ageRange: AgeRange;
+  ageRange?: AgeRange;
   gender: string;
   areaLabel: string;
   playingAreaCoords?: GeoPoint;
