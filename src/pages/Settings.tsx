@@ -7,6 +7,7 @@ import { useTutorial } from "../context/TutorialContext";
 import { useToast } from "../context/ToastContext";
 import { useLocale, LOCALES } from "../i18n/LocaleContext";
 import { supabase } from "../lib/supabase";
+import { registerPushNotifications } from "../lib/push";
 import { Avatar } from "../components/ui/Avatar";
 import { Button } from "../components/ui/Button";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog";
@@ -42,6 +43,13 @@ export function Settings() {
     }
     try {
       await saveProfile({ push_enabled: value });
+      // Turning this back on after having said "Not Now"/never decided is
+      // the one deliberate, explicit re-ask GolfMe allows outside the
+      // one-time PushPrePermissionPrompt -- registerPushNotifications only
+      // actually shows Apple's dialog if the OS permission is still
+      // "prompt", so this is a no-op UI-wise for an already-granted or
+      // already-denied device, and never re-fires on toggling OFF.
+      if (value) registerPushNotifications(currentUser.id);
     } catch (err) {
       showToast(err instanceof Error ? err.message : t("auth.authError"), "warning");
     }

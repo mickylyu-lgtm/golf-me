@@ -5,6 +5,7 @@ import { Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
 import { supabase } from "../lib/supabase";
+import { unregisterPushNotifications } from "../lib/push";
 import { profileRowToGolferProfile } from "../lib/profile";
 import type { ProfileRow } from "../lib/profile";
 import type { GolferProfile } from "../types";
@@ -195,6 +196,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    // Must run BEFORE supabase.auth.signOut() — the delete-own RLS policy
+    // on device_push_tokens requires auth.uid() to still equal this row's
+    // user_id, so this device's token has to be removed while the session
+    // is still live, not after. A previous account must never keep
+    // receiving pushes on a device it's signed out of.
+    await unregisterPushNotifications();
     await supabase.auth.signOut();
   }, []);
 

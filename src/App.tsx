@@ -14,10 +14,11 @@ import type { Locale } from "./i18n/LocaleContext";
 import { AppShell } from "./components/layout/AppShell";
 import { TutorialProvider } from "./context/TutorialContext";
 import { isStandalone } from "./lib/pwa";
-import { registerPushNotifications } from "./lib/push";
+import { checkPushPermission, registerPushNotifications } from "./lib/push";
 import { Capacitor } from "@capacitor/core";
 import { PushNotifications } from "@capacitor/push-notifications";
 import { TutorialOverlay } from "./components/tutorial/TutorialOverlay";
+import { PushPrePermissionPrompt } from "./components/notifications/PushPrePermissionPrompt";
 import { ScrollToTop } from "./components/layout/ScrollToTop";
 import { GolfMeLoader } from "./components/loading/GolfMeLoader";
 import { Welcome } from "./pages/Welcome";
@@ -88,6 +89,7 @@ function AuthedLayout() {
         <Outlet />
       </AppShell>
       <TutorialOverlay />
+      <PushPrePermissionPrompt />
     </TutorialProvider>
   );
   // Admin tools (dashboard, coach-reviewer management) stay pinned to
@@ -146,14 +148,20 @@ function useLanguageProfileSync() {
   }, [locale, isDemo, authUser]);
 }
 
-// Registers this device for real APNs push once a real, opted-in account is
-// signed in. Deliberately not gated on hasOnboarded (same reasoning as
-// usePendingReviewerInviteRedemption) -- there's no harm registering a
-// device slightly before onboarding finishes, and no message can arrive for
-// this account before then anyway. Re-checks pushEnabled so toggling it off
-// in Settings (a real profiles.push_enabled write) stops registering new
-// devices without needing a separate unregister path -- the server-side
-// trigger already skips anyone with push_enabled false.
+// Silently re-confirms/refreshes this device's push token once a real,
+// opted-in account is signed in -- but NEVER prompts for permission itself.
+// A device whose OS permission is already "granted" (from a previous
+// install, or from tapping through PushPrePermissionPrompt before) gets its
+// token upserted on every app load with no UI; a device that hasn't decided
+// yet is deliberately left alone here -- only PushPrePermissionPrompt's own
+// explicit "Enable Notifications" tap is allowed to trigger Apple's actual
+// permission dialog, never an automatic login-time effect. Deliberately not
+// gated on hasOnboarded (same reasoning as usePendingReviewerInviteRedemption)
+// -- there's no harm silently refreshing an already-granted token slightly
+// before onboarding finishes. Re-checks pushEnabled so toggling it off in
+// Settings stops silently re-registering on future app loads (the
+// server-side trigger also independently skips anyone with push_enabled
+// false, so this is belt-and-suspenders, not the only gate).
 function usePushRegistration() {
   const { isDemo, authUser, pushEnabled } = useAuth();
   const registeredForUser = useRef<string | null>(null);
@@ -162,7 +170,9 @@ function usePushRegistration() {
     if (isDemo || !authUser || !pushEnabled) return;
     if (registeredForUser.current === authUser.id) return;
     registeredForUser.current = authUser.id;
-    registerPushNotifications(authUser.id);
+    checkPushPermission().then((state) => {
+      if (state === "granted") registerPushNotifications(authUser.id);
+    });
   }, [isDemo, authUser, pushEnabled]);
 }
 
