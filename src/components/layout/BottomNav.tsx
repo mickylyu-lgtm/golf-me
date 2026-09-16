@@ -167,7 +167,17 @@ export function BottomNav() {
   return (
     <nav
       ref={navRef}
-      className="fixed inset-x-4 bottom-[calc(env(safe-area-inset-bottom)+12px)] z-40 flex overflow-hidden rounded-full border border-slate-200 bg-white/95 shadow-lg shadow-slate-900/10 backdrop-blur-sm sm:hidden"
+      // The new press-and-hold-to-drag interaction means a stationary
+      // press on a tab (before any movement) now lingers long enough to
+      // trigger WKWebView's own native long-press-on-a-link system menu
+      // (NavLink renders an <a href>) -- "Open Link / Copy Link / Share",
+      // reported live as making the app read as a website. -webkit-touch-
+      // callout inherits to every descendant <a>, so this one property on
+      // the container suppresses it everywhere in the bar without touching
+      // each NavLink individually. select-none for the same "feels native,
+      // not a webpage" reason -- nothing in a tab bar should ever become
+      // text-selected by a long press.
+      className="fixed inset-x-4 bottom-[calc(env(safe-area-inset-bottom)+12px)] z-40 flex select-none overflow-hidden rounded-full border border-slate-200 bg-white/95 shadow-lg shadow-slate-900/10 backdrop-blur-sm [-webkit-touch-callout:none] sm:hidden"
     >
       {/* Sliding background pill -- follows the drag preview while dragging,
           otherwise glides to whatever the real current route is (e.g. after
