@@ -177,20 +177,21 @@ export function BottomNav() {
       // each NavLink individually. select-none for the same "feels native,
       // not a webpage" reason -- nothing in a tab bar should ever become
       // text-selected by a long press.
-      className="fixed inset-x-4 bottom-[calc(env(safe-area-inset-bottom)+12px)] z-40 flex select-none overflow-hidden rounded-full border border-slate-200 bg-white/95 shadow-lg shadow-slate-900/10 backdrop-blur-sm [-webkit-touch-callout:none] sm:hidden"
+      className="fixed inset-x-4 bottom-[calc(env(safe-area-inset-bottom)+8px)] z-40 flex select-none overflow-hidden rounded-full border border-slate-200 bg-white/95 shadow-sm shadow-slate-900/[0.03] backdrop-blur-sm [-webkit-touch-callout:none] sm:hidden"
     >
-      {/* Sliding background pill -- follows the drag preview while dragging,
-          otherwise glides to whatever the real current route is (e.g. after
-          a plain tap, or any programmatic navigation). transform:translateX
-          with a percentage is relative to this element's OWN width (already
-          1/5 of the bar via the inline width below), so `N * 100%` lands it
-          exactly on slot N regardless of the bar's actual pixel width. */}
+      {/* Compact capsule -- hugs just the icon, not the full tab slot (was
+          a full-height/full-width pill spanning the whole slot; per polish
+          feedback that read as too much green surface area). `left` is a
+          percentage to the CENTER of slot N (indicatorIndex + 0.5 slots
+          in), and the static translate(-50%, -50%) centers this
+          fixed-size box on that point regardless of the bar's actual pixel
+          width -- only `left` itself is what animates. */}
       <div
-        className="pointer-events-none absolute inset-y-1 left-0 rounded-full bg-fairway-50"
+        className="pointer-events-none absolute top-1/2 h-8 w-11 -translate-y-1/2 rounded-full bg-fairway-50"
         style={{
-          width: `${100 / MOBILE_NAV_ITEMS.length}%`,
-          transform: `translateX(${indicatorIndex * 100}%)`,
-          transition: dragging || reducedMotion ? "none" : "transform 260ms cubic-bezier(0.22, 1, 0.36, 1)",
+          left: `${(indicatorIndex + 0.5) * (100 / MOBILE_NAV_ITEMS.length)}%`,
+          transform: "translate(-50%, -50%)",
+          transition: dragging || reducedMotion ? "none" : "left 260ms cubic-bezier(0.22, 1, 0.36, 1)",
         }}
         aria-hidden="true"
       />
@@ -227,7 +228,7 @@ export function BottomNav() {
                 navigate(caddieUnseen.linkTo);
               }
             }}
-            className={`relative flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium transition-colors duration-200 ease-out active:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-inset motion-reduce:transition-none ${
+            className={`relative flex flex-1 flex-col items-center gap-0.5 py-1.5 text-[10px] font-medium transition-colors duration-200 ease-out active:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-inset motion-reduce:transition-none ${
               isHighlighted ? "text-fairway-700" : "text-slate-400"
             }`}
           >
@@ -235,12 +236,15 @@ export function BottomNav() {
                 same offset regardless of icon size -- Caddie's icon
                 renders larger (so its "AI" lettering stays legible)
                 but must not push its label out of line with its
-                siblings' labels below. */}
-            <span className="relative flex h-7 items-center justify-center">
+                siblings' labels below. Sized down from the original
+                h-7/22px/28px trio (~20-25% smaller throughout) per the
+                compact-nav polish pass -- Caddie stays proportionally
+                larger than the other four so its identity still reads. */}
+            <span className="relative flex h-6 items-center justify-center">
               {isCaddie ? (
-                <CaddieNavStatusIcon size={28} strokeWidth={isHighlighted ? 2.5 : 2} />
+                <CaddieNavStatusIcon size={24} strokeWidth={isHighlighted ? 2.5 : 2} />
               ) : (
-                <Icon size={22} strokeWidth={isHighlighted ? 2.5 : 2} />
+                <Icon size={19} strokeWidth={isHighlighted ? 2.5 : 2} />
               )}
               {path === "/messages" && unreadCount > 0 && (
                 <span
