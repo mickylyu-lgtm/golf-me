@@ -368,9 +368,16 @@ export function BottomNav() {
               ) : (
                 <Icon size={collapsed ? 17 : 19} strokeWidth={isHighlighted ? 2.5 : 2} />
               )}
+              {/* Sized/positioned to fit within the <nav>'s own
+                  overflow-hidden bounds even in the collapsed state (only
+                  ~2px of padding above the icon there, vs ~6px expanded) --
+                  the previous h-4/-top-1 needed more headroom than the
+                  collapsed state actually has, clipping the badge's top
+                  edge (reported live, screenshot showed the collapsed nav).
+                  Smaller + pulled in closer fits comfortably in both. */}
               {path === "/messages" && unreadCount > 0 && (
                 <span
-                  className="absolute -right-1.5 -top-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-fairway-500 px-1 text-[9px] font-bold leading-none text-white"
+                  className="absolute -right-1 -top-0.5 flex h-3.5 min-w-[0.875rem] items-center justify-center rounded-full bg-fairway-500 px-1 text-[8px] font-bold leading-none text-white"
                   aria-label={`${unreadCount} unread messages`}
                 >
                   {unreadCount > 9 ? "9+" : unreadCount}
