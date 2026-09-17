@@ -48,6 +48,25 @@ export const SUPPORTED_TEE_TIME_COURSES: SupportedTeeTimeCourse[] = [
   },
 ];
 
+function normalizeCourseName(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+// Matches a real course-search result (from the general Geoapify-backed
+// `courses` table, which has no idea GolfMe's tee-time system exists) to
+// one of the 2 hand-verified SUPPORTED_TEE_TIME_COURSES, by name only --
+// the two systems use entirely different ids (a real courses.id uuid vs.
+// these courses' own hand-picked "skyway"/"dyker-beach" slugs), so name is
+// the only thing they share. Deliberately conservative (exact match after
+// normalizing) rather than the fuzzy partial-overlap scoring course-enrich
+// uses for GolfCourseAPI -- only 2 courses to match against, so there's no
+// reason to risk a false positive that would misrepresent a random nearby
+// course as one GolfMe can actually help book.
+export function matchSupportedTeeTimeCourse(name: string): SupportedTeeTimeCourse | undefined {
+  const normalized = normalizeCourseName(name);
+  return SUPPORTED_TEE_TIME_COURSES.find((c) => normalizeCourseName(c.name) === normalized);
+}
+
 export interface TeeTime {
   id: string;
   courseId: string;

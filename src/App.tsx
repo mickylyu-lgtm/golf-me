@@ -32,6 +32,7 @@ import { Discover } from "./pages/Discover";
 import { Find } from "./pages/Find";
 import { TeeTimes } from "./pages/TeeTimes";
 import { TeeTimeCourseDetail } from "./pages/TeeTimeCourseDetail";
+import { NearbyCourses } from "./pages/NearbyCourses";
 import { Caddie } from "./pages/Caddie";
 import { AnalyzeSwing } from "./pages/AnalyzeSwing";
 import { CaddieAnalysisDetail } from "./pages/CaddieAnalysisDetail";
@@ -293,6 +294,7 @@ export default function App() {
                   <Route path="/admin/dashboard" element={<AdminDashboard />} />
                   <Route path="/tee-times" element={<TeeTimes />} />
                   <Route path="/tee-times/:courseId" element={<TeeTimeCourseDetail />} />
+                  <Route path="/courses/nearby" element={<NearbyCourses />} />
                   <Route path="/caddie" element={<Caddie />} />
                   <Route path="/caddie/analyze" element={<AnalyzeSwing />} />
                   <Route path="/caddie/:analysisId" element={<CaddieAnalysisDetail />} />

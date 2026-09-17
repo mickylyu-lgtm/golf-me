@@ -27,6 +27,18 @@ export function formatAgeValue(v: number): string {
 }
 export const TRAVEL_RADIUS_PRESETS = [10, 25, 50];
 
+// Same default the schema itself already uses (profiles.travel_radius_miles
+// default 25) and profileRowToGolferProfile's own `?? 25` fallback -- reused
+// here rather than inventing a new number, only exercised if the value is
+// somehow non-finite/non-positive (in practice, every GolferProfile already
+// has a real positive value by the time it reaches this function).
+const FALLBACK_TRAVEL_RADIUS_MILES = 25;
+
+export function resolveTravelRadiusMiles(user: GolferProfile): number {
+  const v = user.travelRadiusMiles;
+  return Number.isFinite(v) && v > 0 ? v : FALLBACK_TRAVEL_RADIUS_MILES;
+}
+
 // Everything editable from the unified Match Preferences panel — shown in
 // full (all 4 sections) from Find Me a Round, and as the subset that isn't
 // already covered by Profile's "Edit profile" identity fields when shown

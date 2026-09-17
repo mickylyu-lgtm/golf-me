@@ -16,6 +16,7 @@ import { MIN_PREFERENCES_FOR_AUTO_MATCH, selectedPreferenceCount } from "../lib/
 import { formatShortDate } from "../lib/format";
 import { COMMUNITY_TUTORIAL_ID } from "../lib/tutorialSteps";
 import { SUPPORTED_TEE_TIME_COURSES } from "../services/teeTimes/types";
+import { NearbyCoursesHomeCard } from "../components/courses/NearbyCoursesHomeCard";
 
 const HOME_RADIUS_MILES = 25;
 const NEARBY_ROUNDS_SHOWN = 3;
@@ -218,6 +219,8 @@ export function Home() {
           </div>
         </section>
       )}
+
+      <NearbyCoursesHomeCard />
 
       {preferencesRemaining > 0 && (
         <button
