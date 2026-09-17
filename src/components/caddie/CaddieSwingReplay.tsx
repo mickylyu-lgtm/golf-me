@@ -9,6 +9,7 @@ import { computeSwingAssessment, segmentStatusAtTime } from "../../lib/swingAsse
 import type { SwingSegmentId, SwingSegmentStatus } from "../../lib/swingAssessment";
 import type { TranslationKey } from "../../i18n/locales/en";
 import { Badge } from "../ui/Badge";
+import { SwingCallout } from "./SwingCallout";
 
 // Standard COCO-17 joint pairs — only drawn when BOTH ends are present in
 // that frame's keypoints. Roboflow's output already had unreliable joints
@@ -34,12 +35,14 @@ const SKELETON_EDGES: [string, string][] = [
   ["right_knee", "right_ankle"],
 ];
 
-// Which two edges visually represent each assessed segment — only these
-// ever pick up a green/red color; every other edge (face, shoulder line,
-// knee/ankle) always stays the neutral base color. Deliberately a small,
-// fixed set (see swingAssessment.ts's own header comment) rather than
-// trying to color the whole skeleton.
-const SEGMENT_EDGES: Record<SwingSegmentId, [string, string][]> = {
+// Which edges visually represent each assessed segment — only these ever
+// pick up a green/red color; every other edge (face, ankle-only spans)
+// always stays the neutral base color. Deliberately a small, fixed set
+// (see swingAssessment.ts's own header comment) rather than trying to
+// color the whole skeleton. "wrists" deliberately has no entry here — a
+// wrist has no edge of its own distinct from the ones left_arm/right_arm
+// already own, so it colors its own JOINT instead (see SEGMENT_JOINTS).
+const SEGMENT_EDGES: Partial<Record<SwingSegmentId, [string, string][]>> = {
   torso: [
     ["left_shoulder", "left_hip"],
     ["right_shoulder", "right_hip"],
@@ -53,6 +56,20 @@ const SEGMENT_EDGES: Record<SwingSegmentId, [string, string][]> = {
     ["right_elbow", "right_wrist"],
   ],
   hip_sway: [["left_hip", "right_hip"]],
+  shoulder_line: [["left_shoulder", "right_shoulder"]],
+  knees: [
+    ["left_hip", "left_knee"],
+    ["left_knee", "left_ankle"],
+    ["right_hip", "right_knee"],
+    ["right_knee", "right_ankle"],
+  ],
+};
+
+// Segments with no edge of their own — colors a joint DOT directly instead
+// (both "good" and "needs_improvement", not just the needs_improvement-only
+// ring the edge-owning segments get below).
+const SEGMENT_JOINTS: Partial<Record<SwingSegmentId, string[]>> = {
+  wrists: ["left_wrist", "right_wrist"],
 };
 
 // Professional, muted tones (not neon) per the brief's own explicit
@@ -77,6 +94,9 @@ const SEGMENT_LABEL_KEYS: Record<SwingSegmentId, TranslationKey> = {
   left_arm: "swingAssessment.segment.leftArm",
   right_arm: "swingAssessment.segment.rightArm",
   hip_sway: "swingAssessment.segment.hipSway",
+  shoulder_line: "swingAssessment.segment.shoulderLine",
+  knees: "swingAssessment.segment.knees",
+  wrists: "swingAssessment.segment.wrists",
 };
 const STATUS_LABEL_KEYS: Record<SwingSegmentStatus, TranslationKey> = {
   good: "swingAssessment.status.good",
@@ -88,8 +108,29 @@ const FOCUS_TIP_KEYS: Record<SwingSegmentId, TranslationKey> = {
   left_arm: "swingAssessment.focusTip.leftArm",
   right_arm: "swingAssessment.focusTip.rightArm",
   hip_sway: "swingAssessment.focusTip.hipSway",
+  shoulder_line: "swingAssessment.focusTip.shoulderLine",
+  knees: "swingAssessment.focusTip.knees",
+  wrists: "swingAssessment.focusTip.wrists",
 };
-const SEGMENT_ORDER: SwingSegmentId[] = ["torso", "left_arm", "right_arm", "hip_sway"];
+// Short, on-video callout text (the "SEE it" tier) — deliberately separate
+// from descriptionKey()'s longer sentences (the "READ Caddie's detailed
+// explanation" tier below the video). Never looked up for "unknown" —
+// callers must check status first, same rule as everywhere else here.
+const CALLOUT_KEYS: Record<SwingSegmentId, Record<"good" | "needs_improvement", TranslationKey>> = {
+  torso: { good: "swingAssessment.callout.torsoGood", needs_improvement: "swingAssessment.callout.torsoNeedsImprovement" },
+  left_arm: { good: "swingAssessment.callout.leftArmGood", needs_improvement: "swingAssessment.callout.leftArmNeedsImprovement" },
+  right_arm: { good: "swingAssessment.callout.rightArmGood", needs_improvement: "swingAssessment.callout.rightArmNeedsImprovement" },
+  hip_sway: { good: "swingAssessment.callout.hipSwayGood", needs_improvement: "swingAssessment.callout.hipSwayNeedsImprovement" },
+  shoulder_line: { good: "swingAssessment.callout.shoulderLineGood", needs_improvement: "swingAssessment.callout.shoulderLineNeedsImprovement" },
+  knees: { good: "swingAssessment.callout.kneesGood", needs_improvement: "swingAssessment.callout.kneesNeedsImprovement" },
+  wrists: { good: "swingAssessment.callout.wristsGood", needs_improvement: "swingAssessment.callout.wristsNeedsImprovement" },
+};
+const SEGMENT_ORDER: SwingSegmentId[] = ["torso", "left_arm", "right_arm", "hip_sway", "shoulder_line", "knees", "wrists"];
+// Priority order for which callouts win when more than MAX_VISIBLE_CALLOUTS
+// are in-window at once — needs_improvement first (the brief's own visual-
+// priority ordering: red areas before green), and within that, the order
+// above.
+const MAX_VISIBLE_CALLOUTS = 2;
 const STATUS_BADGE_TONE: Record<SwingSegmentStatus, "fairway" | "rose" | "slate"> = {
   good: "fairway",
   needs_improvement: "rose",
@@ -105,6 +146,10 @@ function descriptionKey(segment: SwingSegmentId, status: SwingSegmentStatus): Tr
   if (status === "unknown") return "swingAssessment.description.unknown";
   if (segment === "torso") return status === "good" ? "swingAssessment.description.torsoGood" : "swingAssessment.description.torsoNeedsImprovement";
   if (segment === "hip_sway") return status === "good" ? "swingAssessment.description.hipSwayGood" : "swingAssessment.description.hipSwayNeedsImprovement";
+  if (segment === "shoulder_line")
+    return status === "good" ? "swingAssessment.description.shoulderLineGood" : "swingAssessment.description.shoulderLineNeedsImprovement";
+  if (segment === "knees") return status === "good" ? "swingAssessment.description.kneesGood" : "swingAssessment.description.kneesNeedsImprovement";
+  if (segment === "wrists") return status === "good" ? "swingAssessment.description.wristsGood" : "swingAssessment.description.wristsNeedsImprovement";
   return status === "good" ? "swingAssessment.description.armGood" : "swingAssessment.description.armNeedsImprovement";
 }
 
@@ -117,6 +162,16 @@ function StatusIcon({ status, size = 12 }: { status: SwingSegmentStatus; size?: 
 interface PhaseButton {
   labelKey: "swingAnalysis.address" | "swingAnalysis.backswing" | "swingAnalysis.topOfBackswing" | "swingAnalysis.downswing" | "swingAnalysis.impact" | "swingAnalysis.followThrough";
   timestampSeconds: number;
+}
+
+// One on-video callout candidate, already resolved to container-relative
+// pixel coordinates (the same space the canvas skeleton itself draws in).
+interface CalloutState {
+  key: SwingSegmentId;
+  x: number;
+  y: number;
+  status: "good" | "needs_improvement";
+  textKey: TranslationKey;
 }
 
 function phaseButtons(phases: CaddieSwingPhases | undefined): PhaseButton[] {
@@ -138,20 +193,27 @@ function phaseButtons(phases: CaddieSwingPhases | undefined): PhaseButton[] {
   return buttons;
 }
 
-// Every SwingSegmentAssessment already carries its own anchorPhase ("top" or
-// "impact" — see swingAssessment.ts); this just maps a tapped phase BUTTON
-// to the same vocabulary so Swing Check can show only the segments that are
-// actually anchored to whichever phase is selected, never all 4 regardless
-// of relevance. Address/Backswing/Downswing/Follow-through have no segment
-// anchored to them at all today — "none" — which renders the noAnchor card
-// rather than an empty or misleading metrics list.
-type AnchorGroup = "top" | "impact" | "none";
+// Every SwingSegmentAssessment already carries its own anchorPhase
+// ("address"/"top"/"impact" — see swingAssessment.ts); this just maps a
+// tapped phase BUTTON to the same vocabulary so Swing Check can show only
+// the segments that are actually anchored to whichever phase is selected,
+// never all of them regardless of relevance. Backswing/Downswing/
+// Follow-through have no segment anchored to them at all today — "none" —
+// which renders the noAnchor card rather than an empty or misleading
+// metrics list. This is also this component's one visible "tracked vs
+// analyzed" signal (see ANALYZED_PHASE_LABEL_KEYS below): a phase button
+// only earns the "Analyzed" tag when this resolves to something other
+// than "none".
+type AnchorGroup = "address" | "top" | "impact" | "none";
 function anchorGroupForLabelKey(labelKey: PhaseButton["labelKey"]): AnchorGroup {
+  if (labelKey === "swingAnalysis.address") return "address";
   if (labelKey === "swingAnalysis.topOfBackswing") return "top";
   if (labelKey === "swingAnalysis.impact") return "impact";
   return "none";
 }
-const RECORDING_TIP_KEYS: Record<"top" | "impact", TranslationKey> = {
+const ANALYZED_PHASE_LABEL_KEYS = new Set<PhaseButton["labelKey"]>(["swingAnalysis.address", "swingAnalysis.topOfBackswing", "swingAnalysis.impact"]);
+const RECORDING_TIP_KEYS: Record<"address" | "top" | "impact", TranslationKey> = {
+  address: "swingAssessment.recordingTip.address",
   top: "swingAssessment.recordingTip.top",
   impact: "swingAssessment.recordingTip.impact",
 };
@@ -205,6 +267,14 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
   // overlay itself stays fully live/time-based (see draw() below) — only
   // this summary card is phase-selection-based.
   const [selectedPhaseKey, setSelectedPhaseKey] = useState<PhaseButton["labelKey"] | undefined>(undefined);
+
+  // The on-video anchored callouts (see draw() below) — real React state
+  // (not canvas pixels) specifically so the bubble can hold readable,
+  // selectable text. calloutsSignatureRef gates setCallouts to only fire
+  // when the visible set actually changes, not on every rAF tick.
+  const [callouts, setCallouts] = useState<CalloutState[]>([]);
+  const calloutsSignatureRef = useRef("");
+  const [overlaySize, setOverlaySize] = useState({ width: 0, height: 0 });
 
   // Landing in Slow Mode at the clip's start (t=0) almost never coincides
   // with an assessed phase (Top or Impact) — every segment reads "not
@@ -267,9 +337,15 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
 
   // Leaving analysis mode (or losing pose data) while mid-custom-fullscreen
   // would otherwise strand the video pinned full-viewport with no overlay
-  // reason to be there anymore.
+  // reason to be there anymore. Also clears any lingering callout the
+  // instant the overlay turns off, rather than leaving a stale bubble
+  // frozen on screen with no live draw() loop left to update/remove it.
   useEffect(() => {
-    if (!showOverlay) setCustomFullscreen(false);
+    if (!showOverlay) {
+      setCustomFullscreen(false);
+      setCallouts([]);
+      calloutsSignatureRef.current = "";
+    }
   }, [showOverlay]);
 
   useEffect(() => {
@@ -292,6 +368,7 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
       canvas.height = container.clientHeight * dpr;
       canvas.style.width = `${container.clientWidth}px`;
       canvas.style.height = `${container.clientHeight}px`;
+      setOverlaySize({ width: container.clientWidth, height: container.clientHeight });
       draw();
     }
 
@@ -335,16 +412,26 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
 
       const statusNow = segmentStatusAtTime(assessment, phases, video.currentTime);
       // A joint gets flagged (small colored ring, see below) only if it's
-      // an endpoint of a needs_improvement segment — good/unknown segments
-      // communicate entirely through their line color, never a joint
-      // marker, so attention naturally goes to the areas that need it
-      // (brief's own visual-priority ordering: red areas before green).
+      // an endpoint of a needs_improvement EDGE-owning segment — good/
+      // unknown segments communicate entirely through their line color,
+      // never a joint marker, so attention naturally goes to the areas
+      // that need it (brief's own visual-priority ordering: red areas
+      // before green). jointStatus is the separate case for JOINT-only
+      // segments (currently just "wrists"), which have no edge of their
+      // own to color and instead paint their assigned joint dot(s)
+      // directly in either good or needs_improvement, not just red.
       const flaggedJoints = new Set<string>();
+      const jointStatus: Partial<Record<string, SwingSegmentStatus>> = {};
       for (const id of SEGMENT_ORDER) {
-        if (statusNow[id] !== "needs_improvement") continue;
-        for (const [a, b] of SEGMENT_EDGES[id]) {
-          flaggedJoints.add(a);
-          flaggedJoints.add(b);
+        const status = statusNow[id];
+        if (status === "needs_improvement") {
+          for (const [a, b] of SEGMENT_EDGES[id] ?? []) {
+            flaggedJoints.add(a);
+            flaggedJoints.add(b);
+          }
+        }
+        if (status !== "unknown") {
+          for (const joint of SEGMENT_JOINTS[id] ?? []) jointStatus[joint] = status;
         }
       }
 
@@ -354,7 +441,7 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
         const kpA = frame.keypoints[a];
         const kpB = frame.keypoints[b];
         if (!kpA || !kpB) continue;
-        const segmentId = SEGMENT_ORDER.find((id) => SEGMENT_EDGES[id].some(([x, y]) => (x === a && y === b) || (x === b && y === a)));
+        const segmentId = SEGMENT_ORDER.find((id) => SEGMENT_EDGES[id]?.some(([x, y]) => (x === a && y === b) || (x === b && y === a)));
         ctx.strokeStyle = segmentId ? STATUS_STROKE[statusNow[segmentId]] : NEUTRAL_STROKE;
         const [ax, ay] = toCanvas(kpA.x, kpA.y);
         const [bx, by] = toCanvas(kpB.x, kpB.y);
@@ -364,15 +451,53 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
         ctx.stroke();
       }
       // Small dots throughout (point 9: never giant colored joint circles)
-      // — only a flagged joint's dot picks up the "needs improvement" red;
+      // — a flagged joint (needs_improvement edge endpoint, or a
+      // JOINT-only segment's own verdict) picks up that status's color;
       // every other joint stays a plain small white dot regardless of a
       // nearby segment's color, keeping the base skeleton readable.
       for (const [name, kp] of Object.entries(frame.keypoints)) {
         const [x, y] = toCanvas(kp.x, kp.y);
-        ctx.fillStyle = flaggedJoints.has(name) ? STATUS_DOT.needs_improvement : "#ffffff";
+        const status = jointStatus[name] ?? (flaggedJoints.has(name) ? "needs_improvement" : undefined);
+        ctx.fillStyle = status ? STATUS_DOT[status] : "#ffffff";
         ctx.beginPath();
-        ctx.arc(x, y, flaggedJoints.has(name) ? 4 : 3, 0, Math.PI * 2);
+        ctx.arc(x, y, status ? 4 : 3, 0, Math.PI * 2);
         ctx.fill();
+      }
+
+      // On-video anchored callouts (the "SEE it" tier) — only for a
+      // segment that's both in-window AND actually resolved (never for
+      // "unknown"/limited-visibility, and never when its own anchor
+      // keypoint isn't present in this exact frame — the graceful
+      // fallback the brief asks for). Ranked needs_improvement-first,
+      // capped at MAX_VISIBLE_CALLOUTS so this never turns into a wall of
+      // bubbles.
+      const candidates: { segment: SwingSegmentId; status: "good" | "needs_improvement"; x: number; y: number }[] = [];
+      if (assessment) {
+        for (const seg of assessment.segments) {
+          const status = statusNow[seg.segment];
+          if (status === "unknown") continue;
+          const kp = frame.keypoints[seg.anchorKeypoint];
+          if (!kp) continue;
+          const [x, y] = toCanvas(kp.x, kp.y);
+          candidates.push({ segment: seg.segment, status, x, y });
+        }
+      }
+      candidates.sort((a, b) => {
+        const aRank = a.status === "needs_improvement" ? 0 : 1;
+        const bRank = b.status === "needs_improvement" ? 0 : 1;
+        return aRank !== bRank ? aRank - bRank : SEGMENT_ORDER.indexOf(a.segment) - SEGMENT_ORDER.indexOf(b.segment);
+      });
+      const newCallouts: CalloutState[] = candidates.slice(0, MAX_VISIBLE_CALLOUTS).map((c) => ({
+        key: c.segment,
+        x: c.x,
+        y: c.y,
+        status: c.status,
+        textKey: CALLOUT_KEYS[c.segment][c.status],
+      }));
+      const signature = newCallouts.map((c) => `${c.key}:${c.status}:${Math.round(c.x)}:${Math.round(c.y)}`).join("|");
+      if (signature !== calloutsSignatureRef.current) {
+        calloutsSignatureRef.current = signature;
+        setCallouts(newCallouts);
       }
     }
 
@@ -477,6 +602,18 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
             style={{ transform: "translateZ(0)" }}
           />
         )}
+        {showOverlay &&
+          callouts.map((c) => (
+            <SwingCallout
+              key={c.key}
+              x={c.x}
+              y={c.y}
+              status={c.status}
+              text={t(c.textKey)}
+              containerWidth={overlaySize.width}
+              containerHeight={overlaySize.height}
+            />
+          ))}
         {customFullscreen && (
           <button
             onClick={(e) => {
@@ -510,23 +647,40 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
       )}
       {buttons.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
-          {buttons.map((b) => (
-            <button
-              key={b.labelKey}
-              onClick={() => {
-                const video = videoRef.current;
-                if (video) video.currentTime = b.timestampSeconds;
-                setSelectedPhaseKey(b.labelKey);
-              }}
-              className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors duration-150 ${
-                selectedPhaseKey === b.labelKey
-                  ? "border-transparent bg-fairway-700 text-white"
-                  : "border-slate-200 text-slate-600 hover:border-fairway-300 hover:text-fairway-700"
-              }`}
-            >
-              {t(b.labelKey)}
-            </button>
-          ))}
+          {/* A small dot distinguishes phases with a real scored
+              segment (address/top/impact once anything anchors there)
+              from ones that only ever get real-timestamp video
+              navigation (backswing/downswing/follow-through) — the
+              "tracked vs analyzed" distinction made visible, not just
+              conceptual. Never color-only: aria-label carries the same
+              distinction as real text for anyone not seeing the dot. */}
+          {buttons.map((b) => {
+            const analyzed = ANALYZED_PHASE_LABEL_KEYS.has(b.labelKey);
+            return (
+              <button
+                key={b.labelKey}
+                onClick={() => {
+                  const video = videoRef.current;
+                  if (video) video.currentTime = b.timestampSeconds;
+                  setSelectedPhaseKey(b.labelKey);
+                }}
+                aria-label={`${t(b.labelKey)} — ${t(analyzed ? "swingAssessment.analyzedBadge" : "swingAssessment.trackedBadge")}`}
+                className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-colors duration-150 ${
+                  selectedPhaseKey === b.labelKey
+                    ? "border-transparent bg-fairway-700 text-white"
+                    : "border-slate-200 text-slate-600 hover:border-fairway-300 hover:text-fairway-700"
+                }`}
+              >
+                {t(b.labelKey)}
+                {analyzed && (
+                  <span
+                    aria-hidden="true"
+                    className={`h-1.5 w-1.5 shrink-0 rounded-full ${selectedPhaseKey === b.labelKey ? "bg-white/80" : "bg-fairway-400"}`}
+                  />
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
       {/* Never shown in fullscreen (point 21 of the brief) — a card this
@@ -577,7 +731,7 @@ function SwingCheckCard({
   // feedback takes priority over a recording-quality tip, since a confirmed
   // issue is more actionable than a guess at why visibility was limited.
   const tipSegment = relevantSegments.find((s) => s.status === "needs_improvement");
-  const recordingTipKey = anchorGroup === "top" || anchorGroup === "impact" ? RECORDING_TIP_KEYS[anchorGroup] : undefined;
+  const recordingTipKey = anchorGroup !== "none" ? RECORDING_TIP_KEYS[anchorGroup] : undefined;
   const showRecordingTip = !tipSegment && unknownSegments.length > 0;
 
   return (
