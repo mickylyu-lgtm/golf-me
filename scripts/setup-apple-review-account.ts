@@ -14,15 +14,20 @@
 // Run locally (never in CI, never with the key committed anywhere):
 //   SUPABASE_SERVICE_ROLE_KEY=<service_role key from Supabase dashboard, Settings > API> npx tsx scripts/setup-apple-review-account.ts
 //
-// VITE_SUPABASE_URL is read from .env.local (already present for the app
-// itself) via a tiny manual parse below, since this script runs outside
-// Vite and doesn't have import.meta.env.
+// VITE_SUPABASE_URL and APPLE_REVIEW_PASSWORD are read from .env.local
+// (already present for the app itself) via a tiny manual parse below,
+// since this script runs outside Vite and doesn't have import.meta.env.
+// APPLE_REVIEW_PASSWORD was previously a hardcoded literal here — rotated
+// and moved out after being flagged by a secret scanner (2026-09-17); see
+// .env.example for the shape. SUPABASE_SERVICE_ROLE_KEY is deliberately
+// NOT read from .env.local, same as before — it's broad enough (bypasses
+// RLS entirely) that it should only ever exist as an ephemeral env var at
+// invocation time, never sit in a file, even a gitignored one.
 
 import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 
 const REVIEW_EMAIL = "apple-review@golfme.app";
-const REVIEW_PASSWORD = "GolfMeAppleReview2026!";
 // An existing, unrelated seeded golfer to be the reviewer's one DM
 // conversation partner — deliberately not Micky's own account, which was
 // just wiped clean of activity history for the TestFlight demo.
@@ -40,6 +45,7 @@ function readEnvLocal(key: string): string | undefined {
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL ?? readEnvLocal("VITE_SUPABASE_URL");
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const REVIEW_PASSWORD = process.env.APPLE_REVIEW_PASSWORD ?? readEnvLocal("APPLE_REVIEW_PASSWORD");
 
 if (!supabaseUrl) {
   console.error("Missing VITE_SUPABASE_URL (checked env and .env.local).");
@@ -49,6 +55,11 @@ if (!serviceRoleKey) {
   console.error("Missing SUPABASE_SERVICE_ROLE_KEY. Run with:");
   console.error("  SUPABASE_SERVICE_ROLE_KEY=<key> npx tsx scripts/setup-apple-review-account.ts");
   console.error("Find the key in the Supabase dashboard: Settings > API > service_role secret.");
+  process.exit(1);
+}
+if (!REVIEW_PASSWORD) {
+  console.error("Missing APPLE_REVIEW_PASSWORD (checked env and .env.local). Set it in .env.local");
+  console.error("(never committed — .env.local is gitignored) or pass it inline for this run.");
   process.exit(1);
 }
 
