@@ -64,7 +64,7 @@ export function VideoTrimSelector({
         if (!cancelled) setThumbnails(frames);
       })
       .catch((err) => {
-        console.error("Golf Me: failed to build a trim filmstrip.", err);
+        console.error("GolfMe: failed to build a trim filmstrip.", err);
         if (!cancelled) setThumbnails([]); // falls back to a bare track, never blocks trimming
       });
     return () => {

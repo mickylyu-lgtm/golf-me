@@ -240,7 +240,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
         setProfilesById(new Map());
       }
     } catch (err) {
-      console.error("Golf Me: failed to load messages/blocks/notifications.", err);
+      console.error("GolfMe: failed to load messages/blocks/notifications.", err);
     } finally {
       fetchingRef.current = false;
       if (pendingRefetchRef.current) {
@@ -503,7 +503,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       if (!trimmed || !selfId || !canMessage(otherId)) return false;
       const { data: convId, error: convErr } = await supabase.rpc("get_or_create_dm_conversation", { p_other_user_id: otherId });
       if (convErr) {
-        console.error("Golf Me: failed to open conversation.", convErr);
+        console.error("GolfMe: failed to open conversation.", convErr);
         return false;
       }
       // Optimistic: render immediately, before the network round trip. The
@@ -519,7 +519,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
 
       const { error } = await supabase.from("messages").insert({ conversation_id: convId, sender_id: selfId, text: trimmed });
       if (error) {
-        console.error("Golf Me: failed to send message.", error);
+        console.error("GolfMe: failed to send message.", error);
         setPendingMessages((prev) => prev.filter((p) => p.tempId !== tempId));
         return false;
       }
@@ -547,7 +547,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
         .update({ last_read_at: new Date().toISOString() })
         .eq("conversation_id", convId)
         .eq("user_id", selfId);
-      if (error) console.error("Golf Me: failed to mark conversation read.", error);
+      if (error) console.error("GolfMe: failed to mark conversation read.", error);
       else await refetch();
     },
     [selfId, conversationIdWith, refetch],
@@ -665,7 +665,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
   const markNotificationRead = useCallback(
     async (id: string) => {
       const { error } = await supabase.from("notifications").update({ read: true, read_at: new Date().toISOString() }).eq("id", id);
-      if (error) console.error("Golf Me: failed to mark notification read.", error);
+      if (error) console.error("GolfMe: failed to mark notification read.", error);
       else await refetch();
     },
     [refetch],
@@ -678,7 +678,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       .update({ read: true, read_at: new Date().toISOString() })
       .eq("user_id", selfId)
       .eq("read", false);
-    if (error) console.error("Golf Me: failed to mark all notifications read.", error);
+    if (error) console.error("GolfMe: failed to mark all notifications read.", error);
     else await refetch();
   }, [selfId, refetch]);
 

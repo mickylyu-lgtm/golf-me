@@ -71,7 +71,7 @@ export async function getNearbyRealCourses(location: PlayingArea, radiusMiles: n
 // something a caller should block on or surface an error for.
 export function enrichRealCourse(courseId: string): void {
   supabase.functions.invoke("course-enrich", { body: { courseId } }).catch((err) => {
-    console.error("Golf Me: course enrichment failed (non-blocking).", err);
+    console.error("GolfMe: course enrichment failed (non-blocking).", err);
   });
 }
 

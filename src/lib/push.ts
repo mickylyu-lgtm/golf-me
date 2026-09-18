@@ -59,16 +59,16 @@ export async function registerPushNotifications(userId: string): Promise<void> {
         .from("device_push_tokens")
         .upsert({ token: token.value, user_id: userId, platform: "ios", updated_at: new Date().toISOString() }, { onConflict: "token" })
         .then(({ error }) => {
-          if (error) console.error("Golf Me: failed to save push token.", error);
+          if (error) console.error("GolfMe: failed to save push token.", error);
         });
     });
     PushNotifications.addListener("registrationError", (err) => {
-      console.error("Golf Me: push registration error.", err);
+      console.error("GolfMe: push registration error.", err);
     });
 
     await PushNotifications.register();
   } catch (err) {
-    console.error("Golf Me: push setup failed.", err);
+    console.error("GolfMe: push setup failed.", err);
   }
 }
 
@@ -100,9 +100,9 @@ export async function unregisterPushNotifications(): Promise<void> {
   if (!token) return;
   try {
     const { error } = await supabase.from("device_push_tokens").delete().eq("token", token);
-    if (error) console.error("Golf Me: failed to unregister push token.", error);
+    if (error) console.error("GolfMe: failed to unregister push token.", error);
   } catch (err) {
-    console.error("Golf Me: push unregister failed.", err);
+    console.error("GolfMe: push unregister failed.", err);
   } finally {
     setStoredToken(null);
   }

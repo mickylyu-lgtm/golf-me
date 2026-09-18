@@ -131,7 +131,7 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
         setProfilesById(new Map());
       }
     } catch (err) {
-      console.error("Golf Me: failed to load real rounds.", err);
+      console.error("GolfMe: failed to load real rounds.", err);
     } finally {
       fetchingRef.current = false;
       if (pendingRefetchRef.current) {

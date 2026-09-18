@@ -30,7 +30,7 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
     try {
       await saveProfile({ onboarding_tutorial_completed: true });
     } catch (err) {
-      console.error("Golf Me: failed to persist tutorial completion.", err);
+      console.error("GolfMe: failed to persist tutorial completion.", err);
     }
   }, [isDemo, saveProfile]);
 

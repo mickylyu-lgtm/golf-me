@@ -27,7 +27,7 @@ export function ReportModal({ reportedId, reportedName, context, golfCallId, pos
   function submit() {
     if (!category) return;
     reportUser(reportedId, category, details.trim(), context, { golfCallId, postId, commentId });
-    showToast("Report submitted. Our trust & safety team will review it — thank you for keeping Golf Me safe.", "success");
+    showToast("Report submitted. Our trust & safety team will review it — thank you for keeping GolfMe safe.", "success");
     onClose();
   }
 

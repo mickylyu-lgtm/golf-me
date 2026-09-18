@@ -456,7 +456,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       // returns something rejectable) and the queue's own bookkeeping.
       // Neither prevents a caller who DOES want to await/catch `thisSave`
       // itself (see MatchPreferencesDetail.tsx) from doing so.
-      thisSave.catch((err) => console.error("Golf Me: failed to save profile.", err));
+      thisSave.catch((err) => console.error("GolfMe: failed to save profile.", err));
       profileSaveQueueRef.current = thisSave.catch(() => {});
       return thisSave;
     },
@@ -473,7 +473,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
           ),
         }));
       } else {
-        auth.saveProfile({ phone_verified: value }).catch((err) => console.error("Golf Me: failed to save profile.", err));
+        auth.saveProfile({ phone_verified: value }).catch((err) => console.error("GolfMe: failed to save profile.", err));
       }
     },
     [auth],
@@ -489,7 +489,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
           ),
         }));
       } else {
-        auth.saveProfile({ email_verified: value }).catch((err) => console.error("Golf Me: failed to save profile.", err));
+        auth.saveProfile({ email_verified: value }).catch((err) => console.error("GolfMe: failed to save profile.", err));
       }
     },
     [auth],
@@ -504,7 +504,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         ),
       }));
     } else {
-      auth.saveProfile({ verified_golfer: true }).catch((err) => console.error("Golf Me: failed to save profile.", err));
+      auth.saveProfile({ verified_golfer: true }).catch((err) => console.error("GolfMe: failed to save profile.", err));
     }
   }, [auth]);
 
@@ -682,7 +682,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       const trimmed = text.trim();
       if (!trimmed) return;
       if (!auth.isDemo) {
-        realRounds.sendRoundMessage(callId, trimmed).catch((err) => console.error("Golf Me: failed to send round message.", err));
+        realRounds.sendRoundMessage(callId, trimmed).catch((err) => console.error("GolfMe: failed to send round message.", err));
         return;
       }
       setData((prev) => ({
@@ -713,7 +713,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const submitReview = useCallback(
     (callId: string, revieweeId: string, input: ReviewInput) => {
       if (!auth.isDemo) {
-        realRounds.submitReview(callId, revieweeId, input).catch((err) => console.error("Golf Me: failed to submit review.", err));
+        realRounds.submitReview(callId, revieweeId, input).catch((err) => console.error("GolfMe: failed to submit review.", err));
         return;
       }
       setData((prev) => {
@@ -744,7 +744,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       meta?: { golfCallId?: string; postId?: string; commentId?: string },
     ) => {
       if (!auth.isDemo) {
-        realSocial.reportUser(reportedId, category, details, context, { golfCallId: meta?.golfCallId }).catch((err) => console.error("Golf Me: failed to submit report.", err));
+        realSocial.reportUser(reportedId, category, details, context, { golfCallId: meta?.golfCallId }).catch((err) => console.error("GolfMe: failed to submit report.", err));
         return;
       }
       setData((prev) => ({
@@ -772,7 +772,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const blockUser = useCallback(
     (blockedId: string) => {
       if (!auth.isDemo) {
-        realSocial.blockUser(blockedId).catch((err) => console.error("Golf Me: failed to block user.", err));
+        realSocial.blockUser(blockedId).catch((err) => console.error("GolfMe: failed to block user.", err));
         return;
       }
       setData((prev) => ({
@@ -786,7 +786,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const unblockUser = useCallback(
     (blockedId: string) => {
       if (!auth.isDemo) {
-        realSocial.unblockUser(blockedId).catch((err) => console.error("Golf Me: failed to unblock user.", err));
+        realSocial.unblockUser(blockedId).catch((err) => console.error("GolfMe: failed to unblock user.", err));
         return;
       }
       setData((prev) => ({
@@ -1133,7 +1133,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       groupTypePreference: "No Preference",
       gameFormatPreference: "No Preference",
       networkingPreference: "No Preference",
-      bio: "New to Golf Me — excited to find my next round.",
+      bio: "New to GolfMe — excited to find my next round.",
       verification: { phoneVerified: false, emailVerified: false, verifiedGolfer: false },
       reputation: {
         completedRounds: 0,
@@ -1555,7 +1555,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const markNotificationRead = useCallback(
     (id: string) => {
       if (!auth.isDemo) {
-        realSocial.markNotificationRead(id).catch((err) => console.error("Golf Me: failed to mark notification read.", err));
+        realSocial.markNotificationRead(id).catch((err) => console.error("GolfMe: failed to mark notification read.", err));
         return;
       }
       setData((prev) => ({
@@ -1567,7 +1567,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   );
   const markAllNotificationsRead = useCallback(() => {
     if (!auth.isDemo) {
-      realSocial.markAllNotificationsRead().catch((err) => console.error("Golf Me: failed to mark all notifications read.", err));
+      realSocial.markAllNotificationsRead().catch((err) => console.error("GolfMe: failed to mark all notifications read.", err));
       return;
     }
     setData((prev) => ({

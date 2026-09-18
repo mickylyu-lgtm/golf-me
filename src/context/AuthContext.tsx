@@ -72,13 +72,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
       if (error) {
-        console.error("Golf Me: failed to load profile.", error);
+        console.error("GolfMe: failed to load profile.", error);
         setProfileRow(null);
       } else {
         setProfileRow(data as ProfileRow | null);
       }
     } catch (err) {
-      console.error("Golf Me: failed to load profile.", err);
+      console.error("GolfMe: failed to load profile.", err);
       setProfileRow(null);
     } finally {
       setProfileChecked(true);
@@ -221,7 +221,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const saveProfile = useCallback(
     async (patch: Record<string, unknown>) => {
-      if (!authUser) throw new Error("Golf Me: cannot save a profile with no signed-in user.");
+      if (!authUser) throw new Error("GolfMe: cannot save a profile with no signed-in user.");
       const { error } = await supabase.from("profiles").update(patch).eq("id", authUser.id);
       if (error) throw error;
       await fetchProfile(authUser.id);

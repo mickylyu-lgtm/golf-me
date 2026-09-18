@@ -22,7 +22,7 @@ export function useRoles() {
     setLoading(true);
     const { data, error } = await supabase.rpc("my_active_roles");
     if (error) {
-      console.error("Golf Me: failed to load account roles.", error);
+      console.error("GolfMe: failed to load account roles.", error);
       setRoles([]);
     } else {
       setRoles((data ?? []) as string[]);

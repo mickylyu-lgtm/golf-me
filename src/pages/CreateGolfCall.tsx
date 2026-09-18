@@ -314,7 +314,7 @@ export function CreateGolfCall() {
         notes: notes.trim() || undefined,
         additionalJoinedGolferIds: fillMode ? friendIds : undefined,
       });
-      if (fromPostId) attachGolfCallToPost(fromPostId, call.id).catch((err) => console.error("Golf Me: failed to attach round to post.", err));
+      if (fromPostId) attachGolfCallToPost(fromPostId, call.id).catch((err) => console.error("GolfMe: failed to attach round to post.", err));
       track("first_round_hosted");
       clearHostRoundDraft();
       showToast(fillMode ? t("host.postedFillToast") : t("host.postedFreshToast"), "success");
@@ -352,7 +352,7 @@ export function CreateGolfCall() {
         try {
           await attachBookingProofDirect(authUser.id, call.id, proofFile, proofSource, proofReference);
         } catch (err) {
-          console.error("Golf Me: failed to attach booking proof at creation time.", err);
+          console.error("GolfMe: failed to attach booking proof at creation time.", err);
           showToast(t("golfCallDetail.bookingProofSaveError"), "warning");
         }
       }

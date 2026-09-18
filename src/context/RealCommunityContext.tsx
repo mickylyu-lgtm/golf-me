@@ -200,7 +200,7 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
         setProfilesById(map);
       }
     } catch (err) {
-      console.error("Golf Me: failed to load Community.", err);
+      console.error("GolfMe: failed to load Community.", err);
     } finally {
       fetchingRef.current = false;
     }
@@ -327,7 +327,7 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
         // Falls back to the optimistic pendingMedia rows (still keyed to
         // the old pending.id) via the reconciliation effect below, same as
         // any other refetch-driven cleanup.
-        if (mediaError) console.error("Golf Me: failed to attach post media.", mediaError);
+        if (mediaError) console.error("GolfMe: failed to attach post media.", mediaError);
         else insertedMedia = (mediaData ?? []) as MediaRow[];
       }
       setMediaRows((prev) => [...insertedMedia, ...prev.filter((m) => m.post_id !== pending.id)]);

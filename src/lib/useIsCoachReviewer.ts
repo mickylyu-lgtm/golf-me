@@ -18,7 +18,7 @@ export function useIsCoachReviewer(userId: string | undefined) {
     supabase.rpc("is_coach_reviewer", { p_user_id: userId }).then(({ data, error }) => {
       if (cancelled) return;
       if (error) {
-        console.error("Golf Me: failed to check coach reviewer status.", error);
+        console.error("GolfMe: failed to check coach reviewer status.", error);
         setIsCoachReviewer(false);
       } else {
         setIsCoachReviewer(Boolean(data));

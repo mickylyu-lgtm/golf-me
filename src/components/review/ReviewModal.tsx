@@ -75,7 +75,7 @@ export function ReviewModal({ callId, reviewee, onClose, onSubmitted }: ReviewMo
       privateNote: state.privateNote.trim() || undefined,
     });
     if (!alreadyInCircle && addCircle && state.wouldPlayAgain) addToCircle(reviewee.id);
-    showToast(`Review for ${reviewee.name} submitted — visible only to Golf Me's trust system.`, "success");
+    showToast(`Review for ${reviewee.name} submitted — visible only to GolfMe's trust system.`, "success");
     onClose();
     onSubmitted?.();
   }

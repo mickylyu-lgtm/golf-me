@@ -196,7 +196,7 @@ export function AnalyzeSwing() {
       const bytes = await file.arrayBuffer();
       stableFile = new File([bytes], file.name, { type: file.type });
     } catch (err) {
-      console.error("Golf Me: failed to read the video into memory.", err);
+      console.error("GolfMe: failed to read the video into memory.", err);
     }
     const previewUrl = URL.createObjectURL(stableFile);
 
@@ -245,7 +245,7 @@ export function AnalyzeSwing() {
         const { error: thumbUploadError } = await supabase.storage.from(COMMUNITY_MEDIA_BUCKET).upload(thumbPath, thumbBlob, { contentType: "image/jpeg" });
         if (!thumbUploadError) thumbnailUrl = supabase.storage.from(COMMUNITY_MEDIA_BUCKET).getPublicUrl(thumbPath).data.publicUrl;
       } catch (thumbErr) {
-        console.error("Golf Me: failed to capture a video thumbnail.", thumbErr);
+        console.error("GolfMe: failed to capture a video thumbnail.", thumbErr);
       }
 
       const created = await createCaddieAnalysis({

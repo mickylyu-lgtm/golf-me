@@ -40,7 +40,7 @@ export function useCredibilityStats(golferId: string | undefined, baselineReputa
       const { data, error } = await supabase.rpc("get_credibility_stats", { p_user_id: golferId });
       if (cancelled) return;
       if (error || !data || !data[0]) {
-        console.error("Golf Me: failed to load credibility stats.", error);
+        console.error("GolfMe: failed to load credibility stats.", error);
         setStats(null);
         return;
       }

@@ -33,7 +33,7 @@ export function useWaitlistSignup() {
     if (!error) return "success";
     if (error.code === "23505") return "duplicate"; // unique_violation on normalized_email
     if (error.code === "23514") return "invalid-email"; // check_violation — the DB's own email format check
-    console.error("Golf Me: waitlist signup failed.", error);
+    console.error("GolfMe: waitlist signup failed.", error);
     return "error";
   }
 

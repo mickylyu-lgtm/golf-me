@@ -1,4 +1,4 @@
-// Core domain types for Golf Me.
+// Core domain types for GolfMe.
 // Kept as plain data shapes so a real backend (auth, DB, maps, messaging,
 // course data, identity verification) can be swapped in without touching
 // the UI layer — components only ever talk to these types + the DataContext.

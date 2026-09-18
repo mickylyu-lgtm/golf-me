@@ -10,7 +10,7 @@ export function ProfileSwitcher({ onClose }: { onClose: () => void }) {
   const { showToast } = useToast();
 
   return (
-    <Modal title="Preview Golf Me as..." onClose={onClose}>
+    <Modal title="Preview GolfMe as..." onClose={onClose}>
       <p className="mb-3 text-xs text-slate-500">
         Prototype tool — switch identities to see the app from different golfers' perspectives (hosts, new members,
         varying reputation). In the shipped app this maps to real sign-in.
@@ -23,7 +23,7 @@ export function ProfileSwitcher({ onClose }: { onClose: () => void }) {
               key={g.id}
               onClick={() => {
                 switchCurrentUser(g.id);
-                showToast(`Now viewing Golf Me as ${g.name}`, "info");
+                showToast(`Now viewing GolfMe as ${g.name}`, "info");
                 onClose();
               }}
               className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${

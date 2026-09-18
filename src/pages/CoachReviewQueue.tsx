@@ -35,7 +35,7 @@ export function CoachReviewQueue() {
       .then(({ data, error }) => {
         if (cancelled) return;
         if (error) {
-          console.error("Golf Me: failed to load reviewed posts.", error);
+          console.error("GolfMe: failed to load reviewed posts.", error);
         } else {
           setReviewedPostIds(new Set((data ?? []).map((r) => r.post_id as string)));
         }

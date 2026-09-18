@@ -84,20 +84,20 @@ export function AdminReviewers() {
   const runSearch = useCallback(async (q: string) => {
     setSearching(true);
     const { data, error } = await supabase.rpc("admin_search_users", { p_query: q });
-    if (error) console.error("Golf Me: admin_search_users failed.", error);
+    if (error) console.error("GolfMe: admin_search_users failed.", error);
     setSearchResults((data ?? []) as SearchUserRow[]);
     setSearching(false);
   }, []);
 
   const loadReviewers = useCallback(async () => {
     const { data, error } = await supabase.rpc("admin_list_coach_reviewers");
-    if (error) console.error("Golf Me: admin_list_coach_reviewers failed.", error);
+    if (error) console.error("GolfMe: admin_list_coach_reviewers failed.", error);
     setReviewers((data ?? []) as ReviewerRow[]);
   }, []);
 
   const loadInvites = useCallback(async () => {
     const { data, error } = await supabase.rpc("admin_list_reviewer_invites");
-    if (error) console.error("Golf Me: admin_list_reviewer_invites failed.", error);
+    if (error) console.error("GolfMe: admin_list_reviewer_invites failed.", error);
     setInvites((data ?? []) as InviteRow[]);
   }, []);
 

@@ -201,7 +201,7 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
       if (error) throw error;
       setRows((data ?? []) as CaddieAnalysisRow[]);
     } catch (err) {
-      console.error("Golf Me: failed to load Caddie history.", err);
+      console.error("GolfMe: failed to load Caddie history.", err);
     } finally {
       fetchingRef.current = false;
     }

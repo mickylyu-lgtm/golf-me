@@ -144,7 +144,7 @@ function useLanguageProfileSync() {
   useEffect(() => {
     if (isDemo || !authUser) return;
     if (pulledForUser.current !== authUser.id) return; // wait for the pull above to settle first
-    saveProfile({ language: locale }).catch((err) => console.error("Golf Me: failed to save language preference.", err));
+    saveProfile({ language: locale }).catch((err) => console.error("GolfMe: failed to save language preference.", err));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locale, isDemo, authUser]);
 }

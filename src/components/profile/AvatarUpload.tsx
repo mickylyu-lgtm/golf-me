@@ -128,7 +128,7 @@ export function AvatarUpload({ golfer, onChange, size = "xl" }: AvatarUploadProp
   async function handleRemove() {
     if (!isDemo && authUser) {
       const { error: removeError } = await supabase.storage.from(AVATAR_BUCKET).remove([`${authUser.id}/avatar.jpg`]);
-      if (removeError) console.error("Golf Me: failed to remove avatar from storage.", removeError);
+      if (removeError) console.error("GolfMe: failed to remove avatar from storage.", removeError);
     }
     onChange(undefined);
   }

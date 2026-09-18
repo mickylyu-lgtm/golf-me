@@ -78,7 +78,7 @@ export function useBookingProof(golfCallId: string | undefined) {
     setLoading(true);
     const { data, error } = await supabase.from("booking_proofs").select("*").eq("golf_call_id", golfCallId).maybeSingle();
     if (error) {
-      console.error("Golf Me: failed to load booking proof.", error);
+      console.error("GolfMe: failed to load booking proof.", error);
       setProof(null);
     } else if (data) {
       const row = data as ProofRow;
@@ -100,7 +100,7 @@ export function useBookingProof(golfCallId: string | undefined) {
     if (!proof) return null;
     const { data, error } = await supabase.storage.from(BOOKING_PROOFS_BUCKET).createSignedUrl(proof.storagePath, 300);
     if (error) {
-      console.error("Golf Me: failed to create a signed URL for booking proof.", error);
+      console.error("GolfMe: failed to create a signed URL for booking proof.", error);
       return null;
     }
     return data.signedUrl;

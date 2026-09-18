@@ -114,10 +114,10 @@ export function AdminDashboard() {
       supabase.rpc("admin_caddie_stats"),
       supabase.rpc("admin_list_caddie_analyses", { p_limit: 50 }),
     ]);
-    if (wErr) console.error("Golf Me: admin_list_waitlist_signups failed.", wErr);
-    if (uErr) console.error("Golf Me: admin_list_users failed.", uErr);
-    if (csErr) console.error("Golf Me: admin_caddie_stats failed.", csErr);
-    if (caErr) console.error("Golf Me: admin_list_caddie_analyses failed.", caErr);
+    if (wErr) console.error("GolfMe: admin_list_waitlist_signups failed.", wErr);
+    if (uErr) console.error("GolfMe: admin_list_users failed.", uErr);
+    if (csErr) console.error("GolfMe: admin_caddie_stats failed.", csErr);
+    if (caErr) console.error("GolfMe: admin_list_caddie_analyses failed.", caErr);
     setWaitlist((w ?? []) as WaitlistRow[]);
     setUsers((u ?? []) as UserRow[]);
     setCaddieStats(((cs as CaddieStats[]) ?? [])[0] ?? null);

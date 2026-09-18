@@ -66,7 +66,7 @@ export function loadData(): AppData {
       session: parsed.session ?? { isLoggedIn: false, hasOnboarded: false },
     };
   } catch (err) {
-    console.error("Golf Me: failed to load data, reseeding.", err);
+    console.error("GolfMe: failed to load data, reseeding.", err);
     return persistAndReturn(seedData());
   }
 }

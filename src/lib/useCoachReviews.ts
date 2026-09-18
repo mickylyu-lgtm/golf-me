@@ -75,7 +75,7 @@ export function useCoachReviews(postId: string | undefined) {
     setLoading(true);
     const { data, error } = await supabase.from("coach_reviews").select("*").eq("post_id", postId).order("created_at", { ascending: true });
     if (error) {
-      console.error("Golf Me: failed to load Coach Reviews.", error);
+      console.error("GolfMe: failed to load Coach Reviews.", error);
       setLoading(false);
       return;
     }
@@ -85,7 +85,7 @@ export function useCoachReviews(postId: string | undefined) {
     if (ids.length > 0) {
       const { data: profileRows, error: profErr } = await supabase.from("profiles").select("*").in("id", ids);
       if (profErr) {
-        console.error("Golf Me: failed to load Coach Review reviewer profiles.", profErr);
+        console.error("GolfMe: failed to load Coach Review reviewer profiles.", profErr);
       } else {
         const map = new Map<string, GolferProfile>();
         for (const row of (profileRows ?? []) as ProfileRow[]) map.set(row.id, profileRowToGolferProfile(row));
