@@ -33,6 +33,7 @@ export const ko: Record<TranslationKey, string> = {
   "time.hoursAgo": "{hours}시간 전",
   "budget.noPreference": "예산 선호 없음",
   "member.new": "신규 회원",
+  "member.month": "GolfMe 이용 {months}개월",
   "member.months": "GolfMe 이용 {months}개월",
   "member.year": "GolfMe 이용 {years}년",
   "member.years": "GolfMe 이용 {years}년",

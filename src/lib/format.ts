@@ -81,6 +81,7 @@ export function monthsSince(iso: string): number {
 export function memberSinceLabel(iso: string, t: TFn): string {
   const months = monthsSince(iso);
   if (months < 1) return t("member.new");
+  if (months === 1) return t("member.month", { months });
   if (months < 12) return t("member.months", { months });
   const years = Math.floor(months / 12);
   return years > 1 ? t("member.years", { years }) : t("member.year", { years });

@@ -33,6 +33,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "time.hoursAgo": "{hours}小时前",
   "budget.noPreference": "无预算偏好",
   "member.new": "新成员",
+  "member.month": "加入 GolfMe {months} 个月",
   "member.months": "加入 GolfMe {months} 个月",
   "member.year": "加入 GolfMe {years} 年",
   "member.years": "加入 GolfMe {years} 年",

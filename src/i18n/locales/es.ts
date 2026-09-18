@@ -33,6 +33,7 @@ export const es: Record<TranslationKey, string> = {
   "time.hoursAgo": "{hours} h",
   "budget.noPreference": "Sin preferencia de presupuesto",
   "member.new": "Miembro nuevo",
+  "member.month": "1 mes en GolfMe",
   "member.months": "{months} meses en GolfMe",
   "member.year": "{years} año en GolfMe",
   "member.years": "{years} años en GolfMe",

@@ -33,6 +33,7 @@ export const ja: Record<TranslationKey, string> = {
   "time.hoursAgo": "{hours}時間前",
   "budget.noPreference": "予算の希望なし",
   "member.new": "新規メンバー",
+  "member.month": "GolfMe歴{months}ヶ月",
   "member.months": "GolfMe歴{months}ヶ月",
   "member.year": "GolfMe歴{years}年",
   "member.years": "GolfMe歴{years}年",

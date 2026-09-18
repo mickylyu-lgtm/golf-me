@@ -24,7 +24,6 @@ import { Modal } from "../components/ui/Modal";
 import { CLICKABLE_CARD_CLASS } from "../components/ui/cardStyles";
 import { inputClass, labelClass } from "../components/ui/FormControls";
 import { AvatarUpload } from "../components/profile/AvatarUpload";
-import { HighlightGolfMe } from "../components/brand/HighlightGolfMe";
 import { ReputationBadge } from "../components/golfer/ReputationBadge";
 import { Pill } from "../components/ui/Pill";
 import { AGE_RANGES, GENDER_OPTIONS } from "../types";
@@ -156,9 +155,13 @@ export function Profile() {
           {/* Was plain gray text -- reads as a stray line, not really part
               of the identity block. A badge (same pattern as the
               reputation tag below it) makes it read as one deliberate
-              piece of profile metadata, not leftover text. */}
+              piece of profile metadata, not leftover text. Plain text, not
+              HighlightGolfMe -- this metadata is intentionally one neutral
+              color throughout; the logo elsewhere already carries brand
+              emphasis, this line shouldn't compete with the name/rounds/
+              reputation above and beside it. */}
           <Badge tone="slate" icon={<Clock size={11} />} className="mt-1">
-            <HighlightGolfMe text={memberSinceLabel(currentUser.memberSince, t)} />
+            {memberSinceLabel(currentUser.memberSince, t)}
           </Badge>
         </div>
         <Button size="sm" variant="outline" onClick={startEditing}>
