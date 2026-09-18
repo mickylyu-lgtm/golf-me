@@ -31,7 +31,16 @@ export function Caddie() {
             set to at the moment "Ask Caddie" is tapped. A plain native
             <select> rather than a custom dropdown: full accessibility/mobile
             picker behavior for free, no positioning logic to get wrong. */}
-        <label className="flex shrink-0 items-center gap-1 rounded-full border border-slate-200 py-1.5 pl-2.5 pr-1.5 text-xs font-semibold text-slate-600 focus-within:border-fairway-400 focus-within:ring-2 focus-within:ring-fairway-400 focus-within:ring-offset-2">
+        {/* Ring-only focus style, matching every other focused control in
+            the app (see e.g. Button/Pill/TopBar) -- this used to ALSO
+            shift the border to fairway-400 at the same time as the
+            ring-offset-2 ring, which put two different-looking greens
+            (a solid border vs. a softer box-shadow ring, with a pale gap
+            between them from the offset) right next to each other and
+            read as a rendering glitch rather than one coherent focus
+            indicator (reported live, screenshot showed a visibly split
+            double ring). */}
+        <label className="flex shrink-0 items-center gap-1 rounded-full border border-slate-200 py-1.5 pl-2.5 pr-1.5 text-xs font-semibold text-slate-600 focus-within:ring-2 focus-within:ring-fairway-400 focus-within:ring-offset-2">
           <Globe size={13} className="text-slate-400" />
           <select
             value={locale}
