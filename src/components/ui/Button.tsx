@@ -11,8 +11,15 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const VARIANT_CLASSES: Record<Variant, string> = {
+  // Same dark-green gradient as the app icon/Splash/Auth/TopBar logo/
+  // Home's "Find a Round" -- this is the shared primary button used
+  // across the whole app, so fixing it here is what actually makes
+  // "every green button, every page" consistent in one place, rather
+  // than hand-patching dozens of individual call sites. Hover/active use
+  // a brightness filter (not a flat-color swap) so the gradient itself
+  // never flashes to solid on press, same reasoning as Home's own CTA.
   primary:
-    "bg-fairway-600 text-white shadow-sm shadow-fairway-900/10 hover:bg-fairway-700 hover:shadow-md active:bg-fairway-800 focus-visible:ring-fairway-400",
+    "bg-gradient-to-br from-[#1b4a2d] to-[#0e2717] text-white shadow-sm shadow-fairway-900/10 hover:brightness-110 hover:shadow-md active:brightness-95 focus-visible:ring-fairway-400",
   secondary:
     "bg-sun-400 text-fairway-950 shadow-sm shadow-sun-900/10 hover:bg-sun-500 hover:shadow-md active:bg-sun-600 focus-visible:ring-sun-500",
   ghost: "bg-transparent text-fairway-700 hover:bg-fairway-50 active:bg-fairway-100 focus-visible:ring-fairway-400",

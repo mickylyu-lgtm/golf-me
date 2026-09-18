@@ -12,15 +12,20 @@ interface GolfMeWordmarkProps {
 // "Golf" in deep forest green, "Me" in gold — deliberately plain
 // typography (no decorative treatment), meant to sit next to GolfMeIcon
 // or stand alone in headings. The exact hex values (not the fairway-800/
-// sun-500 Tailwind tokens used previously) are the same green/gold
-// public/icon-source.svg — the real app icon's own source — uses for its
-// background and gold rim, so the wordmark's colors read as the SAME
-// green/gold as the icon right next to it, not just a similar pairing
-// (reported live: the token-based colors were noticeably off from the
-// icon once the icon itself got the accurate gradient treatment). Font
-// weight/size are controlled entirely by `className` on the wrapping
-// span so this drops into any existing heading.
-export function GolfMeWordmark({ className = "", golfClassName = "text-[#1b4a2d]", meClassName = "text-[#dc9d24]" }: GolfMeWordmarkProps) {
+// sun-500 Tailwind tokens used originally) come straight from
+// public/icon-source.svg — the real app icon's own source — so the
+// wordmark's colors read as the SAME green/gold as the icon right next
+// to it, not just a similar pairing (reported live, twice: first that
+// the tokens were off, then that the gold specifically still didn't read
+// as "the gold ring" and wanted something more vintage). "Me" now uses
+// the ring gradient's own MIDDLE stop (#f0b93f) rather than its darkest
+// end (#dc9d24) -- the darkest stop is designed to sit in the ring's own
+// shadow side against the icon's dark background, and read as a muddy
+// brown-olive rather than gold once used as flat text on a light page;
+// the middle stop is the ring's actual dominant, most gold-reading tone.
+// Font weight/size are controlled entirely by `className` on the
+// wrapping span so this drops into any existing heading.
+export function GolfMeWordmark({ className = "", golfClassName = "text-[#1b4a2d]", meClassName = "text-[#f0b93f]" }: GolfMeWordmarkProps) {
   return (
     <span className={className}>
       <span className={golfClassName}>Golf</span>
