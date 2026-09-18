@@ -40,6 +40,19 @@
   --color-sun-600: #b88114;
   --color-sun-700: #8f6614;
 
+  /* Brand anchor colors (2026-09-18) — the exact gradient/gold stops from
+     public/icon-source.svg, the real app icon. Distinct from the fairway/
+     sun scales above (which are the general UI palette): these are only
+     for direct "this IS the GolfMe brand mark" moments -- primary CTAs,
+     the wordmark, the app icon itself -- so they stay a small, deliberate
+     set rather than a parallel full color scale. Do not repoint generic
+     fairway-* usage at these; in particular fairway-700 also drives
+     Caddie's "good" swing-assessment semantic (CaddieSwingReplay.tsx) and
+     must stay independent of brand-mark styling.  */
+  --color-brand-forest: #1b4a2d;
+  --color-brand-forest-deep: #0e2717;
+  --color-brand-gold: #f0b93f;
+
   --animate-fade-in: fade-in 0.25s ease-out;
   --animate-slide-up: slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   /* Same slide-up keyframe, more than double the duration — for the Welcome

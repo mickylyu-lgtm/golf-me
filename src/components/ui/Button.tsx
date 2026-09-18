@@ -19,7 +19,7 @@ const VARIANT_CLASSES: Record<Variant, string> = {
   // a brightness filter (not a flat-color swap) so the gradient itself
   // never flashes to solid on press, same reasoning as Home's own CTA.
   primary:
-    "bg-gradient-to-br from-[#1b4a2d] to-[#0e2717] text-white shadow-sm shadow-fairway-900/10 hover:brightness-110 hover:shadow-md active:brightness-95 focus-visible:ring-fairway-400",
+    "bg-gradient-to-br from-brand-forest to-brand-forest-deep text-white shadow-sm shadow-fairway-900/10 hover:brightness-110 hover:shadow-md active:brightness-95 focus-visible:ring-fairway-400",
   secondary:
     "bg-sun-400 text-fairway-950 shadow-sm shadow-sun-900/10 hover:bg-sun-500 hover:shadow-md active:bg-sun-600 focus-visible:ring-sun-500",
   ghost: "bg-transparent text-fairway-700 hover:bg-fairway-50 active:bg-fairway-100 focus-visible:ring-fairway-400",

@@ -16,7 +16,7 @@ interface HighlightGolfMeProps {
 // locales because "GolfMe" is kept as an untranslated brand token in all 6
 // locale files (verified directly, not assumed) — this never touches
 // surrounding translated text, only splits on that one literal substring.
-export function HighlightGolfMe({ text, golfClassName = "text-[#1b4a2d]", meClassName = "text-[#f0b93f]" }: HighlightGolfMeProps): ReactNode {
+export function HighlightGolfMe({ text, golfClassName = "text-brand-forest", meClassName = "text-brand-gold" }: HighlightGolfMeProps): ReactNode {
   const parts = text.split("GolfMe");
   if (parts.length === 1) return text;
   const nodes: ReactNode[] = [];

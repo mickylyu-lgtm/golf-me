@@ -232,7 +232,7 @@ export function CaddieAnalysisDetail() {
           </div>
           {details.score && (
             <div>
-              <p className="text-3xl font-bold text-[#1b4a2d]">{t("caddie.scoreOutOf100", { score: details.score.total })}</p>
+              <p className="text-3xl font-bold text-brand-forest">{t("caddie.scoreOutOf100", { score: details.score.total })}</p>
               <p className="mb-1.5 mt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t("caddie.scoreBreakdown")}</p>
               <div className="flex flex-col gap-2">
                 {SCORE_CRITERIA_ORDER.map(([key, labelKey]) => {
@@ -241,7 +241,7 @@ export function CaddieAnalysisDetail() {
                     <div key={key} className="rounded-xl border border-slate-100 bg-white p-2.5">
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-xs font-semibold text-slate-700">{t(labelKey)}</p>
-                        <p className="text-xs font-bold text-[#1b4a2d]">{c.points}/20</p>
+                        <p className="text-xs font-bold text-brand-forest">{c.points}/20</p>
                       </div>
                       <p className="mt-0.5 text-xs text-slate-500">{c.reason}</p>
                     </div>
@@ -269,7 +269,7 @@ export function CaddieAnalysisDetail() {
             </div>
           )}
           <div className="rounded-xl border border-fairway-200 bg-white p-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1b4a2d]">{t("caddie.focus")}</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-forest">{t("caddie.focus")}</p>
             <p className="mt-1 text-sm font-semibold text-slate-800">{details.focus.title}</p>
             <p className="mt-0.5 text-sm text-slate-600">{details.focus.instruction}</p>
           </div>

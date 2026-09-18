@@ -27,7 +27,7 @@ export function Find() {
         <button
           onClick={() => setTab("rounds")}
           className={`flex-1 rounded-full py-2 text-sm font-semibold transition ${
-            tab === "rounds" ? "bg-gradient-to-br from-[#1b4a2d] to-[#0e2717] text-white" : "text-slate-500"
+            tab === "rounds" ? "bg-gradient-to-br from-brand-forest to-brand-forest-deep text-white" : "text-slate-500"
           }`}
         >
           {t("find.tabRounds")}
@@ -35,7 +35,7 @@ export function Find() {
         <button
           onClick={() => setTab("golfers")}
           className={`flex-1 rounded-full py-2 text-sm font-semibold transition ${
-            tab === "golfers" ? "bg-gradient-to-br from-[#1b4a2d] to-[#0e2717] text-white" : "text-slate-500"
+            tab === "golfers" ? "bg-gradient-to-br from-brand-forest to-brand-forest-deep text-white" : "text-slate-500"
           }`}
         >
           {t("find.tabGolfers")}

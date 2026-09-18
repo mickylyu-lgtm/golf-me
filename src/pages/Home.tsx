@@ -33,7 +33,7 @@ const HOME_POSTS_SHOWN = 6;
 // brightness filter rather than swapping to a flat color, so the
 // gradient itself never flashes to solid on press.
 const PRIMARY_ACTION_CLASS =
-  "rounded-2xl bg-gradient-to-br from-[#1b4a2d] to-[#0e2717] shadow-sm shadow-fairway-900/10 transition-all duration-200 ease-out hover:-translate-y-0.5 hover:brightness-110 hover:shadow-md active:translate-y-0 active:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:hover:translate-y-0";
+  "rounded-2xl bg-gradient-to-br from-brand-forest to-brand-forest-deep shadow-sm shadow-fairway-900/10 transition-all duration-200 ease-out hover:-translate-y-0.5 hover:brightness-110 hover:shadow-md active:translate-y-0 active:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:hover:translate-y-0";
 
 export function Home() {
   const { currentUser, golfCalls, visiblePosts, caddieAnalyses } = useData();
@@ -250,20 +250,20 @@ export function Home() {
             <Sparkles size={18} />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-xs font-bold uppercase tracking-wide text-[#1b4a2d]">{t("caddie.title")}</span>
+            <span className="block text-xs font-bold uppercase tracking-wide text-brand-forest">{t("caddie.title")}</span>
             <span className="block text-sm font-semibold text-slate-900">
               {latestCaddieAnalysis.swingType || t("caddie.homeCardTitle")} · {formatShortDate(latestCaddieAnalysis.createdAt, locale)}
             </span>
             {latestCaddieAnalysis.status === "complete" &&
               (latestCaddieAnalysis.score !== undefined ? (
-                <span className="block text-xs font-bold text-[#1b4a2d]">{t("caddie.scoreOutOf100", { score: latestCaddieAnalysis.score })}</span>
+                <span className="block text-xs font-bold text-brand-forest">{t("caddie.scoreOutOf100", { score: latestCaddieAnalysis.score })}</span>
               ) : (
                 latestCaddieAnalysis.issues.length > 0 && (
                   <span className="block text-xs text-slate-500">{t("caddie.thingsToWorkOn", { count: latestCaddieAnalysis.issues.length })}</span>
                 )
               ))}
           </span>
-          <span className="shrink-0 text-xs font-semibold text-[#1b4a2d]">{t("caddie.continueInCaddie")}</span>
+          <span className="shrink-0 text-xs font-semibold text-brand-forest">{t("caddie.continueInCaddie")}</span>
         </button>
       )}
 

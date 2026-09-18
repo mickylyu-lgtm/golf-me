@@ -25,7 +25,7 @@ interface GolfMeWordmarkProps {
 // the middle stop is the ring's actual dominant, most gold-reading tone.
 // Font weight/size are controlled entirely by `className` on the
 // wrapping span so this drops into any existing heading.
-export function GolfMeWordmark({ className = "", golfClassName = "text-[#1b4a2d]", meClassName = "text-[#f0b93f]" }: GolfMeWordmarkProps) {
+export function GolfMeWordmark({ className = "", golfClassName = "text-brand-forest", meClassName = "text-brand-gold" }: GolfMeWordmarkProps) {
   return (
     <span className={className}>
       <span className={golfClassName}>Golf</span>

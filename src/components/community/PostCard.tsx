@@ -336,7 +336,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
                 <span className="flex items-center gap-1.5 text-sm font-semibold text-fairway-800">
                   <Sparkles size={14} /> {t("caddie.title")} {t("swingAnalysis.title")}
                 </span>
-                <span className="text-xs font-semibold text-[#1b4a2d]">{t("caddie.viewAnalysis")}</span>
+                <span className="text-xs font-semibold text-brand-forest">{t("caddie.viewAnalysis")}</span>
               </button>
             ) : existingCaddieAnalysis?.status === "failed" ? (
               <div className="flex items-center justify-between gap-2 rounded-xl border border-red-100 bg-red-50/50 px-3.5 py-2.5" onClick={stop}>

@@ -102,7 +102,7 @@ export function Community() {
             key={tabOption.value}
             onClick={() => setTab(tabOption.value)}
             className={`flex-1 rounded-full py-2 text-sm font-semibold transition ${
-              tab === tabOption.value ? "bg-gradient-to-br from-[#1b4a2d] to-[#0e2717] text-white" : "text-slate-500"
+              tab === tabOption.value ? "bg-gradient-to-br from-brand-forest to-brand-forest-deep text-white" : "text-slate-500"
             }`}
           >
             {t(tabOption.labelKey)}

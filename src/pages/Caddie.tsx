@@ -91,7 +91,7 @@ export function Caddie() {
                   </span>
                   {a.status === "complete" ? (
                     a.score !== undefined ? (
-                      <span className="shrink-0 text-sm font-bold text-[#1b4a2d]">{t("caddie.scoreOutOf100", { score: a.score })}</span>
+                      <span className="shrink-0 text-sm font-bold text-brand-forest">{t("caddie.scoreOutOf100", { score: a.score })}</span>
                     ) : (
                       <span className="shrink-0 text-xs font-semibold text-slate-500">{t("caddie.thingsToWorkOn", { count: issueCount })}</span>
                     )
