@@ -83,6 +83,24 @@ function normalize(s: string): string {
     .trim();
 }
 
+// Multi-course-facility guard (2026-09-18, real nearby-course-data-accuracy
+// pass): a shared facility name ("Bethpage", "Van Cortlandt") plus generic
+// filler words ("Golf", "Course", "State", "Park") can clear the overall
+// word-overlap threshold below even when comparing two DIFFERENT courses at
+// the same facility -- "Bethpage Black Course" vs a candidate "Bethpage Red
+// Course" -- because neither name is long enough for one mismatched word to
+// pull the ratio down far. A color/direction/number token is exactly the
+// word golf facilities use to distinguish their own courses from each
+// other, so when BOTH names specify one, they must agree.
+const DISTINGUISHING_WORDS = new Set(["black", "red", "blue", "green", "gold", "white", "yellow", "orange", "silver", "bronze", "north", "south", "east", "west"]);
+function distinguishingTokens(name: string): Set<string> {
+  const found = new Set<string>();
+  for (const t of normalize(name).split(" ")) {
+    if (DISTINGUISHING_WORDS.has(t) || /^\d+$/.test(t)) found.add(t);
+  }
+  return found;
+}
+
 // Deliberately conservative: GolfCourseAPI's search only matches against
 // club_name (appending extra words like a tee/nine name to the query
 // reliably returns zero results, confirmed live), so candidates are fetched
@@ -94,6 +112,20 @@ function normalize(s: string): string {
 // silently attached to the wrong physical course.
 function scoreMatch(golfMeName: string, golfMeCity: string | null, golfMeRegion: string | null, candidate: GolfCourseApiCourse): number {
   const candidateName = normalize(`${candidate.club_name ?? ""} ${candidate.course_name ?? ""}`);
+
+  // Reject outright, regardless of overlap, when both names specify a
+  // distinguishing token and they don't share one -- see comment above.
+  // Only fires when BOTH sides actually name one; a facility-only name on
+  // either side ("Bethpage State Park" with no color) stays ambiguous
+  // rather than being hard-rejected, since that's a real, common case of
+  // an imprecise name, not evidence of a wrong course.
+  const golfMeDistinguishing = distinguishingTokens(golfMeName);
+  const candidateDistinguishing = distinguishingTokens(candidateName);
+  if (golfMeDistinguishing.size > 0 && candidateDistinguishing.size > 0) {
+    const sharesDistinguishing = [...golfMeDistinguishing].some((t) => candidateDistinguishing.has(t));
+    if (!sharesDistinguishing) return 0;
+  }
+
   const golfMeTokens = normalize(golfMeName).split(" ").filter((t) => t.length > 2);
   if (golfMeTokens.length === 0) return 0;
   const overlap = golfMeTokens.filter((t) => candidateName.includes(t)).length / golfMeTokens.length;
@@ -111,6 +143,34 @@ function scoreMatch(golfMeName: string, golfMeCity: string | null, golfMeRegion:
 }
 
 const MATCH_THRESHOLD = 0.5;
+
+// Real nearby-course-data-accuracy pass, same date: independent of the
+// name match above, cross-check the two providers' own coordinates when
+// both are available. A great name-overlap score can still be the WRONG
+// course (a same-named course in a different part of a large city that
+// slipped past the city/state check, or two courses at one facility that
+// happened to share their one distinguishing word) -- coordinates that
+// are implausibly far apart are strong independent evidence of exactly
+// that, so this REJECTS the match outright rather than just lowering a
+// confidence label GolfMe doesn't display anywhere yet.
+//
+// Threshold rationale (not arbitrary, no labeled ground truth to tune
+// against yet -- flagged as a starting point, not a validated constant):
+// even a large multi-course facility (Bethpage's full ~1500 acres) rarely
+// spans a mile end-to-end, and two different providers geocoding the same
+// clubhouse/entrance typically land well under a quarter mile apart in
+// practice. 1 mile leaves real margin for ordinary geocoding variance
+// (clubhouse vs. parking lot vs. a specific hole) while still catching a
+// genuine wrong-course match, which is typically many miles away.
+const COORD_DISAGREEMENT_REJECT_MILES = 1;
+const EARTH_RADIUS_MILES = 3958.8;
+function haversineMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return EARTH_RADIUS_MILES * 2 * Math.asin(Math.min(1, Math.sqrt(h)));
+}
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
@@ -134,7 +194,7 @@ Deno.serve(async (req: Request) => {
 
   const { data: course, error: courseError } = await supabase
     .from("courses")
-    .select("id, name, city, region, holes, golfcourseapi_checked_at")
+    .select("id, name, city, region, holes, golfcourseapi_checked_at, latitude, longitude")
     .eq("id", body.courseId)
     .maybeSingle();
   if (courseError) return jsonResponse({ error: courseError.message }, 500);
@@ -171,6 +231,21 @@ Deno.serve(async (req: Request) => {
   for (const candidate of candidates) {
     const score = scoreMatch(course.name, course.city, course.region, candidate);
     if (score >= MATCH_THRESHOLD && (!best || score > best.score)) best = { candidate, score };
+  }
+
+  // Coordinate cross-validation, independent of the name score above --
+  // see COORD_DISAGREEMENT_REJECT_MILES's own comment. Only runs when
+  // GolfCourseAPI actually provided coordinates for the matched candidate
+  // (v1.1, optional) -- courses.latitude/longitude are always real
+  // (NOT NULL, always Geoapify-sourced by this point since enrichment only
+  // ever runs on an already-discovered course), so this never has to
+  // guess at GolfMe's own side of the comparison.
+  if (best) {
+    const candidateCoords = validCoordinates(best.candidate.location?.latitude, best.candidate.location?.longitude);
+    if (candidateCoords && typeof course.latitude === "number" && typeof course.longitude === "number") {
+      const distanceMiles = haversineMiles(course.latitude, course.longitude, candidateCoords.latitude, candidateCoords.longitude);
+      if (distanceMiles > COORD_DISAGREEMENT_REJECT_MILES) best = null;
+    }
   }
 
   if (!best) {
