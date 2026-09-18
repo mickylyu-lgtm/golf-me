@@ -31,16 +31,18 @@ export function Caddie() {
             set to at the moment "Ask Caddie" is tapped. A plain native
             <select> rather than a custom dropdown: full accessibility/mobile
             picker behavior for free, no positioning logic to get wrong. */}
-        {/* Ring-only focus style, matching every other focused control in
-            the app (see e.g. Button/Pill/TopBar) -- this used to ALSO
-            shift the border to fairway-400 at the same time as the
-            ring-offset-2 ring, which put two different-looking greens
-            (a solid border vs. a softer box-shadow ring, with a pale gap
-            between them from the offset) right next to each other and
-            read as a rendering glitch rather than one coherent focus
-            indicator (reported live, screenshot showed a visibly split
-            double ring). */}
-        <label className="flex shrink-0 items-center gap-1 rounded-full border border-slate-200 py-1.5 pl-2.5 pr-1.5 text-xs font-semibold text-slate-600 focus-within:ring-2 focus-within:ring-fairway-400 focus-within:ring-offset-2">
+        {/* Focus indicator is a real border-color change, not a box-shadow
+            ring -- a ring (even ring-only, no offset) visibly failed to
+            trace this element's own tight rounded-full radius correctly
+            on a real device (reported live, screenshot showed the ring
+            broken/cut off around the curved ends rather than a full
+            unbroken loop), a known class of WebKit box-shadow/border-
+            radius compositing issue on small stadium shapes. A border
+            always follows the element's own border-radius exactly, with
+            no separate compositing layer to go wrong. border-2 (not the
+            default 1px) is used in BOTH states so the color-only change
+            on focus never shifts layout by growing the box. */}
+        <label className="flex shrink-0 items-center gap-1 rounded-full border-2 border-slate-200 py-1.5 pl-2.5 pr-1.5 text-xs font-semibold text-slate-600 focus-within:border-fairway-400">
           <Globe size={13} className="text-slate-400" />
           <select
             value={locale}
