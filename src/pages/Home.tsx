@@ -26,8 +26,14 @@ const HOME_POSTS_SHOWN = 6;
 // CLICKABLE_CARD_CLASS) — Tailwind's generated stylesheet order doesn't
 // follow class-attribute order, so a later `bg-fairway-600` in the string
 // isn't guaranteed to beat CLICKABLE_CARD_CLASS's own `bg-white`.
+//
+// Same dark-green gradient as the real app icon / Splash / Auth / the
+// TopBar brand mark (reported live: this flat-green CTA read as
+// inconsistent with those once they were switched) — hover/active use a
+// brightness filter rather than swapping to a flat color, so the
+// gradient itself never flashes to solid on press.
 const PRIMARY_ACTION_CLASS =
-  "rounded-2xl bg-fairway-600 shadow-sm shadow-fairway-900/10 transition-all duration-200 ease-out hover:-translate-y-0.5 hover:bg-fairway-700 hover:shadow-md active:translate-y-0 active:bg-fairway-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:hover:translate-y-0";
+  "rounded-2xl bg-gradient-to-br from-[#1b4a2d] to-[#0e2717] shadow-sm shadow-fairway-900/10 transition-all duration-200 ease-out hover:-translate-y-0.5 hover:brightness-110 hover:shadow-md active:translate-y-0 active:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:hover:translate-y-0";
 
 export function Home() {
   const { currentUser, golfCalls, visiblePosts, caddieAnalyses } = useData();
