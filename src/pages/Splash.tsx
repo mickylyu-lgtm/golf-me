@@ -1,8 +1,8 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { GolfMeIcon } from "../components/brand/GolfMeIcon";
+import { GolfMeIcon, GOLFME_GRADIENT_CHIP_CLASS } from "../components/brand/GolfMeIcon";
 
-const SPLASH_DURATION_MS = 3000;
+const SPLASH_DURATION_MS = 2750;
 
 // Native-app-only stop between AuthedLayout's logged-out redirect and
 // /login (see App.tsx / isStandalone()) -- an installed PWA already skips
@@ -23,8 +23,12 @@ export function Splash() {
       className="flex min-h-screen flex-col items-center justify-center bg-fairway-800"
       style={{ paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      <span className="flex h-20 w-20 items-center justify-center rounded-3xl bg-fairway-600">
-        <GolfMeIcon size={44} dotColor="#f8faf8" flagColor="#4ade80" holeColor="#166534" />
+      {/* Gradient variant + matching chip -- this is the exact screen
+          compared side-by-side against the real home-screen app icon
+          (reported live); the previous flat fill read as noticeably less
+          "authentic" next to it at this size. */}
+      <span className={`flex h-20 w-20 items-center justify-center rounded-3xl ${GOLFME_GRADIENT_CHIP_CLASS}`}>
+        <GolfMeIcon size={44} variant="gradient" />
       </span>
     </div>
   );
