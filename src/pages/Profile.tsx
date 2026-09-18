@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import {
   ChevronRight,
   ClipboardList,
+  Clock,
   LayoutDashboard,
   MessageSquareText,
   Settings as SettingsIcon,
@@ -152,9 +153,13 @@ export function Profile() {
         </button>
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-xl font-bold text-slate-900">{currentUser.name}</h1>
-          <p className="text-sm text-slate-500">
+          {/* Was plain gray text -- reads as a stray line, not really part
+              of the identity block. A badge (same pattern as the
+              credibility tag below it) makes it read as one deliberate
+              piece of profile metadata, not leftover text. */}
+          <Badge tone="slate" icon={<Clock size={11} />} className="mt-1">
             <HighlightGolfMe text={memberSinceLabel(currentUser.memberSince, t)} />
-          </p>
+          </Badge>
         </div>
         <Button size="sm" variant="outline" onClick={startEditing}>
           {t("common.edit")}
