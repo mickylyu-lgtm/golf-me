@@ -20,10 +20,14 @@ export function Find() {
       </div>
 
       <div className="flex rounded-full border border-slate-200 bg-white p-1">
+        {/* Same gradient as the shared Button/app icon -- the flat
+            fairway-600 fill here read as inconsistent once the primary
+            buttons around it (Host, right below this) already had the
+            gradient treatment (reported live). */}
         <button
           onClick={() => setTab("rounds")}
           className={`flex-1 rounded-full py-2 text-sm font-semibold transition ${
-            tab === "rounds" ? "bg-fairway-600 text-white" : "text-slate-500"
+            tab === "rounds" ? "bg-gradient-to-br from-[#1b4a2d] to-[#0e2717] text-white" : "text-slate-500"
           }`}
         >
           {t("find.tabRounds")}
@@ -31,7 +35,7 @@ export function Find() {
         <button
           onClick={() => setTab("golfers")}
           className={`flex-1 rounded-full py-2 text-sm font-semibold transition ${
-            tab === "golfers" ? "bg-fairway-600 text-white" : "text-slate-500"
+            tab === "golfers" ? "bg-gradient-to-br from-[#1b4a2d] to-[#0e2717] text-white" : "text-slate-500"
           }`}
         >
           {t("find.tabGolfers")}

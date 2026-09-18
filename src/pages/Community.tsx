@@ -94,13 +94,15 @@ export function Community() {
         />
       )}
 
+      {/* Same gradient as Find.tsx's identical Rounds/Golfers segmented
+          control -- same fix, same reasoning. */}
       <div className="flex rounded-full border border-slate-200 bg-white p-1">
         {TABS.map((tabOption) => (
           <button
             key={tabOption.value}
             onClick={() => setTab(tabOption.value)}
             className={`flex-1 rounded-full py-2 text-sm font-semibold transition ${
-              tab === tabOption.value ? "bg-fairway-600 text-white" : "text-slate-500"
+              tab === tabOption.value ? "bg-gradient-to-br from-[#1b4a2d] to-[#0e2717] text-white" : "text-slate-500"
             }`}
           >
             {t(tabOption.labelKey)}
