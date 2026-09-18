@@ -250,20 +250,20 @@ export function Home() {
             <Sparkles size={18} />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-xs font-bold uppercase tracking-wide text-fairway-700">{t("caddie.title")}</span>
+            <span className="block text-xs font-bold uppercase tracking-wide text-[#1b4a2d]">{t("caddie.title")}</span>
             <span className="block text-sm font-semibold text-slate-900">
               {latestCaddieAnalysis.swingType || t("caddie.homeCardTitle")} · {formatShortDate(latestCaddieAnalysis.createdAt, locale)}
             </span>
             {latestCaddieAnalysis.status === "complete" &&
               (latestCaddieAnalysis.score !== undefined ? (
-                <span className="block text-xs font-bold text-fairway-700">{t("caddie.scoreOutOf100", { score: latestCaddieAnalysis.score })}</span>
+                <span className="block text-xs font-bold text-[#1b4a2d]">{t("caddie.scoreOutOf100", { score: latestCaddieAnalysis.score })}</span>
               ) : (
                 latestCaddieAnalysis.issues.length > 0 && (
                   <span className="block text-xs text-slate-500">{t("caddie.thingsToWorkOn", { count: latestCaddieAnalysis.issues.length })}</span>
                 )
               ))}
           </span>
-          <span className="shrink-0 text-xs font-semibold text-fairway-700">{t("caddie.continueInCaddie")}</span>
+          <span className="shrink-0 text-xs font-semibold text-[#1b4a2d]">{t("caddie.continueInCaddie")}</span>
         </button>
       )}
 
