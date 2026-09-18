@@ -59,7 +59,7 @@ function CartGlyph({ animated }: { animated: boolean }) {
       {/* roof + pillars */}
       <line x1="11" y1="14" x2="11" y2="9" stroke="#1e5232" strokeWidth="1.5" strokeLinecap="round" />
       <line x1="29" y1="14" x2="29" y2="9" stroke="#1e5232" strokeWidth="1.5" strokeLinecap="round" />
-      <rect x="9" y="6" width="22" height="4" rx="2" fill="#f8faf8" stroke="#e2e8f0" strokeWidth="0.5" />
+      <rect x="9" y="6" width="22" height="4" rx="2" fill="#3f4f48" stroke="#2c3a35" strokeWidth="0.5" />
       {/* driver silhouette + steering wheel */}
       <rect x="17" y="10.5" width="6" height="4.5" rx="2" fill="#94a3b8" />
       <circle cx="20" cy="9.5" r="2.4" fill="#94a3b8" />
