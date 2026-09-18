@@ -25,13 +25,14 @@ import { CLICKABLE_CARD_CLASS } from "../components/ui/cardStyles";
 import { inputClass, labelClass } from "../components/ui/FormControls";
 import { AvatarUpload } from "../components/profile/AvatarUpload";
 import { HighlightGolfMe } from "../components/brand/HighlightGolfMe";
-import { CredibilityBadge } from "../components/golfer/CredibilityBadge";
+import { ReputationBadge } from "../components/golfer/ReputationBadge";
 import { Pill } from "../components/ui/Pill";
 import { AGE_RANGES, GENDER_OPTIONS } from "../types";
 import type { AgeRange } from "../types";
 import { memberSinceLabel } from "../lib/format";
-import { computeCredibility, credibilityLabel } from "../lib/credibility";
 import { useCredibilityStats } from "../lib/useCredibility";
+import { tierDisplayName } from "../lib/reputationTiers";
+import { useReputationState } from "../lib/useReputationState";
 import { useRoles } from "../lib/useRoles";
 
 function ProfileRow({ icon, label, value, onClick }: { icon: ReactNode; label: string; value?: string; onClick: () => void }) {
@@ -57,7 +58,7 @@ function ProfileSection({ title, children }: { title: string; children: ReactNod
 }
 
 export function Profile() {
-  const { currentUser, updateCurrentUserProfile, circleGolfers, reviewsAbout, followingGolfers, posts } = useData();
+  const { currentUser, updateCurrentUserProfile, circleGolfers, followingGolfers, posts } = useData();
   const { isDemo, saveProfile } = useAuth();
   const { showToast } = useToast();
   const { t } = useLocale();
@@ -138,8 +139,7 @@ export function Profile() {
   // here, which reads as "Building Credibility," not a special case.
   const { reputation: realReputation } = useCredibilityStats(currentUser.id, currentUser.reputation);
   const enrichedUser = { ...currentUser, reputation: realReputation };
-  const myReviews = reviewsAbout(currentUser.id);
-  const credibility = computeCredibility(enrichedUser, myReviews);
+  const { state: reputationState } = useReputationState(currentUser);
 
   return (
     <div className="flex flex-col gap-6 pb-6">
@@ -155,7 +155,7 @@ export function Profile() {
           <h1 className="truncate text-xl font-bold text-slate-900">{currentUser.name}</h1>
           {/* Was plain gray text -- reads as a stray line, not really part
               of the identity block. A badge (same pattern as the
-              credibility tag below it) makes it read as one deliberate
+              reputation tag below it) makes it read as one deliberate
               piece of profile metadata, not leftover text. */}
           <Badge tone="slate" icon={<Clock size={11} />} className="mt-1">
             <HighlightGolfMe text={memberSinceLabel(currentUser.memberSince, t)} />
@@ -172,7 +172,7 @@ export function Profile() {
             ? t("profile.roundCountSingular", { handicap: currentUser.handicap ?? "--" })
             : t("profile.roundCount", { count: enrichedUser.reputation.completedRounds, handicap: currentUser.handicap ?? "--" })}
         </p>
-        <CredibilityBadge tier={credibility.tier} size="sm" />
+        <ReputationBadge tier={reputationState.tierKey} size="sm" />
         {isCoachReviewer && (
           <Badge tone="fairway" icon={<ShieldCheck size={12} />}>
             Coach Reviewer
@@ -190,7 +190,7 @@ export function Profile() {
           <ProfileRow
             icon={<Users size={16} />}
             label={t("profile.reputation")}
-            value={credibilityLabel(credibility.tier, t)}
+            value={tierDisplayName(reputationState.tierKey, t)}
             onClick={() => navigate("/profile/reputation")}
           />
           <ProfileRow

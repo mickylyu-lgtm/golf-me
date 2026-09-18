@@ -7,10 +7,12 @@ import { useLocale } from "../i18n/LocaleContext";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { ReputationRow } from "../components/golfer/ReputationRow";
-import { CredibilityBadge } from "../components/golfer/CredibilityBadge";
+import { ReputationBadge, ReputationShieldIcon } from "../components/golfer/ReputationBadge";
 import { VerifyStepModal } from "../components/profile/VerifyStepModal";
-import { computeCredibility, computeHandicapConfidence } from "../lib/credibility";
+import { computeHandicapConfidence } from "../lib/credibility";
 import { useCredibilityStats } from "../lib/useCredibility";
+import { useReputationState } from "../lib/useReputationState";
+import { tierDisplayName } from "../lib/reputationTiers";
 
 export function ReputationDetail() {
   const { currentUser, reviewsAbout, setPhoneVerified, setEmailVerified, requestVerifiedGolfer } = useData();
@@ -19,14 +21,14 @@ export function ReputationDetail() {
   const navigate = useNavigate();
   const [verifyChannel, setVerifyChannel] = useState<"phone" | "email" | null>(null);
 
-  // Real accounts: reputation/handicap-confidence come from a live server
-  // aggregate (get_credibility_stats), never raw review rows — those stay
-  // reviewer-only. Demo mode: falls straight through to the existing
-  // reviews-based computation, unchanged.
+  // Real accounts: reputation/handicap-confidence come from live server
+  // aggregates (get_credibility_stats, get_reputation_state), never raw
+  // review rows — those stay reviewer-only. Demo mode: falls straight
+  // through to the existing client-side computations, unchanged.
   const { reputation: realReputation, handicapConfidence: realHandicapConfidence } = useCredibilityStats(currentUser.id, currentUser.reputation);
   const enrichedUser = { ...currentUser, reputation: realReputation };
+  const { state: reputationState } = useReputationState(currentUser);
   const myReviews = reviewsAbout(currentUser.id);
-  const credibility = computeCredibility(enrichedUser, myReviews);
   const handicapConfidence = realHandicapConfidence ?? computeHandicapConfidence(myReviews);
   const canApplyVerifiedGolfer =
     currentUser.verification.phoneVerified && currentUser.verification.emailVerified && !currentUser.verification.verifiedGolfer;
@@ -43,12 +45,59 @@ export function ReputationDetail() {
       <div>
         <h1 className="text-xl font-bold text-slate-900">{t("reputation.title")}</h1>
         <div className="mt-2">
-          <CredibilityBadge tier={credibility.tier} />
+          <ReputationBadge tier={reputationState.tierKey} />
         </div>
+        <p className="mt-3 text-sm leading-relaxed text-slate-600">{t("reputation.whatItMeans")}</p>
       </div>
 
       <div className="rounded-2xl border border-slate-100 bg-white p-4">
-        <ReputationRow golfer={currentUser} />
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <ReputationShieldIcon tier={reputationState.tierKey} size={18} />
+            <span className="text-sm font-bold text-slate-800">{tierDisplayName(reputationState.tierKey, t)}</span>
+          </div>
+          <span className="text-xs font-semibold text-slate-500">
+            {reputationState.nextTierKey
+              ? t("reputation.pointsToNextTier", {
+                  points: reputationState.pointsToNextTier ?? 0,
+                  tier: tierDisplayName(reputationState.nextTierKey, t),
+                })
+              : t("reputation.maxTierReached")}
+          </span>
+        </div>
+        {reputationState.nextTierKey && (
+          <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-brand-forest to-brand-forest-deep transition-all duration-300"
+              style={{
+                width: `${Math.min(
+                  100,
+                  Math.round(
+                    (reputationState.points / (reputationState.points + (reputationState.pointsToNextTier ?? 0) || 1)) * 100,
+                  ),
+                )}%`,
+              }}
+            />
+          </div>
+        )}
+        <div className="mt-3 flex gap-4 text-xs text-slate-500">
+          <span>
+            <strong className="font-semibold text-slate-800">{reputationState.qualifyingRounds}</strong> {t("reputation.qualifyingRounds")}
+          </span>
+          <span>
+            <strong className="font-semibold text-slate-800">{reputationState.hostedRounds}</strong> {t("reputation.hostedRounds")}
+          </span>
+        </div>
+        <p className="mb-1.5 mt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t("reputation.howToImprove")}</p>
+        <ul className="flex flex-col gap-1 text-xs text-slate-500">
+          <li>{t("reputation.milestoneFirstRound")}</li>
+          <li>{t("reputation.milestoneHostOrJoin")}</li>
+          <li>{t("reputation.milestoneConsistent")}</li>
+        </ul>
+      </div>
+
+      <div className="rounded-2xl border border-slate-100 bg-white p-4">
+        <ReputationRow golfer={enrichedUser} />
         {handicapConfidence.level !== "normal" && (
           <p className="mt-2 flex items-center gap-1 text-xs text-slate-500">
             {handicapConfidence.level === "high" && <ShieldCheck size={12} className="text-fairway-600" />}

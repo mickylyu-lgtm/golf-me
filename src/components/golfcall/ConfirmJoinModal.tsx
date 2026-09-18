@@ -2,11 +2,11 @@ import { ShieldCheck } from "lucide-react";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
 import { Avatar } from "../ui/Avatar";
-import { CredibilityBadge } from "../golfer/CredibilityBadge";
+import { ReputationBadge } from "../golfer/ReputationBadge";
 import { useData } from "../../context/DataContext";
 import type { GolfCall } from "../../types";
 import { formatDate } from "../../lib/format";
-import { computeCredibility } from "../../lib/credibility";
+import { computeDemoReputationState } from "../../lib/reputationTiers";
 import { useLocale } from "../../i18n/LocaleContext";
 
 interface ConfirmJoinModalProps {
@@ -18,7 +18,7 @@ interface ConfirmJoinModalProps {
 // Lightweight reassurance before committing to a round — not a safety
 // warning, just "here's who you'd be playing with."
 export function ConfirmJoinModal({ call, onClose, onConfirm }: ConfirmJoinModalProps) {
-  const { getGolfer, reviewsAbout } = useData();
+  const { getGolfer } = useData();
   const { t, locale } = useLocale();
   const roster = call.joinedGolferIds.map((id) => getGolfer(id)).filter((g): g is NonNullable<typeof g> => Boolean(g));
 
@@ -55,12 +55,18 @@ export function ConfirmJoinModal({ call, onClose, onConfirm }: ConfirmJoinModalP
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Playing with</p>
           <div className="flex flex-col gap-2">
             {roster.map((g) => {
-              const credibility = computeCredibility(g, reviewsAbout(g.id));
+              // A roster can be 2-4 people, so calling the real per-user
+              // useReputationState hook in this loop isn't safe (variable
+              // hook count). This lightweight glance uses the same
+              // formula's client-side approximation instead -- fine here
+              // since it never overstates a tier, only occasionally lags
+              // slightly behind the live server value.
+              const reputationState = computeDemoReputationState(g);
               return (
                 <div key={g.id} className="flex items-center gap-2.5">
                   <Avatar golfer={g} size="xs" showVerified={false} />
                   <span className="flex-1 text-sm font-medium text-slate-700">{g.name}</span>
-                  <CredibilityBadge tier={credibility.tier} size="sm" />
+                  <ReputationBadge tier={reputationState.tierKey} size="sm" />
                 </div>
               );
             })}

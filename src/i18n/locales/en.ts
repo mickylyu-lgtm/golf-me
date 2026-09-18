@@ -734,6 +734,22 @@ export const en = {
   "reputation.handicapConfirmed": "Handicap usually confirmed by playing partners",
   "reputation.handicapQuestioned": "Handicap accuracy has been questioned by multiple playing partners",
 
+  // Reputation tiers
+  "reputation.tier.newcomer": "Newcomer",
+  "reputation.tier.established": "Established",
+  "reputation.tier.trusted": "Trusted",
+  "reputation.tier.premier": "Premier",
+  "reputation.tier.elite": "Elite",
+  "reputation.pointsToNextTier": "{points} pts to {tier}",
+  "reputation.maxTierReached": "You've reached GolfMe's highest tier.",
+  "reputation.whatItMeans": "GolfMe Reputation reflects how reliable and consistently positive you are as a playing partner over time — not your handicap, and not just how long you've had the app.",
+  "reputation.howToImprove": "How to build it",
+  "reputation.milestoneFirstRound": "Complete your first GolfMe round",
+  "reputation.milestoneHostOrJoin": "Host or join another round",
+  "reputation.milestoneConsistent": "Build a consistent participation history",
+  "reputation.qualifyingRounds": "Qualifying rounds",
+  "reputation.hostedRounds": "Hosted rounds",
+
   // Golf Circle detail
   "circle.title": "Golf Circle",
   "circle.subtitle": "People you've played with and would play with again.",

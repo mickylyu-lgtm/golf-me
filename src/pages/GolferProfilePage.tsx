@@ -30,11 +30,12 @@ import { CompareModal } from "../components/golfer/CompareModal";
 import { MatchReasons } from "../components/golfer/MatchReasons";
 import { ReputationRow } from "../components/golfer/ReputationRow";
 import { FounderBadge, TrustBadgeRow } from "../components/golfer/TrustBadges";
-import { CredibilityBadge } from "../components/golfer/CredibilityBadge";
+import { ReputationBadge } from "../components/golfer/ReputationBadge";
 import { computeCompatibility } from "../lib/compatibility";
 import { matchTier, golferMatchReasons } from "../lib/matchReasons";
-import { computeCredibility, computeHandicapConfidence } from "../lib/credibility";
+import { computeHandicapConfidence } from "../lib/credibility";
 import { useCredibilityStats } from "../lib/useCredibility";
+import { useReputationState } from "../lib/useReputationState";
 import { formatBudgetRange, handicapLabel, isNewAccount, paceLabel } from "../lib/format";
 import { isFounder } from "../lib/founder";
 import { vibeLabel, walkOrCartLabel } from "../lib/enumLabels";
@@ -87,6 +88,8 @@ export function GolferProfilePage() {
     golfer?.reputation ?? EMPTY_REPUTATION,
   );
   const isCoachReviewer = useIsCoachReviewer(golfer?.id);
+  // Also called unconditionally, same reason as useCredibilityStats above.
+  const { state: reputationState } = useReputationState(golfer);
 
   if (id === currentUser.id) return <Navigate to="/profile" replace />;
   if (!golfer) {
@@ -110,7 +113,6 @@ export function GolferProfilePage() {
   const enrichedGolfer = { ...golfer, reputation: realReputation };
   const isEstablished = !isNewAccount(enrichedGolfer.reputation.completedRounds);
   const golferReviews = reviewsAbout(golfer.id);
-  const credibility = computeCredibility(enrichedGolfer, golferReviews);
   const handicapConfidence = realHandicapConfidence ?? computeHandicapConfidence(golferReviews);
 
   const feedbackTags = isEstablished
@@ -187,7 +189,7 @@ export function GolferProfilePage() {
             <MapPin size={11} /> {golfer.distanceMiles.toFixed(1)} mi away
           </p>
         </div>
-        <CredibilityBadge tier={credibility.tier} size="sm" />
+        <ReputationBadge tier={reputationState.tierKey} size="sm" />
         {isCoachReviewer && (
           <Badge tone="fairway" icon={<ShieldCheck size={12} />}>
             Coach Reviewer
