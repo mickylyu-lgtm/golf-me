@@ -9,13 +9,14 @@ interface HighlightGolfMeProps {
 }
 
 // Recolors every literal "GolfMe" inside an already-translated string to
-// match GolfMeWordmark's own "Golf"/"Me" split, so the brand name reads
-// identically wherever it shows up as plain text, not just next to the
-// actual logo mark. Safe across locales because "GolfMe" is kept as an
-// untranslated brand token in all 6 locale files (verified directly, not
-// assumed) — this never touches surrounding translated text, only splits
-// on that one literal substring.
-export function HighlightGolfMe({ text, golfClassName = "text-fairway-800", meClassName = "text-sun-500" }: HighlightGolfMeProps): ReactNode {
+// match GolfMeWordmark's own "Golf"/"Me" split (same exact hex values, see
+// that component's own comment on why they're not the fairway-800/sun-500
+// tokens anymore), so the brand name reads identically wherever it shows
+// up as plain text, not just next to the actual logo mark. Safe across
+// locales because "GolfMe" is kept as an untranslated brand token in all 6
+// locale files (verified directly, not assumed) — this never touches
+// surrounding translated text, only splits on that one literal substring.
+export function HighlightGolfMe({ text, golfClassName = "text-[#1b4a2d]", meClassName = "text-[#dc9d24]" }: HighlightGolfMeProps): ReactNode {
   const parts = text.split("GolfMe");
   if (parts.length === 1) return text;
   const nodes: ReactNode[] = [];

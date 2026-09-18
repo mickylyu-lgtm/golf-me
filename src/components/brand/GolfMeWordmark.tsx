@@ -9,12 +9,18 @@ interface GolfMeWordmarkProps {
   meClassName?: string;
 }
 
-// "Golf" in deep forest green, "Me" in the brand's sun/gold accent —
-// deliberately plain typography (no decorative treatment), meant to sit
-// next to GolfMeIcon or stand alone in headings. Font weight/size are
-// controlled entirely by `className` on the wrapping span so this drops
-// into any existing heading.
-export function GolfMeWordmark({ className = "", golfClassName = "text-fairway-800", meClassName = "text-sun-500" }: GolfMeWordmarkProps) {
+// "Golf" in deep forest green, "Me" in gold — deliberately plain
+// typography (no decorative treatment), meant to sit next to GolfMeIcon
+// or stand alone in headings. The exact hex values (not the fairway-800/
+// sun-500 Tailwind tokens used previously) are the same green/gold
+// public/icon-source.svg — the real app icon's own source — uses for its
+// background and gold rim, so the wordmark's colors read as the SAME
+// green/gold as the icon right next to it, not just a similar pairing
+// (reported live: the token-based colors were noticeably off from the
+// icon once the icon itself got the accurate gradient treatment). Font
+// weight/size are controlled entirely by `className` on the wrapping
+// span so this drops into any existing heading.
+export function GolfMeWordmark({ className = "", golfClassName = "text-[#1b4a2d]", meClassName = "text-[#dc9d24]" }: GolfMeWordmarkProps) {
   return (
     <span className={className}>
       <span className={golfClassName}>Golf</span>
