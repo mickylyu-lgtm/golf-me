@@ -9,7 +9,7 @@ import { isStandalone } from "../lib/pwa";
 import { Button } from "../components/ui/Button";
 import { inputClass } from "../components/ui/FormControls";
 import { DEFAULT_CURRENT_USER_ID } from "../data/golfers";
-import { GolfMeIcon, GOLFME_GRADIENT_CHIP_CLASS } from "../components/brand/GolfMeIcon";
+import { GolfMeIcon } from "../components/brand/GolfMeIcon";
 import { GoogleIcon } from "../components/icons/GoogleIcon";
 
 interface AuthProps {
@@ -118,11 +118,11 @@ export function Auth({ mode }: AuthProps) {
 
       <div className="flex flex-1 flex-col justify-center gap-8">
         <div className="text-center">
-          {/* Gradient variant, matching the real home-screen app icon --
-              same fix as Splash.tsx, same "solid square chip" pattern. */}
-          <span className={`mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl ${GOLFME_GRADIENT_CHIP_CLASS}`}>
-            <GolfMeIcon size={26} variant="gradient" />
-          </span>
+          {/* Gradient variant, rendered at full chip size -- same fix and
+              same reasoning as Splash.tsx (see GolfMeIcon's own comment
+              on why a smaller inset icon over a separate chip background
+              left a visible seam even with matching colors). */}
+          <GolfMeIcon size={48} variant="gradient" className="mb-4 rounded-2xl" />
           <h1 className="text-2xl font-extrabold text-slate-900">
             {mode === "signup" ? t("auth.createAccount") : session.hasOnboarded ? t("auth.welcomeBack") : t("auth.logIn")}
           </h1>

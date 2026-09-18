@@ -19,19 +19,21 @@ interface GolfMeIconProps {
    * (14-24px) sizes this renders at across nav/tab chrome, where shading
    * is imperceptible anyway. "gradient": the same shaded rendering the
    * real home-screen app icon uses (see public/icon-source.svg) — use
-   * this ONLY at the few large (~34px+) brand-moment sizes (Splash,
-   * Welcome, Auth) where a golfer can actually compare it side-by-side
-   * with the app icon and a flat fill reads as noticeably less
-   * "authentic" (reported live). Needs its own gradient chip background
-   * behind it — see GRADIENT_CHIP_CLASS below. */
+   * this ONLY at the few large (~34px+) brand-moment sizes (Splash, Auth)
+   * where a golfer can actually compare it side-by-side with the app icon
+   * and a flat fill reads as noticeably less "authentic" (reported live).
+   * Paints its own full background rect (see `size` below) — render it at
+   * the FULL chip size with rounded corners on the icon itself, not as a
+   * smaller icon inset inside a separately-colored chip <div>. An earlier
+   * version did that (icon + separate CSS-gradient chip behind it) and,
+   * even with matching color stops, the two independently-sized gradients
+   * didn't line up at the seam where the smaller SVG's edge sat inside
+   * the larger chip — reads as a visible ring/seam and a washed-out
+   * green rather than one continuous, true-to-source background (this is
+   * exactly what was reported live as "still not 1:1... darker green").
+   * One self-contained SVG removes the seam entirely. */
   variant?: "flat" | "gradient";
 }
-
-// The dark-green gradient chip background the "gradient" icon variant is
-// designed to sit on — matches public/icon-source.svg's own `bg` gradient
-// exactly. Exported so Splash/Welcome/Auth can share the identical chip
-// color instead of three hand-copied gradient strings drifting apart.
-export const GOLFME_GRADIENT_CHIP_CLASS = "bg-gradient-to-br from-[#1b4a2d] to-[#0e2717]";
 
 // THE canonical GolfMe brand mark — "Your Hole Is Waiting": three balls
 // plus a flagged ball and an open hole (bottom-right), the round waiting
@@ -68,6 +70,10 @@ export function GolfMeIcon({
         style={{ aspectRatio: "1 / 1" }}
       >
         <defs>
+          <linearGradient id={`${gid}-bg`} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stopColor="#1b4a2d" />
+            <stop offset="1" stopColor="#0e2717" />
+          </linearGradient>
           <radialGradient id={`${gid}-ball`} cx="0.32" cy="0.28" r="0.85">
             <stop offset="0" stopColor="#ffffff" />
             <stop offset="1" stopColor="#e4e9e1" />
@@ -91,6 +97,11 @@ export function GolfMeIcon({
             <stop offset="1" stopColor="#020805" />
           </radialGradient>
         </defs>
+        {/* Full-bleed background baked into this same SVG (unlike an
+            earlier version, which left this to a separately-sized CSS
+            gradient on the wrapping element) -- guarantees the background
+            is pixel-identical to public/icon-source.svg with no seam. */}
+        <rect width="48" height="48" fill={`url(#${gid}-bg)`} />
         <circle cx="13.9" cy="13.9" r="6.15" fill={`url(#${gid}-ball)`} />
         <circle cx="13.9" cy="34.1" r="6.15" fill={`url(#${gid}-ball)`} />
         <circle cx="34.1" cy="13.9" r="6.15" fill={`url(#${gid}-ball)`} />
