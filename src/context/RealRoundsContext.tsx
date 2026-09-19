@@ -302,8 +302,13 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
         p_reviewed_user_id: revieweeId,
         p_would_play_again: input.wouldPlayAgain,
         p_showed_up: input.showedUp,
-        p_on_time: input.onTime,
-        p_pace: input.paceOfPlay,
+        // Only ever a real value when actually asked (showedUp === true) —
+        // undefined otherwise, sent through as NULL, never a fabricated
+        // answer for a no-show. pace is retired from the active flow
+        // entirely, always NULL for new reviews; the column and its
+        // history stay intact.
+        p_on_time: input.onTime ?? null,
+        p_pace: null,
         p_respectful: input.respectful,
         p_handicap_accuracy: input.handicapAccuracy,
         p_private_note: input.privateNote ?? null,

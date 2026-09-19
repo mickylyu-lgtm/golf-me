@@ -28,6 +28,8 @@ export const en = {
   "common.gotIt": "Got It",
   "common.notNow": "Not Now",
   "common.or": "or",
+  "common.yes": "Yes",
+  "common.no": "No",
 
   // Shared date/time/format helpers (src/lib/format.ts) — used across many screens
   "date.today": "Today",
@@ -756,6 +758,30 @@ export const en = {
   "reputation.milestoneConsistent": "Build a consistent participation history",
   "reputation.qualifyingRounds": "Qualifying rounds",
   "reputation.hostedRounds": "Hosted rounds",
+
+  // Post-round review
+  "review.title": "Review {name}",
+  "review.intro": "How was your round? Your feedback is private and helps build {name}'s GolfMe Reputation. {name} won't see who submitted it.",
+  "review.wouldPlayAgain": "Would you play with them again?",
+  "review.showedUp": "Did they show up?",
+  "review.goodPlayingPartner": "Good playing partner?",
+  "review.onTime": "On time?",
+  "review.handicapAccurate": "Was {name}'s listed handicap reasonably accurate?",
+  "review.handicapYes": "Yes, seemed accurate",
+  "review.handicapSlightlyOff": "Slightly off",
+  "review.handicapVeryInaccurate": "Very inaccurate",
+  "review.handicapNotSure": "Not sure",
+  "review.whatHappened": "What happened? (optional)",
+  "review.noShow": "No-show",
+  "review.canceledLate": "Canceled late",
+  "review.other": "Other",
+  "review.privateNoteLabel": "Private note to GolfMe (optional)",
+  "review.privateNoteHelper": "Not shown on {name}'s profile.",
+  "review.addToCircle": "Add {name} to your Golf Circle",
+  "review.addToCircleDesc": "Golfers you've played with and would play with again.",
+  "review.alreadyInCircle": "{name} is already in your Golf Circle.",
+  "review.submit": "Submit review",
+  "review.submittedToast": "Review for {name} submitted — visible only to GolfMe's trust system.",
 
   // Golf Circle detail
   "circle.title": "Golf Circle",

@@ -20,7 +20,6 @@ import type {
   Holes,
   JoinMode,
   NotificationType,
-  PaceOfPlay,
   PostCategory,
   PostComment,
   PostType,
@@ -90,10 +89,13 @@ export interface CreateGolfCallInput {
 
 export interface ReviewInput {
   showedUp: boolean;
-  onTime: boolean;
+  // Only asked (and only ever real) when showedUp is true — undefined
+  // otherwise, never a fabricated answer for a no-show.
+  onTime?: boolean;
   respectful: boolean;
-  paceOfPlay: PaceOfPlay;
   wouldPlayAgain: boolean;
+  // Always a real value — "not_sure" when a no-show skipped the question,
+  // same as when it's genuinely asked but unknown.
   handicapAccuracy: HandicapAccuracy;
   privateNote?: string;
 }

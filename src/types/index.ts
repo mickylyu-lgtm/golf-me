@@ -249,10 +249,20 @@ export interface Review {
   reviewerId: string;
   revieweeId: string;
   showedUp: boolean;
-  onTime: boolean;
+  // Undefined when not asked — only asked when showedUp is true. Never a
+  // fabricated true/false for a no-show; matches the nullable DB column.
+  onTime?: boolean;
   respectful: boolean;
-  paceOfPlay: PaceOfPlay;
+  // Retired from the active review flow (see ReviewModal) but kept
+  // optional here for historical/demo data compatibility — never
+  // collected from a real submission anymore.
+  paceOfPlay?: PaceOfPlay;
   wouldPlayAgain: boolean;
+  // Always a real value on the wire (DB column stays NOT NULL) — when a
+  // no-show skips this question in the UI, "not_sure" is submitted, the
+  // same "no opinion" value used when it's genuinely asked but unknown.
+  // Kept required here; only the review FORM's own draft state (see
+  // ReviewModal) treats it as optional while unanswered.
   handicapAccuracy: HandicapAccuracy;
   privateNote?: string; // visible only to GolfMe's trust system, never a public review
   createdAt: string;
