@@ -8,7 +8,6 @@ import { useLocale } from "../../i18n/LocaleContext";
 import { computeSwingAssessment, segmentStatusAtTime } from "../../lib/swingAssessment";
 import type { SwingSegmentId, SwingSegmentStatus } from "../../lib/swingAssessment";
 import type { TranslationKey } from "../../i18n/locales/en";
-import { Badge } from "../ui/Badge";
 import { SwingCallout } from "./SwingCallout";
 
 // Standard COCO-17 joint pairs — only drawn when BOTH ends are present in
@@ -126,17 +125,12 @@ const CALLOUT_KEYS: Record<SwingSegmentId, Record<"good" | "needs_improvement", 
   wrists: { good: "swingAssessment.callout.wristsGood", needs_improvement: "swingAssessment.callout.wristsNeedsImprovement" },
 };
 const SEGMENT_ORDER: SwingSegmentId[] = ["torso", "left_arm", "right_arm", "hip_sway", "shoulder_line", "knees", "wrists"];
-// Priority order for which callouts win when more than MAX_VISIBLE_CALLOUTS
-// are in-window at once — needs_improvement first (the brief's own visual-
-// priority ordering: red areas before green), and within that, the order
-// above.
-const MAX_VISIBLE_CALLOUTS = 2;
-const STATUS_BADGE_TONE: Record<SwingSegmentStatus, "fairway" | "rose" | "slate"> = {
-  good: "fairway",
-  needs_improvement: "rose",
-  unknown: "slate",
-};
-
+// On-video callouts are capped at exactly one per status, never two of the
+// same kind — at most one validated needs_improvement (the strongest, by
+// the order above) and at most one validated good. Neither slot is forced:
+// if only one status has a reliable finding, only that one shows. Extra
+// validated findings stay in the Swing Check detail card below instead of
+// stacking more labels over the golfer.
 // "unknown" reuses one generic description across every segment (same
 // wording regardless of which segment lacks data) rather than 4 separate
 // near-identical sentences; left_arm/right_arm share one description pair
@@ -166,13 +160,28 @@ interface PhaseButton {
 
 // One on-video callout candidate, already resolved to container-relative
 // pixel coordinates (the same space the canvas skeleton itself draws in).
+// x/y is the RAIL DOCK point the label itself renders at; anchorX/anchorY
+// is the real joint position the leader line (drawn on canvas, see draw()
+// below) connects it back to — never the same point as x/y except by
+// coincidence, unlike the old center-anchored-on-the-joint layout.
 interface CalloutState {
   key: SwingSegmentId;
   x: number;
   y: number;
+  side: "left" | "right";
+  anchorX: number;
+  anchorY: number;
   status: "good" | "needs_improvement";
   textKey: TranslationKey;
 }
+
+// swingAnalysis.topOfBackswing is also used verbatim in SwingAnalysisPanel.tsx
+// and swingAnalysis.ts, where the fuller phrase reads better — this shorter
+// label is deliberately scoped to just this component's single-row phase
+// nav, not a change to the shared translation string.
+const PHASE_SHORT_LABEL_KEY: Partial<Record<PhaseButton["labelKey"], TranslationKey>> = {
+  "swingAnalysis.topOfBackswing": "swingAssessment.phaseShort.top",
+};
 
 function phaseButtons(phases: CaddieSwingPhases | undefined): PhaseButton[] {
   if (!phases) return [];
@@ -250,6 +259,7 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const phaseRowRef = useRef<HTMLDivElement>(null);
   const framesRef = useRef(poseData?.frames ?? []);
   framesRef.current = poseData?.frames ?? [];
   const [mode, setMode] = useState<(typeof REPLAY_MODES)[number]>(REPLAY_MODES[0]);
@@ -303,6 +313,17 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
     if (phases.top.timestampSeconds !== null) setSelectedPhaseKey("swingAnalysis.topOfBackswing");
     else if (phases.impact.windowStartSeconds !== null) setSelectedPhaseKey("swingAnalysis.impact");
   }, [showOverlay, phases, selectedPhaseKey]);
+
+  // The phase row now scrolls horizontally instead of wrapping (see the
+  // render below) — without this, a phase selected via the auto-jump
+  // effects above (or one far enough along the row) could land outside the
+  // visible scroll area with no indication anything changed.
+  useEffect(() => {
+    if (!selectedPhaseKey) return;
+    const row = phaseRowRef.current;
+    const button = row?.querySelector<HTMLElement>(`[data-phase-key="${selectedPhaseKey}"]`);
+    button?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+  }, [selectedPhaseKey]);
   // The overlay canvas is a sibling DOM element positioned on top of the
   // video — that composites fine in normal page flow, but the OS-native
   // fullscreen player (webkitEnterFullscreen/requestFullscreen) takes over
@@ -435,14 +456,20 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
         }
       }
 
-      ctx.lineWidth = 2.5;
       ctx.lineCap = "round";
       for (const [a, b] of SKELETON_EDGES) {
         const kpA = frame.keypoints[a];
         const kpB = frame.keypoints[b];
         if (!kpA || !kpB) continue;
         const segmentId = SEGMENT_ORDER.find((id) => SEGMENT_EDGES[id]?.some(([x, y]) => (x === a && y === b) || (x === b && y === a)));
-        ctx.strokeStyle = segmentId ? STATUS_STROKE[statusNow[segmentId]] : NEUTRAL_STROKE;
+        // Quieter base skeleton so the coaching feedback (color, callouts)
+        // is what draws the eye, not the pose lines themselves — ordinary
+        // untracked/unhighlighted segments render thin, and only a segment
+        // actually carrying a validated verdict (good or needs_improvement)
+        // gets the bolder stroke weight, on top of its own color.
+        const status = segmentId ? statusNow[segmentId] : "unknown";
+        ctx.strokeStyle = segmentId ? STATUS_STROKE[status] : NEUTRAL_STROKE;
+        ctx.lineWidth = status !== "unknown" ? 2.5 : 1.5;
         const [ax, ay] = toCanvas(kpA.x, kpA.y);
         const [bx, by] = toCanvas(kpB.x, kpB.y);
         ctx.beginPath();
@@ -454,13 +481,15 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
       // — a flagged joint (needs_improvement edge endpoint, or a
       // JOINT-only segment's own verdict) picks up that status's color;
       // every other joint stays a plain small white dot regardless of a
-      // nearby segment's color, keeping the base skeleton readable.
+      // nearby segment's color, keeping the base skeleton readable. Sized
+      // down further (~25-30%) from the original 3px/4px for the same
+      // "quiet skeleton, loud feedback" reasoning as the lines above.
       for (const [name, kp] of Object.entries(frame.keypoints)) {
         const [x, y] = toCanvas(kp.x, kp.y);
         const status = jointStatus[name] ?? (flaggedJoints.has(name) ? "needs_improvement" : undefined);
         ctx.fillStyle = status ? STATUS_DOT[status] : "#ffffff";
         ctx.beginPath();
-        ctx.arc(x, y, status ? 4 : 3, 0, Math.PI * 2);
+        ctx.arc(x, y, status ? 3 : 2.2, 0, Math.PI * 2);
         ctx.fill();
       }
 
@@ -468,9 +497,9 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
       // segment that's both in-window AND actually resolved (never for
       // "unknown"/limited-visibility, and never when its own anchor
       // keypoint isn't present in this exact frame — the graceful
-      // fallback the brief asks for). Ranked needs_improvement-first,
-      // capped at MAX_VISIBLE_CALLOUTS so this never turns into a wall of
-      // bubbles.
+      // fallback the brief asks for). At most one needs_improvement AND at
+      // most one good — never two of the same status, and neither slot is
+      // forced to fill if that status has no reliable finding.
       const candidates: { segment: SwingSegmentId; status: "good" | "needs_improvement"; x: number; y: number }[] = [];
       if (assessment) {
         for (const seg of assessment.segments) {
@@ -482,19 +511,53 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
           candidates.push({ segment: seg.segment, status, x, y });
         }
       }
-      candidates.sort((a, b) => {
-        const aRank = a.status === "needs_improvement" ? 0 : 1;
-        const bRank = b.status === "needs_improvement" ? 0 : 1;
-        return aRank !== bRank ? aRank - bRank : SEGMENT_ORDER.indexOf(a.segment) - SEGMENT_ORDER.indexOf(b.segment);
+      const rankOf = (segId: SwingSegmentId) => SEGMENT_ORDER.indexOf(segId);
+      const bestNeedsImprovement = candidates
+        .filter((c) => c.status === "needs_improvement")
+        .sort((a, b) => rankOf(a.segment) - rankOf(b.segment))[0];
+      const bestGood = candidates.filter((c) => c.status === "good").sort((a, b) => rankOf(a.segment) - rankOf(b.segment))[0];
+      const selected = [bestNeedsImprovement, bestGood].filter((c): c is NonNullable<typeof c> => Boolean(c));
+
+      // Rail docking: each callout docks to whichever half of the actual
+      // video content area (not the full canvas/container, which can
+      // include letterboxing) its own joint already sits in — adapts to
+      // golfer position automatically, no collision-physics needed. If
+      // both selected callouts land on the same half, the lower-priority
+      // one (good, when both exist) is forced to the opposite rail so the
+      // two labels can never overlap.
+      const videoMidX = rect.left + rect.width / 2;
+      const sideFor = (jointX: number): "left" | "right" => (jointX < videoMidX ? "left" : "right");
+      const sides = selected.map((c) => sideFor(c.x));
+      if (selected.length === 2 && sides[0] === sides[1]) sides[1] = sides[1] === "left" ? "right" : "left";
+      const RAIL_INSET = 14;
+      const CALLOUT_VERTICAL_MARGIN = 16;
+      const newCallouts: CalloutState[] = selected.map((c, i) => {
+        const side = sides[i];
+        const dockX = side === "left" ? rect.left + RAIL_INSET : rect.left + rect.width - RAIL_INSET;
+        const dockY = Math.min(Math.max(c.y, rect.top + CALLOUT_VERTICAL_MARGIN), rect.top + rect.height - CALLOUT_VERTICAL_MARGIN);
+        return { key: c.segment, x: dockX, y: dockY, side, anchorX: c.x, anchorY: c.y, status: c.status, textKey: CALLOUT_KEYS[c.segment][c.status] };
       });
-      const newCallouts: CalloutState[] = candidates.slice(0, MAX_VISIBLE_CALLOUTS).map((c) => ({
-        key: c.segment,
-        x: c.x,
-        y: c.y,
-        status: c.status,
-        textKey: CALLOUT_KEYS[c.segment][c.status],
-      }));
-      const signature = newCallouts.map((c) => `${c.key}:${c.status}:${Math.round(c.x)}:${Math.round(c.y)}`).join("|");
+
+      // Thin leader line from each dock point back to the real validated
+      // joint — drawn every frame (not gated behind the signature check
+      // below, which only exists to avoid unnecessary React re-renders of
+      // the label text itself). Never a fake anchor: dockX/dockY and
+      // anchorX/anchorY both come from this exact frame's real keypoint.
+      for (const c of newCallouts) {
+        const color = c.status === "good" ? STATUS_STROKE.good : STATUS_STROKE.needs_improvement;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.25;
+        ctx.beginPath();
+        ctx.moveTo(c.x, c.y);
+        ctx.lineTo(c.anchorX, c.anchorY);
+        ctx.stroke();
+        ctx.fillStyle = STATUS_DOT[c.status];
+        ctx.beginPath();
+        ctx.arc(c.anchorX, c.anchorY, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      const signature = newCallouts.map((c) => `${c.key}:${c.status}:${c.side}:${Math.round(c.y)}`).join("|");
       if (signature !== calloutsSignatureRef.current) {
         calloutsSignatureRef.current = signature;
         setCallouts(newCallouts);
@@ -608,6 +671,7 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
               key={c.key}
               x={c.x}
               y={c.y}
+              side={c.side}
               status={c.status}
               text={t(c.textKey)}
               containerWidth={overlaySize.width}
@@ -629,15 +693,16 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
         )}
       </div>
       {poseData && poseData.frames.length > 0 && (
-        <div className="flex items-center gap-1.5">
+        // A single bordered segmented control (not two floating pills) —
+        // visually reads as one lightweight setting, distinct from the
+        // phase row below it, rather than competing for the same weight.
+        <div className="inline-flex w-fit items-center gap-0.5 self-start rounded-full border border-slate-200 bg-slate-50 p-0.5">
           {REPLAY_MODES.map((m) => (
             <button
               key={m.labelKey}
               onClick={() => setMode(m)}
               className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors duration-150 ${
-                mode.labelKey === m.labelKey
-                  ? "bg-fairway-700 text-white"
-                  : "border border-slate-200 text-slate-600 hover:border-fairway-300 hover:text-fairway-700"
+                mode.labelKey === m.labelKey ? "bg-fairway-700 text-white" : "text-slate-500 hover:text-fairway-700"
               }`}
             >
               {t(m.labelKey)}
@@ -646,7 +711,12 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
         </div>
       )}
       {buttons.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
+        // Single horizontal scrolling row, never wraps to a second line —
+        // the old flex-wrap layout is exactly what produced the cramped
+        // two-row look on longer labels ("Top of backswing" was the
+        // culprit). shrink-0 on each button keeps them from compressing
+        // instead of scrolling.
+        <div ref={phaseRowRef} className="flex gap-1.5 overflow-x-auto no-scrollbar">
           {/* A small dot distinguishes phases with a real scored
               segment (address/top/impact once anything anchors there)
               from ones that only ever get real-timestamp video
@@ -656,22 +726,24 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
               distinction as real text for anyone not seeing the dot. */}
           {buttons.map((b) => {
             const analyzed = ANALYZED_PHASE_LABEL_KEYS.has(b.labelKey);
+            const shortLabelKey = PHASE_SHORT_LABEL_KEY[b.labelKey];
             return (
               <button
                 key={b.labelKey}
+                data-phase-key={b.labelKey}
                 onClick={() => {
                   const video = videoRef.current;
                   if (video) video.currentTime = b.timestampSeconds;
                   setSelectedPhaseKey(b.labelKey);
                 }}
                 aria-label={`${t(b.labelKey)} — ${t(analyzed ? "swingAssessment.analyzedBadge" : "swingAssessment.trackedBadge")}`}
-                className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-colors duration-150 ${
+                className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors duration-150 ${
                   selectedPhaseKey === b.labelKey
                     ? "border-transparent bg-fairway-700 text-white"
                     : "border-slate-200 text-slate-600 hover:border-fairway-300 hover:text-fairway-700"
                 }`}
               >
-                {t(b.labelKey)}
+                {t(shortLabelKey ?? b.labelKey)}
                 {analyzed && (
                   <span
                     aria-hidden="true"
@@ -708,7 +780,12 @@ function SwingCheckCard({
 
   const anchorGroup = selectedPhaseKey ? anchorGroupForLabelKey(selectedPhaseKey) : "none";
   const relevantSegments = anchorGroup === "none" ? [] : assessment.segments.filter((s) => s.anchorPhase === anchorGroup);
-  const knownSegments = relevantSegments.filter((s) => s.status !== "unknown");
+  // Grouped by status (Needs Improvement, then Good) rather than the old
+  // fixed anatomical order, so scanning goes straight to what needs
+  // attention first — matches the same red-before-green priority used for
+  // the on-video callouts above.
+  const needsImprovementSegments = relevantSegments.filter((s) => s.status === "needs_improvement");
+  const goodSegments = relevantSegments.filter((s) => s.status === "good");
   const unknownSegments = relevantSegments.filter((s) => s.status === "unknown");
   const collapseUnknowns = unknownSegments.length >= COLLAPSE_UNKNOWN_THRESHOLD;
 
@@ -757,43 +834,36 @@ function SwingCheckCard({
         <InfoCard icon={<Info size={14} />} title={t("swingAssessment.noAnchorTitle")} body={t("swingAssessment.noAnchorBody")} />
       ) : (
         <>
-          {knownSegments.length > 0 && (
-            <div className="flex flex-col divide-y divide-slate-50">
-              {knownSegments.map((seg) => (
-                <div key={seg.segment} className="flex items-start justify-between gap-3 py-2 first:pt-0 last:pb-0">
-                  <div className="flex items-start gap-2.5">
-                    <span className="mt-0.5 shrink-0">
-                      <StatusIcon status={seg.status} size={16} />
-                    </span>
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-slate-800">{t(SEGMENT_LABEL_KEYS[seg.segment])}</p>
-                      <p className="text-xs text-slate-500">{t(descriptionKey(seg.segment, seg.status))}</p>
-                    </div>
-                  </div>
-                  <Badge tone={STATUS_BADGE_TONE[seg.status]} className="shrink-0">
-                    {t(STATUS_LABEL_KEYS[seg.status])}
-                  </Badge>
-                </div>
-              ))}
+          {needsImprovementSegments.length > 0 && (
+            <div>
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t(STATUS_LABEL_KEYS.needs_improvement)}</p>
+              <div className="flex flex-col divide-y divide-slate-50">
+                {needsImprovementSegments.map((seg) => (
+                  <SegmentRow key={seg.segment} segment={seg.segment} status={seg.status} t={t} />
+                ))}
+              </div>
             </div>
           )}
-          {!collapseUnknowns &&
-            unknownSegments.map((seg) => (
-              <div key={seg.segment} className="flex items-start justify-between gap-3 border-t border-slate-50 py-2 first:border-t-0 first:pt-0">
-                <div className="flex items-start gap-2.5">
-                  <span className="mt-0.5 shrink-0">
-                    <StatusIcon status="unknown" size={16} />
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-slate-800">{t(SEGMENT_LABEL_KEYS[seg.segment])}</p>
-                    <p className="text-xs text-slate-500">{t(descriptionKey(seg.segment, "unknown"))}</p>
-                  </div>
-                </div>
-                <Badge tone="slate" className="shrink-0">
-                  {t(STATUS_LABEL_KEYS.unknown)}
-                </Badge>
+          {goodSegments.length > 0 && (
+            <div>
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t(STATUS_LABEL_KEYS.good)}</p>
+              <div className="flex flex-col divide-y divide-slate-50">
+                {goodSegments.map((seg) => (
+                  <SegmentRow key={seg.segment} segment={seg.segment} status={seg.status} t={t} />
+                ))}
               </div>
-            ))}
+            </div>
+          )}
+          {!collapseUnknowns && unknownSegments.length > 0 && (
+            <div>
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t(STATUS_LABEL_KEYS.unknown)}</p>
+              <div className="flex flex-col divide-y divide-slate-50">
+                {unknownSegments.map((seg) => (
+                  <SegmentRow key={seg.segment} segment={seg.segment} status="unknown" t={t} />
+                ))}
+              </div>
+            </div>
+          )}
           {collapseUnknowns && (
             <InfoCard icon={<Info size={14} />} title={t("swingAssessment.limitedAnalysisTitle")} body={t("swingAssessment.limitedAnalysisBody")} />
           )}
@@ -812,6 +882,34 @@ function SwingCheckCard({
           <p className="mt-0.5 text-xs text-fairway-800/90">{t(recordingTipKey)}</p>
         </div>
       )}
+    </div>
+  );
+}
+
+// One Swing Check row, shared by all three status groups above — the
+// status badge that used to sit on every row is gone now that rows are
+// grouped under their own status header (see STATUS_LABEL_KEYS usage
+// above); repeating it per-row next to a section already titled "Needs
+// Improvement"/"Good"/"Limited Visibility" was pure duplication, exactly
+// the kind of thing this pass is meant to remove.
+function SegmentRow({
+  segment,
+  status,
+  t,
+}: {
+  segment: SwingSegmentId;
+  status: SwingSegmentStatus;
+  t: (key: TranslationKey, vars?: Record<string, string | number>) => string;
+}) {
+  return (
+    <div className="flex items-start gap-2.5 py-2 first:pt-0 last:pb-0">
+      <span className="mt-0.5 shrink-0">
+        <StatusIcon status={status} size={16} />
+      </span>
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-slate-800">{t(SEGMENT_LABEL_KEYS[segment])}</p>
+        <p className="text-xs text-slate-500">{t(descriptionKey(segment, status))}</p>
+      </div>
     </div>
   );
 }
