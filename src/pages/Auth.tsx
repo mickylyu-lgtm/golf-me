@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Check, Mail } from "lucide-react";
 import { useData } from "../context/DataContext";
@@ -19,9 +19,19 @@ interface AuthProps {
 export function Auth({ mode }: AuthProps) {
   const navigate = useNavigate();
   const { logIn, session } = useData();
-  const { signInWithGoogle, signInWithEmailOtp, signInWithPassword } = useAuth();
+  const { signInWithGoogle, signInWithEmailOtp, signInWithPassword, authError, clearAuthError } = useAuth();
   const { showToast } = useToast();
   const { t } = useLocale();
+
+  // A sign-in link that came back invalid/expired (already used, or
+  // consumed early by an email client's link-prefetch/security scan) used
+  // to fail completely silently -- the app just sat there with no
+  // feedback. Now surfaced as a toast so at least "try again" is obvious.
+  useEffect(() => {
+    if (!authError) return;
+    showToast(authError, "warning");
+    clearAuthError();
+  }, [authError, clearAuthError, showToast]);
   const [showEmailField, setShowEmailField] = useState(false);
   const [email, setEmail] = useState("");
   const [emailSent, setEmailSent] = useState(false);

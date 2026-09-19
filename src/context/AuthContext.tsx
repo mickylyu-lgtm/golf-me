@@ -54,6 +54,15 @@ interface AuthContextValue {
   exitDemoMode: () => void;
   refreshProfile: () => Promise<void>;
   saveProfile: (patch: Record<string, unknown>) => Promise<void>;
+  // Set when a sign-in link/redirect comes back with an error instead of a
+  // session (expired or already-used magic link is the common case — email
+  // clients/security scanners that prefetch links can consume a one-time
+  // link before the person actually taps it). Previously this failed
+  // completely silently: the app just sat there with no feedback at all.
+  // Whoever renders the sign-in UI is responsible for surfacing this (as a
+  // toast, say) and calling clearAuthError once shown.
+  authError: string | null;
+  clearAuthError: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -64,6 +73,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profileRow, setProfileRow] = useState<ProfileRow | null>(null);
   const [sessionChecked, setSessionChecked] = useState(false);
   const [profileChecked, setProfileChecked] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const clearAuthError = useCallback(() => setAuthError(null), []);
 
   const fetchProfile = useCallback(async (userId: string) => {
     // profileChecked must flip to true no matter what happens here — a
@@ -82,6 +93,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfileRow(null);
     } finally {
       setProfileChecked(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    // Web/PWA equivalent of the native appUrlOpen error handling below — a
+    // magic link that came back invalid/expired lands here as
+    // #error=...&error_description=... in the URL instead of tokens, and
+    // Supabase's own client-side redirect handling doesn't surface that to
+    // app code on its own. Runs once on mount (Supabase already consumes
+    // any real session tokens from the hash before this fires); the
+    // replaceState clears it so a refresh doesn't re-show a stale error.
+    if (typeof window === "undefined" || Capacitor.isNativePlatform()) return;
+    const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash;
+    if (!hash) return;
+    const params = new URLSearchParams(hash);
+    const description = params.get("error_description") || params.get("error_code") || params.get("error");
+    if (description) {
+      setAuthError(description);
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
     }
   }, []);
 
@@ -132,12 +162,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const listener = CapacitorApp.addListener("appUrlOpen", async ({ url }) => {
       if (!url.startsWith(NATIVE_OAUTH_REDIRECT)) return;
       await Browser.close().catch(() => {});
-      const fragment = url.split("#")[1];
+      const fragment = url.split("#")[1] ?? "";
       const params = new URLSearchParams(fragment);
       const access_token = params.get("access_token");
       const refresh_token = params.get("refresh_token");
       if (access_token && refresh_token) {
         await supabase.auth.setSession({ access_token, refresh_token });
+      } else {
+        // Supabase redirects here with an error instead of tokens when the
+        // link was invalid, expired, or already used — previously silent.
+        const description = params.get("error_description") || params.get("error_code") || params.get("error");
+        if (description) setAuthError(description);
       }
     });
     return () => {
@@ -249,6 +284,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     exitDemoMode,
     refreshProfile,
     saveProfile,
+    authError,
+    clearAuthError,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
