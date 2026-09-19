@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Clock, Globe, Sparkles, Video } from "lucide-react";
 import { useData } from "../context/DataContext";
@@ -12,13 +13,26 @@ import { isStaleProcessing, usePeriodicRerender } from "../lib/caddieAnalysis";
 // most obvious action is always "Analyze a Swing"). Reuses the same
 // CaddieAnalysis data DataContext already branches demo/real on; this page
 // never talks to Supabase or the mock data directly.
+//
+// History used to hard-cap at the 5 newest analyses with no way to see
+// anything older — not deleted, just permanently unreachable once you had
+// a 6th. The underlying data was always fetched in full (no query-level
+// limit); only this page's own render was capped. Fixed 2026-09-19: shows
+// everything, newest first, with lazy "show more" paging instead of a
+// second full page/route — the data's already all in memory, so this is
+// a pure render change.
+const PAGE_SIZE = 10;
+
 export function Caddie() {
   const { caddieAnalyses } = useData();
   const { t, locale, setLocale } = useLocale();
   const navigate = useNavigate();
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
-  const recent = [...caddieAnalyses].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5);
-  usePeriodicRerender(recent.some((a) => a.status === "processing"));
+  const sorted = useMemo(() => [...caddieAnalyses].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [caddieAnalyses]);
+  const visible = sorted.slice(0, visibleCount);
+  const hasMore = sorted.length > visible.length;
+  usePeriodicRerender(visible.some((a) => a.status === "processing"));
 
   return (
     <div className="flex flex-col gap-6 pb-6">
@@ -65,11 +79,11 @@ export function Caddie() {
 
       <section>
         <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-400">{t("caddie.recent")}</h2>
-        {recent.length === 0 ? (
+        {visible.length === 0 ? (
           <EmptyState icon={<Video size={20} />} title={t("caddie.emptyTitle")} description={t("caddie.emptyDescription")} />
         ) : (
           <div className="flex flex-col gap-3">
-            {recent.map((a) => {
+            {visible.map((a) => {
               const issueCount = a.details?.workOn.length ?? a.issues.length;
               return (
                 <button
@@ -105,6 +119,14 @@ export function Caddie() {
                 </button>
               );
             })}
+            {hasMore && (
+              <button
+                onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+                className="rounded-2xl border border-dashed border-slate-200 py-2.5 text-sm font-semibold text-slate-500 transition-colors duration-150 hover:border-fairway-300 hover:text-fairway-700"
+              >
+                {t("common.viewMore")}
+              </button>
+            )}
           </div>
         )}
       </section>

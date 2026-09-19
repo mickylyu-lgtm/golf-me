@@ -12,9 +12,15 @@
 // gets the trusted pose time-series AND the original video, and identifies
 // the six phases + coaching feedback itself (no separate phase-detection
 // state machine reimplemented here — see DEVELOPMENT_STATUS for why).
-// It never fabricates a result — any failure deletes the row rather than
-// saving invented feedback (see REQUIRED TEST — FAILURE in the product
-// brief).
+// It never fabricates a result — any failure marks the row 'failed' with
+// a safe, non-sensitive error_message rather than saving invented
+// feedback (see REQUIRED TEST — FAILURE in the product brief). This used
+// to DELETE the row outright, which was real data loss: a 'processing'
+// analysis the user saw on screen could vanish with zero trace, and it
+// orphaned the already-uploaded video in Storage with nothing left
+// pointing to it. Fixed 2026-09-19 — see caddie_analyses.status's own
+// 'failed' value and error_message column, both already in the schema
+// for exactly this and previously unused by this path.
 //
 // This request/response can't stay open for the whole pipeline (frame
 // extraction + dozens of Roboflow calls + Gemini easily exceeds a
@@ -503,7 +509,17 @@ Deno.serve(async (req: Request) => {
 
   async function fail(errorMessage: string): Promise<void> {
     console.error("[analyze-swing] analysis failed.", { rowId: row.id, reason: errorMessage, processingSeconds: (Date.now() - pipelineStart) / 1000 });
-    await supabase.from("caddie_analyses").delete().eq("id", row.id);
+    // Marked failed, not deleted — see the header comment above. error_message
+    // is already covered by the same owner-only RLS as every other column on
+    // this table, so this reuses an existing safe-disclosure boundary rather
+    // than introducing a new one.
+    const { error: failUpdateError } = await supabase
+      .from("caddie_analyses")
+      .update({ status: "failed", error_message: errorMessage })
+      .eq("id", row.id);
+    if (failUpdateError) {
+      console.error("[analyze-swing] failed to mark row as failed.", { rowId: row.id, reason: failUpdateError.message });
+    }
   }
 
   // ---- Everything from here runs AFTER the response below is already
