@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { App as CapacitorApp } from "@capacitor/app";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "./AuthContext";
 import { useLocale } from "../i18n/LocaleContext";
@@ -223,8 +224,25 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "caddie_analyses", filter: `owner_id=eq.${selfId}` }, () => refetch())
       .subscribe();
 
+    // Realtime alone isn't enough: its WebSocket commonly drops while the
+    // app is backgrounded/suspended (iOS WKWebView), and a missed "flipped
+    // to complete" event during that window meant the in-memory list just
+    // stayed stale forever -- Caddie history, the analysis detail screen,
+    // and the bottom-nav indicator all read from this one context, so they
+    // all showed it too. Reconciling against the real DB state every time
+    // the app becomes active again (in addition to the initial fetch above,
+    // which already covers cold launch) closes that gap without any new
+    // schema, backend change, or ongoing poll loop -- just re-running the
+    // fetch that already exists and is already correct whenever it fires.
+    // Capacitor's web implementation of this event bridges to the Page
+    // Visibility API, so this behaves the same on both native and web.
+    const appStateListener = CapacitorApp.addListener("appStateChange", ({ isActive }) => {
+      if (isActive) refetch();
+    });
+
     return () => {
       supabase.removeChannel(channel);
+      appStateListener.then((l) => l.remove());
     };
   }, [isDemo, selfId, refetch]);
 

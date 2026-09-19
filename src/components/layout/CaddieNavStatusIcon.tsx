@@ -47,13 +47,13 @@ export function CaddieNavStatusIcon({ size, strokeWidth }: CaddieNavStatusIconPr
     const processingIds = new Set(processingRows.map((a) => a.id));
     const prevIds = prevProcessingIdsRef.current;
     // Tracked by ID, not just a processing/not-processing boolean, so a
-    // FAILED analysis can't trigger the completion snap+pulse: analyze-swing
-    // deletes a failed row outright rather than ever marking it 'failed'
-    // (see its own comment), so a failure means an id simply disappears
-    // from caddieAnalyses, while a success means that same id is still
-    // there with status 'complete'. Playing the success sequence over a
-    // failure would misrepresent it as done, which the spec explicitly
-    // calls out not to do.
+    // FAILED analysis can't trigger the completion snap+pulse: this only
+    // fires when that same id is still present with status 'complete' —
+    // a row that stopped processing because it failed instead persists
+    // with status 'failed' (analyze-swing marks it, never deletes it —
+    // see its own fail() comment), which doesn't satisfy this check.
+    // Playing the success sequence over a failure would misrepresent it
+    // as done, which the spec explicitly calls out not to do.
     const succeeded = [...prevIds].some((id) => !processingIds.has(id) && caddieAnalyses.find((a) => a.id === id)?.status === "complete");
     const nowProcessing = processingIds.size > 0;
     const wasProcessing = wasProcessingRef.current;
