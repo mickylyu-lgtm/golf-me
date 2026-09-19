@@ -825,6 +825,11 @@ export const ja: Record<TranslationKey, string> = {
   "reputation.apply": "申請",
   "reputation.active": "有効",
   "reputation.nowVerifiedToast": "認証ゴルファーになりました！",
+  "reputation.comingSoon": "近日公開",
+  "reputation.resendEmail": "メールを再送信",
+  "reputation.resending": "送信中...",
+  "reputation.emailResent": "確認メールを送信しました。",
+  "reputation.verifiedBadgeInactiveReal": "電話番号認証が必要ですが、まだご利用いただけません。",
   "reputation.handicapConfirmed": "ハンディキャップは通常プレー相手に確認されています",
   "reputation.handicapQuestioned": "複数のプレー相手からハンディキャップの正確性について指摘がありました",
 

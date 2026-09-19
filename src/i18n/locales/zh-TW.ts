@@ -825,6 +825,11 @@ export const zhTW: Record<TranslationKey, string> = {
   "reputation.apply": "申請",
   "reputation.active": "已生效",
   "reputation.nowVerifiedToast": "你現在是認證球友了！",
+  "reputation.comingSoon": "即將推出",
+  "reputation.resendEmail": "重新發送郵件",
+  "reputation.resending": "發送中...",
+  "reputation.emailResent": "確認郵件已發送。",
+  "reputation.verifiedBadgeInactiveReal": "需要手機驗證，該功能暫未開放。",
   "reputation.handicapConfirmed": "差點通常已獲球伴確認",
   "reputation.handicapQuestioned": "多位球伴對差點準確性提出過疑問",
 

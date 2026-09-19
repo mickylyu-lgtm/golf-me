@@ -825,6 +825,11 @@ export const ko: Record<TranslationKey, string> = {
   "reputation.apply": "신청",
   "reputation.active": "활성화됨",
   "reputation.nowVerifiedToast": "이제 인증 골퍼가 되었어요!",
+  "reputation.comingSoon": "곧 제공 예정",
+  "reputation.resendEmail": "이메일 다시 보내기",
+  "reputation.resending": "보내는 중...",
+  "reputation.emailResent": "확인 이메일을 보냈어요.",
+  "reputation.verifiedBadgeInactiveReal": "전화번호 인증이 필요하지만 아직 제공되지 않아요.",
   "reputation.handicapConfirmed": "핸디캡이 대체로 플레이 파트너에게 확인됐어요",
   "reputation.handicapQuestioned": "여러 플레이 파트너가 핸디캡 정확성에 의문을 제기했어요",
 

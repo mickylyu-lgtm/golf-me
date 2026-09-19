@@ -825,6 +825,11 @@ export const es: Record<TranslationKey, string> = {
   "reputation.apply": "Solicitar",
   "reputation.active": "Activo",
   "reputation.nowVerifiedToast": "¡Ahora eres un Golfista Verificado!",
+  "reputation.comingSoon": "Próximamente",
+  "reputation.resendEmail": "Reenviar correo",
+  "reputation.resending": "Enviando...",
+  "reputation.emailResent": "Correo de confirmación enviado.",
+  "reputation.verifiedBadgeInactiveReal": "Requiere verificación telefónica, que aún no está disponible.",
   "reputation.handicapConfirmed": "Hándicap generalmente confirmado por compañeros de juego",
   "reputation.handicapQuestioned": "La precisión del hándicap ha sido cuestionada por varios compañeros de juego",
 

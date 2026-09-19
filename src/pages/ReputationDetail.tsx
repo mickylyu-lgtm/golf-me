@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Check, Mail, Phone, ShieldCheck } from "lucide-react";
 import { useData } from "../context/DataContext";
+import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { useLocale } from "../i18n/LocaleContext";
 import { Badge } from "../components/ui/Badge";
@@ -13,13 +14,16 @@ import { computeHandicapConfidence } from "../lib/credibility";
 import { useCredibilityStats } from "../lib/useCredibility";
 import { useReputationState } from "../lib/useReputationState";
 import { tierDisplayName } from "../lib/reputationTiers";
+import { supabase } from "../lib/supabase";
 
 export function ReputationDetail() {
   const { currentUser, reviewsAbout, setPhoneVerified, setEmailVerified, requestVerifiedGolfer } = useData();
+  const { isDemo, authUser } = useAuth();
   const { showToast } = useToast();
   const { t } = useLocale();
   const navigate = useNavigate();
   const [verifyChannel, setVerifyChannel] = useState<"phone" | "email" | null>(null);
+  const [resending, setResending] = useState(false);
 
   // Real accounts: reputation/handicap-confidence come from live server
   // aggregates (get_credibility_stats, get_reputation_state), never raw
@@ -30,8 +34,33 @@ export function ReputationDetail() {
   const { state: reputationState } = useReputationState(currentUser);
   const myReviews = reviewsAbout(currentUser.id);
   const handicapConfidence = realHandicapConfidence ?? computeHandicapConfidence(myReviews);
-  const canApplyVerifiedGolfer =
-    currentUser.verification.phoneVerified && currentUser.verification.emailVerified && !currentUser.verification.verifiedGolfer;
+
+  // Real accounts: email verification is real Supabase Auth state
+  // (auth.users.email_confirmed_at, set by Google OAuth / email-OTP
+  // sign-in — never a client-settable column). Phone verification has no
+  // real backing signal yet — no phone number is even collected, and a
+  // "Verify" button there would be exactly the kind of demo-only
+  // affordance this was built to stop presenting as real. Demo mode keeps
+  // the existing local-only toggle simulation unchanged; it never touches
+  // real Supabase and is clearly labeled as a prototype.
+  const emailVerified = isDemo ? currentUser.verification.emailVerified : Boolean(authUser?.email_confirmed_at);
+  const phoneVerified = isDemo ? currentUser.verification.phoneVerified : false;
+  const verifiedGolfer = isDemo ? currentUser.verification.verifiedGolfer : false;
+  const canApplyVerifiedGolfer = phoneVerified && emailVerified && !verifiedGolfer;
+
+  async function resendConfirmationEmail() {
+    if (!authUser?.email) return;
+    setResending(true);
+    try {
+      const { error } = await supabase.auth.resend({ type: "signup", email: authUser.email });
+      if (error) throw error;
+      showToast(t("reputation.emailResent"), "success");
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : "Couldn't resend the confirmation email. Please try again.", "warning");
+    } finally {
+      setResending(false);
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6 pb-6">
@@ -115,13 +144,20 @@ export function ReputationDetail() {
               <p className="text-sm font-semibold text-slate-800">{t("reputation.phoneNumber")}</p>
               <p className="text-xs text-slate-500">{t("reputation.neverShown")}</p>
             </div>
-            {currentUser.verification.phoneVerified ? (
+            {phoneVerified ? (
               <Badge tone="fairway" icon={<Check size={11} />}>
                 {t("reputation.verified")}
               </Badge>
-            ) : (
+            ) : isDemo ? (
               <Button size="sm" variant="outline" onClick={() => setVerifyChannel("phone")}>
                 {t("reputation.verify")}
+              </Button>
+            ) : (
+              // No real phone-verification path exists yet (no phone number
+              // is even collected) -- disabled and honestly labeled rather
+              // than offering a button that can't actually do anything.
+              <Button size="sm" variant="outline" disabled>
+                {t("reputation.comingSoon")}
               </Button>
             )}
           </div>
@@ -131,13 +167,21 @@ export function ReputationDetail() {
               <p className="text-sm font-semibold text-slate-800">{t("reputation.emailAddress")}</p>
               <p className="text-xs text-slate-500">{t("reputation.neverShown")}</p>
             </div>
-            {currentUser.verification.emailVerified ? (
+            {emailVerified ? (
               <Badge tone="fairway" icon={<Check size={11} />}>
                 {t("reputation.verified")}
               </Badge>
-            ) : (
+            ) : isDemo ? (
               <Button size="sm" variant="outline" onClick={() => setVerifyChannel("email")}>
                 {t("reputation.verify")}
+              </Button>
+            ) : (
+              // Real, working action -- actually sends a real Supabase Auth
+              // confirmation email, unlike the old fake "any code works"
+              // modal. Only reachable if a real account somehow still has
+              // an unconfirmed email (none do today).
+              <Button size="sm" variant="outline" disabled={resending} onClick={resendConfirmationEmail}>
+                {resending ? t("reputation.resending") : t("reputation.resendEmail")}
               </Button>
             )}
           </div>
@@ -146,10 +190,14 @@ export function ReputationDetail() {
             <div className="flex-1">
               <p className="text-sm font-semibold text-slate-800">{t("reputation.verifiedBadge")}</p>
               <p className="text-xs text-slate-500">
-                {currentUser.verification.verifiedGolfer ? t("reputation.verifiedBadgeActive") : t("reputation.verifiedBadgeInactive")}
+                {verifiedGolfer
+                  ? t("reputation.verifiedBadgeActive")
+                  : isDemo
+                    ? t("reputation.verifiedBadgeInactive")
+                    : t("reputation.verifiedBadgeInactiveReal")}
               </p>
             </div>
-            {currentUser.verification.verifiedGolfer ? (
+            {verifiedGolfer ? (
               <Badge tone="fairway" icon={<ShieldCheck size={11} />}>
                 {t("reputation.active")}
               </Badge>
@@ -170,7 +218,7 @@ export function ReputationDetail() {
         </div>
       </div>
 
-      {verifyChannel && (
+      {isDemo && verifyChannel && (
         <VerifyStepModal
           channel={verifyChannel}
           target={verifyChannel === "phone" ? "(•••) •••-0142" : "you@example.com"}

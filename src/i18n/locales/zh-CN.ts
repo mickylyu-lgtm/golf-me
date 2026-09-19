@@ -825,6 +825,11 @@ export const zhCN: Record<TranslationKey, string> = {
   "reputation.apply": "申请",
   "reputation.active": "已生效",
   "reputation.nowVerifiedToast": "你现在是认证球友了！",
+  "reputation.comingSoon": "即将推出",
+  "reputation.resendEmail": "重新发送邮件",
+  "reputation.resending": "发送中...",
+  "reputation.emailResent": "确认邮件已发送。",
+  "reputation.verifiedBadgeInactiveReal": "需要手机验证，该功能暂未开放。",
   "reputation.handicapConfirmed": "差点通常已获球伴确认",
   "reputation.handicapQuestioned": "多位球伴对差点准确性提出过疑问",
 

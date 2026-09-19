@@ -732,6 +732,11 @@ export const en = {
   "reputation.apply": "Apply",
   "reputation.active": "Active",
   "reputation.nowVerifiedToast": "You're now a Verified Golfer!",
+  "reputation.comingSoon": "Coming soon",
+  "reputation.resendEmail": "Resend email",
+  "reputation.resending": "Sending...",
+  "reputation.emailResent": "Confirmation email sent.",
+  "reputation.verifiedBadgeInactiveReal": "Requires phone verification, which isn't available yet.",
   "reputation.handicapConfirmed": "Handicap usually confirmed by playing partners",
   "reputation.handicapQuestioned": "Handicap accuracy has been questioned by multiple playing partners",
 
