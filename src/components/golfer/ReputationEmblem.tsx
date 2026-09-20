@@ -128,6 +128,21 @@ function Dimples({ count, small }: { count: number; small: boolean }) {
   );
 }
 
+// Fixed-footprint placeholder for the brief window (real accounts, first
+// fetch of a session only -- see useReputationState's cache) before the
+// real tier is known. Same width/height math as the real crest so nothing
+// shifts when the real artwork replaces it; aria-hidden since it carries
+// no meaningful content of its own for VoiceOver to announce.
+export function ReputationEmblemSkeleton({ size = 24, className }: { size?: number; className?: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`inline-block shrink-0 animate-pulse rounded-[22%] bg-slate-200 ${className ?? ""}`}
+      style={{ width: size, height: size * (74 / 64) }}
+    />
+  );
+}
+
 export interface ReputationEmblemProps {
   tier: ReputationTierKey;
   /** Pixel width. Height follows the crest's fixed aspect ratio. */

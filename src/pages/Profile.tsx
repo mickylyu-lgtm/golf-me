@@ -180,7 +180,7 @@ export function Profile() {
             : t("profile.roundCountPrefix", { count: enrichedUser.reputation.completedRounds })}
           <span className={handicapColorClass(currentUser.handicap)}>{formatHandicapNumber(currentUser.handicap)}</span>
         </p>
-        <ReputationBadge tier={reputationState.tierKey} size="sm" />
+        <ReputationBadge tier={reputationState?.tierKey ?? null} size="sm" onClick={() => navigate("/profile/reputation")} />
         {isCoachReviewer && (
           <Badge tone="fairway" icon={<ShieldCheck size={12} />}>
             Coach Reviewer
@@ -198,7 +198,7 @@ export function Profile() {
           <ProfileRow
             icon={<Users size={16} />}
             label={t("profile.reputation")}
-            value={tierDisplayName(reputationState.tierKey, t)}
+            value={reputationState ? tierDisplayName(reputationState.tierKey, t) : undefined}
             onClick={() => navigate("/profile/reputation")}
           />
           <ProfileRow

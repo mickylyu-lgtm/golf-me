@@ -202,7 +202,7 @@ export function GolferProfilePage() {
             <MapPin size={11} /> {golfer.distanceMiles.toFixed(1)} mi away
           </p>
         </div>
-        <ReputationBadge tier={reputationState.tierKey} size="sm" />
+        <ReputationBadge tier={reputationState?.tierKey ?? null} size="sm" />
         {isCoachReviewer && (
           <Badge tone="fairway" icon={<ShieldCheck size={12} />}>
             Coach Reviewer

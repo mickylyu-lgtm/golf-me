@@ -9,7 +9,6 @@ import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { ReputationRow } from "../components/golfer/ReputationRow";
 import { ReputationBadge, ReputationShieldIcon } from "../components/golfer/ReputationBadge";
-import { ReputationEmblem } from "../components/golfer/ReputationEmblem";
 import { VerifyStepModal } from "../components/profile/VerifyStepModal";
 import { computeHandicapConfidence } from "../lib/credibility";
 import { useCredibilityStats } from "../lib/useCredibility";
@@ -75,8 +74,8 @@ export function ReputationDetail() {
       <div>
         <h1 className="text-xl font-bold text-slate-900">{t("reputation.title")}</h1>
         <div className="mt-3 flex items-center gap-3">
-          <ReputationEmblem tier={reputationState.tierKey} size={64} />
-          <ReputationBadge tier={reputationState.tierKey} />
+          <ReputationShieldIcon tier={reputationState?.tierKey ?? null} size={64} />
+          <ReputationBadge tier={reputationState?.tierKey ?? null} />
         </div>
         <p className="mt-3 text-sm leading-relaxed text-slate-600">{t("reputation.whatItMeans")}</p>
       </div>
@@ -84,19 +83,27 @@ export function ReputationDetail() {
       <div className="rounded-2xl border border-slate-100 bg-white p-4">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <ReputationShieldIcon tier={reputationState.tierKey} size={20} />
-            <span className="text-sm font-bold text-slate-800">{tierDisplayName(reputationState.tierKey, t)}</span>
+            <ReputationShieldIcon tier={reputationState?.tierKey ?? null} size={20} />
+            {reputationState ? (
+              <span className="text-sm font-bold text-slate-800">{tierDisplayName(reputationState.tierKey, t)}</span>
+            ) : (
+              <span aria-hidden="true" className="h-4 w-24 animate-pulse rounded-full bg-slate-200" />
+            )}
           </div>
-          <span className="text-xs font-semibold text-slate-500">
-            {reputationState.nextTierKey
-              ? t("reputation.pointsToNextTier", {
-                  points: reputationState.pointsToNextTier ?? 0,
-                  tier: tierDisplayName(reputationState.nextTierKey, t),
-                })
-              : t("reputation.maxTierReached")}
-          </span>
+          {reputationState ? (
+            <span className="text-xs font-semibold text-slate-500">
+              {reputationState.nextTierKey
+                ? t("reputation.pointsToNextTier", {
+                    points: reputationState.pointsToNextTier ?? 0,
+                    tier: tierDisplayName(reputationState.nextTierKey, t),
+                  })
+                : t("reputation.maxTierReached")}
+            </span>
+          ) : (
+            <span aria-hidden="true" className="h-3 w-20 animate-pulse rounded-full bg-slate-200" />
+          )}
         </div>
-        {reputationState.nextTierKey && (
+        {reputationState?.nextTierKey && (
           <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
             <div
               className="h-full rounded-full bg-gradient-to-r from-brand-forest to-brand-forest-deep transition-all duration-300"
@@ -122,10 +129,10 @@ export function ReputationDetail() {
         )}
         <div className="mt-3 flex gap-4 text-xs text-slate-500">
           <span>
-            <strong className="font-semibold text-slate-800">{reputationState.qualifyingRounds}</strong> {t("reputation.qualifyingRounds")}
+            <strong className="font-semibold text-slate-800">{reputationState?.qualifyingRounds ?? 0}</strong> {t("reputation.qualifyingRounds")}
           </span>
           <span>
-            <strong className="font-semibold text-slate-800">{reputationState.hostedRounds}</strong> {t("reputation.hostedRounds")}
+            <strong className="font-semibold text-slate-800">{reputationState?.hostedRounds ?? 0}</strong> {t("reputation.hostedRounds")}
           </span>
         </div>
         <p className="mb-1.5 mt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t("reputation.howToImprove")}</p>
