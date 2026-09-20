@@ -9,11 +9,12 @@ import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { ReputationRow } from "../components/golfer/ReputationRow";
 import { ReputationBadge, ReputationShieldIcon } from "../components/golfer/ReputationBadge";
+import { ReputationEmblem } from "../components/golfer/ReputationEmblem";
 import { VerifyStepModal } from "../components/profile/VerifyStepModal";
 import { computeHandicapConfidence } from "../lib/credibility";
 import { useCredibilityStats } from "../lib/useCredibility";
 import { useReputationState } from "../lib/useReputationState";
-import { tierDisplayName } from "../lib/reputationTiers";
+import { TIER_DEFS, tierDisplayName } from "../lib/reputationTiers";
 import { supabase } from "../lib/supabase";
 
 export function ReputationDetail() {
@@ -73,7 +74,8 @@ export function ReputationDetail() {
 
       <div>
         <h1 className="text-xl font-bold text-slate-900">{t("reputation.title")}</h1>
-        <div className="mt-2">
+        <div className="mt-3 flex items-center gap-3">
+          <ReputationEmblem tier={reputationState.tierKey} size={64} />
           <ReputationBadge tier={reputationState.tierKey} />
         </div>
         <p className="mt-3 text-sm leading-relaxed text-slate-600">{t("reputation.whatItMeans")}</p>
@@ -82,7 +84,7 @@ export function ReputationDetail() {
       <div className="rounded-2xl border border-slate-100 bg-white p-4">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <ReputationShieldIcon tier={reputationState.tierKey} size={18} />
+            <ReputationShieldIcon tier={reputationState.tierKey} size={20} />
             <span className="text-sm font-bold text-slate-800">{tierDisplayName(reputationState.tierKey, t)}</span>
           </div>
           <span className="text-xs font-semibold text-slate-500">
@@ -99,10 +101,19 @@ export function ReputationDetail() {
             <div
               className="h-full rounded-full bg-gradient-to-r from-brand-forest to-brand-forest-deep transition-all duration-300"
               style={{
-                width: `${Math.min(
-                  100,
-                  Math.round(
-                    (reputationState.points / (reputationState.points + (reputationState.pointsToNextTier ?? 0) || 1)) * 100,
+                // Truthful in-tier percentage: (points - currentTierMin) /
+                // (nextTierMin - currentTierMin), clamped 0-100 -- never the
+                // fraction of total lifetime points, which would understate
+                // progress for anyone who isn't in the very first tier.
+                width: `${Math.max(
+                  0,
+                  Math.min(
+                    100,
+                    Math.round(
+                      ((reputationState.points - TIER_DEFS[reputationState.tierKey].minPoints) /
+                        (TIER_DEFS[reputationState.nextTierKey].minPoints - TIER_DEFS[reputationState.tierKey].minPoints)) *
+                        100,
+                    ),
                   ),
                 )}%`,
               }}

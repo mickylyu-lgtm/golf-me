@@ -851,6 +851,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "reputation.milestoneConsistent": "建立持續穩定的參與紀錄",
   "reputation.qualifyingRounds": "有效球局數",
   "reputation.hostedRounds": "發起球局數",
+  "reputation.crestAriaLabel": "{tier} 信譽徽章",
 
   // Post-round review
   "review.title": "評價 {name}",

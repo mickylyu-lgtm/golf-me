@@ -851,6 +851,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "reputation.milestoneConsistent": "建立持续稳定的参与记录",
   "reputation.qualifyingRounds": "有效球局数",
   "reputation.hostedRounds": "发起球局数",
+  "reputation.crestAriaLabel": "{tier} 信誉徽章",
 
   // Post-round review
   "review.title": "评价 {name}",

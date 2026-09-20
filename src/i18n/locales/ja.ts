@@ -851,6 +851,7 @@ export const ja: Record<TranslationKey, string> = {
   "reputation.milestoneConsistent": "継続的な参加実績を積み重ねる",
   "reputation.qualifyingRounds": "対象ラウンド数",
   "reputation.hostedRounds": "主催ラウンド数",
+  "reputation.crestAriaLabel": "{tier} レピュテーション紋章",
 
   // Post-round review
   "review.title": "{name}さんをレビュー",

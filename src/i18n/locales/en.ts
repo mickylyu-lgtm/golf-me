@@ -759,6 +759,7 @@ export const en = {
   "reputation.milestoneConsistent": "Build a consistent participation history",
   "reputation.qualifyingRounds": "Qualifying rounds",
   "reputation.hostedRounds": "Hosted rounds",
+  "reputation.crestAriaLabel": "{tier} reputation crest",
 
   // Post-round review
   "review.title": "Review {name}",

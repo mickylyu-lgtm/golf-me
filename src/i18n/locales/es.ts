@@ -851,6 +851,7 @@ export const es: Record<TranslationKey, string> = {
   "reputation.milestoneConsistent": "Construye un historial de participación constante",
   "reputation.qualifyingRounds": "Rondas válidas",
   "reputation.hostedRounds": "Rondas organizadas",
+  "reputation.crestAriaLabel": "Escudo de reputación {tier}",
 
   // Post-round review
   "review.title": "Reseña de {name}",

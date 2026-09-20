@@ -851,6 +851,7 @@ export const ko: Record<TranslationKey, string> = {
   "reputation.milestoneConsistent": "꾸준한 참여 기록 쌓기",
   "reputation.qualifyingRounds": "인정된 라운드",
   "reputation.hostedRounds": "주최한 라운드",
+  "reputation.crestAriaLabel": "{tier} 레퓨테이션 문장",
 
   // Post-round review
   "review.title": "{name} 리뷰",
