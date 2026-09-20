@@ -32,6 +32,7 @@ import { memberSinceLabel } from "../lib/format";
 import { useCredibilityStats } from "../lib/useCredibility";
 import { tierDisplayName } from "../lib/reputationTiers";
 import { useReputationState } from "../lib/useReputationState";
+import { formatHandicapNumber, handicapColorClass } from "../lib/handicapColor";
 import { useRoles } from "../lib/useRoles";
 
 function ProfileRow({ icon, label, value, onClick }: { icon: ReactNode; label: string; value?: string; onClick: () => void }) {
@@ -171,9 +172,13 @@ export function Profile() {
 
       <div className="flex items-center gap-2">
         <p className="text-sm text-slate-600">
+          {/* Only the handicap NUMBER is colored (golf-ability signal,
+              deliberately separate from the GolfMe Reputation badge right
+              next to it) -- "Handicap"/round-count text stays neutral. */}
           {enrichedUser.reputation.completedRounds === 1
-            ? t("profile.roundCountSingular", { handicap: currentUser.handicap ?? "--" })
-            : t("profile.roundCount", { count: enrichedUser.reputation.completedRounds, handicap: currentUser.handicap ?? "--" })}
+            ? t("profile.roundCountSingularPrefix")
+            : t("profile.roundCountPrefix", { count: enrichedUser.reputation.completedRounds })}
+          <span className={handicapColorClass(currentUser.handicap)}>{formatHandicapNumber(currentUser.handicap)}</span>
         </p>
         <ReputationBadge tier={reputationState.tierKey} size="sm" />
         {isCoachReviewer && (

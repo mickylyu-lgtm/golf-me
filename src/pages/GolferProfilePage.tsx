@@ -36,7 +36,8 @@ import { matchTier, golferMatchReasons } from "../lib/matchReasons";
 import { computeHandicapConfidence } from "../lib/credibility";
 import { useCredibilityStats } from "../lib/useCredibility";
 import { useReputationState } from "../lib/useReputationState";
-import { formatBudgetRange, handicapLabel, isNewAccount, paceLabel } from "../lib/format";
+import { formatBudgetRange, isNewAccount, paceLabel } from "../lib/format";
+import { formatHandicapNumber, handicapColorClass } from "../lib/handicapColor";
 import { isFounder } from "../lib/founder";
 import { vibeLabel, walkOrCartLabel } from "../lib/enumLabels";
 import { VIBE_TONE } from "../lib/theme";
@@ -183,7 +184,19 @@ export function GolferProfilePage() {
             </div>
           )}
           <p className="text-sm text-slate-500">
-            {handicapLabel(golfer.handicap, t)} · {golfer.areaLabel}
+            {/* Only the handicap NUMBER is colored -- see src/lib/handicapColor.ts.
+                Distinct from handicapLabel() (unchanged, still used by
+                GolferCard/CompareModal/DirectMessageThread) since this is
+                a profile-identity-specific treatment, not a global one. */}
+            {golfer.handicap === null ? (
+              t("golfCallDetail.noHandicapYet")
+            ) : (
+              <>
+                {t("profile.handicapPrefix")}
+                <span className={handicapColorClass(golfer.handicap)}>{formatHandicapNumber(golfer.handicap)}</span>
+              </>
+            )}{" "}
+            · {golfer.areaLabel}
           </p>
           <p className="flex items-center justify-center gap-1 text-xs text-slate-400">
             <MapPin size={11} /> {golfer.distanceMiles.toFixed(1)} mi away
