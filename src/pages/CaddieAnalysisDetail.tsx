@@ -318,7 +318,7 @@ export function CaddieAnalysisDetail() {
       ) : (
         <div className="flex flex-col gap-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-3.5">
           <CaddieThinking />
-          <p className="pl-12 text-xs text-slate-500">{t("swingAnalysis.processingDescription")}</p>
+          <p className="pl-16 text-xs text-slate-500">{t("swingAnalysis.processingDescription")}</p>
         </div>
       )}
 

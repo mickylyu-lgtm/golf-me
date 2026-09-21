@@ -80,11 +80,21 @@
      wheel actually rolling; this is a mascot idly "thinking" for up to a
      minute or two, so it needs to read as patient, not busy). */
   --animate-caddie-think: caddie-think 2.4s ease-in-out infinite;
-  /* A believable swing tempo, not a linear metronome: slow, deliberate
-     takeaway (0-40%) into a fast downswing/impact (40-58%), then a beat
-     of rest at the top before repeating — real swings are slow-back,
-     fast-down, not symmetric. */
-  --animate-caddie-swing-club: caddie-swing-club 2.2s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+  /* Caddie loading scenes (CaddieLoadingScenes.tsx) — four rotating
+     decorative golfer poses on the swing-analysis processing screen,
+     replacing the old single held caddie-swing-club loop above. Every
+     scene shares the same ~4.2-4.6s cycle length so they feel like one
+     consistent "beat" regardless of which one is currently showing; the
+     higher-level scene ROTATION (which of the four is visible) is a
+     separate, much slower JS timer in that component, not a CSS duration. */
+  --animate-caddie-teeup-bend: caddie-teeup-bend 4.2s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+  --animate-caddie-swing-arc: caddie-swing-arc 4.6s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+  --animate-caddie-puttline-bend: caddie-puttline-bend 4.3s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+  --animate-caddie-puttline-glance: caddie-puttline-glance 4.3s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+  --animate-caddie-puttline-putter-arm: caddie-puttline-putter-arm 4.3s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+  --animate-caddie-puttline-sight-arm: caddie-puttline-sight-arm 4.3s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+  --animate-caddie-putt-stroke: caddie-putt-stroke 4.4s cubic-bezier(0.45, 0, 0.2, 1) infinite;
+  --animate-caddie-ball-roll: caddie-ball-roll 4.4s cubic-bezier(0.45, 0, 0.2, 1) infinite;
   /* Bottom-nav Caddie icon's one-shot "analysis just finished" sequence —
      NOT the mascot's own idle "thinking" loop above. Plays once (no
      infinite) when a caddie_analyses row flips out of 'processing' into
@@ -192,19 +202,162 @@
       transform: translateY(-3px) rotate(4deg);
     }
   }
-  @keyframes caddie-swing-club {
-    0% {
-      transform: rotate(-8deg);
+  @keyframes caddie-teeup-bend {
+    0%,
+    15% {
+      transform: rotate(0deg) translateY(0);
     }
-    40% {
-      transform: rotate(-100deg);
+    36%,
+    52% {
+      transform: rotate(44deg) translateY(6px);
+    }
+    74%,
+    100% {
+      transform: rotate(0deg) translateY(0);
+    }
+  }
+  @keyframes caddie-swing-arc {
+    0%,
+    14% {
+      transform: rotate(0deg);
+    }
+    21% {
+      transform: rotate(-10deg);
+    }
+    27% {
+      transform: rotate(5deg);
+    }
+    35%,
+    48% {
+      transform: rotate(0deg);
+    }
+    58%,
+    63% {
+      transform: rotate(-62deg);
+    }
+    78% {
+      transform: rotate(40deg);
+    }
+    88%,
+    100% {
+      transform: rotate(0deg);
+    }
+  }
+  @keyframes caddie-puttline-bend {
+    0%,
+    15% {
+      transform: rotate(0deg) translateY(0);
+    }
+    38%,
+    55% {
+      transform: rotate(8deg) translateY(5px);
+    }
+    78%,
+    100% {
+      transform: rotate(0deg) translateY(0);
+    }
+  }
+  @keyframes caddie-puttline-glance {
+    0%,
+    34% {
+      transform: rotate(0deg);
+    }
+    44%,
+    52% {
+      transform: rotate(16deg);
+    }
+    64%,
+    100% {
+      transform: rotate(0deg);
+    }
+  }
+  /* Line-Up-Putt's arm swaps identity, not just angle, so the crouch reads
+     as a distinct action from Putt's own stance: a raised "reading the
+     line" sighting arm, crossfading to the putter-hold only once it rises
+     into address. Putt (below) never shows the sighting arm. */
+  @keyframes caddie-puttline-putter-arm {
+    0%,
+    15% {
+      opacity: 1;
+    }
+    28% {
+      opacity: 0;
+    }
+    70% {
+      opacity: 0;
+    }
+    85%,
+    100% {
+      opacity: 1;
+    }
+  }
+  @keyframes caddie-puttline-sight-arm {
+    0%,
+    15% {
+      opacity: 0;
+    }
+    28% {
+      opacity: 1;
+    }
+    62% {
+      opacity: 1;
+    }
+    78%,
+    100% {
+      opacity: 0;
+    }
+  }
+  @keyframes caddie-putt-stroke {
+    0%,
+    15% {
+      transform: rotate(0deg);
+    }
+    36% {
+      transform: rotate(-16deg);
+    }
+    52% {
+      transform: rotate(12deg);
+    }
+    66%,
+    100% {
+      transform: rotate(0deg);
+    }
+  }
+  /* Ball fades in/out at 0%/100% (identical values, so the loop seam is
+     invisible) instead of visibly snapping back to the tee after reaching
+     the cup — see CaddieLoadingScenes.tsx's own comment for the timing. */
+  @keyframes caddie-ball-roll {
+    0% {
+      transform: translateX(0);
+      opacity: 0;
+    }
+    4% {
+      transform: translateX(0);
+      opacity: 1;
+    }
+    52% {
+      transform: translateX(0);
+      opacity: 1;
     }
     58% {
-      transform: rotate(25deg);
+      transform: translateX(2px);
+      opacity: 1;
     }
-    75%,
+    82% {
+      transform: translateX(28px);
+      opacity: 1;
+    }
+    90% {
+      transform: translateX(28px);
+      opacity: 1;
+    }
+    95% {
+      transform: translateX(28px);
+      opacity: 0;
+    }
     100% {
-      transform: rotate(-8deg);
+      transform: translateX(0);
+      opacity: 0;
     }
   }
   @keyframes caddie-pulse {
@@ -398,8 +551,29 @@ select {
   .animate-caddie-think {
     animation: var(--animate-caddie-think);
   }
-  .animate-caddie-swing-club {
-    animation: var(--animate-caddie-swing-club);
+  .animate-caddie-teeup-bend {
+    animation: var(--animate-caddie-teeup-bend);
+  }
+  .animate-caddie-swing-arc {
+    animation: var(--animate-caddie-swing-arc);
+  }
+  .animate-caddie-puttline-bend {
+    animation: var(--animate-caddie-puttline-bend);
+  }
+  .animate-caddie-puttline-glance {
+    animation: var(--animate-caddie-puttline-glance);
+  }
+  .animate-caddie-puttline-putter-arm {
+    animation: var(--animate-caddie-puttline-putter-arm);
+  }
+  .animate-caddie-puttline-sight-arm {
+    animation: var(--animate-caddie-puttline-sight-arm);
+  }
+  .animate-caddie-putt-stroke {
+    animation: var(--animate-caddie-putt-stroke);
+  }
+  .animate-caddie-ball-roll {
+    animation: var(--animate-caddie-ball-roll);
   }
   .animate-caddie-pulse {
     animation: var(--animate-caddie-pulse);
