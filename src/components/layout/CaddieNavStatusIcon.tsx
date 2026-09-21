@@ -23,6 +23,17 @@ interface CaddieNavStatusIconProps {
   strokeWidth: number;
 }
 
+// Ring hugs the icon at a size-PROPORTIONAL gap, not a flat px addition --
+// root cause of the collapsed-BottomNav clipping bug: the old flat `size +
+// 7` barely shrank between the expanded (24px) and collapsed (21px) icon
+// sizes, so the ring needed almost the same clearance in both states even
+// though the collapsed nav's own padding budget is much smaller. Exported
+// so BottomNav.tsx can reserve exactly this much box space for the Caddie
+// tab specifically -- one formula, so the two can never drift apart.
+export function caddieRingSize(iconSize: number): number {
+  return Math.round(iconSize * 1.2);
+}
+
 // Decorates the existing Caddie mascot nav icon with a live processing
 // ring / one-shot completion pulse / unseen-result dot — replaces the old
 // full-width CaddieProcessingBanner, which covered header controls and
@@ -121,13 +132,19 @@ export function CaddieNavStatusIcon({ size, strokeWidth }: CaddieNavStatusIconPr
 
   // Visually separated from the mascot but hugging it closely (reported
   // live as too large a gap in an earlier pass) — sized off the icon's own
-  // size so it scales correctly between the bottom nav (28px) and the
-  // desktop sidebar (24px).
-  const ringSize = size + 7;
+  // size so it scales correctly across every caller (bottom nav collapsed/
+  // expanded, desktop sidebar). Stroke thins slightly at the compact size
+  // so it stays visually balanced rather than looking heavy on a smaller
+  // ring (per the collapsed-nav sizing pass).
+  const ringSize = caddieRingSize(size);
   const radius = ringSize / 2 - 1.5;
+  const ringStrokeWidth = size <= 21 ? 1.6 : 2;
 
   return (
-    <span className="relative flex shrink-0 items-center justify-center" style={{ width: ringSize, height: ringSize }}>
+    <span
+      className="relative flex shrink-0 items-center justify-center"
+      style={{ width: ringSize, height: ringSize, transition: "width 200ms ease-out, height 200ms ease-out" }}
+    >
       <CaddieNavIcon size={size} strokeWidth={strokeWidth} className={pulsing ? "animate-caddie-pulse" : undefined} />
       {/* One soft outward halo — distinct from the processing ring below
           (which fills in place) — plus 2-3 small spark marks above the
@@ -154,19 +171,26 @@ export function CaddieNavStatusIcon({ size, strokeWidth }: CaddieNavStatusIconPr
           height={ringSize}
           viewBox={`0 0 ${ringSize} ${ringSize}`}
           className={`pointer-events-none absolute text-fairway-600 transition-opacity duration-300 ${pulsing ? "opacity-0" : "opacity-100"}`}
+          style={{ transition: "width 200ms ease-out, height 200ms ease-out" }}
           aria-hidden="true"
         >
           {/* pathLength=1 makes stroke-dasharray/dashoffset simple 0-1
               fractions of this circle's own length, regardless of its
               actual pixel radius — the same fixed offsets work unchanged
-              at both this icon's sizes (bottom nav vs. sidebar). Starts at
-              12 o'clock (rotate -90deg) and fills clockwise, like iOS's own
-              app-update progress ring, rather than a spinner — a plain CSS
-              transition on stroke-dashoffset (no keyframes, no JS loop)
-              does the filling; prefers-reduced-motion is already handled
-              globally in index.css (collapses every animation/transition
-              duration app-wide), so this settles to its end state
-              immediately for anyone who needs that. */}
+              at every size this renders at (collapsed/expanded bottom nav,
+              sidebar). Starts at 12 o'clock (rotate -90deg) and fills
+              clockwise, like iOS's own app-update progress ring, rather
+              than a spinner — a plain CSS transition on stroke-dashoffset
+              (no keyframes, no JS loop) does the filling; cx/cy/r each get
+              their own 200ms transition too (same duration as BottomNav's
+              own collapse/expand) so a resize glides the ring to its new
+              size instead of snapping — this is pure geometry, so it can't
+              touch or reset fillOffset, which is what actually carries the
+              real fill progress across a resize. prefers-reduced-motion is
+              already handled globally in index.css (collapses every
+              animation/transition duration app-wide), so all of this
+              settles to its end state immediately for anyone who needs
+              that. */}
           <circle
             cx={ringSize / 2}
             cy={ringSize / 2}
@@ -174,12 +198,12 @@ export function CaddieNavStatusIcon({ size, strokeWidth }: CaddieNavStatusIconPr
             pathLength={1}
             fill="none"
             stroke="currentColor"
-            strokeWidth={2}
+            strokeWidth={ringStrokeWidth}
             strokeLinecap="round"
             strokeDasharray={1}
             style={{
               strokeDashoffset: fillOffset,
-              transition: `stroke-dashoffset ${fillTransitionMs}ms linear`,
+              transition: `stroke-dashoffset ${fillTransitionMs}ms linear, cx 200ms ease-out, cy 200ms ease-out, r 200ms ease-out`,
               transformBox: "fill-box",
               transformOrigin: "center",
               transform: "rotate(-90deg)",

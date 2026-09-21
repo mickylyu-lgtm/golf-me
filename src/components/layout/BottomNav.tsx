@@ -8,7 +8,19 @@ import { useLocale } from "../../i18n/LocaleContext";
 import { useData } from "../../context/DataContext";
 import { useCaddieNavStatus } from "../../lib/useCaddieNavStatus";
 import { useKeyboardHeight } from "../../lib/useKeyboardHeight";
-import { CaddieNavStatusIcon } from "./CaddieNavStatusIcon";
+import { CaddieNavStatusIcon, caddieRingSize } from "./CaddieNavStatusIcon";
+
+// Reserves real room for the Caddie ring (not just the plain icon it wraps
+// around) in the shared icon-wrapper span below, for both nav states --
+// same formula CaddieNavStatusIcon itself uses for the ring's actual pixel
+// size, so this can't silently drift out of sync with it. Root cause of
+// the collapsed-nav clipping: that span used to be sized for the bare icon
+// only (h-5/h-6), so the ring — always a bit larger than the icon it
+// surrounds — had to borrow space from the tab's own padding to fit; the
+// collapsed state's padding (py-0.5) wasn't enough, only the expanded
+// state's (py-1.5) happened to be.
+const CADDIE_ICON_BOX_COLLAPSED = caddieRingSize(21);
+const CADDIE_ICON_BOX_EXPANDED = caddieRingSize(24);
 
 // Below this, a touch hasn't moved enough to tell a tap from the start of a
 // drag yet -- deliberately no direction-ratio check like RootTabCarousel's
@@ -362,7 +374,10 @@ export function BottomNav() {
                 different rather than a subtle nudge; Caddie stays
                 proportionally larger than the other four in both states
                 so its identity still reads. */}
-            <span className={`relative flex items-center justify-center transition-[height] duration-200 ease-out motion-reduce:transition-none ${collapsed ? "h-5" : "h-6"}`}>
+            <span
+              className="relative flex items-center justify-center transition-[height] duration-200 ease-out motion-reduce:transition-none"
+              style={{ height: collapsed ? CADDIE_ICON_BOX_COLLAPSED : CADDIE_ICON_BOX_EXPANDED }}
+            >
               {isCaddie ? (
                 <CaddieNavStatusIcon size={collapsed ? 21 : 24} strokeWidth={isHighlighted ? 2.5 : 2} />
               ) : (
