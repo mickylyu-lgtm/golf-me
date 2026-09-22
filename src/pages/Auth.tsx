@@ -132,7 +132,12 @@ export function Auth({ mode }: AuthProps) {
               same reasoning as Splash.tsx (see GolfMeIcon's own comment
               on why a smaller inset icon over a separate chip background
               left a visible seam even with matching colors). */}
-          <GolfMeIcon size={48} variant="gradient" className="mb-4 rounded-2xl" />
+          {/* mx-auto: text-center on the parent only centers inline content
+              -- Tailwind's preflight makes svg display:block, so without
+              this the icon sits left-aligned regardless of text-center
+              (reported live). Splash.tsx doesn't need this since its
+              parent centers via flexbox instead. */}
+          <GolfMeIcon size={48} variant="gradient" className="mx-auto mb-4 rounded-2xl" />
           <h1 className="text-2xl font-extrabold text-slate-900">
             {mode === "signup" ? t("auth.createAccount") : session.hasOnboarded ? t("auth.welcomeBack") : t("auth.logIn")}
           </h1>
