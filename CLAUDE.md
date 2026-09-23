@@ -1,5 +1,17 @@
 # GolfMe — working agreement
 
+## Project overview
+
+GolfMe is a golf social/matchmaking mobile app — find playing partners, host and join real golf rounds ("Golf Calls"), chat, build a community, and get AI swing-analysis feedback from "Caddie." Ships as an installable web app (PWA) and, via Capacitor, a native iOS TestFlight build that loads the same live web app rather than bundling a separate copy.
+
+**Stack**: React + TypeScript + Vite frontend (`src/`), Tailwind v4 for styling, Supabase for the real backend (Postgres + RLS, Auth via Google OAuth/email magic-link, Storage, Edge Functions, Realtime), Capacitor for the iOS shell (`ios/`), Vercel for hosting (production alias `golfme.app`). 6-language i18n (`src/i18n`).
+
+**Two parallel user paths, same UI**: a real, Supabase-backed account (`isDemo === false`) and a "Try Demo Account" mock/`localStorage`-only path (`isDemo === true`, for onboarding-free exploration and App Store review). Most context files (`DataContext`, `AuthContext`, `RealRoundsContext`, etc.) branch on this flag — check both paths before assuming a change is complete.
+
+**Current major features** (real, not mocked, unless noted): auth + onboarding; profiles/preferences/avatar/location; real-time multiplayer Golf Calls (host/join/leave, atomic overfill prevention via a row-locked RPC); DMs, blocks, reports, notifications; Golf Circle/Following + Find Friends; Community feed (posts/comments/votes, Swing Posts); real course search/discovery (Geoapify + GolfCourseAPI enrichment); Caddie — real AI swing analysis via a Roboflow (pose) + Gemini (assessment) pipeline, with persisted server-side jobs that survive the app backgrounding/resuming; GolfMe Reputation — a server-derived 13-tier progression with custom shield/flag/dimple crest badges; push notifications (direct APNs); an admin platform dashboard (`/admin/dashboard`); a Coach Reviewer system; a public pre-signup waitlist landing page.
+
+**Where the detail lives** (read these, don't re-derive from code): `DEVELOPMENT_STATUS.md` — phase-by-phase build log, current status, exact next recommended action, every migration, manual-config checklist. `BACKEND_STATUS.md` — real-vs-mock/demo classification per feature, security audit, TestFlight readiness list. `AFTER_TESTFLIGHT.md` — deliberately deferred post-launch feature ideas, not started yet.
+
 ## Start here every session
 
 Read `DEVELOPMENT_STATUS.md` before doing anything else. It's the handoff point between sessions and devices (laptop CLI, claude.ai/code on mobile). Don't re-derive project state from scratch — trust it, verify against current code/git state if something looks stale, and fix the file if it's wrong.
