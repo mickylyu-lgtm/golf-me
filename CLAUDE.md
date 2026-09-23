@@ -22,3 +22,15 @@ Read `DEVELOPMENT_STATUS.md` before doing anything else. It's the handoff point 
 
 - Any schema change goes through a tracked migration (`supabase/migrations`), not ad hoc dashboard edits — so it's reproducible from a fresh session/device.
 - Every new table ships with its RLS policies in the same migration, not as a follow-up.
+
+## Task routing: default model vs. the Opus specialist
+
+Routine work (copy/text, CSS/spacing/polish, small UI changes, approved SVG/animation implementation, routine lint/type/test fixes, simple bugs with a known root cause, isolated low-risk refactors) stays on whatever model this session is already running as. Don't escalate just because multiple files are touched — escalate on architectural risk, ambiguity, security/data impact, unknown root cause, or cross-system blast radius.
+
+Delegate to the `golfme-architect` subagent (Agent tool, `subagent_type: "golfme-architect"`, pinned to Opus) for: Caddie's persisted-job/background-resume architecture; the Roboflow+Gemini AI pipeline (pose reliability, phase detection, model-output validation); Supabase schema/migrations/RLS/security policies; auth/credential/OAuth flows; native iOS/Capacitor (keyboard, plugins, lifecycle, push/APNs, entitlements); complex debugging with an unknown root cause or cross-system interaction; architecture-wide refactors; pre-release (TestFlight/App Store) security or architecture audits.
+
+If classification is genuinely ambiguous: inspect enough code to judge blast radius, default to handling clearly low-risk work directly, escalate if investigation reveals real architectural/security risk, and only ask the user when the classification would materially change strategy or cost — don't ask about obvious cases either way.
+
+Frozen/high-sensitivity areas that need the specialist before any change, not just a careful Sonnet pass: Chat's CapacitorKeyboard/DirectMessageThread viewport/composer/dvh/ResizeObserver behavior (known-good on physical device); Caddie's persisted-job architecture (never move durable analysis state back into component-only/in-memory state); Reputation's scoring formula/thresholds/tier names/qualifying-round definition (visual/crest polish is fine on the default model, scoring/data architecture is not).
+
+The parent session cannot switch its own model mid-conversation — `/model` is a human-driven command, not something callable from a tool. Delegating to a pinned-model subagent via the Agent tool is the only supported way to route part of a task to a different model.
