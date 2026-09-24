@@ -1,6 +1,7 @@
 import type { GolfCall, GolferProfile } from "../types";
 import { skillTierFromHandicap } from "./format";
 import { callToAvailabilitySlot } from "./availability";
+import { haversineMiles } from "./geo";
 
 // Golf Compatibility Score: a weighted blend of schedule overlap, distance,
 // skill closeness, budget overlap, and playing-style (vibe) match.
@@ -79,9 +80,20 @@ export interface CompatibilityBreakdown {
   coursePreference?: number; // only meaningful for user-vs-call comparisons
 }
 
+// Distance between two golfers' general playing areas. Demo fixtures carry a
+// mock distanceMiles, which wins so demo behaves exactly as before; real
+// profiles have none and use both golfers' coordinates when known.
+// Undefined when either side has no coordinates — scored neutrally, never
+// treated as 0 mi.
+export function golferDistanceMiles(viewer: GolferProfile, other: GolferProfile): number | undefined {
+  if (other.distanceMiles !== undefined) return other.distanceMiles;
+  if (viewer.playingAreaCoords && other.playingAreaCoords) return haversineMiles(viewer.playingAreaCoords, other.playingAreaCoords);
+  return undefined;
+}
+
 export function computeCompatibility(current: GolferProfile, candidate: GolferProfile): CompatibilityBreakdown {
   const schedule = scheduleScore(current, candidate);
-  const distance = distanceScore(candidate.distanceMiles);
+  const distance = distanceScore(golferDistanceMiles(current, candidate));
   const skill = skillScore(current, candidate);
   const budget = budgetScore(current, candidate);
   const vibe = vibeScore(current, candidate);

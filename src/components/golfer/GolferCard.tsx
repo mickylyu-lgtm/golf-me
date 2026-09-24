@@ -10,6 +10,9 @@ import { ReputationRow } from "./ReputationRow";
 import { TrustBadgeRow } from "./TrustBadges";
 import { CLICKABLE_CARD_CLASS } from "../ui/cardStyles";
 import type { CompatibilityBreakdown } from "../../lib/compatibility";
+import { golferDistanceMiles } from "../../lib/compatibility";
+import { useData } from "../../context/DataContext";
+import { useCredibilityStats } from "../../lib/useCredibility";
 import { useLocale } from "../../i18n/LocaleContext";
 
 interface GolferCardProps {
@@ -20,6 +23,12 @@ interface GolferCardProps {
 
 export function GolferCard({ golfer, compatibility, onClick }: GolferCardProps) {
   const { t } = useLocale();
+  const { currentUser } = useData();
+  const distance = golferDistanceMiles(currentUser, golfer);
+  // Real accounts: live server stats, not the never-updated profile
+  // counters (demo falls through to the fixture's own numbers).
+  const { reputation } = useCredibilityStats(golfer.id, golfer.reputation);
+  const statsGolfer = reputation === golfer.reputation ? golfer : { ...golfer, reputation };
   return (
     <button onClick={onClick} className={`flex w-full flex-col gap-3 p-4 text-left ${CLICKABLE_CARD_CLASS}`}>
       <div className="flex items-start justify-between gap-3">
@@ -31,7 +40,8 @@ export function GolferCard({ golfer, compatibility, onClick }: GolferCardProps) 
               {golfer.ageRange && <span className="font-normal text-slate-400"> · {golfer.ageRange}</span>}
             </p>
             <p className="flex items-center gap-1 text-xs text-slate-500">
-              <MapPin size={12} /> {t("golfCallCard.miAway", { miles: golfer.distanceMiles.toFixed(1) })} · {golfer.areaLabel}
+              <MapPin size={12} /> {distance !== undefined && `${t("golfCallCard.miAway", { miles: distance.toFixed(1) })} · `}
+              {golfer.areaLabel}
             </p>
           </div>
         </div>
@@ -59,10 +69,10 @@ export function GolferCard({ golfer, compatibility, onClick }: GolferCardProps) 
         </span>
       </div>
 
-      <TrustBadgeRow golfer={golfer} />
+      <TrustBadgeRow golfer={statsGolfer} />
 
       <div className="border-t border-slate-100 pt-2.5">
-        <ReputationRow golfer={golfer} compact />
+        <ReputationRow golfer={statsGolfer} compact />
       </div>
     </button>
   );

@@ -19,6 +19,37 @@ interface RealCredibility {
   handicapConfidence: HandicapConfidenceInfo;
 }
 
+// Session-lifetime cache keyed by user id, so list surfaces (golfer cards,
+// the join modal's roster) don't re-fetch every golfer on every mount. A
+// cache hit renders immediately; the hook still re-fetches in the
+// background to pick up changes. Same approach as useReputationState.
+const rowCache = new Map<string, CredibilityStatsRow>();
+
+async function fetchCredibilityRow(golferId: string): Promise<CredibilityStatsRow | null> {
+  const { data, error } = await supabase.rpc("get_credibility_stats", { p_user_id: golferId });
+  if (error || !data || !data[0]) {
+    console.error("GolfMe: failed to load credibility stats.", error);
+    return null;
+  }
+  const row = data[0] as CredibilityStatsRow;
+  rowCache.set(golferId, row);
+  return row;
+}
+
+function rowToCredibility(row: CredibilityStatsRow, baselineReputation: GolferProfile["reputation"]): RealCredibility {
+  return {
+    reputation: {
+      completedRounds: row.completed_rounds,
+      showUpRatePct: row.show_up_pct,
+      wouldPlayAgainPct: row.would_play_again_pct,
+      onTimePct: row.on_time_pct,
+      respectfulPct: row.respectful_pct,
+      goodPacePct: baselineReputation.goodPacePct, // not tracked server-side yet — stays a real (not fabricated) 0
+    },
+    handicapConfidence: { level: row.handicap_confidence, uniqueReviewerCount: row.reviews_received },
+  };
+}
+
 // Real accounts never expose raw review rows for anyone but the reviewer
 // (see round_reviews' RLS) — get_credibility_stats() is the only real-mode
 // path to another golfer's credibility, and it only ever returns rounded
@@ -26,7 +57,10 @@ interface RealCredibility {
 // existing computeCredibility(golfer, reviews) already works unchanged.
 export function useCredibilityStats(golferId: string | undefined, baselineReputation: GolferProfile["reputation"]) {
   const { isDemo } = useAuth();
-  const [stats, setStats] = useState<RealCredibility | null>(null);
+  const [stats, setStats] = useState<RealCredibility | null>(() => {
+    const cached = golferId ? rowCache.get(golferId) : undefined;
+    return cached ? rowToCredibility(cached, baselineReputation) : null;
+  });
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -35,28 +69,16 @@ export function useCredibilityStats(golferId: string | undefined, baselineReputa
       return;
     }
     let cancelled = false;
+    const cached = rowCache.get(golferId);
+    if (cached) setStats(rowToCredibility(cached, baselineReputation));
     setLoading(true);
-    (async () => {
-      const { data, error } = await supabase.rpc("get_credibility_stats", { p_user_id: golferId });
-      if (cancelled) return;
-      if (error || !data || !data[0]) {
-        console.error("GolfMe: failed to load credibility stats.", error);
-        setStats(null);
-        return;
-      }
-      const row = data[0] as CredibilityStatsRow;
-      setStats({
-        reputation: {
-          completedRounds: row.completed_rounds,
-          showUpRatePct: row.show_up_pct,
-          wouldPlayAgainPct: row.would_play_again_pct,
-          onTimePct: row.on_time_pct,
-          respectfulPct: row.respectful_pct,
-          goodPacePct: baselineReputation.goodPacePct, // not tracked server-side yet — stays a real (not fabricated) 0
-        },
-        handicapConfidence: { level: row.handicap_confidence, uniqueReviewerCount: row.reviews_received },
-      });
-    })().finally(() => !cancelled && setLoading(false));
+    fetchCredibilityRow(golferId)
+      .then((row) => {
+        if (cancelled) return;
+        if (row) setStats(rowToCredibility(row, baselineReputation));
+        else if (!cached) setStats(null);
+      })
+      .finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;
     };
@@ -68,4 +90,45 @@ export function useCredibilityStats(golferId: string | undefined, baselineReputa
     reputation: stats?.reputation ?? baselineReputation,
     handicapConfidence: stats?.handicapConfidence,
   };
+}
+
+// Server credibility for a small group of golfers at once (e.g. a round's
+// roster, 2-4 people) — a per-golfer hook can't be called in a loop.
+// Returns id -> reputation, falling back to each golfer's baseline (demo,
+// still loading, or a failed fetch).
+export function useCredibilityForGolfers(golfers: GolferProfile[]): Record<string, GolferProfile["reputation"]> {
+  const { isDemo } = useAuth();
+  const idsKey = golfers.map((g) => g.id).join(",");
+  const [rows, setRows] = useState<Record<string, CredibilityStatsRow>>(() => {
+    const initial: Record<string, CredibilityStatsRow> = {};
+    for (const g of golfers) {
+      const cached = rowCache.get(g.id);
+      if (cached) initial[g.id] = cached;
+    }
+    return initial;
+  });
+
+  useEffect(() => {
+    if (isDemo || !idsKey) return;
+    let cancelled = false;
+    const ids = idsKey.split(",");
+    Promise.all(ids.map((id) => fetchCredibilityRow(id).then((row) => [id, row] as const))).then((results) => {
+      if (cancelled) return;
+      setRows((prev) => {
+        const next = { ...prev };
+        for (const [id, row] of results) if (row) next[id] = row;
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isDemo, idsKey]);
+
+  const result: Record<string, GolferProfile["reputation"]> = {};
+  for (const g of golfers) {
+    const row = isDemo ? undefined : rows[g.id];
+    result[g.id] = row ? rowToCredibility(row, g.reputation).reputation : g.reputation;
+  }
+  return result;
 }

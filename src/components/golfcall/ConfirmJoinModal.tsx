@@ -4,15 +4,31 @@ import { Button } from "../ui/Button";
 import { Avatar } from "../ui/Avatar";
 import { ReputationBadge } from "../golfer/ReputationBadge";
 import { useData } from "../../context/DataContext";
-import type { GolfCall } from "../../types";
+import type { GolfCall, GolferProfile } from "../../types";
 import { formatDate } from "../../lib/format";
-import { computeDemoReputationState } from "../../lib/reputationTiers";
+import { useCredibilityForGolfers } from "../../lib/useCredibility";
+import { useReputationState } from "../../lib/useReputationState";
 import { useLocale } from "../../i18n/LocaleContext";
 
 interface ConfirmJoinModalProps {
   call: GolfCall;
   onClose: () => void;
   onConfirm: () => void;
+}
+
+// One component per roster row so each can call the real per-user
+// useReputationState hook (server tier for real accounts, the client mirror
+// in demo) — previously the client-side approximation, which could show the
+// wrong tier.
+function RosterMember({ golfer }: { golfer: GolferProfile }) {
+  const { state } = useReputationState(golfer);
+  return (
+    <div className="flex items-center gap-2.5">
+      <Avatar golfer={golfer} size="xs" showVerified={false} />
+      <span className="flex-1 text-sm font-medium text-slate-700">{golfer.name}</span>
+      <ReputationBadge tier={state?.tierKey ?? null} size="sm" />
+    </div>
+  );
 }
 
 // Lightweight reassurance before committing to a round — not a safety
@@ -22,11 +38,15 @@ export function ConfirmJoinModal({ call, onClose, onConfirm }: ConfirmJoinModalP
   const { t, locale } = useLocale();
   const roster = call.joinedGolferIds.map((id) => getGolfer(id)).filter((g): g is NonNullable<typeof g> => Boolean(g));
 
+  // Real accounts: live server stats (get_credibility_stats), not the
+  // never-updated profile counters. Demo: the fixtures' own numbers.
+  const reputations = useCredibilityForGolfers(roster);
+
   const verifiedCount = roster.filter((g) => g.verification.verifiedGolfer).length;
-  const combinedRounds = roster.reduce((sum, g) => sum + g.reputation.completedRounds, 0);
+  const combinedRounds = roster.reduce((sum, g) => sum + reputations[g.id].completedRounds, 0);
   const avgWouldPlayAgain =
-    roster.length > 0 ? Math.round(roster.reduce((sum, g) => sum + g.reputation.wouldPlayAgainPct, 0) / roster.length) : 0;
-  const noRecentNoShows = roster.length > 0 && roster.every((g) => g.reputation.showUpRatePct >= 90);
+    roster.length > 0 ? Math.round(roster.reduce((sum, g) => sum + reputations[g.id].wouldPlayAgainPct, 0) / roster.length) : 0;
+  const noRecentNoShows = roster.length > 0 && roster.every((g) => reputations[g.id].showUpRatePct >= 90);
 
   return (
     <Modal
@@ -54,22 +74,9 @@ export function ConfirmJoinModal({ call, onClose, onConfirm }: ConfirmJoinModalP
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Playing with</p>
           <div className="flex flex-col gap-2">
-            {roster.map((g) => {
-              // A roster can be 2-4 people, so calling the real per-user
-              // useReputationState hook in this loop isn't safe (variable
-              // hook count). This lightweight glance uses the same
-              // formula's client-side approximation instead -- fine here
-              // since it never overstates a tier, only occasionally lags
-              // slightly behind the live server value.
-              const reputationState = computeDemoReputationState(g);
-              return (
-                <div key={g.id} className="flex items-center gap-2.5">
-                  <Avatar golfer={g} size="xs" showVerified={false} />
-                  <span className="flex-1 text-sm font-medium text-slate-700">{g.name}</span>
-                  <ReputationBadge tier={reputationState.tierKey} size="sm" />
-                </div>
-              );
-            })}
+            {roster.map((g) => (
+              <RosterMember key={g.id} golfer={g} />
+            ))}
           </div>
         </div>
 

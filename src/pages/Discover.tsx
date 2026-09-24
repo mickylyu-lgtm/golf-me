@@ -6,7 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import { useLocale } from "../i18n/LocaleContext";
 import { GolferCard } from "../components/golfer/GolferCard";
 import { EmptyState } from "../components/ui/EmptyState";
-import { computeCompatibility } from "../lib/compatibility";
+import { computeCompatibility, golferDistanceMiles } from "../lib/compatibility";
 import { GOLF_VIBES } from "../types";
 import type { GolfVibe } from "../types";
 import { vibeLabel } from "../lib/enumLabels";
@@ -39,7 +39,12 @@ export function Discover({ embedded = false }: DiscoverProps) {
     }
     switch (sortMode) {
       case "distance":
-        list.sort((a, b) => a.golfer.distanceMiles - b.golfer.distanceMiles);
+        // Unknown distance sorts last.
+        list.sort(
+          (a, b) =>
+            (golferDistanceMiles(currentUser, a.golfer) ?? Number.POSITIVE_INFINITY) -
+            (golferDistanceMiles(currentUser, b.golfer) ?? Number.POSITIVE_INFINITY),
+        );
         break;
       case "reputation":
         list.sort((a, b) => b.golfer.reputation.wouldPlayAgainPct - a.golfer.reputation.wouldPlayAgainPct);

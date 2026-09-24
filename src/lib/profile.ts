@@ -67,7 +67,6 @@ export function placeholderGolferProfile(id: string, name: string): GolferProfil
     avatarInitials: initialsFromName(name),
     gender: "Prefer not to say",
     areaLabel: "",
-    distanceMiles: 0,
     handicap: null,
     favoriteCourses: [],
     budgetMin: 0,
@@ -173,7 +172,9 @@ export function profileRowToGolferProfile(row: ProfileRow): GolferProfile {
       row.playing_area_lat != null && row.playing_area_lng != null
         ? { lat: row.playing_area_lat, lng: row.playing_area_lng }
         : undefined,
-    distanceMiles: 0,
+    // No stored distance for real profiles — golferDistanceMiles() computes
+    // it from both golfers' playing-area coordinates when known.
+    distanceMiles: undefined,
     handicap: row.handicap,
     favoriteCourses: row.favorite_courses ?? [],
     budgetMin: row.budget_min ?? 0,

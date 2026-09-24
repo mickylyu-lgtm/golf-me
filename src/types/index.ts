@@ -142,7 +142,10 @@ export interface GolferProfile {
   // computed distance are shown). Absent for free-typed labels with no
   // known match — every consumer must handle that gracefully.
   playingAreaCoords?: GeoPoint;
-  distanceMiles: number; // approximate distance from current user, mock-computed
+  // Mock distance from the current user — demo fixtures only. Real profiles
+  // leave it undefined; read distance through golferDistanceMiles()
+  // (compatibility.ts), which falls back to real playing-area coordinates.
+  distanceMiles?: number;
   handicap: number | null; // null = no handicap / brand new
   favoriteCourses: string[];
   budgetMin: number;

@@ -31,7 +31,7 @@ import { MatchReasons } from "../components/golfer/MatchReasons";
 import { ReputationRow } from "../components/golfer/ReputationRow";
 import { FounderBadge, TrustBadgeRow } from "../components/golfer/TrustBadges";
 import { ReputationBadge } from "../components/golfer/ReputationBadge";
-import { computeCompatibility } from "../lib/compatibility";
+import { computeCompatibility, golferDistanceMiles } from "../lib/compatibility";
 import { matchTier, golferMatchReasons } from "../lib/matchReasons";
 import { computeHandicapConfidence } from "../lib/credibility";
 import { useCredibilityStats } from "../lib/useCredibility";
@@ -76,6 +76,7 @@ export function GolferProfilePage() {
 
   const golfer = id ? getGolfer(id) : undefined;
   const compat = useMemo(() => (golfer ? computeCompatibility(currentUser, golfer) : null), [currentUser, golfer]);
+  const distance = golfer ? golferDistanceMiles(currentUser, golfer) : undefined;
   // Real accounts: golfer.reputation and the review corpus come from a live
   // server aggregate (get_credibility_stats) — round_reviews' raw rows are
   // reviewer-only, so `reviewsAbout(golfer.id)` is correctly always empty
@@ -198,9 +199,11 @@ export function GolferProfilePage() {
             )}{" "}
             · {golfer.areaLabel}
           </p>
-          <p className="flex items-center justify-center gap-1 text-xs text-slate-400">
-            <MapPin size={11} /> {golfer.distanceMiles.toFixed(1)} mi away
-          </p>
+          {distance !== undefined && (
+            <p className="flex items-center justify-center gap-1 text-xs text-slate-400">
+              <MapPin size={11} /> {distance.toFixed(1)} mi away
+            </p>
+          )}
         </div>
         <ReputationBadge tier={reputationState?.tierKey ?? null} size="sm" />
         {isCoachReviewer && (
