@@ -841,7 +841,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
     return ids;
   }, [golfCalls, currentUser.id]);
 
-  const circleGolfers = useMemo(
+  // Demo Golf Circle: the mock localStorage circle. Real accounts branch
+  // below (after the follow helpers) onto real follows.
+  const demoCircleGolfers = useMemo(
     () =>
       data.circle
         .filter((c) => c.ownerId === currentUser.id)
@@ -850,12 +852,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [data.circle, data.golfers, currentUser.id],
   );
 
-  const isInCircle = useCallback(
+  const demoIsInCircle = useCallback(
     (golferId: string) => data.circle.some((c) => c.ownerId === currentUser.id && c.memberId === golferId),
     [data.circle, currentUser.id],
   );
 
-  const addToCircle = useCallback((memberId: string) => {
+  const demoAddToCircle = useCallback((memberId: string) => {
     setData((prev) => {
       const already = prev.circle.some((c) => c.ownerId === prev.currentUserId && c.memberId === memberId);
       if (already) return prev;
@@ -962,6 +964,32 @@ export function DataProvider({ children }: { children: ReactNode }) {
       await realSocial.unfollowUser(golferId);
     },
     [auth.isDemo, demoUnfollowUser, realSocial],
+  );
+
+  // Golf Circle = "golfers you've played with and would play with again".
+  // Real accounts have no circle table — the old mock-localStorage write
+  // under a mock id meant "Add to Golf Circle" silently did nothing. Real
+  // circle is derived from real data instead: golfers you follow AND have
+  // completed a round with; adding someone follows them (the Add button only
+  // shows for people you've played with).
+  const circleGolfers = useMemo(
+    () => (auth.isDemo ? demoCircleGolfers : followingGolfers.filter((g) => playedWithIds.has(g.id))),
+    [auth.isDemo, demoCircleGolfers, followingGolfers, playedWithIds],
+  );
+  const isInCircle = useCallback(
+    (golferId: string) => (auth.isDemo ? demoIsInCircle(golferId) : isFollowing(golferId) && playedWithIds.has(golferId)),
+    [auth.isDemo, demoIsInCircle, isFollowing, playedWithIds],
+  );
+  const addToCircle = useCallback(
+    (memberId: string) => {
+      if (auth.isDemo) {
+        demoAddToCircle(memberId);
+        return;
+      }
+      if (isFollowing(memberId)) return;
+      followUser(memberId).catch((err) => console.error("GolfMe: failed to add to Golf Circle.", err));
+    },
+    [auth.isDemo, demoAddToCircle, isFollowing, followUser],
   );
 
   // Messaging never requires following — Follow and Message are independent
