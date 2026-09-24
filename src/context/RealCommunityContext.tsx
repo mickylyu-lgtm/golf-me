@@ -103,6 +103,8 @@ interface RealCommunityContextValue {
   posts: CommunityPost[];
   comments: PostComment[];
   isLoading: boolean;
+  /** True once the first fetch has finished (always true in demo). */
+  hasLoaded: boolean;
   profilesById: Map<string, GolferProfile>;
 
   getPost: (id: string) => CommunityPost | undefined;
@@ -143,6 +145,7 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
   const [hiddenPostIds, setHiddenPostIds] = useState<string[]>([]);
   const [profilesById, setProfilesById] = useState<Map<string, GolferProfile>>(new Map());
   const [isLoading, setIsLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const fetchingRef = useRef(false);
   const selfId = authUser?.id;
 
@@ -223,7 +226,11 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
     }
 
     setIsLoading(true);
-    refetch().finally(() => setIsLoading(false));
+    setLoaded(false);
+    refetch().finally(() => {
+      setIsLoading(false);
+      setLoaded(true);
+    });
 
     const channel = supabase
       .channel("community-realtime")
@@ -487,6 +494,7 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
     posts,
     comments,
     isLoading,
+    hasLoaded: isDemo || loaded,
     profilesById,
     getPost,
     createPost,

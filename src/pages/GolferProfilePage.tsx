@@ -20,6 +20,10 @@ import {
 } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useToast } from "../context/ToastContext";
+import { useRealRounds } from "../context/RealRoundsContext";
+import { useRealSocial } from "../context/RealSocialContext";
+import { useRealCommunity } from "../context/RealCommunityContext";
+import { GolfMeLoader } from "../components/loading/GolfMeLoader";
 import { useLocale } from "../i18n/LocaleContext";
 import { Avatar } from "../components/ui/Avatar";
 import { Badge } from "../components/ui/Badge";
@@ -67,6 +71,9 @@ export function GolferProfilePage() {
     unfollowUser,
     canMessage,
   } = useData();
+  const { hasLoaded: roundsLoaded } = useRealRounds();
+  const { hasLoaded: socialLoaded } = useRealSocial();
+  const { hasLoaded: communityLoaded } = useRealCommunity();
   const { showToast } = useToast();
   const { t } = useLocale();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -94,6 +101,9 @@ export function GolferProfilePage() {
   const { state: reputationState } = useReputationState(golfer);
 
   if (id === currentUser.id) return <Navigate to="/profile" replace />;
+  // Opened cold, the profile caches (rounds / social / community) may not
+  // have loaded yet — wait rather than flash "Golfer not found".
+  if (!golfer && !(roundsLoaded && socialLoaded && communityLoaded)) return <GolfMeLoader className="py-12" />;
   if (!golfer) {
     return (
       <div className="py-12 text-center text-slate-500">

@@ -61,6 +61,8 @@ interface NotificationRow {
 interface RealSocialContextValue {
   profilesById: Map<string, GolferProfile>;
   isLoading: boolean;
+  /** True once the first full fetch has finished (always true in demo). */
+  hasLoaded: boolean;
   // Every other real profile (minus self, minus blocked either direction) —
   // the real-mode data source for Discover/Find, distinct from profilesById
   // above (which only ever holds people already connected via a round/DM/
@@ -195,6 +197,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
   // notification actors) -- profilesById is exactly these, as before.
   const [connectedIds, setConnectedIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const fetchingRef = useRef(false);
   // conversation_id -> Date.now() of the last successful markConversationRead
   // call, so a caller that ends up invoking it repeatedly in a tight loop
@@ -420,7 +423,11 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     }
 
     setIsLoading(true);
-    refetch({ full: true }).finally(() => setIsLoading(false));
+    setLoaded(false);
+    refetch({ full: true }).finally(() => {
+      setIsLoading(false);
+      setLoaded(true);
+    });
 
     // Receiver-side timeout: cleared/reset every time a fresh typing:start
     // for a conversation arrives, so a single missed typing:stop (dropped
@@ -874,6 +881,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     () => ({
       profilesById,
       isLoading,
+      hasLoaded: isDemo || loaded,
       discoverableGolfers,
       canMessage,
       isBlocked,
@@ -904,6 +912,8 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     [
       profilesById,
       isLoading,
+      isDemo,
+      loaded,
       discoverableGolfers,
       canMessage,
       isBlocked,

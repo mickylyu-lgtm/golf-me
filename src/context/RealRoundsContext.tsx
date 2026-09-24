@@ -53,6 +53,8 @@ interface RealRoundsContextValue {
   golfCalls: GolfCall[];
   profilesById: Map<string, GolferProfile>;
   isLoading: boolean;
+  /** True once the first fetch has finished (always true in demo) — lets a deep-linked page wait instead of showing "not found". */
+  hasLoaded: boolean;
   hostRound: (input: HostRealRoundInput) => Promise<GolfCall>;
   joinRound: (roundId: string) => Promise<void>;
   leaveRound: (roundId: string) => Promise<void>;
@@ -79,6 +81,7 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
   const [myReviewedKeys, setMyReviewedKeys] = useState<Set<string>>(new Set());
   const [profilesById, setProfilesById] = useState<Map<string, GolferProfile>>(new Map());
   const [isLoading, setIsLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const fetchingRef = useRef(false);
   // Same fix as RealSocialContext's refetch(): a realtime event arriving
   // while a refetch is already in flight used to just be dropped with
@@ -151,7 +154,11 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
     }
 
     setIsLoading(true);
-    refetch().finally(() => setIsLoading(false));
+    setLoaded(false);
+    refetch().finally(() => {
+      setIsLoading(false);
+      setLoaded(true);
+    });
 
     // Global subscription (not per-round) — simplest correct way to satisfy
     // "membership changes appear across devices without restarting," and
@@ -323,6 +330,7 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
     golfCalls,
     profilesById,
     isLoading,
+    hasLoaded: isDemo || loaded,
     hostRound,
     joinRound,
     leaveRound,

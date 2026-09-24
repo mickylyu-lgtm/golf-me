@@ -18,6 +18,8 @@ import {
 } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
+import { useRealRounds } from "../context/RealRoundsContext";
+import { GolfMeLoader } from "../components/loading/GolfMeLoader";
 import { useToast } from "../context/ToastContext";
 import { useLocale } from "../i18n/LocaleContext";
 import { Avatar } from "../components/ui/Avatar";
@@ -61,6 +63,7 @@ export function GolfCallDetail() {
     hasReviewed,
   } = useData();
   const { isDemo } = useAuth();
+  const { hasLoaded: roundsLoaded } = useRealRounds();
   const { showToast } = useToast();
   const { t, locale } = useLocale();
   const [joining, setJoining] = useState(false);
@@ -89,6 +92,9 @@ export function GolfCallDetail() {
     if (!isDemo && call?.courseId) enrichRealCourse(call.courseId);
   }, [isDemo, call?.courseId]);
 
+  // Opened cold (push tap, refresh, shared link) the round list may not have
+  // loaded yet — wait rather than flash "not found".
+  if (!call && !roundsLoaded) return <GolfMeLoader className="py-12" />;
   if (!call) {
     return (
       <div className="py-12 text-center text-slate-500">
