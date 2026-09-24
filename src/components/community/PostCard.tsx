@@ -34,6 +34,7 @@ import { formatRelativeTime } from "../../lib/format";
 import { postCategoryLabel } from "../../lib/enumLabels";
 import { areaForCourse } from "../../lib/courses";
 import { enterNativeVideoFullscreen } from "../../lib/video";
+import { isStaleProcessing, usePeriodicRerender } from "../../lib/caddieAnalysis";
 import { useLocale } from "../../i18n/LocaleContext";
 
 interface PostCardProps {
@@ -124,6 +125,9 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
     return () => observer.disconnect();
   }, [post.videoUrl]);
 
+  // Re-checks the Ask-Caddie row's stale mark below as time passes.
+  usePeriodicRerender(caddieAnalyses.some((a) => a.sourcePostId === post.id && a.status === "processing"));
+
   const author = getGolfer(post.authorId);
   if (!author || isBlocked(post.authorId)) return null;
 
@@ -165,6 +169,12 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
   // open permissions question the brief flagged, so Ask Caddie is scoped
   // to the post's own author until that's revisited.
   const existingCaddieAnalysis = isOwn ? caddieAnalyses.find((a) => a.sourcePostId === post.id) : undefined;
+  // An abandoned pipeline leaves the row at 'processing' forever — past the
+  // same stale threshold the Caddie list uses, show it as failed (with Try
+  // again) instead of an endless "Analyzing…". (Periodic re-render is above
+  // the early return.)
+  const caddieFailed =
+    existingCaddieAnalysis?.status === "failed" || (!!existingCaddieAnalysis && isStaleProcessing(existingCaddieAnalysis));
 
   async function askCaddie(e: React.MouseEvent) {
     stop(e);
@@ -338,7 +348,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
                 </span>
                 <span className="text-xs font-semibold text-brand-forest">{t("caddie.viewAnalysis")}</span>
               </button>
-            ) : existingCaddieAnalysis?.status === "failed" ? (
+            ) : caddieFailed && !askingCaddie ? (
               <div className="flex items-center justify-between gap-2 rounded-xl border border-red-100 bg-red-50/50 px-3.5 py-2.5" onClick={stop}>
                 <span className="text-xs font-semibold text-red-700">{t("caddie.askCaddieError")}</span>
                 <Button variant="outline" size="sm" onClick={askCaddie} disabled={askingCaddie}>
