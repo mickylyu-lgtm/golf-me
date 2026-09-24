@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { Analytics } from "@vercel/analytics/react";
@@ -24,50 +24,55 @@ import { GolfMeLoader } from "./components/loading/GolfMeLoader";
 import { Button } from "./components/ui/Button";
 import { Welcome } from "./pages/Welcome";
 import { Splash } from "./pages/Splash";
-import { Onboarding } from "./pages/Onboarding";
 import { Auth } from "./pages/Auth";
 import { ProfileSetup } from "./pages/ProfileSetup";
-import { Ready } from "./pages/Ready";
 import { Home } from "./pages/Home";
 import { Discover } from "./pages/Discover";
 import { Find } from "./pages/Find";
-import { TeeTimes } from "./pages/TeeTimes";
-import { TeeTimeCourseDetail } from "./pages/TeeTimeCourseDetail";
-import { NearbyCourses } from "./pages/NearbyCourses";
 import { Caddie } from "./pages/Caddie";
-import { AnalyzeSwing } from "./pages/AnalyzeSwing";
-import { CaddieAnalysisDetail } from "./pages/CaddieAnalysisDetail";
-import { AutoMatch } from "./pages/AutoMatch";
 import { GolfCalls } from "./pages/GolfCalls";
-import { CreateGolfCall } from "./pages/CreateGolfCall";
 import { GolfCallDetail } from "./pages/GolfCallDetail";
 import { MyRounds } from "./pages/MyRounds";
 import { Profile } from "./pages/Profile";
-import { ReputationDetail } from "./pages/ReputationDetail";
-import { GolfCircleDetail } from "./pages/GolfCircleDetail";
-import { FollowingDetail } from "./pages/FollowingDetail";
-import { FindFriends } from "./pages/FindFriends";
-import { MyPosts } from "./pages/MyPosts";
-import { MatchPreferencesDetail } from "./pages/MatchPreferencesDetail";
-import { Settings } from "./pages/Settings";
-import { LanguageSettings } from "./pages/LanguageSettings";
-import { HelpCenter } from "./pages/HelpCenter";
-import { About } from "./pages/About";
 import { GolferProfilePage } from "./pages/GolferProfilePage";
 import { Inbox } from "./pages/Inbox";
 import { DirectMessageThread } from "./pages/DirectMessageThread";
 import { Community } from "./pages/Community";
-import { CreatePost } from "./pages/CreatePost";
 import { PostDetail } from "./pages/PostDetail";
-import { CommunityGuidelines } from "./pages/CommunityGuidelines";
-import { SavedPosts } from "./pages/SavedPosts";
-import { CoachReviewQueue } from "./pages/CoachReviewQueue";
-import { PrivacyPolicy } from "./pages/PrivacyPolicy";
-import { AdminReviewers } from "./pages/AdminReviewers";
-import { AdminDashboard } from "./pages/AdminDashboard";
-import { CoachInvite } from "./pages/CoachInvite";
 import { usePendingReviewerInviteRedemption } from "./lib/usePendingReviewerInviteRedemption";
 import { useDisableKeyboardAccessoryBar } from "./lib/useDisableKeyboardAccessoryBar";
+import { lazyPage } from "./lib/lazyPage";
+
+// Code-split routes (Health Audit P3-4): pages not needed on first open load
+// on demand. Main tabs, detail pages reached from push/deep links that are
+// already hot, and the frozen DM thread stay in the main bundle.
+const Onboarding = lazyPage(() => import("./pages/Onboarding"), "Onboarding");
+const Ready = lazyPage(() => import("./pages/Ready"), "Ready");
+const TeeTimes = lazyPage(() => import("./pages/TeeTimes"), "TeeTimes");
+const TeeTimeCourseDetail = lazyPage(() => import("./pages/TeeTimeCourseDetail"), "TeeTimeCourseDetail");
+const NearbyCourses = lazyPage(() => import("./pages/NearbyCourses"), "NearbyCourses");
+const AnalyzeSwing = lazyPage(() => import("./pages/AnalyzeSwing"), "AnalyzeSwing");
+const CaddieAnalysisDetail = lazyPage(() => import("./pages/CaddieAnalysisDetail"), "CaddieAnalysisDetail");
+const AutoMatch = lazyPage(() => import("./pages/AutoMatch"), "AutoMatch");
+const CreateGolfCall = lazyPage(() => import("./pages/CreateGolfCall"), "CreateGolfCall");
+const ReputationDetail = lazyPage(() => import("./pages/ReputationDetail"), "ReputationDetail");
+const GolfCircleDetail = lazyPage(() => import("./pages/GolfCircleDetail"), "GolfCircleDetail");
+const FollowingDetail = lazyPage(() => import("./pages/FollowingDetail"), "FollowingDetail");
+const FindFriends = lazyPage(() => import("./pages/FindFriends"), "FindFriends");
+const MyPosts = lazyPage(() => import("./pages/MyPosts"), "MyPosts");
+const MatchPreferencesDetail = lazyPage(() => import("./pages/MatchPreferencesDetail"), "MatchPreferencesDetail");
+const Settings = lazyPage(() => import("./pages/Settings"), "Settings");
+const LanguageSettings = lazyPage(() => import("./pages/LanguageSettings"), "LanguageSettings");
+const HelpCenter = lazyPage(() => import("./pages/HelpCenter"), "HelpCenter");
+const About = lazyPage(() => import("./pages/About"), "About");
+const CreatePost = lazyPage(() => import("./pages/CreatePost"), "CreatePost");
+const CommunityGuidelines = lazyPage(() => import("./pages/CommunityGuidelines"), "CommunityGuidelines");
+const SavedPosts = lazyPage(() => import("./pages/SavedPosts"), "SavedPosts");
+const CoachReviewQueue = lazyPage(() => import("./pages/CoachReviewQueue"), "CoachReviewQueue");
+const PrivacyPolicy = lazyPage(() => import("./pages/PrivacyPolicy"), "PrivacyPolicy");
+const AdminReviewers = lazyPage(() => import("./pages/AdminReviewers"), "AdminReviewers");
+const AdminDashboard = lazyPage(() => import("./pages/AdminDashboard"), "AdminDashboard");
+const CoachInvite = lazyPage(() => import("./pages/CoachInvite"), "CoachInvite");
 
 // Logged-in area: sidebar/bottom nav shell. Three real states, not two —
 // no session -> Welcome (or straight to Login if this is the installed
@@ -88,7 +93,9 @@ function AuthedLayout() {
   const shell = (
     <TutorialProvider>
       <AppShell>
-        <Outlet />
+        <Suspense fallback={<GolfMeLoader className="py-12" />}>
+          <Outlet />
+        </Suspense>
       </AppShell>
       <TutorialOverlay />
       <PushPrePermissionPrompt />
@@ -257,6 +264,7 @@ export default function App() {
               <BrowserRouter>
               <ScrollToTop />
               <PushNotificationRouting />
+              <Suspense fallback={<GolfMeLoader fullScreen />}>
               <Routes>
                 {/* Standalone, outside both GuestOnly and AuthedLayout — by the
                     time signUpNewGolfer() lands here the session is already
@@ -328,6 +336,7 @@ export default function App() {
                   <Route path="/caddie/:analysisId" element={<CaddieAnalysisDetail />} />
                 </Route>
               </Routes>
+              </Suspense>
             </BrowserRouter>
           </AppGate>
         </ToastProvider>

@@ -1,11 +1,6 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { en } from "./locales/en";
-import { zhCN } from "./locales/zh-CN";
-import { zhTW } from "./locales/zh-TW";
-import { es } from "./locales/es";
-import { ko } from "./locales/ko";
-import { ja } from "./locales/ja";
 import type { TranslationKey } from "./locales/en";
 
 export type Locale = "en" | "zh-CN" | "zh-TW" | "es" | "ko" | "ja";
@@ -19,14 +14,30 @@ export const LOCALES: { value: Locale; nativeName: string }[] = [
   { value: "ja", nativeName: "日本語" },
 ];
 
-const DICTIONARIES: Record<Locale, Record<TranslationKey, string>> = {
-  en,
-  "zh-CN": zhCN,
-  "zh-TW": zhTW,
-  es,
-  ko,
-  ja,
+type Dictionary = Record<TranslationKey, string>;
+
+// English ships in the main bundle (it's also every key's fallback); the
+// other five (~50-65 KB each) load on demand so a golfer only downloads the
+// language they use (Health Audit P3-4).
+const LOADERS: Record<Exclude<Locale, "en">, () => Promise<Dictionary>> = {
+  "zh-CN": () => import("./locales/zh-CN").then((m) => m.zhCN),
+  "zh-TW": () => import("./locales/zh-TW").then((m) => m.zhTW),
+  es: () => import("./locales/es").then((m) => m.es),
+  ko: () => import("./locales/ko").then((m) => m.ko),
+  ja: () => import("./locales/ja").then((m) => m.ja),
 };
+
+const loadedDictionaries: Partial<Record<Locale, Dictionary>> = { en };
+const KNOWN_LOCALE_VALUES = new Set<string>(LOCALES.map((l) => l.value));
+
+function loadDictionary(locale: Locale): Promise<Dictionary> {
+  const cached = loadedDictionaries[locale];
+  if (cached) return Promise.resolve(cached);
+  return LOADERS[locale as Exclude<Locale, "en">]().then((dict) => {
+    loadedDictionaries[locale] = dict;
+    return dict;
+  });
+}
 
 // Separate from AppData's own localStorage key (golfme:data:v8) so
 // switching or resetting demo data never touches the language choice, and
@@ -49,7 +60,7 @@ function detectBrowserLocale(): Locale {
 function loadStoredLocale(): Locale | null {
   if (typeof window === "undefined") return null;
   const raw = window.localStorage.getItem(LOCALE_STORAGE_KEY);
-  return raw && raw in DICTIONARIES ? (raw as Locale) : null;
+  return raw && KNOWN_LOCALE_VALUES.has(raw) ? (raw as Locale) : null;
 }
 
 interface LocaleContextValue {
@@ -61,7 +72,7 @@ interface LocaleContextValue {
 const LocaleContext = createContext<LocaleContextValue | null>(null);
 
 function buildT(locale: Locale) {
-  const dict = DICTIONARIES[locale];
+  const dict = loadedDictionaries[locale] ?? en;
   return (key: TranslationKey, vars?: Record<string, string | number>) => {
     let str = dict[key] ?? en[key];
     if (vars) {
@@ -79,15 +90,53 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
   // silently changes again (per spec: explicit choice always overrides
   // browser settings after that point).
   const [locale, setLocaleState] = useState<Locale>(() => loadStoredLocale() ?? detectBrowserLocale());
+  // Bumped when a dictionary finishes loading so t is rebuilt with it.
+  const [dictVersion, setDictVersion] = useState(0);
+  // First paint waits (briefly) for a non-English golfer's dictionary so
+  // the UI doesn't flash English first. A failed load falls back to
+  // English rather than blocking forever.
+  const [ready, setReady] = useState(() => Boolean(loadedDictionaries[locale]));
 
   useEffect(() => {
     window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
   }, [locale]);
 
-  const t = useMemo(() => buildT(locale), [locale]);
+  useEffect(() => {
+    if (loadedDictionaries[locale]) {
+      setReady(true);
+      return;
+    }
+    let cancelled = false;
+    loadDictionary(locale)
+      .catch((err) => console.error(`GolfMe: failed to load ${locale} translations; using English.`, err))
+      .finally(() => {
+        if (cancelled) return;
+        setDictVersion((v) => v + 1);
+        setReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [locale]);
 
-  const value = useMemo(() => ({ locale, setLocale: setLocaleState, t }), [locale, t]);
+  // Switching language keeps the current one on screen until the new
+  // dictionary has loaded, instead of dropping to English in between.
+  const setLocale = useCallback((next: Locale) => {
+    if (loadedDictionaries[next]) {
+      setLocaleState(next);
+      return;
+    }
+    loadDictionary(next)
+      .catch((err) => console.error(`GolfMe: failed to load ${next} translations; using English.`, err))
+      .finally(() => setLocaleState(next));
+  }, []);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const t = useMemo(() => buildT(locale), [locale, dictVersion]);
+
+  const value = useMemo(() => ({ locale, setLocale, t }), [locale, setLocale, t]);
+
+  if (!ready) return null;
   return <LocaleContext.Provider value={value}>{children}</LocaleContext.Provider>;
 }
 
