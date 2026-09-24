@@ -255,36 +255,29 @@ Deno.serve(async (req: Request) => {
   }
 
   const teeSet = best.candidate.tees?.male?.[0] ?? best.candidate.tees?.female?.[0];
+  // GolfCourseAPI coordinates are preferred over Geoapify's when valid --
+  // GolfCourseAPI's data is course-specific and hand-curated, vs. Geoapify's
+  // general places-API geocoding, which can land on a clubhouse/parking lot
+  // rather than the actual course. They're passed into
+  // attach_external_course_mapping() itself (health audit Batch C, P2-4:
+  // courses no longer has a direct client-JWT write policy), which applies
+  // them to whichever course the mapping actually landed on -- that RPC can
+  // return a DIFFERENT canonical course than the caller's own if this
+  // GolfCourseAPI id was already mapped elsewhere, and coordinates belong on
+  // that course, same as `holes`. Missing/invalid coordinates are passed as
+  // null and simply leave Geoapify's existing values in place -- the
+  // fallback is "do nothing," never a fabricated or zeroed value, and never
+  // a user-facing error just because a provider didn't have coordinates.
+  const coords = validCoordinates(best.candidate.location?.latitude, best.candidate.location?.longitude);
   const { data: updated, error: attachError } = await supabase.rpc("attach_external_course_mapping", {
     p_course_id: course.id,
     p_provider: "golfcourseapi",
     p_external_id: String(best.candidate.id),
     p_holes: teeSet?.number_of_holes ?? null,
+    p_latitude: coords?.latitude ?? null,
+    p_longitude: coords?.longitude ?? null,
   });
   if (attachError) return jsonResponse({ error: attachError.message }, 500);
-
-  // GolfCourseAPI coordinates are preferred over Geoapify's when valid --
-  // GolfCourseAPI's data is course-specific and hand-curated, vs. Geoapify's
-  // general places-API geocoding, which can land on a clubhouse/parking lot
-  // rather than the actual course. Written as a plain, RLS-scoped update
-  // (courses_update_authenticated already permits this) rather than a new
-  // RPC/migration -- no new column needed, this only ever overwrites
-  // latitude/longitude on the same row attach_external_course_mapping just
-  // touched. Missing/invalid coordinates are silently discarded and simply
-  // leave Geoapify's existing values in place -- the fallback is "do
-  // nothing," never a fabricated or zeroed value, and never a user-facing
-  // error just because a provider didn't have coordinates.
-  // Written against updated.id, not course.id -- attach_external_course_
-  // mapping() can return a DIFFERENT canonical course than the caller's own
-  // (see its own comment: this GolfCourseAPI id was already mapped to
-  // another course_id). Coordinates belong on whichever course the mapping
-  // actually landed on, same as `holes` above.
-  const coords = validCoordinates(best.candidate.location?.latitude, best.candidate.location?.longitude);
-  if (coords) {
-    const { error: coordError } = await supabase.from("courses").update(coords).eq("id", updated.id);
-    if (coordError) return jsonResponse({ error: coordError.message }, 500);
-    return jsonResponse({ matched: true, course: { ...updated, ...coords } });
-  }
 
   return jsonResponse({ matched: true, course: updated });
 });

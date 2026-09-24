@@ -375,7 +375,9 @@ export function GolfCallDetail() {
 
       {/* Real: host-only, manual — "keep the beta logic simple" means no
           scheduled job watching tee times, the host decides when it's over. */}
-      {!isDemo && isHost && !isCompleted && !isCancelled && (
+      {/* Server allows completion once date_iso (noon, host's round day) has
+          arrived — see 20260924100200_enforce_round_date_rules. */}
+      {!isDemo && isHost && !isCompleted && !isCancelled && Date.now() >= new Date(call.dateISO).getTime() && (
         <Button variant="outline" fullWidth onClick={() => setCompleteConfirmOpen(true)}>
           {t("golfCallDetail.markCompleted")}
         </Button>

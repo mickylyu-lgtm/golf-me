@@ -343,7 +343,27 @@ export function DataProvider({ children }: { children: ReactNode }) {
   // golfers array — resolved from RealRoundsContext's/RealSocialContext's
   // batch profile fetches instead. currentUser itself is checked first
   // since it's always known even before either cache has loaded anyone.
-  const golfCalls = auth.isDemo ? data.golfCalls : realRounds.golfCalls;
+  const allGolfCalls = auth.isDemo ? data.golfCalls : realRounds.golfCalls;
+  const { isBlocked: realIsBlocked, isBlockedBy: realIsBlockedBy } = realSocial;
+  // Blocking hides the other side's rounds in both directions (product
+  // decision, health audit Batch C P1-5) -- a round hosted by someone you
+  // blocked, or who blocked you, never appears in browse/Home/Auto-Match or
+  // resolves via getGolfCall. Rounds you host or are already in stay
+  // visible so an existing participant's own round list never breaks. Real
+  // mode's join/chat block is also enforced in the database
+  // (join_golf_call, round_messages_insert_member) -- this is the UI half.
+  const golfCalls = useMemo(() => {
+    const selfId = currentUser.id;
+    const blockedEitherWay = (otherId: string) =>
+      auth.isDemo
+        ? data.blocks.some(
+            (b) => (b.blockerId === selfId && b.blockedId === otherId) || (b.blockerId === otherId && b.blockedId === selfId),
+          )
+        : realIsBlocked(otherId) || realIsBlockedBy(otherId);
+    return allGolfCalls.filter(
+      (c) => c.hostId === selfId || c.joinedGolferIds.includes(selfId) || !blockedEitherWay(c.hostId),
+    );
+  }, [allGolfCalls, currentUser.id, auth.isDemo, data.blocks, realIsBlocked, realIsBlockedBy]);
   const getGolfer = useCallback(
     (id: string) => {
       if (auth.isDemo) return data.golfers.find((g) => g.id === id);
