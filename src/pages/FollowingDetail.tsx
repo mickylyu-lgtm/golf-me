@@ -7,6 +7,7 @@ import { useLocale } from "../i18n/LocaleContext";
 import { Avatar } from "../components/ui/Avatar";
 import { Button } from "../components/ui/Button";
 import { EmptyState } from "../components/ui/EmptyState";
+import { useCredibilityForGolfers } from "../lib/useCredibility";
 
 export function FollowingDetail() {
   const { followingGolfers, unfollowUser } = useData();
@@ -14,6 +15,8 @@ export function FollowingDetail() {
   const { showToast } = useToast();
   const { t } = useLocale();
   const navigate = useNavigate();
+  // Real accounts: server round counts, not the never-updated profile counter.
+  const reputations = useCredibilityForGolfers(followingGolfers);
 
   return (
     <div className="flex flex-col gap-6 pb-6">
@@ -53,7 +56,7 @@ export function FollowingDetail() {
                   <p className="text-sm font-semibold text-slate-800">{g.name}</p>
                   <p className="text-xs text-slate-500">
                     {g.handicap !== null ? t("golfCallDetail.handicapValue", { handicap: g.handicap }) : t("golfCallDetail.noHandicapYet")} ·{" "}
-                    {t("following.rounds", { count: g.reputation.completedRounds })}
+                    {t("following.rounds", { count: reputations[g.id].completedRounds })}
                   </p>
                 </div>
               </button>

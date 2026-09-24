@@ -10,6 +10,7 @@ import { computeCompatibility, golferDistanceMiles } from "../lib/compatibility"
 import { GOLF_VIBES } from "../types";
 import type { GolfVibe } from "../types";
 import { vibeLabel } from "../lib/enumLabels";
+import { useCredibilityForGolfers } from "../lib/useCredibility";
 
 type SortMode = "compatibility" | "distance" | "reputation";
 
@@ -31,6 +32,9 @@ export function Discover({ embedded = false }: DiscoverProps) {
   }
 
   const rawCandidates = visibleGolfers();
+  // Real accounts: server stats for the reputation sort, not the
+  // never-updated profile counters (demo: fixture numbers).
+  const reputations = useCredibilityForGolfers(rawCandidates);
 
   const results = useMemo(() => {
     let list = rawCandidates.map((g) => ({ golfer: g, compat: computeCompatibility(currentUser, g) }));
@@ -47,13 +51,13 @@ export function Discover({ embedded = false }: DiscoverProps) {
         );
         break;
       case "reputation":
-        list.sort((a, b) => b.golfer.reputation.wouldPlayAgainPct - a.golfer.reputation.wouldPlayAgainPct);
+        list.sort((a, b) => reputations[b.golfer.id].wouldPlayAgainPct - reputations[a.golfer.id].wouldPlayAgainPct);
         break;
       default:
         list.sort((a, b) => b.compat.overall - a.compat.overall);
     }
     return list;
-  }, [rawCandidates, currentUser, activeVibes, sortMode]);
+  }, [rawCandidates, reputations, currentUser, activeVibes, sortMode]);
 
   return (
     <div className="flex flex-col gap-5">

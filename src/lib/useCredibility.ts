@@ -25,15 +25,25 @@ interface RealCredibility {
 // background to pick up changes. Same approach as useReputationState.
 const rowCache = new Map<string, CredibilityStatsRow>();
 
-async function fetchCredibilityRow(golferId: string): Promise<CredibilityStatsRow | null> {
-  const { data, error } = await supabase.rpc("get_credibility_stats", { p_user_id: golferId });
-  if (error || !data || !data[0]) {
-    console.error("GolfMe: failed to load credibility stats.", error);
-    return null;
-  }
-  const row = data[0] as CredibilityStatsRow;
-  rowCache.set(golferId, row);
-  return row;
+// In-flight requests keyed by user id, so a list hook and the per-card hook
+// asking for the same golfer at the same moment share one RPC.
+const inFlight = new Map<string, Promise<CredibilityStatsRow | null>>();
+
+function fetchCredibilityRow(golferId: string): Promise<CredibilityStatsRow | null> {
+  const pending = inFlight.get(golferId);
+  if (pending) return pending;
+  const request = (async () => {
+    const { data, error } = await supabase.rpc("get_credibility_stats", { p_user_id: golferId });
+    if (error || !data || !data[0]) {
+      console.error("GolfMe: failed to load credibility stats.", error);
+      return null;
+    }
+    const row = data[0] as CredibilityStatsRow;
+    rowCache.set(golferId, row);
+    return row;
+  })().finally(() => inFlight.delete(golferId));
+  inFlight.set(golferId, request);
+  return request;
 }
 
 function rowToCredibility(row: CredibilityStatsRow, baselineReputation: GolferProfile["reputation"]): RealCredibility {
