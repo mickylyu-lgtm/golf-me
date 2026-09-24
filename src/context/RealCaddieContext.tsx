@@ -31,7 +31,12 @@ interface CaddieAnalysisRow {
   recommendations: string[];
   drills: string[];
   analysis_json: Record<string, unknown> | null;
-  roboflow_analysis_json: Record<string, unknown> | null;
+  // Heavy (~50 KB avg, up to ~120 KB per row: every sampled frame's
+  // keypoints). Deliberately NOT part of the list select below -- only the
+  // detail screen's replay overlay needs it, so it's lazy-loaded per
+  // analysis via loadPoseData(). Present only on rows returned whole by an
+  // Edge Function (createAnalysis / translateAnalysis).
+  roboflow_analysis_json?: Record<string, unknown> | null;
   camera_angle: string | null;
   score: number | null;
   model: string | null;
@@ -133,7 +138,7 @@ function jsonToPoseData(raw: Record<string, unknown> | null): CaddiePoseData | u
   };
 }
 
-function rowToAnalysis(row: CaddieAnalysisRow): CaddieAnalysis {
+function rowToAnalysis(row: CaddieAnalysisRow, poseData: CaddiePoseData | undefined): CaddieAnalysis {
   return {
     id: row.id,
     ownerId: row.owner_id,
@@ -149,7 +154,7 @@ function rowToAnalysis(row: CaddieAnalysisRow): CaddieAnalysis {
     recommendations: row.recommendations,
     drills: row.drills,
     details: jsonToDetails(row.analysis_json, row.score),
-    poseData: jsonToPoseData(row.roboflow_analysis_json),
+    poseData,
     score: row.score ?? undefined,
     model: row.model ?? undefined,
     errorMessage: row.error_message ?? undefined,
@@ -180,6 +185,30 @@ interface RealCaddieContextValue {
   createAnalysis: (input: CreateAnalysisInput) => Promise<CaddieAnalysis>;
   markShared: (id: string) => Promise<void>;
   translateAnalysis: (id: string, locale: string) => Promise<void>;
+  /**
+   * Fetches this analysis's pose frames (roboflow_analysis_json) if they
+   * aren't cached yet; the result shows up as `poseData` on that analysis.
+   * The list fetch deliberately omits them -- call this from any screen that
+   * renders the replay overlay, passing the row's current updatedAt. Only
+   * call it for complete rows. No-op in demo.
+   */
+  loadPoseData: (id: string, rowUpdatedAt: string) => Promise<void>;
+}
+
+// Everything the list, nav ring, PostCard and detail text need -- every
+// column except the heavy roboflow_analysis_json (see CaddieAnalysisRow).
+const LIST_COLUMNS =
+  "id, owner_id, source_type, source_post_id, source_media_url, thumbnail_url, swing_type, status, analysis_summary, strengths, issues, recommendations, drills, analysis_json, camera_angle, score, model, error_message, shared_to_community, created_at, updated_at";
+
+// Pose data per analysis id. `updatedAt` is the row version it was fetched
+// at: a fetched-but-empty result (row still processing, or a pre-Roboflow
+// analysis) is retried once the row changes; real pose frames never change
+// after completion (translate only rewrites text), so those stay cached.
+// This is a read-through cache of server data, not durable state -- the
+// caddie_analyses row stays the source of truth.
+interface PoseCacheEntry {
+  updatedAt: string;
+  pose: CaddiePoseData | undefined;
 }
 
 const RealCaddieContext = createContext<RealCaddieContextValue | null>(null);
@@ -193,30 +222,103 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
   // detail screen (push tap from a killed app, web refresh) wait for data
   // instead of treating "not loaded yet" as "doesn't exist".
   const [loadedForId, setLoadedForId] = useState<string | undefined>(undefined);
-  const fetchingRef = useRef(false);
+  const [poseCache, setPoseCache] = useState<Map<string, PoseCacheEntry>>(new Map());
+  // The in-flight list fetch, if any. A realtime event (or app resume) that
+  // arrived while one was running used to be dropped outright -- if that
+  // event was the processing -> complete flip and the in-flight query had
+  // already read the row as processing, the list stayed stale until some
+  // unrelated refetch. Now it sets pendingRefetchRef and exactly one more
+  // fetch runs as soon as the current one finishes; callers awaiting
+  // refetch() (the initial load that drives hasLoaded) get the in-flight
+  // promise instead of an immediately-resolved no-op.
+  const inFlightRef = useRef<{ selfId: string; promise: Promise<void> } | null>(null);
+  const pendingRefetchRef = useRef(false);
   const selfId = authUser?.id;
-
-  const refetch = useCallback(async () => {
-    if (!selfId || fetchingRef.current) return;
-    fetchingRef.current = true;
-    try {
-      const { data, error } = await supabase
-        .from("caddie_analyses")
-        .select("*")
-        .eq("owner_id", selfId)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      setRows((data ?? []) as CaddieAnalysisRow[]);
-    } catch (err) {
-      console.error("GolfMe: failed to load Caddie history.", err);
-    } finally {
-      fetchingRef.current = false;
-    }
+  // Guards against an account switch mid-fetch writing the previous
+  // account's rows into state.
+  const selfIdRef = useRef(selfId);
+  const poseCacheRef = useRef(poseCache);
+  const poseInFlightRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    selfIdRef.current = selfId;
   }, [selfId]);
+  useEffect(() => {
+    poseCacheRef.current = poseCache;
+  }, [poseCache]);
+
+  const refetch = useCallback((): Promise<void> => {
+    if (!selfId) return Promise.resolve();
+    const inFlight = inFlightRef.current;
+    if (inFlight && inFlight.selfId === selfId) {
+      pendingRefetchRef.current = true;
+      return inFlight.promise;
+    }
+    const run: Promise<void> = (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("caddie_analyses")
+          .select(LIST_COLUMNS)
+          .eq("owner_id", selfId)
+          .order("created_at", { ascending: false });
+        if (error) throw error;
+        if (selfIdRef.current !== selfId) return;
+        setRows((data ?? []) as CaddieAnalysisRow[]);
+      } catch (err) {
+        console.error("GolfMe: failed to load Caddie history.", err);
+      }
+    })().finally(() => {
+      // Only clear/follow up if this is still the tracked fetch (an account
+      // switch may have started a newer one for a different selfId).
+      if (inFlightRef.current?.promise !== run) return;
+      inFlightRef.current = null;
+      if (pendingRefetchRef.current) {
+        pendingRefetchRef.current = false;
+        void refetch();
+      }
+    });
+    inFlightRef.current = { selfId, promise: run };
+    return run;
+  }, [selfId]);
+
+  // Seeds the pose cache from a whole row an Edge Function handed back
+  // (it includes roboflow_analysis_json), so opening that analysis right
+  // after creating/translating it doesn't need a second round trip.
+  const cachePoseFromFullRow = useCallback((row: CaddieAnalysisRow) => {
+    if (row.roboflow_analysis_json === undefined) return;
+    const pose = jsonToPoseData(row.roboflow_analysis_json);
+    setPoseCache((prev) => {
+      const existing = prev.get(row.id);
+      if (existing?.pose && !pose) return prev;
+      return new Map(prev).set(row.id, { updatedAt: row.updated_at, pose });
+    });
+  }, []);
+
+  const loadPoseData = useCallback(
+    async (id: string, rowUpdatedAt: string) => {
+      if (isDemo || !selfId) return;
+      const cached = poseCacheRef.current.get(id);
+      if (cached && (cached.pose || cached.updatedAt === rowUpdatedAt)) return;
+      if (poseInFlightRef.current.has(id)) return;
+      poseInFlightRef.current.add(id);
+      try {
+        const { data, error } = await supabase.from("caddie_analyses").select("id, updated_at, roboflow_analysis_json").eq("id", id).maybeSingle();
+        if (error) throw error;
+        if (!data || selfIdRef.current !== selfId) return;
+        const fetched = data as { id: string; updated_at: string; roboflow_analysis_json: Record<string, unknown> | null };
+        setPoseCache((prev) => new Map(prev).set(id, { updatedAt: fetched.updated_at, pose: jsonToPoseData(fetched.roboflow_analysis_json) }));
+      } catch (err) {
+        console.error("GolfMe: failed to load Caddie pose data.", err);
+      } finally {
+        poseInFlightRef.current.delete(id);
+      }
+    },
+    [isDemo, selfId],
+  );
 
   useEffect(() => {
     if (isDemo || !selfId) {
       setRows([]);
+      setPoseCache(new Map());
       return;
     }
     setIsLoading(true);
@@ -255,7 +357,7 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
     };
   }, [isDemo, selfId, refetch]);
 
-  const analyses = useMemo(() => rows.map(rowToAnalysis), [rows]);
+  const analyses = useMemo(() => rows.map((row) => rowToAnalysis(row, poseCache.get(row.id)?.pose)), [rows, poseCache]);
 
   const getAnalysis = useCallback((id: string) => analyses.find((a) => a.id === id), [analyses]);
 
@@ -296,14 +398,15 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
         throw new Error(message);
       }
       const row = (data as { analysis: CaddieAnalysisRow }).analysis;
-      const created = rowToAnalysis(row);
+      cachePoseFromFullRow(row);
+      const created = rowToAnalysis(row, row.roboflow_analysis_json ? jsonToPoseData(row.roboflow_analysis_json) : undefined);
       setRows((prev) => {
         const withoutDuplicate = prev.filter((r) => r.id !== row.id);
         return [row, ...withoutDuplicate];
       });
       return created;
     },
-    [selfId, locale],
+    [selfId, locale, cachePoseFromFullRow],
   );
 
   const markShared = useCallback(async (id: string) => {
@@ -329,12 +432,16 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
       throw new Error(message);
     }
     const row = (data as { analysis: CaddieAnalysisRow }).analysis;
+    cachePoseFromFullRow(row);
     setRows((prev) => prev.map((r) => (r.id === row.id ? row : r)));
-  }, []);
+  }, [cachePoseFromFullRow]);
 
   const hasLoaded = isDemo || (!!selfId && loadedForId === selfId);
 
-  const value: RealCaddieContextValue = { analyses, isLoading, hasLoaded, getAnalysis, createAnalysis, markShared, translateAnalysis };
+  const value = useMemo<RealCaddieContextValue>(
+    () => ({ analyses, isLoading, hasLoaded, getAnalysis, createAnalysis, markShared, translateAnalysis, loadPoseData }),
+    [analyses, isLoading, hasLoaded, getAnalysis, createAnalysis, markShared, translateAnalysis, loadPoseData],
+  );
 
   return <RealCaddieContext.Provider value={value}>{children}</RealCaddieContext.Provider>;
 }

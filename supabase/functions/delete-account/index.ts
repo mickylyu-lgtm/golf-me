@@ -70,5 +70,68 @@ Deno.serve(async (req: Request) => {
 
   if (deleteError) return jsonResponse({ error: deleteError.message }, 500);
 
+  // Storage cleanup (Health Audit P2-10). Deleting the auth user cascades
+  // every table row, but Storage objects aren't rows Postgres can cascade
+  // (and SQL can't delete them -- storage.protect_delete), so the user's
+  // avatar, Community/Caddie media and booking-proof files used to stay
+  // publicly reachable forever. Every bucket keys objects by the owner's
+  // user id as the first path segment (enforced by each bucket's
+  // *_insert_own storage policy), so removing `<userId>/` from each bucket
+  // removes exactly this user's files and nobody else's.
+  //
+  // Runs AFTER the auth delete on purpose: if the account delete fails, the
+  // user keeps a working account with all their media; if this cleanup
+  // fails, the account is still gone (what they asked for) and the leftover
+  // files are logged for a manual sweep. Never fails the response.
+  const storageCleanup = await purgeUserStorage(adminClient, user.id);
+  if (storageCleanup.errors.length > 0) {
+    console.error("delete-account: storage cleanup incomplete", { userId: user.id, removed: storageCleanup.removed, errors: storageCleanup.errors });
+  }
+
   return jsonResponse({ success: true });
 });
+
+const USER_KEYED_BUCKETS = ["avatars", "community-media", "booking-proofs"];
+const LIST_PAGE_SIZE = 1000;
+const REMOVE_BATCH_SIZE = 100;
+
+type AdminClient = ReturnType<typeof createClient>;
+
+// Recursively collects every object path under `prefix` (Storage's list()
+// is one directory level at a time; entries with a null id are folders --
+// booking-proofs nests `<userId>/<golfCallId>/<file>`).
+async function listAllPaths(client: AdminClient, bucket: string, prefix: string, depth = 0): Promise<string[]> {
+  if (depth > 5) return [];
+  const paths: string[] = [];
+  for (let offset = 0; ; offset += LIST_PAGE_SIZE) {
+    const { data, error } = await client.storage.from(bucket).list(prefix, { limit: LIST_PAGE_SIZE, offset });
+    if (error) throw new Error(`list ${bucket}/${prefix}: ${error.message}`);
+    const entries = data ?? [];
+    for (const entry of entries) {
+      const path = `${prefix}/${entry.name}`;
+      if (entry.id === null) paths.push(...(await listAllPaths(client, bucket, path, depth + 1)));
+      else paths.push(path);
+    }
+    if (entries.length < LIST_PAGE_SIZE) break;
+  }
+  return paths;
+}
+
+async function purgeUserStorage(client: AdminClient, userId: string): Promise<{ removed: number; errors: string[] }> {
+  let removed = 0;
+  const errors: string[] = [];
+  for (const bucket of USER_KEYED_BUCKETS) {
+    try {
+      const paths = await listAllPaths(client, bucket, userId);
+      for (let i = 0; i < paths.length; i += REMOVE_BATCH_SIZE) {
+        const batch = paths.slice(i, i + REMOVE_BATCH_SIZE);
+        const { error } = await client.storage.from(bucket).remove(batch);
+        if (error) errors.push(`remove ${bucket} (${batch.length} files): ${error.message}`);
+        else removed += batch.length;
+      }
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : String(err));
+    }
+  }
+  return { removed, errors };
+}

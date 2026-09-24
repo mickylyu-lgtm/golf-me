@@ -54,7 +54,7 @@ export function CaddieAnalysisDetail() {
   const { analysisId } = useParams<{ analysisId: string }>();
   const { getCaddieAnalysis, getPost, createCaddieAnalysis, markCaddieAnalysisShared, translateCaddieAnalysis, createPost, notifications, markNotificationRead } =
     useData();
-  const { hasLoaded: caddieHasLoaded } = useRealCaddie();
+  const { hasLoaded: caddieHasLoaded, loadPoseData } = useRealCaddie();
   const { t, locale } = useLocale();
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -78,6 +78,16 @@ export function CaddieAnalysisDetail() {
   }, [analysis, analysisId, showToast, t]);
 
   usePeriodicRerender(analysis?.status === "processing");
+
+  // The Caddie list fetch omits the heavy pose frames; the replay overlay
+  // needs them, so pull them for just this analysis (cached in
+  // RealCaddieContext, re-checked when the row flips to complete).
+  const analysisStatus = analysis?.status;
+  const analysisUpdatedAt = analysis?.updatedAt;
+  useEffect(() => {
+    if (!analysisId || analysisStatus !== "complete" || !analysisUpdatedAt) return;
+    void loadPoseData(analysisId, analysisUpdatedAt);
+  }, [analysisId, analysisStatus, analysisUpdatedAt, loadPoseData]);
 
   // Clears the bottom-nav "result ready" dot regardless of HOW someone got
   // here (the nav tap shortcut already marks it read too, but this covers

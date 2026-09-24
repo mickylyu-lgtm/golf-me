@@ -128,6 +128,57 @@ function notificationRowToAppNotification(row: NotificationRow): AppNotification
   };
 }
 
+// Cheap structural equality for the small row arrays/objects this context
+// holds. Every refetch used to replace every piece of state with a fresh
+// array even when nothing had changed, which gave every derived memo and
+// the (previously un-memoized) context value a new identity -- so every
+// consumer, i.e. effectively the whole app via DataContext, re-rendered on
+// every poll tick. Keeping the previous reference when the data is equal
+// makes an unchanged refetch a no-op for React.
+function sameJson(a: unknown, b: unknown): boolean {
+  return a === b || JSON.stringify(a) === JSON.stringify(b);
+}
+
+function keepIfSame<T>(prev: T, next: T): T {
+  return sameJson(prev, next) ? prev : next;
+}
+
+function sameProfileMap(a: Map<string, GolferProfile>, b: Map<string, GolferProfile>): boolean {
+  if (a === b) return true;
+  if (a.size !== b.size) return false;
+  for (const [id, profile] of b) {
+    const other = a.get(id);
+    if (!other || !sameJson(other, profile)) return false;
+  }
+  return true;
+}
+
+// Realtime (postgres_changes on messages/notifications/blocks) is the
+// primary delivery path; polling is only the safety net for a websocket
+// that died without telling anyone (iOS backgrounding). While the channel
+// reports SUBSCRIBED, a slow poll is enough; when it's known to be down,
+// fall back to the old 6 s cadence so delivery latency doesn't regress.
+const POLL_TICK_MS = 6000;
+const POLL_WHEN_REALTIME_OK_MS = 30000;
+const POLL_WHEN_REALTIME_DOWN_MS = 6000;
+// A "full" refetch also reloads the discovery directory (every profile)
+// and the whole message window instead of just new messages. Runs on first
+// load, after destructive changes (clear chat, a deleted message), and at
+// least this often as a catch-all for anything the incremental path could
+// miss (profile edits, deleted accounts).
+const FULL_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+// Incremental message fetches re-read this much history before the newest
+// message already held, and dedupe by id -- so a row whose created_at
+// (transaction start time) is slightly older than one already seen, but
+// which committed later, is still picked up.
+const MESSAGE_OVERLAP_MS = 2 * 60 * 1000;
+// Newest-N windows. Messages are fetched newest-first and reversed, so if
+// a user ever exceeds the window it's the oldest history that's left out,
+// never the newest (the old ascending, unlimited query would have hit
+// PostgREST's row cap and silently dropped the NEWEST messages instead).
+const MESSAGE_WINDOW = 1000;
+const NOTIFICATION_WINDOW = 200;
+
 export function RealSocialProvider({ children }: { children: ReactNode }) {
   const { isDemo, authUser } = useAuth();
   const [participants, setParticipants] = useState<ConversationParticipantRow[]>([]);
@@ -136,8 +187,13 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
   const [follows, setFollows] = useState<FollowRow[]>([]);
   const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
   const [notificationRows, setNotificationRows] = useState<NotificationRow[]>([]);
-  const [profilesById, setProfilesById] = useState<Map<string, GolferProfile>>(new Map());
-  const [allProfiles, setAllProfiles] = useState<GolferProfile[]>([]);
+  // Every real profile this client knows about: the discovery directory
+  // (refreshed on full refetches) plus any profile a conversation,
+  // notification or follow needed before the next directory refresh.
+  const [profileCache, setProfileCache] = useState<Map<string, GolferProfile>>(new Map());
+  // Ids of people this user is connected to (conversation participants,
+  // notification actors) -- profilesById is exactly these, as before.
+  const [connectedIds, setConnectedIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const fetchingRef = useRef(false);
   // conversation_id -> Date.now() of the last successful markConversationRead
@@ -152,6 +208,20 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
   // and runs exactly one more refetch right after the in-flight one
   // finishes, so nothing is ever lost.
   const pendingRefetchRef = useRef(false);
+  // Incremental-fetch bookkeeping. These refs are written only by refetch
+  // (and reset when the account changes), so they always describe what's
+  // actually in state.
+  const forceFullRef = useRef(true);
+  const lastFullAtRef = useRef(0);
+  const lastFetchAtRef = useRef(0);
+  const messagesRef = useRef<MessageRow[]>([]);
+  const profileCacheRef = useRef<Map<string, GolferProfile>>(new Map());
+  const convKeyRef = useRef<string | null>(null);
+  const clearedKeyRef = useRef<string | null>(null);
+  const realtimeHealthyRef = useRef(false);
+  // Bumped whenever the signed-in account changes, so a fetch that started
+  // under the previous account can't write its results into state.
+  const generationRef = useRef(0);
   const selfId = authUser?.id;
 
   // Typing indicator -- ephemeral, in-memory, never written to Postgres.
@@ -171,100 +241,186 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     participantsRef.current = participants;
   }, [participants]);
 
-  const refetch = useCallback(async () => {
-    if (!selfId) return;
-    if (fetchingRef.current) {
-      pendingRefetchRef.current = true;
-      return;
-    }
-    fetchingRef.current = true;
-    try {
-      const [
-        { data: myConvIds, error: convErr },
-        { data: blockRows, error: blockErr },
-        { data: notifRows, error: notifErr },
-        { data: allProfileRows, error: allProfilesErr },
-        { data: followRows, error: followErr },
-      ] = await Promise.all([
-        supabase.from("conversation_participants").select("conversation_id, user_id, last_read_at, cleared_before, hidden_at").eq("user_id", selfId),
-        supabase.from("blocks").select("blocker_id, blocked_id").or(`blocker_id.eq.${selfId},blocked_id.eq.${selfId}`),
-        supabase.from("notifications").select("*").eq("user_id", selfId).order("created_at", { ascending: false }),
+  // `full` forces the directory + whole-message-window reload described at
+  // FULL_REFRESH_INTERVAL_MS; otherwise only new messages are fetched.
+  const refetch = useCallback(
+    async (options?: { full?: boolean }) => {
+      if (!selfId) return;
+      if (options?.full) forceFullRef.current = true;
+      if (fetchingRef.current) {
+        pendingRefetchRef.current = true;
+        return;
+      }
+      fetchingRef.current = true;
+      const generation = generationRef.current;
+      const isCurrent = () => generationRef.current === generation;
+      lastFetchAtRef.current = Date.now();
+      const full = forceFullRef.current || Date.now() - lastFullAtRef.current >= FULL_REFRESH_INTERVAL_MS;
+      forceFullRef.current = false;
+      try {
         // Discover/Find's real-mode candidate pool — every registered real
         // golfer, RLS already allows any authenticated user to read every
         // profile row (mirrors the old mock world's fully-open
         // visibleGolfers()). Self/blocked filtering happens in the
-        // discoverableGolfers memo below, not here.
-        supabase.from("profiles").select("*"),
-        supabase.from("follows").select("follower_id, following_id").or(`follower_id.eq.${selfId},following_id.eq.${selfId}`),
-      ]);
-      if (convErr) throw convErr;
-      if (blockErr) throw blockErr;
-      if (notifErr) throw notifErr;
-      if (allProfilesErr) throw allProfilesErr;
-      if (followErr) throw followErr;
+        // discoverableGolfers memo below, not here. Only on full refetches:
+        // it used to be re-downloaded on every poll tick and every realtime
+        // event.
+        // Promise.resolve() starts the (lazy) query now, in parallel with
+        // the batch below, rather than only when it is awaited.
+        const directoryPromise = full ? Promise.resolve(supabase.from("profiles").select("*")) : null;
+        const [
+          { data: myConvIds, error: convErr },
+          { data: blockRows, error: blockErr },
+          { data: notifRows, error: notifErr },
+          { data: followRows, error: followErr },
+        ] = await Promise.all([
+          supabase.from("conversation_participants").select("conversation_id, user_id, last_read_at, cleared_before, hidden_at").eq("user_id", selfId),
+          supabase.from("blocks").select("blocker_id, blocked_id").or(`blocker_id.eq.${selfId},blocked_id.eq.${selfId}`),
+          supabase.from("notifications").select("*").eq("user_id", selfId).order("created_at", { ascending: false }).limit(NOTIFICATION_WINDOW),
+          supabase.from("follows").select("follower_id, following_id").or(`follower_id.eq.${selfId},following_id.eq.${selfId}`),
+        ]);
+        if (convErr) throw convErr;
+        if (blockErr) throw blockErr;
+        if (notifErr) throw notifErr;
+        if (followErr) throw followErr;
+        let directoryRows: ProfileRow[] | null = null;
+        if (directoryPromise) {
+          const { data, error } = await directoryPromise;
+          if (error) throw error;
+          directoryRows = (data ?? []) as ProfileRow[];
+        }
+        if (!isCurrent()) return;
 
-      setBlocks((blockRows ?? []) as BlockRow[]);
-      setNotificationRows((notifRows ?? []) as NotificationRow[]);
-      setAllProfiles(((allProfileRows ?? []) as ProfileRow[]).map(profileRowToGolferProfile));
-      setFollows((followRows ?? []) as FollowRow[]);
+        setBlocks((prev) => keepIfSame(prev, (blockRows ?? []) as BlockRow[]));
+        setNotificationRows((prev) => keepIfSame(prev, (notifRows ?? []) as NotificationRow[]));
+        setFollows((prev) => keepIfSame(prev, (followRows ?? []) as FollowRow[]));
 
-      const conversationIds = [...new Set((myConvIds ?? []).map((r) => r.conversation_id))];
-      if (conversationIds.length === 0) {
-        setParticipants([]);
-        setMessages([]);
-        return;
+        const myRows = (myConvIds ?? []) as ConversationParticipantRow[];
+        const conversationIds = [...new Set(myRows.map((r) => r.conversation_id))];
+        // Anything that can REMOVE messages from this user's view (a new
+        // or vanished conversation, a cleared_before change from "Clear
+        // chat" on any device) needs the full window, not a delta.
+        const convKey = [...conversationIds].sort().join(",");
+        const clearedKey = myRows
+          .map((r) => `${r.conversation_id}:${r.cleared_before ?? ""}`)
+          .sort()
+          .join("|");
+
+        let nextParticipants: ConversationParticipantRow[] = [];
+        let nextMessages: MessageRow[] = messagesRef.current.length === 0 ? messagesRef.current : [];
+        if (conversationIds.length > 0) {
+          const newest = messagesRef.current[messagesRef.current.length - 1];
+          const incremental = !full && Boolean(newest) && convKey === convKeyRef.current && clearedKey === clearedKeyRef.current;
+          const participantsQuery = supabase
+            .from("conversation_participants")
+            .select("conversation_id, user_id, last_read_at, cleared_before, hidden_at")
+            .in("conversation_id", conversationIds);
+          const messagesQuery = incremental
+            ? supabase
+                .from("messages")
+                .select("*")
+                .in("conversation_id", conversationIds)
+                .gte("created_at", new Date(Date.parse(newest.created_at) - MESSAGE_OVERLAP_MS).toISOString())
+                .order("created_at", { ascending: true })
+            : supabase.from("messages").select("*").in("conversation_id", conversationIds).order("created_at", { ascending: false }).limit(MESSAGE_WINDOW);
+          const [{ data: allParticipants, error: pErr }, { data: messageRows, error: mErr }] = await Promise.all([participantsQuery, messagesQuery]);
+          if (pErr) throw pErr;
+          if (mErr) throw mErr;
+          if (!isCurrent()) return;
+          nextParticipants = (allParticipants ?? []) as ConversationParticipantRow[];
+          const fetched = (messageRows ?? []) as MessageRow[];
+          if (incremental) {
+            const known = new Set(messagesRef.current.map((m) => m.id));
+            const added = fetched.filter((m) => !known.has(m.id));
+            nextMessages =
+              added.length === 0 ? messagesRef.current : [...messagesRef.current, ...added].sort((a, b) => a.created_at.localeCompare(b.created_at));
+          } else {
+            nextMessages = keepIfSame(messagesRef.current, fetched.reverse());
+          }
+        }
+        setParticipants((prev) => keepIfSame(prev, nextParticipants));
+        messagesRef.current = nextMessages;
+        setMessages(nextMessages);
+        convKeyRef.current = convKey;
+        clearedKeyRef.current = clearedKey;
+
+        // Profiles: the directory (when just fetched) replaces the cache
+        // wholesale, which also drops deleted accounts; otherwise only ids
+        // this refetch needs but the cache doesn't have yet are fetched.
+        const connected = new Set<string>();
+        for (const p of nextParticipants) connected.add(p.user_id);
+        for (const n of notifRows ?? []) if (n.actor_id) connected.add(n.actor_id);
+        const needed = new Set(connected);
+        for (const f of followRows ?? []) {
+          needed.add(f.follower_id);
+          needed.add(f.following_id);
+        }
+        let cache = profileCacheRef.current;
+        if (directoryRows) cache = new Map(directoryRows.map((row) => [row.id, profileRowToGolferProfile(row)]));
+        const missing = [...needed].filter((id) => !cache.has(id));
+        if (missing.length > 0) {
+          const { data: profileRows, error: profErr } = await supabase.from("profiles").select("*").in("id", missing);
+          if (profErr) throw profErr;
+          if (!isCurrent()) return;
+          cache = new Map(cache);
+          for (const row of (profileRows ?? []) as ProfileRow[]) cache.set(row.id, profileRowToGolferProfile(row));
+        }
+        if (cache !== profileCacheRef.current) {
+          profileCacheRef.current = cache;
+          setProfileCache((prev) => (sameProfileMap(prev, cache) ? prev : cache));
+        }
+        setConnectedIds((prev) => keepIfSame(prev, [...connected].sort()));
+        if (full) lastFullAtRef.current = Date.now();
+      } catch (err) {
+        // Retry the full reload next time rather than silently falling
+        // back to incremental on a half-applied state.
+        if (full) forceFullRef.current = true;
+        console.error("GolfMe: failed to load messages/blocks/notifications.", err);
+      } finally {
+        // A fetch that outlived its account must not clear the NEW
+        // account's in-flight flag or run a follow-up with a stale closure.
+        if (isCurrent()) {
+          fetchingRef.current = false;
+          if (pendingRefetchRef.current) {
+            pendingRefetchRef.current = false;
+            refetch();
+          }
+        }
       }
-
-      const [{ data: allParticipants, error: pErr }, { data: allMessages, error: mErr }] = await Promise.all([
-        supabase.from("conversation_participants").select("conversation_id, user_id, last_read_at, cleared_before, hidden_at").in("conversation_id", conversationIds),
-        supabase.from("messages").select("*").in("conversation_id", conversationIds).order("created_at", { ascending: true }),
-      ]);
-      if (pErr) throw pErr;
-      if (mErr) throw mErr;
-
-      const nextParticipants = (allParticipants ?? []) as ConversationParticipantRow[];
-      const nextMessages = (allMessages ?? []) as MessageRow[];
-      setParticipants(nextParticipants);
-      setMessages(nextMessages);
-
-      const ids = new Set<string>();
-      for (const p of nextParticipants) ids.add(p.user_id);
-      for (const n of notifRows ?? []) if (n.actor_id) ids.add(n.actor_id);
-      if (ids.size > 0) {
-        const { data: profileRows, error: profErr } = await supabase.from("profiles").select("*").in("id", Array.from(ids));
-        if (profErr) throw profErr;
-        const map = new Map<string, GolferProfile>();
-        for (const row of (profileRows ?? []) as ProfileRow[]) map.set(row.id, profileRowToGolferProfile(row));
-        setProfilesById(map);
-      } else {
-        setProfilesById(new Map());
-      }
-    } catch (err) {
-      console.error("GolfMe: failed to load messages/blocks/notifications.", err);
-    } finally {
-      fetchingRef.current = false;
-      if (pendingRefetchRef.current) {
-        pendingRefetchRef.current = false;
-        refetch();
-      }
-    }
-  }, [selfId]);
+    },
+    [selfId],
+  );
 
   useEffect(() => {
+    // New account (or signed out / demo): nothing fetched so far applies.
+    generationRef.current += 1;
+    forceFullRef.current = true;
+    lastFullAtRef.current = 0;
+    messagesRef.current = [];
+    profileCacheRef.current = new Map();
+    convKeyRef.current = null;
+    clearedKeyRef.current = null;
+    realtimeHealthyRef.current = false;
+    // A fetch from the previous account may still be "in flight"; its
+    // results are discarded by the generation check, so don't let it
+    // block this account's first fetch.
+    fetchingRef.current = false;
+    pendingRefetchRef.current = false;
+
     if (isDemo || !selfId) {
       setParticipants([]);
       setMessages([]);
       setBlocks([]);
       setNotificationRows([]);
-      setProfilesById(new Map());
-      setAllProfiles([]);
+      setProfileCache(new Map());
+      setConnectedIds([]);
       setFollows([]);
       setPendingMessages([]);
       return;
     }
 
     setIsLoading(true);
-    refetch().finally(() => setIsLoading(false));
+    refetch({ full: true }).finally(() => setIsLoading(false));
 
     // Receiver-side timeout: cleared/reset every time a fresh typing:start
     // for a conversation arrives, so a single missed typing:stop (dropped
@@ -284,7 +440,12 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
 
     const channel = supabase
       .channel("social-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => refetch())
+      // A deleted message (e.g. the other account was deleted and its
+      // messages cascaded away) can't be picked up by the incremental
+      // new-messages fetch, so DELETE forces the full window.
+      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, (payload) =>
+        refetch(payload.eventType === "DELETE" ? { full: true } : undefined),
+      )
       .on("postgres_changes", { event: "*", schema: "public", table: "notifications" }, () => refetch())
       .on("postgres_changes", { event: "*", schema: "public", table: "blocks" }, () => refetch())
       // Ephemeral typing signal -- never written to Postgres, no message
@@ -320,7 +481,16 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
           }, TYPING_EXPIRY_MS),
         );
       })
-      .subscribe();
+      .subscribe((status) => {
+        // A previous account's channel reporting CLOSED after teardown
+        // must not mark this one unhealthy.
+        if (channelRef.current !== channel) return;
+        const wasHealthy = realtimeHealthyRef.current;
+        realtimeHealthyRef.current = status === "SUBSCRIBED";
+        // Re-subscribed after an outage: catch up on anything whose event
+        // was missed while the socket was down.
+        if (!wasHealthy && realtimeHealthyRef.current && lastFetchAtRef.current > 0) refetch();
+      });
 
     channelRef.current = channel;
 
@@ -333,16 +503,22 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     // manually opening the inbox, which does a real fetch) happened to
     // trigger a refetch — reads as "the live popup never fired" even
     // though the data was there all along. A refetch on regaining
-    // visibility, plus a modest poll while actively visible, means the
-    // user is never more than moments away from a fresh fetch either way.
+    // visibility, plus a poll while actively visible (every 6 s while the
+    // channel is known to be down, every 30 s while it reports healthy),
+    // means the user is never far from a fresh fetch either way.
     function onVisible() {
-      if (document.visibilityState === "visible") refetch();
+      if (document.visibilityState !== "visible") return;
+      // visibilitychange and focus usually fire together on resume.
+      if (Date.now() - lastFetchAtRef.current < 1000) return;
+      refetch();
     }
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
     const pollInterval = window.setInterval(() => {
-      if (document.visibilityState === "visible") refetch();
-    }, 6000);
+      if (document.visibilityState !== "visible") return;
+      const interval = realtimeHealthyRef.current ? POLL_WHEN_REALTIME_OK_MS : POLL_WHEN_REALTIME_DOWN_MS;
+      if (Date.now() - lastFetchAtRef.current >= interval - 500) refetch();
+    }, POLL_TICK_MS);
     // Captured here (not re-read via typingTimeoutsRef.current inside the
     // cleanup below) since this ref's Map is mutated in place, never
     // reassigned -- same object reference throughout, so this stays valid
@@ -360,6 +536,16 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       setTypingConversationIds(new Set());
     };
   }, [isDemo, selfId, refetch]);
+
+  const profilesById = useMemo(() => {
+    const map = new Map<string, GolferProfile>();
+    for (const id of connectedIds) {
+      const profile = profileCache.get(id);
+      if (profile) map.set(id, profile);
+    }
+    return map;
+  }, [connectedIds, profileCache]);
+  const allProfiles = useMemo(() => Array.from(profileCache.values()), [profileCache]);
 
   // Drops a pending (optimistic) message once the realtime-driven refetch
   // above brings in the real row it corresponds to -- matched by
@@ -682,36 +868,70 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     else await refetch();
   }, [selfId, refetch]);
 
-  const value: RealSocialContextValue = {
-    profilesById,
-    isLoading,
-    discoverableGolfers,
-    canMessage,
-    isBlocked,
-    isBlockedBy,
-    blockedIds,
-    blockUser,
-    unblockUser,
-    isFollowing,
-    followingGolfers,
-    followUser,
-    unfollowUser,
-    dmConversations,
-    hasUnreadMessages,
-    messagesWithGolfer,
-    sendDirectMessage,
-    markConversationRead,
-    clearChatHistory,
-    deleteConversation,
-    isOtherTyping,
-    typingConversationIds,
-    sendTypingSignal,
-    reportUser,
-    notifications,
-    unreadNotificationCount,
-    markNotificationRead,
-    markAllNotificationsRead,
-  };
+  // Memoized so an unchanged refetch (every piece of state kept by
+  // reference, see keepIfSame) doesn't re-render every consumer.
+  const value = useMemo<RealSocialContextValue>(
+    () => ({
+      profilesById,
+      isLoading,
+      discoverableGolfers,
+      canMessage,
+      isBlocked,
+      isBlockedBy,
+      blockedIds,
+      blockUser,
+      unblockUser,
+      isFollowing,
+      followingGolfers,
+      followUser,
+      unfollowUser,
+      dmConversations,
+      hasUnreadMessages,
+      messagesWithGolfer,
+      sendDirectMessage,
+      markConversationRead,
+      clearChatHistory,
+      deleteConversation,
+      isOtherTyping,
+      typingConversationIds,
+      sendTypingSignal,
+      reportUser,
+      notifications,
+      unreadNotificationCount,
+      markNotificationRead,
+      markAllNotificationsRead,
+    }),
+    [
+      profilesById,
+      isLoading,
+      discoverableGolfers,
+      canMessage,
+      isBlocked,
+      isBlockedBy,
+      blockedIds,
+      blockUser,
+      unblockUser,
+      isFollowing,
+      followingGolfers,
+      followUser,
+      unfollowUser,
+      dmConversations,
+      hasUnreadMessages,
+      messagesWithGolfer,
+      sendDirectMessage,
+      markConversationRead,
+      clearChatHistory,
+      deleteConversation,
+      isOtherTyping,
+      typingConversationIds,
+      sendTypingSignal,
+      reportUser,
+      notifications,
+      unreadNotificationCount,
+      markNotificationRead,
+      markAllNotificationsRead,
+    ],
+  );
 
   return <RealSocialContext.Provider value={value}>{children}</RealSocialContext.Provider>;
 }

@@ -6,6 +6,8 @@ import { profileRowToGolferProfile } from "../lib/profile";
 import type { ProfileRow } from "../lib/profile";
 import type { CommunityPost, PostComment, GolferProfile, PostMediaItem, PostType, PostCategory, SwingAnalysisStatus } from "../types";
 
+const COMMUNITY_MEDIA_BUCKET = "community-media";
+
 interface PostRow {
   id: string;
   author_id: string;
@@ -339,8 +341,32 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
 
   const deletePost = useCallback(
     async (postId: string) => {
-      const { error } = await supabase.from("community_posts").delete().eq("id", postId);
-      if (error) throw new Error(error.message);
+      // delete_community_post deletes the post and returns which of its
+      // community-media objects are no longer referenced anywhere (a kept
+      // Caddie analysis or another post can still point at the same video/
+      // thumbnail -- those are never returned). See migration
+      // 20260924110000_delete_community_post_with_media_cleanup.
+      const { data, error } = await supabase.rpc("delete_community_post", { p_post_id: postId });
+      if (error) {
+        // RPC not deployed yet (client shipped ahead of the migration):
+        // fall back to the old direct delete so deleting still works; media
+        // is just left behind, as before.
+        if (error.code === "PGRST202") {
+          const { error: deleteError } = await supabase.from("community_posts").delete().eq("id", postId);
+          if (deleteError) throw new Error(deleteError.message);
+        } else {
+          throw new Error(error.message);
+        }
+      } else {
+        const paths = ((data ?? []) as string[]).filter((p) => typeof p === "string" && p.length > 0);
+        if (paths.length > 0) {
+          // Best effort: the post is already gone either way, and storage
+          // RLS (community_media_delete_own) only lets this remove files in
+          // the caller's own folder.
+          const { error: removeError } = await supabase.storage.from(COMMUNITY_MEDIA_BUCKET).remove(paths);
+          if (removeError) console.error("GolfMe: post deleted but its media could not be removed.", removeError);
+        }
+      }
       await refetch();
     },
     [refetch],

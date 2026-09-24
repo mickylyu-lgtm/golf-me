@@ -1,4 +1,4 @@
-import type { CaddiePoseData, CaddiePoseFrame, CaddiePoseKeypoint, CaddieSwingPhases } from "../types";
+import type { CaddieConfidence, CaddiePoseData, CaddiePoseFrame, CaddiePoseKeypoint, CaddieSwingPhases } from "../types";
 
 // Colors Caddie's replay skeleton by evaluating a small, deliberately narrow
 // set of geometric metrics against fixed thresholds -- NOT by asking Gemini
@@ -66,8 +66,61 @@ const MIN_KEYPOINT_CONFIDENCE = 0.5;
 // seconds of that phase's own timestamp -- outside it, the segment reads as
 // neutral rather than carrying a stale verdict into a different part of the
 // swing (the brief's own lead-elbow example: red at Top, neutral/green by
-// Downswing).
-const PHASE_DISPLAY_WINDOW_SECONDS = 0.45;
+// Downswing). The verdict was measured on ONE frame, but the on-video
+// callout pins to whatever frame is currently showing, so this window is
+// kept short: at the old 0.45 s an impact verdict was still being drawn
+// well into the follow-through. Top -> downswing is roughly 0.25 s.
+const PHASE_DISPLAY_WINDOW_SECONDS = 0.25;
+
+// How far the pose frame an assessment is measured on may sit from the
+// phase time Gemini reported. The old tolerance reused the 0.45 s display
+// window, so a verdict could be computed from a frame nearly half a second
+// from the phase it claimed to describe (e.g. a mid-downswing frame scored
+// as "impact") whenever Roboflow had dropped the frames near it. Pose
+// frames are sampled at analysisFps (8 fps today), so one sample period is
+// the honest bound; this cap keeps a low-fps analysis from widening it.
+const MAX_PHASE_FRAME_OFFSET_SECONDS = 0.2;
+
+// Impact is reported as a window, not an instant (see analyze-swing's
+// prompt). A window this wide or wider is too imprecise to pin a frame-
+// accurate verdict to, so impact segments resolve to "unknown" instead of
+// treating the window's midpoint as the contact frame. Real windows were
+// 0.05-0.38 s wide as of 2026-09-24, most <= 0.25 s.
+const MAX_IMPACT_WINDOW_SECONDS = 0.3;
+
+// Gemini tags each phase high/medium/low. Only high/medium phases anchor an
+// assessment or a colored callout; a low-confidence (or confidence-less)
+// phase is treated exactly like an unidentified one.
+function isTrustedPhaseConfidence(confidence: CaddieConfidence | null): boolean {
+  return confidence === "high" || confidence === "medium";
+}
+
+interface PhaseAnchor {
+  timeSeconds: number;
+  // Max distance a pose frame may sit from timeSeconds and still count as
+  // this phase's frame.
+  frameToleranceSeconds: number;
+}
+
+// Single source of truth for "is this phase usable as an anchor, and where
+// is it" -- used both for picking the measured frame and for the display
+// window, so a phase that can't be trusted never gets a color.
+function phaseAnchor(phases: CaddieSwingPhases, phase: SwingAnchorPhase, analysisFps: number): PhaseAnchor | null {
+  const samplePeriod = 1 / (analysisFps > 0 ? analysisFps : 8);
+  if (phase === "impact") {
+    const { windowStartSeconds: start, windowEndSeconds: end, confidence } = phases.impact;
+    if (start === null || end === null || end < start || !isTrustedPhaseConfidence(confidence)) return null;
+    const width = end - start;
+    if (width >= MAX_IMPACT_WINDOW_SECONDS) return null;
+    // Any frame inside the window is plausibly the contact frame; half a
+    // sample of slack lets a narrow window that falls between two samples
+    // still resolve to its nearest one.
+    return { timeSeconds: (start + end) / 2, frameToleranceSeconds: Math.min(MAX_PHASE_FRAME_OFFSET_SECONDS, width / 2 + samplePeriod / 2) };
+  }
+  const moment = phase === "address" ? phases.address : phases.top;
+  if (moment.timestampSeconds === null || !isTrustedPhaseConfidence(moment.confidence)) return null;
+  return { timeSeconds: moment.timestampSeconds, frameToleranceSeconds: Math.min(MAX_PHASE_FRAME_OFFSET_SECONDS, samplePeriod) };
+}
 
 function getKp(frame: CaddiePoseFrame | undefined, name: string): CaddiePoseKeypoint | undefined {
   const k = frame?.keypoints[name];
@@ -329,14 +382,13 @@ function assessWrists(topFrame: CaddiePoseFrame | undefined): SwingSegmentAssess
 // analysis id, no debouncing/caching infrastructure needed.
 export function computeSwingAssessment(poseData: CaddiePoseData | undefined, phases: CaddieSwingPhases | undefined): SwingAssessment | undefined {
   if (!poseData || poseData.frames.length === 0 || !phases) return undefined;
-  const tolerance = Math.max(PHASE_DISPLAY_WINDOW_SECONDS, 1 / poseData.analysisFps);
-  const addressFrame = findFrameNear(poseData.frames, phases.address.timestampSeconds, tolerance);
-  const topFrame = findFrameNear(poseData.frames, phases.top.timestampSeconds, tolerance);
-  const impactMid =
-    phases.impact.windowStartSeconds !== null && phases.impact.windowEndSeconds !== null
-      ? (phases.impact.windowStartSeconds + phases.impact.windowEndSeconds) / 2
-      : null;
-  const impactFrame = findFrameNear(poseData.frames, impactMid, tolerance);
+  const frameFor = (phase: SwingAnchorPhase): CaddiePoseFrame | undefined => {
+    const anchor = phaseAnchor(phases, phase, poseData.analysisFps);
+    return anchor ? findFrameNear(poseData.frames, anchor.timeSeconds, anchor.frameToleranceSeconds) : undefined;
+  };
+  const addressFrame = frameFor("address");
+  const topFrame = frameFor("top");
+  const impactFrame = frameFor("impact");
 
   return {
     segments: [
@@ -364,13 +416,10 @@ export function segmentStatusAtTime(
   const base = Object.fromEntries(ALL_SEGMENT_IDS.map((id) => [id, "unknown"])) as Record<SwingSegmentId, SwingSegmentStatus>;
   if (!assessment || !phases) return base;
 
-  const addressT = phases.address.timestampSeconds;
-  const topT = phases.top.timestampSeconds;
-  const impactT =
-    phases.impact.windowStartSeconds !== null && phases.impact.windowEndSeconds !== null
-      ? (phases.impact.windowStartSeconds + phases.impact.windowEndSeconds) / 2
-      : null;
-  const anchorTimeFor = (phase: SwingAnchorPhase): number | null => (phase === "address" ? addressT : phase === "top" ? topT : impactT);
+  // Same trust rules as computeSwingAssessment: a low-confidence phase has
+  // no anchor time, so nothing is ever colored against it. (analysisFps
+  // only changes frame tolerance, not the time/null decision used here.)
+  const anchorTimeFor = (phase: SwingAnchorPhase): number | null => phaseAnchor(phases, phase, 8)?.timeSeconds ?? null;
 
   for (const seg of assessment.segments) {
     const anchorT = anchorTimeFor(seg.anchorPhase);
