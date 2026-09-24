@@ -48,6 +48,11 @@ export function PushPrePermissionPrompt() {
     checkPushPermission().then((state) => {
       if (state === "prompt") {
         setVisible(true);
+      } else if (state === "unavailable") {
+        // The plugin call failed (e.g. an older native build without the
+        // push plugin). Leave the one-time flag unset so a fixed build can
+        // still show this screen.
+        return;
       } else {
         // Already decided (granted on a previous install, or denied
         // directly in iOS Settings) — nothing for this screen to do.

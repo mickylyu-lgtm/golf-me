@@ -1,6 +1,7 @@
 // Sends a real APNs push to every device registered for a user. Never
-// called directly by the app -- the only caller is the notify_new_message
-// Postgres trigger (via pg_net), authenticated with a shared secret from
+// called directly by the app -- the only callers are the notify_new_message,
+// notify_round_joined and notify_caddie_analysis_complete Postgres triggers
+// (via pg_net), authenticated with a shared secret from
 // Vault rather than a normal user JWT, so this function is deployed with
 // verify_jwt disabled and does its own check instead (see PUSH_INTERNAL_SECRET
 // below). That's a deliberate exception to "always verify_jwt": there is no
@@ -82,11 +83,34 @@ async function getApnsJwt(): Promise<string> {
   return jwt;
 }
 
+// APNs failure reasons that mean this token itself is dead, so deleting the
+// row is correct. Everything else (DeviceTokenNotForTopic, TopicDisallowed,
+// InvalidProviderToken, ExpiredProviderToken, MissingTopic, BadTopic, 403s,
+// 429s, 5xx) is a server-side config or transient problem: deleting on those
+// would wipe every user's token over one bad secret. Those are logged and
+// the tokens are kept.
+// https://developer.apple.com/documentation/usernotifications/handling-notification-responses-from-apns
+const DEAD_TOKEN_REASONS = new Set(["BadDeviceToken", "Unregistered"]);
+
+// Enough of a token to tell rows apart in logs without printing the whole
+// device secret.
+function tokenHint(token: string): string {
+  return `...${token.slice(-8)}`;
+}
+
+type SendFailure = { token: string; status: number; reason: string };
+
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return jsonResponse({ error: "Method not allowed" }, 405);
 
   const internalSecret = Deno.env.get("PUSH_INTERNAL_SECRET");
-  if (!internalSecret || req.headers.get("x-internal-secret") !== internalSecret) {
+  if (!internalSecret) {
+    // Never log either value, only which side is wrong.
+    console.error("send-push: PUSH_INTERNAL_SECRET is not set on this function; every push is rejected.");
+    return jsonResponse({ error: "Unauthorized" }, 401);
+  }
+  if (req.headers.get("x-internal-secret") !== internalSecret) {
+    console.error("send-push: x-internal-secret header does not match PUSH_INTERNAL_SECRET (check the 'push_internal_secret' Vault secret).");
     return jsonResponse({ error: "Unauthorized" }, 401);
   }
 
@@ -105,9 +129,24 @@ Deno.serve(async (req: Request) => {
   if (tokensError) return jsonResponse({ error: tokensError.message }, 500);
   if (!tokens || tokens.length === 0) return jsonResponse({ sent: 0, reason: "no registered devices" });
 
+  const missing = ["APNS_KEY_ID", "APNS_TEAM_ID", "APNS_AUTH_KEY", "APNS_TOPIC"].filter((name) => !Deno.env.get(name));
+  if (missing.length > 0) {
+    console.error(`send-push: missing secrets: ${missing.join(", ")}`);
+    return jsonResponse({ error: "APNs is not configured", missing }, 500);
+  }
+
+  // Production APNs is correct for TestFlight and App Store builds. A build
+  // installed straight from Xcode (Debug) gets a sandbox token, which the
+  // production host rejects as BadDeviceToken, so test push from TestFlight.
   const apnsHost = Deno.env.get("APNS_HOST") || "https://api.push.apple.com";
   const topic = Deno.env.get("APNS_TOPIC")!;
-  const jwt = await getApnsJwt();
+  let jwt: string;
+  try {
+    jwt = await getApnsJwt();
+  } catch (err) {
+    console.error("send-push: could not sign the APNs provider token (check APNS_AUTH_KEY is the full .p8 contents).", err);
+    return jsonResponse({ error: "APNs provider token signing failed" }, 500);
+  }
 
   const payload = JSON.stringify({
     aps: { alert: { title, body }, sound: "default" },
@@ -116,33 +155,57 @@ Deno.serve(async (req: Request) => {
 
   let sent = 0;
   const staleTokens: string[] = [];
+  const failures: SendFailure[] = [];
 
   await Promise.all(
     tokens.map(async ({ token }) => {
-      const res = await fetch(`${apnsHost}/3/device/${token}`, {
-        method: "POST",
-        headers: {
-          authorization: `bearer ${jwt}`,
-          "apns-topic": topic,
-          "apns-push-type": "alert",
-          "apns-priority": "10",
-        },
-        body: payload,
-      });
+      let res: Response;
+      try {
+        res = await fetch(`${apnsHost}/3/device/${token}`, {
+          method: "POST",
+          headers: {
+            authorization: `bearer ${jwt}`,
+            "apns-topic": topic,
+            "apns-push-type": "alert",
+            "apns-priority": "10",
+          },
+          body: payload,
+        });
+      } catch (err) {
+        failures.push({ token, status: 0, reason: err instanceof Error ? err.message : "network error" });
+        return;
+      }
       if (res.ok) {
         sent++;
-      } else if (res.status === 400 || res.status === 410) {
-        // BadDeviceToken / Unregistered -- Apple is telling us this token
-        // will never work again (reinstall, app deleted, etc). Drop it so
-        // future sends don't keep paying the round trip for a dead token.
-        staleTokens.push(token);
+        return;
       }
+      // APNs error bodies look like {"reason":"BadDeviceToken"}.
+      let reason = "unknown";
+      try {
+        const parsed = await res.json();
+        if (parsed && typeof parsed.reason === "string") reason = parsed.reason;
+      } catch {
+        // Empty or non-JSON body, keep "unknown".
+      }
+      failures.push({ token, status: res.status, reason });
+      // A 410 always means the token is no longer active for this topic.
+      if (res.status === 410 || DEAD_TOKEN_REASONS.has(reason)) staleTokens.push(token);
     }),
   );
 
-  if (staleTokens.length > 0) {
-    await adminClient.from("device_push_tokens").delete().in("token", staleTokens);
+  for (const f of failures) {
+    const action = staleTokens.includes(f.token) ? "removing token" : "keeping token";
+    console.error(`send-push: APNs rejected ${tokenHint(f.token)} with ${f.status} ${f.reason} (${action}; host ${apnsHost}, topic ${topic})`);
   }
 
-  return jsonResponse({ sent, removed_stale: staleTokens.length });
+  if (staleTokens.length > 0) {
+    const { error: deleteError } = await adminClient.from("device_push_tokens").delete().in("token", staleTokens);
+    if (deleteError) console.error("send-push: failed to remove dead tokens.", deleteError.message);
+  }
+
+  return jsonResponse({
+    sent,
+    removed_stale: staleTokens.length,
+    failures: failures.map((f) => ({ token: tokenHint(f.token), status: f.status, reason: f.reason })),
+  });
 });
