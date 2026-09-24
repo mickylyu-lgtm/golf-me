@@ -33,8 +33,9 @@
 //
 // Every DB operation here uses a client scoped to the CALLER's own JWT
 // (forwarded Authorization header against the anon key), not the service
-// role — caddie_analyses' existing RLS (owner-only select/insert/update/
-// delete) and its ownership trigger (Ask Caddie only on your own community
+// role — caddie_analyses' existing RLS (owner-only select/insert/update;
+// no client delete since 20260924140000, which also enforces the daily
+// limit and freezes created_at in-database) and its ownership trigger (Ask Caddie only on your own community
 // posts, see migration 20260817091500) already enforce everything this
 // function needs, so there is no reason to bypass them with a service-role
 // client.
@@ -45,7 +46,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const GEMINI_MODEL = "gemini-3.6-flash"; // gemini-2.5-flash was retired for new API keys/projects (Gemini API started 404ing it with "no longer available to new users" on 2026-08-21); 3.6-flash is Google's named replacement, same video-understanding + structured-JSON-output support
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com";
 const COOLDOWN_SECONDS = 30; // blocks accidental double-taps/rapid re-asks
-const DAILY_LIMIT_PER_USER = 30; // caps worst-case per-user Gemini+Roboflow spend for the beta — covers both providers together, not separately; raised from 10 for active beta testing (2026-08-22)
+const DAILY_LIMIT_PER_USER = 30; // ALSO hard-coded in enforce_caddie_daily_limit() (migration 20260924140000), the authoritative in-DB check — change both together. Caps worst-case per-user Gemini+Roboflow spend for the beta — covers both providers together, not separately; raised from 10 for active beta testing (2026-08-22)
 const MAX_VIDEO_BYTES = 200 * 1024 * 1024; // matches the community-media Storage bucket's own file_size_limit
 const STALE_PROCESSING_MINUTES = 5; // a 'processing' row older than this is treated as abandoned, not an active duplicate
 const FILE_ACTIVE_POLL_ATTEMPTS = 6;
@@ -500,8 +501,16 @@ Deno.serve(async (req: Request) => {
     // The ownership trigger (20260817091500) raises exactly this kind of
     // message for a community_post the caller doesn't own — safe to
     // forward verbatim, it was written to be client-facing.
+    // The daily-limit trigger (20260924140000) is the race-proof backstop
+    // for the pre-check above — concurrent requests that all passed the
+    // count land here, with the same client-facing message.
     const message = insertError?.message ?? "Could not start this analysis.";
-    const status = message.includes("only available on your own posts") || message.includes("Source post not found") ? 403 : 500;
+    const status =
+      insertError?.hint === "caddie_daily_limit"
+        ? 429
+        : message.includes("only available on your own posts") || message.includes("Source post not found")
+          ? 403
+          : 500;
     return jsonResponse({ error: message }, status);
   }
   const row = inserted as CaddieAnalysisRow;
