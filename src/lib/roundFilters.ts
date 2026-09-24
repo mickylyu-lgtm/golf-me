@@ -1,11 +1,14 @@
 import type { GolfCall } from "../types";
 import { isThisWeekend } from "./greeting";
+import { roundCalendarDay } from "./golfCall";
 
 // Shared "when" matching used by both the Golf Calls matched-browse view and
 // Auto-Match, so the two entry points behave identically for the same
 // wizard answers.
+// `iso` is a round's dateISO — compared by the host's intended day (see
+// roundCalendarDay).
 export function isSameCalendarDay(iso: string, ref: Date): boolean {
-  const d = new Date(iso);
+  const d = roundCalendarDay(iso);
   return d.getFullYear() === ref.getFullYear() && d.getMonth() === ref.getMonth() && d.getDate() === ref.getDate();
 }
 

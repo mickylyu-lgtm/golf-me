@@ -2,11 +2,27 @@ import type { GolfCall } from "../types";
 import { haversineMiles } from "./geo";
 import type { GeoPoint } from "./geo";
 
-// A round whose calendar day (viewer's local time) is before today. Rounds
+// A round's dateISO is noon on the host's chosen day, converted to UTC
+// (CreateGolfCall / EditTeeTimeModal: new Date(`${date}T12:00:00`)). For
+// any host between UTC-12 and UTC+11 that instant falls on the same UTC
+// calendar date as the day they picked, so reading the UTC date gives the
+// host's intended day for every viewer, wherever they are (Health Audit
+// P3-3 — reading it in the viewer's own zone showed a New York host's
+// Oct 5 round as Oct 6 in Tokyo). Hosts at UTC+12..+14 (e.g. New Zealand in
+// summer) would still read one day early — accepted.
+// Returns a Date at LOCAL noon on that calendar day, so existing local-day
+// logic (same-day checks, weekday, toLocaleDateString) works unchanged.
+export function roundCalendarDay(dateISO: string): Date {
+  const d = new Date(dateISO);
+  if (Number.isNaN(d.getTime())) return d;
+  return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12, 0, 0, 0);
+}
+
+// A round whose calendar day is before today (viewer's today). Rounds
 // happening today still count as upcoming. Used to keep past-dated open
-// rounds out of browse/join — nothing server-side closes them yet.
+// rounds out of browse/join; the server enforces its own rule too.
 export function isPastRound(call: Pick<GolfCall, "dateISO">): boolean {
-  const roundDay = new Date(call.dateISO);
+  const roundDay = roundCalendarDay(call.dateISO);
   if (Number.isNaN(roundDay.getTime())) return false;
   roundDay.setHours(0, 0, 0, 0);
   const today = new Date();

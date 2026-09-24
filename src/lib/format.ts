@@ -1,5 +1,6 @@
 import type { Locale } from "../i18n/LocaleContext";
 import type { TranslationKey } from "../i18n/locales/en";
+import { roundCalendarDay } from "./golfCall";
 
 // Matches useLocale()'s t() signature exactly — every function below takes
 // this (and locale, where Intl needs it) as a plain parameter instead of
@@ -8,8 +9,9 @@ import type { TranslationKey } from "../i18n/locales/en";
 // `t`/`locale` from useLocale().
 type TFn = (key: TranslationKey, vars?: Record<string, string | number>) => string;
 
+// Round dates only (see roundCalendarDay for why the UTC date is used).
 export function formatDate(iso: string, locale: Locale, t: TFn): string {
-  const d = new Date(iso);
+  const d = roundCalendarDay(iso);
   const today = new Date();
   const tomorrow = new Date();
   tomorrow.setDate(today.getDate() + 1);
@@ -32,7 +34,7 @@ export function formatShortDate(iso: string, locale: Locale): string {
 export function formatCompactDay(iso: string, locale: Locale, t: TFn): string {
   const label = formatDate(iso, locale, t);
   if (label === t("date.today") || label === t("date.tomorrow")) return label.toUpperCase();
-  const d = new Date(iso);
+  const d = roundCalendarDay(iso);
   return d.toLocaleDateString(locale, { weekday: "short" }).toUpperCase();
 }
 

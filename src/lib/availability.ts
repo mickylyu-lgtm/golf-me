@@ -1,4 +1,5 @@
 import type { AvailabilitySlot } from "../types";
+import { roundCalendarDay } from "./golfCall";
 
 function dayPartFromHour(hour: number): "Mornings" | "Afternoons" | "Evenings" {
   return hour < 12 ? "Mornings" : hour < 17 ? "Afternoons" : "Evenings";
@@ -15,7 +16,8 @@ export function currentAvailabilitySlot(): AvailabilitySlot {
 // golfer availability, so a round's slot can be compared against a
 // golfer's stated free times.
 export function callToAvailabilitySlot(dateISO: string, timeLabel: string): AvailabilitySlot {
-  const date = new Date(dateISO);
+  // Weekday/weekend by the host's intended day (see roundCalendarDay).
+  const date = roundCalendarDay(dateISO);
   const isWeekend = date.getDay() === 0 || date.getDay() === 6;
 
   const match = timeLabel.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);

@@ -2,6 +2,9 @@ import type { ChatMessage, CircleConnection, DirectMessage, FollowConnection, Go
 import { generateId } from "../lib/id";
 import { dmConversationId } from "../lib/dm";
 
+// Round dateISOs are always noon on the round's day — the same convention
+// real rounds use (see roundCalendarDay in lib/golfCall.ts); an evening
+// hour here would read as the next day for US viewers.
 function isoInDays(days: number, hour = 12): string {
   const d = new Date();
   d.setDate(d.getDate() + days);
@@ -82,7 +85,7 @@ export function buildGolfCallsBundle(): SeedBundle {
       course: "Eisenhower Park Red",
       areaLabel: "East Meadow, NY",
       distanceMiles: 6.5,
-      dateISO: isoInDays(1, 17),
+      dateISO: isoInDays(1),
       timeLabel: "5:30 PM Twilight",
       estimatedPricePerPerson: 40,
       totalSpots: 4,
@@ -126,7 +129,7 @@ export function buildGolfCallsBundle(): SeedBundle {
       course: "Van Cortlandt Park Golf Course",
       areaLabel: "Bronx, NY",
       distanceMiles: 22,
-      dateISO: isoInDays(4, 18),
+      dateISO: isoInDays(4),
       timeLabel: "6:15 PM",
       estimatedPricePerPerson: 35,
       totalSpots: 4,
@@ -148,7 +151,7 @@ export function buildGolfCallsBundle(): SeedBundle {
       course: "Cantiague Park Golf Course",
       areaLabel: "Hicksville, NY",
       distanceMiles: 5.0,
-      dateISO: isoInDays(5, 8),
+      dateISO: isoInDays(5),
       timeLabel: "8:00 AM",
       estimatedPricePerPerson: 30,
       totalSpots: 4,
@@ -219,7 +222,7 @@ export function buildGolfCallsBundle(): SeedBundle {
       course: "Split Rock Golf Course",
       areaLabel: "Bronx, NY",
       distanceMiles: 23,
-      dateISO: isoInDays(10, 16),
+      dateISO: isoInDays(10),
       timeLabel: "3:40 PM",
       estimatedPricePerPerson: 55,
       totalSpots: 4,
@@ -240,7 +243,7 @@ export function buildGolfCallsBundle(): SeedBundle {
       course: "Harbor Links Golf Course",
       areaLabel: "Port Washington, NY",
       distanceMiles: 15,
-      dateISO: isoInDays(2, 14),
+      dateISO: isoInDays(2),
       timeLabel: "2:00 PM",
       estimatedPricePerPerson: 50,
       totalSpots: 4,

@@ -1,4 +1,5 @@
 import type { TranslationKey } from "../i18n/locales/en";
+import { roundCalendarDay } from "./golfCall";
 
 // 05:00-11:59 Morning, 12:00-17:59 Afternoon, 18:00-04:59 Evening — the
 // wrap past midnight matters here: hour < 5 must still read as evening/
@@ -37,8 +38,10 @@ export function getWeekendRange(): { start: Date; end: Date } {
   return { start, end };
 }
 
+// `dateISO` is a round's dateISO — judged by the host's intended day (see
+// roundCalendarDay).
 export function isThisWeekend(dateISO: string): boolean {
   const { start, end } = getWeekendRange();
-  const d = new Date(dateISO);
+  const d = roundCalendarDay(dateISO);
   return d >= start && d < end;
 }
