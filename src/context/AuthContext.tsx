@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { Capacitor } from "@capacitor/core";
@@ -31,9 +31,17 @@ interface AuthContextValue {
   // True while the initial session/profile restore is still in flight —
   // gates the app behind GolfMeLoader so it never flickers Welcome->Home.
   authLoading: boolean;
+  // Signed in, but the profile couldn't be loaded at all (no previous row to
+  // fall back on). Rendered as a retry screen by AppGate — never treated as
+  // "not onboarded", which would route into /profile-setup.
+  profileLoadFailed: boolean;
   isDemo: boolean;
   authUser: Session["user"] | null;
   profile: GolferProfile | null;
+  // Raw row, for the rare caller that must tell "unset" (null/empty column)
+  // apart from a value — GolferProfile's mapping fills in UI defaults that
+  // hide that distinction. Read-only; write through saveProfile.
+  profileRow: ProfileRow | null;
   hasOnboarded: boolean;
   onboardingTutorialCompleted: boolean;
   // Not part of GolferProfile (that type is UI-shaped, never had a language
@@ -74,26 +82,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [sessionChecked, setSessionChecked] = useState(false);
   const [profileChecked, setProfileChecked] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  // True when the most recent profiles fetch failed (network/API error) —
+  // distinct from "fetched fine, no row exists". A failed fetch must never
+  // be read as "not onboarded" (that used to route a fully onboarded golfer
+  // into /profile-setup, whose submit then overwrote their preferences).
+  const [profileFetchFailed, setProfileFetchFailed] = useState(false);
   const clearAuthError = useCallback(() => setAuthError(null), []);
+  // The user id the profile state currently belongs to. Lets the auth
+  // listener tell a genuine identity change (sign-in/sign-out/switch) apart
+  // from same-user events (TOKEN_REFRESHED, USER_UPDATED, a repeat
+  // SIGNED_IN on tab refocus), and lets fetchProfile drop a response that
+  // resolves after the user has already changed.
+  const currentUserIdRef = useRef<string | null>(null);
+  const profileFetchFailedRef = useRef(false);
 
   const fetchProfile = useCallback(async (userId: string) => {
     // profileChecked must flip to true no matter what happens here — a
     // network-level throw (not just an API error in `error`) must never
     // leave a signed-in visitor stuck on the loading screen forever.
+    let failed = false;
     try {
       const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
+      if (currentUserIdRef.current !== userId) return; // stale response for a previous user
       if (error) {
         console.error("GolfMe: failed to load profile.", error);
-        setProfileRow(null);
+        failed = true;
       } else {
         setProfileRow(data as ProfileRow | null);
       }
     } catch (err) {
+      if (currentUserIdRef.current !== userId) return;
       console.error("GolfMe: failed to load profile.", err);
-      setProfileRow(null);
-    } finally {
-      setProfileChecked(true);
+      failed = true;
     }
+    // On failure the previous row (if any) is deliberately kept as-is —
+    // it's still this same user's last known-good profile.
+    profileFetchFailedRef.current = failed;
+    setProfileFetchFailed(failed);
+    setProfileChecked(true);
   }, []);
 
   useEffect(() => {
@@ -129,15 +155,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // suddenly jumping to Home right after the Login page had already
     // rendered, with no login action taken in between. One listener, one
     // state update path, no race.
+    //
+    // Only a real identity change (user id differs from the one the
+    // profile state belongs to) resets the profile and re-gates the app
+    // behind the full-screen loader. Same-user events — TOKEN_REFRESHED
+    // (hourly, and on resume after the access token expired), USER_UPDATED,
+    // a repeat SIGNED_IN on refocus — used to do that too, which unmounted
+    // the whole router and threw away unsent drafts, attached videos, the
+    // swing trimmer and the host wizard mid-use.
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (cancelled) return;
-      setAuthUser(session?.user ?? null);
+      const nextUser = session?.user ?? null;
+      const nextId = nextUser?.id ?? null;
+      const sameUser = nextId !== null && nextId === currentUserIdRef.current;
+      currentUserIdRef.current = nextId;
       setSessionChecked(true);
-      if (session?.user) {
+
+      if (sameUser && nextUser) {
+        // Keep the existing user object reference unless something a
+        // consumer actually reads changed — a fresh object on every token
+        // refresh would re-fire every effect keyed on authUser (refetches,
+        // the language save in App.tsx) for no reason.
+        setAuthUser((prev) =>
+          prev && prev.updated_at === nextUser.updated_at && prev.email_confirmed_at === nextUser.email_confirmed_at && prev.email === nextUser.email
+            ? prev
+            : nextUser,
+        );
+        // Silent background retry if the last profile fetch failed — never
+        // flips profileChecked, so the router stays mounted.
+        if (profileFetchFailedRef.current) fetchProfile(nextId);
+        return;
+      }
+
+      setAuthUser(nextUser);
+      setProfileRow(null);
+      profileFetchFailedRef.current = false;
+      setProfileFetchFailed(false);
+      if (nextId) {
         setProfileChecked(false);
-        fetchProfile(session.user.id);
+        fetchProfile(nextId);
       } else {
-        setProfileRow(null);
         setProfileChecked(true);
       }
     });
@@ -259,6 +316,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!authUser) throw new Error("GolfMe: cannot save a profile with no signed-in user.");
       const { error } = await supabase.from("profiles").update(patch).eq("id", authUser.id);
       if (error) throw error;
+      // The write succeeded — reflect it locally right away, so a failed
+      // follow-up fetch below can't leave stale state (e.g. has_onboarded
+      // still false right after ProfileSetup saved it true).
+      setProfileRow((prev) => (prev ? ({ ...prev, ...patch } as ProfileRow) : prev));
       await fetchProfile(authUser.id);
     },
     [authUser, fetchProfile],
@@ -268,9 +329,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value: AuthContextValue = {
     authLoading: !sessionChecked || (Boolean(authUser) && !profileChecked),
+    profileLoadFailed: Boolean(authUser) && profileChecked && !profileRow && profileFetchFailed,
     isDemo,
     authUser,
     profile,
+    profileRow,
     hasOnboarded: profileRow?.has_onboarded ?? false,
     onboardingTutorialCompleted: profileRow?.onboarding_tutorial_completed ?? false,
     profileLanguage: profileRow?.language ?? null,

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { Analytics } from "@vercel/analytics/react";
@@ -21,6 +21,7 @@ import { TutorialOverlay } from "./components/tutorial/TutorialOverlay";
 import { PushPrePermissionPrompt } from "./components/notifications/PushPrePermissionPrompt";
 import { ScrollToTop } from "./components/layout/ScrollToTop";
 import { GolfMeLoader } from "./components/loading/GolfMeLoader";
+import { Button } from "./components/ui/Button";
 import { Welcome } from "./pages/Welcome";
 import { Splash } from "./pages/Splash";
 import { Onboarding } from "./pages/Onboarding";
@@ -202,8 +203,9 @@ function PushNotificationRouting() {
 // app never flickers Welcome->Home while either resolves.
 function AppGate({ children }: { children: ReactNode }) {
   const { isLoading } = useData();
-  const { authLoading } = useAuth();
+  const { authLoading, isDemo, profileLoadFailed, refreshProfile, signOut } = useAuth();
   const { t } = useLocale();
+  const [retrying, setRetrying] = useState(false);
   useLanguageProfileSync();
   // Fires as soon as a real auth session exists, even mid-onboarding (a
   // Coach Reviewer invite isn't gated on has_onboarded) — see the hook's
@@ -211,7 +213,33 @@ function AppGate({ children }: { children: ReactNode }) {
   usePendingReviewerInviteRedemption();
   usePushRegistration();
   useDisableKeyboardAccessoryBar();
-  if (isLoading || authLoading) return <GolfMeLoader fullScreen message={t("loading.gettingReady")} />;
+  if (isLoading || authLoading || retrying) return <GolfMeLoader fullScreen message={t("loading.gettingReady")} />;
+  // Signed in but the very first profile load failed (nothing cached to fall
+  // back on). Rendering the router here would read "no profile" as "not
+  // onboarded" and route an existing golfer into /profile-setup — so offer
+  // a retry instead. Demo never reaches this (it has no real profile fetch).
+  if (!isDemo && profileLoadFailed) {
+    return (
+      <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 bg-[#faf9f6] px-6 text-center">
+        <p className="text-sm text-slate-600">{t("loading.profileLoadFailed")}</p>
+        <Button
+          onClick={async () => {
+            setRetrying(true);
+            try {
+              await refreshProfile();
+            } finally {
+              setRetrying(false);
+            }
+          }}
+        >
+          {t("loading.retry")}
+        </Button>
+        <button onClick={() => signOut()} className="text-sm font-semibold text-slate-500 hover:text-slate-800">
+          {t("settings.logOut")}
+        </button>
+      </div>
+    );
+  }
   return <>{children}</>;
 }
 

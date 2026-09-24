@@ -47,7 +47,7 @@ const DEFAULT_GENDER = "Prefer not to say";
 export function ProfileSetup() {
   const navigate = useNavigate();
   const { signUpNewGolfer } = useData();
-  const { isDemo, saveProfile, signOut } = useAuth();
+  const { isDemo, profileRow, saveProfile, signOut } = useAuth();
   const { showToast } = useToast();
   const { t } = useLocale();
   const [submitting, setSubmitting] = useState(false);
@@ -105,25 +105,39 @@ export function ProfileSetup() {
       // age_range is deliberately omitted — it isn't asked here, and
       // leaving the column NULL (never a fabricated band) is exactly what
       // every consumer (autoMatch, GolferCard, Profile) already handles.
+      //
+      // Preference defaults are only written into columns that are still
+      // unset on the existing row (the handle_new_user() stub leaves them
+      // null/empty/0). If this screen is ever reached by a golfer who
+      // already has preferences saved, finishing it must not reset them.
+      const row = profileRow;
+      const preferenceDefaults: Record<string, unknown> = {};
+      if (!row?.gender) preferenceDefaults.gender = DEFAULT_GENDER;
+      if (!row || row.vibes.length === 0) preferenceDefaults.vibes = [...DEFAULT_VIBES];
+      if (!row?.walk_or_cart) preferenceDefaults.walk_or_cart = DEFAULT_WALK_OR_CART;
+      if (!row || (row.budget_min === 0 && row.budget_max === 0 && !row.no_budget_preference)) {
+        preferenceDefaults.budget_min = DEFAULT_BUDGET_MIN;
+        preferenceDefaults.budget_max = DEFAULT_BUDGET_MAX;
+      }
+      if (!row) {
+        // Column defaults already equal these on a stub row, so they only
+        // need writing when there's no row snapshot to compare against.
+        preferenceDefaults.skill_level = null;
+        preferenceDefaults.favorite_courses = [];
+        preferenceDefaults.travel_radius_miles = DEFAULT_TRAVEL_RADIUS_MILES;
+        preferenceDefaults.round_length_preference = DEFAULT_ROUND_LENGTH_PREFERENCE;
+      }
       setSubmitting(true);
       try {
         await saveProfile({
           name: name.trim(),
           avatar_color: avatarColorForName(name),
           avatar_initials: initialsFromName(name),
-          gender: DEFAULT_GENDER,
           area_label: areaLabel.trim(),
           playing_area_lat: playingAreaCoords?.lat ?? null,
           playing_area_lng: playingAreaCoords?.lng ?? null,
           handicap: hasHandicap ? finalHandicap : null,
-          skill_level: null,
-          vibes: [...DEFAULT_VIBES],
-          walk_or_cart: DEFAULT_WALK_OR_CART,
-          budget_min: DEFAULT_BUDGET_MIN,
-          budget_max: DEFAULT_BUDGET_MAX,
-          favorite_courses: [],
-          travel_radius_miles: DEFAULT_TRAVEL_RADIUS_MILES,
-          round_length_preference: DEFAULT_ROUND_LENGTH_PREFERENCE,
+          ...preferenceDefaults,
           has_onboarded: true,
         });
       } catch (err) {
