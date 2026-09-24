@@ -64,12 +64,11 @@ export function CaddieAnalysisDetail() {
 
   const analysis = analysisId ? getCaddieAnalysis(analysisId) : undefined;
 
-  // The edge function deletes the row outright on a failed analysis (see
-  // analyze-swing/index.ts) rather than leaving a visible 'failed' entry —
-  // so from here that reads as this exact row vanishing out from under a
-  // user who's sitting on its "Caddie is analyzing your swing" screen.
-  // Silently bouncing back to /caddie with zero explanation is exactly
-  // what made a one-off Roboflow failure look like an indefinite hang.
+  // analyze-swing now marks a failed analysis status='failed' (kept, shown
+  // with Try again) instead of deleting it (d1fb696). This still covers the
+  // row disappearing out from under someone on the "Caddie is analyzing
+  // your swing" screen (e.g. deleted elsewhere) — explain it with a toast
+  // rather than silently bouncing back to /caddie.
   const wasProcessingRef = useRef(false);
   if (analysis?.status === "processing") wasProcessingRef.current = true;
   useEffect(() => {

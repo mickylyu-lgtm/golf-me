@@ -12,6 +12,9 @@
 -- trigger could observe, and that's an intentional, already-covered case:
 -- the golfer is shown the failure directly if they're still on the page,
 -- and there's no lingering row to notify about if they're not.
+-- (Note added 2026-09-24, comment only: since d1fb696 (2026-09-19) a failed
+-- analysis is kept as status='failed' rather than deleted. Still no
+-- notification is sent for failures.)
 alter table public.notifications
   drop constraint notifications_type_check;
 alter table public.notifications
