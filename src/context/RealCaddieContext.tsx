@@ -174,6 +174,8 @@ export interface CreateAnalysisInput {
 interface RealCaddieContextValue {
   analyses: CaddieAnalysis[];
   isLoading: boolean;
+  /** True once the first fetch for the current account has finished (or always, in demo). */
+  hasLoaded: boolean;
   getAnalysis: (id: string) => CaddieAnalysis | undefined;
   createAnalysis: (input: CreateAnalysisInput) => Promise<CaddieAnalysis>;
   markShared: (id: string) => Promise<void>;
@@ -187,6 +189,10 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
   const { locale } = useLocale();
   const [rows, setRows] = useState<CaddieAnalysisRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  // Which account the first fetch has completed for — lets a deep-linked
+  // detail screen (push tap from a killed app, web refresh) wait for data
+  // instead of treating "not loaded yet" as "doesn't exist".
+  const [loadedForId, setLoadedForId] = useState<string | undefined>(undefined);
   const fetchingRef = useRef(false);
   const selfId = authUser?.id;
 
@@ -214,7 +220,10 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
       return;
     }
     setIsLoading(true);
-    refetch().finally(() => setIsLoading(false));
+    refetch().finally(() => {
+      setIsLoading(false);
+      setLoadedForId(selfId);
+    });
 
     // Own-row-only data (RLS already guarantees no other user's changes can
     // ever reach this filter), so a single owner-scoped subscription is
@@ -323,7 +332,9 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
     setRows((prev) => prev.map((r) => (r.id === row.id ? row : r)));
   }, []);
 
-  const value: RealCaddieContextValue = { analyses, isLoading, getAnalysis, createAnalysis, markShared, translateAnalysis };
+  const hasLoaded = isDemo || (!!selfId && loadedForId === selfId);
+
+  const value: RealCaddieContextValue = { analyses, isLoading, hasLoaded, getAnalysis, createAnalysis, markShared, translateAnalysis };
 
   return <RealCaddieContext.Provider value={value}>{children}</RealCaddieContext.Provider>;
 }

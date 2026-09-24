@@ -6,6 +6,7 @@ import { CaddieThinking } from "../components/caddie/CaddieThinking";
 import { CaddieSwingReplay } from "../components/caddie/CaddieSwingReplay";
 import { useData } from "../context/DataContext";
 import { useToast } from "../context/ToastContext";
+import { useRealCaddie } from "../context/RealCaddieContext";
 import { useLocale, LOCALES } from "../i18n/LocaleContext";
 import { Button } from "../components/ui/Button";
 import { Badge } from "../components/ui/Badge";
@@ -53,6 +54,7 @@ export function CaddieAnalysisDetail() {
   const { analysisId } = useParams<{ analysisId: string }>();
   const { getCaddieAnalysis, getPost, createCaddieAnalysis, markCaddieAnalysisShared, translateCaddieAnalysis, createPost, notifications, markNotificationRead } =
     useData();
+  const { hasLoaded: caddieHasLoaded } = useRealCaddie();
   const { t, locale } = useLocale();
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -88,6 +90,15 @@ export function CaddieAnalysisDetail() {
     if (match) markNotificationRead(match.id);
   }, [analysisId, notifications, markNotificationRead]);
 
+  // Opened cold (push tap from a killed app, web refresh) the list hasn't
+  // loaded yet — wait for the first fetch before deciding the row is gone.
+  if (!analysis && !caddieHasLoaded) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <Loader2 size={24} className="animate-spin text-fairway-600" />
+      </div>
+    );
+  }
   if (!analysis) return <Navigate to="/caddie" replace />;
 
   const sourcePost = analysis.sourcePostId ? getPost(analysis.sourcePostId) : undefined;
