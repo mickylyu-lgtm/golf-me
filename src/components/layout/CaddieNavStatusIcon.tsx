@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { CaddieNavIcon } from "../icons/CaddieNavIcon";
 import { useData } from "../../context/DataContext";
 import { useCaddieNavStatus } from "../../lib/useCaddieNavStatus";
+import { isStaleProcessing } from "../../lib/caddieAnalysis";
 
 const PULSE_MS = 700;
 const SPARK_ANGLES = [-18, 0, 18];
@@ -52,9 +53,17 @@ export function CaddieNavStatusIcon({ size, strokeWidth }: CaddieNavStatusIconPr
   const [pulsing, setPulsing] = useState(false);
   const prevProcessingIdsRef = useRef<Set<string>>(new Set());
   const wasProcessingRef = useRef(false);
+  // Stale rows (pipeline killed, row left at 'processing' forever) don't
+  // count as in-flight. useCaddieNavStatus above re-renders periodically
+  // while anything is processing; this key is what re-runs the effect when
+  // a row crosses the stale mark, since caddieAnalyses itself never changes.
+  const liveProcessingKey = caddieAnalyses
+    .filter((a) => a.status === "processing" && !isStaleProcessing(a))
+    .map((a) => a.id)
+    .join(",");
 
   useEffect(() => {
-    const processingRows = caddieAnalyses.filter((a) => a.status === "processing");
+    const processingRows = caddieAnalyses.filter((a) => a.status === "processing" && !isStaleProcessing(a));
     const processingIds = new Set(processingRows.map((a) => a.id));
     const prevIds = prevProcessingIdsRef.current;
     // Tracked by ID, not just a processing/not-processing boolean, so a
@@ -128,7 +137,7 @@ export function CaddieNavStatusIcon({ size, strokeWidth }: CaddieNavStatusIconPr
       setFillOffset(1);
       setPulsing(false);
     }
-  }, [caddieAnalyses]);
+  }, [caddieAnalyses, liveProcessingKey]);
 
   // Visually separated from the mascot but hugging it closely (reported
   // live as too large a gap in an earlier pass) — sized off the icon's own

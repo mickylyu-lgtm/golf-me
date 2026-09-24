@@ -2,7 +2,7 @@
 
 > Read this file first in any new session (laptop or claude.ai/code on mobile) before making changes. Update it in the same commit as any milestone — new feature, schema change, or architectural decision — so the next session (possibly on another device) has zero context loss.
 
-Last updated: 2026-09-21 (Phase 22)
+Last updated: 2026-09-24 (Health Audit Batch B)
 
 Note: Phases between Phase 20/21 (see below) and Phase 22 span roughly 31 commits (2026-09-16 through 2026-09-21) that also never got a numbered write-up as they landed — Phase 22 below reconstructs them from `git log`/code review (that session's own commit messages are unusually detailed, so this is a faithful summary, not a guess) rather than live session narration. Older gap, still not backfilled: Phases between Phase 6 and Phase 20 (chat keyboard/Capacitor Keyboard native linking, floating swipeable BottomNav + auto-collapse + centering fixes, tee-time booking fallback hero image, and everything else through 2026-09-15) — see `git log` for that range (commits from "Prefer GolfCourseAPI v1.1 coordinates..." through "Floating pill bottom nav with press-and-slide tab selection, haptics, Caddie unify").
 
@@ -478,7 +478,8 @@ Not done by any session — needs dashboard/browser/third-party-account access t
 
 ## Known bugs
 
-- None currently outstanding. Found and fixed since this project started (newest first) — full Phase 6 detail in `BACKEND_STATUS.md`'s Security audit:
+- Open items from the 2026-09-23 Health Audit (Claude Doc "GolfMe Health Audit"): Batch C (P1-2 Swing Post delete blocked by an Ask-Caddie analysis, P1-3 client-writable trust/Reputation inputs, P1-5 blocking not enforced for rounds, server half of P1-4, P2-3/P2-12/P2-4), Batch D (P1-9 push, 0 device tokens), Batch E (selected P2s). Found and fixed since this project started (newest first) — full Phase 6 detail in `BACKEND_STATUS.md`'s Security audit:
+  - **Health Audit Batch B** (2026-09-24, web-only, commits `35fda1b`..`2fe09e3` + the nav-ring follow-up): P1-1 same-user auth events (hourly `TOKEN_REFRESHED`, resume) remounted the whole app and a failed profile fetch routed onboarded users into `/profile-setup`, which then overwrote their preferences; P1-6 a stuck (abandoned) Caddie `processing` row spun the nav ring / Swing Post "Analyzing…" forever — now uses the same 5-min `isStaleProcessing` threshold as the Caddie list; P1-7 a Caddie result deep link (push from a killed app, web refresh) bounced to `/caddie` before data loaded — `RealCaddieContext.hasLoaded`; P1-4 client half — past-dated rounds hidden from Find/Home and unjoinable (`isPastRound`), confirm dialog before "Mark Round Completed". Not yet verified on a physical device.
   - **Anonymous listing of the `community-media` bucket exposed private Caddie uploads** (2026-09-23, P0, fixed by `20260923120000_restrict_community_media_listing`) — repro: Storage list API with only the public anon key returned every user folder and file. Residual: URLs already known remain fetchable until the private-bucket item (Remaining 0g) ships.
   - **Caddie ring clipped in collapsed BottomNav** (2026-09-21, this session) — icon-wrapper box was never sized for the ring, only the bare icon.
   - **Reputation tier flash on navigation** (2026-09-21, this session) — `useReputationState` fell back to an inaccurate client-side guess on every fresh mount.
@@ -564,6 +565,11 @@ Not done by any session — needs dashboard/browser/third-party-account access t
 - This session's deploy pattern: `git push origin main`, then `npx vercel --prod --yes` (a `vercel` plugin/CLI is available in this environment and successfully authenticates — an earlier bare `npx vercel` attempt without going through the plugin returned "Not authorized," so use the plugin-backed invocation, not a fresh unauthenticated `npx vercel`). Always ask before push and before deploy, per standing project rule — confirmed both explicitly this session before each of the 3 deploys.
 
 ## Exact next recommended action
+
+**2026-09-24 (supersedes the list below where they overlap)**: working through the 2026-09-23 Health Audit (Claude Doc "GolfMe Health Audit" — the full P1/P2/P3 list and batch plan live there, not in this repo). Batch A (P0 storage listing) and Batch B (web-only P1s) are done and deployed. Next:
+1. iPhone checks for Batch B: background the app >1h with a DM draft / host wizard open and resume (nothing lost, no full-screen loader); airplane-mode cold start shows "Couldn't load your profile" not onboarding; tap a "Caddie finished" push from a killed app (lands on the result).
+2. Batch C (database integrity/security, via the `golfme-architect` agent) — needs Micky's answers to the audit's open questions first: should completion require the round date to have passed; on Swing Post delete keep or delete its Caddie analysis; block joining in both directions.
+3. Batch D (push / 0 device tokens — needs the Mac's Xcode Signing & Capabilities checked), then Batch E.
 
 **2026-09-21**: everything in the old "Exact next recommended action" below (Community go-ahead, `GEOAPIFY_API_KEY`, Google OAuth config) is resolved — left in place underneath for history, not because it's still the plan. Current punch list, in priority order:
 
