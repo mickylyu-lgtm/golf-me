@@ -41,6 +41,7 @@ import { computeCallCompatibility } from "../lib/compatibility";
 import { matchTier, callMatchReasons } from "../lib/matchReasons";
 import { track } from "../lib/analytics";
 import { enrichRealCourse } from "../lib/realCourseSearch";
+import { isPastRound } from "../lib/golfCall";
 
 export function GolfCallDetail() {
   const { id } = useParams<{ id: string }>();
@@ -66,6 +67,7 @@ export function GolfCallDetail() {
 
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [completeConfirmOpen, setCompleteConfirmOpen] = useState(false);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
   const [joinConfirmOpen, setJoinConfirmOpen] = useState(false);
   const [proofExplainerOpen, setProofExplainerOpen] = useState(false);
@@ -113,7 +115,8 @@ export function GolfCallDetail() {
   const breakdown = !isHost ? computeCallCompatibility(currentUser, call) : null;
   const tier = breakdown ? matchTier(breakdown.overall) : null;
   const reasons = breakdown ? callMatchReasons(call, breakdown, locale, t) : [];
-  const canJoin = !isHost && !isJoined && !isPending && !isFull;
+  const isPast = isPastRound(call);
+  const canJoin = !isHost && !isJoined && !isPending && !isFull && !isPast;
 
   async function handleJoin() {
     if (joining) return;
@@ -341,6 +344,10 @@ export function GolfCallDetail() {
             <Button variant="outline" fullWidth onClick={() => cancelJoinRequest(call.id)}>
               {t("golfCallDetail.cancelRequest")}
             </Button>
+          ) : isPast ? (
+            <Button disabled fullWidth>
+              {t("golfCallDetail.roundPassed")}
+            </Button>
           ) : isFull ? (
             <Button disabled fullWidth>
               {t("golfCallDetail.foursomeFull")}
@@ -369,18 +376,7 @@ export function GolfCallDetail() {
       {/* Real: host-only, manual — "keep the beta logic simple" means no
           scheduled job watching tee times, the host decides when it's over. */}
       {!isDemo && isHost && !isCompleted && !isCancelled && (
-        <Button
-          variant="outline"
-          fullWidth
-          onClick={async () => {
-            try {
-              await completeGolfCall(call.id);
-              showToast(t("golfCallDetail.markCompletedToast"), "success");
-            } catch (err) {
-              showToast(err instanceof Error ? err.message : t("golfCallDetail.markCompletedError"), "warning");
-            }
-          }}
-        >
+        <Button variant="outline" fullWidth onClick={() => setCompleteConfirmOpen(true)}>
           {t("golfCallDetail.markCompleted")}
         </Button>
       )}
@@ -468,6 +464,24 @@ export function GolfCallDetail() {
             }
           }}
           onCancel={() => setCancelConfirmOpen(false)}
+        />
+      )}
+      {completeConfirmOpen && (
+        <ConfirmDialog
+          title={t("golfCallDetail.markCompletedConfirmTitle")}
+          message={t("golfCallDetail.markCompletedConfirmMessage")}
+          confirmLabel={t("golfCallDetail.markCompleted")}
+          onConfirm={async () => {
+            try {
+              await completeGolfCall(call.id);
+              showToast(t("golfCallDetail.markCompletedToast"), "success");
+            } catch (err) {
+              showToast(err instanceof Error ? err.message : t("golfCallDetail.markCompletedError"), "warning");
+            } finally {
+              setCompleteConfirmOpen(false);
+            }
+          }}
+          onCancel={() => setCompleteConfirmOpen(false)}
         />
       )}
       {joinConfirmOpen && canJoin && (

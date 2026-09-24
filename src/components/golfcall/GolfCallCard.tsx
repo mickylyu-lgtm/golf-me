@@ -18,6 +18,7 @@ import { computeCallCompatibility } from "../../lib/compatibility";
 import { matchTier, callMatchReasons } from "../../lib/matchReasons";
 import { evaluatePreferenceMatch } from "../../lib/preferenceMatch";
 import { track } from "../../lib/analytics";
+import { isPastRound } from "../../lib/golfCall";
 import type { PreferenceMatchContext } from "../../lib/preferenceMatch";
 import { useLocale } from "../../i18n/LocaleContext";
 
@@ -85,6 +86,8 @@ export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
     cta = <Badge tone="fairway">{t("golfCallCard.youreIn")}</Badge>;
   } else if (isPending) {
     cta = <Badge tone="sun">{t("golfCallCard.requestPending")}</Badge>;
+  } else if (isPastRound(call)) {
+    cta = <Badge tone="slate">{t("golfCallDetail.roundPassed")}</Badge>;
   } else if (isFull) {
     cta = <Badge tone="slate">{t("golfCallDetail.full")}</Badge>;
   } else {

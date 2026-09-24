@@ -536,6 +536,9 @@ export const ko: Record<TranslationKey, string> = {
   "golfCallDetail.requestToJoinButton": "참가 요청",
   "golfCallDetail.markCompletedToast": "라운드가 완료 처리되었습니다 — 이제 리뷰를 남길 수 있습니다.",
   "golfCallDetail.markCompleted": "라운드 완료 처리",
+  "golfCallDetail.markCompletedConfirmTitle": "이 라운드를 완료 처리할까요?",
+  "golfCallDetail.markCompletedConfirmMessage": "라운드를 실제로 플레이한 후에만 진행하세요. 되돌릴 수 없으며, 그룹 전원의 리뷰가 열립니다.",
+  "golfCallDetail.roundPassed": "이 라운드의 날짜가 지났습니다",
   "golfCallDetail.markCompletedError": "이 라운드를 완료 처리할 수 없습니다.",
   "golfCallDetail.reviewYourGroup": "그룹 리뷰하기",
   "golfCallDetail.reviewed": "리뷰 완료",
@@ -969,4 +972,6 @@ export const ko: Record<TranslationKey, string> = {
   "community.emptyForYou": "첫 번째로 대화를 시작해보세요.",
 
   "loading.gettingReady": "GolfMe 준비 중...",
+  "loading.profileLoadFailed": "프로필을 불러오지 못했습니다. 연결을 확인하고 다시 시도해 주세요.",
+  "loading.retry": "다시 시도",
 };

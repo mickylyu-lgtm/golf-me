@@ -11,6 +11,7 @@ import { FindRoundModal } from "../components/find/FindRoundModal";
 import type { GolfCall, GolfVibe, SkillFilter, WalkOrCart } from "../types";
 import { computeCallCompatibility } from "../lib/compatibility";
 import { matchesWhen } from "../lib/roundFilters";
+import { isPastRound } from "../lib/golfCall";
 import { effectiveLocation } from "../lib/travelLocation";
 import { resolveCallDistanceMiles } from "../lib/courseSearch";
 
@@ -43,7 +44,7 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
   const baseResults = useMemo(
     () =>
       golfCalls
-        .filter((c) => c.status !== "completed" && c.status !== "cancelled")
+        .filter((c) => c.status !== "completed" && c.status !== "cancelled" && !isPastRound(c))
         .filter(
           (c) =>
             !trimmedQuery || c.course.toLowerCase().includes(trimmedQuery) || c.areaLabel.toLowerCase().includes(trimmedQuery),

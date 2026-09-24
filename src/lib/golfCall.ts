@@ -2,6 +2,18 @@ import type { GolfCall } from "../types";
 import { haversineMiles } from "./geo";
 import type { GeoPoint } from "./geo";
 
+// A round whose calendar day (viewer's local time) is before today. Rounds
+// happening today still count as upcoming. Used to keep past-dated open
+// rounds out of browse/join — nothing server-side closes them yet.
+export function isPastRound(call: Pick<GolfCall, "dateISO">): boolean {
+  const roundDay = new Date(call.dateISO);
+  if (Number.isNaN(roundDay.getTime())) return false;
+  roundDay.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return roundDay.getTime() < today.getTime();
+}
+
 export interface RoundRow {
   id: string;
   host_user_id: string;

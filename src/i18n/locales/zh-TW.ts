@@ -536,6 +536,9 @@ export const zhTW: Record<TranslationKey, string> = {
   "golfCallDetail.requestToJoinButton": "申請加入",
   "golfCallDetail.markCompletedToast": "球局已標記為完成 — 現在可以留下評價了。",
   "golfCallDetail.markCompleted": "標記球局完成",
+  "golfCallDetail.markCompletedConfirmTitle": "將此球局標記為完成？",
+  "golfCallDetail.markCompletedConfirmMessage": "請僅在球局實際打完後操作。此操作無法復原，並會為全組開啟評價。",
+  "golfCallDetail.roundPassed": "此球局的日期已過",
   "golfCallDetail.markCompletedError": "無法將此球局標記為完成。",
   "golfCallDetail.reviewYourGroup": "評價你的球友",
   "golfCallDetail.reviewed": "已評價",
@@ -969,4 +972,6 @@ export const zhTW: Record<TranslationKey, string> = {
   "community.emptyForYou": "當第一個發起話題的人吧。",
 
   "loading.gettingReady": "GolfMe 準備中…",
+  "loading.profileLoadFailed": "無法載入你的個人資料。請檢查網路連線後重試。",
+  "loading.retry": "重試",
 };

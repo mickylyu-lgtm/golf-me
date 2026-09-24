@@ -886,6 +886,8 @@ export const en = {
 
   // Loading
   "loading.gettingReady": "Getting GolfMe ready...",
+  "loading.profileLoadFailed": "Couldn't load your profile. Check your connection and try again.",
+  "loading.retry": "Try again",
 
   // Golf Call detail
   "golfCallDetail.notFound": "Golf Call not found.",
@@ -917,6 +919,9 @@ export const en = {
   "golfCallDetail.requestToJoinButton": "Request to Join",
   "golfCallDetail.markCompletedToast": "Round marked completed — you can now leave reviews.",
   "golfCallDetail.markCompleted": "Mark Round Completed",
+  "golfCallDetail.markCompletedConfirmTitle": "Mark this round completed?",
+  "golfCallDetail.markCompletedConfirmMessage": "Only do this once the round has actually been played. It can't be undone, and it opens reviews for everyone in the group.",
+  "golfCallDetail.roundPassed": "This round's date has passed",
   "golfCallDetail.markCompletedError": "Couldn't mark this round completed.",
   "golfCallDetail.reviewYourGroup": "Review your group",
   "golfCallDetail.reviewed": "Reviewed",

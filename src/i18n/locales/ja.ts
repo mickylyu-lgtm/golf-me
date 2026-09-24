@@ -536,6 +536,9 @@ export const ja: Record<TranslationKey, string> = {
   "golfCallDetail.requestToJoinButton": "参加をリクエスト",
   "golfCallDetail.markCompletedToast": "ラウンドを完了にしました — レビューを投稿できます。",
   "golfCallDetail.markCompleted": "ラウンドを完了にする",
+  "golfCallDetail.markCompletedConfirmTitle": "このラウンドを完了にしますか？",
+  "golfCallDetail.markCompletedConfirmMessage": "実際にラウンドをプレーした後にだけ行ってください。元に戻すことはできず、グループ全員のレビューが開始されます。",
+  "golfCallDetail.roundPassed": "このラウンドの日付は過ぎています",
   "golfCallDetail.markCompletedError": "このラウンドを完了にできませんでした。",
   "golfCallDetail.reviewYourGroup": "グループをレビュー",
   "golfCallDetail.reviewed": "レビュー済み",
@@ -969,4 +972,6 @@ export const ja: Record<TranslationKey, string> = {
   "community.emptyForYou": "最初の投稿をしてみましょう。",
 
   "loading.gettingReady": "GolfMe を準備中...",
+  "loading.profileLoadFailed": "プロフィールを読み込めませんでした。接続を確認して、もう一度お試しください。",
+  "loading.retry": "再試行",
 };

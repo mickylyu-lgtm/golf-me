@@ -536,6 +536,9 @@ export const es: Record<TranslationKey, string> = {
   "golfCallDetail.requestToJoinButton": "Solicitar unirse",
   "golfCallDetail.markCompletedToast": "Ronda marcada como completada — ya puedes dejar reseñas.",
   "golfCallDetail.markCompleted": "Marcar ronda como completada",
+  "golfCallDetail.markCompletedConfirmTitle": "¿Marcar esta ronda como completada?",
+  "golfCallDetail.markCompletedConfirmMessage": "Hazlo solo cuando la ronda ya se haya jugado. No se puede deshacer y abre las reseñas para todo el grupo.",
+  "golfCallDetail.roundPassed": "La fecha de esta ronda ya pasó",
   "golfCallDetail.markCompletedError": "No se pudo marcar esta ronda como completada.",
   "golfCallDetail.reviewYourGroup": "Reseña a tu grupo",
   "golfCallDetail.reviewed": "Reseñado",
@@ -969,4 +972,6 @@ export const es: Record<TranslationKey, string> = {
   "community.emptyForYou": "Sé el primero en iniciar una conversación.",
 
   "loading.gettingReady": "Preparando GolfMe...",
+  "loading.profileLoadFailed": "No se pudo cargar tu perfil. Revisa tu conexión e inténtalo de nuevo.",
+  "loading.retry": "Intentar de nuevo",
 };

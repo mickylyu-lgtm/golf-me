@@ -536,6 +536,9 @@ export const zhCN: Record<TranslationKey, string> = {
   "golfCallDetail.requestToJoinButton": "申请加入",
   "golfCallDetail.markCompletedToast": "球局已标记为完成 — 现在可以留下评价了。",
   "golfCallDetail.markCompleted": "标记球局完成",
+  "golfCallDetail.markCompletedConfirmTitle": "将此球局标记为完成？",
+  "golfCallDetail.markCompletedConfirmMessage": "请仅在球局实际打完后操作。此操作无法撤销，并会为全组开启评价。",
+  "golfCallDetail.roundPassed": "此球局的日期已过",
   "golfCallDetail.markCompletedError": "无法将此球局标记为完成。",
   "golfCallDetail.reviewYourGroup": "评价你的球友",
   "golfCallDetail.reviewed": "已评价",
@@ -969,4 +972,6 @@ export const zhCN: Record<TranslationKey, string> = {
   "community.emptyForYou": "做第一个发起话题的人吧。",
 
   "loading.gettingReady": "GolfMe 正在准备中…",
+  "loading.profileLoadFailed": "无法加载你的个人资料。请检查网络连接后重试。",
+  "loading.retry": "重试",
 };

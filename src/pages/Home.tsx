@@ -14,6 +14,7 @@ import { CLICKABLE_CARD_CLASS } from "../components/ui/cardStyles";
 import { firstName, greetingKeyForHour, isThisWeekend } from "../lib/greeting";
 import { MIN_PREFERENCES_FOR_AUTO_MATCH, selectedPreferenceCount } from "../lib/preferenceMatch";
 import { formatShortDate } from "../lib/format";
+import { isPastRound } from "../lib/golfCall";
 import { COMMUNITY_TUTORIAL_ID } from "../lib/tutorialSteps";
 import { SUPPORTED_TEE_TIME_COURSES } from "../services/teeTimes/types";
 import { NearbyCoursesHomeCard } from "../components/courses/NearbyCoursesHomeCard";
@@ -62,7 +63,7 @@ export function Home() {
   );
 
   const openCalls = useMemo(
-    () => golfCalls.filter((c) => c.status === "open" && c.totalSpots - c.joinedGolferIds.length > 0),
+    () => golfCalls.filter((c) => c.status === "open" && c.totalSpots - c.joinedGolferIds.length > 0 && !isPastRound(c)),
     [golfCalls],
   );
 
