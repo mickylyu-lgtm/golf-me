@@ -515,8 +515,17 @@ export interface CaddieAnalysis {
   ownerId: string;
   sourceType: CaddieSourceType;
   sourcePostId?: string; // only for sourceType "community_post"
+  // What the player/poster actually load. For a private direct upload
+  // (sourceMediaPath set) this is a short-lived signed URL resolved by
+  // RealCaddieContext — "" until it's signed; never persist or share it.
+  // For Ask Caddie on a Community post it's the post's public URL.
   sourceMediaUrl: string;
   thumbnailUrl?: string; // a real captured frame from the source video — see community_posts.videoThumbnailUrl for the same idea
+  // Object paths in the private caddie-media bucket (see src/lib/caddieMedia.ts).
+  // The durable reference for a direct upload — Share to Community copies
+  // from these, retry re-sends them.
+  sourceMediaPath?: string;
+  thumbnailPath?: string;
   swingType?: string;
   status: CaddieAnalysisStatus;
   analysisSummary?: string;

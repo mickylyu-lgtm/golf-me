@@ -2,6 +2,9 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { ReactNode } from "react";
 import { App as CapacitorApp } from "@capacitor/app";
 import { supabase } from "../lib/supabase";
+import { SIGNED_URL_CHECK_INTERVAL_MS, SIGNED_URL_REFRESH_MARGIN_MS, signCaddieMediaPaths } from "../lib/caddieMedia";
+import type { SignedUrlEntry } from "../lib/caddieMedia";
+import { CaddieRequestError } from "../lib/caddieAnalysis";
 import { useAuth } from "./AuthContext";
 import { useLocale } from "../i18n/LocaleContext";
 import type {
@@ -21,8 +24,14 @@ interface CaddieAnalysisRow {
   owner_id: string;
   source_type: CaddieSourceType;
   source_post_id: string | null;
-  source_media_url: string;
+  // Public URL (Ask Caddie on a Community post / legacy direct upload), or
+  // null when the media lives in the private caddie-media bucket at
+  // source_media_path (migration 20260925090000). Optional so a row from a
+  // not-yet-migrated database still maps cleanly.
+  source_media_url: string | null;
   thumbnail_url: string | null;
+  source_media_path?: string | null;
+  thumbnail_path?: string | null;
   swing_type: string | null;
   status: CaddieAnalysisStatus;
   analysis_summary: string | null;
@@ -138,14 +147,21 @@ function jsonToPoseData(raw: Record<string, unknown> | null): CaddiePoseData | u
   };
 }
 
-function rowToAnalysis(row: CaddieAnalysisRow, poseData: CaddiePoseData | undefined): CaddieAnalysis {
+// A private path resolves through the signed-URL cache ("" / undefined until
+// signed — every renderer already guards on a falsy URL); otherwise the
+// row's public URL is used as-is.
+function rowToAnalysis(row: CaddieAnalysisRow, poseData: CaddiePoseData | undefined, signed: Map<string, SignedUrlEntry>): CaddieAnalysis {
+  const sourceMediaPath = row.source_media_path ?? undefined;
+  const thumbnailPath = row.thumbnail_path ?? undefined;
   return {
     id: row.id,
     ownerId: row.owner_id,
     sourceType: row.source_type,
     sourcePostId: row.source_post_id ?? undefined,
-    sourceMediaUrl: row.source_media_url,
-    thumbnailUrl: row.thumbnail_url ?? undefined,
+    sourceMediaUrl: sourceMediaPath ? (signed.get(sourceMediaPath)?.url ?? "") : (row.source_media_url ?? ""),
+    thumbnailUrl: thumbnailPath ? signed.get(thumbnailPath)?.url : (row.thumbnail_url ?? undefined),
+    sourceMediaPath,
+    thumbnailPath,
     swingType: row.swing_type ?? undefined,
     status: row.status,
     analysisSummary: row.analysis_summary ?? undefined,
@@ -167,7 +183,14 @@ function rowToAnalysis(row: CaddieAnalysisRow, poseData: CaddiePoseData | undefi
 export interface CreateAnalysisInput {
   sourceType: CaddieSourceType;
   sourcePostId?: string;
-  sourceMediaUrl: string;
+  // A private direct upload sends its caddie-media object paths (the
+  // server re-checks they're in the caller's own folder and signs them
+  // itself). sourceMediaUrl is only for a Community post's public video
+  // (the server ignores it for community_post and reads the post's own
+  // media) or a legacy row that still lives in community-media.
+  sourceMediaPath?: string;
+  thumbnailPath?: string;
+  sourceMediaUrl?: string;
   thumbnailUrl?: string;
   swingType?: string;
   // A golfer-picked window within a longer source video (see
@@ -193,12 +216,14 @@ interface RealCaddieContextValue {
    * call it for complete rows. No-op in demo.
    */
   loadPoseData: (id: string, rowUpdatedAt: string) => Promise<void>;
+  /** Re-signs these private caddie-media paths now (e.g. after a video/image load error). No-op in demo. */
+  refreshMediaUrls: (paths: Array<string | undefined>) => void;
 }
 
 // Everything the list, nav ring, PostCard and detail text need -- every
 // column except the heavy roboflow_analysis_json (see CaddieAnalysisRow).
 const LIST_COLUMNS =
-  "id, owner_id, source_type, source_post_id, source_media_url, thumbnail_url, swing_type, status, analysis_summary, strengths, issues, recommendations, drills, analysis_json, camera_angle, score, model, error_message, shared_to_community, created_at, updated_at";
+  "id, owner_id, source_type, source_post_id, source_media_url, thumbnail_url, source_media_path, thumbnail_path, swing_type, status, analysis_summary, strengths, issues, recommendations, drills, analysis_json, camera_angle, score, model, error_message, shared_to_community, created_at, updated_at";
 
 // Pose data per analysis id. `updatedAt` is the row version it was fetched
 // at: a fetched-but-empty result (row still processing, or a pre-Roboflow
@@ -223,6 +248,19 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
   // instead of treating "not loaded yet" as "doesn't exist".
   const [loadedForId, setLoadedForId] = useState<string | undefined>(undefined);
   const [poseCache, setPoseCache] = useState<Map<string, PoseCacheEntry>>(new Map());
+  // Signed playback/thumbnail URLs for private caddie-media paths, keyed by
+  // path. A derived read-through cache like poseCache -- the row's path is
+  // the durable reference; these links are re-made whenever they're missing
+  // or close to expiry and are never written anywhere.
+  const [signedUrls, setSignedUrls] = useState<Map<string, SignedUrlEntry>>(new Map());
+  const signedUrlsRef = useRef(signedUrls);
+  const signingRef = useRef<Set<string>>(new Set());
+  // Last forced re-sign per path (refreshMediaUrls), so a genuinely missing
+  // object can't trigger a sign/error loop.
+  const forcedAtRef = useRef<Map<string, number>>(new Map());
+  useEffect(() => {
+    signedUrlsRef.current = signedUrls;
+  }, [signedUrls]);
   // The in-flight list fetch, if any. A realtime event (or app resume) that
   // arrived while one was running used to be dropped outright -- if that
   // event was the processing -> complete flip and the in-flight query had
@@ -319,6 +357,7 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
     if (isDemo || !selfId) {
       setRows([]);
       setPoseCache(new Map());
+      setSignedUrls(new Map());
       return;
     }
     setIsLoading(true);
@@ -357,9 +396,76 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
     };
   }, [isDemo, selfId, refetch]);
 
-  const analyses = useMemo(() => rows.map((row) => rowToAnalysis(row, poseCache.get(row.id)?.pose)), [rows, poseCache]);
+  // Signs any private path that has no URL yet or whose URL is within
+  // SIGNED_URL_REFRESH_MARGIN_MS of expiring. Runs whenever the row list
+  // changes (initial load, realtime, app resume -- all go through refetch)
+  // and on a slow timer, so a screen left open for hours still re-signs
+  // before its link lapses.
+  useEffect(() => {
+    if (isDemo || !selfId) return;
+    const signMissing = () => {
+      const now = Date.now();
+      const needed = [
+        ...new Set(rows.flatMap((r) => [r.source_media_path, r.thumbnail_path]).filter((p): p is string => typeof p === "string" && p.length > 0)),
+      ].filter((p) => {
+        if (signingRef.current.has(p)) return false;
+        const entry = signedUrlsRef.current.get(p);
+        return !entry || entry.expiresAt - now < SIGNED_URL_REFRESH_MARGIN_MS;
+      });
+      if (needed.length === 0) return;
+      needed.forEach((p) => signingRef.current.add(p));
+      void signCaddieMediaPaths(needed)
+        .then((fresh) => {
+          if (selfIdRef.current !== selfId || fresh.size === 0) return;
+          setSignedUrls((prev) => {
+            const next = new Map(prev);
+            fresh.forEach((entry, path) => next.set(path, entry));
+            return next;
+          });
+        })
+        .finally(() => needed.forEach((p) => signingRef.current.delete(p)));
+    };
+    signMissing();
+    const timer = window.setInterval(signMissing, SIGNED_URL_CHECK_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [rows, isDemo, selfId]);
+
+  const analyses = useMemo(
+    () => rows.map((row) => rowToAnalysis(row, poseCache.get(row.id)?.pose, signedUrls)),
+    [rows, poseCache, signedUrls],
+  );
 
   const getAnalysis = useCallback((id: string) => analyses.find((a) => a.id === id), [analyses]);
+
+  // Forced re-sign, for a player/poster that failed to load (most likely an
+  // expired link after a long pause or backgrounding). At most once per 30 s
+  // per path.
+  const refreshMediaUrls = useCallback(
+    (paths: Array<string | undefined>) => {
+      if (isDemo || !selfId) return;
+      const now = Date.now();
+      const due = [...new Set(paths.filter((p): p is string => !!p))].filter((p) => {
+        const last = forcedAtRef.current.get(p) ?? 0;
+        return now - last > 30_000 && !signingRef.current.has(p);
+      });
+      if (due.length === 0) return;
+      due.forEach((p) => {
+        forcedAtRef.current.set(p, now);
+        signingRef.current.add(p);
+      });
+      void signCaddieMediaPaths(due)
+        .then((fresh) => {
+          if (selfIdRef.current !== selfId || fresh.size === 0) return;
+          setSignedUrls((prev) => {
+            const next = new Map(prev);
+            fresh.forEach((entry, path) => next.set(path, entry));
+            return next;
+          });
+        })
+        .finally(() => due.forEach((p) => signingRef.current.delete(p)));
+    },
+    [isDemo, selfId],
+  );
 
   const createAnalysis = useCallback(
     async (input: CreateAnalysisInput): Promise<CaddieAnalysis> => {
@@ -374,6 +480,8 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
         body: {
           sourceType: input.sourceType,
           sourcePostId: input.sourcePostId,
+          sourceMediaPath: input.sourceMediaPath,
+          thumbnailPath: input.thumbnailPath,
           sourceMediaUrl: input.sourceMediaUrl,
           thumbnailUrl: input.thumbnailUrl,
           swingType: input.swingType,
@@ -389,17 +497,18 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
         // never a raw provider error) instead of a generic "Edge Function
         // returned a non-2xx status code."
         let message = error.message;
+        const status = typeof error.context?.status === "number" ? (error.context.status as number) : undefined;
         try {
           const body = await error.context?.json();
           if (body?.error) message = body.error;
         } catch {
           // Falls back to error.message below.
         }
-        throw new Error(message);
+        throw new CaddieRequestError(message, status);
       }
       const row = (data as { analysis: CaddieAnalysisRow }).analysis;
       cachePoseFromFullRow(row);
-      const created = rowToAnalysis(row, row.roboflow_analysis_json ? jsonToPoseData(row.roboflow_analysis_json) : undefined);
+      const created = rowToAnalysis(row, row.roboflow_analysis_json ? jsonToPoseData(row.roboflow_analysis_json) : undefined, signedUrlsRef.current);
       setRows((prev) => {
         const withoutDuplicate = prev.filter((r) => r.id !== row.id);
         return [row, ...withoutDuplicate];
@@ -439,8 +548,8 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
   const hasLoaded = isDemo || (!!selfId && loadedForId === selfId);
 
   const value = useMemo<RealCaddieContextValue>(
-    () => ({ analyses, isLoading, hasLoaded, getAnalysis, createAnalysis, markShared, translateAnalysis, loadPoseData }),
-    [analyses, isLoading, hasLoaded, getAnalysis, createAnalysis, markShared, translateAnalysis, loadPoseData],
+    () => ({ analyses, isLoading, hasLoaded, getAnalysis, createAnalysis, markShared, translateAnalysis, loadPoseData, refreshMediaUrls }),
+    [analyses, isLoading, hasLoaded, getAnalysis, createAnalysis, markShared, translateAnalysis, loadPoseData, refreshMediaUrls],
   );
 
   return <RealCaddieContext.Provider value={value}>{children}</RealCaddieContext.Provider>;

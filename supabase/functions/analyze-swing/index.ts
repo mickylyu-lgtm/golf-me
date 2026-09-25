@@ -52,7 +52,9 @@ const STALE_PROCESSING_MINUTES = 5; // a 'processing' row older than this is tre
 const FILE_ACTIVE_POLL_ATTEMPTS = 6;
 const FILE_ACTIVE_POLL_DELAY_MS = 2000;
 const MAX_TRIM_WINDOW_SECONDS = 10; // matches AnalyzeSwing.tsx's own MAX_SWING_VIDEO_SECONDS — a client-sent startSeconds/endSeconds window is validated against this, never trusted as-is
-const COMMUNITY_MEDIA_BUCKET = "community-media"; // same bucket the client's own direct-upload/Swing Post flows use — no second media pipeline
+const COMMUNITY_MEDIA_BUCKET = "community-media"; // public Community media — only ever READ here now (Ask Caddie on a post, legacy direct uploads)
+const CADDIE_MEDIA_BUCKET = "caddie-media"; // PRIVATE (migration 20260925090000): direct uploads, their thumbnails and trimmed copies, `<owner uid>/<file>`
+const PIPELINE_SIGNED_URL_SECONDS = 60 * 60; // server-side signed URL for the pipeline's own fetches (trim-video, extract-frames x2) — comfortably longer than the 400s function budget
 
 // Roboflow's validated, already-deployed six-phase pose workflow — do not
 // retrain/replace/rebuild this, see product brief point 37.
@@ -273,7 +275,13 @@ function devLog(event: string, fields: Record<string, unknown> = {}) {
 interface RequestBody {
   sourceType: "direct_upload" | "community_post";
   sourcePostId?: string;
-  sourceMediaUrl: string;
+  // direct_upload: caddie-media object paths in the caller's own folder.
+  sourceMediaPath?: string;
+  thumbnailPath?: string;
+  // Legacy direct_upload (a row still in public community-media) — must be
+  // the caller's own community-media object. Ignored for community_post:
+  // the post's own media is read server-side instead (P2-9).
+  sourceMediaUrl?: string;
   thumbnailUrl?: string;
   swingType?: string;
   locale?: string;
@@ -288,11 +296,35 @@ interface CaddieAnalysisRow {
   owner_id: string;
   source_type: string;
   source_post_id: string | null;
-  source_media_url: string;
+  source_media_url: string | null;
   thumbnail_url: string | null;
+  source_media_path: string | null;
+  thumbnail_path: string | null;
   swing_type: string | null;
   status: string;
   created_at: string;
+}
+
+// P2-9: the pipeline only ever fetches media the caller owns in this
+// project's own Storage — never an arbitrary client-supplied URL (which
+// analyze-swing, trim-video and extract-frames would otherwise fetch
+// server-side). Returns the input when valid, null otherwise.
+function ownCaddiePath(path: unknown, userId: string): string | null {
+  if (typeof path !== "string" || path.length > 512) return null;
+  if (!path.startsWith(`${userId}/`) || path.includes("..") || /[?#\\]/.test(path)) return null;
+  return path;
+}
+function ownPublicCommunityMediaUrl(url: unknown, userId: string, supabaseUrl: string): string | null {
+  if (typeof url !== "string" || url.length > 2048) return null;
+  try {
+    const u = new URL(url);
+    if (u.protocol !== "https:" || u.host !== new URL(supabaseUrl).host || u.search || u.hash) return null;
+    const prefix = `/storage/v1/object/public/${COMMUNITY_MEDIA_BUCKET}/${userId}/`;
+    if (!u.pathname.startsWith(prefix) || decodeURIComponent(u.pathname).includes("..")) return null;
+    return url;
+  } catch {
+    return null;
+  }
 }
 
 interface ExtractedFrame {
@@ -400,11 +432,48 @@ Deno.serve(async (req: Request) => {
   if (body.sourceType !== "direct_upload" && body.sourceType !== "community_post") {
     return jsonResponse({ error: "Invalid sourceType." }, 400);
   }
-  if (!body.sourceMediaUrl || typeof body.sourceMediaUrl !== "string") {
-    return jsonResponse({ error: "sourceMediaUrl is required." }, 400);
-  }
   if (body.sourceType === "community_post" && !body.sourcePostId) {
     return jsonResponse({ error: "sourcePostId is required for a community_post analysis." }, 400);
+  }
+
+  // Resolve WHICH media this analysis uses, server-side (P2-9 + private
+  // bucket). Exactly one of mediaPath (private caddie-media) / mediaUrl
+  // (public community-media) is set; thumbnails are best-effort (invalid =
+  // dropped, never an error).
+  let mediaPath: string | null = null;
+  let mediaUrl: string | null = null;
+  let thumbPath: string | null = null;
+  let thumbUrl: string | null = null;
+  if (body.sourceType === "community_post") {
+    // The post's own media, never the client's copy of it. Same messages as
+    // the ownership trigger (20260817091500), which still runs on insert.
+    const { data: post } = await supabase
+      .from("community_posts")
+      .select("author_id, video_url, video_thumbnail_url")
+      .eq("id", body.sourcePostId!)
+      .maybeSingle();
+    if (!post) return jsonResponse({ error: "Source post not found." }, 403);
+    if (post.author_id !== user.id) return jsonResponse({ error: "Ask Caddie is only available on your own posts." }, 403);
+    mediaUrl = ownPublicCommunityMediaUrl(post.video_url, user.id, supabaseUrl);
+    thumbUrl = ownPublicCommunityMediaUrl(post.video_thumbnail_url, user.id, supabaseUrl);
+  } else if (body.sourceMediaPath !== undefined) {
+    mediaPath = ownCaddiePath(body.sourceMediaPath, user.id);
+    thumbPath = ownCaddiePath(body.thumbnailPath, user.id);
+  } else {
+    mediaUrl = ownPublicCommunityMediaUrl(body.sourceMediaUrl, user.id, supabaseUrl);
+    thumbUrl = ownPublicCommunityMediaUrl(body.thumbnailUrl, user.id, supabaseUrl);
+  }
+  if (!mediaPath && !mediaUrl) return jsonResponse({ error: "This swing video can't be analyzed." }, 400);
+
+  // A private object is signed now, with the caller's JWT: caddie-media's
+  // owner-only RLS makes this fail for a path that doesn't exist or isn't
+  // theirs — before any row (and daily-limit slot) is spent. The pipeline
+  // reuses this URL for every fetch; nothing about it is ever stored.
+  let pipelineVideoUrl = mediaUrl;
+  if (mediaPath) {
+    const { data: signed, error: signError } = await supabase.storage.from(CADDIE_MEDIA_BUCKET).createSignedUrl(mediaPath, PIPELINE_SIGNED_URL_SECONDS);
+    if (signError || !signed?.signedUrl) return jsonResponse({ error: "This swing video can't be analyzed." }, 400);
+    pipelineVideoUrl = signed.signedUrl;
   }
   const locale = body.locale && SUPPORTED_LOCALES.has(body.locale) ? body.locale : "en";
 
@@ -459,7 +528,9 @@ Deno.serve(async (req: Request) => {
   inFlightQuery =
     body.sourceType === "community_post"
       ? inFlightQuery.eq("source_post_id", body.sourcePostId!)
-      : inFlightQuery.eq("source_type", "direct_upload").eq("source_media_url", body.sourceMediaUrl);
+      : mediaPath
+        ? inFlightQuery.eq("source_type", "direct_upload").eq("source_media_path", mediaPath)
+        : inFlightQuery.eq("source_type", "direct_upload").eq("source_media_url", mediaUrl!);
   const { data: inFlightRows } = await inFlightQuery.limit(1);
   if (inFlightRows && inFlightRows.length > 0) {
     devLog("duplicate request, returning existing in-flight row", { id: inFlightRows[0].id });
@@ -477,7 +548,9 @@ Deno.serve(async (req: Request) => {
   completedQuery =
     body.sourceType === "community_post"
       ? completedQuery.eq("source_post_id", body.sourcePostId!)
-      : completedQuery.eq("source_type", "direct_upload").eq("source_media_url", body.sourceMediaUrl);
+      : mediaPath
+        ? completedQuery.eq("source_type", "direct_upload").eq("source_media_path", mediaPath)
+        : completedQuery.eq("source_type", "direct_upload").eq("source_media_url", mediaUrl!);
   const { data: completedRows } = await completedQuery.limit(1);
   if (completedRows && completedRows.length > 0) {
     devLog("already-complete analysis exists, reusing", { id: completedRows[0].id });
@@ -490,8 +563,10 @@ Deno.serve(async (req: Request) => {
       owner_id: user.id,
       source_type: body.sourceType,
       source_post_id: body.sourceType === "community_post" ? body.sourcePostId : null,
-      source_media_url: body.sourceMediaUrl,
-      thumbnail_url: body.thumbnailUrl ?? null,
+      source_media_url: mediaUrl,
+      source_media_path: mediaPath,
+      thumbnail_url: thumbUrl,
+      thumbnail_path: thumbPath,
       swing_type: body.swingType ?? null,
       status: "processing",
     })
@@ -535,14 +610,13 @@ Deno.serve(async (req: Request) => {
   // sent — this request can't stay open for the full pipeline. The client
   // already has the 'processing' row via the response and via realtime. ----
   async function runPipeline(): Promise<void> {
-    // Fetch the swing video. community-media is a public-read bucket (same
-    // as every other post's media in this app today), so a plain
-    // server-side GET is correct — no signed URL needed, and this function
-    // never makes a private video public to satisfy Gemini.
+    // Fetch the swing video: the signed caddie-media URL made above for a
+    // private upload, or the validated public community-media URL. This
+    // function never makes a private video public to satisfy Gemini.
     let videoBytes: ArrayBuffer;
     let videoContentType: string;
     try {
-      const videoRes = await fetch(row.source_media_url);
+      const videoRes = await fetch(pipelineVideoUrl!);
       if (!videoRes.ok) return await fail(`video fetch ${videoRes.status}`);
       videoContentType = videoRes.headers.get("content-type") ?? "video/mp4";
       videoBytes = await videoRes.arrayBuffer();
@@ -554,21 +628,24 @@ Deno.serve(async (req: Request) => {
     devLog("video fetched", { bytes: videoBytes.byteLength, contentType: videoContentType });
 
     // If the golfer picked a window (VideoTrimSelector), actually trim the
-    // video server-side and re-upload the result as this row's real
-    // source_media_url — NOT just a sampling-window hint passed to frame
-    // extraction. That was the original approach, and it left the
-    // untrimmed original as source_media_url, reported live as "the crop
+    // video server-side and re-upload the result (private caddie-media) as
+    // this row's real video — NOT just a sampling-window hint passed to
+    // frame extraction. That was the original approach, and it left the
+    // untrimmed original as the row's video, reported live as "the crop
     // isn't applied" once someone replayed the saved analysis and saw the
     // whole original clip. `effectiveVideoUrl`/`videoBytes` below are what
     // every later step (frame extraction, Gemini) actually uses, and
-    // effectiveVideoUrl also becomes the row's saved source_media_url.
-    let effectiveVideoUrl = row.source_media_url;
+    // trimmedPath becomes the row's saved source_media_path.
+    let effectiveVideoUrl = pipelineVideoUrl!;
+    // Set once the trimmed copy is uploaded to private caddie-media; it then
+    // becomes the row's source_media_path at completion.
+    let trimmedPath: string | null = null;
     if (trimWindow) {
       try {
         const trimRes = await fetch(TRIM_VIDEO_URL, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${frameExtractSecret}` },
-          body: JSON.stringify({ videoUrl: row.source_media_url, startSeconds: trimWindow.startSeconds, endSeconds: trimWindow.endSeconds }),
+          body: JSON.stringify({ videoUrl: pipelineVideoUrl, startSeconds: trimWindow.startSeconds, endSeconds: trimWindow.endSeconds }),
         });
         if (!trimRes.ok) {
           const errBody = await trimRes.text().catch(() => "");
@@ -577,13 +654,18 @@ Deno.serve(async (req: Request) => {
         const trimmedBytes = await trimRes.arrayBuffer();
         if (trimmedBytes.byteLength === 0) return await fail("video trim returned 0 bytes");
 
-        const trimmedPath = `${row.owner_id}/caddie-trimmed-${row.id}.mp4`;
+        const newTrimmedPath = `${row.owner_id}/caddie-trimmed-${row.id}.mp4`;
         const { error: trimUploadError } = await supabase.storage
-          .from(COMMUNITY_MEDIA_BUCKET)
-          .upload(trimmedPath, trimmedBytes, { contentType: "video/mp4" });
+          .from(CADDIE_MEDIA_BUCKET)
+          .upload(newTrimmedPath, trimmedBytes, { contentType: "video/mp4" });
         if (trimUploadError) return await fail(`trimmed video upload failed: ${trimUploadError.message}`);
+        const { data: trimmedSigned, error: trimmedSignError } = await supabase.storage
+          .from(CADDIE_MEDIA_BUCKET)
+          .createSignedUrl(newTrimmedPath, PIPELINE_SIGNED_URL_SECONDS);
+        if (trimmedSignError || !trimmedSigned?.signedUrl) return await fail("trimmed video sign failed");
 
-        effectiveVideoUrl = supabase.storage.from(COMMUNITY_MEDIA_BUCKET).getPublicUrl(trimmedPath).data.publicUrl;
+        trimmedPath = newTrimmedPath;
+        effectiveVideoUrl = trimmedSigned.signedUrl;
         videoBytes = trimmedBytes;
         videoContentType = "video/mp4";
         devLog("video trimmed", { bytes: videoBytes.byteLength, window: trimWindow });
@@ -906,12 +988,11 @@ Deno.serve(async (req: Request) => {
       .from("caddie_analyses")
       .update({
         status: "complete",
-        // Only actually changes anything when trimWindow was set (the trim
-        // step above already re-pointed effectiveVideoUrl at the newly
-        // uploaded, ACTUALLY trimmed file) — a no-op write of the same
-        // value otherwise, so this is safe unconditionally rather than
-        // needing its own branch.
-        source_media_url: effectiveVideoUrl,
+        // When the golfer picked a window, the row's video becomes the
+        // ACTUALLY trimmed private copy (stored by path; effectiveVideoUrl
+        // is only a signed link and is never saved). Otherwise the media
+        // columns are left exactly as inserted.
+        ...(trimmedPath ? { source_media_path: trimmedPath, source_media_url: null } : {}),
         analysis_json: parsed,
         roboflow_analysis_json: trustedPoseData,
         analysis_summary: parsed.summary,
@@ -930,6 +1011,20 @@ Deno.serve(async (req: Request) => {
       // completed; leave it for a manual look rather than silently losing it.
       console.error("[analyze-swing] save after successful analysis failed.", { rowId: row.id, reason: updateError.message });
       return;
+    }
+    // The untrimmed private original is now unreferenced (this row points at
+    // the trimmed copy) unless another of the caller's rows still uses it —
+    // remove it rather than leave a private orphan. Best-effort; never a
+    // community-media object (those belong to posts / P2-10's cleanup).
+    if (trimmedPath && row.source_media_path && row.source_media_path !== trimmedPath) {
+      const { count: stillUsed, error: usedError } = await supabase
+        .from("caddie_analyses")
+        .select("id", { count: "exact", head: true })
+        .eq("source_media_path", row.source_media_path);
+      if (!usedError && stillUsed === 0) {
+        const { error: removeError } = await supabase.storage.from(CADDIE_MEDIA_BUCKET).remove([row.source_media_path]);
+        if (removeError) console.error("[analyze-swing] couldn't remove the untrimmed original.", { rowId: row.id, reason: removeError.message });
+      }
     }
     devLog("saved", {
       id: row.id,

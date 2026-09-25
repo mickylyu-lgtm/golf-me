@@ -28,7 +28,12 @@ export interface CommunityPostDraft {
   text: string;
   activeTool: PostAttachment;
   mediaItems: DraftMediaItem[];
-  prefilledVideoUrl?: string;
+  prefilledVideoUrl?: string; // public URLs only — never a signed link
+  prefilledThumbnailUrl?: string;
+  // A private Caddie upload being shared, by caddie-media object path — the
+  // preview link is re-signed on restore, and the public copy is only made
+  // when the post is published (see CreatePost / src/lib/caddieMedia.ts).
+  privateShare?: { videoPath: string; thumbnailPath?: string };
   courseTag?: string;
   golfCallId?: string;
   category: PostCategory;

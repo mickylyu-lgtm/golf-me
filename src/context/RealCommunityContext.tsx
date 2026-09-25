@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { supabase } from "../lib/supabase";
+import { privatizeAnalysesOfPost } from "../lib/caddieMedia";
 import { useAuth } from "./AuthContext";
 import { profileRowToGolferProfile } from "../lib/profile";
 import type { ProfileRow } from "../lib/profile";
@@ -353,6 +354,19 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
       // Caddie analysis or another post can still point at the same video/
       // thumbnail -- those are never returned). See migration
       // 20260924110000_delete_community_post_with_media_cleanup.
+      //
+      // First, any Ask-Caddie analysis of this post gets its own private
+      // copy of the video/thumbnail and stops referencing the public files
+      // (private-bucket product decision: a deleted post leaves nothing
+      // public behind). Must run BEFORE the RPC so its reference check sees
+      // the analysis on the private copy and returns the public files for
+      // removal. Best effort: a row that couldn't be privatized keeps its
+      // public URL, and the RPC then keeps that file — never a dangling
+      // reference. See privatizeAnalysesOfPost.
+      if (selfId) {
+        const notPrivatized = await privatizeAnalysesOfPost(selfId, postId);
+        if (notPrivatized > 0) console.warn(`GolfMe: ${notPrivatized} Caddie analysis(es) of this post kept the public video.`);
+      }
       const { data, error } = await supabase.rpc("delete_community_post", { p_post_id: postId });
       if (error) {
         // RPC not deployed yet (client shipped ahead of the migration):
@@ -376,7 +390,7 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
       }
       await refetch();
     },
-    [refetch],
+    [refetch, selfId],
   );
 
   const attachGolfCallToPost = useCallback(

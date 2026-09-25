@@ -235,6 +235,10 @@ const COLLAPSE_UNKNOWN_THRESHOLD = 2;
 export interface CaddieSwingReplayProps {
   sourceMediaUrl: string;
   thumbnailUrl?: string;
+  // Called when the video fails to load — for a private upload that's most
+  // likely an expired signed link; the parent re-signs and passes a new
+  // sourceMediaUrl, and playback resumes where it stopped.
+  onMediaError?: () => void;
   poseData?: CaddiePoseData;
   phases?: CaddieSwingPhases;
 }
@@ -254,9 +258,10 @@ const REPLAY_MODES = [
   { speed: 0.25, labelKey: "caddie.replaySlowAnalysis", showOverlay: true },
 ] as const;
 
-export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phases }: CaddieSwingReplayProps) {
+export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, poseData, phases }: CaddieSwingReplayProps) {
   const { t } = useLocale();
   const videoRef = useRef<HTMLVideoElement>(null);
+  const resumeAtRef = useRef<number | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const phaseRowRef = useRef<HTMLDivElement>(null);
@@ -626,6 +631,18 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, poseData, phas
           src={sourceMediaUrl}
           poster={thumbnailUrl}
           preload="metadata"
+          onError={() => {
+            const v = videoRef.current;
+            if (v && v.currentTime > 0) resumeAtRef.current = v.currentTime;
+            onMediaError?.();
+          }}
+          onLoadedMetadata={() => {
+            const v = videoRef.current;
+            if (v && resumeAtRef.current !== null) {
+              v.currentTime = resumeAtRef.current;
+              resumeAtRef.current = null;
+            }
+          }}
           controls
           // playsInline: without it, iOS Safari can auto-promote playback
           // into its OWN real native fullscreen the instant play() fires —

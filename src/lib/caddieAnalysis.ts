@@ -35,3 +35,17 @@ export function usePeriodicRerender(active: boolean, intervalMs = 15000): void {
     return () => clearInterval(id);
   }, [active, intervalMs]);
 }
+
+// analyze-swing rejection with its HTTP status, so a caller can tell a
+// definite "no row was created" answer (400/401/403/429 -- every one of
+// those returns before or at the insert) from an ambiguous network/gateway
+// failure where the row may exist. AnalyzeSwing only cleans up its uploaded
+// private files for the definite case.
+export class CaddieRequestError extends Error {
+  readonly status?: number;
+  constructor(message: string, status?: number) {
+    super(message);
+    this.name = "CaddieRequestError";
+    this.status = status;
+  }
+}

@@ -19,6 +19,7 @@ import { formatDate, formatMoney } from "../lib/format";
 import { postCategoryLabel } from "../lib/enumLabels";
 import { supabase } from "../lib/supabase";
 import { clearCommunityPostDraft, loadCommunityPostDraft, saveCommunityPostDraft } from "../lib/communityPostDraft";
+import { copyCaddieMediaToCommunity, signCaddieMediaPath } from "../lib/caddieMedia";
 import type { DraftMediaItem } from "../lib/communityPostDraft";
 
 type Attachment = "none" | "photo" | "course" | "round" | "swing";
@@ -28,12 +29,21 @@ const MAX_SWING_VIDEO_BYTES = 200 * 1024 * 1024; // matches the Storage bucket's
 const MAX_SWING_VIDEO_SECONDS = 15; // Caddie's Roboflow pass calls once per sampled frame (~8fps) — a longer cap multiplies calls/latency per analysis, see analyze-swing's ANALYSIS_FPS comment
 const MAX_POST_MEDIA_ITEMS = 10; // matches Instagram's own carousel cap — a sensible, familiar limit, not an arbitrary one
 
-// Caddie's "Share to Community" hands off here via navigate(..., { state })
-// — a real video already sitting in community-media, so posting must reuse
-// that URL directly rather than re-uploading a second copy of the same file.
+// Caddie's "Share to Community" hands off here via navigate(..., { state }).
+// Two shapes:
+//  * A private direct upload (privateVideoPath set): the video lives in the
+//    PRIVATE caddie-media bucket. swingVideoUrl is only a short-lived signed
+//    URL for the preview. Publishing copies the files into public
+//    community-media (copyCaddieMediaToCommunity) so the post never points
+//    at the private original — and abandoning the share leaves nothing
+//    public.
+//  * Ask Caddie on a Community post (no privateVideoPath): swingVideoUrl is
+//    already a public community-media URL and is reused as-is.
 export interface CreatePostSwingPrefill {
   swingVideoUrl: string;
   videoThumbnailUrl?: string;
+  privateVideoPath?: string;
+  privateThumbnailPath?: string;
   caption?: string;
 }
 
@@ -60,7 +70,9 @@ export function CreatePost() {
   // activeTool is UI-only — which picker panel is currently expanded below
   // the pills. It must never be the thing that decides what's attached;
   // that's exactly the bug being fixed here (see doc comment further down).
-  const [activeTool, setActiveTool] = useState<Attachment>(prefill?.swingVideoUrl ? "swing" : (draft?.activeTool ?? "none"));
+  const [activeTool, setActiveTool] = useState<Attachment>(
+    prefill?.swingVideoUrl || prefill?.privateVideoPath ? "swing" : (draft?.activeTool ?? "none"),
+  );
   const [mediaItems, setMediaItems] = useState<DraftMediaItem[]>(draft?.mediaItems ?? []);
   const [mediaUploading, setMediaUploading] = useState(false);
   // Never restored from the draft — a File can't survive localStorage's
@@ -73,7 +85,14 @@ export function CreatePost() {
   // must skip the upload step and reuse this URL as-is. Cleared the moment
   // the user picks a different video file, since that's a genuinely new
   // upload no longer represented by this URL.
-  const [prefilledVideoUrl, setPrefilledVideoUrl] = useState<string | undefined>(prefill?.swingVideoUrl ?? draft?.prefilledVideoUrl);
+  const [prefilledVideoUrl, setPrefilledVideoUrl] = useState<string | undefined>(prefill?.swingVideoUrl || draft?.prefilledVideoUrl || undefined);
+  // A private Caddie video being shared (see CreatePostSwingPrefill). When
+  // set, prefilledVideoUrl/videoPreviewUrl are only a signed preview link —
+  // never saved to the draft and never published.
+  const [privateShare, setPrivateShare] = useState<{ videoPath: string; thumbnailPath?: string } | undefined>(
+    prefill?.privateVideoPath ? { videoPath: prefill.privateVideoPath, thumbnailPath: prefill.privateThumbnailPath } : draft?.privateShare,
+  );
+  const prefilledThumbnailUrl = prefill?.videoThumbnailUrl ?? draft?.prefilledThumbnailUrl;
   const [courseQuery, setCourseQuery] = useState("");
   const [courseTag, setCourseTag] = useState<string | undefined>(draft?.courseTag);
   const [golfCallId, setGolfCallId] = useState<string | undefined>(draft?.golfCallId);
@@ -92,8 +111,35 @@ export function CreatePost() {
   // own state comment above). Cleared only once the post actually
   // publishes (see handlePost).
   useEffect(() => {
-    saveCommunityPostDraft({ text, activeTool, mediaItems, prefilledVideoUrl, courseTag, golfCallId, category, requestCoachReview });
-  }, [text, activeTool, mediaItems, prefilledVideoUrl, courseTag, golfCallId, category, requestCoachReview]);
+    saveCommunityPostDraft({
+      text,
+      activeTool,
+      mediaItems,
+      // A signed preview link expires — a private share is saved by path.
+      prefilledVideoUrl: privateShare ? undefined : prefilledVideoUrl,
+      prefilledThumbnailUrl: privateShare ? undefined : prefilledThumbnailUrl,
+      privateShare,
+      courseTag,
+      golfCallId,
+      category,
+      requestCoachReview,
+    });
+  }, [text, activeTool, mediaItems, prefilledVideoUrl, prefilledThumbnailUrl, privateShare, courseTag, golfCallId, category, requestCoachReview]);
+
+  // A private share restored from a draft (or handed over before its
+  // signed URL was ready) needs a fresh preview link.
+  useEffect(() => {
+    if (!privateShare || prefilledVideoUrl || videoFile) return;
+    let cancelled = false;
+    void signCaddieMediaPath(privateShare.videoPath).then((url) => {
+      if (cancelled || !url) return;
+      setPrefilledVideoUrl(url);
+      setVideoPreviewUrl(url);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [privateShare, prefilledVideoUrl, videoFile]);
 
   const myCalls = useMemo(
     () => golfCalls.filter((c) => c.hostId === currentUser.id || c.joinedGolferIds.includes(currentUser.id)),
@@ -114,7 +160,7 @@ export function CreatePost() {
   // effect. Priority order (swing highest) matches the brief's explicit
   // "the swing video is the PRIMARY content" instruction.
   function attachedKind(): Attachment {
-    if (videoFile || prefilledVideoUrl) return "swing";
+    if (videoFile || prefilledVideoUrl || privateShare) return "swing";
     if (mediaItems.length > 0) return "photo";
     if (courseTag) return "course";
     if (golfCallId) return "round";
@@ -217,6 +263,7 @@ export function CreatePost() {
 
   function doAttachVideo(file: File) {
     setPrefilledVideoUrl(undefined);
+    setPrivateShare(undefined);
     setVideoFile(file);
     setVideoPreviewUrl(URL.createObjectURL(file));
     setActiveTool("swing");
@@ -285,6 +332,7 @@ export function CreatePost() {
     if (videoPreviewUrl && !prefilledVideoUrl) URL.revokeObjectURL(videoPreviewUrl);
     setVideoPreviewUrl(undefined);
     setPrefilledVideoUrl(undefined);
+    setPrivateShare(undefined);
     if (activeTool === "swing") setActiveTool("none");
   }
 
@@ -315,7 +363,7 @@ export function CreatePost() {
   }
 
   const kind = attachedKind();
-  const canPost = text.trim().length > 0 && !mediaUploading && (kind !== "swing" || Boolean(videoFile) || Boolean(prefilledVideoUrl));
+  const canPost = text.trim().length > 0 && !mediaUploading && (kind !== "swing" || Boolean(videoFile) || Boolean(prefilledVideoUrl) || Boolean(privateShare));
 
   async function handlePost() {
     if (!canPost || posting) return;
@@ -324,7 +372,29 @@ export function CreatePost() {
     try {
       let videoUrl: string | undefined;
       let videoThumbnailUrl: string | undefined;
-      if (kind === "swing" && prefilledVideoUrl && !videoFile) {
+      if (kind === "swing" && privateShare && !videoFile) {
+        // Sharing a private Caddie upload: copy it (and its thumbnail) into
+        // public community-media now, at publish time. The post references
+        // only the public copy; the private original stays with the
+        // analysis, and deleting this post later removes just the copy.
+        if (isDemo || !authUser) {
+          showToast("Swing Post video upload needs a real GolfMe account.", "warning");
+          setPosting(false);
+          setUploadProgress("idle");
+          return;
+        }
+        setUploadProgress("uploading");
+        videoUrl = await copyCaddieMediaToCommunity(authUser.id, privateShare.videoPath, "video");
+        if (privateShare.thumbnailPath) {
+          try {
+            videoThumbnailUrl = await copyCaddieMediaToCommunity(authUser.id, privateShare.thumbnailPath, "thumb");
+          } catch (thumbErr) {
+            console.error("GolfMe: failed to copy the swing thumbnail.", thumbErr);
+          }
+        }
+      } else if (kind === "swing" && prefilledVideoUrl && !videoFile) {
+        // Never publish a signed (expiring, private) link.
+        if (prefilledVideoUrl.includes("/storage/v1/object/sign/")) throw new Error("Couldn't attach this swing video. Please try sharing it again.");
         // Handed off from Caddie's "Share to Community" — already a real
         // Storage URL, so reuse it directly rather than uploading a second
         // copy of the same file. The thumbnail was already captured at the
@@ -333,7 +403,7 @@ export function CreatePost() {
         // state, so it comes along here too instead of falling back to a
         // black player.
         videoUrl = prefilledVideoUrl;
-        videoThumbnailUrl = prefill?.videoThumbnailUrl;
+        videoThumbnailUrl = prefilledThumbnailUrl;
       } else if (kind === "swing" && videoFile) {
         if (isDemo || !authUser) {
           // Swing Posts have no demo/local equivalent — real Supabase
@@ -460,14 +530,20 @@ export function CreatePost() {
         </div>
       )}
 
-      {(videoFile || prefilledVideoUrl) && videoPreviewUrl && (
+      {(videoFile || prefilledVideoUrl || privateShare) && (videoPreviewUrl || privateShare) && (
         <div className="flex flex-col gap-2.5 rounded-2xl border border-fairway-200 bg-fairway-50/40 p-3">
           <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-fairway-700">
             <Video size={13} /> {t("composer.swingVideo")}
           </p>
           <div className="overflow-hidden rounded-xl">
             {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-            <video src={videoPreviewUrl} controls className="max-h-72 w-full rounded-xl bg-black" />
+            {videoPreviewUrl ? (
+              <video src={videoPreviewUrl} controls className="max-h-72 w-full rounded-xl bg-black" />
+            ) : (
+              <div className="flex h-40 w-full items-center justify-center rounded-xl bg-black">
+                <Loader2 size={20} className="animate-spin text-white/70" />
+              </div>
+            )}
           </div>
           <div className="flex items-center justify-between gap-2">
             <span className="flex items-center gap-1 text-xs font-semibold text-fairway-700">
@@ -619,6 +695,7 @@ export function CreatePost() {
             if (videoPreviewUrl && !prefilledVideoUrl) URL.revokeObjectURL(videoPreviewUrl);
             setVideoPreviewUrl(undefined);
             setPrefilledVideoUrl(undefined);
+            setPrivateShare(undefined);
             setCourseTag(undefined);
             setGolfCallId(undefined);
             run();

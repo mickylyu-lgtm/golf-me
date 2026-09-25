@@ -48,6 +48,19 @@ function runFfmpeg(args: string[]): Promise<string> {
   });
 }
 
+// Health audit P2-9 (defense in depth): analyze-swing, the only caller,
+// now only ever passes this project's own Supabase Storage URLs (a signed
+// caddie-media URL or a public community-media URL). Refuse anything else
+// so a leaked FRAME_EXTRACT_SECRET can't turn this into a general fetcher.
+function isAllowedVideoUrl(videoUrl: string): boolean {
+  try {
+    const u = new URL(videoUrl);
+    return u.protocol === "https:" && u.hostname.endsWith(".supabase.co") && u.pathname.startsWith("/storage/v1/object/");
+  } catch {
+    return false;
+  }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
@@ -63,6 +76,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     endSeconds?: number;
   };
   if (!videoUrl || typeof videoUrl !== "string") return res.status(400).json({ error: "videoUrl is required" });
+  if (!isAllowedVideoUrl(videoUrl)) return res.status(400).json({ error: "videoUrl is not an allowed source" });
   if (typeof startSeconds !== "number" || typeof endSeconds !== "number" || endSeconds <= startSeconds) {
     return res.status(400).json({ error: "startSeconds/endSeconds are required and endSeconds must exceed startSeconds" });
   }

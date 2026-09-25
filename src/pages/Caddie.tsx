@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Clock, Globe, Sparkles, Video } from "lucide-react";
 import { useData } from "../context/DataContext";
+import { useRealCaddie } from "../context/RealCaddieContext";
 import { useLocale, LOCALES } from "../i18n/LocaleContext";
 import { EmptyState } from "../components/ui/EmptyState";
 import { Button } from "../components/ui/Button";
@@ -25,6 +26,7 @@ const PAGE_SIZE = 10;
 
 export function Caddie() {
   const { caddieAnalyses } = useData();
+  const { refreshMediaUrls } = useRealCaddie();
   const { t, locale, setLocale } = useLocale();
   const navigate = useNavigate();
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
@@ -97,7 +99,13 @@ export function Caddie() {
                       for this. Older/incomplete analyses simply fall back
                       to the text-only layout below. */}
                   {a.thumbnailUrl && (
-                    <img src={a.thumbnailUrl} alt="" className="h-12 w-12 shrink-0 rounded-xl object-cover" />
+                    <img
+                      src={a.thumbnailUrl}
+                      alt=""
+                      className="h-12 w-12 shrink-0 rounded-xl object-cover"
+                      // A private thumbnail whose 1-hour signed link lapsed: re-sign it.
+                      onError={a.thumbnailPath ? () => refreshMediaUrls([a.thumbnailPath]) : undefined}
+                    />
                   )}
                   <span className="min-w-0 flex-1">
                     <span className="block text-sm font-bold text-slate-900">{a.swingType || t("caddie.title")}</span>

@@ -54,7 +54,7 @@ export function CaddieAnalysisDetail() {
   const { analysisId } = useParams<{ analysisId: string }>();
   const { getCaddieAnalysis, getPost, createCaddieAnalysis, markCaddieAnalysisShared, translateCaddieAnalysis, createPost, notifications, markNotificationRead } =
     useData();
-  const { hasLoaded: caddieHasLoaded, loadPoseData } = useRealCaddie();
+  const { hasLoaded: caddieHasLoaded, loadPoseData, refreshMediaUrls } = useRealCaddie();
   const { t, locale } = useLocale();
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -115,11 +115,24 @@ export function CaddieAnalysisDetail() {
 
   function shareToCommunity() {
     if (!analysis) return;
-    const prefill: CreatePostSwingPrefill = {
-      swingVideoUrl: analysis.sourceMediaUrl,
-      videoThumbnailUrl: analysis.thumbnailUrl,
-      caption: analysis.swingType ? `${analysis.swingType} swing` : "",
-    };
+    // A private direct upload hands over its caddie-media PATHS (plus the
+    // current signed URL, for the composer's preview only). CreatePost
+    // copies the files into public community-media when — and only if —
+    // the post is actually published, so the public post never points at
+    // the private original. A Community-sourced analysis already has a
+    // public URL and is reused as before.
+    const prefill: CreatePostSwingPrefill = analysis.sourceMediaPath
+      ? {
+          swingVideoUrl: analysis.sourceMediaUrl,
+          privateVideoPath: analysis.sourceMediaPath,
+          privateThumbnailPath: analysis.thumbnailPath,
+          caption: analysis.swingType ? `${analysis.swingType} swing` : "",
+        }
+      : {
+          swingVideoUrl: analysis.sourceMediaUrl,
+          videoThumbnailUrl: analysis.thumbnailUrl,
+          caption: analysis.swingType ? `${analysis.swingType} swing` : "",
+        };
     navigate("/community/new", { state: prefill });
   }
 
@@ -130,8 +143,10 @@ export function CaddieAnalysisDetail() {
       const created = await createCaddieAnalysis({
         sourceType: analysis.sourceType,
         sourcePostId: analysis.sourcePostId,
-        sourceMediaUrl: analysis.sourceMediaUrl,
-        thumbnailUrl: analysis.thumbnailUrl,
+        // Never re-send a signed URL: a private upload retries by path.
+        ...(analysis.sourceMediaPath
+          ? { sourceMediaPath: analysis.sourceMediaPath, thumbnailPath: analysis.thumbnailPath }
+          : { sourceMediaUrl: analysis.sourceMediaUrl, thumbnailUrl: analysis.thumbnailUrl }),
         swingType: analysis.swingType,
       });
       navigate(`/caddie/${created.id}`, { replace: true });
@@ -225,6 +240,7 @@ export function CaddieAnalysisDetail() {
         <CaddieSwingReplay
           sourceMediaUrl={analysis.sourceMediaUrl}
           thumbnailUrl={analysis.thumbnailUrl}
+          onMediaError={analysis.sourceMediaPath ? () => refreshMediaUrls([analysis.sourceMediaPath, analysis.thumbnailPath]) : undefined}
           poseData={analysis.poseData}
           phases={details?.phases}
         />

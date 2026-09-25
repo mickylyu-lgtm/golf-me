@@ -13,8 +13,8 @@ import { VideoTrimSelector } from "../components/caddie/VideoTrimSelector";
 import { captureVideoThumbnail, readVideoDuration } from "../lib/image";
 import { formatClock } from "../lib/format";
 import { supabase } from "../lib/supabase";
-
-const COMMUNITY_MEDIA_BUCKET = "community-media"; // same bucket CreatePost.tsx's Swing Post upload uses — no second media pipeline
+import { CADDIE_MEDIA_BUCKET } from "../lib/caddieMedia";
+import { CaddieRequestError } from "../lib/caddieAnalysis";
 const MAX_SWING_VIDEO_BYTES = 200 * 1024 * 1024; // matches the Storage bucket's own file_size_limit
 const MAX_SWING_VIDEO_SECONDS = 10; // max length of the WINDOW actually analyzed (2026-08-22 credit-efficiency pass) — Caddie's Roboflow pass calls once per sampled frame, so a longer clip directly multiplies calls/latency/credit spend; see analyze-swing's ANALYSIS_FPS comment. Was 15s. A source video longer than this is no longer rejected outright — VideoTrimSelector lets the golfer pick which 10s window to analyze instead.
 // Once analyze-swing actually creates the 'processing' row, the real
@@ -62,10 +62,11 @@ const CLUB_OPTIONS = [
 ] as const;
 
 // Direct-upload Caddie flow: pick a swing video, optionally label the club,
-// get real Gemini feedback. Reuses the exact community-media Storage upload
-// mechanics CreatePost.tsx already established for Swing Posts (same
-// bucket, same path convention, same thumbnail capture) — no second media
-// pipeline for what's conceptually the same "upload a swing video" action.
+// get real Gemini feedback. Same upload mechanics as CreatePost.tsx's Swing
+// Posts (same `<uid>/<file>` path convention, same thumbnail capture), but
+// into the PRIVATE caddie-media bucket (migration 20260925090000): a Caddie
+// upload stays private unless the golfer explicitly shares it, and then
+// CreatePost copies it into public community-media at publish time.
 export function AnalyzeSwing() {
   const { createCaddieAnalysis, draftSwingVideo, setDraftSwingVideo } = useData();
   const { isDemo, authUser } = useAuth();
@@ -232,26 +233,34 @@ export function AnalyzeSwing() {
     // Cleared in every exit from this function below, success or failure;
     // only stays set if the app itself was killed before either happened.
     localStorage.setItem(UPLOAD_IN_PROGRESS_KEY, "1");
+    // Private uploads made by this attempt — removed again only if the
+    // server definitively refused to create the analysis (see below).
+    const uploadedPaths: string[] = [];
     try {
-      const path = `${authUser.id}/caddie-${crypto.randomUUID()}.${videoFile.name.split(".").pop() ?? "mp4"}`;
-      const { error: uploadError } = await supabase.storage.from(COMMUNITY_MEDIA_BUCKET).upload(path, videoFile, { contentType: videoFile.type });
+      const rawExt = (videoFile.name.split(".").pop() ?? "").toLowerCase();
+      const ext = /^[a-z0-9]{1,8}$/.test(rawExt) ? rawExt : "mp4";
+      const path = `${authUser.id}/caddie-${crypto.randomUUID()}.${ext}`;
+      const { error: uploadError } = await supabase.storage.from(CADDIE_MEDIA_BUCKET).upload(path, videoFile, { contentType: videoFile.type || "video/mp4" });
       if (uploadError) throw uploadError;
-      const sourceMediaUrl = supabase.storage.from(COMMUNITY_MEDIA_BUCKET).getPublicUrl(path).data.publicUrl;
+      uploadedPaths.push(path);
 
-      let thumbnailUrl: string | undefined;
+      let thumbnailPath: string | undefined;
       try {
         const thumbBlob = await captureVideoThumbnail(videoFile, 640, draftSwingVideo?.trimStartSeconds);
         const thumbPath = `${authUser.id}/caddie-thumb-${crypto.randomUUID()}.jpg`;
-        const { error: thumbUploadError } = await supabase.storage.from(COMMUNITY_MEDIA_BUCKET).upload(thumbPath, thumbBlob, { contentType: "image/jpeg" });
-        if (!thumbUploadError) thumbnailUrl = supabase.storage.from(COMMUNITY_MEDIA_BUCKET).getPublicUrl(thumbPath).data.publicUrl;
+        const { error: thumbUploadError } = await supabase.storage.from(CADDIE_MEDIA_BUCKET).upload(thumbPath, thumbBlob, { contentType: "image/jpeg" });
+        if (!thumbUploadError) {
+          thumbnailPath = thumbPath;
+          uploadedPaths.push(thumbPath);
+        }
       } catch (thumbErr) {
         console.error("GolfMe: failed to capture a video thumbnail.", thumbErr);
       }
 
       const created = await createCaddieAnalysis({
         sourceType: "direct_upload",
-        sourceMediaUrl,
-        thumbnailUrl,
+        sourceMediaPath: path,
+        thumbnailPath,
         swingType: swingType.trim() || undefined,
         startSeconds: draftSwingVideo?.trimStartSeconds,
         endSeconds: draftSwingVideo?.trimEndSeconds,
@@ -261,6 +270,19 @@ export function AnalyzeSwing() {
       navigate(`/caddie/${created.id}`, { replace: true });
     } catch (err) {
       localStorage.removeItem(UPLOAD_IN_PROGRESS_KEY);
+      // A 400/401/403/429 from analyze-swing means no row was created, so
+      // nothing will ever reference these files — remove them rather than
+      // leaving private orphans (e.g. hitting the daily limit). Any other
+      // failure (network drop, gateway timeout) is ambiguous: the row may
+      // exist server-side, so the files are kept.
+      if (err instanceof CaddieRequestError && err.status !== undefined && [400, 401, 403, 429].includes(err.status) && uploadedPaths.length > 0) {
+        void supabase.storage
+          .from(CADDIE_MEDIA_BUCKET)
+          .remove(uploadedPaths)
+          .then(({ error }) => {
+            if (error) console.error("GolfMe: couldn't remove an unused Caddie upload.", error);
+          });
+      }
       showToast(err instanceof Error ? err.message : t("caddie.askCaddieError"), "warning");
       setSubmitting(false);
     }

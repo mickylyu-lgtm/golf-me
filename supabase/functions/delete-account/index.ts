@@ -91,7 +91,10 @@ Deno.serve(async (req: Request) => {
   return jsonResponse({ success: true });
 });
 
-const USER_KEYED_BUCKETS = ["avatars", "community-media", "booking-proofs"];
+// caddie-media: private Caddie uploads (migration 20260925090000). Listing a
+// bucket that doesn't exist yet just lands in `errors` for that bucket;
+// the others are still purged.
+const USER_KEYED_BUCKETS = ["avatars", "community-media", "booking-proofs", "caddie-media"];
 const LIST_PAGE_SIZE = 1000;
 const REMOVE_BATCH_SIZE = 100;
 
