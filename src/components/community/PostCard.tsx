@@ -33,7 +33,7 @@ import { FullscreenMediaViewer } from "./FullscreenMediaViewer";
 import { formatRelativeTime } from "../../lib/format";
 import { postCategoryLabel } from "../../lib/enumLabels";
 import { areaForCourse } from "../../lib/courses";
-import { enterNativeVideoFullscreen } from "../../lib/video";
+import { enterNativeVideoFullscreen, isVideoInNativeFullscreen } from "../../lib/video";
 import { isStaleProcessing, usePeriodicRerender } from "../../lib/caddieAnalysis";
 import { useLocale } from "../../i18n/LocaleContext";
 
@@ -88,7 +88,25 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
     // in the same event having called preventDefault; doing so was
     // silently breaking fullscreen entirely (not just the earlier
     // glitch/flash it was meant to fix).
-    if (videoRef.current) enterNativeVideoFullscreen(videoRef.current);
+    const video = videoRef.current;
+    if (!video) return;
+    // Native fullscreen can be refused (metadata not loaded yet — common when
+    // the feed video never autoplayed, e.g. Low Power Mode — or WebKit accepts
+    // the call but never presents the player). Either way, fall back to the
+    // in-app fullscreen viewer the photo/video carousels already use, so the
+    // tap always opens something.
+    const openInAppViewer = () => {
+      videoRef.current?.pause(); // never two copies playing (with sound) at once
+      setMediaLightboxIndex(0);
+    };
+    if (!enterNativeVideoFullscreen(video)) {
+      openInAppViewer();
+      return;
+    }
+    window.setTimeout(() => {
+      const v = videoRef.current;
+      if (v && !isVideoInNativeFullscreen(v)) openInAppViewer();
+    }, 1000);
   }
 
   function toggleFeedMute(e: React.MouseEvent) {

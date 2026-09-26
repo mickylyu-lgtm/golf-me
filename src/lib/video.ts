@@ -6,13 +6,35 @@
 // native player (desktop Chrome/Firefox, Android); iOS Safari doesn't
 // implement `requestFullscreen` on <video> at all, so the WebKit fallback
 // is what actually fires there.
-export function enterNativeVideoFullscreen(video: HTMLVideoElement): void {
+//
+// Returns whether a native fullscreen request was actually made. WebKit's
+// webkitEnterFullscreen() THROWS (InvalidStateError) when the video hasn't
+// loaded its metadata yet — e.g. a feed video that never autoplayed (Low
+// Power Mode, or not yet scrolled fully into view) — which used to escape as
+// an uncaught error and make the tap silently do nothing. Callers can fall
+// back to an in-app viewer when this returns false.
+export function enterNativeVideoFullscreen(video: HTMLVideoElement): boolean {
   const webkitVideo = video as HTMLVideoElement & { webkitEnterFullscreen?: () => void };
-  if (typeof webkitVideo.webkitEnterFullscreen === "function") {
-    webkitVideo.webkitEnterFullscreen();
-  } else if (video.requestFullscreen) {
-    video.requestFullscreen().catch(() => {});
+  try {
+    if (typeof webkitVideo.webkitEnterFullscreen === "function") {
+      if (video.readyState < HTMLMediaElement.HAVE_METADATA) return false;
+      webkitVideo.webkitEnterFullscreen();
+      return true;
+    }
+    if (video.requestFullscreen) {
+      video.requestFullscreen().catch(() => {});
+      return true;
+    }
+  } catch {
+    return false;
   }
+  return false;
+}
+
+/** True while the element is shown in the native fullscreen player. */
+export function isVideoInNativeFullscreen(video: HTMLVideoElement): boolean {
+  const webkitVideo = video as HTMLVideoElement & { webkitDisplayingFullscreen?: boolean };
+  return !!webkitVideo.webkitDisplayingFullscreen || document.fullscreenElement === video;
 }
 
 /** The actual displayed content rectangle within a <video> element's own
