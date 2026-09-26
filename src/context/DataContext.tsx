@@ -183,7 +183,8 @@ interface DataContextValue {
   approveRequest: (callId: string, golferId: string) => void;
   declineRequest: (callId: string, golferId: string) => void;
 
-  sendMessage: (callId: string, text: string) => void;
+  /** Resolves false when a real round-chat message failed to send (caller keeps the text for retry). */
+  sendMessage: (callId: string, text: string) => Promise<boolean>;
 
   hasReviewed: (callId: string, revieweeId: string) => boolean;
   submitReview: (callId: string, revieweeId: string, input: ReviewInput) => void;
@@ -700,12 +701,19 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const sendMessage = useCallback(
-    (callId: string, text: string) => {
+    async (callId: string, text: string): Promise<boolean> => {
       const trimmed = text.trim();
-      if (!trimmed) return;
+      if (!trimmed) return false;
       if (!auth.isDemo) {
-        realRounds.sendRoundMessage(callId, trimmed).catch((err) => console.error("GolfMe: failed to send round message.", err));
-        return;
+        // Surfaced to GroupChat (error toast + typed text restored) instead of
+        // failing silently — previously a failed send just vanished.
+        try {
+          await realRounds.sendRoundMessage(callId, trimmed);
+          return true;
+        } catch (err) {
+          console.error("GolfMe: failed to send round message.", err);
+          return false;
+        }
       }
       setData((prev) => ({
         ...prev,
@@ -720,6 +728,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
           },
         ],
       }));
+      return true;
     },
     [auth.isDemo, realRounds],
   );

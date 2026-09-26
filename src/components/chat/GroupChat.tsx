@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useData } from "../../context/DataContext";
+import { useToast } from "../../context/ToastContext";
 import { Avatar } from "../ui/Avatar";
 import { ChatComposer } from "./ChatComposer";
 import { groupChatDraftKey, loadChatDraft, saveChatDraft } from "../../lib/chatDraft";
@@ -7,6 +8,7 @@ import { useLocale } from "../../i18n/LocaleContext";
 
 export function GroupChat({ callId }: { callId: string }) {
   const { currentUser, getGolfer, messagesForCall, sendMessage } = useData();
+  const { showToast } = useToast();
   const { t } = useLocale();
   const [text, setText] = useState(() => loadChatDraft(groupChatDraftKey(callId)));
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -28,10 +30,22 @@ export function GroupChat({ callId }: { callId: string }) {
     saveChatDraft(groupChatDraftKey(callId), value);
   }
 
-  function handleSend() {
-    if (!text.trim()) return;
-    sendMessage(callId, text);
+  async function handleSend() {
+    const sending = text;
+    if (!sending.trim()) return;
+    // Clear right away so sending feels instant; if it fails, say so and put
+    // the text back (unless the golfer already started typing something new)
+    // so it can be retried instead of silently vanishing.
     updateText("");
+    const ok = await sendMessage(callId, sending);
+    if (!ok) {
+      showToast(t("chat.sendFailedToast"), "warning");
+      setText((current) => {
+        if (current.trim()) return current;
+        saveChatDraft(groupChatDraftKey(callId), sending);
+        return sending;
+      });
+    }
   }
 
   return (

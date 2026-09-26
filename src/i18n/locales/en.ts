@@ -91,6 +91,7 @@ export const en = {
   "credibility.limited": "Limited History",
   "chat.noMessagesYet": "No messages yet — say hello to the group.",
   "chat.messagePlaceholder": "Message the group...",
+  "chat.sendFailedToast": "Message didn't send. Your text is still there — try again.",
 
   "postCategory.general": "General",
   "postCategory.memes": "Memes",
@@ -633,6 +634,7 @@ export const en = {
   "host.yourGolfCircle": "Your Golf Circle",
   "host.otherGolfers": "Other golfers",
   "host.tellUsWhenTeeTime": "Tee time",
+  "host.pastStartError": "That date and time has already passed. Pick today with a later time, or a future date.",
   "host.verifyYourTeeTime": "Verify Your Tee Time",
   "host.verifyYourTeeTimeBody": "Help other golfers know this round is based on a real booking.",
   "host.skipForNow": "Skip for now",

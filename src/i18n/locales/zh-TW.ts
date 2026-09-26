@@ -81,6 +81,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "credibility.limited": "記錄較少",
   "chat.noMessagesYet": "暫無訊息 — 跟大家打個招呼吧。",
   "chat.messagePlaceholder": "給小組發訊息...",
+  "chat.sendFailedToast": "訊息未送出。你輸入的內容仍在，請再試一次。",
 
   "postCategory.general": "綜合",
   "postCategory.memes": "迷因",
@@ -732,6 +733,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "host.yourGolfCircle": "你的球友圈",
   "host.otherGolfers": "其他球友",
   "host.tellUsWhenTeeTime": "開球時間",
+  "host.pastStartError": "該日期和時間已經過去。請選擇今天稍晚的時間或未來的日期。",
   "host.verifyYourTeeTime": "驗證你的開球時間",
   "host.verifyYourTeeTimeBody": "讓其他球友知道這個球局是根據真實預訂建立的。",
   "host.skipForNow": "暫時略過",

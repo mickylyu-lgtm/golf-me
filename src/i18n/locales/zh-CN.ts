@@ -81,6 +81,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "credibility.limited": "记录较少",
   "chat.noMessagesYet": "暂无消息 — 跟大家打个招呼吧。",
   "chat.messagePlaceholder": "给小组发消息...",
+  "chat.sendFailedToast": "消息未发送。你输入的内容仍在，请重试。",
 
   "postCategory.general": "综合",
   "postCategory.memes": "梗图",
@@ -732,6 +733,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "host.yourGolfCircle": "你的球友圈",
   "host.otherGolfers": "其他球友",
   "host.tellUsWhenTeeTime": "开球时间",
+  "host.pastStartError": "该日期和时间已经过去。请选择今天稍后的时间或未来的日期。",
   "host.verifyYourTeeTime": "验证你的开球时间",
   "host.verifyYourTeeTimeBody": "帮助其他球友知道这个球局基于真实预订。",
   "host.skipForNow": "暂时跳过",

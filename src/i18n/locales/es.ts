@@ -81,6 +81,7 @@ export const es: Record<TranslationKey, string> = {
   "credibility.limited": "Historial Limitado",
   "chat.noMessagesYet": "Aún no hay mensajes — saluda al grupo.",
   "chat.messagePlaceholder": "Mensaje al grupo...",
+  "chat.sendFailedToast": "El mensaje no se envió. Tu texto sigue ahí; inténtalo de nuevo.",
 
   "postCategory.general": "General",
   "postCategory.memes": "Memes",
@@ -732,6 +733,7 @@ export const es: Record<TranslationKey, string> = {
   "host.yourGolfCircle": "Tu Círculo de Golf",
   "host.otherGolfers": "Otros golfistas",
   "host.tellUsWhenTeeTime": "Hora de salida",
+  "host.pastStartError": "Esa fecha y hora ya pasaron. Elige hoy con una hora posterior o una fecha futura.",
   "host.verifyYourTeeTime": "Verifica Tu Hora de Salida",
   "host.verifyYourTeeTimeBody": "Ayuda a otros golfistas a saber que esta ronda se basa en una reserva real.",
   "host.skipForNow": "Omitir por ahora",

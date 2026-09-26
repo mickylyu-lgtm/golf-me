@@ -18,6 +18,7 @@ import { inputClass, labelClass } from "../components/ui/FormControls";
 import { formatDate, formatMoney } from "../lib/format";
 import { skillLabel, vibeLabel } from "../lib/enumLabels";
 import { getWeekendRange } from "../lib/greeting";
+import { isPastRoundStart, localDateInputValue } from "../lib/golfCall";
 import { skillTierFromHandicap } from "../lib/format";
 import { coordsForCourse } from "../lib/courses";
 import { haversineMiles } from "../lib/geo";
@@ -62,19 +63,20 @@ const STEP_TITLE_KEYS: Record<number, TranslationKey> = {
   5: "host.step5Title",
 };
 
-function toDateInputValue(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
-
 function prefillDateFromWhen(when: string | null, dateParam: string | null): string {
   if (when === "date" && dateParam) return dateParam;
-  if (when === "today") return toDateInputValue(new Date());
+  if (when === "today") return localDateInputValue();
   if (when === "tomorrow") {
     const d = new Date();
     d.setDate(d.getDate() + 1);
-    return toDateInputValue(d);
+    return localDateInputValue(d);
   }
-  if (when === "weekend") return toDateInputValue(getWeekendRange().start);
+  if (when === "weekend") {
+    // On a Sunday the weekend "starts" yesterday (Saturday) — use today instead.
+    const start = localDateInputValue(getWeekendRange().start);
+    const today = localDateInputValue();
+    return start < today ? today : start;
+  }
   return "";
 }
 
@@ -276,7 +278,10 @@ export function CreateGolfCall() {
   }
 
   const step1Valid = Boolean(course.trim() && areaLabel.trim());
-  const step2Valid = Boolean(date && timeLabel.trim());
+  // A round can't start in the past (a past-dated round is instantly
+  // unjoinable — the server refuses joins once its day is over).
+  const startsInPast = isPastRoundStart(date, timeLabel);
+  const step2Valid = Boolean(date && timeLabel.trim()) && !startsInPast;
   const step3Valid = !fillMode || openSpotsRemaining >= 1;
   const canSubmit = step1Valid && step2Valid && step3Valid;
 
@@ -438,12 +443,13 @@ export function CreateGolfCall() {
               ))}
             </div>
             {when === "date" && (
-              <input type="date" className={`${inputClass} mt-2 w-full`} value={date} onChange={(e) => setDate(e.target.value)} />
+              <input type="date" className={`${inputClass} mt-2 w-full`} value={date} min={localDateInputValue()} onChange={(e) => setDate(e.target.value)} />
             )}
           </div>
           <div>
             <label className={labelClass}>{t("host.tellUsWhenTeeTime")}</label>
             <input className={inputClass} value={timeLabel} onChange={(e) => setTimeLabel(e.target.value)} placeholder="e.g. 10:00 AM" />
+            {startsInPast && <p className="mt-1.5 text-xs font-medium text-red-600">{t("host.pastStartError")}</p>}
           </div>
 
           {/* Real accounts only — Storage/RPCs need a real auth session.

@@ -81,6 +81,7 @@ export const ja: Record<TranslationKey, string> = {
   "credibility.limited": "実績が少ない",
   "chat.noMessagesYet": "まだメッセージはありません — グループに挨拶しましょう。",
   "chat.messagePlaceholder": "グループにメッセージ...",
+  "chat.sendFailedToast": "メッセージを送信できませんでした。入力した内容は残っています。もう一度お試しください。",
 
   "postCategory.general": "一般",
   "postCategory.memes": "ミーム",
@@ -732,6 +733,7 @@ export const ja: Record<TranslationKey, string> = {
   "host.yourGolfCircle": "ゴルフサークル",
   "host.otherGolfers": "その他のゴルファー",
   "host.tellUsWhenTeeTime": "ティータイム",
+  "host.pastStartError": "その日時はすでに過ぎています。今日の後の時間か、未来の日付を選んでください。",
   "host.verifyYourTeeTime": "ティータイムを確認する",
   "host.verifyYourTeeTimeBody": "このラウンドが実際の予約に基づいていることを他のゴルファーに伝えましょう。",
   "host.skipForNow": "今はスキップ",

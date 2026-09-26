@@ -7,6 +7,7 @@ import { CourseAutocomplete } from "./CourseAutocomplete";
 import { Button } from "../ui/Button";
 import { Modal } from "../ui/Modal";
 import { inputClass, labelClass } from "../ui/FormControls";
+import { isPastRoundStart, localDateInputValue } from "../../lib/golfCall";
 
 function toDateInputValue(iso: string): string {
   return iso.slice(0, 10);
@@ -35,7 +36,9 @@ export function EditTeeTimeModal({ call, onClose }: EditTeeTimeModalProps) {
   const [saving, setSaving] = useState(false);
 
   const hasProof = call.teeTimeSource === "user_verified";
-  const canSave = Boolean(course.trim() && date && timeLabel.trim());
+  // Moving a round into the past would make it instantly unjoinable.
+  const startsInPast = isPastRoundStart(date, timeLabel);
+  const canSave = Boolean(course.trim() && date && timeLabel.trim()) && !startsInPast;
 
   async function handleSave() {
     if (!canSave || saving) return;
@@ -96,13 +99,14 @@ export function EditTeeTimeModal({ call, onClose }: EditTeeTimeModalProps) {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={labelClass}>{t("filters.chooseDate")}</label>
-            <input type="date" className={inputClass} value={date} onChange={(e) => setDate(e.target.value)} />
+            <input type="date" className={inputClass} value={date} min={localDateInputValue()} onChange={(e) => setDate(e.target.value)} />
           </div>
           <div>
             <label className={labelClass}>{t("host.tellUsWhenTeeTime")}</label>
             <input className={inputClass} value={timeLabel} onChange={(e) => setTimeLabel(e.target.value)} placeholder="e.g. 10:00 AM" />
           </div>
         </div>
+        {startsInPast && <p className="-mt-2 text-xs font-medium text-red-600">{t("host.pastStartError")}</p>}
       </div>
     </Modal>
   );

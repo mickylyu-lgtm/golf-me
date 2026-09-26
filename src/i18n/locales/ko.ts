@@ -81,6 +81,7 @@ export const ko: Record<TranslationKey, string> = {
   "credibility.limited": "기록 부족",
   "chat.noMessagesYet": "아직 메시지가 없습니다 — 그룹에 인사해보세요.",
   "chat.messagePlaceholder": "그룹에 메시지 보내기...",
+  "chat.sendFailedToast": "메시지를 보내지 못했습니다. 입력한 내용은 그대로 있으니 다시 시도해 주세요.",
 
   "postCategory.general": "일반",
   "postCategory.memes": "밈",
@@ -732,6 +733,7 @@ export const ko: Record<TranslationKey, string> = {
   "host.yourGolfCircle": "내 골프 서클",
   "host.otherGolfers": "다른 골퍼",
   "host.tellUsWhenTeeTime": "티타임",
+  "host.pastStartError": "이미 지난 날짜와 시간입니다. 오늘 이후 시간이나 미래 날짜를 선택해 주세요.",
   "host.verifyYourTeeTime": "티타임 인증하기",
   "host.verifyYourTeeTimeBody": "이 라운드가 실제 예약을 기반으로 한다는 것을 다른 골퍼들에게 알려주세요.",
   "host.skipForNow": "나중에 하기",

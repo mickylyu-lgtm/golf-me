@@ -18,6 +18,52 @@ export function roundCalendarDay(dateISO: string): Date {
   return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12, 0, 0, 0);
 }
 
+// Local calendar date as a <input type="date"> value (YYYY-MM-DD). Not
+// toISOString(): that's the UTC date, which is tomorrow in New York after
+// 8 PM and yesterday in Asia in the morning — it made "Today" pick the wrong
+// (sometimes already-past) day when hosting.
+export function localDateInputValue(d: Date = new Date()): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+// Best-effort read of the free-text tee time ("10:00 AM", "7:30pm", "9 am",
+// "14:05"). Null when it isn't a clock time ("Morning", "TBD"), so callers
+// never reject something they can't actually interpret.
+export function parseTeeTimeLabel(label: string): { hours: number; minutes: number } | null {
+  const s = String(label ?? "").trim();
+  const twelve = /^(\d{1,2})(?::(\d{2}))?\s*([ap])\.?\s*m\.?\b/i.exec(s);
+  if (twelve) {
+    let hours = Number(twelve[1]);
+    const minutes = Number(twelve[2] ?? 0);
+    if (hours < 1 || hours > 12 || minutes > 59) return null;
+    if (twelve[3].toLowerCase() === "p" && hours !== 12) hours += 12;
+    if (twelve[3].toLowerCase() === "a" && hours === 12) hours = 0;
+    return { hours, minutes };
+  }
+  const twentyFour = /^(\d{1,2}):(\d{2})\b/.exec(s);
+  if (twentyFour) {
+    const hours = Number(twentyFour[1]);
+    const minutes = Number(twentyFour[2]);
+    if (hours > 23 || minutes > 59) return null;
+    return { hours, minutes };
+  }
+  return null;
+}
+
+// True when a round being hosted/edited would start in the past: any day
+// before today, or today at a clock time that has already passed. Today with
+// an unreadable time ("Morning") is allowed — there's nothing to compare.
+export function isPastRoundStart(dateYmd: string, timeLabel: string, now: Date = new Date()): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateYmd)) return false;
+  const today = localDateInputValue(now);
+  if (dateYmd < today) return true;
+  if (dateYmd > today) return false;
+  const t = parseTeeTimeLabel(timeLabel);
+  if (!t) return false;
+  return t.hours * 60 + t.minutes < now.getHours() * 60 + now.getMinutes();
+}
+
 // A round whose calendar day is before today (viewer's today). Rounds
 // happening today still count as upcoming. Used to keep past-dated open
 // rounds out of browse/join; the server enforces its own rule too.
