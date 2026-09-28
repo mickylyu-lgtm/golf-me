@@ -331,7 +331,7 @@ export const ko: Record<TranslationKey, string> = {
   "landing.hero.subhead": "GolfMe는 함께 라운드할 사람을 찾고, 빈 자리를 채우고, 골프를 중심으로 연결되도록 도와줍니다.",
   "landing.hero.explainer": "주변 골퍼를 찾으세요. 라운드에 참여하세요. 포섬을 채우세요. Caddie로 실력을 키우세요.",
   "landing.hero.primaryCta": "GolfMe 대기자 명단 참여",
-  "landing.hero.secondaryCta": "이미 이용 중이신가요? 로그인",
+  "landing.hero.secondaryCta": "이미 계정이 있으신가요? 로그인",
   "landing.explain.title": "골프는 좋은 사람들과 함께할 때 더 즐겁습니다.",
   "landing.explain.body1": "코스를 찾는 건 쉽습니다.",
   "landing.explain.body2": "함께할 사람을 찾는 건 쉽지 않습니다.",
@@ -367,7 +367,7 @@ export const ko: Record<TranslationKey, string> = {
   "landing.waitlist.errorMissingRegion": "홈 골프 지역을 선택하세요.",
   "landing.waitlist.errorGeneric": "지금은 등록할 수 없습니다. 다시 시도해 주세요.",
   "landing.bottom.headline": "다음 포섬은 여기서 시작될 수 있습니다.",
-  "landing.bottom.body": "GolfMe에 얼리 액세스로 함께하는 골퍼들과 만나보세요.",
+  "landing.bottom.body": "GolfMe에서 다음 라운드를 찾고 있는 골퍼들과 함께하세요.",
 
   "onboarding.screen1Title": "원할 때 라운드하세요",
   "onboarding.screen1Body": "근처의 열린 라운드와 골퍼를 찾아보세요 — 평소 멤버의 일정을 기다릴 필요 없어요.",

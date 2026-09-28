@@ -331,7 +331,7 @@ export const ja: Record<TranslationKey, string> = {
   "landing.hero.subhead": "GolfMeは、一緒にプレーする仲間を見つけ、空いた枠を埋め、ゴルフを通じてつながるお手伝いをします。",
   "landing.hero.explainer": "近くのゴルファーを見つける。ラウンドに参加する。フォーサムを埋める。Caddieで上達する。",
   "landing.hero.primaryCta": "GolfMeウェイトリストに参加",
-  "landing.hero.secondaryCta": "すでにアクセス権がありますか？ログイン",
+  "landing.hero.secondaryCta": "すでにアカウントをお持ちですか？ログイン",
   "landing.explain.title": "ゴルフは、良い仲間と一緒だともっと楽しい。",
   "landing.explain.body1": "コースを見つけるのは簡単です。",
   "landing.explain.body2": "一緒にプレーする仲間を見つけるのは簡単ではありません。",
@@ -367,7 +367,7 @@ export const ja: Record<TranslationKey, string> = {
   "landing.waitlist.errorMissingRegion": "ホームゴルフエリアを選択してください。",
   "landing.waitlist.errorGeneric": "現在登録できませんでした。もう一度お試しください。",
   "landing.bottom.headline": "次のフォーサムはここから始まるかもしれません。",
-  "landing.bottom.body": "GolfMeに早期アクセスするゴルファーに加わりましょう。",
+  "landing.bottom.body": "GolfMeで次のラウンドを見つけているゴルファーに加わりましょう。",
 
   "onboarding.screen1Title": "好きな時にゴルフを",
   "onboarding.screen1Body": "近くの空きラウンドやゴルファーを見つけよう — いつものメンバーの予定を待つ必要はありません。",

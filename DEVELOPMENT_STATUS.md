@@ -571,7 +571,14 @@ Not done by any session — needs dashboard/browser/third-party-account access t
 
 ## Exact next recommended action
 
-**2026-09-26 (supersedes the lists below where they overlap)**: Health Audit improvement **Batch F** committed locally (`870fb88`, `783f1db`), **not yet pushed/deployed**:
+**2026-09-28 — LAUNCH READINESS mode (supersedes everything below where they overlap)**: GolfMe launches ASAP to Manhattan/NJ golfers on **both** golfme.app and a public TestFlight link, with **open signup** (no invite gating). Launch blockers:
+- **A1 (done, this commit):** the golfme.app landing page no longer funnels to the waitlist — hero, nav and bottom CTAs are "Get Started" → `/signup`; "Already have an account? Log In"; launch wording at the bottom. The waitlist section is removed from the page only — `WaitlistForm`, `waitlist_signups` (16 signups), and the admin view are untouched.
+- **A0 (Micky, unconfirmed):** Supabase Auth "Allow new users to sign up" ON; custom SMTP configured so magic links reach non-team addresses (built-in SMTP only mails team members, ~2/h); Google OAuth consent screen "In production" (Testing = max 100 listed users).
+- **A2 (Micky, parallel, TestFlight channel only — not a web-launch blocker):** push secret (`send-push` `PUSH_INTERNAL_SECRET` = Vault `push_internal_secret`), `APNS_*` check, Xcode Push capability + build bump, archive/upload, external group, Beta App Review, public link.
+- Before inviting: host 3–5 real rounds (0 upcoming today), then the two-account production smoke test with a brand-new non-team email and a brand-new Google account.
+Deferred to immediately post-launch: historical Caddie backfill (COPY needs Micky's approval; legacy media verified not anonymously listable), the 2 stuck analyses (`449a5520` pending since 08-18, `212bf24f` processing since 09-18), server-side past-date guard, auto-closing past rounds (10 stale open/full rows, already hidden from Play), waitlist email throttle (P2-5), email notifications for web users, the Batch B/C/E/F device checks (covered by the smoke test). Later: unused-Storage sweep, Review Gate, leaked-password protection.
+
+**2026-09-26**: Health Audit improvement **Batch F** — pushed and live 2026-09-27 (`36a21d8`):
 - F1 Swing Post video tap: iOS `webkitEnterFullscreen()` throws when the feed video has no metadata yet (autoplay suppressed, e.g. Low Power Mode), so the tap did nothing. `enterNativeVideoFullscreen()` now returns whether it entered; `PostCard` falls back to the in-app `FullscreenMediaViewer` if it didn't, or if native fullscreen hasn't appeared within 1 s.
 - F2 round chat: `DataContext.sendMessage` resolves true/false instead of swallowing errors; `GroupChat` shows a warning toast and restores the typed text (and draft) on failure.
 - F3 past rounds: host wizard and Edit Tee Time reject a past date, or today with a parseable start time already passed (today + later time stays valid; an unparseable time label on today is allowed). The host wizard's default date now uses the local day, not UTC; Sunday weekend prefill no longer lands on yesterday. Client-side only — no DB constraint.

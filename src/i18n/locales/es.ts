@@ -331,7 +331,7 @@ export const es: Record<TranslationKey, string> = {
   "landing.hero.subhead": "GolfMe ayuda a los golfistas a encontrar compañeros de juego, llenar cupos libres y conectar en torno al golf.",
   "landing.hero.explainer": "Encuentra golfistas cerca. Únete a una ronda. Completa tu cuarteto. Mejora con Caddie.",
   "landing.hero.primaryCta": "Únete a la Lista de Espera de GolfMe",
-  "landing.hero.secondaryCta": "¿Ya tienes acceso? Iniciar Sesión",
+  "landing.hero.secondaryCta": "¿Ya tienes una cuenta? Iniciar Sesión",
   "landing.explain.title": "El golf es mejor con la gente adecuada.",
   "landing.explain.body1": "Encontrar una cancha es fácil.",
   "landing.explain.body2": "Encontrar a la gente adecuada para jugar no lo es.",
@@ -367,7 +367,7 @@ export const es: Record<TranslationKey, string> = {
   "landing.waitlist.errorMissingRegion": "Selecciona tu zona de golf.",
   "landing.waitlist.errorGeneric": "No pudimos añadirte en este momento. Inténtalo de nuevo.",
   "landing.bottom.headline": "Tu próximo cuarteto podría empezar aquí.",
-  "landing.bottom.body": "Únete a los golfistas que ya tienen acceso anticipado a GolfMe.",
+  "landing.bottom.body": "Únete a los golfistas que ya encuentran su próxima ronda en GolfMe.",
 
   "onboarding.screen1Title": "Juega cuando quieras",
   "onboarding.screen1Body": "Encuentra rondas abiertas y golfistas cerca — sin esperar el horario de tu grupo habitual.",

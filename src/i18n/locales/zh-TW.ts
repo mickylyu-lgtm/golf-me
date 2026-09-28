@@ -367,7 +367,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "landing.waitlist.errorMissingRegion": "請選擇你常打球的地區。",
   "landing.waitlist.errorGeneric": "暫時無法為你新增，請再試一次。",
   "landing.bottom.headline": "你的下一個四人組，也許就從這裡開始。",
-  "landing.bottom.body": "加入正在搶先體驗 GolfMe 的球友。",
+  "landing.bottom.body": "加入已經在 GolfMe 上尋找下一場球局的球友。",
 
   "onboarding.screen1Title": "想打就打",
   "onboarding.screen1Body": "找到附近的空缺球局和球友——不用再等老球友的檔期。",

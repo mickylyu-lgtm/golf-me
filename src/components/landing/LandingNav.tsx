@@ -46,12 +46,12 @@ export function LandingNav() {
           >
             {t("welcome.logIn")}
           </button>
-          <a
-            href="#waitlist"
+          <button
+            onClick={() => navigate("/signup")}
             className="whitespace-nowrap rounded-full bg-sun-400 px-2.5 py-1.5 text-xs font-bold text-fairway-950 shadow-sm transition hover:bg-sun-300 sm:px-4 sm:text-sm"
           >
-            {t("landing.nav.joinWaitlist")}
-          </a>
+            {t("welcome.getStarted")}
+          </button>
         </div>
       </div>
     </nav>

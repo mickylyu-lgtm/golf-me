@@ -343,7 +343,7 @@ export const en = {
   "landing.hero.subhead": "GolfMe helps golfers find people to play with, fill open spots, and connect around the game.",
   "landing.hero.explainer": "Find golfers nearby. Join a round. Fill your foursome. Get better with Caddie.",
   "landing.hero.primaryCta": "Join the GolfMe Waitlist",
-  "landing.hero.secondaryCta": "Already have access? Log In",
+  "landing.hero.secondaryCta": "Already have an account? Log In",
   "landing.explain.title": "Golf is better with the right people.",
   "landing.explain.body1": "Finding a course is easy.",
   "landing.explain.body2": "Finding the right people to play with isn't.",
@@ -379,7 +379,7 @@ export const en = {
   "landing.waitlist.errorMissingRegion": "Select your home golf area.",
   "landing.waitlist.errorGeneric": "We couldn't add you right now. Please try again.",
   "landing.bottom.headline": "Your next foursome might start here.",
-  "landing.bottom.body": "Join golfers getting early access to GolfMe.",
+  "landing.bottom.body": "Join golfers already finding their next round on GolfMe.",
 
   // Onboarding (3-screen intro carousel)
   "onboarding.screen1Title": "Play when you want",

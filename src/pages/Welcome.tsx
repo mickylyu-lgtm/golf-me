@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { Flag, Users } from "lucide-react";
 import { LandingNav } from "../components/landing/LandingNav";
-import { WaitlistForm } from "../components/landing/WaitlistForm";
 import { GolfMeIcon } from "../components/brand/GolfMeIcon";
 import { HighlightGolfMe } from "../components/brand/HighlightGolfMe";
 import { CaddieNavIcon } from "../components/icons/CaddieNavIcon";
@@ -45,14 +44,13 @@ function StepCard({ n, title, body, delayMs }: { n: number; title: string; body:
   );
 }
 
-// Public / logged-out landing experience — pre-TestFlight waitlist capture.
-// The authenticated app (Home/Play/Caddie/Me, real Supabase auth, the whole
-// existing product) is completely untouched by this file; a visitor here
-// has no session at all. "Get Started" self-serve signup is deliberately
-// no longer the page's primary action (Join Waitlist is) but /onboarding,
-// /signup, /login all still work unchanged for anyone who reaches them
-// directly — this page just stops advertising self-serve signup as the
-// front door.
+// Public / logged-out landing experience. The authenticated app
+// (Home/Play/Caddie/Me, real Supabase auth, the whole existing product) is
+// completely untouched by this file; a visitor here has no session at all.
+// Signup is open for launch: every primary CTA goes straight to /signup.
+// The pre-launch waitlist section was removed from this page, but
+// WaitlistForm, the waitlist_signups table and the admin view are kept —
+// existing signups are untouched and the form can be re-added if needed.
 //
 // Every section below uses <Reveal> (scroll-triggered fade+slide-in, plays
 // once, settles) rather than a fixed page-load delay — most of this page
@@ -85,12 +83,12 @@ export function Welcome() {
             <p className="max-w-md text-sm text-fairway-200/80">{t("landing.hero.explainer")}</p>
           </Reveal>
           <Reveal delayMs={1400} className="mt-2 flex w-full max-w-xs flex-col items-center gap-3">
-            <a
-              href="#waitlist"
+            <button
+              onClick={() => navigate("/signup")}
               className="flex w-full items-center justify-center rounded-full bg-sun-400 px-6 py-3.5 text-base font-bold text-fairway-950 shadow-md shadow-fairway-950/20 transition hover:-translate-y-px hover:bg-sun-300"
             >
-              {t("landing.hero.primaryCta")}
-            </a>
+              {t("welcome.getStarted")}
+            </button>
             <button
               onClick={() => navigate("/login")}
               className="rounded-full px-4 py-2 text-sm font-semibold text-white/80 transition-colors hover:text-white"
@@ -132,32 +130,18 @@ export function Welcome() {
         </div>
       </section>
 
-      <section id="waitlist" className="mx-auto max-w-lg px-6 py-16">
-        <Reveal className="mb-7 text-center">
-          <h2 className="text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl">
-            <HighlightGolfMe text={t("landing.waitlist.title")} />
-          </h2>
-          <p className="mt-2 text-sm text-slate-500">
-            <HighlightGolfMe text={t("landing.waitlist.subtitle")} />
-          </p>
-        </Reveal>
-        <Reveal delayMs={350}>
-          <WaitlistForm />
-        </Reveal>
-      </section>
-
       <section className="bg-fairway-950 px-6 py-16 text-center text-white">
         <Reveal>
           <h2 className="text-2xl font-extrabold tracking-tight sm:text-3xl">{t("landing.bottom.headline")}</h2>
           <p className="mx-auto mt-2 max-w-sm text-sm text-fairway-100">
             <HighlightGolfMe text={t("landing.bottom.body")} golfClassName="text-white" meClassName="text-sun-300" />
           </p>
-          <a
-            href="#waitlist"
+          <button
+            onClick={() => navigate("/signup")}
             className="mt-6 inline-flex items-center justify-center rounded-full bg-sun-400 px-6 py-3.5 text-base font-bold text-fairway-950 shadow-md shadow-fairway-950/20 transition hover:-translate-y-px hover:bg-sun-300"
           >
-            {t("landing.hero.primaryCta")}
-          </a>
+            {t("welcome.getStarted")}
+          </button>
         </Reveal>
       </section>
 
