@@ -73,6 +73,7 @@ const PrivacyPolicy = lazyPage(() => import("./pages/PrivacyPolicy"), "PrivacyPo
 const AdminReviewers = lazyPage(() => import("./pages/AdminReviewers"), "AdminReviewers");
 const AdminDashboard = lazyPage(() => import("./pages/AdminDashboard"), "AdminDashboard");
 const CoachInvite = lazyPage(() => import("./pages/CoachInvite"), "CoachInvite");
+const NotFound = lazyPage(() => import("./pages/NotFound"), "NotFound");
 
 // Logged-in area: sidebar/bottom nav shell. Three real states, not two —
 // no session -> Welcome (or straight to Login if this is the installed
@@ -335,6 +336,9 @@ export default function App() {
                   <Route path="/caddie/analyze" element={<AnalyzeSwing />} />
                   <Route path="/caddie/:analysisId" element={<CaddieAnalysisDetail />} />
                 </Route>
+                {/* Unknown paths used to render a blank page. Standalone like
+                    /privacy, so it works with or without a session. */}
+                <Route path="*" element={<NotFound />} />
               </Routes>
               </Suspense>
             </BrowserRouter>

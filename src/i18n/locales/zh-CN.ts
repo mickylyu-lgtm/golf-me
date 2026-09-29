@@ -959,6 +959,9 @@ export const zhCN: Record<TranslationKey, string> = {
   "help.subtitle": "关于使用 GolfMe 的常见问题。",
   "about.description": "GolfMe 帮助球友互相找到彼此——加入空缺球局、招募球友补齐四人组，或根据日程、水平和预算自动匹配。",
   "about.version": "版本 1.0（原型）",
+  "notFound.title": "页面未找到",
+  "notFound.body": "此页面不存在或已移动。",
+  "notFound.cta": "前往 GolfMe",
 
   "community.title": "社区",
   "community.subtitle": "球场闲聊、趣味内容，以及正在招募球友的球局。",

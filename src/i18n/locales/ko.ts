@@ -959,6 +959,9 @@ export const ko: Record<TranslationKey, string> = {
   "help.subtitle": "GolfMe 사용에 관한 자주 묻는 질문.",
   "about.description": "GolfMe는 골퍼들이 서로를 찾도록 도와줘요 — 열린 라운드에 참가하고, 조를 채우고, 일정·실력·예산에 맞춰 자동으로 매칭돼요.",
   "about.version": "버전 1.0 (프로토타입)",
+  "notFound.title": "페이지를 찾을 수 없습니다",
+  "notFound.body": "이 페이지는 존재하지 않거나 이동되었습니다.",
+  "notFound.cta": "GolfMe로 이동",
 
   "community.title": "커뮤니티",
   "community.subtitle": "골프 이야기, 밈, 골프장 잡담, 그리고 플레이어를 찾는 라운드.",

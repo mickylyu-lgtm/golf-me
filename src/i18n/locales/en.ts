@@ -871,6 +871,9 @@ export const en = {
   "help.subtitle": "Common questions about using GolfMe.",
   "about.description": "GolfMe helps golfers find each other — join an open round, fill a foursome, or get matched automatically based on schedule, skill, and budget.",
   "about.version": "Version 1.0 (prototype)",
+  "notFound.title": "Page not found",
+  "notFound.body": "This page doesn't exist or has moved.",
+  "notFound.cta": "Go to GolfMe",
 
   // Community
   "community.title": "Community",

@@ -959,6 +959,9 @@ export const es: Record<TranslationKey, string> = {
   "help.subtitle": "Preguntas frecuentes sobre el uso de GolfMe.",
   "about.description": "GolfMe ayuda a los golfistas a encontrarse — únete a una ronda abierta, completa un grupo de cuatro, o consigue un emparejamiento automático según horario, nivel y presupuesto.",
   "about.version": "Versión 1.0 (prototipo)",
+  "notFound.title": "Página no encontrada",
+  "notFound.body": "Esta página no existe o se ha movido.",
+  "notFound.cta": "Ir a GolfMe",
 
   "community.title": "Comunidad",
   "community.subtitle": "Charla de golf, memes, conversación de campos y rondas que buscan jugadores.",
