@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // GolfMe Review Gate task CLI.
+//   node tools/review-gate/task.mjs start --spec-json '<json>'  (human-gated: the prompt shows objective + scope)
 //   node tools/review-gate/task.mjs start --spec <file.json>
 //   node tools/review-gate/task.mjs status
 //   node tools/review-gate/task.mjs note <F#> <addressed|disputed|open> "<note>"
@@ -97,14 +98,18 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   let r;
   try {
     if (cmd === "start") {
+      // --spec-json '<json>' keeps the objective and scope visible in the approval prompt.
+      const j = rest.indexOf("--spec-json");
       const i = rest.indexOf("--spec");
-      r = startTask(repoRoot, JSON.parse(readFileSync(rest[i + 1], "utf8")));
+      if (j >= 0) r = startTask(repoRoot, JSON.parse(rest[j + 1]));
+      else if (i >= 0) r = startTask(repoRoot, JSON.parse(readFileSync(rest[i + 1], "utf8")));
+      else r = { ok: false, error: "usage: start --spec-json '<json>' | start --spec <file>" };
     } else if (cmd === "status") r = taskStatus(repoRoot);
     else if (cmd === "note") r = noteFinding(repoRoot, rest[0], rest[1], rest.slice(2).join(" "));
     else if (cmd === "tests") r = recordTests(repoRoot, JSON.parse(readFileSync(rest[0], "utf8")));
     else if (cmd === "done") r = finishTask(repoRoot);
     else if (cmd === "cancel") r = cancelTask(repoRoot);
-    else r = { ok: false, error: "usage: start --spec <file> | status | note | tests <file> | done | cancel" };
+    else r = { ok: false, error: "usage: start --spec-json '<json>' | start --spec <file> | status | note | tests <file> | done | cancel" };
   } catch (e) {
     r = { ok: false, error: e.message };
   }

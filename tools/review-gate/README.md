@@ -28,6 +28,13 @@ Synthetic `clampPercent` code only. `secret` must be refused before sending; `do
 auto (silent) · reviewer (needs DONE for the current work hash) · human (ask) · prohibited (deny).
 Frozen areas (DirectMessageThread, BottomNav, keyboard code, `capacitor.config.ts`, `ios/**`) and the gate itself are always human-gated.
 
+### How shell commands are read (P1, 2026-09-29)
+- `lib/shell.mjs` parses commands before classifying: `|`, `;`, `&&` inside quotes, heredoc bodies or comments do **not** split a command, so grep patterns and commit messages no longer trigger prompts. `$(…)`, backticks and `<(…)` run commands even inside double quotes and unquoted heredocs, so their contents are classified too (`echo $(git push)` is a push). `bash -c '…'` is classified by its script. Unbalanced quotes/heredocs are never auto.
+- Writes: only real targets count — redirect targets, `rm`/`mv`/`touch`/`tee`/`sed -i` operands, the `cp` destination. Protected targets stay gated; writes outside the repo are human except temp/scratch.
+- Review Gate files: read-only commands (including pipes into filters) and the gate's own commands are allowed; anything else touching `tools/review-gate`, `.review-gate` or `.claude` settings is denied, and after `cd` into a gate folder every command must be read-only.
+- `task.mjs start --spec-json '<json>'` is human-gated: **approving that prompt is the explicit approval that starts the reviewer loop**, and the prompt shows the objective and scope. `status`, `note`, `tests`, `done` are auto; `cancel` is human.
+- Still human: unknown programs (`node script.js`, `python`, `npx tsx`), `find -exec/-delete`, `awk system()`, piping into an interpreter, eval/encoded commands.
+
 ## Review tasks
 ```
 node tools/review-gate/task.mjs start --spec <spec.json>   # objective, scope globs, requirements, risk, rollback…

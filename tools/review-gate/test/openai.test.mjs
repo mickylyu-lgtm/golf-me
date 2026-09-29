@@ -388,11 +388,13 @@ test("live-check: respects the daily call limit (no request)", async () => {
   assert.match(r.reason, /daily reviewer call limit/);
   assert.equal(requests.length, 0);
 });
-test("classifier: live-check is human-gated; any variation is denied", () => {
+test("classifier: live-check is always human-gated; chaining gate changes onto it is denied", () => {
   setTestEnv();
   const repo = makeRepo();
   assert.equal(decisionOf(pre(repo, "Bash", { command: "node tools/review-gate/live-check.mjs" })), "ask");
   assert.equal(decisionOf(pre(repo, "Bash", { command: "node tools/review-gate/live-check.mjs --case revise" })), "ask");
-  assert.equal(decisionOf(pre(repo, "Bash", { command: "node tools/review-gate/live-check.mjs > out.txt" })), "deny");
+  assert.equal(decisionOf(pre(repo, "Bash", { command: "node tools/review-gate/live-check.mjs > out.txt 2>&1" })), "ask");
+  assert.equal(decisionOf(pre(repo, "Bash", { command: "node tools/review-gate/live-check.mjs > tools/review-gate/policy.json" })), "ask"); // security-boundary write, still human
   assert.equal(decisionOf(pre(repo, "Bash", { command: "node tools/review-gate/live-check.mjs && rm -rf tools/review-gate" })), "deny");
+  assert.equal(decisionOf(pre(repo, "Bash", { command: "node tools/review-gate/live-check.mjs --case $(rm -rf x)" })), "deny");
 });
