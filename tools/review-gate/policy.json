@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "_comment": "GolfMe Review Gate policy. Development tooling only; never imported by src/. Real OpenAI calls enabled 2026-09-29 (approved by Micky, P0). The API key lives in ~/.golfme-review/openai.key, never in the repo.",
+  "realCallsEnabled": true,
+  "model": "gpt-6-sol",
+  "reasoningEffort": "medium",
+  "limits": {
+    "maxReviseCycles": 3,
+    "maxContinueCycles": 8,
+    "maxDisputesPerFinding": 2,
+    "maxCallsPerDay": 10,
+    "dailySoftStopUsd": 2.0,
+    "monthlyCapUsd": 10.0,
+    "maxPayloadChars": 60000,
+    "maxFileContentsChars": 40000,
+    "maxFileContentsFiles": 3,
+    "maxResponseChars": 50000,
+    "maxOutputTokens": 8000,
+    "requestTimeoutMs": 90000,
+    "totalReviewTimeoutMs": 240000,
+    "retryDelaysMs": [2000, 8000],
+    "maxRetryAfterMs": 30000,
+    "maxMalformedRetries": 1,
+    "payloadRetentionDays": 7
+  },
+  "pricing": {
+    "_comment": "USD per 1M tokens for gpt-6-sol, standard tier, from developers.openai.com/api/docs/pricing on 2026-09-29 (cached-input discount ignored, so estimates run high). Prompts over 272K input tokens cost more, but payloads are capped far below that. null = cost unknown, so real calls are refused.",
+    "inputPerMillion": 2.0,
+    "outputPerMillion": 10.0
+  },
+  "unknownCommandPolicy": "ask",
+  "frozenPaths": [
+    "src/pages/DirectMessageThread.tsx",
+    "src/components/layout/BottomNav.tsx",
+    "src/lib/useDisableKeyboardAccessoryBar.ts",
+    "src/**/*Keyboard*",
+    "src/**/*keyboard*",
+    "capacitor.config.ts",
+    "ios/**"
+  ],
+  "securityBoundaryPaths": [
+    ".claude/settings.json",
+    ".claude/settings.local.json",
+    ".claude/agents/**",
+    "tools/review-gate/**",
+    ".gitignore",
+    ".vercelignore",
+    "package.json",
+    "package-lock.json",
+    "CLAUDE.md",
+    "vercel.json"
+  ],
+  "prohibitedWritePaths": [
+    ".review-gate/**",
+    ".review-gate-test-repo"
+  ],
+  "secretPathPatterns": [
+    "(^|[\\\\/\\s\"'=])\\.env(?!\\.example)(\\.[\\w.-]+)?($|[\\s\"';|&)])",
+    "\\.claude[\\\\/]channels",
+    "\\.golfme-review",
+    "\\.p8($|[\\s\"'])",
+    "\\.pem($|[\\s\"'])",
+    "\\.p12($|[\\s\"'])",
+    "\\.mobileprovision"
+  ],
+  "highRiskPaths": [
+    "supabase/**",
+    "api/**",
+    "src/context/AuthContext.tsx",
+    "src/lib/supabase.ts"
+  ],
+  "writableOutsideRepo": [
+    "**/AppData/Local/Temp/claude/**",
+    "**/.claude/projects/*/memory/**"
+  ]
+}

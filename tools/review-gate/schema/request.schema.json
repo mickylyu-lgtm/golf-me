@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "golfme-review/1 request (built and sanitized by review.mjs; never raw)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "task_id", "work_hash", "cycle", "objective", "requirements", "approved_scope", "hard_constraints", "risk_declared", "files_changed", "diff", "file_contents", "tests", "architecture_decisions", "risks", "rollback", "open_questions", "previous_findings", "redaction_report"],
+  "properties": {
+    "protocol": { "const": "golfme-review/1" },
+    "task_id": { "type": "string" },
+    "work_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "cycle": { "type": "integer", "minimum": 1 },
+    "objective": { "type": "string", "maxLength": 1000 },
+    "requirements": { "type": "array", "items": { "type": "string", "maxLength": 300 } },
+    "approved_scope": { "type": "array", "items": { "type": "string" } },
+    "hard_constraints": { "type": "array", "items": { "type": "string", "maxLength": 300 } },
+    "risk_declared": { "enum": ["low", "medium", "high", "critical"] },
+    "files_changed": { "type": "array", "items": { "type": "object", "required": ["path", "status", "additions", "deletions"] } },
+    "diff": { "type": "string" },
+    "file_contents": { "type": "array", "maxItems": 3, "items": { "type": "object", "required": ["path", "content", "reason"] } },
+    "tests": { "type": "array", "items": { "type": "object", "required": ["command", "result", "summary"] } },
+    "architecture_decisions": { "type": "array", "items": { "type": "string", "maxLength": 500 } },
+    "risks": { "type": "array", "items": { "type": "string", "maxLength": 500 } },
+    "rollback": { "type": "string", "maxLength": 1000 },
+    "open_questions": { "type": "array", "items": { "type": "string", "maxLength": 500 } },
+    "previous_findings": { "type": "array", "items": { "type": "object", "required": ["id", "status", "note"] } },
+    "redaction_report": { "type": "object", "required": ["redacted_count", "excluded_paths"] }
+  }
+}

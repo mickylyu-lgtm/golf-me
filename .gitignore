@@ -49,3 +49,7 @@ ios/**/xcuserdata/
 ios/**/*.xcuserstate
 ios/DerivedData
 ios/.build
+
+# GolfMe Review Gate (dev tooling): runtime state + laptop-only Claude settings
+.review-gate/
+.claude/settings.local.json

@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "golfme-review/1 response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocol", "task_id", "work_hash", "state", "risk", "findings", "scope_change_detected", "human_gate_reasons", "summary"],
+  "properties": {
+    "protocol": { "const": "golfme-review/1" },
+    "task_id": { "type": "string" },
+    "work_hash": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "state": { "enum": ["CONTINUE", "REVISE", "USER_APPROVAL_REQUIRED", "BLOCKED", "DONE"] },
+    "risk": { "enum": ["low", "medium", "high", "critical"] },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "severity", "category", "file", "line", "issue", "required_change"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^F\\d{1,3}$" },
+          "severity": { "enum": ["blocker", "major", "minor", "nit"] },
+          "category": { "enum": ["security", "correctness", "architecture", "scope", "tests", "migration", "privacy"] },
+          "file": { "type": "string", "maxLength": 300 },
+          "line": { "type": "integer", "minimum": 0 },
+          "issue": { "type": "string", "maxLength": 800 },
+          "required_change": { "type": "string", "maxLength": 800 }
+        }
+      }
+    },
+    "scope_change_detected": { "type": "boolean" },
+    "human_gate_reasons": { "type": "array", "items": { "type": "string", "maxLength": 300 } },
+    "summary": { "type": "string", "maxLength": 500 }
+  }
+}
