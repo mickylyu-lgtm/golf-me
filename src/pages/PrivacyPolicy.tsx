@@ -160,3 +160,6 @@ export function PrivacyPolicy() {
     </div>
   );
 }
+
+// Shared with TermsOfService.tsx so the contact address lives in one place.
+export { CONTACT_EMAIL };
