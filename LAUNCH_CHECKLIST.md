@@ -1,13 +1,14 @@
 # GOLFME LAUNCH STATUS
 
 **Target:** First public App Store launch (plus golfme.app, already live with open signup)
-**Last updated:** 2026-09-29 — initial read-only audit (evidence: code, git history, production database, earlier device tests)
+**Last updated:** 2026-09-29 (evening) — Privacy Policy rewrite + App Store privacy mapping drafted (task T-20260929-12042, not yet committed); new location-privacy blocker found. Initial audit earlier the same day.
 
 Statuses: `[ ]` NOT STARTED · `[~]` IN PROGRESS · `[?]` NEEDS VERIFICATION · `[!]` BLOCKED · `[x]` COMPLETE (only with evidence it works).
 Classify every request: **A** fixes a launch blocker · **B** improves launch quality · **C** nonessential, probably after launch.
 
 ### CURRENT LAUNCH BLOCKERS
-1. **Privacy Policy is inaccurate.** It says "We don't have any advertising or analytics tracking in the app", but `<Analytics />` (Vercel Web Analytics) runs on every page. It also never mentions push notifications, device push tokens, or that message previews pass through Apple's push service. Last updated Aug 22. Must be fixed before App Privacy labels can be filled in truthfully. (A)
+0. **NEW — Users' device locations are readable by every signed-in member.** When someone allows location, `LocationPicker.tsx` saves raw device coordinates to `profiles.playing_area_lat/lng` (12 of 23 profiles have 12–13 decimal places). The profiles SELECT policy is `using (true)` for all authenticated users, and signup is open, so anyone can create an account and read approximate home locations through the API. **Fix (D1, approved):** `[~]` **database side LIVE and verified 2026-09-30.** Migration `20260930090000_coarsen_profile_location` (trigger + backfill) applied after Micky approved the SQL: 23 profiles, 0 with more than 2 decimals; trigger rounds precise writes; an authenticated non-owner sees at most 2 decimals; no side effects. No precise profile coordinates remain in production. Remaining: ship the client rounding (`coarseLocation.ts` + `LocationPicker` + `FindRoundModal`, uncommitted; the trigger already covers the current client), then a device check that "Use My Current Location" and nearby discovery still work. (A)
+1. **Privacy Policy is inaccurate** → `[~]` **rewrite ready** (`src/pages/PrivacyPolicy.tsx`, uncommitted) plus the App Store mapping in `APP_STORE_PRIVACY.md`. It discloses Vercel Web Analytics, push tokens and APNs previews, every profile field, who can see what, Canada storage and 18+. The D1 database fix is now live, so the "rounded to about 1 km" statement is true; it ships with the client rounding in the same commit. D2 resolved: the review gate now redacts only the hash-listed published contact address (no allowlist; other PII still blocks), so GPT can review the policy text. (A)
 2. **No public Support URL.** App Store Connect requires one. `/help` exists but sits behind login; there is no public support page. (A)
 3. **Apple UGC rules (Guideline 1.2) not demonstrably met.** Report and block exist in code, but production has 0 reports and 0 blocks ever, so neither has been exercised. There's no signup-time acceptance of the Terms (Apple expects users to agree to terms with no tolerance for objectionable content), and no content filtering beyond reports. (A)
 4. **No real upcoming rounds.** Production has 0 upcoming rounds, and the 10 open/full rounds are all past-dated (hidden from Play). A new user from the App Store finds nothing to join. (A — marketplace, not App Review)
@@ -15,13 +16,13 @@ Classify every request: **A** fixes a launch blocker · **B** improves launch qu
 6. **App Store listing not started.** No screenshots, description, keywords, App Privacy answers, age rating, review notes, or release-candidate build. (A)
 
 ### NEEDS VERIFICATION
-Home, discovery, host/join/leave/cancel round, search and filter, profile viewing, follow, DM creation from a profile, logout and account switching, account deletion, push-tap deep links, foreground push, duplicate-push prevention, round-join push, Caddie completion push, denied-permission fallback, report/block, Caddie failure states in the UI, and the demo-account button on the public login screen (keep or hide for launch).
+The App Review password account still signs in (the demo button is no longer visible to reviewers), Home, discovery, host/join/leave/cancel round, search and filter, profile viewing, follow, DM creation from a profile, logout and account switching, account deletion, push-tap deep links, foreground push, duplicate-push prevention, round-join push, Caddie completion push, denied-permission fallback, report/block, and Caddie failure states in the UI.
 
 ### READY
 Email and Google signup/login with onboarding (fresh incognito tests, 2026-09-28) · golfme.app open signup (live, verified) · DM messaging + native DM push with previews (device test + `send-push` 200s, 2026-09-29) · Terms of Service at `/terms` (live, verified) · Page-not-found for unknown URLs (live) · Caddie pipeline (57 complete, 0 failures in 30 days, daily limit enforced in DB + Edge Function) · private Caddie storage for new uploads · no secrets in tracked files or git history (patterns scanned) · only the anon key and URL reach the frontend · GPT Review Gate working (P0 + P1, pilot shipped).
 
 ### NEXT 3 ACTIONS
-1. **Fix the Privacy Policy** (analytics disclosure, push notifications and device tokens, date), then draft the App Privacy answers from it. (A, small, through the Review Gate)
+1. **Ship the location-privacy commit** (client rounding + Privacy Policy + App Store mapping + hidden demo button; the DB fix is already live) after GPT DONE and Micky's approval, then a quick device check of "Use My Current Location" and nearby discovery. (A)
 2. **Add a public `/support` page and a Terms-acceptance line at signup** ("By continuing you agree to the Terms and Privacy Policy", with zero tolerance for objectionable content in the Terms). (A, small)
 3. **Micky: host 3–5 real NYC rounds, then run the two-account real-device QA** (section 9), including report, block and account deletion on a throwaway account. (A)
 
@@ -91,9 +92,9 @@ Email and Google signup/login with onboarding (fresh incognito tests, 2026-09-28
 | [ ] | Keywords | |
 | [ ] | Category | Suggest Sports (primary), Social Networking (secondary). |
 | [!] | Support URL | No public support page (`/help` is behind login). |
-| [!] | Privacy Policy URL | `https://golfme.app/privacy` is public, but the content is inaccurate (see blockers). |
+| [~] | Privacy Policy URL | `https://golfme.app/privacy` is public; the accurate rewrite is drafted, waiting on D1 before shipping. |
 | [x] | Terms URL | `https://golfme.app/terms` live 2026-09-29. |
-| [ ] | App Privacy disclosures | Depends on the fixed Privacy Policy. Data: contact info (email), name, photos/videos, location (coarse and precise when used), user content (posts, messages), identifiers (user ID, device push token), usage data (Vercel page analytics). |
+| [~] | App Privacy disclosures | Full mapping with evidence in `APP_STORE_PRIVACY.md`: Name, Email, Coarse Location (after D1), Messages, Photos/Videos, Audio, Other User Content, User ID, Device ID (push token), Product Interaction (not linked, Analytics), Other Data; Tracking = No. Enter in App Store Connect after D1 ships. |
 | [ ] | Age rating | Social app with user-generated content and chat → likely 17+ unless moderation changes the answers. |
 | [ ] | App Review notes | Explain: social golf app, real accounts, demo account available, push, AI swing feedback. |
 | [~] | Review / demo credentials | `scripts/setup-apple-review-account.ts` exists; "Try Demo Account" on the login screen. Confirm the reviewer account works. |
@@ -103,7 +104,8 @@ Email and Google signup/login with onboarding (fresh incognito tests, 2026-09-28
 ## 5. LEGAL / TRUST
 | Status | Item | Evidence / notes |
 |---|---|---|
-| [!] | Privacy Policy | Inaccurate on analytics; missing push notifications and device tokens; dated Aug 22. |
+| [~] | Privacy Policy | Rewrite drafted 2026-09-29 (10 disagreements fixed, listed in `APP_STORE_PRIVACY.md`); headless-verified; ships with D1. |
+| [~] | Location privacy | Raw coordinates were stored and readable by all members. The migration is live and verified 2026-09-30 (0 precise values; non-owner sees at most 2 decimals). No other API path returns user coordinates. Client rounding ships with the task commit; device check pending. |
 | [x] | Terms of Service | Live at `/terms` (approved by Micky, GPT review DONE). |
 | [?] | Account deletion | In Settings → `delete-account` v23; re-test needed. |
 | [?] | Report user / content | `reports` table + UI exist; never used in production. Check who receives reports and how quickly. |
@@ -154,7 +156,7 @@ Current state: `track()` in `src/lib/analytics.ts` **does nothing in production*
 | [x] | `.p8` / signing keys | Not in the repo; APNs key only in Supabase secrets; OpenAI reviewer key outside the repo. |
 | [x] | Stale dev URLs | None in `src/`. |
 | [x] | Debug / prototype tools | Profile switcher, demo reset and "any code works" verification are demo-only (`isDemo`). |
-| [?] | Demo account on the public login screen | Intentional (App Review / exploration). Decide: keep, or hide on the web build. (B) |
+| [~] | Demo account on the public login screen | Micky decided: hide it. `Auth.tsx` now shows it only on `/login?demo=1` (headless-verified: hidden on `/login` and `/signup`; `?demo=1` shows it and signs in). Demo functionality kept. App Review uses the password reviewer account. Uncommitted. |
 | [ ] | Placeholder copy | About page shows "Version 1.0 (prototype)"; login strings include "Prototype — choose your account" (check where shown). Reputation shows a disabled "Coming soon" for phone verification. (B) |
 | [~] | Hard-coded / test accounts | Demo data is local-only. Production still has 2 old mailinator test accounts and a little test data; remove before launch. (B) |
 | [?] | Broken links | Community Guidelines is login-only (the Terms reference it by name, not by link). Full link sweep not done. |
@@ -218,5 +220,5 @@ Attribution: give each creator a distinct round and track joins to it, plus sign
 ## 14. POST-LAUNCH
 Look for repeated evidence before expanding scope; don't implement every suggestion immediately.
 - **CRITICAL BUG:** (none yet)
-- **IMPORTANT IMPROVEMENT:** Caddie historical backfill (staged, approval needed) · auto-fail stuck Caddie analyses · server-side past-date guard for rounds · auto-close past rounds · waitlist email throttle · email notifications for web-only users · round (group) chat push · round update/cancel push · unused-Storage sweep · leaked-password protection.
+- **IMPORTANT IMPROVEMENT:** reconcile Supabase migration history. Every local migration filename's version differs from the version recorded in production (applied via MCP `apply_migration`, matched by name), so `supabase db push` must not be used until `supabase migration repair` aligns them · Review Gate: allow a pre-approved migration apply inside a task (today it deadlocks) · Caddie historical backfill (staged, approval needed) · auto-fail stuck Caddie analyses · server-side past-date guard for rounds · auto-close past rounds · waitlist email throttle · email notifications for web-only users · round (group) chat push · round update/cancel push · unused-Storage sweep · leaked-password protection.
 - **FUTURE IDEA:** see `AFTER_TESTFLIGHT.md`.

@@ -7,6 +7,7 @@ import { REGIONS, searchRegions } from "../../data/regions";
 import type { Region } from "../../data/regions";
 import { haversineMiles } from "../../lib/geo";
 import type { PlayingArea } from "../../lib/geo";
+import { coarsenGeoPoint } from "../../lib/coarseLocation";
 
 // How close a real geolocation fix needs to be to one of our curated
 // region centroids before we're willing to label it with that city name —
@@ -63,9 +64,12 @@ export function LocationPicker({ title = "Where do you usually play?", onSelect,
     setGeoStatus("requesting");
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const { latitude, longitude } = pos.coords;
-        const region = nearestRegion(latitude, longitude);
-        onSelect({ label: region?.label ?? "Current Location", coords: { lat: latitude, lng: longitude } });
+        // Coarsen before anything else touches the fix — the raw device
+        // coordinates never leave this callback (not to the profile, not
+        // to course search). See lib/coarseLocation.ts.
+        const coords = coarsenGeoPoint({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        const region = nearestRegion(coords.lat, coords.lng);
+        onSelect({ label: region?.label ?? "Current Location", coords });
       },
       () => setGeoStatus("denied"),
       { enableHighAccuracy: false, timeout: 10_000, maximumAge: 5 * 60_000 },
@@ -79,7 +83,9 @@ export function LocationPicker({ title = "Where do you usually play?", onSelect,
   }, [autoRequestLocation]);
 
   function selectRegion(region: Region) {
-    onSelect({ label: region.label, coords: region.coords });
+    // Region centroids are public, but coarsen them too so what the client
+    // holds matches what the server stores (it rounds every write).
+    onSelect({ label: region.label, coords: coarsenGeoPoint(region.coords) });
   }
 
   function useFreeTextLabel() {

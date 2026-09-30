@@ -29,6 +29,7 @@ import {
 import type { NewPreferenceSelections } from "../../lib/preferenceMatch";
 import { locationParams } from "../../lib/travelLocation";
 import type { PlayingArea } from "../../lib/geo";
+import { coarsenOptionalGeoPoint } from "../../lib/coarseLocation";
 
 export type WhenChoice = "today" | "tomorrow" | "weekend" | "date";
 
@@ -99,7 +100,9 @@ export function FindRoundModal({ onClose }: { onClose: () => void }) {
 
   function setTravelLocationAsDefault() {
     if (!travelLocation) return;
-    updateCurrentUserProfile({ areaLabel: travelLocation.label, playingAreaCoords: travelLocation.coords });
+    // Defensive: LocationPicker already coarsens, but never let a precise
+    // point reach the (broadly readable) profile row from here either.
+    updateCurrentUserProfile({ areaLabel: travelLocation.label, playingAreaCoords: coarsenOptionalGeoPoint(travelLocation.coords) });
     showToast(`Default playing area set to ${travelLocation.label}.`, "success");
     setTravelLocation(null);
   }

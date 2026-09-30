@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Check, Mail } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
@@ -22,6 +22,12 @@ export function Auth({ mode }: AuthProps) {
   const { signInWithGoogle, signInWithEmailOtp, signInWithPassword, authError, clearAuthError } = useAuth();
   const { showToast } = useToast();
   const { t } = useLocale();
+  // The demo account (mock data, localStorage only) is an internal/testing
+  // entry point, hidden from the normal public login screen for launch. Open
+  // /login?demo=1 to see it. App Review signs in with the dedicated password
+  // account instead (scripts/setup-apple-review-account.ts).
+  const [searchParams] = useSearchParams();
+  const showDemoEntry = searchParams.has("demo");
 
   // A sign-in link that came back invalid/expired (already used, or
   // consumed early by an email client's link-prefetch/security scan) used
@@ -198,7 +204,7 @@ export function Auth({ mode }: AuthProps) {
               </div>
             )}
 
-            {mode === "login" && (
+            {mode === "login" && showDemoEntry && (
               <>
                 <div className="my-1 flex items-center gap-3 text-xs font-medium text-slate-400">
                   <span className="h-px flex-1 bg-slate-200" />
