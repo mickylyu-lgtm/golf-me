@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { Capacitor } from "@capacitor/core";
 import { ArrowLeft, Check, Mail } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
@@ -28,6 +29,14 @@ export function Auth({ mode }: AuthProps) {
   // account instead (scripts/setup-apple-review-account.ts).
   const [searchParams] = useSearchParams();
   const showDemoEntry = searchParams.has("demo");
+  // Apple guideline 4.8: an iOS app that offers a third-party login such as
+  // Google must also offer Sign in with Apple. The native app therefore shows
+  // only GolfMe's own sign-in (email link + password); Google stays on the
+  // web. Google-created accounts are expected to reach the same account via
+  // the email link (Supabase matches confirmed emails); device-verify before
+  // relying on it (LAUNCH_CHECKLIST blocker 7).
+  const isNativeApp = Capacitor.isNativePlatform();
+  const showGoogle = !isNativeApp;
 
   // A sign-in link that came back invalid/expired (already used, or
   // consumed early by an email client's link-prefetch/security scan) used
@@ -173,13 +182,15 @@ export function Auth({ mode }: AuthProps) {
           </div>
         ) : (
           <div className="mx-auto flex w-full max-w-xs flex-col gap-3">
-            <button
-              onClick={continueWithGoogle}
-              disabled={busy}
-              className="flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition-all duration-200 ease-out hover:-translate-y-px hover:border-slate-300 hover:shadow-sm active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none disabled:opacity-50"
-            >
-              <GoogleIcon size={16} /> {t("auth.continueWithGoogle")}
-            </button>
+            {showGoogle && (
+              <button
+                onClick={continueWithGoogle}
+                disabled={busy}
+                className="flex items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition-all duration-200 ease-out hover:-translate-y-px hover:border-slate-300 hover:shadow-sm active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none disabled:opacity-50"
+              >
+                <GoogleIcon size={16} /> {t("auth.continueWithGoogle")}
+              </button>
+            )}
 
             {!showEmailField ? (
               <button
@@ -217,7 +228,13 @@ export function Auth({ mode }: AuthProps) {
                 >
                   <Check size={16} /> {t("auth.tryDemoAccount")}
                 </button>
+              </>
+            )}
 
+            {/* Always shown in the iOS app: App Review signs in with the password account there and can't add ?demo=1.
+                On the web it stays behind ?demo=1 as before. */}
+            {mode === "login" && (showDemoEntry || isNativeApp) && (
+              <>
                 {!showPasswordField ? (
                   <button
                     onClick={() => setShowPasswordField(true)}

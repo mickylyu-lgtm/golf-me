@@ -55,7 +55,8 @@ export function Support() {
 
       <Section title="Signing in">
         <p>
-          You can sign in with Google or with a sign-in link sent to your email. If a link doesn't work, it may have expired or already
+          On the web you can sign in with Google or with a sign-in link sent to your email. In the iPhone app, use the email sign-in
+          link, or "Sign in with a password" on the log-in screen if your account has a password. If you signed up with Google and have trouble signing in on iPhone, email us and we'll help. If a link doesn't work, it may have expired or already
           been used (some email apps open links automatically) — request a new one from the sign-in screen. Check your spam folder if the
           email doesn't arrive within a few minutes.
         </p>
