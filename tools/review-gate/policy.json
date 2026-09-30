@@ -11,7 +11,7 @@
     "maxCallsPerDay": 10,
     "dailySoftStopUsd": 2.0,
     "monthlyCapUsd": 10.0,
-    "maxPayloadChars": 60000,
+    "maxPayloadChars": 120000,
     "maxFileContentsChars": 40000,
     "maxFileContentsFiles": 3,
     "maxResponseChars": 50000,
@@ -28,8 +28,11 @@
     "inputPerMillion": 2.0,
     "outputPerMillion": 10.0
   },
-  "publishedContactEmailSha256": ["06153e913e3a1d44e38960de21d6df0aeefb50c86817ba30bf71b0a3f6c40a27"],
-  "_publishedContactEmailSha256": "SHA-256 of the lowercased contact address already published on golfme.app/privacy and /terms. Matches are replaced with a placeholder and do not block the review; the address is never sent. Only hashes are stored here. Every other email/PII still blocks.",
+  "publishedContactEmailSha256": [
+    "06153e913e3a1d44e38960de21d6df0aeefb50c86817ba30bf71b0a3f6c40a27",
+    "4e69d735baaf33baa88b1d1ccfe47ec509adae0b61f61f88e106bca034401e1d"
+  ],
+  "_publishedContactEmailSha256": "SHA-256 of lowercased non-personal addresses allowed to appear in reviewed code: (1) the contact address published on golfme.app/privacy and /terms; (2) Resend's shared sender address used by the waitlist and report alert triggers (approved by Micky 2026-09-30). Matches are replaced with a placeholder and do not block the review; the addresses are never sent. Only hashes are stored here. Every other email/PII still blocks.",
   "unknownCommandPolicy": "ask",
   "frozenPaths": [
     "src/pages/DirectMessageThread.tsx",
