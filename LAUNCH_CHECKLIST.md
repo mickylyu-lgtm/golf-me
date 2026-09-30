@@ -9,7 +9,8 @@ Classify every request: **A** fixes a launch blocker · **B** improves launch qu
 ### CURRENT LAUNCH BLOCKERS
 0. **NEW — Users' device locations are readable by every signed-in member.** When someone allows location, `LocationPicker.tsx` saves raw device coordinates to `profiles.playing_area_lat/lng` (12 of 23 profiles have 12–13 decimal places). The profiles SELECT policy is `using (true)` for all authenticated users, and signup is open, so anyone can create an account and read approximate home locations through the API. **Fix (D1, approved):** `[~]` **database side LIVE and verified 2026-09-30.** Migration `20260930090000_coarsen_profile_location` (trigger + backfill) applied after Micky approved the SQL: 23 profiles, 0 with more than 2 decimals; trigger rounds precise writes; an authenticated non-owner sees at most 2 decimals; no side effects. No precise profile coordinates remain in production. Remaining: ship the client rounding (`coarseLocation.ts` + `LocationPicker` + `FindRoundModal`, uncommitted; the trigger already covers the current client), then a device check that "Use My Current Location" and nearby discovery still work. (A)
 1. **Privacy Policy is inaccurate** → `[~]` **rewrite ready** (`src/pages/PrivacyPolicy.tsx`, uncommitted) plus the App Store mapping in `APP_STORE_PRIVACY.md`. It discloses Vercel Web Analytics, push tokens and APNs previews, every profile field, who can see what, Canada storage and 18+. The D1 database fix is now live, so the "rounded to about 1 km" statement is true; it ships with the client rounding in the same commit. D2 resolved: the review gate now redacts only the hash-listed published contact address (no allowlist; other PII still blocks), so GPT can review the policy text. (A)
-2. **No public Support URL.** App Store Connect requires one. `/help` exists but sits behind login; there is no public support page. (A)
+2. **No public Support URL** → `[~]` **built** (task T-20260929-78169, uncommitted): `/support` is public and standalone, with contact (shared constant), reply time, sign-in, rounds, safety/report/block, notifications, Caddie and account deletion; footer now links Privacy · Terms · Support. Headless-verified. (A)
+2b. **Reports reached no one** → `[~]` **database side LIVE 2026-09-30.** Migration `20260930100000_report_alerts_and_admin_view` (designed by golfme-architect, applied after Micky's approval): an AFTER INSERT trigger emails the founder via Resend on every report (HTML-escaped, best-effort, never blocks the insert); admin-only `admin_list_reports` / `admin_set_report_status`. Verified in a rolled-back test: the insert works under RLS, the alert is queued escaped, nothing is sent, non-admins are rejected by both RPCs, no leftovers; no new advisor findings beyond the standard admin-RPC pattern. Remaining: ship the Reports section in `AdminDashboard.tsx` (uncommitted) and do a real end-to-end test (file a report in the app → email arrives → shows on the dashboard). Known limits (post-launch): post/comment reports don't record which post; no alert rate limit. (A)
 3. **Apple UGC rules (Guideline 1.2) not demonstrably met.** Report and block exist in code, but production has 0 reports and 0 blocks ever, so neither has been exercised. There's no signup-time acceptance of the Terms (Apple expects users to agree to terms with no tolerance for objectionable content), and no content filtering beyond reports. (A)
 4. **No real upcoming rounds.** Production has 0 upcoming rounds, and the 10 open/full rounds are all past-dated (hidden from Play). A new user from the App Store finds nothing to join. (A — marketplace, not App Review)
 5. **The two-account real-device QA has never been run end to end** (section 9). That includes round-join push (only 1 device token exists in production: Micky's), push-tap deep links, and in-app account deletion (Apple requires it). (A)
@@ -23,7 +24,7 @@ Email and Google signup/login with onboarding (fresh incognito tests, 2026-09-28
 
 ### NEXT 3 ACTIONS
 1. **Ship the location-privacy commit** (client rounding + Privacy Policy + App Store mapping + hidden demo button; the DB fix is already live) after GPT DONE and Micky's approval, then a quick device check of "Use My Current Location" and nearby discovery. (A)
-2. **Add a public `/support` page and a Terms-acceptance line at signup** ("By continuing you agree to the Terms and Privacy Policy", with zero tolerance for objectionable content in the Terms). (A, small)
+2. **Report alert + minimal admin view** (blocker 2b; approved 2026-09-29) via golfme-architect, then ship `/support` + Terms acceptance + the zero-tolerance clause together (built; wording approved by Micky 2026-09-29). (A)
 3. **Micky: host 3–5 real NYC rounds, then run the two-account real-device QA** (section 9), including report, block and account deletion on a throwaway account. (A)
 
 ---
@@ -46,8 +47,8 @@ Email and Google signup/login with onboarding (fresh incognito tests, 2026-09-28
 | [?] | Follow / Golf Circle | Follows real (Phase 7); Circle = followed + played together (P2-11); not verified. |
 | [?] | DM creation from a profile | DMs exist (5 in the last 7 days); creation path from a golfer profile not re-verified. |
 | [x] | Messaging | Real DMs exchanged between two accounts 2026-09-29, push delivered. |
-| [?] | Notification tap → correct screen | `pushNotificationActionPerformed` routes `link_to` (`App.tsx`); tap behaviour not explicitly confirmed on device. |
-| [?] | Logout / account switching | Token deleted on logout; `register_device_push_token` moves the token to the signed-in account; not device-verified. |
+| [x] | Notification tap → correct screen | DM push tap opens the correct conversation in foreground, background and killed states (device test 2026-09-30). |
+| [x] | Logout / account switching | Device-verified 2026-09-30: account switch moved the push token; the old account stopped receiving pushes on that phone. |
 | [?] | Account deletion | `delete-account` v23 (purges storage incl. private Caddie bucket); not re-tested since the private-bucket change. **Apple requires this.** |
 
 ## 2. PUSH NOTIFICATIONS
@@ -56,10 +57,11 @@ Email and Google signup/login with onboarding (fresh incognito tests, 2026-09-28
 | [x] | Server config | `PUSH_INTERNAL_SECRET` matches Vault (fingerprint-verified); all `APNS_*` secrets set; production APNs. |
 | [x] | DM push, app backgrounded or closed | Micky's device test 2026-09-29; `send-push` returned 200 at 04:57 and 04:58 UTC. |
 | [x] | DM preview text | `20260929120000_dm_push_message_preview` applied; short and long messages tested on device. |
-| [?] | DM push while app in foreground | Not tested (iOS may suppress foreground banners unless handled). |
-| [?] | Tap → correct chat | See Core Product; not explicitly confirmed. |
-| [?] | Duplicate-notification prevention | One token per device via RPC; not tested with multiple devices or accounts. |
-| [?] | Device token / account switching | RPC exists; not tested. |
+| [x] | Second-device DM push (launch blocker, 2026-09-29) | Micky reported: User B gets the in-app notification but no native push. Server-side diagnosis (metadata only): the 7 test DMs (02:31–02:36 UTC) went to account `1101110c`, which has **never had a device token**, so `send-push` correctly found "no registered devices" (HTTP 200, APNs never called). The second phone was signed in as `1101110c` (it ran a Caddie analysis at 02:42 under it) but never registered while on that account. At 02:45:04 the phone signed into the other "Jordan" account `2e28a8c5`, and a token registered 1 second later, so registration and the entitlement work on that phone. **Resolved 2026-09-30:** User B = Jordan joined Sep 4 (`2e28a8c5`, token fp `c276a08a90`). Controlled test: A→B DMs at 03:02:30 and 03:02:41 UTC created the in-app notifications, `send-push` returned 200, and there's no APNs rejection in the logs. **Micky confirmed the native notification arrived on the second iPhone.** B→A (03:01:45, 03:01:48) also delivered. Root cause of the earlier failure: the test DMs went to the other Jordan account, which never registered a device. Diagnostics built (uncommitted, task T-20260929-12184): fingerprint-only `send-push` outcome logging (deploys after GPT DONE) and a Settings "Push status" line. Acceptance test passed 2026-09-30 (three app states + tap + account switch; rows below). |
+| [x] | DM push: app open / backgrounded / fully closed | Two real iPhones, 2026-09-30: Micky confirmed all three states deliver and **tapping opens the correct conversation**. Server: every A↔B DM created the in-app notification, `send-push` 200, no APNs rejections. |
+| [x] | Tap → correct chat | Confirmed on device for all three app states (2026-09-30). |
+| [x] | Duplicate-notification prevention | The account switch moved the phone's single token between accounts (no duplicate row); each DM produced one push. |
+| [x] | Device token / account switching | 2026-09-30 03:07:50 UTC: the second phone signed into another account; token `c276a08a90` moved to it 1 s later via `register_device_push_token`; the previous account has no token on that phone. Micky confirmed the old account no longer receives pushes there. |
 | [?] | Denied-permission fallback | `checkPushPermission` returns `unavailable`/`denied`; in-app notifications still work; not tested. |
 | [?] | Round join notification | Trigger `notify_round_joined` sends push; never exercised (only one device token in production). |
 | [ ] | Round update / cancel push | Not implemented (V1 was joins only). In-app notifications only. (C unless you decide otherwise) |
@@ -76,7 +78,7 @@ Email and Google signup/login with onboarding (fresh incognito tests, 2026-09-28
 | [x] | Analysis completion | 57 complete, 0 failed. |
 | [x] | Result persistence | Stored in `caddie_analyses`, media by path with signed URLs. |
 | [?] | Confidence handling | Callouts only on high/medium-confidence phases (P2-8); not re-verified on device. |
-| [x] | Production cost safeguards | Daily limit per user enforced by a BEFORE INSERT trigger and in the Edge Function; size caps. |
+| [x] | Production cost safeguards | Daily limit per user enforced by a BEFORE INSERT trigger and in the Edge Function; size caps. The limit stays at 30 analyses/user/day for launch (Micky decided 2026-09-29). |
 | [~] | Stuck analyses | 2 rows stuck (`449a5520` pending since 08-18, `212bf24f` processing since 09-18). Cleanup + auto-fail after 30 min recommended. (B) |
 | [ ] | Historical media backfill to the private bucket | Dry run done; COPY needs approval. Legacy media not anonymously listable. **Post-launch.** (C) |
 
@@ -91,7 +93,7 @@ Email and Google signup/login with onboarding (fresh incognito tests, 2026-09-28
 | [ ] | Description | |
 | [ ] | Keywords | |
 | [ ] | Category | Suggest Sports (primary), Social Networking (secondary). |
-| [!] | Support URL | No public support page (`/help` is behind login). |
+| [~] | Support URL | `https://golfme.app/support` built and headless-verified (uncommitted, task T-20260929-78169). |
 | [~] | Privacy Policy URL | `https://golfme.app/privacy` is public; the accurate rewrite is drafted, waiting on D1 before shipping. |
 | [x] | Terms URL | `https://golfme.app/terms` live 2026-09-29. |
 | [~] | App Privacy disclosures | Full mapping with evidence in `APP_STORE_PRIVACY.md`: Name, Email, Coarse Location (after D1), Messages, Photos/Videos, Audio, Other User Content, User ID, Device ID (push token), Product Interaction (not linked, Analytics), Other Data; Tracking = No. Enter in App Store Connect after D1 ships. |
@@ -115,7 +117,8 @@ Email and Google signup/login with onboarding (fresh incognito tests, 2026-09-28
 | [x] | AI / Caddie disclaimer | Covered in Terms. An in-app line on Caddie results would help. (B) |
 | [x] | Governing law | New York (approved). |
 | [x] | Contact information | Email on `/privacy` and `/terms`. |
-| [!] | Terms acceptance | Not shown at signup. Likely needed for App Review (UGC). |
+| [~] | Terms acceptance | "By continuing, you agree to our Terms of Service and Privacy Policy" (linked, 6 languages, placeholder word order) on login and signup; Terms gain an explicit zero-tolerance clause. Headless-verified; uncommitted; ships after the report alert (2b). |
+| [~] | Report handling | **Real delivery verified 2026-09-30:** Micky filed a real report (06:19:20 UTC, report `46cff7b4`, context profile), Resend accepted it (HTTP 200) and the email arrived in his inbox. Admin RPCs verified (non-admins rejected). Remaining: the dashboard Reports section (with load-error + retry) ships with the pending commit; after deploy, confirm the report shows there and mark it Reviewed. See blocker 2b. |
 
 ## 6. ANALYTICS
 Current state: `track()` in `src/lib/analytics.ts` **does nothing in production** (dev-only console log). Vercel Web Analytics records page views only. The production database already holds the underlying facts.
@@ -220,5 +223,6 @@ Attribution: give each creator a distinct round and track joins to it, plus sign
 ## 14. POST-LAUNCH
 Look for repeated evidence before expanding scope; don't implement every suggestion immediately.
 - **CRITICAL BUG:** (none yet)
+- **Review Gate notes (2026-09-30):** payload limit raised 60k → 120k characters (Micky approved) after a combined launch batch was truncated; the Resend shared sender address was added (by hash) to the redact-only list.
 - **IMPORTANT IMPROVEMENT:** reconcile Supabase migration history. Every local migration filename's version differs from the version recorded in production (applied via MCP `apply_migration`, matched by name), so `supabase db push` must not be used until `supabase migration repair` aligns them · Review Gate: allow a pre-approved migration apply inside a task (today it deadlocks) · Caddie historical backfill (staged, approval needed) · auto-fail stuck Caddie analyses · server-side past-date guard for rounds · auto-close past rounds · waitlist email throttle · email notifications for web-only users · round (group) chat push · round update/cancel push · unused-Storage sweep · leaked-password protection.
 - **FUTURE IDEA:** see `AFTER_TESTFLIGHT.md`.

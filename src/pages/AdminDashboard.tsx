@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { Bell, Calendar, LayoutGrid, MessageSquare, ShieldCheck, Smartphone, TrendingDown, TrendingUp, Trophy, Users, Wand2 } from "lucide-react";
+import { Bell, Calendar, Flag, LayoutGrid, MessageSquare, ShieldCheck, Smartphone, TrendingDown, TrendingUp, Trophy, Users, Wand2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useRoles } from "../lib/useRoles";
 import { supabase } from "../lib/supabase";
@@ -182,6 +182,46 @@ function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
+interface ReportRow {
+  id: string;
+  reporter_id: string;
+  reporter_name: string | null;
+  reporter_username: string | null;
+  reported_user_id: string | null;
+  reported_name: string | null;
+  reported_username: string | null;
+  reported_message_id: string | null;
+  round_id: string | null;
+  category: string;
+  context: string;
+  details: string;
+  status: string;
+  created_at: string;
+}
+
+const REPORT_STATUS_STYLES: Record<string, string> = {
+  open: "bg-rose-50 text-rose-700",
+  reviewed: "bg-sky-50 text-sky-700",
+  actioned: "bg-fairway-50 text-fairway-700",
+  dismissed: "bg-slate-100 text-slate-500",
+};
+
+// The three states an admin can move a report to — mirrors the allowed set
+// in admin_set_report_status() ('open' is only the insert default).
+const REPORT_ACTIONS = [
+  { status: "reviewed", label: "Reviewed" },
+  { status: "actioned", label: "Actioned" },
+  { status: "dismissed", label: "Dismissed" },
+] as const;
+
+function fmtDateTime(iso: string) {
+  return new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function personLabel(name: string | null, username: string | null) {
+  return `${name ?? "Unknown"}${username ? ` (@${username})` : ""}`;
+}
+
 const STATUS_STYLES: Record<string, string> = {
   waiting: "bg-fairway-50 text-fairway-700",
   invited: "bg-sky-50 text-sky-700",
@@ -203,6 +243,11 @@ export function AdminDashboard() {
   const [reputationDist, setReputationDist] = useState<ReputationDistributionRow[]>([]);
   const [messagingStats, setMessagingStats] = useState<MessagingStats | null>(null);
   const [pushStats, setPushStats] = useState<PushStats | null>(null);
+  const [reports, setReports] = useState<ReportRow[]>([]);
+  // Separate from the empty state: a failed load must never look like "no reports".
+  const [reportsError, setReportsError] = useState<string | null>(null);
+  const [retryingReports, setRetryingReports] = useState(false);
+  const [updatingReportId, setUpdatingReportId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -218,6 +263,7 @@ export function AdminDashboard() {
       { data: rd, error: rdErr },
       { data: ms, error: msErr },
       { data: ps, error: psErr },
+      { data: rp, error: rpErr },
     ] = await Promise.all([
       supabase.rpc("admin_list_waitlist_signups"),
       supabase.rpc("admin_list_users"),
@@ -229,6 +275,7 @@ export function AdminDashboard() {
       supabase.rpc("admin_reputation_distribution"),
       supabase.rpc("admin_messaging_stats"),
       supabase.rpc("admin_push_stats"),
+      supabase.rpc("admin_list_reports", { p_limit: 100 }),
     ]);
     if (wErr) console.error("GolfMe: admin_list_waitlist_signups failed.", wErr);
     if (uErr) console.error("GolfMe: admin_list_users failed.", uErr);
@@ -240,6 +287,7 @@ export function AdminDashboard() {
     if (rdErr) console.error("GolfMe: admin_reputation_distribution failed.", rdErr);
     if (msErr) console.error("GolfMe: admin_messaging_stats failed.", msErr);
     if (psErr) console.error("GolfMe: admin_push_stats failed.", psErr);
+    if (rpErr) console.error("GolfMe: admin_list_reports failed.", rpErr);
     setWaitlist((w ?? []) as WaitlistRow[]);
     setUsers((u ?? []) as UserRow[]);
     setCaddieStats(((cs as CaddieStats[]) ?? [])[0] ?? null);
@@ -250,7 +298,38 @@ export function AdminDashboard() {
     setReputationDist((rd ?? []) as ReputationDistributionRow[]);
     setMessagingStats(((ms as MessagingStats[]) ?? [])[0] ?? null);
     setPushStats(((ps as PushStats[]) ?? [])[0] ?? null);
+    if (rpErr) {
+      setReportsError(rpErr.message);
+    } else {
+      setReportsError(null);
+      setReports((rp ?? []) as ReportRow[]);
+    }
     setLoading(false);
+  }, []);
+
+  const retryReports = useCallback(async () => {
+    setRetryingReports(true);
+    const { data, error } = await supabase.rpc("admin_list_reports", { p_limit: 100 });
+    if (error) {
+      console.error("GolfMe: admin_list_reports failed.", error);
+      setReportsError(error.message);
+    } else {
+      setReportsError(null);
+      setReports((data ?? []) as ReportRow[]);
+    }
+    setRetryingReports(false);
+  }, []);
+
+  const setReportStatus = useCallback(async (reportId: string, status: string) => {
+    setUpdatingReportId(reportId);
+    const { error } = await supabase.rpc("admin_set_report_status", { p_report_id: reportId, p_status: status });
+    if (error) {
+      console.error("GolfMe: admin_set_report_status failed.", error);
+      window.alert(`Couldn't update the report: ${error.message}`);
+    } else {
+      setReports((prev) => prev.map((r) => (r.id === reportId ? { ...r, status } : r)));
+    }
+    setUpdatingReportId(null);
   }, []);
 
   useEffect(() => {
@@ -276,6 +355,7 @@ export function AdminDashboard() {
     .sort((a, b) => b.count - a.count);
 
   const onboardedCount = users.filter((u) => u.has_onboarded).length;
+  const openReportCount = reports.filter((r) => r.status === "open").length;
 
   return (
     <div className="flex flex-col gap-8 pb-10">
@@ -310,6 +390,90 @@ export function AdminDashboard() {
           </div>
         </section>
       )}
+
+      <section className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <h2 className="flex items-center gap-1.5 text-sm font-bold text-slate-800">
+            <Flag size={15} className="text-fairway-600" /> Reports
+          </h2>
+          <span className="text-sm font-semibold text-slate-500">
+            {reportsError
+              ? "Unavailable"
+              : reports.length >= 100
+                ? `Latest 100 shown · ${openReportCount} open among them (older reports not listed)`
+                : `${reports.length} total · ${openReportCount} open`}
+          </span>
+        </div>
+
+        {reportsError ? (
+          <div className="flex items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-3.5">
+            <p className="text-sm text-rose-700">
+              <span className="font-semibold">Couldn't load reports.</span> There may be open reports you can't see. ({reportsError})
+            </p>
+            <button
+              onClick={retryReports}
+              disabled={retryingReports}
+              className="shrink-0 rounded-full border border-rose-300 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+            >
+              {retryingReports ? "Retrying…" : "Retry"}
+            </button>
+          </div>
+        ) : reports.length === 0 ? (
+          <EmptyState icon={<Flag size={20} />} title="No user reports yet." />
+        ) : (
+          <div className="flex flex-col gap-2">
+            {reports.map((r) => {
+              const isOpen = r.status === "open";
+              return (
+                <div
+                  key={r.id}
+                  className={`flex flex-col gap-2 rounded-2xl border p-3 ${isOpen ? "border-rose-200 bg-rose-50/40" : "border-slate-100 bg-white"}`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-slate-800">
+                        {r.category} <span className="font-normal text-slate-500">· {r.context}</span>
+                      </p>
+                      <p className="truncate text-xs text-slate-500">{fmtDateTime(r.created_at)}</p>
+                    </div>
+                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${REPORT_STATUS_STYLES[r.status] ?? "bg-slate-100 text-slate-500"}`}>
+                      {r.status}
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-600">
+                    <p className="truncate">
+                      <span className="text-slate-400">Reporter:</span> {personLabel(r.reporter_name, r.reporter_username)}
+                    </p>
+                    <p className="truncate">
+                      <span className="text-slate-400">Reported:</span>{" "}
+                      {r.reported_user_id ? personLabel(r.reported_name, r.reported_username) : "(none)"}
+                    </p>
+                  </div>
+                  {r.details && <p className="whitespace-pre-wrap break-words rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-700">{r.details}</p>}
+                  <p className="break-all text-[11px] text-slate-400">
+                    Report {r.id}
+                    {r.round_id && <> · Golf Call {r.round_id}</>}
+                    {r.reported_message_id && <> · Message {r.reported_message_id}</>}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {REPORT_ACTIONS.map((a) => (
+                      <button
+                        key={a.status}
+                        type="button"
+                        disabled={updatingReportId === r.id || r.status === a.status}
+                        onClick={() => setReportStatus(r.id, a.status)}
+                        className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 disabled:opacity-40"
+                      >
+                        {a.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
       <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between">

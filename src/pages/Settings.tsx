@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Capacitor } from "@capacitor/core";
 import { useNavigate } from "react-router-dom";
 import { AlertTriangle, ArrowLeft, Bell, ChevronRight, CircleHelp, Compass, Globe, Info, Lock, LogOut, MapPin, RotateCcw, ShieldCheck, ShieldOff, Sparkles, User, Users } from "lucide-react";
 import { useData } from "../context/DataContext";
@@ -7,7 +8,8 @@ import { useTutorial } from "../context/TutorialContext";
 import { useToast } from "../context/ToastContext";
 import { useLocale, LOCALES } from "../i18n/LocaleContext";
 import { supabase } from "../lib/supabase";
-import { registerPushNotifications } from "../lib/push";
+import { checkPushPermission, getPushDiagnostics, registerPushNotifications } from "../lib/push";
+import type { TranslationKey } from "../i18n/locales/en";
 import { Avatar } from "../components/ui/Avatar";
 import { Button } from "../components/ui/Button";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog";
@@ -15,6 +17,72 @@ import { Toggle } from "../components/ui/Toggle";
 import { ProfileSwitcher } from "../components/layout/ProfileSwitcher";
 import { AddToHomeScreenPrompt } from "../components/layout/AddToHomeScreenPrompt";
 import { clearOnboardingDraft } from "../lib/onboardingDraft";
+
+// Plain-language push status for THIS phone, from what it knows locally:
+// iOS permission, whether Apple issued a device token, and whether GolfMe
+// saved it for the signed-in account (lib/push.ts getPushDiagnostics). No
+// tokens are shown. "Try again" re-runs registration (it only prompts if iOS
+// permission is still undecided).
+type PushStatus = "web" | "off" | "checking" | "denied" | "prompt" | "unavailable" | "apnsError" | "backendError" | "notLinked" | "ready";
+
+function PushStatusLine({ userId, pushEnabled }: { userId: string; pushEnabled: boolean }) {
+  const { t } = useLocale();
+  const native = Capacitor.isNativePlatform();
+  const [permission, setPermission] = useState<Awaited<ReturnType<typeof checkPushPermission>> | null>(null);
+  const [diag, setDiag] = useState(getPushDiagnostics);
+  const [retrying, setRetrying] = useState(false);
+
+  useEffect(() => {
+    if (!native) return;
+    let alive = true;
+    checkPushPermission().then((p) => alive && setPermission(p));
+    const refresh = () => setDiag(getPushDiagnostics());
+    window.addEventListener("golfme:push-diagnostics", refresh);
+    return () => {
+      alive = false;
+      window.removeEventListener("golfme:push-diagnostics", refresh);
+    };
+  }, [native]);
+
+  let status: PushStatus;
+  if (!native) status = "web";
+  else if (!pushEnabled) status = "off";
+  else if (permission === null) status = "checking";
+  else if (permission === "denied") status = "denied";
+  else if (permission === "prompt") status = "prompt";
+  else if (permission === "unavailable") status = "unavailable";
+  else if (diag.apns === "error") status = "apnsError";
+  else if (diag.backend === "ok" && diag.backendUserId === userId) status = "ready";
+  else if (diag.backend === "error" && diag.backendUserId === userId) status = "backendError";
+  else status = "notLinked";
+
+  async function retry() {
+    setRetrying(true);
+    await registerPushNotifications(userId);
+    setPermission(await checkPushPermission());
+    // The token arrives asynchronously; give the save a moment before re-reading.
+    setTimeout(() => {
+      setDiag(getPushDiagnostics());
+      setRetrying(false);
+    }, 2500);
+  }
+
+  const canRetry = status === "prompt" || status === "apnsError" || status === "backendError" || status === "notLinked";
+  const ok = status === "ready";
+  return (
+    <div className="ml-7 flex items-center gap-2 text-xs">
+      <span className={`h-2 w-2 shrink-0 rounded-full ${ok ? "bg-fairway-500" : status === "web" || status === "checking" || status === "off" ? "bg-slate-300" : "bg-amber-400"}`} />
+      <p className="flex-1 text-slate-500">
+        <span className="font-semibold text-slate-600">{t("settings.pushStatus")}:</span> {t(`settings.pushStatus.${status}` as TranslationKey)}
+      </p>
+      {canRetry && (
+        <button onClick={retry} disabled={retrying} className="shrink-0 font-semibold text-fairway-700 hover:underline disabled:opacity-50">
+          {status === "prompt" ? t("settings.pushStatus.allow") : t("settings.pushStatus.retry")}
+        </button>
+      )}
+    </div>
+  );
+}
 
 export function Settings() {
   const { currentUser, golfers, blockedIds, getGolfer, unblockUser, logOut, resetDemoData } = useData();
@@ -119,6 +187,7 @@ export function Settings() {
               </div>
               <Toggle checked={pushEnabled} onChange={handlePushToggle} label={t("settings.pushNotifications")} />
             </div>
+            {!isDemo && <PushStatusLine userId={currentUser.id} pushEnabled={pushEnabled} />}
             <div className="flex items-center gap-3">
               <Bell size={16} className="text-slate-400" />
               <div className="flex-1">

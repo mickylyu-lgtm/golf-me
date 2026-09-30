@@ -156,6 +156,10 @@ export function Welcome() {
           <button onClick={() => navigate("/terms")} className="hover:text-slate-600 hover:underline">
             Terms of Service
           </button>
+          <span aria-hidden="true">·</span>
+          <button onClick={() => navigate("/support")} className="hover:text-slate-600 hover:underline">
+            Support
+          </button>
         </div>
       </footer>
     </div>

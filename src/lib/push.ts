@@ -30,6 +30,40 @@ function setStoredToken(token: string | null): void {
   }
 }
 
+// What this phone last saw while setting up push, for the Settings "Push
+// status" line: did Apple hand us a device token, and did GolfMe save it for
+// which account. Never stores the token itself (that stays in LAST_TOKEN_KEY,
+// only for logout cleanup). Persisted so the status survives app restarts.
+const DIAG_KEY = "golfme:pushDiagnostics";
+
+export interface PushDiagnostics {
+  apns: "ok" | "error" | null;
+  backend: "ok" | "error" | null;
+  backendUserId: string | null;
+  updatedAt: string | null;
+}
+
+export function getPushDiagnostics(): PushDiagnostics {
+  const empty: PushDiagnostics = { apns: null, backend: null, backendUserId: null, updatedAt: null };
+  if (typeof window === "undefined") return empty;
+  try {
+    return { ...empty, ...JSON.parse(window.localStorage.getItem(DIAG_KEY) ?? "{}") };
+  } catch {
+    return empty;
+  }
+}
+
+function updatePushDiagnostics(patch: Partial<PushDiagnostics>): void {
+  if (typeof window === "undefined") return;
+  try {
+    const next = { ...getPushDiagnostics(), ...patch, updatedAt: new Date().toISOString() };
+    window.localStorage.setItem(DIAG_KEY, JSON.stringify(next));
+    window.dispatchEvent(new Event("golfme:push-diagnostics"));
+  } catch {
+    // Diagnostics are best-effort only.
+  }
+}
+
 // Handles for the two listeners registerPushNotifications owns, so a repeat
 // call can swap out just its own listeners. It must NOT call
 // PushNotifications.removeAllListeners(): that also drops App.tsx's
@@ -54,15 +88,20 @@ async function removeRegistrationListeners(): Promise<void> {
 // order between the migration and the web app doesn't matter.
 async function saveToken(token: string, userId: string): Promise<void> {
   const { error: rpcError } = await supabase.rpc("register_device_push_token", { p_token: token });
-  if (!rpcError) return;
+  if (!rpcError) {
+    updatePushDiagnostics({ backend: "ok", backendUserId: userId });
+    return;
+  }
   if (rpcError.code !== "PGRST202") {
     console.error("GolfMe: failed to save push token.", rpcError);
+    updatePushDiagnostics({ backend: "error", backendUserId: userId });
     return;
   }
   const { error } = await supabase
     .from("device_push_tokens")
     .upsert({ token, user_id: userId, platform: "ios", updated_at: new Date().toISOString() }, { onConflict: "token" });
   if (error) console.error("GolfMe: failed to save push token.", error);
+  updatePushDiagnostics({ backend: error ? "error" : "ok", backendUserId: userId });
 }
 
 // Registers this device for real APNs push and upserts the resulting token
@@ -92,6 +131,7 @@ export async function registerPushNotifications(userId: string): Promise<void> {
     registrationListeners = await Promise.all([
       PushNotifications.addListener("registration", (token) => {
         setStoredToken(token.value);
+        updatePushDiagnostics({ apns: "ok" });
         void saveToken(token.value, userId);
       }),
       // Without the aps-environment entitlement (Xcode's Push Notifications
@@ -99,6 +139,7 @@ export async function registerPushNotifications(userId: string): Promise<void> {
       // fails here with "no valid 'aps-environment' entitlement string found".
       PushNotifications.addListener("registrationError", (err) => {
         console.error("GolfMe: push registration error.", err);
+        updatePushDiagnostics({ apns: "error" });
       }),
     ]);
 
@@ -146,5 +187,7 @@ export async function unregisterPushNotifications(): Promise<void> {
     console.error("GolfMe: push unregister failed.", err);
   } finally {
     setStoredToken(null);
+    // This phone is no longer registered for the account that just signed out.
+    updatePushDiagnostics({ backend: null, backendUserId: null });
   }
 }

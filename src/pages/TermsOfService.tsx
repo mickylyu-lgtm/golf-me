@@ -95,6 +95,10 @@ export function TermsOfService() {
           <li>host rounds you don't intend to show up for, or misrepresent a round, booking, or yourself;</li>
           <li>scrape, reverse-engineer, overload, or interfere with the Service, or access accounts or data that aren't yours.</li>
         </ul>
+        <p>
+          <span className="font-semibold text-slate-800">GolfMe has zero tolerance for objectionable content and abusive users.</span>{" "}
+          Content like this is removed, and accounts that post it or abuse other golfers are suspended or removed.
+        </p>
         <p>The Community Guidelines in the app explain what we expect in posts and comments; they're part of these terms.</p>
       </Section>
 
@@ -146,7 +150,8 @@ export function TermsOfService() {
 
       <Section title="Blocking, reporting and enforcement">
         <p>
-          You can block and report other users in the app. We review reports and may remove content, limit features, or suspend or delete
+          You can block other users and report users or content from their profile, a chat, a round or a post. Blocked users can't message
+          you or join your rounds. We review every report and act on it — removing content, limiting features, or suspending or deleting
           accounts that break these terms or put others at risk — with or without notice, where the law allows.
         </p>
       </Section>

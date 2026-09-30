@@ -251,6 +251,26 @@ export function Auth({ mode }: AuthProps) {
           </div>
         )}
 
+        {/* Terms acceptance (App Store Guideline 1.2): every sign-in path here can create an account, so both screens show it.
+            Template placeholders keep each language's word order; the links are real buttons, not concatenated strings. */}
+        <p className="text-center text-xs leading-relaxed text-slate-400">
+          {t("auth.legalAgreement")
+            .split(/(\{terms\}|\{privacy\})/)
+            .map((part, i) =>
+              part === "{terms}" ? (
+                <button key={i} onClick={() => navigate("/terms")} className="font-semibold text-slate-500 underline hover:text-slate-700">
+                  {t("auth.termsLink")}
+                </button>
+              ) : part === "{privacy}" ? (
+                <button key={i} onClick={() => navigate("/privacy")} className="font-semibold text-slate-500 underline hover:text-slate-700">
+                  {t("auth.privacyLink")}
+                </button>
+              ) : (
+                <span key={i}>{part}</span>
+              ),
+            )}
+        </p>
+
         <p className="text-center text-sm text-slate-500">
           {mode === "signup" ? (
             <>

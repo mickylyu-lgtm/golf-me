@@ -71,6 +71,7 @@ const SavedPosts = lazyPage(() => import("./pages/SavedPosts"), "SavedPosts");
 const CoachReviewQueue = lazyPage(() => import("./pages/CoachReviewQueue"), "CoachReviewQueue");
 const PrivacyPolicy = lazyPage(() => import("./pages/PrivacyPolicy"), "PrivacyPolicy");
 const TermsOfService = lazyPage(() => import("./pages/TermsOfService"), "TermsOfService");
+const Support = lazyPage(() => import("./pages/Support"), "Support");
 const AdminReviewers = lazyPage(() => import("./pages/AdminReviewers"), "AdminReviewers");
 const AdminDashboard = lazyPage(() => import("./pages/AdminDashboard"), "AdminDashboard");
 const CoachInvite = lazyPage(() => import("./pages/CoachInvite"), "CoachInvite");
@@ -287,6 +288,7 @@ export default function App() {
                     neither of whom will ever have a session. */}
                 <Route path="/privacy" element={<PrivacyPolicy />} />
                 <Route path="/terms" element={<TermsOfService />} />
+                <Route path="/support" element={<Support />} />
                 <Route element={<GuestOnly />}>
                   <Route path="/welcome" element={<Welcome />} />
                   <Route path="/splash" element={<Splash />} />
