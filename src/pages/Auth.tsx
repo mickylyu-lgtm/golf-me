@@ -19,7 +19,7 @@ interface AuthProps {
 
 export function Auth({ mode }: AuthProps) {
   const navigate = useNavigate();
-  const { logIn, session } = useData();
+  const { logIn } = useData();
   const { signInWithGoogle, signInWithEmailOtp, signInWithPassword, authError, clearAuthError } = useAuth();
   const { showToast } = useToast();
   const { t } = useLocale();
@@ -29,6 +29,9 @@ export function Auth({ mode }: AuthProps) {
   // account instead (scripts/setup-apple-review-account.ts).
   const [searchParams] = useSearchParams();
   const showDemoEntry = searchParams.has("demo");
+  // Web-only way to reach the password sign-in for the App Review account; the
+  // iOS app always shows the small link (no address bar there to add this).
+  const showReviewEntry = searchParams.get("review") === "1";
   // Apple guideline 4.8: an iOS app that offers a third-party login such as
   // Google must also offer Sign in with Apple. The native app therefore shows
   // only GolfMe's own sign-in (email link + password); Google stays on the
@@ -47,7 +50,7 @@ export function Auth({ mode }: AuthProps) {
     showToast(authError, "warning");
     clearAuthError();
   }, [authError, clearAuthError, showToast]);
-  const [showEmailField, setShowEmailField] = useState(false);
+  const [showEmailField, setShowEmailField] = useState(mode === "login");
   const [email, setEmail] = useState("");
   const [emailSent, setEmailSent] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -55,7 +58,7 @@ export function Auth({ mode }: AuthProps) {
   // accounts that need a fixed, typeable credential rather than an inbox or
   // a Google account (Apple's App Review reviewer is the reason this
   // exists; regular users have no reason to notice or use it).
-  const [showPasswordField, setShowPasswordField] = useState(false);
+  const [showPasswordField, setShowPasswordField] = useState(mode === "login" && showReviewEntry);
   const [passwordEmail, setPasswordEmail] = useState("");
   const [password, setPassword] = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -109,7 +112,7 @@ export function Auth({ mode }: AuthProps) {
 
   function useDifferentMethod() {
     setEmailSent(false);
-    setShowEmailField(false);
+    setShowEmailField(mode === "login");
     setEmail("");
     setShowPasswordField(false);
     setPasswordEmail("");
@@ -155,7 +158,7 @@ export function Auth({ mode }: AuthProps) {
               parent centers via flexbox instead. */}
           <GolfMeIcon size={48} variant="gradient" className="mx-auto mb-4 rounded-2xl" />
           <h1 className="text-2xl font-extrabold text-slate-900">
-            {mode === "signup" ? t("auth.createAccount") : session.hasOnboarded ? t("auth.welcomeBack") : t("auth.logIn")}
+            {mode === "signup" ? t("auth.createAccount") : t("auth.signIn")}
           </h1>
           <p className="mt-1.5 text-sm text-slate-500">{mode === "signup" ? t("auth.signupSubtitle") : t("auth.loginSubtitle")}</p>
         </div>
@@ -204,7 +207,7 @@ export function Auth({ mode }: AuthProps) {
               <div className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-3">
                 <input
                   type="email"
-                  autoFocus
+                  autoFocus={mode !== "login"}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
@@ -234,7 +237,7 @@ export function Auth({ mode }: AuthProps) {
 
             {/* Always shown in the iOS app: App Review signs in with the password account there and can't add ?demo=1.
                 On the web it stays behind ?demo=1 as before. */}
-            {mode === "login" && (showDemoEntry || isNativeApp) && (
+            {mode === "login" && (showDemoEntry || showReviewEntry || isNativeApp) && (
               <>
                 {!showPasswordField ? (
                   <button
