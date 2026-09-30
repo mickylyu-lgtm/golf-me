@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
-import { ArrowLeft, Check, Mail } from "lucide-react";
+import { ArrowLeft, Check, Eye, EyeOff, Mail } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
@@ -58,6 +58,7 @@ export function Auth({ mode }: AuthProps) {
   const [showPasswordField, setShowPasswordField] = useState(false);
   const [passwordEmail, setPasswordEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordVisible, setPasswordVisible] = useState(false);
 
   async function continueWithGoogle() {
     setBusy(true);
@@ -251,13 +252,26 @@ export function Auth({ mode }: AuthProps) {
                       placeholder="you@example.com"
                       className={inputClass}
                     />
-                    <input
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder={t("auth.passwordPlaceholder")}
-                      className={inputClass}
-                    />
+                    <div className="relative">
+                      <input
+                        type={passwordVisible ? "text" : "password"}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder={t("auth.passwordPlaceholder")}
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck={false}
+                        className={`${inputClass} pr-12`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setPasswordVisible((v) => !v)}
+                        aria-label={t(passwordVisible ? "auth.hidePassword" : "auth.showPassword")}
+                        className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-xl text-slate-400 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400"
+                      >
+                        {passwordVisible ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
                     <Button onClick={continueWithPassword} disabled={!passwordEmail.includes("@") || !password || busy} fullWidth>
                       {t("auth.signIn")}
                     </Button>

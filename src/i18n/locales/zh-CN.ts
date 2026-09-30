@@ -408,6 +408,8 @@ export const zhCN: Record<TranslationKey, string> = {
   "auth.authError": "登录时出了点问题,请重试。",
   "auth.signInWithPassword": "使用密码登录",
   "auth.passwordPlaceholder": "密码",
+  "auth.showPassword": "显示密码",
+  "auth.hidePassword": "隐藏密码",
   "auth.signIn": "登录",
 
   "avatarUpload.invalidFile": "请选择一张图片文件。",

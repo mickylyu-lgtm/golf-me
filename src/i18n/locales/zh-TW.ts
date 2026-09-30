@@ -408,6 +408,8 @@ export const zhTW: Record<TranslationKey, string> = {
   "auth.authError": "登入時發生問題,請再試一次。",
   "auth.signInWithPassword": "使用密碼登入",
   "auth.passwordPlaceholder": "密碼",
+  "auth.showPassword": "顯示密碼",
+  "auth.hidePassword": "隱藏密碼",
   "auth.signIn": "登入",
 
   "avatarUpload.invalidFile": "請選擇一張圖片檔案。",

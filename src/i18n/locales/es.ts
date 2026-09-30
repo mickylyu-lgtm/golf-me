@@ -408,6 +408,8 @@ export const es: Record<TranslationKey, string> = {
   "auth.authError": "Hubo un problema al iniciar sesión. Inténtalo de nuevo.",
   "auth.signInWithPassword": "Iniciar sesión con contraseña",
   "auth.passwordPlaceholder": "Contraseña",
+  "auth.showPassword": "Mostrar contraseña",
+  "auth.hidePassword": "Ocultar contraseña",
   "auth.signIn": "Iniciar sesión",
 
   "avatarUpload.invalidFile": "Elige un archivo de imagen.",

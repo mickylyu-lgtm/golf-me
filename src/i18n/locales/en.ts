@@ -422,6 +422,8 @@ export const en = {
   "auth.authError": "Something went wrong signing you in. Please try again.",
   "auth.signInWithPassword": "Sign in with a password",
   "auth.passwordPlaceholder": "Password",
+  "auth.showPassword": "Show password",
+  "auth.hidePassword": "Hide password",
   "auth.signIn": "Sign in",
 
   // Avatar upload (used in onboarding and Profile)

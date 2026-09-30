@@ -104,6 +104,7 @@ Email and Google signup/login with onboarding (fresh incognito tests, 2026-09-28
 | [ ] | Age rating | Social app with user-generated content and chat → likely 17+ unless moderation changes the answers. |
 | [ ] | App Review notes | Explain: social golf app, real accounts, reviewer password login ("Sign in with a password" on the login screen), push, AI swing feedback, and what is native (push, camera/video upload) to pre-empt a 4.2 "website wrapper" concern. |
 | [x] | Review / demo credentials | Reviewer password sign-in verified on a real iPhone 2026-09-30 (blocker 8). Put the exact credentials in the App Review notes. |
+| [~] | Password show/hide toggle | Requested by Micky after 5 mistyped reviewer-password attempts. An eye / eye-off button inside the password field on `/login` (44×46 px; its `aria-label` switches between Show and Hide password, in 6 languages); hidden by default; autocapitalize/autocorrect off. Headless-verified (simulated iOS): password → text → password, value kept, 0 page errors. GPT reviewer hit its daily call limit, so Micky reviewed the diff and approved it (2026-09-30, task T-20260930-25411). Live after deploy; device check pending. (B) |
 | [~] | Permission strings | Location, photos, camera and microphone descriptions present in `Info.plist`. Consider adding `ITSAppUsesNonExemptEncryption = NO` to skip the export question on each upload. (B) |
 | [ ] | Final release-candidate build | Not built. The current TestFlight build has the push entitlement; Beta App Review / public link status to confirm. |
 

@@ -408,6 +408,8 @@ export const ja: Record<TranslationKey, string> = {
   "auth.authError": "サインイン中に問題が発生しました。もう一度お試しください。",
   "auth.signInWithPassword": "パスワードでサインイン",
   "auth.passwordPlaceholder": "パスワード",
+  "auth.showPassword": "パスワードを表示",
+  "auth.hidePassword": "パスワードを隠す",
   "auth.signIn": "サインイン",
 
   "avatarUpload.invalidFile": "画像ファイルを選択してください。",

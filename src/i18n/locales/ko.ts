@@ -408,6 +408,8 @@ export const ko: Record<TranslationKey, string> = {
   "auth.authError": "로그인 중 문제가 발생했습니다. 다시 시도해 주세요.",
   "auth.signInWithPassword": "비밀번호로 로그인",
   "auth.passwordPlaceholder": "비밀번호",
+  "auth.showPassword": "비밀번호 표시",
+  "auth.hidePassword": "비밀번호 숨기기",
   "auth.signIn": "로그인",
 
   "avatarUpload.invalidFile": "이미지 파일을 선택해주세요.",
