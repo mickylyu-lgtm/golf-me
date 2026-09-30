@@ -12,6 +12,7 @@ import { PostCard } from "../components/community/PostCard";
 import { CommentItem } from "../components/community/CommentItem";
 import { CoachReviewSection } from "../components/community/CoachReviewSection";
 import { loadChatDraft, postCommentDraftKey, saveChatDraft } from "../lib/chatDraft";
+import { isObjectionableContentError } from "../lib/objectionableContent";
 
 export function PostDetail() {
   const { id } = useParams<{ id: string }>();
@@ -67,7 +68,14 @@ export function PostDetail() {
       await createComment(post.id, text);
     } catch (err) {
       updateCommentText(text);
-      showToast(err instanceof Error ? err.message : "Couldn't post your comment. Please try again.", "warning");
+      showToast(
+        isObjectionableContentError(err)
+          ? t("moderation.objectionableContent")
+          : err instanceof Error
+            ? err.message
+            : "Couldn't post your comment. Please try again.",
+        "warning",
+      );
     } finally {
       setSubmitting(false);
     }

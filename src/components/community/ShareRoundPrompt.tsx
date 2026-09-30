@@ -9,6 +9,7 @@ import { Button } from "../ui/Button";
 import { resizeImageToDataUrl } from "../../lib/image";
 import { formatDate } from "../../lib/format";
 import { useLocale } from "../../i18n/LocaleContext";
+import { isObjectionableContentError } from "../../lib/objectionableContent";
 
 interface ShareRoundPromptProps {
   call: GolfCall;
@@ -38,14 +39,26 @@ export function ShareRoundPrompt({ call, onClose }: ShareRoundPromptProps) {
     }
   }
 
-  function share() {
-    createPost({
-      type: "round",
-      text: text.trim() || "Great round today.",
-      imageUrl,
-      golfCallId: call.id,
-      category: "Round Stories",
-    });
+  async function share() {
+    try {
+      await createPost({
+        type: "round",
+        text: text.trim() || "Great round today.",
+        imageUrl,
+        golfCallId: call.id,
+        category: "Round Stories",
+      });
+    } catch (err) {
+      showToast(
+        isObjectionableContentError(err)
+          ? t("moderation.objectionableContent")
+          : err instanceof Error
+            ? err.message
+            : "Couldn't share your round. Please try again.",
+        "warning",
+      );
+      return;
+    }
     showToast("Shared with the Community.", "success");
     onClose();
   }

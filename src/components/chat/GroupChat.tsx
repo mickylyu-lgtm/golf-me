@@ -37,9 +37,9 @@ export function GroupChat({ callId }: { callId: string }) {
     // the text back (unless the golfer already started typing something new)
     // so it can be retried instead of silently vanishing.
     updateText("");
-    const ok = await sendMessage(callId, sending);
-    if (!ok) {
-      showToast(t("chat.sendFailedToast"), "warning");
+    const result = await sendMessage(callId, sending);
+    if (result !== "sent") {
+      showToast(result === "objectionable" ? t("moderation.objectionableContent") : t("chat.sendFailedToast"), "warning");
       setText((current) => {
         if (current.trim()) return current;
         saveChatDraft(groupChatDraftKey(callId), sending);

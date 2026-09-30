@@ -21,6 +21,7 @@ import { supabase } from "../lib/supabase";
 import { clearCommunityPostDraft, loadCommunityPostDraft, saveCommunityPostDraft } from "../lib/communityPostDraft";
 import { copyCaddieMediaToCommunity, signCaddieMediaPath } from "../lib/caddieMedia";
 import type { DraftMediaItem } from "../lib/communityPostDraft";
+import { isObjectionableContentError } from "../lib/objectionableContent";
 
 type Attachment = "none" | "photo" | "course" | "round" | "swing";
 
@@ -457,7 +458,14 @@ export function CreatePost() {
       showToast("Post published.", "success");
       navigate("/community");
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Couldn't publish your post. Please try again.", "warning");
+      showToast(
+        isObjectionableContentError(err)
+          ? t("moderation.objectionableContent")
+          : err instanceof Error
+            ? err.message
+            : "Couldn't publish your post. Please try again.",
+        "warning",
+      );
       setPosting(false);
       setUploadProgress("idle");
     }

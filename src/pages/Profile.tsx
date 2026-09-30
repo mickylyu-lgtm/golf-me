@@ -34,6 +34,7 @@ import { tierDisplayName } from "../lib/reputationTiers";
 import { useReputationState } from "../lib/useReputationState";
 import { formatHandicapNumber, handicapColorClass } from "../lib/handicapColor";
 import { useRoles } from "../lib/useRoles";
+import { isObjectionableContentError } from "../lib/objectionableContent";
 
 function ProfileRow({ icon, label, value, onClick }: { icon: ReactNode; label: string; value?: string; onClick: () => void }) {
   return (
@@ -111,7 +112,8 @@ export function Profile() {
         } catch (err) {
           setSavingUsername(false);
           const msg = err instanceof Error ? err.message : "";
-          if (msg.includes("profiles_username_unique_idx")) showToast(t("username.takenError"), "warning");
+          if (isObjectionableContentError(err)) showToast(t("moderation.objectionableContent"), "warning");
+          else if (msg.includes("profiles_username_unique_idx")) showToast(t("username.takenError"), "warning");
           else if (msg.includes("profiles_username_format")) showToast(t("username.invalidError"), "warning");
           else showToast(t("username.saveFailedError"), "warning");
           return;
@@ -120,16 +122,24 @@ export function Profile() {
       }
     }
 
-    updateCurrentUserProfile({
-      ageRange: form.ageRange,
-      gender: form.gender,
-      handicap: form.handicap,
-      favoriteCourses: form.favoriteCourses
-        .split(",")
-        .map((c) => c.trim())
-        .filter(Boolean),
-      bio: form.bio,
-    });
+    // Awaited so any failed write (including a bio rejected by the server-side
+    // content filter) keeps the editor open with the typed text, and the
+    // success toast only shows after the write actually succeeded.
+    try {
+      await updateCurrentUserProfile({
+        ageRange: form.ageRange,
+        gender: form.gender,
+        handicap: form.handicap,
+        favoriteCourses: form.favoriteCourses
+          .split(",")
+          .map((c) => c.trim())
+          .filter(Boolean),
+        bio: form.bio,
+      });
+    } catch (err) {
+      showToast(isObjectionableContentError(err) ? t("moderation.objectionableContent") : t("profile.saveFailedError"), "warning");
+      return;
+    }
     setEditing(false);
     showToast(t("profile.profileUpdated"), "success");
   }

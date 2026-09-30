@@ -4,6 +4,8 @@ import { supabase } from "../lib/supabase";
 import { useAuth } from "./AuthContext";
 import { profileRowToGolferProfile } from "../lib/profile";
 import type { ProfileRow } from "../lib/profile";
+import { isObjectionableContentError } from "../lib/objectionableContent";
+import type { SendMessageResult } from "../lib/objectionableContent";
 import type { GolferProfile, AppNotification, DirectMessage, NotificationType, ReportCategory, Report } from "../types";
 import type { DmConversation } from "./DataContext";
 
@@ -84,7 +86,7 @@ interface RealSocialContextValue {
   dmConversations: DmConversation[];
   hasUnreadMessages: boolean;
   messagesWithGolfer: (otherId: string) => DirectMessage[];
-  sendDirectMessage: (otherId: string, text: string) => Promise<boolean>;
+  sendDirectMessage: (otherId: string, text: string) => Promise<SendMessageResult>;
   markConversationRead: (otherId: string) => Promise<void>;
   clearChatHistory: (otherId: string) => Promise<void>;
   deleteConversation: (otherId: string) => Promise<void>;
@@ -691,13 +693,13 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
   );
 
   const sendDirectMessage = useCallback(
-    async (otherId: string, text: string): Promise<boolean> => {
+    async (otherId: string, text: string): Promise<SendMessageResult> => {
       const trimmed = text.trim();
-      if (!trimmed || !selfId || !canMessage(otherId)) return false;
+      if (!trimmed || !selfId || !canMessage(otherId)) return "failed";
       const { data: convId, error: convErr } = await supabase.rpc("get_or_create_dm_conversation", { p_other_user_id: otherId });
       if (convErr) {
         console.error("GolfMe: failed to open conversation.", convErr);
-        return false;
+        return "failed";
       }
       // Optimistic: render immediately, before the network round trip. The
       // effect above drops this once the realtime-driven refetch brings in
@@ -712,11 +714,12 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
 
       const { error } = await supabase.from("messages").insert({ conversation_id: convId, sender_id: selfId, text: trimmed });
       if (error) {
-        console.error("GolfMe: failed to send message.", error);
         setPendingMessages((prev) => prev.filter((p) => p.tempId !== tempId));
-        return false;
+        if (isObjectionableContentError(error)) return "objectionable";
+        console.error("GolfMe: failed to send message.", error);
+        return "failed";
       }
-      return true;
+      return "sent";
     },
     [selfId, canMessage],
   );

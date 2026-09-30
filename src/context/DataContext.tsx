@@ -42,6 +42,8 @@ import { avatarColorForName, initialsFromName } from "../lib/avatar";
 import { dmConversationId, otherParticipant } from "../lib/dm";
 import { useAuth } from "./AuthContext";
 import { placeholderGolferProfile, golferPatchToProfileRow } from "../lib/profile";
+import { isObjectionableContentError } from "../lib/objectionableContent";
+import type { SendMessageResult } from "../lib/objectionableContent";
 import { useRealRounds } from "./RealRoundsContext";
 import { useRealSocial } from "./RealSocialContext";
 import { useRealCommunity } from "./RealCommunityContext";
@@ -183,8 +185,8 @@ interface DataContextValue {
   approveRequest: (callId: string, golferId: string) => void;
   declineRequest: (callId: string, golferId: string) => void;
 
-  /** Resolves false when a real round-chat message failed to send (caller keeps the text for retry). */
-  sendMessage: (callId: string, text: string) => Promise<boolean>;
+  /** Resolves "failed" when a real round-chat message failed to send, or "objectionable" when the content filter rejected it (caller keeps the text either way). */
+  sendMessage: (callId: string, text: string) => Promise<SendMessageResult>;
 
   hasReviewed: (callId: string, revieweeId: string) => boolean;
   submitReview: (callId: string, revieweeId: string, input: ReviewInput) => void;
@@ -220,7 +222,7 @@ interface DataContextValue {
   dmConversations: DmConversation[];
   hasUnreadMessages: boolean;
   messagesWithGolfer: (golferId: string) => DirectMessage[];
-  sendDirectMessage: (golferId: string, text: string) => Promise<boolean>;
+  sendDirectMessage: (golferId: string, text: string) => Promise<SendMessageResult>;
   markConversationRead: (golferId: string) => Promise<void>;
   clearChatHistory: (golferId: string) => Promise<void>;
   deleteConversation: (golferId: string) => Promise<void>;
@@ -701,18 +703,19 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const sendMessage = useCallback(
-    async (callId: string, text: string): Promise<boolean> => {
+    async (callId: string, text: string): Promise<SendMessageResult> => {
       const trimmed = text.trim();
-      if (!trimmed) return false;
+      if (!trimmed) return "failed";
       if (!auth.isDemo) {
         // Surfaced to GroupChat (error toast + typed text restored) instead of
         // failing silently — previously a failed send just vanished.
         try {
           await realRounds.sendRoundMessage(callId, trimmed);
-          return true;
+          return "sent";
         } catch (err) {
+          if (isObjectionableContentError(err)) return "objectionable";
           console.error("GolfMe: failed to send round message.", err);
-          return false;
+          return "failed";
         }
       }
       setData((prev) => ({
@@ -728,7 +731,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
           },
         ],
       }));
-      return true;
+      return "sent";
     },
     [auth.isDemo, realRounds],
   );
@@ -1050,10 +1053,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
   // Returns whether the message actually sent, so the UI can tell a
   // rate-limited/blocked send apart from a normal successful one.
   const sendDirectMessage = useCallback(
-    async (golferId: string, text: string): Promise<boolean> => {
+    async (golferId: string, text: string): Promise<SendMessageResult> => {
       if (!auth.isDemo) return realSocial.sendDirectMessage(golferId, text);
       const trimmed = text.trim();
-      if (!trimmed || !canMessage(golferId) || !canSendMessageNow()) return false;
+      if (!trimmed || !canMessage(golferId) || !canSendMessageNow()) return "failed";
       const convId = dmConversationId(currentUser.id, golferId);
       setData((prev) => ({
         ...prev,
@@ -1062,7 +1065,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
           { id: generateId("dm"), conversationId: convId, senderId: prev.currentUserId, text: trimmed, createdAt: new Date().toISOString() },
         ],
       }));
-      return true;
+      return "sent";
     },
     [auth.isDemo, realSocial, canMessage, canSendMessageNow, currentUser.id],
   );

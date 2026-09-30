@@ -10,6 +10,7 @@ import { ReportModal } from "../trust/ReportModal";
 import { formatRelativeTime } from "../../lib/format";
 import { commentReplyDraftKey, loadChatDraft, saveChatDraft } from "../../lib/chatDraft";
 import { useLocale } from "../../i18n/LocaleContext";
+import { isObjectionableContentError } from "../../lib/objectionableContent";
 
 interface CommentItemProps {
   comment: PostComment;
@@ -44,11 +45,26 @@ export function CommentItem({ comment, postId, replies }: CommentItemProps) {
     saveChatDraft(commentReplyDraftKey(comment.id), value);
   }
 
-  function submitReply() {
+  async function submitReply() {
     if (!replyText.trim()) return;
-    createComment(postId, replyText, comment.id);
+    const text = replyText;
     updateReplyText("");
     setReplyOpen(false);
+    try {
+      await createComment(postId, text, comment.id);
+    } catch (err) {
+      // Put the reply back (open, with its draft) so it can be edited and resent.
+      updateReplyText(text);
+      setReplyOpen(true);
+      showToast(
+        isObjectionableContentError(err)
+          ? t("moderation.objectionableContent")
+          : err instanceof Error
+            ? err.message
+            : "Couldn't post your reply. Please try again.",
+        "warning",
+      );
+    }
   }
 
   return (

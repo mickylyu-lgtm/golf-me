@@ -8,6 +8,7 @@ import { Button } from "../ui/Button";
 import { Modal } from "../ui/Modal";
 import { inputClass, labelClass } from "../ui/FormControls";
 import { isPastRoundStart, localDateInputValue } from "../../lib/golfCall";
+import { isObjectionableContentError } from "../../lib/objectionableContent";
 
 function toDateInputValue(iso: string): string {
   return iso.slice(0, 10);
@@ -56,7 +57,14 @@ export function EditTeeTimeModal({ call, onClose }: EditTeeTimeModalProps) {
       showToast(proofInvalidated ? t("golfCallDetail.proofInvalidatedToast") : t("golfCallDetail.teeTimeUpdatedToast"), proofInvalidated ? "warning" : "success");
       onClose();
     } catch (err) {
-      showToast(err instanceof Error ? err.message : t("golfCallDetail.bookingProofSaveError"), "warning");
+      showToast(
+        isObjectionableContentError(err)
+          ? t("moderation.objectionableContent")
+          : err instanceof Error
+            ? err.message
+            : t("golfCallDetail.bookingProofSaveError"),
+        "warning",
+      );
     } finally {
       setSaving(false);
     }

@@ -278,10 +278,11 @@ export function DirectMessageThread() {
     const pendingText = text;
     updateText("");
     stopTyping();
-    const sent = await sendDirectMessage(other.id, pendingText);
-    if (!sent) {
+    const result = await sendDirectMessage(other.id, pendingText);
+    if (result !== "sent") {
       updateText(pendingText);
-      showToast("Message didn't send — try again in a moment.", "info");
+      if (result === "objectionable") showToast(t("moderation.objectionableContent"), "warning");
+      else showToast("Message didn't send — try again in a moment.", "info");
     }
   }
 

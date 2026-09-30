@@ -14,6 +14,7 @@ import type { GeoPoint } from "../lib/geo";
 import { track } from "../lib/analytics";
 import { clearOnboardingDraft, loadOnboardingDraft, saveOnboardingDraft } from "../lib/onboardingDraft";
 import type { OnboardingDraft } from "../lib/onboardingDraft";
+import { isObjectionableContentError } from "../lib/objectionableContent";
 
 function draftDefaults(): OnboardingDraft {
   return {
@@ -142,7 +143,10 @@ export function ProfileSetup() {
         });
       } catch (err) {
         setSubmitting(false);
-        showToast(err instanceof Error ? err.message : t("auth.authError"), "warning");
+        showToast(
+          isObjectionableContentError(err) ? t("moderation.objectionableContent") : err instanceof Error ? err.message : t("auth.authError"),
+          "warning",
+        );
         return;
       }
     }

@@ -26,6 +26,7 @@ import { track } from "../lib/analytics";
 import { attachBookingProofDirect } from "../lib/useBookingProof";
 import { clearHostRoundDraft, loadHostRoundDraft, saveHostRoundDraft } from "../lib/hostRoundDraft";
 import type { LookingFor, WhenChoice } from "../lib/hostRoundDraft";
+import { isObjectionableContentError } from "../lib/objectionableContent";
 
 const BOOKING_SOURCES = ["Course Website", "GolfNow", "Lightspeed / Chronogolf", "Phone Reservation", "Other"] as const;
 
@@ -365,7 +366,14 @@ export function CreateGolfCall() {
       navigate(`/golf-calls/${call.id}`);
     } catch (err) {
       setSubmitting(false);
-      showToast(err instanceof Error ? err.message : "Couldn't post this round. Please try again.", "warning");
+      showToast(
+        isObjectionableContentError(err)
+          ? t("moderation.objectionableContent")
+          : err instanceof Error
+            ? err.message
+            : "Couldn't post this round. Please try again.",
+        "warning",
+      );
     }
   }
 
