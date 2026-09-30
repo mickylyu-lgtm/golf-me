@@ -156,29 +156,27 @@ export function ReputationDetail() {
       <div className="rounded-2xl border border-slate-100 bg-white p-4">
         <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">{t("reputation.trustVerification")}</p>
         <div className="flex flex-col gap-2.5">
-          <div className="flex items-center gap-3 rounded-xl border border-slate-100 px-3.5 py-3">
-            <Phone size={16} className="text-slate-400" />
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-slate-800">{t("reputation.phoneNumber")}</p>
-              <p className="text-xs text-slate-500">{t("reputation.neverShown")}</p>
+          {/* Phone verification (and the Verified Golfer badge, which needs it) has no real backing yet -- no phone number
+              is collected -- so real accounts don't see either row at all: a disabled "Coming soon" reads as an
+              unfinished feature to App Review (Guideline 2.1). Demo mode keeps its local-only simulation. */}
+          {isDemo && (
+            <div className="flex items-center gap-3 rounded-xl border border-slate-100 px-3.5 py-3">
+              <Phone size={16} className="text-slate-400" />
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-slate-800">{t("reputation.phoneNumber")}</p>
+                <p className="text-xs text-slate-500">{t("reputation.neverShown")}</p>
+              </div>
+              {phoneVerified ? (
+                <Badge tone="fairway" icon={<Check size={11} />}>
+                  {t("reputation.verified")}
+                </Badge>
+              ) : (
+                <Button size="sm" variant="outline" onClick={() => setVerifyChannel("phone")}>
+                  {t("reputation.verify")}
+                </Button>
+              )}
             </div>
-            {phoneVerified ? (
-              <Badge tone="fairway" icon={<Check size={11} />}>
-                {t("reputation.verified")}
-              </Badge>
-            ) : isDemo ? (
-              <Button size="sm" variant="outline" onClick={() => setVerifyChannel("phone")}>
-                {t("reputation.verify")}
-              </Button>
-            ) : (
-              // No real phone-verification path exists yet (no phone number
-              // is even collected) -- disabled and honestly labeled rather
-              // than offering a button that can't actually do anything.
-              <Button size="sm" variant="outline" disabled>
-                {t("reputation.comingSoon")}
-              </Button>
-            )}
-          </div>
+          )}
           <div className="flex items-center gap-3 rounded-xl border border-slate-100 px-3.5 py-3">
             <Mail size={16} className="text-slate-400" />
             <div className="flex-1">
@@ -203,36 +201,34 @@ export function ReputationDetail() {
               </Button>
             )}
           </div>
-          <div className="flex items-center gap-3 rounded-xl border border-slate-100 px-3.5 py-3">
-            <ShieldCheck size={16} className="text-slate-400" />
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-slate-800">{t("reputation.verifiedBadge")}</p>
-              <p className="text-xs text-slate-500">
-                {verifiedGolfer
-                  ? t("reputation.verifiedBadgeActive")
-                  : isDemo
-                    ? t("reputation.verifiedBadgeInactive")
-                    : t("reputation.verifiedBadgeInactiveReal")}
-              </p>
+          {isDemo && (
+            <div className="flex items-center gap-3 rounded-xl border border-slate-100 px-3.5 py-3">
+              <ShieldCheck size={16} className="text-slate-400" />
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-slate-800">{t("reputation.verifiedBadge")}</p>
+                <p className="text-xs text-slate-500">
+                  {verifiedGolfer ? t("reputation.verifiedBadgeActive") : t("reputation.verifiedBadgeInactive")}
+                </p>
+              </div>
+              {verifiedGolfer ? (
+                <Badge tone="fairway" icon={<ShieldCheck size={11} />}>
+                  {t("reputation.active")}
+                </Badge>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!canApplyVerifiedGolfer}
+                  onClick={() => {
+                    requestVerifiedGolfer();
+                    showToast(t("reputation.nowVerifiedToast"), "success");
+                  }}
+                >
+                  {t("reputation.apply")}
+                </Button>
+              )}
             </div>
-            {verifiedGolfer ? (
-              <Badge tone="fairway" icon={<ShieldCheck size={11} />}>
-                {t("reputation.active")}
-              </Badge>
-            ) : (
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={!canApplyVerifiedGolfer}
-                onClick={() => {
-                  requestVerifiedGolfer();
-                  showToast(t("reputation.nowVerifiedToast"), "success");
-                }}
-              >
-                {t("reputation.apply")}
-              </Button>
-            )}
-          </div>
+          )}
         </div>
       </div>
 
