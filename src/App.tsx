@@ -179,7 +179,13 @@ function usePushRegistration() {
   const registeredForUser = useRef<string | null>(null);
 
   useEffect(() => {
-    if (isDemo || !authUser || !pushEnabled) return;
+    if (isDemo || !authUser || !pushEnabled) {
+      // Sign-out deletes this device's token (AuthContext.signOut), so forget
+      // who we registered for: signing back into the same account in the same
+      // app session must register again, or that phone silently gets no push.
+      registeredForUser.current = null;
+      return;
+    }
     if (registeredForUser.current === authUser.id) return;
     registeredForUser.current = authUser.id;
     checkPushPermission().then((state) => {
