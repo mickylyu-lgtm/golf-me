@@ -103,7 +103,7 @@ export function ReviewModal({ callId, reviewee, onClose, onSubmitted }: ReviewMo
   }
 
   return (
-    <Modal title={t("review.title", { name: reviewee.name })} onClose={onClose}>
+    <Modal title={t("review.title", { name: reviewee.name })} onClose={onClose} keyboardAware>
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-3">
           <Avatar golfer={reviewee} size="md" />

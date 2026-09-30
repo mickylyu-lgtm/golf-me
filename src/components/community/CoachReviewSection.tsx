@@ -55,6 +55,7 @@ function ReviewForm({ postId, authorId, submitReview, onClose }: ReviewFormProps
     <Modal
       title="Leave Coach Review"
       onClose={onClose}
+      keyboardAware
       footer={
         <Button fullWidth disabled={!canSubmit || submitting} onClick={handleSubmit}>
           {submitting ? "Posting…" : "Post Review"}
