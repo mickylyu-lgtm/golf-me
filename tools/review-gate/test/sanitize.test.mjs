@@ -26,6 +26,43 @@ for (const [name, value] of Object.entries(FAKE)) {
   });
 }
 
+// ---------- published contact address: redact, don't block (hash-listed only) ----------
+{
+  const { createHash } = await import("node:crypto");
+  const PUBLISHED = "owner.contact" + "@" + "gmail.com"; // fake, assembled at runtime
+  const OTHER = "someone.else" + "@" + "gmail.com";
+  const HASH = createHash("sha256").update(PUBLISHED).digest("hex");
+  const opts = { publishedContactEmailSha256: [HASH] };
+
+  test("published contact: redacted with a placeholder, send not blocked", () => {
+    const r = sanitizeWork({ diff: section("src/pages/PrivacyPolicy.tsx", `const CONTACT = "${PUBLISHED}"; // legal text stays`) }, LIMITS, opts);
+    assert.equal(r.blocked, false, JSON.stringify(r.blockReasons));
+    assert.ok(!r.diff.includes(PUBLISHED));
+    assert.match(r.diff, /‹REDACTED:published-contact›/);
+    assert.match(r.diff, /legal text stays/);
+    assert.equal(r.publishedContactRedactions, 1);
+  });
+  test("published contact: case-insensitive match", () => {
+    const r = sanitizeWork({ diff: section("a.ts", PUBLISHED.toUpperCase()) }, LIMITS, opts);
+    assert.equal(r.blocked, false);
+    assert.ok(!r.diff.toLowerCase().includes(PUBLISHED));
+  });
+  test("published contact: any OTHER email still blocks (general detection unchanged)", () => {
+    const r = sanitizeWork({ diff: section("a.ts", `${PUBLISHED} and ${OTHER}`) }, LIMITS, opts);
+    assert.equal(r.blocked, true);
+    assert.ok(!r.diff.includes(OTHER));
+    assert.ok(!r.diff.includes(PUBLISHED));
+  });
+  test("published contact: without the hash list the address blocks as before", () => {
+    assert.equal(sanitizeWork({ diff: section("a.ts", PUBLISHED) }, LIMITS).blocked, true);
+    assert.equal(sanitizeWork({ diff: section("a.ts", PUBLISHED) }, LIMITS, { publishedContactEmailSha256: ["not-a-hash", ""] }).blocked, true);
+  });
+  test("published contact: secrets and phone numbers next to it still block", () => {
+    const r = sanitizeWork({ diff: section("a.ts", `${PUBLISHED} ${FAKE.openai} (415) 555-0134`) }, LIMITS, opts);
+    assert.equal(r.blocked, true);
+  });
+}
+
 test(".env and .env.local are excluded, .env.example is allowed", () => {
   assert.equal(isExcludedPath(".env"), true);
   assert.equal(isExcludedPath(".env.local"), true);

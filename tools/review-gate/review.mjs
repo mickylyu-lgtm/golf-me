@@ -78,7 +78,7 @@ export async function runReview({ repoRoot, dryRun = false, sleep } = {}) {
   } catch (e) {
     return { ...base, work_hash: workHash, state: "BLOCKED", reason: `could not read task diff: ${e.message}` };
   }
-  const clean = sanitizeWork({ diff, fileContents: task.file_contents ?? [] }, L);
+  const clean = sanitizeWork({ diff, fileContents: task.file_contents ?? [] }, L, { publishedContactEmailSha256: policy.publishedContactEmailSha256 ?? [] });
   if (clean.blocked) {
     audit(repoRoot, { event: "sanitizer_block", task_id: task.task_id, work_hash: workHash, reason: clean.blockReasons.join(" | ") });
     return { ...base, work_hash: workHash, state: "USER_APPROVAL_REQUIRED", reason: `payload not sent: ${clean.blockReasons.join(" | ")}`, sanitizer: clean };
@@ -104,7 +104,7 @@ export async function runReview({ repoRoot, dryRun = false, sleep } = {}) {
     rollback: spec.rollback ?? "",
     open_questions: spec.open_questions ?? [],
     previous_findings: Object.entries(progress.findings).map(([id, h]) => ({ id, status: h.status ?? "open", note: (h.note ?? "").slice(0, 500) })),
-    redaction_report: { redacted_count: 0, excluded_paths: clean.excluded },
+    redaction_report: { redacted_count: clean.publishedContactRedactions, excluded_paths: clean.excluded },
   };
   const fit = fitPayload(request, L.maxPayloadChars);
   if (!fit.fitted) return { ...base, work_hash: workHash, state: "USER_APPROVAL_REQUIRED", reason: "payload exceeds the hard size limit even after trimming; split the task" };

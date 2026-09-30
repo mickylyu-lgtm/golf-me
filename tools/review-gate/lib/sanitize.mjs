@@ -1,6 +1,14 @@
 // Reviewer payload sanitizer. Anything unsafe is removed AND reported; any
 // secret or personal-data hit blocks the send (USER_APPROVAL_REQUIRED) so Micky
 // sees what was nearly sent. Nothing here ever reads files outside the diff it is given.
+//
+// One narrow exception: addresses whose SHA-256 (lowercased) is listed in
+// policy.json `publishedContactEmailSha256` — the business contact address
+// already published on golfme.app — are replaced with ‹REDACTED:published-contact›
+// and do NOT block, so the surrounding legal text can still be reviewed. The
+// address itself never reaches the reviewer, and the gate stores only its hash.
+// Every other email/PII match still blocks.
+import { createHash } from "node:crypto";
 import { matchesAny } from "./util.mjs";
 
 export const EXCLUDED_PATH_GLOBS = [
@@ -92,16 +100,38 @@ function mergeHits(into, hits) {
   for (const [k, v] of Object.entries(hits)) into[k] = (into[k] ?? 0) + v;
 }
 
+const EMAIL_RE = PII_PATTERNS.find(([type]) => type === "email")[1];
+const sha256 = (s) => createHash("sha256").update(s).digest("hex");
+
+// Replaces only exact published contact addresses (matched by hash); returns the count.
+export function redactPublishedContacts(text, hashes) {
+  if (!hashes?.size) return { text: String(text ?? ""), count: 0 };
+  let count = 0;
+  const out = String(text ?? "").replace(new RegExp(EMAIL_RE.source, EMAIL_RE.flags), (m) => {
+    if (!hashes.has(sha256(m.toLowerCase()))) return m;
+    count++;
+    return "‹REDACTED:published-contact›";
+  });
+  return { text: out, count };
+}
+
 /**
  * Builds the sanitized pieces of a reviewer request.
  * @returns {{ diff, file_contents, excluded, media, secretHits, piiHits, blocked, blockReasons }}
  */
-export function sanitizeWork({ diff, fileContents = [] }, limits) {
+export function sanitizeWork({ diff, fileContents = [] }, limits, { publishedContactEmailSha256 = [] } = {}) {
   const excluded = [];
   const media = [];
   const secretHits = {};
   const piiHits = {};
   const kept = [];
+  const contactHashes = new Set(publishedContactEmailSha256.filter((h) => /^[a-f0-9]{64}$/.test(h)));
+  let publishedContactRedactions = 0;
+  const redactContacts = (t) => {
+    const r = redactPublishedContacts(t, contactHashes);
+    publishedContactRedactions += r.count;
+    return r.text;
+  };
 
   for (const section of splitDiff(String(diff ?? ""))) {
     if (isExcludedPath(section.path)) {
@@ -114,7 +144,7 @@ export function sanitizeWork({ diff, fileContents = [] }, limits) {
     }
     const s = redact(section.text, SECRET_PATTERNS);
     mergeHits(secretHits, s.hits);
-    const p = redact(s.text, PII_PATTERNS);
+    const p = redact(redactContacts(s.text), PII_PATTERNS);
     mergeHits(piiHits, p.hits);
     kept.push({ path: section.path, text: p.text });
   }
@@ -131,7 +161,7 @@ export function sanitizeWork({ diff, fileContents = [] }, limits) {
     }
     const s = redact(fc.content, SECRET_PATTERNS);
     mergeHits(secretHits, s.hits);
-    const p = redact(s.text, PII_PATTERNS);
+    const p = redact(redactContacts(s.text), PII_PATTERNS);
     mergeHits(piiHits, p.hits);
     contents.push({ path: fc.path, content: p.text, reason: fc.reason ?? "context" });
   }
@@ -153,6 +183,7 @@ export function sanitizeWork({ diff, fileContents = [] }, limits) {
     media: [...new Set(media)],
     secretHits,
     piiHits,
+    publishedContactRedactions,
     blocked: blockReasons.length > 0,
     blockReasons,
   };

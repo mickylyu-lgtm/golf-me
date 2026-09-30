@@ -266,6 +266,20 @@ test("media file in scope blocks the send", async () => {
   assert.match(r.reason, /media/);
   assert.equal(readLedger(repo).length, 0);
 });
+test("published contact address in the diff: redacted, review still sent", async () => {
+  const { createHash } = await import("node:crypto");
+  const addr = "owner.contact" + "@" + "gmail.com";
+  const override = JSON.stringify({ pricing: { inputPerMillion: 1, outputPerMillion: 4 }, publishedContactEmailSha256: [createHash("sha256").update(addr).digest("hex")] });
+  const repo = setup([ok(reviewBody("DONE"))], { override });
+  writeFile(repo, "src/lib/contact.ts", `export const CONTACT = "${addr}";\n`);
+  const dry = await runReview({ repoRoot: repo, sleep: noSleep, dryRun: true });
+  assert.equal(dry.state, "DRY_RUN");
+  assert.ok(!JSON.stringify(dry.request).includes(addr));
+  assert.match(dry.request.diff, /‹REDACTED:published-contact›/);
+  assert.equal(dry.request.redaction_report.redacted_count, 1);
+  assert.equal((await review(repo)).state, "DONE");
+});
+
 test(".env.local in scope is never included", async () => {
   const repo = setup([ok(reviewBody("DONE"))]);
   writeFile(repo, "docs/.env.local", "SECRET_THING=abc\n");

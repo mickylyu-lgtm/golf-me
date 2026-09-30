@@ -28,6 +28,8 @@
     "inputPerMillion": 2.0,
     "outputPerMillion": 10.0
   },
+  "publishedContactEmailSha256": ["06153e913e3a1d44e38960de21d6df0aeefb50c86817ba30bf71b0a3f6c40a27"],
+  "_publishedContactEmailSha256": "SHA-256 of the lowercased contact address already published on golfme.app/privacy and /terms. Matches are replaced with a placeholder and do not block the review; the address is never sent. Only hashes are stored here. Every other email/PII still blocks.",
   "unknownCommandPolicy": "ask",
   "frozenPaths": [
     "src/pages/DirectMessageThread.tsx",
