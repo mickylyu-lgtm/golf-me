@@ -8,7 +8,7 @@
     "maxReviseCycles": 3,
     "maxContinueCycles": 8,
     "maxDisputesPerFinding": 2,
-    "maxCallsPerDay": 10,
+    "maxCallsPerDay": 25,
     "dailySoftStopUsd": 2.0,
     "monthlyCapUsd": 10.0,
     "maxPayloadChars": 120000,
