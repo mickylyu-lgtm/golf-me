@@ -1,7 +1,7 @@
 # GOLFME LAUNCH STATUS
 
 **Target:** First public App Store launch (plus golfme.app, already live with open signup)
-**Last updated:** 2026-09-30 — Rows refreshed after the launch-blocker commits `a286063` and `fa3a27c` went live. New App Review blockers found: Google-only login on iOS (guideline 4.8), the reviewer password login hidden behind `?demo=1`, and "prototype" copy. The first two are fixed in task T-20260930-87857.
+**Last updated:** 2026-09-30 (evening). Shipped today: report → admin loop verified; Google hidden on iOS (4.8) and reviewer login, both device-verified; push re-registration after re-sign-in; password eye toggle; branded sign-in email (live in Supabase, device-confirmed); prototype/placeholder wording removed; login screen cleanup. Review Gate daily call limit raised from 10 to 25 (Micky approved; $2/day and $10/month caps unchanged).
 
 Statuses: `[ ]` NOT STARTED · `[~]` IN PROGRESS · `[?]` NEEDS VERIFICATION · `[!]` BLOCKED · `[x]` COMPLETE (only with evidence it works).
 Classify every request: **A** fixes a launch blocker · **B** improves launch quality · **C** nonessential, probably after launch.
@@ -20,15 +20,15 @@ Classify every request: **A** fixes a launch blocker · **B** improves launch qu
 9. **"Prototype" copy** → `[~]` **fixed and deployed** (task T-20260930-71354; GPT at its daily limit, Micky approved the diff). About now says "Version 1.0" (6 languages). Real accounts no longer see the Reputation phone row (disabled "Coming soon") or the Verified Golfer row ("requires phone verification, which isn't available yet"); both need phone verification, which doesn't exist yet. Demo mode unchanged. The Caddie tutorial no longer calls its feedback "beta" (6 languages). Unused strings removed. Demo-only "Prototype tools" were already hidden from real accounts. Remaining: deploy + a quick look at About and Reputation on a real account. (A)
 
 ### NEEDS VERIFICATION
-Push after signing back into the same account (fix pending), "Use My Current Location" after rounding, Home, discovery, host/join/leave/cancel round, search and filter, profile viewing, follow, DM creation from a profile, account deletion, round-join push, Caddie completion push, denied-permission fallback, block, and Caddie failure states in the UI.
+Device checks after today's deploys: push after signing back into the same account, the password eye toggle, the new login screen (email-link sign-in + reviewer password), About/Reputation wording on a real account, "Use My Current Location". Two-account QA: host/join/leave/cancel round, round-join push, block/unblock, report from B, Caddie completion push, account deletion. Also: Home, discovery, search/filter, profile viewing, follow, DM from a profile, denied-permission fallback, Caddie failure states.
 
 ### READY
 Email and Google signup/login with onboarding (fresh incognito tests, 2026-09-28) · golfme.app open signup (live, verified) · DM push on two iPhones in all three app states, tap → correct chat, token moves on account switch (2026-09-30) · `send-push` outcome logging (v13) + Settings Push status · Privacy Policy, Terms and Support pages live · Terms acceptance at signup · report → founder email → admin dashboard → status (verified 2026-09-30) · profile locations rounded to ~1 km · demo entry hidden · Page-not-found for unknown URLs · Caddie pipeline (daily limit enforced in DB + Edge Function) · private Caddie storage for new uploads · no secrets in tracked files or git history · only the anon key and URL reach the frontend · GPT Review Gate working.
 
 ### NEXT 3 ACTIONS
-1. **Ship the push re-registration fix** (task T-20260930-94385), then on a device: sign out, sign back into the same account, and a DM push arrives with no Settings step. Next: fix the "prototype" copy (blocker 9) and add a show/hide eye icon to the password field (B, requested by Micky). Blockers 7 and 8 (Google hidden on iOS, reviewer login) are shipped and device-verified. (A)
-2. **Micky: two-account real-device QA** (section 9 steps not yet done): round-join push, leave/cancel, block/unblock, report from B, Caddie completion push, account deletion on a throwaway account, "Use My Current Location". (A)
-3. **Content filter (blocker 3)** via golfme-architect, then a crash-screen error boundary (B), 3–5 real NYC rounds, screenshots + listing, release candidate. (A)
+1. **Micky: device checks + two-account QA** (see NEEDS VERIFICATION); host 3–5 real NYC rounds while doing it (blocker 4). (A)
+2. **Content filter (blocker 3)** via golfme-architect (DB trigger; Micky approves the SQL), then a crash-screen error boundary (B, strongly recommended). (A)
+3. **App Store Connect:** six screenshots, subtitle/description/keywords/promo text, category, App Privacy answers (from `APP_STORE_PRIVACY.md`), age rating, review notes (reviewer account via the in-app "Sign in with a password" link). Then the release-candidate build → QA on that build → submit. (A)
 
 ---
 
