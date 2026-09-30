@@ -2,6 +2,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 import { DataProvider, useData } from "./context/DataContext";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { RealRoundsProvider } from "./context/RealRoundsContext";
@@ -361,6 +362,7 @@ export default function App() {
         </RealRoundsProvider>
       </AuthProvider>
       <Analytics />
+      <SpeedInsights />
     </LocaleProvider>
   );
 }
