@@ -36,6 +36,9 @@ import { formatHandicapNumber, handicapColorClass } from "../lib/handicapColor";
 import { useRoles } from "../lib/useRoles";
 import { isObjectionableContentError } from "../lib/objectionableContent";
 
+// Same cap as the profiles_bio_length database check.
+const BIO_MAX_LENGTH = 150;
+
 function ProfileRow({ icon, label, value, onClick }: { icon: ReactNode; label: string; value?: string; onClick: () => void }) {
   return (
     <button onClick={onClick} className={`flex items-center gap-3 p-4 text-left ${CLICKABLE_CARD_CLASS}`}>
@@ -364,7 +367,17 @@ export function Profile() {
             </div>
             <div>
               <label className={labelClass}>{t("profile.bio")}</label>
-              <textarea className={inputClass} rows={3} value={form.bio} onChange={(e) => setForm((f) => ({ ...f, bio: e.target.value }))} />
+              {/* 150 max, Instagram-style; the profiles_bio_length DB check enforces the same cap server-side. */}
+              <textarea
+                className={inputClass}
+                rows={3}
+                maxLength={BIO_MAX_LENGTH}
+                value={form.bio}
+                onChange={(e) => setForm((f) => ({ ...f, bio: e.target.value }))}
+              />
+              <p className="mt-1 text-right text-xs text-slate-400" aria-live="polite">
+                {form.bio.length}/{BIO_MAX_LENGTH}
+              </p>
             </div>
             <p className="-mt-1 text-xs text-slate-400">{t("profile.livesUnderMatchPreferences")}</p>
           </div>
