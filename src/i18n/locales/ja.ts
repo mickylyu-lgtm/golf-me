@@ -812,6 +812,7 @@ export const ja: Record<TranslationKey, string> = {
   "profile.handicap": "ハンディキャップ",
   "profile.favoriteCourses": "お気に入りのコース",
   "profile.bio": "自己紹介",
+  "profile.addBio": "+ 自己紹介を追加",
   "profile.roundCountPrefix": "{count}ラウンド · ハンディキャップ ",
   "profile.roundCountSingularPrefix": "1ラウンド · ハンディキャップ ",
   "profile.handicapPrefix": "ハンディキャップ ",

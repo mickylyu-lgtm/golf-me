@@ -812,6 +812,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "profile.handicap": "差點",
   "profile.favoriteCourses": "常打球場",
   "profile.bio": "個人簡介",
+  "profile.addBio": "+ 新增個人簡介",
   "profile.roundCountPrefix": "{count} 局 · 差點 ",
   "profile.roundCountSingularPrefix": "1 局 · 差點 ",
   "profile.handicapPrefix": "差點 ",

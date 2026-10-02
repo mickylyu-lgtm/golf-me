@@ -812,6 +812,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "profile.handicap": "差点",
   "profile.favoriteCourses": "常打球场",
   "profile.bio": "个人简介",
+  "profile.addBio": "+ 添加个人简介",
   "profile.roundCountPrefix": "{count} 局 · 差点 ",
   "profile.roundCountSingularPrefix": "1 局 · 差点 ",
   "profile.handicapPrefix": "差点 ",

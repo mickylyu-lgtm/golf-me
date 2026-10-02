@@ -812,6 +812,7 @@ export const ko: Record<TranslationKey, string> = {
   "profile.handicap": "핸디캡",
   "profile.favoriteCourses": "즐겨찾는 골프장",
   "profile.bio": "자기소개",
+  "profile.addBio": "+ 소개 추가",
   "profile.roundCountPrefix": "{count}라운드 · 핸디캡 ",
   "profile.roundCountSingularPrefix": "1라운드 · 핸디캡 ",
   "profile.handicapPrefix": "핸디캡 ",

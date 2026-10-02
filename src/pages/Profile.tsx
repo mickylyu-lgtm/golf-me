@@ -198,6 +198,20 @@ export function Profile() {
         )}
       </div>
 
+      {/* Your own bio, shown the way other golfers see it on your profile
+          (Instagram-style, under the name and stats). Empty: a quiet prompt
+          that opens the same Edit Profile popup. */}
+      {currentUser.bio?.trim() ? (
+        <p className="-mt-3 whitespace-pre-line break-words text-sm leading-relaxed text-slate-700">{currentUser.bio}</p>
+      ) : (
+        <button
+          onClick={startEditing}
+          className="-mt-3 self-start text-sm font-semibold text-fairway-700 hover:underline"
+        >
+          {t("profile.addBio")}
+        </button>
+      )}
+
       <div className="flex flex-col gap-5">
         <ProfileSection title={t("profile.sectionGolf")}>
           <ProfileRow icon={<ClipboardList size={16} />} label={t("profile.myGolf")} onClick={() => navigate("/my-rounds")} />

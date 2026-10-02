@@ -812,6 +812,7 @@ export const es: Record<TranslationKey, string> = {
   "profile.handicap": "Hándicap",
   "profile.favoriteCourses": "Campos favoritos",
   "profile.bio": "Biografía",
+  "profile.addBio": "+ Añade una biografía",
   "profile.roundCountPrefix": "{count} rondas · Hándicap ",
   "profile.roundCountSingularPrefix": "1 ronda · Hándicap ",
   "profile.handicapPrefix": "Hándicap ",

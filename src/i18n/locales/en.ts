@@ -714,6 +714,7 @@ export const en = {
   "profile.handicap": "Handicap",
   "profile.favoriteCourses": "Favorite courses",
   "profile.bio": "Bio",
+  "profile.addBio": "+ Add a bio",
   "profile.roundCountPrefix": "{count} rounds · Handicap ",
   "profile.roundCountSingularPrefix": "1 round · Handicap ",
   "profile.handicapPrefix": "Handicap ",
