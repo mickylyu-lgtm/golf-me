@@ -261,6 +261,7 @@ export function Profile() {
         <Modal
           title={t("profile.editProfile")}
           onClose={() => setEditing(false)}
+          keyboardAware
           footer={
             <div className="flex gap-3">
               <Button variant="outline" fullWidth onClick={() => setEditing(false)}>

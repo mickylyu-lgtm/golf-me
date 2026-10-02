@@ -56,7 +56,10 @@ export function PostDetail() {
     if (!composerDocked) scrollYBeforeKeyboardRef.current = window.scrollY;
   }
 
-  useEffect(() => {
+  // Layout effect, not a passive one: the scroll lock and the restore to the
+  // saved position must land before the docked layout paints, or the
+  // iOS-panned page could flash for a frame before snapping back.
+  useLayoutEffect(() => {
     if (!composerDocked) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
