@@ -178,6 +178,7 @@ Current state: `track()` in `src/lib/analytics.ts` **does nothing in production*
 | [x] | Unknown URLs | Now show "Page not found". |
 
 ## 9. REAL-DEVICE QA — two real accounts, two iPhones (TestFlight build)
+**Run 2026-10-02, two real accounts on two iPhones (server evidence, UTC):** host `1101110c` hosted a round (`host_golf_call` 23:34:13) → `11be6983` joined (23:34:24) → **round-join push delivered to APNs** for the host (send-push `delivered_to_apns`, 23:34:25) and the in-app `round_joined` notification was created → left (23:34:34, `round_left` in-app) → rejoined (23:34:37) → round cancelled (23:34:54, `round_cancelled` in-app) → **report** filed (23:35:47) and the founder alert email accepted by Resend (HTTP 200, 23:35:48) → **block** (23:36:38) and **unblock** (23:36:55) → DM push delivered (23:37:21). **Not yet done:** Caddie completion push (no analysis uploaded) and account deletion (no throwaway account created/deleted; still 26 users). Micky to confirm the round-join push appeared on the phone.
 1. **A** hosts a round for tomorrow in NYC. Also try a past time → refused.
 2. **B** finds it in Play / discovery, opens it, views A's profile, joins.
 3. **A** receives the round-join push (app in background) → tap → lands on the round.
