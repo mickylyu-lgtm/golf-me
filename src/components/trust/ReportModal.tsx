@@ -32,7 +32,7 @@ export function ReportModal({ reportedId, reportedName, context, golfCallId, pos
   }
 
   return (
-    <Modal title={`Report ${reportedName}`} onClose={onClose}>
+    <Modal title={`Report ${reportedName}`} onClose={onClose} keyboardAware>
       <div className="flex flex-col gap-3">
         <p className="text-xs text-slate-500">Reports are confidential. {reportedName} will not be notified.</p>
         <div className="flex flex-col gap-1.5">
