@@ -484,6 +484,9 @@ export const es: Record<TranslationKey, string> = {
   "home.hostRound": "Organizar una Ronda",
   "home.hostRoundSubtitle": "Crea una ronda o completa tu grupo de cuatro.",
   "home.roundsNearYou": "Rondas cerca de ti",
+  "home.openRounds": "Partidas abiertas",
+  "home.noRoundsYetTitle": "Aún no hay partidas",
+  "home.noRoundsYetBody": "Organiza la primera y otros golfistas podrán unirse.",
 
   "find.title": "Encuentra golf cerca de ti",
   "find.subtitle": "Rondas que buscan jugadores, y los golfistas detrás de ellas.",

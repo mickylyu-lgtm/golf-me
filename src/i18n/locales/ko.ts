@@ -484,6 +484,9 @@ export const ko: Record<TranslationKey, string> = {
   "home.hostRound": "라운드 만들기",
   "home.hostRoundSubtitle": "새 라운드를 만들거나 조를 채워보세요.",
   "home.roundsNearYou": "근처 라운드",
+  "home.openRounds": "모집 중인 라운드",
+  "home.noRoundsYetTitle": "아직 라운드가 없어요",
+  "home.noRoundsYetBody": "첫 라운드를 열면 다른 골퍼들이 참여할 수 있어요.",
 
   "find.title": "근처 골프 찾기",
   "find.subtitle": "플레이어를 찾는 라운드와 그 뒤의 골퍼들.",

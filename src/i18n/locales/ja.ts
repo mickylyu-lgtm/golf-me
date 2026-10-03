@@ -484,6 +484,9 @@ export const ja: Record<TranslationKey, string> = {
   "home.hostRound": "ラウンドを作成",
   "home.hostRoundSubtitle": "ラウンドを新規作成、またはメンバーを募集。",
   "home.roundsNearYou": "近くのラウンド",
+  "home.openRounds": "募集中のラウンド",
+  "home.noRoundsYetTitle": "まだラウンドがありません",
+  "home.noRoundsYetBody": "最初のラウンドを主催すると、ゴルファーが参加できます。",
 
   "find.title": "近くのゴルフを探す",
   "find.subtitle": "メンバーを募集中のラウンドと、そのゴルファーたち。",

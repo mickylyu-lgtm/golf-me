@@ -484,6 +484,9 @@ export const zhTW: Record<TranslationKey, string> = {
   "home.hostRound": "揪球局",
   "home.hostRoundSubtitle": "開新球局，或為你的四人組招募球友。",
   "home.roundsNearYou": "附近的球局",
+  "home.openRounds": "開放中的球局",
+  "home.noRoundsYetTitle": "還沒有球局",
+  "home.noRoundsYetBody": "發起第一場球局，其他球友就能加入。",
 
   "find.title": "尋找附近的球局",
   "find.subtitle": "正在招募球友的球局，以及背後的球友。",

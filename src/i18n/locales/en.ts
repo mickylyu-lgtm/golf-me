@@ -506,6 +506,9 @@ export const en = {
   "home.hostRound": "Host a Round",
   "home.hostRoundSubtitle": "Create a round or fill your foursome.",
   "home.roundsNearYou": "Rounds near you",
+  "home.openRounds": "Open rounds",
+  "home.noRoundsYetTitle": "No rounds yet",
+  "home.noRoundsYetBody": "Host the first one and golfers can join you.",
 
   // Find
   "find.title": "Find golf near you",
