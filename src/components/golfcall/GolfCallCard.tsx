@@ -36,6 +36,8 @@ export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
   const host = getGolfer(call.hostId);
   const openSpots = call.totalSpots - call.joinedGolferIds.length;
   const isHost = call.hostId === currentUser.id;
+  // The host is shown inline with the "hosted by" line; the avatar row is for everyone else who joined.
+  const otherJoinedIds = call.joinedGolferIds.filter((id) => id !== call.hostId);
   const isJoined = call.joinedGolferIds.includes(currentUser.id);
   const isPending = call.pendingRequestIds.includes(currentUser.id);
   const isFull = call.status === "full" || openSpots <= 0;
@@ -140,19 +142,24 @@ export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
         {!isCancelled && <TeeTimeTrustBadge source={call.teeTimeSource} />}
       </div>
 
-      {/* Mobile: compact overlapping avatars only — full names/handicaps live one tap away on the detail page. */}
-      <div className="flex items-center gap-1.5 sm:hidden">
-        <div className="flex -space-x-2">
-          {call.joinedGolferIds.slice(0, 3).map((id) => {
-            const g = getGolfer(id);
-            if (!g) return null;
-            return <Avatar key={id} golfer={g} size="xs" showVerified={false} />;
-          })}
+      {/* Mobile: compact overlapping avatars of the OTHER golfers who joined —
+          the host's avatar sits inline with "hosted by" in the footer, so a
+          round with only its host shows no standalone avatar row. Full
+          names/handicaps live one tap away on the detail page. */}
+      {otherJoinedIds.length > 0 && (
+        <div className="flex items-center gap-1.5 sm:hidden">
+          <div className="flex -space-x-2">
+            {otherJoinedIds.slice(0, 3).map((id) => {
+              const g = getGolfer(id);
+              if (!g) return null;
+              return <Avatar key={id} golfer={g} size="xs" showVerified={false} />;
+            })}
+          </div>
+          {otherJoinedIds.length > 3 && (
+            <span className="text-xs font-semibold text-slate-500">+{otherJoinedIds.length - 3}</span>
+          )}
         </div>
-        {call.joinedGolferIds.length > 3 && (
-          <span className="text-xs font-semibold text-slate-500">+{call.joinedGolferIds.length - 3}</span>
-        )}
-      </div>
+      )}
 
       {/* Desktop/tablet: full roster chips with handicap + host tag. */}
       <div className="hidden flex-wrap gap-1.5 sm:flex">
@@ -171,7 +178,13 @@ export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
         })}
       </div>
 
-      <Badge tone={VIBE_TONE[call.vibe]} className="self-start font-semibold">
+      {/* Medium weight (was semibold) so the vibe reads as a descriptor, not
+          the headline; Competitive also gets a lighter rose wash. Text colors
+          are unchanged, so contrast stays at the tone's AA level. */}
+      <Badge
+        tone={VIBE_TONE[call.vibe]}
+        className={`self-start font-medium ${VIBE_TONE[call.vibe] === "rose" ? "bg-rose-50/60" : ""}`}
+      >
         {vibeLabel(call.vibe, t)}
       </Badge>
 
@@ -195,15 +208,22 @@ export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
       )}
 
       <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-2.5">
-        <p className="text-xs font-medium text-slate-500">
-          {t("golfCallCard.joinedOfTotal", { joined: call.joinedGolferIds.length, total: call.totalSpots })}
+        <div className="min-w-0">
+          <p className="text-xs font-medium text-slate-500">
+            {t("golfCallCard.joinedOfTotal", { joined: call.joinedGolferIds.length, total: call.totalSpots })}
+          </p>
+          {/* Host avatar grouped directly with the "hosted by" text, at every width, so they never wrap apart. */}
           {host && (
-            <span className="text-slate-400">
-              {" "}
-              · {isHost ? t("golfCallCard.hostedByYou") : t("golfCallCard.hostedBy", { name: host.name })}
-            </span>
+            <div className="mt-1 flex min-w-0 items-center gap-1.5">
+              <span className="shrink-0">
+                <Avatar golfer={host} size="xs" showVerified={false} />
+              </span>
+              <span className="truncate text-xs text-slate-400">
+                {isHost ? t("golfCallCard.hostedByYou") : t("golfCallCard.hostedBy", { name: host.name })}
+              </span>
+            </div>
           )}
-        </p>
+        </div>
         {cta}
       </div>
     </div>

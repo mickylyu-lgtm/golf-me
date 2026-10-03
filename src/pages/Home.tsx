@@ -138,12 +138,12 @@ export function Home() {
   const preferencesRemaining = MIN_PREFERENCES_FOR_AUTO_MATCH - selectedPreferenceCount(currentUser);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-5">
       {/* Search bar, greeting, and the primary action cards are meant to
           read as one tight "top of Home" block (per product direction) —
           gap-3 here instead of inheriting the outer gap-6, which stays for
           spacing between this block and the sections below it. */}
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-2.5">
         {/* Same fast entry point into FindFriends' own dedicated golfer-search
             screen used by Discover.tsx's shortcut — not a second search
             implementation. A plain button styled like a search bar, rather
@@ -163,10 +163,10 @@ export function Home() {
         )}
 
         <div>
-          <p className="text-sm font-medium text-slate-500">
+          <p className="text-[13px] font-normal text-slate-500">
             {t(greetingKeyForHour(new Date().getHours()))}, {firstName(currentUser.name)}
           </p>
-          <p className="mt-0.5 text-lg font-bold text-slate-900">{subtitle}</p>
+          <p className="mt-0.5 text-xl font-bold text-slate-900">{subtitle}</p>
         </div>
 
         <AddToHomeScreenPrompt />
@@ -205,10 +205,10 @@ export function Home() {
             moment a third course is added. */}
         <button
           onClick={() => navigate("/tee-times")}
-          className={`flex w-full items-center gap-3 p-4 text-left ${CLICKABLE_CARD_CLASS}`}
+          className={`flex w-full items-center gap-3 px-4 py-3 text-left ${CLICKABLE_CARD_CLASS}`}
         >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-fairway-50 text-fairway-700">
-            <CalendarClock size={18} />
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-fairway-50 text-fairway-700">
+            <CalendarClock size={16} />
           </span>
           <span className="min-w-0 flex-1">
             <span className="flex items-center gap-2">
@@ -225,7 +225,7 @@ export function Home() {
           direction): nearby when there are any, otherwise the newest open
           rounds anywhere, otherwise an invitation to host the first one. */}
       <section>
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-2.5 flex items-center justify-between">
           <h2 className="text-lg font-bold text-slate-900">
             {showingNearby ? t("home.roundsNearYou") : t("home.openRounds")}
           </h2>
