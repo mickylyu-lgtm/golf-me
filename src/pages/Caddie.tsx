@@ -24,12 +24,35 @@ import { isStaleProcessing, usePeriodicRerender } from "../lib/caddieAnalysis";
 // a pure render change.
 const PAGE_SIZE = 10;
 
+// How far the history list is expanded survives opening an analysis and
+// coming back (this page unmounts in between). Cleared by
+// CaddieHistoryReset in App.tsx as soon as the user leaves /caddie*, so a
+// fresh visit to Caddie starts collapsed again.
+const HISTORY_COUNT_KEY = "golfme:caddieHistoryCount";
+
+function loadHistoryCount(): number {
+  try {
+    const n = Number(window.sessionStorage.getItem(HISTORY_COUNT_KEY));
+    return Number.isFinite(n) && n > PAGE_SIZE ? n : PAGE_SIZE;
+  } catch {
+    return PAGE_SIZE;
+  }
+}
+
+function saveHistoryCount(n: number): void {
+  try {
+    window.sessionStorage.setItem(HISTORY_COUNT_KEY, String(n));
+  } catch {
+    // Storage unavailable: the list just starts collapsed next time.
+  }
+}
+
 export function Caddie() {
   const { caddieAnalyses } = useData();
   const { refreshMediaUrls } = useRealCaddie();
   const { t, locale, setLocale } = useLocale();
   const navigate = useNavigate();
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [visibleCount, setVisibleCount] = useState(loadHistoryCount);
 
   const sorted = useMemo(() => [...caddieAnalyses].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [caddieAnalyses]);
   const visible = sorted.slice(0, visibleCount);
@@ -129,7 +152,13 @@ export function Caddie() {
             })}
             {hasMore && (
               <button
-                onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+                onClick={() =>
+                  setVisibleCount((c) => {
+                    const next = c + PAGE_SIZE;
+                    saveHistoryCount(next);
+                    return next;
+                  })
+                }
                 className="rounded-2xl border border-dashed border-slate-200 py-2.5 text-sm font-semibold text-slate-500 transition-colors duration-150 hover:border-fairway-300 hover:text-fairway-700"
               >
                 {t("common.viewMore")}

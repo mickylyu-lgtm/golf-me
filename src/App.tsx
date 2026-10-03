@@ -102,6 +102,7 @@ function AuthedLayout() {
       </AppShell>
       <TutorialOverlay />
       <PushPrePermissionPrompt />
+      <CaddieHistoryReset />
     </TutorialProvider>
   );
   // Admin tools (dashboard, coach-reviewer management) stay pinned to
@@ -109,6 +110,29 @@ function AuthedLayout() {
   // surrounding nav chrome (TopBar/SideNav/BottomNav) to English since
   // they read useLocale() too and AppShell is inside this override.
   return location.pathname.startsWith("/admin") ? <ForceLocale locale="en">{shell}</ForceLocale> : shell;
+}
+
+// Caddie's history list remembers how far "View more" was expanded while the
+// user moves between /caddie and an analysis (see Caddie.tsx). Leaving the
+// Caddie section entirely resets it, so the next visit starts collapsed.
+function clearCaddieHistoryCount() {
+  try {
+    window.sessionStorage.removeItem("golfme:caddieHistoryCount");
+  } catch {
+    // Storage unavailable: nothing was saved either.
+  }
+}
+
+function CaddieHistoryReset() {
+  const { pathname } = useLocation();
+  // Deliberately no clear-on-unmount: React Strict Mode's dev double-run would
+  // wipe the count while the user is still inside Caddie. Signing out from a
+  // Caddie screen therefore keeps the count until the next non-Caddie route
+  // (harmless: at most the list starts expanded once).
+  useEffect(() => {
+    if (!pathname.startsWith("/caddie")) clearCaddieHistoryCount();
+  }, [pathname]);
+  return null;
 }
 
 // Welcome/onboarding/auth screens: no point revisiting these once signed in
