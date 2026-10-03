@@ -169,42 +169,6 @@ export function Home() {
           <p className="mt-0.5 text-lg font-bold text-slate-900">{subtitle}</p>
         </div>
 
-        {/* Available rounds sit at the very top of Home (per product
-            direction): nearby when there are any, otherwise the newest open
-            rounds anywhere, otherwise an invitation to host the first one. */}
-        <section className="mt-1">
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-lg font-bold text-slate-900">
-              {showingNearby ? t("home.roundsNearYou") : t("home.openRounds")}
-            </h2>
-            {homeRounds.length > 0 && (
-              <button
-                onClick={() => navigate("/find")}
-                className="text-sm font-semibold text-fairway-700 transition-colors duration-200 hover:text-fairway-800 hover:underline"
-              >
-                {t("common.viewMore")}
-              </button>
-            )}
-          </div>
-          {homeRounds.length > 0 ? (
-            <div className="flex flex-col gap-3">
-              {homeRounds.map((call) => (
-                <GolfCallCard key={call.id} call={call} />
-              ))}
-            </div>
-          ) : (
-            <div className="flex items-center gap-3 rounded-2xl border border-dashed border-slate-200 bg-white p-4">
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-bold text-slate-900">{t("home.noRoundsYetTitle")}</span>
-                <span className="block text-xs text-slate-500">{t("home.noRoundsYetBody")}</span>
-              </span>
-              <Button size="sm" icon={<Plus size={14} />} onClick={() => navigate("/golf-calls/new")}>
-                {t("home.hostRound")}
-              </Button>
-            </div>
-          )}
-        </section>
-
         <AddToHomeScreenPrompt />
 
         <button
@@ -256,6 +220,42 @@ export function Home() {
           <ArrowRight size={16} className="shrink-0 text-slate-400" />
         </button>
       </div>
+
+      {/* Available rounds, right below the Tee Times card (per product
+          direction): nearby when there are any, otherwise the newest open
+          rounds anywhere, otherwise an invitation to host the first one. */}
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-bold text-slate-900">
+            {showingNearby ? t("home.roundsNearYou") : t("home.openRounds")}
+          </h2>
+          {homeRounds.length > 0 && (
+            <button
+              onClick={() => navigate("/find")}
+              className="text-sm font-semibold text-fairway-700 transition-colors duration-200 hover:text-fairway-800 hover:underline"
+            >
+              {t("common.viewMore")}
+            </button>
+          )}
+        </div>
+        {homeRounds.length > 0 ? (
+          <div className="flex flex-col gap-3">
+            {homeRounds.map((call) => (
+              <GolfCallCard key={call.id} call={call} />
+            ))}
+          </div>
+        ) : (
+          <div className="flex items-center gap-3 rounded-2xl border border-dashed border-slate-200 bg-white p-4">
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-bold text-slate-900">{t("home.noRoundsYetTitle")}</span>
+              <span className="block text-xs text-slate-500">{t("home.noRoundsYetBody")}</span>
+            </span>
+            <Button size="sm" icon={<Plus size={14} />} onClick={() => navigate("/golf-calls/new")}>
+              {t("home.hostRound")}
+            </Button>
+          </div>
+        )}
+      </section>
 
       <NearbyCoursesHomeCard />
 
