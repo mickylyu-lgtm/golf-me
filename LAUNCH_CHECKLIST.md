@@ -218,6 +218,7 @@ Record results here with date, device and build number.
 | [ ] | Simulator communities | |
 | [ ] | Local golf pages | |
 | [ ] | Founder-led outreach | |
+| [~] | **Founding Golfer launch hook** (B, Micky chose it for launch marketing 2026-10-07) | The first 250 NYC golfers get a permanent numbered badge. Migrations `20261006120000` (sets up the cohort, created closed) and `20261006120100` (exclusions, opening, backfill) are drafted, NOT applied, and reviewed by golfme-architect 2026-10-06. Before applying: (1) complete the exclusion list (test accounts `5dae1847`, `81765aff`, `2d468e5b`; decide on both "Jordan Kim" accounts, `1101110c` is the two-iPhone QA host); (2) require a confirmed email before awarding (protects the 250 spots from scripted signups); (3) the backfill stops unless the award count is the one confirmed in advance, and an excluded ID that doesn't exist raises an error; (4) badge on profiles plus "X of 250 spots left" on the landing page/onboarding (web only, no new Apple review needed). Then Micky approves and applies. Plan: `LAUNCH_MARKETING.md`. |
 
 ## 12. CREATOR PROGRAM (small test: creators host real rounds on GolfMe)
 | Creator | Audience / location | Proposed round | Outreach status | Compensation | Attributed signups/joins | Actual participation |
@@ -233,7 +234,8 @@ Attribution: give each creator a distinct round and track joins to it, plus sign
 - [ ] Messaging + push between two accounts.
 - [ ] Caddie: one analysis end to end.
 - [ ] Creator posts live and linking correctly.
-- [ ] Founder outreach sent.
+- [ ] Founder outreach sent (existing accounts + waitlist: "We're live, Founding Golfer spots are open"; see `LAUNCH_MARKETING.md`).
+- [ ] Founding Golfer cohort open, badge visible, spots-left counter correct.
 - [ ] Monitoring: check logs morning, midday and evening.
 - [ ] Respond to early users (DMs to Micky via the founder welcome chat) within hours.
 
