@@ -209,7 +209,7 @@ Record results here with date, device and build number.
 | Status | Item | Notes |
 |---|---|---|
 | [!] | Real hosted rounds available | 0 upcoming today. |
-| [ ] | Initial real users recruited | 26 accounts, 1 new in the last 7 days. |
+| [ ] | Initial real users recruited | 23 accounts after the 2026-10-12 cleanup (deleted 3 abandoned shells with no data: a typo-email unconfirmed signup, and two never-onboarded accounts). Still present on purpose: the Apple reviewer account and the 3 test accounts the Founding Golfer migration excludes. |
 | [ ] | Creator hosts | See section 12. |
 | [ ] | Micro-creator outreach | |
 | [ ] | Golf communities | |
