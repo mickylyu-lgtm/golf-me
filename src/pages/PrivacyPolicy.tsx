@@ -14,7 +14,7 @@ import { ArrowLeft, Lock } from "lucide-react";
 // privacy answers) — update this file, the date, and APP_STORE_PRIVACY.md if
 // the data collected or the third parties involved change.
 const LAST_UPDATED = "September 29, 2026";
-const CONTACT_EMAIL = "mickylyu@gmail.com";
+const CONTACT_EMAIL = "support@golfme.app";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
