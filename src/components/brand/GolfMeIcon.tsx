@@ -1,4 +1,5 @@
 import { useId } from "react";
+import type { SVGProps } from "react";
 
 interface GolfMeIconProps {
   size?: number;
@@ -37,7 +38,13 @@ interface GolfMeIconProps {
    * the mark can sit on a larger surface painted with the same gradient
    * (EntryOverlay, which matches the full-screen iOS launch image). */
   background?: boolean;
+  /** variant="gradient" only: per-part props (className/style) so a caller
+   * can animate the pieces separately (EntryOverlay). Each part is wrapped in
+   * a plain <g>, so the drawing itself is identical with or without them. */
+  parts?: Partial<Record<GolfMeIconPart, SVGProps<SVGGElement>>>;
 }
+
+export type GolfMeIconPart = "ballTopLeft" | "ballTopRight" | "ballBottomLeft" | "hole";
 
 // THE canonical GolfMe brand mark — "Your Hole Is Waiting": three balls
 // plus a flagged ball and an open hole (bottom-right), the round waiting
@@ -56,6 +63,7 @@ export function GolfMeIcon({
   holeColor = "#f8faf8",
   variant = "flat",
   background = true,
+  parts = {},
 }: GolfMeIconProps) {
   // Unique per instance so multiple gradient icons on one page (unlikely
   // today, but cheap to guard) never collide on the same gradient id and
@@ -107,14 +115,22 @@ export function GolfMeIcon({
             gradient on the wrapping element) -- guarantees the background
             is pixel-identical to public/icon-source.svg with no seam. */}
         {background && <rect width="48" height="48" fill={`url(#${gid}-bg)`} />}
-        <circle cx="13.9" cy="13.9" r="6.15" fill={`url(#${gid}-ball)`} />
-        <circle cx="13.9" cy="34.1" r="6.15" fill={`url(#${gid}-ball)`} />
-        <circle cx="34.1" cy="13.9" r="6.15" fill={`url(#${gid}-ball)`} />
-        <line x1="34.1" y1="7.8" x2="34.1" y2="2.7" stroke="#2c9247" strokeWidth="1.25" strokeLinecap="round" />
-        <path d="M34.1 2.92 L39.7 4.83 L34.1 5.72 Z" fill={`url(#${gid}-flagLit)`} />
-        <path d="M34.1 5.72 L39.7 4.83 L34.1 7.63 Z" fill={`url(#${gid}-flagShade)`} />
-        <ellipse cx="34.1" cy="34.1" rx="7.8" ry="4.9" fill={`url(#${gid}-rimFace)`} />
-        <ellipse cx="34.1" cy="34.75" rx="7.2" ry="4.25" fill={`url(#${gid}-cavity)`} />
+        <g {...parts.ballTopLeft}>
+          <circle cx="13.9" cy="13.9" r="6.15" fill={`url(#${gid}-ball)`} />
+        </g>
+        <g {...parts.ballBottomLeft}>
+          <circle cx="13.9" cy="34.1" r="6.15" fill={`url(#${gid}-ball)`} />
+        </g>
+        <g {...parts.ballTopRight}>
+          <circle cx="34.1" cy="13.9" r="6.15" fill={`url(#${gid}-ball)`} />
+          <line x1="34.1" y1="7.8" x2="34.1" y2="2.7" stroke="#2c9247" strokeWidth="1.25" strokeLinecap="round" />
+          <path d="M34.1 2.92 L39.7 4.83 L34.1 5.72 Z" fill={`url(#${gid}-flagLit)`} />
+          <path d="M34.1 5.72 L39.7 4.83 L34.1 7.63 Z" fill={`url(#${gid}-flagShade)`} />
+        </g>
+        <g {...parts.hole}>
+          <ellipse cx="34.1" cy="34.1" rx="7.8" ry="4.9" fill={`url(#${gid}-rimFace)`} />
+          <ellipse cx="34.1" cy="34.75" rx="7.2" ry="4.25" fill={`url(#${gid}-cavity)`} />
+        </g>
       </svg>
     );
   }

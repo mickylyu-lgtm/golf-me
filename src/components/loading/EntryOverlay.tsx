@@ -1,14 +1,23 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
+import type { CSSProperties } from "react";
 import { GolfMeIcon } from "../brand/GolfMeIcon";
+import type { GolfMeIconPart } from "../brand/GolfMeIcon";
 import { ENTRY_BOOT_CLASS, SHOW_ENTRY } from "./entryFlag";
 import { getFullScreenLoaderCount, subscribeFullScreenLoaders, usePrefersReducedMotion } from "./loaderState";
 
-// Timeline (ms from the overlay's first paint): the logo fades, scales and
-// settles in over INTRO_MS while the gold halo around the hole swells and
-// settles (to ~1000ms). The overlay then fades out over EXIT_MS as soon as
-// the app underneath is ready: never held for the halo, never before the
-// logo has landed. If the app is still loading, the halo keeps breathing.
-const INTRO_MS = 650;
+// Timeline (ms from the overlay's first paint), on the plain green:
+//   0    hole fades in (300ms); top-left ball starts
+//   150  top-right ball (with its flag) starts
+//   300  bottom-left ball starts
+//        each ball: fade + scale 0.85 -> 1 over BALL_MS, damped ease-out,
+//        overlapping so the three read as one motion; all in by ~720ms
+//   600  gold halo around the hole swells and settles (same halo as before)
+// The overlay then fades out over EXIT_MS as soon as the app underneath is
+// ready: never held for the halo, never before the last ball has landed.
+// If the app is still loading, the halo keeps breathing.
+const BALL_MS = 420;
+const BALL_STAGGER_MS = 150;
+const INTRO_MS = 2 * BALL_STAGGER_MS + BALL_MS;
 const EXIT_MS = 350;
 // Safety net: never cover the app for longer than this, even if a loader
 // never unmounts (e.g. a stuck session restore), so an error screen is seen.
@@ -45,9 +54,25 @@ function useAppReady(active: boolean): boolean {
 
 // The once-per-launch brand entry, behind a per-device test switch (see
 // entryFlag.ts). The existing mark (GolfMeIcon's gradient variant, without
-// its own background square) on the launch image's full-screen green. The
+// its own background square) on the launch image's full-screen green, its
+// balls arriving one after another around the hole. The
 // halo is a separate transparent ellipse with only an outer glow, laid over
 // the hole's rim: the logo's own geometry and colors are never touched.
+// Each ball scales about its own centre (GolfMeIcon's 48-unit box).
+function ballPart(cx: number, cy: number, index: number): { className: string; style: CSSProperties } {
+  return {
+    className: "animate-entry-ball",
+    style: { transformBox: "view-box", transformOrigin: `${cx}px ${cy}px`, animationDelay: `${index * BALL_STAGGER_MS}ms` },
+  };
+}
+
+const ENTRY_PARTS: Partial<Record<GolfMeIconPart, { className: string; style?: CSSProperties }>> = {
+  ballTopLeft: ballPart(13.9, 13.9, 0),
+  ballTopRight: ballPart(34.1, 13.9, 1),
+  ballBottomLeft: ballPart(13.9, 34.1, 2),
+  hole: { className: "animate-entry-fade" },
+};
+
 export function EntryOverlay() {
   const [phase, setPhase] = useState<"in" | "out" | "done">(SHOW_ENTRY ? "in" : "done");
   const [introDone, setIntroDone] = useState(false);
@@ -96,10 +121,16 @@ export function EntryOverlay() {
         }}
       >
         <div
-          className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 ${reducedMotion ? "" : "animate-entry-in"}`}
+          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
           style={{ width: `${MARK_FRACTION * 100}%`, height: `${MARK_FRACTION * 100}%` }}
         >
-          <GolfMeIcon size={48} variant="gradient" background={false} className="block h-full w-full" />
+          <GolfMeIcon
+            size={48}
+            variant="gradient"
+            background={false}
+            parts={reducedMotion ? undefined : ENTRY_PARTS}
+            className="block h-full w-full"
+          />
           {!reducedMotion && (
             // Hole rim in GolfMeIcon's 48-unit box: center (34.1, 34.1),
             // rx 7.8, ry 4.9 -> as percentages of the mark's box.
