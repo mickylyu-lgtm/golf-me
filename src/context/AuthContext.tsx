@@ -56,6 +56,10 @@ interface AuthContextValue {
 
   signInWithGoogle: () => Promise<void>;
   signInWithEmailOtp: (email: string) => Promise<void>;
+  // Signs in on THIS device with the code from the same sign-in email, so a
+  // link opened on another device (or eaten by a mail scanner) isn't the only
+  // way in.
+  verifyEmailOtp: (email: string, token: string) => Promise<void>;
   signInWithPassword: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   enterDemoMode: () => void;
@@ -68,7 +72,9 @@ interface AuthContextValue {
   // link before the person actually taps it). Previously this failed
   // completely silently: the app just sat there with no feedback at all.
   // Whoever renders the sign-in UI is responsible for surfacing this (as a
-  // toast, say) and calling clearAuthError once shown.
+  // toast, say) and calling clearAuthError once shown. Holds Supabase's
+  // error_code when the redirect has one (e.g. "otp_expired"), else the
+  // description.
   authError: string | null;
   clearAuthError: () => void;
 }
@@ -131,14 +137,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // any real session tokens from the hash before this fires); the
     // replaceState clears it so a refresh doesn't re-show a stale error.
     if (typeof window === "undefined" || Capacitor.isNativePlatform()) return;
-    const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash;
-    if (!hash) return;
-    const params = new URLSearchParams(hash);
-    const description = params.get("error_description") || params.get("error_code") || params.get("error");
-    if (description) {
-      setAuthError(description);
-      window.history.replaceState(null, "", window.location.pathname + window.location.search);
-    }
+    // Supabase puts the error in the fragment for this (implicit) flow; the
+    // query string is checked too in case a redirect ever uses it.
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const search = new URLSearchParams(window.location.search);
+    const source = hash.has("error") || hash.has("error_code") || hash.has("error_description") ? hash : search;
+    const error = source.get("error_code") || source.get("error_description") || source.get("error");
+    if (!error) return;
+    setAuthError(error);
+    for (const key of ["error", "error_code", "error_description"]) search.delete(key);
+    const query = search.toString();
+    // The link lands on the site root, which for a signed-out visitor would
+    // redirect to the marketing Welcome page where nothing shows the error.
+    // Rewritten before BrowserRouter mounts (AppGate holds it back until the
+    // session check finishes), so the router starts on the sign-in screen.
+    const path = window.location.pathname === "/signup" ? "/signup" : "/login";
+    window.history.replaceState(null, "", path + (query ? `?${query}` : ""));
   }, []);
 
   useEffect(() => {
@@ -170,6 +184,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const sameUser = nextId !== null && nextId === currentUserIdRef.current;
       currentUserIdRef.current = nextId;
       setSessionChecked(true);
+      // A failed sign-in link means nothing to someone who is signed in
+      // (already, or by the code); don't let it resurface after a later sign-out.
+      if (nextUser) setAuthError(null);
 
       if (sameUser && nextUser) {
         // Keep the existing user object reference unless something a
@@ -228,7 +245,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         // Supabase redirects here with an error instead of tokens when the
         // link was invalid, expired, or already used — previously silent.
-        const description = params.get("error_description") || params.get("error_code") || params.get("error");
+        const description = params.get("error_code") || params.get("error_description") || params.get("error");
         if (description) setAuthError(description);
       }
     });
@@ -274,6 +291,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email,
       options: { emailRedirectTo: Capacitor.isNativePlatform() ? NATIVE_OAUTH_REDIRECT : window.location.origin },
     });
+    if (error) throw error;
+  }, []);
+
+  // The 6-digit code in the same email as the link. type "email" covers both
+  // templates signInWithOtp can send: Magic link (existing user) and Confirm
+  // signup (first use of an address). Link and code share one token, so
+  // whichever is used first consumes both. onAuthStateChange takes over on
+  // success, exactly as for the link and password paths.
+  const verifyEmailOtp = useCallback(async (email: string, token: string) => {
+    const { error } = await supabase.auth.verifyOtp({ email, token, type: "email" });
     if (error) throw error;
   }, []);
 
@@ -341,6 +368,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isAuthenticated: isDemo || Boolean(authUser),
     signInWithGoogle,
     signInWithEmailOtp,
+    verifyEmailOtp,
     signInWithPassword,
     signOut,
     enterDemoMode,

@@ -410,6 +410,18 @@ export const zhCN: Record<TranslationKey, string> = {
   "auth.showPassword": "显示密码",
   "auth.hidePassword": "隐藏密码",
   "auth.signIn": "登录",
+  // >>> Email sign-in code (6-digit OTP) + failed-link notice
+  "auth.code.checkEmailBody": "我们已向 {email} 发送登录链接和 {count} 位验证码。请在此设备上点按链接,或在此输入验证码。",
+  "auth.code.label": "输入 {count} 位验证码",
+  "auth.code.verify": "使用验证码登录",
+  "auth.code.invalid": "验证码错误或已过期。请查看最新的邮件,或发送新的验证码。",
+  "auth.code.resend": "发送新的验证码",
+  "auth.code.resendIn": "{seconds} 秒后可发送新的验证码",
+  "auth.code.resent": "新邮件已发送。请使用最新邮件中的验证码。",
+  "auth.code.rateLimited": "尝试次数过多。请等一分钟后再试。",
+  "auth.code.linkExpiredTitle": "该登录链接无法使用",
+  "auth.code.linkExpiredBody": "链接已过期或已被使用(可能是在其他设备上)。请输入邮箱获取新链接。邮件中还有一个 {count} 位验证码,也可以在此输入。",
+  // <<< Email sign-in code
 
   "avatarUpload.invalidFile": "请选择一张图片文件。",
   "avatarUpload.loadError": "图片加载失败——换一张试试。",

@@ -410,6 +410,18 @@ export const ko: Record<TranslationKey, string> = {
   "auth.showPassword": "비밀번호 표시",
   "auth.hidePassword": "비밀번호 숨기기",
   "auth.signIn": "로그인",
+  // >>> Email sign-in code (6-digit OTP) + failed-link notice
+  "auth.code.checkEmailBody": "{email}(으)로 로그인 링크와 {count}자리 코드를 보냈습니다. 이 기기에서 링크를 누르거나 여기에 코드를 입력하세요.",
+  "auth.code.label": "{count}자리 코드 입력",
+  "auth.code.verify": "코드로 로그인",
+  "auth.code.invalid": "코드가 틀렸거나 만료되었습니다. 가장 최근 이메일을 확인하거나 새 코드를 받으세요.",
+  "auth.code.resend": "새 코드 보내기",
+  "auth.code.resendIn": "{seconds}초 후 새 코드 보내기",
+  "auth.code.resent": "새 이메일을 보냈습니다. 가장 최근 이메일의 코드를 사용하세요.",
+  "auth.code.rateLimited": "시도 횟수가 너무 많습니다. 1분 후 다시 시도해 주세요.",
+  "auth.code.linkExpiredTitle": "로그인 링크가 작동하지 않았습니다",
+  "auth.code.linkExpiredBody": "링크가 만료되었거나 다른 기기 등에서 이미 사용되었습니다. 이메일을 입력하면 새 링크를 보내 드립니다. 이메일에 있는 {count}자리 코드를 여기에 입력해도 됩니다.",
+  // <<< Email sign-in code
 
   "avatarUpload.invalidFile": "이미지 파일을 선택해주세요.",
   "avatarUpload.loadError": "이미지를 불러올 수 없어요 — 다른 이미지를 시도해보세요.",

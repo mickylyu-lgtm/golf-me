@@ -424,6 +424,18 @@ export const en = {
   "auth.showPassword": "Show password",
   "auth.hidePassword": "Hide password",
   "auth.signIn": "Sign in",
+  // >>> Email sign-in code (6-digit OTP) + failed-link notice
+  "auth.code.checkEmailBody": "We sent a sign-in link and a {count}-digit code to {email}. Tap the link on this device, or enter the code here.",
+  "auth.code.label": "Enter the {count}-digit code",
+  "auth.code.verify": "Sign in with code",
+  "auth.code.invalid": "That code is wrong or has expired. Check the newest email, or send a new code.",
+  "auth.code.resend": "Send a new code",
+  "auth.code.resendIn": "Send a new code in {seconds}s",
+  "auth.code.resent": "New email sent. Use the code in the newest one.",
+  "auth.code.rateLimited": "Too many tries. Please wait a minute, then try again.",
+  "auth.code.linkExpiredTitle": "That sign-in link didn't work",
+  "auth.code.linkExpiredBody": "It expired or was already used, possibly on another device. Enter your email to get a new one. The email also has a {count}-digit code you can type here instead.",
+  // <<< Email sign-in code
 
   // Avatar upload (used in onboarding and Profile)
   "avatarUpload.invalidFile": "Please choose an image file.",

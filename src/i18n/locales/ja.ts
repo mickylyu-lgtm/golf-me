@@ -410,6 +410,18 @@ export const ja: Record<TranslationKey, string> = {
   "auth.showPassword": "パスワードを表示",
   "auth.hidePassword": "パスワードを隠す",
   "auth.signIn": "サインイン",
+  // >>> Email sign-in code (6-digit OTP) + failed-link notice
+  "auth.code.checkEmailBody": "{email} にサインインリンクと{count}桁のコードを送信しました。このデバイスでリンクをタップするか、ここにコードを入力してください。",
+  "auth.code.label": "{count}桁のコードを入力",
+  "auth.code.verify": "コードでサインイン",
+  "auth.code.invalid": "コードが正しくないか、有効期限が切れています。最新のメールを確認するか、新しいコードを送信してください。",
+  "auth.code.resend": "新しいコードを送信",
+  "auth.code.resendIn": "{seconds}秒後に新しいコードを送信できます",
+  "auth.code.resent": "新しいメールを送信しました。最新のメールのコードを使ってください。",
+  "auth.code.rateLimited": "試行回数が多すぎます。1分ほど待ってから、もう一度お試しください。",
+  "auth.code.linkExpiredTitle": "サインインリンクが使えませんでした",
+  "auth.code.linkExpiredBody": "リンクの有効期限が切れているか、別のデバイスなどですでに使用されています。メールアドレスを入力して新しいリンクを受け取ってください。メールには、ここに入力できる{count}桁のコードも記載されています。",
+  // <<< Email sign-in code
 
   "avatarUpload.invalidFile": "画像ファイルを選択してください。",
   "avatarUpload.loadError": "画像を読み込めませんでした — 別の画像をお試しください。",

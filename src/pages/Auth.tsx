@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
 import { ArrowLeft, Check, Eye, EyeOff, Mail } from "lucide-react";
@@ -17,10 +18,25 @@ interface AuthProps {
   mode: "login" | "signup";
 }
 
+// Must match Supabase Dashboard > Authentication > Providers > Email >
+// "Email OTP Length". Drives the copy and when Verify enables; the field
+// itself accepts up to Supabase's 10-digit maximum so a longer configured
+// code is never truncated.
+const EMAIL_OTP_LENGTH = 6;
+const EMAIL_OTP_MAX_LENGTH = 10;
+// Supabase's default minimum gap between sign-in emails to one address.
+const RESEND_COOLDOWN_SECONDS = 60;
+
+function isRateLimited(err: unknown): boolean {
+  if (typeof err !== "object" || err === null) return false;
+  const { status, code } = err as { status?: number; code?: string };
+  return status === 429 || (typeof code === "string" && code.startsWith("over_"));
+}
+
 export function Auth({ mode }: AuthProps) {
   const navigate = useNavigate();
   const { logIn } = useData();
-  const { signInWithGoogle, signInWithEmailOtp, signInWithPassword, authError, clearAuthError } = useAuth();
+  const { signInWithGoogle, signInWithEmailOtp, verifyEmailOtp, signInWithPassword, authError, clearAuthError } = useAuth();
   const { showToast } = useToast();
   const { t } = useLocale();
   // The demo account (mock data, localStorage only) is an internal/testing
@@ -41,19 +57,37 @@ export function Auth({ mode }: AuthProps) {
   const isNativeApp = Capacitor.isNativePlatform();
   const showGoogle = !isNativeApp;
 
-  // A sign-in link that came back invalid/expired (already used, or
-  // consumed early by an email client's link-prefetch/security scan) used
-  // to fail completely silently -- the app just sat there with no
-  // feedback. Now surfaced as a toast so at least "try again" is obvious.
-  useEffect(() => {
-    if (!authError) return;
-    showToast(authError, "warning");
-    clearAuthError();
-  }, [authError, clearAuthError, showToast]);
   const [showEmailField, setShowEmailField] = useState(mode === "login");
   const [email, setEmail] = useState("");
   const [emailSent, setEmailSent] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [code, setCode] = useState("");
+  const [codeError, setCodeError] = useState<string | null>(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  // Set when the visitor arrives from a sign-in link that failed (expired,
+  // already used on another device, or consumed by a mail scanner).
+  const [linkFailed, setLinkFailed] = useState(false);
+
+  // A sign-in link that came back invalid/expired used to fail silently.
+  // otp_expired (Supabase's code for both expired and already-used links)
+  // gets a lasting notice pointing at a new link + code; anything else a
+  // translated toast.
+  useEffect(() => {
+    if (!authError) return;
+    if (authError === "otp_expired") {
+      setLinkFailed(true);
+      setShowEmailField(true);
+    } else {
+      showToast(t("auth.authError"), "warning");
+    }
+    clearAuthError();
+  }, [authError, clearAuthError, showToast, t]);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = window.setTimeout(() => setResendCooldown((s) => s - 1), 1000);
+    return () => window.clearTimeout(timer);
+  }, [resendCooldown]);
   // Secondary, low-visibility path alongside Google/magic-link -- for
   // accounts that need a fixed, typeable credential rather than an inbox or
   // a Google account (Apple's App Review reviewer is the reason this
@@ -87,9 +121,41 @@ export function Auth({ mode }: AuthProps) {
     setBusy(true);
     try {
       await signInWithEmailOtp(email.trim());
+      if (emailSent) showToast(t("auth.code.resent"), "success");
       setEmailSent(true);
+      setLinkFailed(false);
+      setCode("");
+      setCodeError(null);
+      setResendCooldown(RESEND_COOLDOWN_SECONDS);
     } catch (err) {
-      showToast(err instanceof Error ? err.message : t("auth.authError"), "warning");
+      if (isRateLimited(err)) {
+        showToast(t("auth.code.rateLimited"), "warning");
+        if (emailSent) setResendCooldown(RESEND_COOLDOWN_SECONDS);
+      } else {
+        showToast(err instanceof Error ? err.message : t("auth.authError"), "warning");
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function verifyCode(e: FormEvent) {
+    e.preventDefault();
+    if (code.length < EMAIL_OTP_LENGTH || busy) return;
+    setBusy(true);
+    setCodeError(null);
+    try {
+      await verifyEmailOtp(email.trim(), code);
+      // Success: onAuthStateChange in AuthContext takes over, as for the link.
+    } catch (err) {
+      const status = (err as { status?: number } | null)?.status;
+      setCodeError(
+        isRateLimited(err)
+          ? t("auth.code.rateLimited")
+          : status === 400 || status === 403 || status === 422
+            ? t("auth.code.invalid")
+            : t("auth.authError"),
+      );
     } finally {
       setBusy(false);
     }
@@ -112,6 +178,8 @@ export function Auth({ mode }: AuthProps) {
 
   function useDifferentMethod() {
     setEmailSent(false);
+    setCode("");
+    setCodeError(null);
     setShowEmailField(mode === "login");
     setEmail("");
     setShowPasswordField(false);
@@ -169,23 +237,67 @@ export function Auth({ mode }: AuthProps) {
               <Mail size={22} />
             </span>
             <h2 className="text-base font-bold text-slate-900">{t("auth.checkEmailTitle")}</h2>
-            <p className="text-sm text-slate-500">{t("auth.checkEmailBody", { email })}</p>
+            <p className="break-words text-sm text-slate-500">{t("auth.code.checkEmailBody", { email, count: EMAIL_OTP_LENGTH })}</p>
+            {/* Code from the same email: signs in on THIS device, whichever device the email was opened on. */}
+            <form onSubmit={verifyCode} className="mt-1 flex w-full flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-3 text-left">
+              <label htmlFor="email-otp" className="text-xs font-semibold text-slate-600">
+                {t("auth.code.label", { count: EMAIL_OTP_LENGTH })}
+              </label>
+              <input
+                id="email-otp"
+                name="one-time-code"
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                pattern="[0-9]*"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                value={code}
+                // Strips spaces/dashes from a pasted "123 456"; no maxLength
+                // attribute, since that would truncate the paste before this runs.
+                onChange={(e) => {
+                  setCode(e.target.value.replace(/\D/g, "").slice(0, EMAIL_OTP_MAX_LENGTH));
+                  setCodeError(null);
+                }}
+                placeholder={"0".repeat(EMAIL_OTP_LENGTH)}
+                aria-invalid={codeError ? true : undefined}
+                aria-describedby={codeError ? "email-otp-error" : undefined}
+                className={`${inputClass} min-h-11 text-center font-mono text-xl tracking-[0.3em] placeholder:text-slate-300`}
+              />
+              {codeError && (
+                <p id="email-otp-error" role="alert" className="text-xs leading-relaxed text-red-600">
+                  {codeError}
+                </p>
+              )}
+              <Button type="submit" disabled={code.length < EMAIL_OTP_LENGTH || busy} fullWidth className="min-h-11">
+                {t("auth.code.verify")}
+              </Button>
+            </form>
             <button
               onClick={() => continueWithEmail()}
-              disabled={busy}
-              className="mt-1 text-xs font-semibold text-fairway-700 hover:underline disabled:opacity-50"
+              disabled={busy || resendCooldown > 0}
+              className="min-h-11 px-3 text-xs font-semibold text-fairway-700 hover:underline disabled:text-slate-400 disabled:no-underline"
             >
-              {t("auth.resendEmail")}
+              {resendCooldown > 0 ? t("auth.code.resendIn", { seconds: resendCooldown }) : t("auth.code.resend")}
             </button>
             <button
               onClick={useDifferentMethod}
-              className="text-xs font-semibold text-slate-400 hover:text-slate-600 hover:underline"
+              className="-mt-2 min-h-11 px-3 text-xs font-semibold text-slate-400 hover:text-slate-600 hover:underline"
             >
               {t("auth.useDifferentMethod")}
             </button>
           </div>
         ) : (
           <div className="mx-auto flex w-full max-w-xs flex-col gap-3">
+            {linkFailed && (
+              <div role="alert" className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-left">
+                <p className="text-sm font-semibold text-amber-900">{t("auth.code.linkExpiredTitle")}</p>
+                <p className="mt-1 text-xs leading-relaxed text-amber-800">
+                  {t("auth.code.linkExpiredBody", { count: EMAIL_OTP_LENGTH })}
+                </p>
+              </div>
+            )}
             {showGoogle && (
               <button
                 onClick={continueWithGoogle}
