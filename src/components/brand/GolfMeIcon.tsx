@@ -33,6 +33,10 @@ interface GolfMeIconProps {
    * exactly what was reported live as "still not 1:1... darker green").
    * One self-contained SVG removes the seam entirely. */
   variant?: "flat" | "gradient";
+  /** variant="gradient" only: false leaves out the background square so
+   * the mark can sit on a larger surface painted with the same gradient
+   * (EntryOverlay, which matches the full-screen iOS launch image). */
+  background?: boolean;
 }
 
 // THE canonical GolfMe brand mark — "Your Hole Is Waiting": three balls
@@ -51,6 +55,7 @@ export function GolfMeIcon({
   flagColor = "#166534",
   holeColor = "#f8faf8",
   variant = "flat",
+  background = true,
 }: GolfMeIconProps) {
   // Unique per instance so multiple gradient icons on one page (unlikely
   // today, but cheap to guard) never collide on the same gradient id and
@@ -101,7 +106,7 @@ export function GolfMeIcon({
             earlier version, which left this to a separately-sized CSS
             gradient on the wrapping element) -- guarantees the background
             is pixel-identical to public/icon-source.svg with no seam. */}
-        <rect width="48" height="48" fill={`url(#${gid}-bg)`} />
+        {background && <rect width="48" height="48" fill={`url(#${gid}-bg)`} />}
         <circle cx="13.9" cy="13.9" r="6.15" fill={`url(#${gid}-ball)`} />
         <circle cx="13.9" cy="34.1" r="6.15" fill={`url(#${gid}-ball)`} />
         <circle cx="34.1" cy="13.9" r="6.15" fill={`url(#${gid}-ball)`} />

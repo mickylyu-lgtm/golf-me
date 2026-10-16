@@ -51,6 +51,37 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="description" content="Golf Me — Find your next foursome." />
     <title>Golf Me</title>
+    <!-- Paint the app's cream from the very first frame, before the CSS
+         bundle arrives, so a launch never flashes white (matches the native
+         web view's backgroundColor in capacitor.config.ts). -->
+    <style>html { background: #faf9f6; }
+      /* EntryOverlay launch: the iOS launch image's green until the overlay
+         itself is up, so there's no cream frame between the two. */
+      html.gm-entry-boot, html.gm-entry-boot body { background: #143822 !important; }</style>
+    <!-- Decides, once per page load and before the bundle runs, whether the
+         branded entry plays (EntryOverlay reads the class this sets):
+         installed app only (Capacitor native or home-screen PWA), the
+         per-device test switch on (About -> tap the version 7 times), and
+         not already shown in this web view (sessionStorage survives in-app
+         reloads and resumes, not a cold launch). `?entry` forces a preview
+         in a normal browser tab, on a local dev server only. -->
+    <script>
+      (function () {
+        try {
+          var local = location.hostname === "localhost" || location.hostname === "127.0.0.1";
+          var forced = local && new URLSearchParams(location.search).has("entry");
+          var nav = window.navigator;
+          var standalone =
+            !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) ||
+            nav.standalone === true ||
+            (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+          if (!forced && !(standalone && localStorage.getItem("golfme:entryTest") === "1")) return;
+          if (!forced && sessionStorage.getItem("golfme:entryShown")) return;
+          sessionStorage.setItem("golfme:entryShown", "1");
+          document.documentElement.classList.add("gm-entry-boot");
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
