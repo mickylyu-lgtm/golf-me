@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { CaddieAnalysis } from "../types";
 
-// Matches analyze-swing/index.ts's own STALE_PROCESSING_MINUTES (there,
+// Related to analyze-swing/index.ts's own STALE_PROCESSING_MINUTES (there,
 // used so an abandoned 'processing' row stops blocking a genuine retry as
 // a "duplicate in-flight request"). The Edge Function's own pipeline runs
 // via EdgeRuntime.waitUntil() after it already responds -- if the
@@ -9,11 +9,19 @@ import type { CaddieAnalysis } from "../types";
 // ever reaches its own try/catch fail() path, the row is left at
 // 'processing' forever: nothing else will ever update or delete it.
 // Reported live as "stuck at 80%, can't complete" -- an indefinite
-// spinner with no way out. Reusing the same 5-minute threshold client-side
-// turns that into a normal-looking "failed, try again" state instead,
-// which retry() already handles correctly (the server's own duplicate
-// check no longer matches a row this old, so it starts a fresh pipeline).
-const STALE_PROCESSING_MINUTES = 5;
+// spinner with no way out. A client-side stale threshold turns that into a
+// normal-looking "failed, try again" state instead, which retry() already
+// handles correctly (the server's own duplicate check no longer matches a
+// row this old, so it starts a fresh pipeline).
+//
+// Deliberately longer than the server's 5 minutes: a legitimately long run
+// (a 52 MB .mov with a Roboflow retry took ~3.5 min) must not read as
+// "failed" while it's still genuinely working. Diverging in this direction
+// is safe -- by the time the client offers Try again (10 min) the server
+// already treats the row as abandoned (5 min), so retry() still starts a
+// fresh pipeline rather than being refused as a duplicate in-flight run.
+// Never set this BELOW the server's value, or Try again would be refused.
+const STALE_PROCESSING_MINUTES = 10;
 
 export function isStaleProcessing(analysis: Pick<CaddieAnalysis, "status" | "createdAt">): boolean {
   if (analysis.status !== "processing") return false;

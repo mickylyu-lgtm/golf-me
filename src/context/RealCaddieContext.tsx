@@ -4,7 +4,7 @@ import { App as CapacitorApp } from "@capacitor/app";
 import { supabase } from "../lib/supabase";
 import { SIGNED_URL_CHECK_INTERVAL_MS, SIGNED_URL_REFRESH_MARGIN_MS, signCaddieMediaPaths } from "../lib/caddieMedia";
 import type { SignedUrlEntry } from "../lib/caddieMedia";
-import { CaddieRequestError } from "../lib/caddieAnalysis";
+import { CaddieRequestError, isStaleProcessing } from "../lib/caddieAnalysis";
 import { useAuth } from "./AuthContext";
 import { useLocale } from "../i18n/LocaleContext";
 import type {
@@ -220,6 +220,10 @@ interface RealCaddieContextValue {
   refreshMediaUrls: (paths: Array<string | undefined>) => void;
 }
 
+// How often an in-flight analysis is re-read from the DB while the app is
+// visible (see the processing poll in RealCaddieProvider).
+const PROCESSING_POLL_MS = 5000;
+
 // Everything the list, nav ring, PostCard and detail text need -- every
 // column except the heavy roboflow_analysis_json (see CaddieAnalysisRow).
 const LIST_COLUMNS =
@@ -369,10 +373,24 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
     // Own-row-only data (RLS already guarantees no other user's changes can
     // ever reach this filter), so a single owner-scoped subscription is
     // enough — no cross-account traffic to worry about, unlike Community.
+    //
+    // Every time the channel (re)enters SUBSCRIBED, refetch once: realtime-js
+    // rejoins after a socket drop but never replays events from the gap, and
+    // on iOS the socket was seen reconnecting ~6 times during one 3.5-min
+    // analysis -- a processing -> complete flip landing in any of those gaps
+    // used to leave the loading screen spinning while the app stayed open.
+    // Same catch-up pattern RealSocialContext already uses.
+    let disposed = false;
+    let realtimeHealthy = false;
     const channel = supabase
       .channel("caddie-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "caddie_analyses", filter: `owner_id=eq.${selfId}` }, () => refetch())
-      .subscribe();
+      .subscribe((status) => {
+        if (disposed) return;
+        const wasHealthy = realtimeHealthy;
+        realtimeHealthy = status === "SUBSCRIBED";
+        if (!wasHealthy && realtimeHealthy) void refetch();
+      });
 
     // Realtime alone isn't enough: its WebSocket commonly drops while the
     // app is backgrounded/suspended (iOS WKWebView), and a missed "flipped
@@ -391,10 +409,34 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
     });
 
     return () => {
+      disposed = true;
       supabase.removeChannel(channel);
       appStateListener.then((l) => l.remove());
     };
   }, [isDemo, selfId, refetch]);
+
+  // Foreground guarantee for an in-flight analysis: while any row is still
+  // 'processing' (and not stale), re-read the real rows every few seconds
+  // while the page is visible, so the loading screen flips to the result
+  // even if the realtime event never arrives at all. This only ever re-runs
+  // the existing DB fetch -- the caddie_analyses row stays the source of
+  // truth; nothing about the job is tracked client-side. The timer exists
+  // only while some row's status is 'processing', so it's gone the moment
+  // the last job completes/fails (and in demo / signed out).
+  const rowsRef = useRef(rows);
+  useEffect(() => {
+    rowsRef.current = rows;
+  }, [rows]);
+  const anyProcessing = rows.some((r) => r.status === "processing");
+  useEffect(() => {
+    if (isDemo || !selfId || !anyProcessing) return;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      const active = rowsRef.current.some((r) => r.status === "processing" && !isStaleProcessing({ status: r.status, createdAt: r.created_at }));
+      if (active) void refetch();
+    }, PROCESSING_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [isDemo, selfId, anyProcessing, refetch]);
 
   // Signs any private path that has no URL yet or whose URL is within
   // SIGNED_URL_REFRESH_MARGIN_MS of expiring. Runs whenever the row list
