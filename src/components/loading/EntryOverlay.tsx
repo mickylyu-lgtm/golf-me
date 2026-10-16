@@ -6,17 +6,17 @@ import { ENTRY_BOOT_CLASS, SHOW_ENTRY } from "./entryFlag";
 import { getFullScreenLoaderCount, subscribeFullScreenLoaders, usePrefersReducedMotion } from "./loaderState";
 
 // Timeline (ms from the overlay's first paint), on the plain green:
-//   0    hole fades in (300ms); top-left ball starts
-//   150  top-right ball (with its flag) starts
-//   300  bottom-left ball starts
+//   0    hole fades in (400ms); top-left ball starts
+//   180  top-right ball (with its flag) starts
+//   360  bottom-left ball starts
 //        each ball: fade + scale 0.85 -> 1 over BALL_MS, damped ease-out,
-//        overlapping so the three read as one motion; all in by ~720ms
-//   600  gold halo around the hole swells and settles (same halo as before)
+//        overlapping so the three read as one motion; all in by ~910ms
+//   800  gold halo around the hole swells and settles (same halo as before)
 // The overlay then fades out over EXIT_MS as soon as the app underneath is
 // ready: never held for the halo, never before the last ball has landed.
 // If the app is still loading, the halo keeps breathing.
-const BALL_MS = 420;
-const BALL_STAGGER_MS = 150;
+const BALL_MS = 550;
+const BALL_STAGGER_MS = 180;
 const INTRO_MS = 2 * BALL_STAGGER_MS + BALL_MS;
 const EXIT_MS = 350;
 // Safety net: never cover the app for longer than this, even if a loader

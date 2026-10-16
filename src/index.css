@@ -67,13 +67,13 @@
   /* EntryOverlay (once per app launch): the hole fades in, the three balls
      fade and scale in one after another (stagger + delay set inline), each
      settling with a damped ease-out, no overshoot; the halo around the hole
-     swells and settles by 1250ms and, if the app is still loading, keeps
+     swells and settles by 1450ms and, if the app is still loading, keeps
      breathing gently until the overlay fades out. */
-  --animate-entry-ball: entry-ball 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
-  --animate-entry-fade: entry-fade 300ms ease-out both;
+  --animate-entry-ball: entry-ball 550ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-entry-fade: entry-fade 400ms ease-out both;
   --animate-entry-halo:
-    entry-halo 650ms 600ms cubic-bezier(0.22, 1, 0.36, 1) both,
-    entry-halo-breathe 1.6s 1250ms ease-in-out infinite alternate;
+    entry-halo 650ms 800ms cubic-bezier(0.22, 1, 0.36, 1) both,
+    entry-halo-breathe 1.6s 1450ms ease-in-out infinite alternate;
   /* GolfMeLoader's splash icon — a continuous hop-and-tumble, Geometry
      Dash's cube as the reference: each hop is one quarter-turn short of a
      full rotation, landing upright again exactly as it touches down. */
