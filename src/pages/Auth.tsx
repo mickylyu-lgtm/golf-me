@@ -204,7 +204,8 @@ export function Auth({ mode }: AuthProps) {
     setEmailSent(false);
     setCode("");
     setCodeError(null);
-    setShowEmailField(mode === "login");
+    // Same as the initial state: back to the buttons when Apple/Google show.
+    setShowEmailField(mode === "login" && !showGoogle);
     setEmail("");
     setShowPasswordField(false);
     setPasswordEmail("");
