@@ -66,6 +66,14 @@ export function ProfileSetup() {
   const [hasHandicap, setHasHandicap] = useState(initial.hasHandicap);
   const [handicap, setHandicap] = useState<number | "">(initial.handicap);
 
+  // Pre-fill the name a sign-in provider already gave us (today only Sign in
+  // with Apple writes profiles.name before onboarding, see AuthContext), and
+  // only into an empty field. It can arrive just after this screen mounts.
+  const savedName = isDemo ? "" : (profileRow?.name?.trim() ?? "");
+  useEffect(() => {
+    if (savedName) setName((current) => (current.trim() ? current : savedName));
+  }, [savedName]);
+
   // Persist a resumable draft on every change (not photoUrl — a data-URL
   // image would bloat localStorage for a draft that might never be
   // finished; a golfer who abandons and returns just re-picks a photo).

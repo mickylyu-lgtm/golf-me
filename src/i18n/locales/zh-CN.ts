@@ -390,6 +390,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "auth.loginSubtitle": "回到你上次离开的地方。",
   "auth.continueWithApple": "使用 Apple 继续",
   "auth.continueWithGoogle": "使用 Google 继续",
+  "auth.signInWithApple": "通过 Apple 登录",
   "auth.continueWithEmail": "使用邮箱继续",
   "auth.tryDemoAccount": "试用演示账号",
   "auth.demoAccountLabel": "{name}（演示账号）",
@@ -622,6 +623,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "settings.deleteAccountConfirmMessage": "这将永久删除你的个人资料、主办的球局、消息和评价。仍在你主办的球局中的其他人也会失去名额。此操作无法撤销。",
   "settings.accountDeletedToast": "你的账户已被删除。",
   "settings.accountDeleteFailedToast": "无法删除账户，请重试。",
+  "settings.accountDeleteAppleCanceledToast": "要删除账户，请先通过 Apple 确认。",
   "settings.logOutConfirmTitle": "要退出登录吗？",
   "settings.logOutConfirmMessage": "你需要重新登录才能继续使用 GolfMe。你的个人资料和数据会保留。",
 

@@ -390,6 +390,7 @@ export const es: Record<TranslationKey, string> = {
   "auth.loginSubtitle": "Continúa donde lo dejaste.",
   "auth.continueWithApple": "Continuar con Apple",
   "auth.continueWithGoogle": "Continuar con Google",
+  "auth.signInWithApple": "Iniciar sesión con Apple",
   "auth.continueWithEmail": "Continuar con Correo",
   "auth.tryDemoAccount": "Probar Cuenta Demo",
   "auth.demoAccountLabel": "{name} (Cuenta Demo)",
@@ -622,6 +623,7 @@ export const es: Record<TranslationKey, string> = {
   "settings.deleteAccountConfirmMessage": "Esto elimina permanentemente tu perfil, rondas organizadas, mensajes y reseñas. Cualquiera que siga en una ronda que organizas también perderá su lugar. Esto no se puede deshacer.",
   "settings.accountDeletedToast": "Tu cuenta ha sido eliminada.",
   "settings.accountDeleteFailedToast": "No se pudo eliminar tu cuenta. Inténtalo de nuevo.",
+  "settings.accountDeleteAppleCanceledToast": "Para eliminar tu cuenta, primero confirma con Apple.",
   "settings.logOutConfirmTitle": "¿Cerrar sesión?",
   "settings.logOutConfirmMessage": "Deberás iniciar sesión de nuevo para seguir usando GolfMe. Tu perfil y datos se conservan.",
 

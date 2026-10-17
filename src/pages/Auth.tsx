@@ -13,6 +13,8 @@ import { inputClass } from "../components/ui/FormControls";
 import { DEFAULT_CURRENT_USER_ID } from "../data/golfers";
 import { GolfMeIcon } from "../components/brand/GolfMeIcon";
 import { GoogleIcon } from "../components/icons/GoogleIcon";
+import { AppleIcon } from "../components/icons/AppleIcon";
+import { isAppleSignInCanceled, isNativeSocialSignInEnabled } from "../lib/socialSignIn";
 
 interface AuthProps {
   mode: "login" | "signup";
@@ -36,7 +38,7 @@ function isRateLimited(err: unknown): boolean {
 export function Auth({ mode }: AuthProps) {
   const navigate = useNavigate();
   const { logIn } = useData();
-  const { signInWithGoogle, signInWithEmailOtp, verifyEmailOtp, signInWithPassword, authError, clearAuthError } = useAuth();
+  const { signInWithGoogle, signInWithApple, signInWithEmailOtp, verifyEmailOtp, signInWithPassword, authError, clearAuthError } = useAuth();
   const { showToast } = useToast();
   const { t } = useLocale();
   // The demo account (mock data, localStorage only) is an internal/testing
@@ -50,12 +52,13 @@ export function Auth({ mode }: AuthProps) {
   const showReviewEntry = searchParams.get("review") === "1";
   // Apple guideline 4.8: an iOS app that offers a third-party login such as
   // Google must also offer Sign in with Apple. The native app therefore shows
-  // only GolfMe's own sign-in (email link + password); Google stays on the
-  // web. Google-created accounts are expected to reach the same account via
-  // the email link (Supabase matches confirmed emails); device-verify before
-  // relying on it (LAUNCH_CHECKLIST blocker 7).
+  // Google only together with Sign in with Apple, and only on a build that
+  // has the native Apple plugin with the switch on (lib/socialSignIn.ts).
+  // Every other native build keeps GolfMe's own sign-in only (email link +
+  // code, password). The web keeps Google and never shows Apple.
   const isNativeApp = Capacitor.isNativePlatform();
-  const showGoogle = !isNativeApp;
+  const showApple = isNativeApp && isNativeSocialSignInEnabled();
+  const showGoogle = !isNativeApp || showApple;
 
   const [showEmailField, setShowEmailField] = useState(mode === "login");
   const [email, setEmail] = useState("");
@@ -111,6 +114,22 @@ export function Auth({ mode }: AuthProps) {
       // nothing here ever threw, and there was no unmount to make it moot.
     } catch (err) {
       showToast(err instanceof Error ? err.message : t("auth.authError"), "warning");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function continueWithApple() {
+    setBusy(true);
+    try {
+      await signInWithApple();
+      // Success: onAuthStateChange in AuthContext takes over.
+    } catch (err) {
+      // Closing Apple's sheet is a normal choice, not an error.
+      if (!isAppleSignInCanceled(err)) {
+        console.error("GolfMe: Sign in with Apple failed.", err);
+        showToast(t("auth.authError"), "warning");
+      }
     } finally {
       setBusy(false);
     }
@@ -297,6 +316,16 @@ export function Auth({ mode }: AuthProps) {
                   {t("auth.code.linkExpiredBody", { count: EMAIL_OTP_LENGTH })}
                 </p>
               </div>
+            )}
+            {/* Apple HIG: black button, white logo and title, at least as prominent as the other buttons, so it goes first. */}
+            {showApple && (
+              <button
+                onClick={continueWithApple}
+                disabled={busy}
+                className="flex items-center justify-center gap-2 rounded-full bg-black px-5 py-3 text-sm font-semibold text-white transition-all duration-200 ease-out hover:-translate-y-px hover:shadow-sm active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none disabled:opacity-50"
+              >
+                <AppleIcon size={17} /> {mode === "signup" ? t("auth.continueWithApple") : t("auth.signInWithApple")}
+              </button>
             )}
             {showGoogle && (
               <button

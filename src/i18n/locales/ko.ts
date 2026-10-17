@@ -390,6 +390,7 @@ export const ko: Record<TranslationKey, string> = {
   "auth.loginSubtitle": "이어서 시작해보세요.",
   "auth.continueWithApple": "Apple로 계속하기",
   "auth.continueWithGoogle": "Google로 계속하기",
+  "auth.signInWithApple": "Apple로 로그인",
   "auth.continueWithEmail": "이메일로 계속하기",
   "auth.tryDemoAccount": "데모 계정 사용해보기",
   "auth.demoAccountLabel": "{name} (데모 계정)",
@@ -622,6 +623,7 @@ export const ko: Record<TranslationKey, string> = {
   "settings.deleteAccountConfirmMessage": "프로필, 주최 중인 라운드, 메시지, 리뷰가 영구적으로 삭제됩니다. 당신이 주최하는 라운드에 참가 중인 사람들도 자리를 잃게 됩니다. 되돌릴 수 없습니다.",
   "settings.accountDeletedToast": "계정이 삭제되었습니다.",
   "settings.accountDeleteFailedToast": "계정을 삭제할 수 없습니다. 다시 시도해주세요.",
+  "settings.accountDeleteAppleCanceledToast": "계정을 삭제하려면 먼저 Apple로 확인해주세요.",
   "settings.logOutConfirmTitle": "로그아웃하시겠습니까?",
   "settings.logOutConfirmMessage": "GolfMe를 계속 사용하려면 다시 로그인해야 합니다. 프로필과 데이터는 저장됩니다.",
 
