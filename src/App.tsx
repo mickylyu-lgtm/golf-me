@@ -25,6 +25,7 @@ import { Button } from "./components/ui/Button";
 import { Welcome } from "./pages/Welcome";
 import { Splash } from "./pages/Splash";
 import { EntryOverlay } from "./components/loading/EntryOverlay";
+import { NativeSplashHide } from "./components/loading/NativeSplashHide";
 import { isEntryTestEnabled } from "./components/loading/entryFlag";
 import { Auth } from "./pages/Auth";
 import { ProfileSetup } from "./pages/ProfileSetup";
@@ -257,7 +258,7 @@ function AppGate({ children }: { children: ReactNode }) {
   usePendingReviewerInviteRedemption();
   usePushRegistration();
   useDisableKeyboardAccessoryBar();
-  if (isLoading || authLoading || retrying) return <GolfMeLoader fullScreen message={t("loading.gettingReady")} />;
+  if (isLoading || authLoading || retrying) return <GolfMeLoader fullScreen slowLoadRetry message={t("loading.gettingReady")} />;
   // Signed in but the very first profile load failed (nothing cached to fall
   // back on). Rendering the router here would read "no profile" as "not
   // onboarded" and route an existing golfer into /profile-setup — so offer
@@ -298,11 +299,12 @@ export default function App() {
         <DataProvider>
           <ToastProvider>
             <EntryOverlay />
+            <NativeSplashHide />
             <AppGate>
               <BrowserRouter>
               <ScrollToTop />
               <PushNotificationRouting />
-              <Suspense fallback={<GolfMeLoader fullScreen />}>
+              <Suspense fallback={<GolfMeLoader fullScreen slowLoadRetry />}>
               <Routes>
                 {/* Standalone, outside both GuestOnly and AuthedLayout — by the
                     time signUpNewGolfer() lands here the session is already

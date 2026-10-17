@@ -1014,4 +1014,6 @@ export const es: Record<TranslationKey, string> = {
   "loading.gettingReady": "Preparando GolfMe...",
   "loading.profileLoadFailed": "No se pudo cargar tu perfil. Revisa tu conexión e inténtalo de nuevo.",
   "loading.retry": "Intentar de nuevo",
+  "loading.slow": "Está tardando más de lo habitual.",
+  "loading.unreachable": "No se puede conectar con GolfMe. Revisa tu conexión e inténtalo de nuevo.",
 };

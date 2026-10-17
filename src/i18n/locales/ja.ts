@@ -1014,4 +1014,6 @@ export const ja: Record<TranslationKey, string> = {
   "loading.gettingReady": "GolfMe を準備中...",
   "loading.profileLoadFailed": "プロフィールを読み込めませんでした。接続を確認して、もう一度お試しください。",
   "loading.retry": "再試行",
+  "loading.slow": "いつもより時間がかかっています。",
+  "loading.unreachable": "GolfMeに接続できません。接続を確認してもう一度お試しください。",
 };
