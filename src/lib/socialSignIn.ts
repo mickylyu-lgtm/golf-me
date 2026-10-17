@@ -18,7 +18,7 @@ import { Capacitor, registerPlugin } from "@capacitor/core";
 
 // Flip to true (and deploy) when the build with the plugin goes to App
 // Review or is released, so that build shows Apple + Google for everyone.
-export const SOCIAL_SIGN_IN_ENABLED = false;
+export const SOCIAL_SIGN_IN_ENABLED = true;
 
 const TEST_KEY = "golfme:socialSignInTest";
 const APPLE_PLUGIN = "GolfMeAppleSignIn";
