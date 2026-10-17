@@ -1,5 +1,8 @@
+import { useEffect, useState } from "react";
 import { usePrefersReducedMotion, useRegisterFullScreenLoader } from "./loaderState";
 import { GolfMeIcon } from "../brand/GolfMeIcon";
+import { Button } from "../ui/Button";
+import { useLocale } from "../../i18n/LocaleContext";
 
 // One golf cart drawing, reused at every size via an outer <g transform="scale()">
 // rather than redrawn per context — native box is 44 wide x 30 tall.
@@ -127,9 +130,64 @@ export interface GolfMeLoaderProps {
    * app load, Auto-Match, other major waits. Defaults to a small inline cart
    * for lighter-weight spots (profile loading, chat, round refresh). */
   fullScreen?: boolean;
+  /** fullScreen only: after SLOW_LOAD_MS, offer a reload so a stuck app
+   * start (slow network, a session restore that never settles) is never a
+   * dead end. For app-start waits only, not for real work like Auto-Match. */
+  slowLoadRetry?: boolean;
   /** Inline-mode cart size in px. Ignored when fullScreen. */
   size?: "sm" | "md" | "lg";
   className?: string;
+}
+
+// Same point at which EntryOverlay stops covering the app (MAX_HOLD_MS), so
+// a launch that is still loading lands on this loader with the retry shown.
+const SLOW_LOAD_MS = 8000;
+const REACHABILITY_TIMEOUT_MS = 5000;
+
+// Reloading while the site is unreachable would swap this loader for the web
+// view's own blank error page, so check golfme.app answers first (no service
+// worker here, so this always hits the network).
+async function canReachSite(): Promise<boolean> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REACHABILITY_TIMEOUT_MS);
+  try {
+    const res = await fetch(`/?reachability=${Date.now()}`, { method: "HEAD", cache: "no-store", signal: controller.signal });
+    return res.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function SlowLoadRetry() {
+  const { t } = useLocale();
+  const [visible, setVisible] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [unreachable, setUnreachable] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setVisible(true), SLOW_LOAD_MS);
+    return () => clearTimeout(timer);
+  }, []);
+  if (!visible) return null;
+  async function retry() {
+    setChecking(true);
+    setUnreachable(false);
+    if (await canReachSite()) {
+      window.location.reload();
+      return;
+    }
+    setUnreachable(true);
+    setChecking(false);
+  }
+  return (
+    <div className="flex flex-col items-center gap-3 text-center">
+      <p className="text-sm text-slate-600">{t(unreachable ? "loading.unreachable" : "loading.slow")}</p>
+      <Button onClick={retry} disabled={checking}>
+        {t("loading.retry")}
+      </Button>
+    </div>
+  );
 }
 
 const INLINE_SIZE_PX: Record<NonNullable<GolfMeLoaderProps["size"]>, number> = { sm: 44, md: 60, lg: 84 };
@@ -138,7 +196,7 @@ const INLINE_SIZE_PX: Record<NonNullable<GolfMeLoaderProps["size"]>, number> = {
 // the app, from the initial splash to a small profile spinner. Only ever
 // shown while something real is actually in flight; never used to
 // artificially pad out a fast operation.
-export function GolfMeLoader({ message, fullScreen = false, size = "md", className = "" }: GolfMeLoaderProps) {
+export function GolfMeLoader({ message, fullScreen = false, slowLoadRetry = false, size = "md", className = "" }: GolfMeLoaderProps) {
   const reducedMotion = usePrefersReducedMotion();
   useRegisterFullScreenLoader(fullScreen);
 
@@ -167,6 +225,7 @@ export function GolfMeLoader({ message, fullScreen = false, size = "md", classNa
               {message && <p className="text-sm font-semibold text-slate-600">{message}</p>}
             </>
           )}
+          {slowLoadRetry && <SlowLoadRetry />}
         </div>
       </div>
     );

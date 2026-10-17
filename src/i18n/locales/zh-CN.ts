@@ -1012,4 +1012,6 @@ export const zhCN: Record<TranslationKey, string> = {
   "loading.gettingReady": "GolfMe 正在准备中…",
   "loading.profileLoadFailed": "无法加载你的个人资料。请检查网络连接后重试。",
   "loading.retry": "重试",
+  "loading.slow": "加载时间比平时长。",
+  "loading.unreachable": "无法连接 GolfMe。请检查网络连接后重试。",
 };

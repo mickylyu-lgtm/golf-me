@@ -1012,4 +1012,6 @@ export const zhTW: Record<TranslationKey, string> = {
   "loading.gettingReady": "GolfMe 準備中…",
   "loading.profileLoadFailed": "無法載入你的個人資料。請檢查網路連線後重試。",
   "loading.retry": "重試",
+  "loading.slow": "載入時間比平常久。",
+  "loading.unreachable": "無法連線至 GolfMe。請檢查網路連線後再試一次。",
 };

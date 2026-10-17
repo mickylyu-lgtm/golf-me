@@ -925,6 +925,8 @@ export const en = {
   "loading.gettingReady": "Getting GolfMe ready...",
   "loading.profileLoadFailed": "Couldn't load your profile. Check your connection and try again.",
   "loading.retry": "Try again",
+  "loading.slow": "Taking longer than usual.",
+  "loading.unreachable": "Can't reach GolfMe. Check your connection and try again.",
 
   // Golf Call detail
   "golfCallDetail.notFound": "Golf Call not found.",

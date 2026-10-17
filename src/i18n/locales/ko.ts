@@ -1012,4 +1012,6 @@ export const ko: Record<TranslationKey, string> = {
   "loading.gettingReady": "GolfMe 준비 중...",
   "loading.profileLoadFailed": "프로필을 불러오지 못했습니다. 연결을 확인하고 다시 시도해 주세요.",
   "loading.retry": "다시 시도",
+  "loading.slow": "평소보다 오래 걸리고 있어요.",
+  "loading.unreachable": "GolfMe에 연결할 수 없어요. 연결 상태를 확인하고 다시 시도해 주세요.",
 };
