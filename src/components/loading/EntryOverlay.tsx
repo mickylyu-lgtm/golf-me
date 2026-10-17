@@ -1,9 +1,9 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { GolfMeIcon } from "../brand/GolfMeIcon";
 import type { GolfMeIconPart } from "../brand/GolfMeIcon";
 import { ENTRY_BOOT_CLASS, SHOW_ENTRY } from "./entryFlag";
-import { getFullScreenLoaderCount, subscribeFullScreenLoaders, usePrefersReducedMotion } from "./loaderState";
+import { useAppReady, usePrefersReducedMotion } from "./loaderState";
 
 // Timeline (ms from the overlay's first paint), on the plain green:
 //   0    hole fades in (400ms); top-left ball starts
@@ -25,32 +25,17 @@ const MAX_HOLD_MS = 8000;
 
 // Geometry of the iOS launch image (ios/App/App/Assets.xcassets/
 // Splash.imageset, 2732px square, aspect-fill): the same diagonal gradient
-// as the app icon across the whole square, with the mark centered and its
-// ball centres 213px from the middle. The current mark's ball centres sit
-// 10.1 of 48 units from the middle, so its 48-unit box spans 48 x 213/10.1
-// = 1012px, i.e. 37.05% of the square. Rendering the overlay the same way
-// (a square of max(width, height), centered) puts the mark where the launch
-// image had it, with no size or position jump at the hand-off.
+// as the app icon across the whole square. The launch image is now that
+// gradient alone (the native splash plugin holds it until NativeSplashHide
+// sees this overlay painted), so the balls arrive here with nothing to
+// vanish first. The mark keeps the size/position the launch image's logo
+// used to have: ball centres 213px from the middle, and the current mark's
+// sit 10.1 of 48 units from the middle, so its 48-unit box spans
+// 48 x 213/10.1 = 1012px, i.e. 37.05% of the square
+// (scripts/render-launch-screen.cjs renders the logo variant the same way).
+// Rendering the overlay as a centered square of max(width, height) matches
+// the launch image's aspect-fill, so the gradient lines up at the hand-off.
 const MARK_FRACTION = 0.3705;
-
-// "Ready" = no fullScreen GolfMeLoader mounted (AppGate's session restore
-// and the router's lazy-route fallback both use one), confirmed across two
-// animation frames so the hand-off between those two loaders, which happens
-// within a single commit, never reads as a gap.
-function useAppReady(active: boolean): boolean {
-  const loaderCount = useSyncExternalStore(subscribeFullScreenLoaders, getFullScreenLoaderCount);
-  const [ready, setReady] = useState(false);
-  useEffect(() => {
-    if (!active || ready || loaderCount > 0) return;
-    let frame = requestAnimationFrame(() => {
-      frame = requestAnimationFrame(() => {
-        if (getFullScreenLoaderCount() === 0) setReady(true);
-      });
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [active, ready, loaderCount]);
-  return ready;
-}
 
 // The once-per-launch brand entry, behind a per-device test switch (see
 // entryFlag.ts). The existing mark (GolfMeIcon's gradient variant, without

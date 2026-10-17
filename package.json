@@ -21,6 +21,7 @@
     "@capacitor/ios": "^8.5.0",
     "@capacitor/keyboard": "^8.0.5",
     "@capacitor/push-notifications": "^8.1.2",
+    "@capacitor/splash-screen": "^8.0.2",
     "@fontsource/inter": "^5.2.8",
     "@supabase/supabase-js": "2.112.3",
     "@vercel/analytics": "^2.0.1",

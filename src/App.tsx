@@ -25,6 +25,7 @@ import { Button } from "./components/ui/Button";
 import { Welcome } from "./pages/Welcome";
 import { Splash } from "./pages/Splash";
 import { EntryOverlay } from "./components/loading/EntryOverlay";
+import { NativeSplashHide } from "./components/loading/NativeSplashHide";
 import { isEntryTestEnabled } from "./components/loading/entryFlag";
 import { Auth } from "./pages/Auth";
 import { ProfileSetup } from "./pages/ProfileSetup";
@@ -298,6 +299,7 @@ export default function App() {
         <DataProvider>
           <ToastProvider>
             <EntryOverlay />
+            <NativeSplashHide />
             <AppGate>
               <BrowserRouter>
               <ScrollToTop />
