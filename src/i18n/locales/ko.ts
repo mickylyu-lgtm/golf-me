@@ -404,7 +404,7 @@ export const ko: Record<TranslationKey, string> = {
   "auth.checkEmailBody": "{email}(으)로 로그인 링크를 보냈습니다. 이 기기에서 열어 계속 진행하세요.",
   "auth.resendEmail": "이메일 다시 보내기",
   "auth.useDifferentMethod": "다른 방법 사용",
-  "auth.sendMagicLink": "로그인 링크 보내기",
+  "auth.sendMagicLink": "이메일로 코드 받기",
   "auth.authError": "로그인 중 문제가 발생했습니다. 다시 시도해 주세요.",
   "auth.signInWithPassword": "비밀번호로 로그인",
   "auth.passwordPlaceholder": "비밀번호",

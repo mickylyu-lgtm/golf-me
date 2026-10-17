@@ -404,7 +404,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "auth.checkEmailBody": "我们已将登录链接发送至 {email},请在此设备上打开以继续。",
   "auth.resendEmail": "重新发送邮件",
   "auth.useDifferentMethod": "使用其他方式",
-  "auth.sendMagicLink": "发送登录链接",
+  "auth.sendMagicLink": "通过邮箱发送验证码",
   "auth.authError": "登录时出了点问题,请重试。",
   "auth.signInWithPassword": "使用密码登录",
   "auth.passwordPlaceholder": "密码",

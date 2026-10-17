@@ -60,7 +60,12 @@ export function Auth({ mode }: AuthProps) {
   const showApple = isNativeApp && isNativeSocialSignInEnabled();
   const showGoogle = !isNativeApp || showApple;
 
-  const [showEmailField, setShowEmailField] = useState(mode === "login");
+  // With Apple/Google offered, email is a third equal button that opens the
+  // box in place (one tap more for email users, a calmer screen that leads
+  // with one-tap sign-in). Login without them (web is Google-only, so this
+  // means an older native build) keeps the box open, since a lone "Continue
+  // with Email" button there would just be an extra tap.
+  const [showEmailField, setShowEmailField] = useState(mode === "login" && !showGoogle);
   const [email, setEmail] = useState("");
   const [emailSent, setEmailSent] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -348,7 +353,7 @@ export function Auth({ mode }: AuthProps) {
               <div className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-3">
                 <input
                   type="email"
-                  autoFocus={mode !== "login"}
+                  autoFocus={mode !== "login" || showGoogle}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"

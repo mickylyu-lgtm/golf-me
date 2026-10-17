@@ -404,7 +404,7 @@ export const es: Record<TranslationKey, string> = {
   "auth.checkEmailBody": "Enviamos un enlace de acceso a {email}. Ábrelo en este dispositivo para continuar.",
   "auth.resendEmail": "Reenviar correo",
   "auth.useDifferentMethod": "Usar otro método",
-  "auth.sendMagicLink": "Enviar enlace de acceso",
+  "auth.sendMagicLink": "Enviarme un código",
   "auth.authError": "Hubo un problema al iniciar sesión. Inténtalo de nuevo.",
   "auth.signInWithPassword": "Iniciar sesión con contraseña",
   "auth.passwordPlaceholder": "Contraseña",
