@@ -1,6 +1,7 @@
 # GOLFME LAUNCH STATUS
 
 **Target:** First public App Store launch (plus golfme.app, already live with open signup)
+**Launched:** 1.0 live on the App Store (seen "Ready for Distribution" 2026-10-17). **1.1 approved by App Review 2026-10-18** (Micky): native launch screen + entry animation, Sign in with Apple + Google, email code sign-in. Release + on-device check of the App Store build still pending (see DEVELOPMENT_STATUS "Exact next recommended action").
 **Last updated:** 2026-09-30 (evening). Shipped today: report → admin loop verified; Google hidden on iOS (4.8) and reviewer login, both device-verified; push re-registration after re-sign-in; password eye toggle; branded sign-in email (live in Supabase, device-confirmed); prototype/placeholder wording removed; login screen cleanup. Review Gate daily call limit raised from 10 to 25 (Micky approved; $2/day and $10/month caps unchanged).
 
 Statuses: `[ ]` NOT STARTED · `[~]` IN PROGRESS · `[?]` NEEDS VERIFICATION · `[!]` BLOCKED · `[x]` COMPLETE (only with evidence it works).
