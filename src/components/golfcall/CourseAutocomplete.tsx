@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Plus } from "lucide-react";
 import { useNearbyCourses, useCourseTextSearch } from "../../lib/useCourseSearch";
+import { useKeyboardHeight } from "../../lib/useKeyboardHeight";
 import type { PlayingArea } from "../../lib/geo";
 import { inputClass, labelClass } from "../ui/FormControls";
 import { CourseSearchStatus } from "../ui/CourseSearchStatus";
@@ -64,6 +65,33 @@ export function CourseAutocomplete({ value, onChange, onPickKnownCourse, recentC
 
   const searchState = useCourseTextSearch(value, location, 6);
   const filtered = searchState.results;
+  const showDropdown = focused && Boolean(value.trim()) && (searchState.loading || Boolean(searchState.error) || filtered.length > 0);
+
+  // The suggestions open below the field, which in the iOS app sits behind
+  // the keyboard. Under resize:"body" the window's height never changes for
+  // the keyboard (see useKeyboardHeight), so scrollIntoView thinks they're
+  // already visible; instead the window is scrolled by hand so they end just
+  // above the keyboard, without pushing the field itself under the header.
+  // keyboardSpacer gives the page room to scroll that far; it sits under the
+  // dropdown, so it's never seen.
+  const inputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const keyboardHeight = useKeyboardHeight();
+  const keyboardSpacer = showDropdown && keyboardHeight > 0 ? keyboardHeight : 0;
+  useEffect(() => {
+    if (!showDropdown) return;
+    const frame = requestAnimationFrame(() => {
+      const dropdown = dropdownRef.current?.getBoundingClientRect();
+      const input = inputRef.current?.getBoundingClientRect();
+      if (!dropdown || !input) return;
+      const visibleBottom = keyboardHeight > 0 ? window.innerHeight - keyboardHeight : (window.visualViewport?.height ?? window.innerHeight);
+      const overflow = dropdown.bottom + 12 - visibleBottom;
+      // 112px: clears the app header.
+      const delta = Math.min(overflow, input.top - 112);
+      if (delta > 0) window.scrollBy({ top: delta, behavior: "smooth" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [showDropdown, filtered.length, searchState.loading, keyboardHeight]);
 
   function pick(result: CoursePick) {
     onChange(result.name);
@@ -103,6 +131,7 @@ export function CourseAutocomplete({ value, onChange, onPickKnownCourse, recentC
       <div className="relative">
         {quickPicks.length > 0 && <label className={labelClass}>{t("courseAutocomplete.searchAllCourses")}</label>}
         <input
+          ref={inputRef}
           className={inputClass}
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -110,8 +139,8 @@ export function CourseAutocomplete({ value, onChange, onPickKnownCourse, recentC
           onBlur={() => window.setTimeout(() => setFocused(false), 150)}
           placeholder={t("courseAutocomplete.placeholder")}
         />
-        {focused && value.trim() && (searchState.loading || searchState.error || filtered.length > 0) && (
-          <div className="absolute z-10 mt-1.5 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        {showDropdown && (
+          <div ref={dropdownRef} className="absolute z-10 mt-1.5 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
             {searchState.loading || searchState.error ? (
               <div className="p-2.5">
                 <CourseSearchStatus loading={searchState.loading} error={searchState.error} onRetry={searchState.retry} />
@@ -133,6 +162,7 @@ export function CourseAutocomplete({ value, onChange, onPickKnownCourse, recentC
             )}
           </div>
         )}
+        {keyboardSpacer > 0 && <div aria-hidden style={{ height: keyboardSpacer }} />}
       </div>
     </div>
   );
