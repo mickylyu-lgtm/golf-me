@@ -73,11 +73,14 @@ export function CourseAutocomplete({ value, onChange, onPickKnownCourse, recentC
   // already visible; instead the window is scrolled by hand so they end just
   // above the keyboard, without pushing the field itself under the header.
   // keyboardSpacer gives the page room to scroll that far; it sits under the
-  // dropdown, so it's never seen.
+  // dropdown, so it's never seen. On short screens (iPhone SE) six results
+  // don't fit between the header and the keyboard, so the list is capped to
+  // that space and scrolls inside itself: every option stays reachable.
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const keyboardHeight = useKeyboardHeight();
   const keyboardSpacer = showDropdown && keyboardHeight > 0 ? keyboardHeight : 0;
+  const [dropdownMaxHeight, setDropdownMaxHeight] = useState<number | undefined>(undefined);
   useEffect(() => {
     if (!showDropdown) return;
     const frame = requestAnimationFrame(() => {
@@ -85,8 +88,12 @@ export function CourseAutocomplete({ value, onChange, onPickKnownCourse, recentC
       const input = inputRef.current?.getBoundingClientRect();
       if (!dropdown || !input) return;
       const visibleBottom = keyboardHeight > 0 ? window.innerHeight - keyboardHeight : (window.visualViewport?.height ?? window.innerHeight);
-      const overflow = dropdown.bottom + 12 - visibleBottom;
-      // 112px: clears the app header.
+      // 112px: clears the app header; 6px: the dropdown's top margin.
+      const room = Math.max(visibleBottom - 12 - (112 + input.height + 6), 120);
+      const maxHeight = keyboardHeight > 0 ? room : undefined;
+      setDropdownMaxHeight(maxHeight);
+      const bottom = maxHeight ? Math.min(dropdown.bottom, input.bottom + 6 + maxHeight) : dropdown.bottom;
+      const overflow = bottom + 12 - visibleBottom;
       const delta = Math.min(overflow, input.top - 112);
       if (delta > 0) window.scrollBy({ top: delta, behavior: "smooth" });
     });
@@ -140,7 +147,10 @@ export function CourseAutocomplete({ value, onChange, onPickKnownCourse, recentC
           placeholder={t("courseAutocomplete.placeholder")}
         />
         {showDropdown && (
-          <div ref={dropdownRef} className="absolute z-10 mt-1.5 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div
+            ref={dropdownRef}
+            style={dropdownMaxHeight ? { maxHeight: dropdownMaxHeight } : undefined}
+            className="absolute z-10 mt-1.5 w-full overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white shadow-sm">
             {searchState.loading || searchState.error ? (
               <div className="p-2.5">
                 <CourseSearchStatus loading={searchState.loading} error={searchState.error} onRetry={searchState.retry} />
