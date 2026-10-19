@@ -398,6 +398,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "auth.loginSubtitle": "回到你上次离开的地方。",
   "auth.continueWithApple": "使用 Apple 继续",
   "auth.continueWithGoogle": "使用 Google 继续",
+  "auth.signInWithApple": "通过 Apple 登录",
   "auth.continueWithEmail": "使用邮箱继续",
   "auth.tryDemoAccount": "试用演示账号",
   "auth.demoAccountLabel": "{name}（演示账号）",
@@ -411,7 +412,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "auth.checkEmailBody": "我们已将登录链接发送至 {email},请在此设备上打开以继续。",
   "auth.resendEmail": "重新发送邮件",
   "auth.useDifferentMethod": "使用其他方式",
-  "auth.sendMagicLink": "发送登录链接",
+  "auth.sendMagicLink": "通过邮箱发送验证码",
   "auth.authError": "登录时出了点问题,请重试。",
   "auth.signInWithPassword": "使用密码登录",
   "auth.passwordPlaceholder": "密码",
@@ -630,6 +631,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "settings.deleteAccountConfirmMessage": "这将永久删除你的个人资料、主办的球局、消息和评价。仍在你主办的球局中的其他人也会失去名额。此操作无法撤销。",
   "settings.accountDeletedToast": "你的账户已被删除。",
   "settings.accountDeleteFailedToast": "无法删除账户，请重试。",
+  "settings.accountDeleteAppleCanceledToast": "要删除账户，请先通过 Apple 确认。",
   "settings.logOutConfirmTitle": "要退出登录吗？",
   "settings.logOutConfirmMessage": "你需要重新登录才能继续使用 GolfMe。你的个人资料和数据会保留。",
 
@@ -1020,4 +1022,6 @@ export const zhCN: Record<TranslationKey, string> = {
   "loading.gettingReady": "GolfMe 正在准备中…",
   "loading.profileLoadFailed": "无法加载你的个人资料。请检查网络连接后重试。",
   "loading.retry": "重试",
+  "loading.slow": "加载时间比平时长。",
+  "loading.unreachable": "无法连接 GolfMe。请检查网络连接后重试。",
 };

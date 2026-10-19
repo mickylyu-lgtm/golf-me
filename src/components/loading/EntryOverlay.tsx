@@ -1,56 +1,49 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { GolfMeIcon } from "../brand/GolfMeIcon";
 import type { GolfMeIconPart } from "../brand/GolfMeIcon";
 import { ENTRY_BOOT_CLASS, SHOW_ENTRY } from "./entryFlag";
-import { getFullScreenLoaderCount, subscribeFullScreenLoaders, usePrefersReducedMotion } from "./loaderState";
+import { useAppReady, usePrefersReducedMotion } from "./loaderState";
 
 // Timeline (ms from the overlay's first paint), on the plain green:
 //   0    hole fades in (400ms); top-left ball starts
 //   180  top-right ball (with its flag) starts
 //   360  bottom-left ball starts
-//        each ball: fade + scale 0.85 -> 1 over BALL_MS, damped ease-out,
+//        each ball: fade + scale 0.85 -> 1 over 550ms (index.css), damped ease-out,
 //        overlapping so the three read as one motion; all in by ~910ms
-//   800  gold halo around the hole swells and settles (same halo as before)
-// The overlay then fades out over EXIT_MS as soon as the app underneath is
-// ready: never held for the halo, never before the last ball has landed.
-// If the app is still loading, the halo keeps breathing.
-const BALL_MS = 550;
-const BALL_STAGGER_MS = 180;
-const INTRO_MS = 2 * BALL_STAGGER_MS + BALL_MS;
+//   700  gold halo around the hole swells and settles (650ms, same halo as
+//        before), overlapping the last ball's settle; complete at 1350ms
+//   1350 completed logo holds, still (HOLD_MS)
+//   1650 earliest exit: fade into the app over EXIT_MS, done by 2000ms
+// The sequence always plays in full: the app initializes underneath, and
+// the overlay leaves only once BOTH the sequence is done AND the app is
+// ready, so an early-ready app never cuts the halo short. If the app is
+// still loading after 1650ms, the halo keeps breathing until it is.
+// The halo timings live in index.css (--animate-entry-halo): keep them in
+// step with HALO_DONE_MS.
+const HALO_DONE_MS = 700 + 650;
+const HOLD_MS = 300;
+const MIN_SEQUENCE_MS = HALO_DONE_MS + HOLD_MS;
 const EXIT_MS = 350;
+const BALL_STAGGER_MS = 180;
 // Safety net: never cover the app for longer than this, even if a loader
-// never unmounts (e.g. a stuck session restore), so an error screen is seen.
+// never unmounts (e.g. a stuck session restore). The fullScreen loader
+// underneath offers a retry at the same point (GolfMeLoader SLOW_LOAD_MS).
 const MAX_HOLD_MS = 8000;
 
 // Geometry of the iOS launch image (ios/App/App/Assets.xcassets/
 // Splash.imageset, 2732px square, aspect-fill): the same diagonal gradient
-// as the app icon across the whole square, with the mark centered and its
-// ball centres 213px from the middle. The current mark's ball centres sit
-// 10.1 of 48 units from the middle, so its 48-unit box spans 48 x 213/10.1
-// = 1012px, i.e. 37.05% of the square. Rendering the overlay the same way
-// (a square of max(width, height), centered) puts the mark where the launch
-// image had it, with no size or position jump at the hand-off.
+// as the app icon across the whole square. The launch image is now that
+// gradient alone (the native splash plugin holds it until NativeSplashHide
+// sees this overlay painted), so the balls arrive here with nothing to
+// vanish first. The mark keeps the size/position the launch image's logo
+// used to have: ball centres 213px from the middle, and the current mark's
+// sit 10.1 of 48 units from the middle, so its 48-unit box spans
+// 48 x 213/10.1 = 1012px, i.e. 37.05% of the square
+// (scripts/render-launch-screen.cjs renders the logo variant the same way).
+// Rendering the overlay as a centered square of max(width, height) matches
+// the launch image's aspect-fill, so the gradient lines up at the hand-off.
 const MARK_FRACTION = 0.3705;
-
-// "Ready" = no fullScreen GolfMeLoader mounted (AppGate's session restore
-// and the router's lazy-route fallback both use one), confirmed across two
-// animation frames so the hand-off between those two loaders, which happens
-// within a single commit, never reads as a gap.
-function useAppReady(active: boolean): boolean {
-  const loaderCount = useSyncExternalStore(subscribeFullScreenLoaders, getFullScreenLoaderCount);
-  const [ready, setReady] = useState(false);
-  useEffect(() => {
-    if (!active || ready || loaderCount > 0) return;
-    let frame = requestAnimationFrame(() => {
-      frame = requestAnimationFrame(() => {
-        if (getFullScreenLoaderCount() === 0) setReady(true);
-      });
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [active, ready, loaderCount]);
-  return ready;
-}
 
 // The once-per-launch brand entry, behind a per-device test switch (see
 // entryFlag.ts). The existing mark (GolfMeIcon's gradient variant, without
@@ -75,24 +68,24 @@ const ENTRY_PARTS: Partial<Record<GolfMeIconPart, { className: string; style?: C
 
 export function EntryOverlay() {
   const [phase, setPhase] = useState<"in" | "out" | "done">(SHOW_ENTRY ? "in" : "done");
-  const [introDone, setIntroDone] = useState(false);
+  const [sequenceDone, setSequenceDone] = useState(false);
   const [timedOut, setTimedOut] = useState(false);
   const reducedMotion = usePrefersReducedMotion();
   const ready = useAppReady(phase === "in");
 
   useEffect(() => {
     if (phase !== "in") return;
-    const intro = setTimeout(() => setIntroDone(true), reducedMotion ? 0 : INTRO_MS);
+    const sequence = setTimeout(() => setSequenceDone(true), reducedMotion ? 0 : MIN_SEQUENCE_MS);
     const cap = setTimeout(() => setTimedOut(true), MAX_HOLD_MS);
     return () => {
-      clearTimeout(intro);
+      clearTimeout(sequence);
       clearTimeout(cap);
     };
   }, [phase, reducedMotion]);
 
   useEffect(() => {
-    if (phase === "in" && ((ready && introDone) || timedOut)) setPhase("out");
-  }, [phase, ready, introDone, timedOut]);
+    if (phase === "in" && ((ready && sequenceDone) || timedOut)) setPhase("out");
+  }, [phase, ready, sequenceDone, timedOut]);
 
   useEffect(() => {
     if (phase === "out") {

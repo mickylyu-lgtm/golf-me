@@ -8,7 +8,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let windowScene = scene as? UIWindowScene else { return }
 
         window = UIWindow(windowScene: windowScene)
-        window?.rootViewController = CAPBridgeViewController()
+        // GolfMeBridgeViewController (AppleSignInPlugin.swift) registers the app-local
+        // Capacitor plugins; otherwise identical to CAPBridgeViewController.
+        window?.rootViewController = GolfMeBridgeViewController()
         window?.makeKeyAndVisible()
 
         SceneDelegateProxy.shared.scene(scene, willConnectTo: session, options: connectionOptions)

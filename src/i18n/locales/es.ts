@@ -398,6 +398,7 @@ export const es: Record<TranslationKey, string> = {
   "auth.loginSubtitle": "Continúa donde lo dejaste.",
   "auth.continueWithApple": "Continuar con Apple",
   "auth.continueWithGoogle": "Continuar con Google",
+  "auth.signInWithApple": "Iniciar sesión con Apple",
   "auth.continueWithEmail": "Continuar con Correo",
   "auth.tryDemoAccount": "Probar Cuenta Demo",
   "auth.demoAccountLabel": "{name} (Cuenta Demo)",
@@ -411,7 +412,7 @@ export const es: Record<TranslationKey, string> = {
   "auth.checkEmailBody": "Enviamos un enlace de acceso a {email}. Ábrelo en este dispositivo para continuar.",
   "auth.resendEmail": "Reenviar correo",
   "auth.useDifferentMethod": "Usar otro método",
-  "auth.sendMagicLink": "Enviar enlace de acceso",
+  "auth.sendMagicLink": "Enviarme un código",
   "auth.authError": "Hubo un problema al iniciar sesión. Inténtalo de nuevo.",
   "auth.signInWithPassword": "Iniciar sesión con contraseña",
   "auth.passwordPlaceholder": "Contraseña",
@@ -630,6 +631,7 @@ export const es: Record<TranslationKey, string> = {
   "settings.deleteAccountConfirmMessage": "Esto elimina permanentemente tu perfil, rondas organizadas, mensajes y reseñas. Cualquiera que siga en una ronda que organizas también perderá su lugar. Esto no se puede deshacer.",
   "settings.accountDeletedToast": "Tu cuenta ha sido eliminada.",
   "settings.accountDeleteFailedToast": "No se pudo eliminar tu cuenta. Inténtalo de nuevo.",
+  "settings.accountDeleteAppleCanceledToast": "Para eliminar tu cuenta, primero confirma con Apple.",
   "settings.logOutConfirmTitle": "¿Cerrar sesión?",
   "settings.logOutConfirmMessage": "Deberás iniciar sesión de nuevo para seguir usando GolfMe. Tu perfil y datos se conservan.",
 
@@ -1020,4 +1022,6 @@ export const es: Record<TranslationKey, string> = {
   "loading.gettingReady": "Preparando GolfMe...",
   "loading.profileLoadFailed": "No se pudo cargar tu perfil. Revisa tu conexión e inténtalo de nuevo.",
   "loading.retry": "Intentar de nuevo",
+  "loading.slow": "Está tardando más de lo habitual.",
+  "loading.unreachable": "No se puede conectar con GolfMe. Revisa tu conexión e inténtalo de nuevo.",
 };

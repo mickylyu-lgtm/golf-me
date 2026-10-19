@@ -65,6 +65,19 @@ Deno.serve(async (req: Request) => {
 
   if (userError || !user) return jsonResponse({ error: "Not authenticated." }, 401);
 
+  // Sign in with Apple token revocation (Apple guideline 5.1.1(v)). Older
+  // app versions send no body; that path is unchanged. Runs BEFORE the
+  // delete (it needs the user's Apple identity) but never blocks it: the
+  // person asked for their account to be gone.
+  const body = (await req.json().catch(() => null)) as { apple_authorization_code?: unknown } | null;
+  const appleCode = typeof body?.apple_authorization_code === "string" ? body.apple_authorization_code : null;
+  if (appleCode) {
+    const appleIdentity = user.identities?.find((identity) => identity.provider === "apple");
+    const appleSub = (appleIdentity?.identity_data?.sub as string | undefined) ?? appleIdentity?.id ?? null;
+    const outcome = await revokeAppleTokens(appleCode, appleSub);
+    if (outcome !== "revoked") console.error("delete-account: Apple token revocation not completed", { userId: user.id, outcome });
+  }
+
   const adminClient = createClient(supabaseUrl, serviceRoleKey);
   const { error: deleteError } = await adminClient.auth.admin.deleteUser(user.id);
 
@@ -90,6 +103,90 @@ Deno.serve(async (req: Request) => {
 
   return jsonResponse({ success: true });
 });
+
+// --- Sign in with Apple revocation -----------------------------------------
+// Secrets (Supabase Edge Function secrets, never VITE_ variables):
+//   APPLE_TEAM_ID           10-character Team ID
+//   APPLE_SIWA_KEY_ID       Key ID of the Sign in with Apple .p8 key
+//   APPLE_SIWA_PRIVATE_KEY  full .p8 contents, BEGIN/END lines included
+//   APPLE_SIWA_CLIENT_ID    optional, defaults to the bundle ID com.golfme.ios
+// Without them this returns "not_configured" and deletion proceeds as before.
+type AppleRevokeOutcome = "revoked" | "not_configured" | "exchange_failed" | "identity_mismatch" | "revoke_failed" | "error";
+
+function base64UrlEncode(bytes: Uint8Array): string {
+  let binary = "";
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function base64UrlDecodeToString(input: string): string {
+  const padded = input.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(input.length / 4) * 4, "=");
+  return atob(padded);
+}
+
+// ES256 client secret JWT, as Apple's REST API requires. WebCrypto's ECDSA
+// signature is already the raw r||s form JWS expects.
+async function appleClientSecret(teamId: string, keyId: string, clientId: string, p8: string): Promise<string> {
+  const pem = p8.replace(/-----(BEGIN|END) PRIVATE KEY-----/g, "").replace(/\s+/g, "");
+  const der = Uint8Array.from(atob(pem), (c) => c.charCodeAt(0));
+  const key = await crypto.subtle.importKey("pkcs8", der, { name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]);
+  const now = Math.floor(Date.now() / 1000);
+  const encoder = new TextEncoder();
+  const header = base64UrlEncode(encoder.encode(JSON.stringify({ alg: "ES256", kid: keyId })));
+  const payload = base64UrlEncode(
+    encoder.encode(JSON.stringify({ iss: teamId, iat: now, exp: now + 300, aud: "https://appleid.apple.com", sub: clientId })),
+  );
+  const signingInput = `${header}.${payload}`;
+  const signature = new Uint8Array(await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, key, encoder.encode(signingInput)));
+  return `${signingInput}.${base64UrlEncode(signature)}`;
+}
+
+async function revokeAppleTokens(authorizationCode: string, expectedSub: string | null): Promise<AppleRevokeOutcome> {
+  const teamId = Deno.env.get("APPLE_TEAM_ID");
+  const keyId = Deno.env.get("APPLE_SIWA_KEY_ID");
+  const privateKey = Deno.env.get("APPLE_SIWA_PRIVATE_KEY");
+  const clientId = Deno.env.get("APPLE_SIWA_CLIENT_ID") || "com.golfme.ios";
+  if (!teamId || !keyId || !privateKey) return "not_configured";
+  try {
+    const clientSecret = await appleClientSecret(teamId, keyId, clientId, privateKey);
+    const tokenRes = await fetch("https://appleid.apple.com/auth/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret, code: authorizationCode, grant_type: "authorization_code" }),
+    });
+    if (!tokenRes.ok) {
+      console.error("delete-account: Apple token exchange failed", { status: tokenRes.status, body: await tokenRes.text() });
+      return "exchange_failed";
+    }
+    const tokens = (await tokenRes.json()) as { refresh_token?: string; access_token?: string; id_token?: string };
+    // Only revoke for the Apple ID this account is linked to. The id_token
+    // comes straight from Apple over TLS, so its payload is read, not verified.
+    if (expectedSub && tokens.id_token) {
+      const claims = JSON.parse(base64UrlDecodeToString(tokens.id_token.split(".")[1] ?? "")) as { sub?: string };
+      if (claims.sub !== expectedSub) return "identity_mismatch";
+    }
+    const token = tokens.refresh_token ?? tokens.access_token;
+    if (!token) return "exchange_failed";
+    const revokeRes = await fetch("https://appleid.apple.com/auth/revoke", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        token,
+        token_type_hint: tokens.refresh_token ? "refresh_token" : "access_token",
+      }),
+    });
+    if (!revokeRes.ok) {
+      console.error("delete-account: Apple revoke failed", { status: revokeRes.status, body: await revokeRes.text() });
+      return "revoke_failed";
+    }
+    return "revoked";
+  } catch (err) {
+    console.error("delete-account: Apple revocation error", err instanceof Error ? err.message : String(err));
+    return "error";
+  }
+}
 
 // caddie-media: private Caddie uploads (migration 20260925090000). Listing a
 // bucket that doesn't exist yet just lands in `errors` for that bucket;

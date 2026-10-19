@@ -6,6 +6,7 @@ import { App as CapacitorApp } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
 import { supabase } from "../lib/supabase";
 import { unregisterPushNotifications } from "../lib/push";
+import { authorizeWithApple, randomNonce } from "../lib/socialSignIn";
 import { profileRowToGolferProfile } from "../lib/profile";
 import type { ProfileRow } from "../lib/profile";
 import type { GolferProfile } from "../types";
@@ -55,6 +56,9 @@ interface AuthContextValue {
   isAuthenticated: boolean;
 
   signInWithGoogle: () => Promise<void>;
+  // Native iOS only. Rejects with code "canceled" when the person closes
+  // Apple's sheet (isAppleSignInCanceled in lib/socialSignIn).
+  signInWithApple: () => Promise<void>;
   signInWithEmailOtp: (email: string) => Promise<void>;
   // Signs in on THIS device with the code from the same sign-in email, so a
   // link opened on another device (or eaten by a mail scanner) isn't the only
@@ -275,6 +279,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw error;
   }, []);
 
+  // Native Sign in with Apple (iOS only; the button only renders where
+  // isNativeSocialSignInEnabled() is true). Apple's sheet returns an identity
+  // token whose nonce claim is the SHA-256 of `nonce`; Supabase gets the raw
+  // value, hashes it and compares. Supabase links this to an existing account
+  // when the email matches a verified one (Supabase automatic identity
+  // linking); a Hide My Email relay address becomes a new account.
+  //
+  // Apple returns the name only on the very first authorization for this
+  // Apple ID + app, never again, so it's saved right away: to the auth user's
+  // metadata and, if the profile has no name yet, to profiles.name (which
+  // ProfileSetup pre-fills). Both best-effort: a failure there must not undo
+  // a successful sign-in, and onboarding still asks for the name.
+  const signInWithApple = useCallback(async () => {
+    const nonce = randomNonce();
+    const apple = await authorizeWithApple(nonce);
+    const { data, error } = await supabase.auth.signInWithIdToken({ provider: "apple", token: apple.identityToken, nonce });
+    if (error) throw error;
+    const givenName = apple.givenName?.trim() ?? "";
+    const familyName = apple.familyName?.trim() ?? "";
+    const fullName = [givenName, familyName].filter(Boolean).join(" ");
+    const userId = data.user?.id;
+    if (!fullName || !userId) return;
+    try {
+      await supabase.auth.updateUser({ data: { full_name: fullName, given_name: givenName || null, family_name: familyName || null } });
+      const { error: nameError } = await supabase.from("profiles").update({ name: fullName }).eq("id", userId).is("name", null);
+      if (nameError) throw nameError;
+      if (currentUserIdRef.current === userId) await fetchProfile(userId);
+    } catch (err) {
+      console.error("GolfMe: could not save the name from Sign in with Apple.", err);
+    }
+  }, [fetchProfile]);
+
   // Same native-vs-web redirect split as signInWithGoogle, and for the same
   // reason: on the native app, window.location.origin is still just
   // "https://golfme.app" (the WKWebView is displaying that live URL), so a
@@ -367,6 +403,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     pushEnabled: profileRow?.push_enabled ?? true,
     isAuthenticated: isDemo || Boolean(authUser),
     signInWithGoogle,
+    signInWithApple,
     signInWithEmailOtp,
     verifyEmailOtp,
     signInWithPassword,

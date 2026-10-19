@@ -25,7 +25,8 @@ import { Button } from "./components/ui/Button";
 import { Welcome } from "./pages/Welcome";
 import { Splash } from "./pages/Splash";
 import { EntryOverlay } from "./components/loading/EntryOverlay";
-import { isEntryTestEnabled } from "./components/loading/entryFlag";
+import { NativeSplashHide } from "./components/loading/NativeSplashHide";
+import { isEntryEnabled } from "./components/loading/entryFlag";
 import { Auth } from "./pages/Auth";
 import { ProfileSetup } from "./pages/ProfileSetup";
 import { Home } from "./pages/Home";
@@ -92,7 +93,7 @@ function AuthedLayout() {
   if (!session.isLoggedIn) {
     // With the entry test switch on, EntryOverlay covers the launch, so skip
     // the old fixed 2.75s /splash hold; otherwise today's launch is unchanged.
-    return <Navigate to={isStandalone() ? (isEntryTestEnabled() ? "/login" : "/splash") : "/welcome"} replace />;
+    return <Navigate to={isStandalone() ? (isEntryEnabled() ? "/login" : "/splash") : "/welcome"} replace />;
   }
   if (!session.hasOnboarded) {
     return <Navigate to="/profile-setup" replace />;
@@ -257,7 +258,7 @@ function AppGate({ children }: { children: ReactNode }) {
   usePendingReviewerInviteRedemption();
   usePushRegistration();
   useDisableKeyboardAccessoryBar();
-  if (isLoading || authLoading || retrying) return <GolfMeLoader fullScreen message={t("loading.gettingReady")} />;
+  if (isLoading || authLoading || retrying) return <GolfMeLoader fullScreen slowLoadRetry message={t("loading.gettingReady")} />;
   // Signed in but the very first profile load failed (nothing cached to fall
   // back on). Rendering the router here would read "no profile" as "not
   // onboarded" and route an existing golfer into /profile-setup — so offer
@@ -298,11 +299,12 @@ export default function App() {
         <DataProvider>
           <ToastProvider>
             <EntryOverlay />
+            <NativeSplashHide />
             <AppGate>
               <BrowserRouter>
               <ScrollToTop />
               <PushNotificationRouting />
-              <Suspense fallback={<GolfMeLoader fullScreen />}>
+              <Suspense fallback={<GolfMeLoader fullScreen slowLoadRetry />}>
               <Routes>
                 {/* Standalone, outside both GuestOnly and AuthedLayout — by the
                     time signUpNewGolfer() lands here the session is already
@@ -326,7 +328,7 @@ export default function App() {
                 <Route path="/support" element={<Support />} />
                 <Route element={<GuestOnly />}>
                   <Route path="/welcome" element={<Welcome />} />
-                  <Route path="/splash" element={isEntryTestEnabled() ? <Navigate to="/login" replace /> : <Splash />} />
+                  <Route path="/splash" element={isEntryEnabled() ? <Navigate to="/login" replace /> : <Splash />} />
                   <Route path="/onboarding" element={<Onboarding />} />
                   <Route path="/login" element={<Auth mode="login" />} />
                   <Route path="/signup" element={<Auth mode="signup" />} />

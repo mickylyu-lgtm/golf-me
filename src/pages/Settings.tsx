@@ -9,6 +9,7 @@ import { useToast } from "../context/ToastContext";
 import { useLocale, LOCALES } from "../i18n/LocaleContext";
 import { supabase } from "../lib/supabase";
 import { checkPushPermission, getPushDiagnostics, registerPushNotifications } from "../lib/push";
+import { getAppleCodeForAccountDeletion, isAppleSignInCanceled } from "../lib/socialSignIn";
 import type { TranslationKey } from "../i18n/locales/en";
 import { Avatar } from "../components/ui/Avatar";
 import { Button } from "../components/ui/Button";
@@ -86,7 +87,7 @@ function PushStatusLine({ userId, pushEnabled }: { userId: string; pushEnabled: 
 
 export function Settings() {
   const { currentUser, golfers, blockedIds, getGolfer, unblockUser, logOut, resetDemoData } = useData();
-  const { isDemo, pushEnabled: realPushEnabled, saveProfile } = useAuth();
+  const { isDemo, authUser, pushEnabled: realPushEnabled, saveProfile } = useAuth();
   const { showToast } = useToast();
   const { locale, t } = useLocale();
   const navigate = useNavigate();
@@ -128,7 +129,22 @@ export function Settings() {
   async function handleDeleteAccount() {
     setDeletingAccount(true);
     try {
-      const { data, error } = await supabase.functions.invoke("delete-account", { method: "POST" });
+      // Sign in with Apple accounts: a fresh Apple authorization code so
+      // delete-account can revoke GolfMe's Apple tokens (null for everyone
+      // else, and on builds without the Apple plugin).
+      let appleCode: string | null;
+      try {
+        appleCode = await getAppleCodeForAccountDeletion(authUser);
+      } catch (err) {
+        if (!isAppleSignInCanceled(err)) throw err;
+        setDeletingAccount(false);
+        showToast(t("settings.accountDeleteAppleCanceledToast"), "info");
+        return;
+      }
+      const { data, error } = await supabase.functions.invoke("delete-account", {
+        method: "POST",
+        ...(appleCode ? { body: { apple_authorization_code: appleCode } } : {}),
+      });
       if (error || (data as { error?: string } | null)?.error) {
         throw new Error((data as { error?: string } | null)?.error ?? error?.message ?? "Account deletion failed.");
       }

@@ -51,6 +51,21 @@ const config: CapacitorConfig = {
       resize: KeyboardResize.Body,
       resizeOnFullScreen: true,
     },
+    // Keeps the launch screen (LaunchScreen.storyboard + Splash.imageset,
+    // reused as-is) over the web view until golfme.app has painted, instead
+    // of iOS dismissing it the moment the native app is up and showing the
+    // web view's cream backgroundColor above until the site arrives. The web
+    // app lifts it itself (src/lib/nativeSplash.ts, via NativeSplashHide).
+    // launchAutoHide stays true on purpose: launchShowDuration is the cap
+    // if that hide call never comes (offline, DNS failure, a 5xx page, a JS
+    // crash, or a web deploy older than this change) -- with autoHide off the
+    // plugin has no timeout and the launch screen would stay up for good.
+    SplashScreen: {
+      launchAutoHide: true,
+      launchShowDuration: 8000,
+      backgroundColor: "#143822",
+      showSpinner: false,
+    },
   },
 };
 

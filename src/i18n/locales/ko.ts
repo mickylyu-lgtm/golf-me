@@ -398,6 +398,7 @@ export const ko: Record<TranslationKey, string> = {
   "auth.loginSubtitle": "이어서 시작해보세요.",
   "auth.continueWithApple": "Apple로 계속하기",
   "auth.continueWithGoogle": "Google로 계속하기",
+  "auth.signInWithApple": "Apple로 로그인",
   "auth.continueWithEmail": "이메일로 계속하기",
   "auth.tryDemoAccount": "데모 계정 사용해보기",
   "auth.demoAccountLabel": "{name} (데모 계정)",
@@ -411,7 +412,7 @@ export const ko: Record<TranslationKey, string> = {
   "auth.checkEmailBody": "{email}(으)로 로그인 링크를 보냈습니다. 이 기기에서 열어 계속 진행하세요.",
   "auth.resendEmail": "이메일 다시 보내기",
   "auth.useDifferentMethod": "다른 방법 사용",
-  "auth.sendMagicLink": "로그인 링크 보내기",
+  "auth.sendMagicLink": "이메일로 코드 받기",
   "auth.authError": "로그인 중 문제가 발생했습니다. 다시 시도해 주세요.",
   "auth.signInWithPassword": "비밀번호로 로그인",
   "auth.passwordPlaceholder": "비밀번호",
@@ -630,6 +631,7 @@ export const ko: Record<TranslationKey, string> = {
   "settings.deleteAccountConfirmMessage": "프로필, 주최 중인 라운드, 메시지, 리뷰가 영구적으로 삭제됩니다. 당신이 주최하는 라운드에 참가 중인 사람들도 자리를 잃게 됩니다. 되돌릴 수 없습니다.",
   "settings.accountDeletedToast": "계정이 삭제되었습니다.",
   "settings.accountDeleteFailedToast": "계정을 삭제할 수 없습니다. 다시 시도해주세요.",
+  "settings.accountDeleteAppleCanceledToast": "계정을 삭제하려면 먼저 Apple로 확인해주세요.",
   "settings.logOutConfirmTitle": "로그아웃하시겠습니까?",
   "settings.logOutConfirmMessage": "GolfMe를 계속 사용하려면 다시 로그인해야 합니다. 프로필과 데이터는 저장됩니다.",
 
@@ -1020,4 +1022,6 @@ export const ko: Record<TranslationKey, string> = {
   "loading.gettingReady": "GolfMe 준비 중...",
   "loading.profileLoadFailed": "프로필을 불러오지 못했습니다. 연결을 확인하고 다시 시도해 주세요.",
   "loading.retry": "다시 시도",
+  "loading.slow": "평소보다 오래 걸리고 있어요.",
+  "loading.unreachable": "GolfMe에 연결할 수 없어요. 연결 상태를 확인하고 다시 시도해 주세요.",
 };

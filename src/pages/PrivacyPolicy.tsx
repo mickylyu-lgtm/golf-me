@@ -13,8 +13,8 @@ import { ArrowLeft, Lock } from "lucide-react";
 // integrations (see APP_STORE_PRIVACY.md for the evidence and the App Store
 // privacy answers) — update this file, the date, and APP_STORE_PRIVACY.md if
 // the data collected or the third parties involved change.
-const LAST_UPDATED = "September 29, 2026";
-const CONTACT_EMAIL = "mickylyu@gmail.com";
+const LAST_UPDATED = "October 17, 2026";
+const CONTACT_EMAIL = "support@golfme.app";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -81,7 +81,8 @@ export function PrivacyPolicy() {
       <Section title="Information we collect">
         <Item label="Account">
           Your email address and sign-in details. If you sign in with Google, we receive your name, email and profile picture from Google —
-          nothing else.
+          nothing else. If you sign in with Apple, we receive the name and email you choose to share; if you choose Hide My Email, we only
+          see Apple's private relay address.
         </Item>
         <Item label="Profile">
           Your name, username, profile photo, age range, gender, short bio, handicap and skill level, language, home playing area, favorite
@@ -166,6 +167,10 @@ export function PrivacyPolicy() {
           </li>
           <li>
             <span className="font-semibold text-slate-800">Google (sign-in)</span> — only if you choose "Continue with Google".
+          </li>
+          <li>
+            <span className="font-semibold text-slate-800">Apple (sign-in)</span> — only if you choose "Sign in with Apple". When you
+            delete your GolfMe account, we also revoke GolfMe's access to your Apple ID.
           </li>
           <li>
             <span className="font-semibold text-slate-800">Google Gemini API</span> — used only if you use Caddie: your swing video is

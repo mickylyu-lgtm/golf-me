@@ -412,6 +412,7 @@ export const en = {
   "auth.loginSubtitle": "Pick up right where you left off.",
   "auth.continueWithApple": "Continue with Apple",
   "auth.continueWithGoogle": "Continue with Google",
+  "auth.signInWithApple": "Sign in with Apple",
   "auth.continueWithEmail": "Continue with Email",
   "auth.tryDemoAccount": "Try Demo Account",
   "auth.demoAccountLabel": "{name} (Demo Account)",
@@ -425,7 +426,7 @@ export const en = {
   "auth.checkEmailBody": "We sent a sign-in link to {email}. Open it on this device to continue.",
   "auth.resendEmail": "Resend email",
   "auth.useDifferentMethod": "Use a different method",
-  "auth.sendMagicLink": "Send sign-in link",
+  "auth.sendMagicLink": "Email me a code",
   "auth.authError": "Something went wrong signing you in. Please try again.",
   "auth.signInWithPassword": "Sign in with a password",
   "auth.passwordPlaceholder": "Password",
@@ -933,6 +934,8 @@ export const en = {
   "loading.gettingReady": "Getting GolfMe ready...",
   "loading.profileLoadFailed": "Couldn't load your profile. Check your connection and try again.",
   "loading.retry": "Try again",
+  "loading.slow": "Taking longer than usual.",
+  "loading.unreachable": "Can't reach GolfMe. Check your connection and try again.",
 
   // Golf Call detail
   "golfCallDetail.notFound": "Golf Call not found.",
@@ -1031,6 +1034,7 @@ export const en = {
   "settings.deleteAccountConfirmMessage": "This permanently deletes your profile, hosted rounds, messages, and reviews. Anyone still in a round you're hosting loses their spot too. This cannot be undone.",
   "settings.accountDeletedToast": "Your account has been deleted.",
   "settings.accountDeleteFailedToast": "Couldn't delete your account. Please try again.",
+  "settings.accountDeleteAppleCanceledToast": "To delete your account, confirm with Apple first.",
   "settings.logOutConfirmTitle": "Log out?",
   "settings.logOutConfirmMessage": "You'll need to log back in to keep using GolfMe. Your profile and data stay saved.",
 
