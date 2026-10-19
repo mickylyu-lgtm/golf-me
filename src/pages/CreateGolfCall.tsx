@@ -401,6 +401,7 @@ export function CreateGolfCall() {
             recentCourses={recentCourses}
             preferredCourses={currentUser.preferredCourses}
             location={userLocation}
+            dockAboveKeyboard
           />
           {course.trim() && (
             <div className="rounded-xl bg-slate-50/60 px-3.5 py-3">

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Check, Plus } from "lucide-react";
 import { useNearbyCourses, useCourseTextSearch } from "../../lib/useCourseSearch";
 import { useKeyboardHeight } from "../../lib/useKeyboardHeight";
@@ -26,16 +26,22 @@ interface CourseAutocompleteProps {
   recentCourses?: string[];
   preferredCourses?: string[];
   location?: PlayingArea;
+  /** iOS app only: while the search field has focus and the keyboard is up,
+   * dock it and its suggestions to the top of the screen (see below). Only
+   * for a field on a normal page -- not inside a modal. */
+  dockAboveKeyboard?: boolean;
 }
 
 const NEARBY_RADIUS_MILES = 30;
+// Gap between the docked panel and the header above / keyboard below.
+const DOCK_GAP_PX = 12;
 
 // Single-select course field used by Create Golf Call / Fill My Foursome —
 // Recent / Preferred / Near Your Location chips first (reduces typing),
 // then free search across every known course via the shared
 // CourseSearchService. Picking any known course also reports its area/
 // distance so the caller can auto-fill those fields.
-export function CourseAutocomplete({ value, onChange, onPickKnownCourse, recentCourses = [], preferredCourses = [], location }: CourseAutocompleteProps) {
+export function CourseAutocomplete({ value, onChange, onPickKnownCourse, recentCourses = [], preferredCourses = [], location, dockAboveKeyboard = false }: CourseAutocompleteProps) {
   const { t } = useLocale();
   const [focused, setFocused] = useState(false);
 
@@ -67,43 +73,66 @@ export function CourseAutocomplete({ value, onChange, onPickKnownCourse, recentC
   const filtered = searchState.results;
   const showDropdown = focused && Boolean(value.trim()) && (searchState.loading || Boolean(searchState.error) || filtered.length > 0);
 
-  // The suggestions open below the field, which in the iOS app sits behind
-  // the keyboard. Under resize:"body" the window's height never changes for
-  // the keyboard (see useKeyboardHeight), so scrollIntoView thinks they're
-  // already visible; instead the window is scrolled by hand so they end just
-  // above the keyboard, without pushing the field itself under the header.
-  // keyboardSpacer gives the page room to scroll that far; it sits under the
-  // dropdown, so it's never seen. On short screens (iPhone SE) six results
-  // don't fit between the header and the keyboard, so the list is capped to
-  // that space and scrolls inside itself: every option stays reachable.
-  const inputRef = useRef<HTMLInputElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  // iOS app (capacitor.config.ts Keyboard resize:"body"): that mode only
+  // shrinks document.body's inline height -- the WebView, window.innerHeight
+  // and position:fixed stay full-screen, so suggestions opening below the
+  // field land behind the keyboard, and scrolling the window to reveal them
+  // never moved the page on device. Instead, while this field has focus and
+  // the keyboard is up, the field and its suggestions are docked (same
+  // technique as PostDetail's composer): the SAME elements (never
+  // remounted, so the input keeps focus and the keyboard stays up) switch
+  // to a fixed panel just under the app header, inside a frame that ends a
+  // gap above the keyboard -- the field sits near the top with room below
+  // it, and the suggestions stay above the keyboard (the list scrolls
+  // inside itself on short screens). An in-flow slot of the field's height
+  // holds its place and the page behind is scroll-locked. keyboardHeight
+  // comes from the plugin's own events and is always 0 on web, where
+  // nothing here changes.
   const keyboardHeight = useKeyboardHeight();
-  const keyboardSpacer = showDropdown && keyboardHeight > 0 ? keyboardHeight : 0;
-  const [dropdownMaxHeight, setDropdownMaxHeight] = useState<number | undefined>(undefined);
-  useEffect(() => {
-    if (!showDropdown) return;
-    const frame = requestAnimationFrame(() => {
-      const dropdown = dropdownRef.current?.getBoundingClientRect();
-      const input = inputRef.current?.getBoundingClientRect();
-      if (!dropdown || !input) return;
-      const visibleBottom = keyboardHeight > 0 ? window.innerHeight - keyboardHeight : (window.visualViewport?.height ?? window.innerHeight);
-      // 112px: clears the app header; 6px: the dropdown's top margin.
-      const room = Math.max(visibleBottom - 12 - (112 + input.height + 6), 120);
-      const maxHeight = keyboardHeight > 0 ? room : undefined;
-      setDropdownMaxHeight(maxHeight);
-      const bottom = maxHeight ? Math.min(dropdown.bottom, input.bottom + 6 + maxHeight) : dropdown.bottom;
-      const overflow = bottom + 12 - visibleBottom;
-      const delta = Math.min(overflow, input.top - 112);
-      if (delta > 0) window.scrollBy({ top: delta, behavior: "smooth" });
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [showDropdown, filtered.length, searchState.loading, keyboardHeight]);
+  const docked = dockAboveKeyboard && focused && keyboardHeight > 0;
+  const inputRef = useRef<HTMLInputElement>(null);
+  const slotRef = useRef<HTMLDivElement>(null);
+  // Measured on focus, while the field is still in flow and before the
+  // keyboard starts opening: the slot's height, and the header's bottom
+  // edge for the panel's top (the header is sticky, so it doesn't move).
+  const [dockLayout, setDockLayout] = useState({ slotHeight: 0, top: 0 });
+  // Page scroll position from just before the keyboard opened. iOS may pan
+  // the page to reveal the field before it docks; if it did, the page is
+  // put back once docked, and again when the keyboard closes.
+  const scrollYBeforeKeyboardRef = useRef<number | null>(null);
+
+  function handleFocus() {
+    setFocused(true);
+    if (!dockAboveKeyboard || docked) return;
+    scrollYBeforeKeyboardRef.current = window.scrollY;
+    const headerBottom = document.querySelector("header")?.getBoundingClientRect().bottom ?? 0;
+    setDockLayout({ slotHeight: slotRef.current?.offsetHeight ?? 0, top: Math.max(headerBottom, 0) + DOCK_GAP_PX });
+  }
+
+  // Layout effect, not a passive one: the scroll lock and the restore to the
+  // saved position must land before the docked layout paints, or an
+  // iOS-panned page could flash for a frame before snapping back.
+  useLayoutEffect(() => {
+    if (!docked) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const saved = scrollYBeforeKeyboardRef.current;
+    if (saved !== null && Math.abs(window.scrollY - saved) > 1) window.scrollTo(0, saved);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      const restoreTo = scrollYBeforeKeyboardRef.current;
+      scrollYBeforeKeyboardRef.current = null;
+      if (restoreTo !== null) requestAnimationFrame(() => window.scrollTo(0, restoreTo));
+    };
+  }, [docked]);
 
   function pick(result: CoursePick) {
     onChange(result.name);
     onPickKnownCourse?.(result);
     setFocused(false);
+    // A pick from the docked panel is the end of the search: close the
+    // keyboard so the page comes back with the course filled in.
+    if (docked) inputRef.current?.blur();
   }
 
   return (
@@ -135,44 +164,57 @@ export function CourseAutocomplete({ value, onChange, onPickKnownCourse, recentC
           <p className="text-xs text-slate-500">{t("courseAutocomplete.noNearbyCourses")}</p>
         )
       )}
-      <div className="relative">
-        {quickPicks.length > 0 && <label className={labelClass}>{t("courseAutocomplete.searchAllCourses")}</label>}
-        <input
-          ref={inputRef}
-          className={inputClass}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onFocus={() => setFocused(true)}
-          onBlur={() => window.setTimeout(() => setFocused(false), 150)}
-          placeholder={t("courseAutocomplete.placeholder")}
-        />
-        {showDropdown && (
-          <div
-            ref={dropdownRef}
-            style={dropdownMaxHeight ? { maxHeight: dropdownMaxHeight } : undefined}
-            className="absolute z-10 mt-1.5 w-full overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white shadow-sm">
-            {searchState.loading || searchState.error ? (
-              <div className="p-2.5">
-                <CourseSearchStatus loading={searchState.loading} error={searchState.error} onRetry={searchState.retry} />
+      {/* Slot -> frame -> panel: the same three elements docked or not (see
+          `docked` above), so the input is never remounted. Undocked they're
+          plain wrappers and the suggestions drop down over the page as
+          before; docked, the frame spans header-to-keyboard (taps outside
+          the panel pass through to the page and close the keyboard) and
+          the panel inside it is only as tall as its content. */}
+      <div ref={slotRef} style={docked ? { height: dockLayout.slotHeight } : undefined}>
+        <div
+          className={docked ? "pointer-events-none fixed inset-x-0 z-[35] mx-auto flex max-w-3xl flex-col px-4" : "relative"}
+          style={docked ? { top: dockLayout.top, bottom: keyboardHeight + DOCK_GAP_PX } : undefined}
+        >
+          <div className={docked ? "pointer-events-auto flex min-h-0 flex-col rounded-2xl border border-slate-200 bg-white p-3 shadow-lg" : undefined}>
+            {quickPicks.length > 0 && <label className={labelClass}>{t("courseAutocomplete.searchAllCourses")}</label>}
+            <input
+              ref={inputRef}
+              className={inputClass}
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              onFocus={handleFocus}
+              onBlur={() => window.setTimeout(() => setFocused(false), 150)}
+              placeholder={t("courseAutocomplete.placeholder")}
+            />
+            {showDropdown && (
+              <div
+                className={`mt-1.5 rounded-xl border border-slate-200 bg-white ${
+                  docked ? "min-h-0 overflow-y-auto overscroll-contain" : "absolute z-10 w-full overflow-hidden shadow-sm"
+                }`}
+              >
+                {searchState.loading || searchState.error ? (
+                  <div className="p-2.5">
+                    <CourseSearchStatus loading={searchState.loading} error={searchState.error} onRetry={searchState.retry} />
+                  </div>
+                ) : (
+                  filtered.map((c) => (
+                    <button
+                      key={c.name}
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => pick(c)}
+                      className="flex w-full items-center gap-2 border-b border-slate-50 px-3 py-2.5 text-left text-sm text-slate-700 transition-colors duration-150 last:border-b-0 hover:bg-fairway-50"
+                    >
+                      <Plus size={13} className="text-fairway-600 shrink-0" />
+                      <span className="flex-1">{c.name}</span>
+                      {c.area && <span className="shrink-0 text-xs text-slate-400">{c.area}</span>}
+                    </button>
+                  ))
+                )}
               </div>
-            ) : (
-              filtered.map((c) => (
-                <button
-                  key={c.name}
-                  type="button"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => pick(c)}
-                  className="flex w-full items-center gap-2 border-b border-slate-50 px-3 py-2.5 text-left text-sm text-slate-700 transition-colors duration-150 last:border-b-0 hover:bg-fairway-50"
-                >
-                  <Plus size={13} className="text-fairway-600 shrink-0" />
-                  <span className="flex-1">{c.name}</span>
-                  {c.area && <span className="shrink-0 text-xs text-slate-400">{c.area}</span>}
-                </button>
-              ))
             )}
           </div>
-        )}
-        {keyboardSpacer > 0 && <div aria-hidden style={{ height: keyboardSpacer }} />}
+        </div>
       </div>
     </div>
   );
