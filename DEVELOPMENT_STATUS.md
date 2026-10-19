@@ -577,7 +577,7 @@ Not done by any session — needs dashboard/browser/third-party-account access t
 
 ## Exact next recommended action
 
-**2026-10-18 (later)**: Founding Golfer cohort is LIVE in the database (both migrations applied, #1–#7 backfilled, cohort open; new NYC onboardings get #8+ automatically). Next: merge `entry-animation` into `main` and deploy (with Micky's OK) so the badge and spots-remaining counter show; check them on golfme.app and in the iOS app; then release 1.1 and run the App Store build checks below.
+**2026-10-18 (later)**: Founding Golfer cohort is LIVE in the database (both migrations applied, #1–#7 backfilled, cohort open; new NYC onboardings get #8+ automatically). Next: merge `entry-animation` into `main` and deploy (with Micky's OK) so the badge and spots-remaining counter show; check them on golfme.app and in the iOS app. **1.1 is live on the App Store (2026-10-18, Micky)**; run the App Store build checks below (no release step left).
 
 **2026-10-18**: App Store **1.1 approved** (Micky; submitted 2026-10-17 with the launch screen, entry animation, Sign in with Apple + Google). Next: release it if it's on manual release, then on the App Store build check the launch screen/entry animation, Apple + Google sign-in, the email code, and Sign in with Apple on a throwaway Apple ID followed by account deletion — then confirm in the `delete-account` logs that no "Apple token revocation not completed" error was logged for that deletion. Keep risky web pushes to a minimum around review windows: the app loads golfme.app live.
 

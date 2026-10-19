@@ -1,14 +1,14 @@
 # GOLFME LAUNCH STATUS
 
 **Target:** App Store launch → real NYC usage. golfme.app is live with open signup.
-**Launched:** **1.0 live on the App Store** ("Ready for Distribution", build 2, seen 2026-10-17). **1.1 approved by App Review 2026-10-18** (native launch screen + entry animation, Sign in with Apple + Google, email code sign-in); release + on-device check of the App Store build pending.
+**Launched:** **1.0 live on the App Store** ("Ready for Distribution", build 2, seen 2026-10-17). **1.1 approved and live on the App Store 2026-10-18** (native launch screen + entry animation, Sign in with Apple + Google, email code sign-in); on-device check of the App Store build pending.
 **Last updated:** 2026-10-18. Phase is now **post-launch**: ship 1.1 cleanly, then seed the marketplace (real rounds, Founding Golfer, outreach).
 
 Statuses: `[ ]` NOT STARTED · `[~]` IN PROGRESS · `[?]` NEEDS VERIFICATION · `[!]` BLOCKED · `[x]` COMPLETE (only with evidence it works).
 Classify every request: **A** blocks the launch going well (now: 1.1 release + marketplace) · **B** improves launch quality · **C** nonessential, later.
 
 ### CURRENT BLOCKERS
-1. **1.1 not yet released / not checked on the App Store build.** Release it (if manual release), then on the App Store build check: launch screen + entry animation (no cream flash), Sign in with Apple, Google, 6-digit email code (existing account, brand-new email, iOS autofill), and Sign in with Apple on a throwaway Apple ID → delete the account → confirm the `delete-account` logs show no "Apple token revocation not completed" (revocation never exercised for real). (A)
+1. **1.1 live (2026-10-18) but not yet checked on the App Store build.** On the App Store build check: launch screen + entry animation (no cream flash), Sign in with Apple, Google, 6-digit email code (existing account, brand-new email, iOS autofill), and Sign in with Apple on a throwaway Apple ID → delete the account → confirm the `delete-account` logs show no "Apple token revocation not completed" (revocation never exercised for real). (A)
 2. **No real upcoming rounds.** Production has 0 upcoming rounds; a new App Store user finds nothing to join. Host 3–5 real NYC rounds. (A — marketplace)
 3. **Founding Golfer UI not deployed.** Database live 2026-10-18 (cohort open, #1–#7 awarded); the badge + counter code is on `entry-animation`, needs merge into `main` + deploy (section 11). Code lives on branch `entry-animation`, not on `main`. (A for launch marketing)
 4. **No user acquisition yet.** 26 accounts, ~1 new per week; creator/community outreach not started (sections 11–12). (A)
@@ -23,7 +23,7 @@ On the 1.1 App Store build: blocker 1 items. Still-open device checks from earli
 1.0 on the App Store · email and Google signup/login with onboarding · golfme.app open signup · DM + round-join + Caddie push on real iPhones, tap → correct screen, token moves on account switch · two-account QA (host/join/leave/cancel, report, block/unblock, deletion) · `send-push` outcome logging + Settings Push status · Privacy, Terms and Support pages · Terms acceptance · objectionable-content filter · report handling · profile locations rounded to ~1 km · crash screen · Caddie pipeline with DB-enforced daily limit · private Caddie storage for new uploads · no secrets in tracked files or git history · `delete-account` v33 with Apple token revocation (secrets set).
 
 ### NEXT 3 ACTIONS
-1. **Micky: release 1.1 and run the blocker 1 checks** on the App Store build; Claude then checks the `delete-account` logs. (A)
+1. **Micky: run the blocker 1 checks** on the live 1.1 App Store build; Claude then checks the `delete-account` logs. (A)
 2. **Founding Golfer:** database live 2026-10-18; merge `entry-animation` into `main` + deploy (Micky's OK), then check the badge and spots counter live. (A)
 3. **Seed the marketplace:** Micky hosts 3–5 real NYC rounds, then founder outreach to existing accounts + waitlist (`LAUNCH_MARKETING.md`). (A)
 
@@ -114,7 +114,7 @@ On the 1.1 App Store build: blocker 1 items. Still-open device checks from earli
 | [x] | Branded sign-in email | Supabase Auth sends it (not app code) via the Resend SMTP; the templates live only in the Supabase Dashboard. Tracked copy: `supabase/templates/sign-in-email.html` (paste steps in the README there). Corporate transactional layout (per Micky): subject "Sign in to GolfMe", gold + forest accent line, logo + wordmark top-left, left-aligned copy, 48 px forest button, fallback link, separate footer (Support · Privacy · Terms, automated-email note, © 2026). Link only via `{{ .ConfirmationURL }}`. Headless previews at 375 and 700 px (light, dark, images blocked): no horizontal scroll. **Live 2026-09-30:** Micky saved it into **Magic link** and **Confirm signup** (config reloads 08:39:01 and 08:39:12 UTC). Sign-in from the emailed link verified with the first design (request 08:34:02 → `/verify` 303 → login 08:34:16, same flow and variable); first email with the new design requested 08:39:32. Micky confirmed the new design on his iPhone (2026-09-30). The GPT reviewer hit its daily limit; Micky approved the diff (task T-20260930-15914). **Refinement (per Micky, 2026-09-30):** button kept dark forest in dark mode (it had switched to a lighter green), a compact "Trouble signing in?" fallback with a smaller link, tighter spacing and a more compact footer. Saved into both templates (reloads 08:50:03 and 08:50:19 UTC); Micky confirmed the email requested at 08:51:14 looks right. (B) |
 | [~] | Permission strings | Location, photos, camera and microphone descriptions present in `Info.plist`. `ITSAppUsesNonExemptEncryption = false` added (standard HTTPS only; skips the export-compliance question on each upload); takes effect with the next Xcode archive (committed with task T-20260930-19042). (B) |
 | [~] | iPhone-only app | App Store Connect asked for iPad screenshots because the app target declared TARGETED_DEVICE_FAMILY = "1,2" (iPhone + iPad). Changed to 1 (iPhone only) in Debug and Release, nothing else (task T-20261003-92442). Takes effect with the next uploaded build; then the iPad screenshot requirement goes away. |
-| [x] | Final release-candidate build | 1.0 = build 2 (live 2026-10-17). 1.1 approved 2026-10-18; release pending. |
+| [x] | Final release-candidate build | 1.0 = build 2 (live 2026-10-17). 1.1 approved and live 2026-10-18. |
 
 ## 5. LEGAL / TRUST
 | Status | Item | Evidence / notes |
@@ -198,7 +198,8 @@ Record results here with date, device and build number.
 ## 10. RELEASE CANDIDATE
 - [x] 1.0 (build 2) approved and live 2026-10-17.
 - [x] 1.1 (launch screen, entry animation, Sign in with Apple + Google, email code) submitted 2026-10-17, approved 2026-10-18.
-- [ ] Release 1.1 and run blocker 1 checks on the App Store build.
+- [x] 1.1 live on the App Store 2026-10-18.
+- [ ] Run blocker 1 checks on the 1.1 App Store build.
 - Every later native change ships as a new App Store version: `git pull` + `npx cap sync ios` on the Mac, bump Version/Build in Xcode, archive, upload, submit.
 
 ## 11. MARKETPLACE SEEDING (NYC) — no fake users or activity in production
