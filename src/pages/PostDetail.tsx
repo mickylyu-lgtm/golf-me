@@ -192,7 +192,10 @@ export function PostDetail() {
         )}
       </div>
 
-      {composerDocked && <div aria-hidden="true" style={{ height: composerHeight }} />}
+      {/* Holds the composer's place, plus the keyboard's height: near the
+          bottom of the page there's otherwise no room to scroll the latest
+          content up above the docked bar (it's hidden under the keyboard). */}
+      {composerDocked && <div aria-hidden="true" style={{ height: composerHeight + keyboardHeight }} />}
       <div
         className={
           composerDocked
