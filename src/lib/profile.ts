@@ -53,6 +53,13 @@ export interface ProfileRow {
   has_onboarded: boolean;
   onboarding_tutorial_completed: boolean;
   member_since: string;
+  // Founding Golfer (20261006120000). Server-awarded only; the client can
+  // never write these (guard_profile_founding_columns). Optional so rows
+  // fetched before that migration is applied still type-check.
+  founding_golfer?: boolean;
+  founding_member_number?: number | null;
+  founding_cohort?: string | null;
+  founding_awarded_at?: string | null;
 }
 
 // Used only for the brief window (if ever reached) where a real session
@@ -198,6 +205,8 @@ export function profileRowToGolferProfile(row: ProfileRow): GolferProfile {
       goodPacePct: row.good_pace_pct ?? 0,
     },
     memberSince: row.member_since,
+    foundingMemberNumber: row.founding_golfer && row.founding_member_number != null ? row.founding_member_number : undefined,
+    foundingAwardedAt: row.founding_golfer ? (row.founding_awarded_at ?? undefined) : undefined,
     circleSize: row.circle_size ?? 0,
     preferredCourses: row.preferred_courses ?? [],
     travelRadiusMiles: row.travel_radius_miles ?? 25,

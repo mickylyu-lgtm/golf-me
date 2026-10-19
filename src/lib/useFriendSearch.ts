@@ -18,6 +18,7 @@ export interface FriendSearchResult {
   areaLabel: string;
   completedRounds: number;
   wouldPlayAgainPct: number;
+  foundingMemberNumber?: number;
 }
 
 interface SearchRow {
@@ -31,6 +32,7 @@ interface SearchRow {
   area_label: string;
   completed_rounds: number;
   would_play_again_pct: number;
+  founding_member_number?: number | null;
 }
 
 const DEBOUNCE_MS = 300;
@@ -74,6 +76,7 @@ export function useFriendSearch(query: string) {
             areaLabel: r.area_label,
             completedRounds: r.completed_rounds,
             wouldPlayAgainPct: r.would_play_again_pct,
+            foundingMemberNumber: r.founding_member_number ?? undefined,
           })),
         );
       }

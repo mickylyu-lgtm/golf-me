@@ -33,7 +33,8 @@ import { ReportModal } from "../components/trust/ReportModal";
 import { CompareModal } from "../components/golfer/CompareModal";
 import { MatchReasons } from "../components/golfer/MatchReasons";
 import { ReputationRow } from "../components/golfer/ReputationRow";
-import { FounderBadge, TrustBadgeRow } from "../components/golfer/TrustBadges";
+import { TrustBadgeRow } from "../components/golfer/TrustBadges";
+import { FoundingGolferBadge } from "../components/golfer/FoundingGolfer";
 import { ReputationBadge } from "../components/golfer/ReputationBadge";
 import { computeCompatibility, golferDistanceMiles } from "../lib/compatibility";
 import { matchTier, golferMatchReasons } from "../lib/matchReasons";
@@ -189,9 +190,9 @@ export function GolferProfilePage() {
             {golfer.name}
             {golfer.verification.verifiedGolfer && <ShieldCheck size={16} className="text-fairway-600" />}
           </h1>
-          {isFounder(golfer.id) && (
-            <div className="mt-1 flex justify-center">
-              <FounderBadge />
+          {(isFounder(golfer.id) || golfer.foundingMemberNumber != null) && (
+            <div className="mb-1 mt-1.5 flex justify-center">
+              <FoundingGolferBadge golfer={golfer} />
             </div>
           )}
           <p className="text-sm text-slate-500">

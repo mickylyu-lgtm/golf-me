@@ -13,6 +13,7 @@ import {
   Sparkles,
   ThumbsUp,
   Trash2,
+  Users,
   Video,
   Volume2,
   VolumeX,
@@ -246,15 +247,13 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
             <p className="flex items-center gap-1 text-sm font-semibold text-slate-800">
               <span className="truncate">{author.name}</span>
               {author.verification.verifiedGolfer && <ShieldCheck size={13} className="shrink-0 text-fairway-500" />}
-            </p>
-            <p className="flex items-center gap-1 text-xs text-slate-400">
-              {formatRelativeTime(post.createdAt, locale, t)}
               {isInCircle(author.id) && (
-                <span className="flex items-center gap-0.5 text-fairway-600">
-                  · <span aria-hidden>⛳</span> In Your Golf Circle
+                <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-fairway-50 px-1.5 py-0.5 text-[10px] font-semibold text-fairway-700 ring-1 ring-fairway-200">
+                  <Users size={10} aria-hidden /> {t("profile.golfCircle")}
                 </span>
               )}
             </p>
+            <p className="text-xs text-slate-400">{formatRelativeTime(post.createdAt, locale, t)}</p>
           </div>
         </button>
 

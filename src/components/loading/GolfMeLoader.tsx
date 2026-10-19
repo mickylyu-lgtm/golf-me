@@ -1,19 +1,5 @@
-import { useEffect, useState } from "react";
+import { usePrefersReducedMotion, useRegisterFullScreenLoader } from "./loaderState";
 import { GolfMeIcon } from "../brand/GolfMeIcon";
-
-function usePrefersReducedMotion(): boolean {
-  const [reduced, setReduced] = useState(
-    () => typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true,
-  );
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.matchMedia) return;
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const handler = () => setReduced(mq.matches);
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
-  }, []);
-  return reduced;
-}
 
 // One golf cart drawing, reused at every size via an outer <g transform="scale()">
 // rather than redrawn per context — native box is 44 wide x 30 tall.
@@ -154,6 +140,7 @@ const INLINE_SIZE_PX: Record<NonNullable<GolfMeLoaderProps["size"]>, number> = {
 // artificially pad out a fast operation.
 export function GolfMeLoader({ message, fullScreen = false, size = "md", className = "" }: GolfMeLoaderProps) {
   const reducedMotion = usePrefersReducedMotion();
+  useRegisterFullScreenLoader(fullScreen);
 
   if (fullScreen) {
     return (

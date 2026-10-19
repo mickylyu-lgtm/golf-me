@@ -3,6 +3,7 @@ import { ArrowLeft, Users } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useLocale } from "../i18n/LocaleContext";
 import { Avatar } from "../components/ui/Avatar";
+import { FoundingMark } from "../components/golfer/FoundingGolfer";
 import { EmptyState } from "../components/ui/EmptyState";
 
 export function GolfCircleDetail() {
@@ -36,7 +37,9 @@ export function GolfCircleDetail() {
             >
               <Avatar golfer={g} size="sm" />
               <div className="flex-1">
-                <p className="text-sm font-semibold text-slate-800">{g.name}</p>
+                <p className="text-sm font-semibold text-slate-800">
+                  {g.name}{" "}<FoundingMark golfer={g} />
+                </p>
                 <p className="text-xs text-slate-500">{g.handicap !== null ? `${g.handicap} handicap` : "No handicap yet"}</p>
               </div>
             </button>

@@ -16,6 +16,7 @@ interface SuggestionRow {
   area_label: string;
   completed_rounds: number;
   would_play_again_pct: number;
+  founding_member_number?: number | null;
 }
 
 const SUGGESTION_LIMIT = 6;
@@ -50,6 +51,7 @@ export function useSuggestedGolfers() {
             areaLabel: r.area_label,
             completedRounds: r.completed_rounds,
             wouldPlayAgainPct: r.would_play_again_pct,
+            foundingMemberNumber: r.founding_member_number ?? undefined,
           })),
         );
       }

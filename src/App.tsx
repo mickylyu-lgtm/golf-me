@@ -24,6 +24,8 @@ import { GolfMeLoader } from "./components/loading/GolfMeLoader";
 import { Button } from "./components/ui/Button";
 import { Welcome } from "./pages/Welcome";
 import { Splash } from "./pages/Splash";
+import { EntryOverlay } from "./components/loading/EntryOverlay";
+import { isEntryTestEnabled } from "./components/loading/entryFlag";
 import { Auth } from "./pages/Auth";
 import { ProfileSetup } from "./pages/ProfileSetup";
 import { Home } from "./pages/Home";
@@ -88,7 +90,9 @@ function AuthedLayout() {
   const { session } = useData();
   const location = useLocation();
   if (!session.isLoggedIn) {
-    return <Navigate to={isStandalone() ? "/splash" : "/welcome"} replace />;
+    // With the entry test switch on, EntryOverlay covers the launch, so skip
+    // the old fixed 2.75s /splash hold; otherwise today's launch is unchanged.
+    return <Navigate to={isStandalone() ? (isEntryTestEnabled() ? "/login" : "/splash") : "/welcome"} replace />;
   }
   if (!session.hasOnboarded) {
     return <Navigate to="/profile-setup" replace />;
@@ -293,6 +297,7 @@ export default function App() {
         <RealCaddieProvider>
         <DataProvider>
           <ToastProvider>
+            <EntryOverlay />
             <AppGate>
               <BrowserRouter>
               <ScrollToTop />
@@ -321,7 +326,7 @@ export default function App() {
                 <Route path="/support" element={<Support />} />
                 <Route element={<GuestOnly />}>
                   <Route path="/welcome" element={<Welcome />} />
-                  <Route path="/splash" element={<Splash />} />
+                  <Route path="/splash" element={isEntryTestEnabled() ? <Navigate to="/login" replace /> : <Splash />} />
                   <Route path="/onboarding" element={<Onboarding />} />
                   <Route path="/login" element={<Auth mode="login" />} />
                   <Route path="/signup" element={<Auth mode="signup" />} />

@@ -160,6 +160,10 @@ export interface GolferProfile {
   verification: VerificationState;
   reputation: ReputationStats;
   memberSince: string; // ISO date
+  // Founding Golfer #1-250 (real accounts only, server-awarded, permanent).
+  // Undefined for everyone else, including every demo golfer.
+  foundingMemberNumber?: number;
+  foundingAwardedAt?: string; // ISO date the founding number was awarded
   isCurrentUser?: boolean;
   // Mock "golfers this person has played with and would play with again"
   // count, shown on their profile. Only the current user's own Golf Circle

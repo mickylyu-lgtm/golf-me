@@ -23,6 +23,7 @@ import { GolfMeLoader } from "../components/loading/GolfMeLoader";
 import { useToast } from "../context/ToastContext";
 import { useLocale } from "../i18n/LocaleContext";
 import { Avatar } from "../components/ui/Avatar";
+import { FoundingMark } from "../components/golfer/FoundingGolfer";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog";
@@ -285,7 +286,7 @@ export function GolfCallDetail() {
                 <Avatar golfer={g} size="sm" />
                 <div className="flex-1">
                   <p className="text-sm font-semibold text-slate-800">
-                    {g.name} {g.id === currentUser.id && <span className="font-normal text-slate-400">{t("golfCallDetail.you")}</span>}
+                    {g.name}{" "}<FoundingMark golfer={g} className="mr-0.5" /> {g.id === currentUser.id && <span className="font-normal text-slate-400">{t("golfCallDetail.you")}</span>}
                     {g.id === call.hostId && <span className="ml-1.5 text-xs font-medium text-sun-600">{t("golfCallDetail.hostTag")}</span>}
                   </p>
                   <p className="text-xs text-slate-500">{g.handicap !== null ? t("golfCallDetail.handicapValue", { handicap: g.handicap }) : t("golfCallDetail.noHandicapYet")}</p>

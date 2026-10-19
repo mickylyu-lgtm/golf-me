@@ -1,6 +1,7 @@
 import { UserRoundCheck, UserRoundPlus } from "lucide-react";
 import { useLocale } from "../../i18n/LocaleContext";
 import { Avatar } from "../ui/Avatar";
+import { FoundingMark } from "./FoundingGolfer";
 import { Button } from "../ui/Button";
 import type { FriendSearchResult } from "../../lib/useFriendSearch";
 
@@ -32,7 +33,9 @@ export function GolferSearchResultRow({ golfer, following, onOpenProfile, onTogg
           showVerified={false}
         />
         <div className="flex-1">
-          <p className="text-sm font-semibold text-slate-800">{golfer.name}</p>
+          <p className="text-sm font-semibold text-slate-800">
+            {golfer.name}{" "}<FoundingMark golfer={golfer} />
+          </p>
           <p className="text-xs text-slate-500">
             {golfer.username && <>@{golfer.username} · </>}
             {golfer.handicap !== null ? t("golfCallDetail.handicapValue", { handicap: golfer.handicap }) : t("golfCallDetail.noHandicapYet")}

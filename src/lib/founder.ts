@@ -7,3 +7,8 @@ export const FOUNDER_USER_ID = "11be6983-7cd6-434d-bb52-6bfaf1d6e309";
 export function isFounder(golferId: string): boolean {
   return golferId === FOUNDER_USER_ID;
 }
+
+// Founding Golfer numbers display zero-padded: 37 -> "#037".
+export function formatFoundingNumber(n: number): string {
+  return `#${String(n).padStart(3, "0")}`;
+}

@@ -1,6 +1,7 @@
 import { MapPin, Wallet, Footprints, Car } from "lucide-react";
 import type { GolferProfile } from "../../types";
 import { Avatar } from "../ui/Avatar";
+import { FoundingMark } from "./FoundingGolfer";
 import { Badge } from "../ui/Badge";
 import { formatBudgetRange, handicapLabel } from "../../lib/format";
 import { vibeLabel, walkOrCartLabel } from "../../lib/enumLabels";
@@ -36,7 +37,7 @@ export function GolferCard({ golfer, compatibility, onClick }: GolferCardProps) 
           <Avatar golfer={golfer} size="lg" />
           <div>
             <p className="font-bold text-slate-900">
-              {golfer.name}
+              {golfer.name}{" "}<FoundingMark golfer={golfer} />
               {golfer.ageRange && <span className="font-normal text-slate-400"> · {golfer.ageRange}</span>}
             </p>
             <p className="flex items-center gap-1 text-xs text-slate-500">

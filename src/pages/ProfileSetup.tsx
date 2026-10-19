@@ -8,6 +8,7 @@ import { useLocale } from "../i18n/LocaleContext";
 import { Button } from "../components/ui/Button";
 import { AvatarUpload } from "../components/profile/AvatarUpload";
 import { LocationPicker } from "../components/location/LocationPicker";
+import { FoundingSpotsNote } from "../components/golfer/FoundingGolfer";
 import { inputClass, labelClass } from "../components/ui/FormControls";
 import { initialsFromName, avatarColorForName } from "../lib/avatar";
 import type { GeoPoint } from "../lib/geo";
@@ -251,6 +252,7 @@ export function ProfileSetup() {
                 </button>
               </div>
             )}
+            <FoundingSpotsNote enabled={!isDemo} />
           </div>
 
           <div className="flex flex-col gap-3">

@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { useLocale } from "../i18n/LocaleContext";
 import { Avatar } from "../components/ui/Avatar";
+import { FoundingMark } from "../components/golfer/FoundingGolfer";
 import { Button } from "../components/ui/Button";
 import { EmptyState } from "../components/ui/EmptyState";
 import { useCredibilityForGolfers } from "../lib/useCredibility";
@@ -53,7 +54,9 @@ export function FollowingDetail() {
               >
                 <Avatar golfer={g} size="sm" />
                 <div className="flex-1">
-                  <p className="text-sm font-semibold text-slate-800">{g.name}</p>
+                  <p className="text-sm font-semibold text-slate-800">
+                    {g.name}{" "}<FoundingMark golfer={g} />
+                  </p>
                   <p className="text-xs text-slate-500">
                     {g.handicap !== null ? t("golfCallDetail.handicapValue", { handicap: g.handicap }) : t("golfCallDetail.noHandicapYet")} ·{" "}
                     {t("following.rounds", { count: reputations[g.id].completedRounds })}
