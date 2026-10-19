@@ -7,6 +7,7 @@ import { HighlightGolfMe } from "../components/brand/HighlightGolfMe";
 import { CaddieNavIcon } from "../components/icons/CaddieNavIcon";
 import { Reveal } from "../components/ui/Reveal";
 import { useLocale } from "../i18n/LocaleContext";
+import { FoundingSpotsNote } from "../components/golfer/FoundingGolfer";
 
 function PillarCard({
   id,
@@ -95,6 +96,7 @@ export function Welcome() {
             >
               {t("landing.hero.secondaryCta")}
             </button>
+            <FoundingSpotsNote enabled onDark className="justify-center text-center" />
           </Reveal>
         </section>
       </div>

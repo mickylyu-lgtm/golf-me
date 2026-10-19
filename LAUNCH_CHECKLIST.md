@@ -10,7 +10,7 @@ Classify every request: **A** blocks the launch going well (now: 1.1 release + m
 ### CURRENT BLOCKERS
 1. **1.1 not yet released / not checked on the App Store build.** Release it (if manual release), then on the App Store build check: launch screen + entry animation (no cream flash), Sign in with Apple, Google, 6-digit email code (existing account, brand-new email, iOS autofill), and Sign in with Apple on a throwaway Apple ID → delete the account → confirm the `delete-account` logs show no "Apple token revocation not completed" (revocation never exercised for real). (A)
 2. **No real upcoming rounds.** Production has 0 upcoming rounds; a new App Store user finds nothing to join. Host 3–5 real NYC rounds. (A — marketplace)
-3. **Founding Golfer launch hook not live.** Migrations drafted and architect-reviewed, NOT applied; pre-apply items open (section 11). Code lives on branch `entry-animation`, not on `main`. (A for launch marketing)
+3. **Founding Golfer launch hook not live.** Migrations drafted and architect-reviewed, NOT applied; pre-apply items done in code, a fresh backfill pre-check + Micky's approval remain (section 11). Code lives on branch `entry-animation`, not on `main`. (A for launch marketing)
 4. **No user acquisition yet.** 26 accounts, ~1 new per week; creator/community outreach not started (sections 11–12). (A)
 
 ### RESOLVED PRE-LAUNCH BLOCKERS (history)
@@ -24,7 +24,7 @@ On the 1.1 App Store build: blocker 1 items. Still-open device checks from earli
 
 ### NEXT 3 ACTIONS
 1. **Micky: release 1.1 and run the blocker 1 checks** on the App Store build; Claude then checks the `delete-account` logs. (A)
-2. **Founding Golfer pre-apply items** (section 11): exclusion list, confirmed-email requirement, backfill count guard, badge + spots-left UI → Micky approves the SQL → apply → merge `entry-animation` into `main`. (A)
+2. **Founding Golfer** (section 11): pre-apply items are done in code; re-run the read-only backfill pre-check → Micky approves the SQL → apply → merge `entry-animation` into `main` + deploy. (A)
 3. **Seed the marketplace:** Micky hosts 3–5 real NYC rounds, then founder outreach to existing accounts + waitlist (`LAUNCH_MARKETING.md`). (A)
 
 ---
@@ -213,7 +213,7 @@ Record results here with date, device and build number.
 | [ ] | Simulator communities | |
 | [ ] | Local golf pages | |
 | [ ] | Founder-led outreach | |
-| [~] | **Founding Golfer launch hook** (B, Micky chose it for launch marketing 2026-10-07) | The first 250 NYC golfers get a permanent numbered badge. Migrations `20261006120000` (sets up the cohort, created closed) and `20261006120100` (exclusions, opening, backfill) are drafted, NOT applied, and reviewed by golfme-architect 2026-10-06. The migrations + badge code are on branch `entry-animation` (not on `main`). Before applying: (1) complete the exclusion list (test accounts `5dae1847`, `81765aff`, `2d468e5b`; decide on both "Jordan Kim" accounts, `1101110c` is the two-iPhone QA host); (2) require a confirmed email before awarding (protects the 250 spots from scripted signups); (3) the backfill stops unless the award count is the one confirmed in advance, and an excluded ID that doesn't exist raises an error; (4) badge on profiles plus "X of 250 spots left" on the landing page/onboarding (web only, no new Apple review needed). Then Micky approves and applies. Plan: `LAUNCH_MARKETING.md`. |
+| [~] | **Founding Golfer launch hook** (B, Micky chose it for launch marketing 2026-10-07) | The first 250 NYC golfers get a permanent numbered badge. Migrations `20261006120000` (cohort, created closed) and `20261006120100` (exclusions, opening, backfill), reviewed by golfme-architect 2026-10-06, **NOT applied**; they and the app code are on branch `entry-animation`, not `main`. Pre-apply items done in code: (1) exclusion list confirmed by Micky 2026-10-12 (reviewer `24c3c140` + 5 test accounts; both "Jordan Kim" accounts stay eligible as #1/#2); an excluded ID that doesn't exist aborts the migration; (2) a confirmed email is required to be awarded; (3) the backfill rolls back unless exactly the 7 expected accounts are awarded, in signup order; (4) badge on profiles, cards, search rows and round pages; "spots remaining" on onboarding and (2026-10-18) the landing hero (anon-callable `get_founding_cohort_status`, shows nothing until the cohort is open). tsc, build and lint pass. Remaining: re-run the read-only pre-check (the expected 7 was verified 2026-10-12; any newer eligible NYC signup changes the list) → Micky approves the SQL → apply both in order → merge `entry-animation` into `main` + deploy → check the badge and counter live. Plan: `LAUNCH_MARKETING.md`. |
 
 ## 12. CREATOR PROGRAM (small test: creators host real rounds on GolfMe)
 | Creator | Audience / location | Proposed round | Outreach status | Compensation | Attributed signups/joins | Actual participation |

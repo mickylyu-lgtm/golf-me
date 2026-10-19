@@ -83,18 +83,27 @@ export function FoundingGolferBadge({ golfer, className = "" }: { golfer: Foundi
   );
 }
 
-// Onboarding line: spots left while the cohort is open, a "claimed" note
-// once all of them are gone, nothing otherwise (demo, loading, cohort not
-// opened yet, or closed early by an admin).
-export function FoundingSpotsNote({ enabled, className = "" }: { enabled: boolean; className?: string }) {
+// Onboarding / landing line: spots left while the cohort is open, a
+// "claimed" note once all of them are gone, nothing otherwise (demo,
+// loading, cohort not opened yet, or closed early by an admin). `onDark`
+// is the landing hero's light-on-green variant.
+export function FoundingSpotsNote({
+  enabled,
+  onDark = false,
+  className = "",
+}: {
+  enabled: boolean;
+  onDark?: boolean;
+  className?: string;
+}) {
   const { t } = useLocale();
   const status = useFoundingCohortStatus(enabled);
   if (!status) return null;
   const claimed = status.awardedCount >= status.cap;
   if (!claimed && !(status.isOpen && status.remaining > 0)) return null;
   return (
-    <p className={`flex items-center gap-2 text-xs text-slate-500 ${className}`}>
-      <Flag size={12} strokeWidth={2.5} className="shrink-0 text-sun-600" />
+    <p className={`flex items-center gap-2 text-xs ${onDark ? "text-fairway-100" : "text-slate-500"} ${className}`}>
+      <Flag size={12} strokeWidth={2.5} className={`shrink-0 ${onDark ? "text-sun-300" : "text-sun-600"}`} />
       <span>
         {claimed ? t("founding.spotsClaimed", { cap: status.cap }) : t("founding.spotsRemaining", { remaining: status.remaining, cap: status.cap })}
       </span>
