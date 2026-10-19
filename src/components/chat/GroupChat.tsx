@@ -45,8 +45,15 @@ export function GroupChat({ callId }: { callId: string }) {
   // closes. Local to this component only -- not the removed app-wide
   // scrollTo(0,0) hack.
   const scrollYBeforeKeyboardRef = useRef<number | null>(null);
+  // Where the composer sat in the page (document coordinates), so docking
+  // can bring the content just above it -- the latest messages/comments --
+  // right above the docked bar instead of leaving the view wherever it was.
+  const composerPageTopRef = useRef<number | null>(null);
   function rememberScrollBeforeKeyboard() {
-    if (!composerDocked) scrollYBeforeKeyboardRef.current = window.scrollY;
+    if (composerDocked) return;
+    scrollYBeforeKeyboardRef.current = window.scrollY;
+    const rect = composerRef.current?.getBoundingClientRect();
+    composerPageTopRef.current = rect ? rect.top + window.scrollY : null;
   }
 
   // Layout effect, not a passive one: the scroll lock and the restore to the
@@ -56,14 +63,29 @@ export function GroupChat({ callId }: { callId: string }) {
     if (!composerDocked) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    const saved = scrollYBeforeKeyboardRef.current;
-    if (saved !== null && Math.abs(window.scrollY - saved) > 1) window.scrollTo(0, saved);
+    // Line the composer's old spot up with the top of the docked bar, so
+    // what was right above it stays visible right above the keyboard. The
+    // page is put back where it was when the keyboard closes.
+    const list = listRef.current;
+    if (list) list.scrollTop = list.scrollHeight;
+    const composerTop = composerPageTopRef.current;
+    const dockedHeight = composerRef.current?.offsetHeight ?? 0;
+    if (composerTop !== null) {
+      window.scrollTo(0, Math.max(0, composerTop - (window.innerHeight - keyboardHeight - dockedHeight)));
+    } else {
+      const saved = scrollYBeforeKeyboardRef.current;
+      if (saved !== null && Math.abs(window.scrollY - saved) > 1) window.scrollTo(0, saved);
+    }
     return () => {
       document.body.style.overflow = previousOverflow;
       const restoreTo = scrollYBeforeKeyboardRef.current;
       scrollYBeforeKeyboardRef.current = null;
+      composerPageTopRef.current = null;
       if (restoreTo !== null) requestAnimationFrame(() => window.scrollTo(0, restoreTo));
     };
+    // keyboardHeight is final when the composer docks (keyboardWillShow);
+    // re-running on later height changes would re-scroll mid-typing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [composerDocked]);
 
   useEffect(() => {
