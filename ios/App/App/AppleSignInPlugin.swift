@@ -138,5 +138,23 @@ class GolfMeBridgeViewController: CAPBridgeViewController {
     override func capacitorDidLoad() {
         super.capacitorDidLoad()
         bridge?.registerPluginInstance(GolfMeAppleSignInPlugin())
+        hideTopScrollEdgeEffect()
+    }
+
+    // iOS 26 draws a scroll edge effect (a soft blur/fade) on a scroll view's
+    // top edge under the status bar. The web view is edge-to-edge
+    // (contentInset "never", viewport-fit=cover) and the web app paints its
+    // own status-bar area, so that effect is just a pale band over the page:
+    // invisible on the cream pages, obvious over the dark green EntryOverlay.
+    // Purely visual: no change to insets, frame or scrolling, so the keyboard
+    // resize (KeyboardResize.Body) path is untouched. The compiler check keeps
+    // this building on pre-Xcode-26 toolchains; #available makes it a no-op
+    // below iOS 26.
+    private func hideTopScrollEdgeEffect() {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            webView?.scrollView.topEdgeEffect.isHidden = true
+        }
+        #endif
     }
 }
