@@ -9,6 +9,7 @@
 // frame edges (V1 never stored frame size), or "a swing actually happened";
 // those belong to later modules.
 
+import { thresholdValue } from "./thresholds.ts";
 import { POSE_KEYPOINT_NAMES } from "./types.ts";
 import type { PoseFrame, PoseKeypointName, PoseSequence } from "./types.ts";
 
@@ -16,23 +17,24 @@ export const QUALITY_GATE_VERSION = "0.1.0";
 
 // ---------------------------------------------------------------------------
 // PROVISIONAL THRESHOLDS: placeholders, NOT validated.
-// None of these values has been checked against real swings. They must be
-// tuned on the consented, coach-labeled evaluation set (audit §8) before any
-// result from this gate is shown to a user or quoted as accuracy.
+// Values and their status live in thresholds.ts (the single registry). None
+// has been checked against real swings. They must be tuned on the consented,
+// coach-labeled evaluation set (audit §8) before any result from this gate is
+// shown to a user or quoted as accuracy.
 // ---------------------------------------------------------------------------
 
 /** A keypoint below this confidence is treated as not observed. Matches V1 swingAssessment's MIN_KEYPOINT_CONFIDENCE. PROVISIONAL. */
-export const QG_MIN_KEYPOINT_CONFIDENCE = 0.5;
+export const QG_MIN_KEYPOINT_CONFIDENCE = thresholdValue("QG_MIN_KEYPOINT_CONFIDENCE");
 /** If the backend reports a person score, frames below it are rejected. PROVISIONAL. */
-export const QG_MIN_PERSON_CONFIDENCE = 0.5;
+export const QG_MIN_PERSON_CONFIDENCE = thresholdValue("QG_MIN_PERSON_CONFIDENCE");
 /** Minimum confident keypoints (of 13) for a frame to be usable. PROVISIONAL. */
-export const QG_MIN_CONFIDENT_KEYPOINTS = 8;
+export const QG_MIN_CONFIDENT_KEYPOINTS = thresholdValue("QG_MIN_CONFIDENT_KEYPOINTS");
 /** Minimum confident torso points (of both shoulders + both hips). Torso anchors every measurement. PROVISIONAL. */
-export const QG_MIN_CONFIDENT_TORSO_KEYPOINTS = 3;
+export const QG_MIN_CONFIDENT_TORSO_KEYPOINTS = thresholdValue("QG_MIN_CONFIDENT_TORSO_KEYPOINTS");
 /** Minimum usable frames for the whole sequence. PROVISIONAL. */
-export const QG_MIN_USABLE_FRAMES = 8;
+export const QG_MIN_USABLE_FRAMES = thresholdValue("QG_MIN_USABLE_FRAMES");
 /** Minimum share of frames that must be usable. Mirrors V1's 50 % rule, but on usable frames rather than HTTP successes. PROVISIONAL. */
-export const QG_MIN_USABLE_FRAME_RATIO = 0.5;
+export const QG_MIN_USABLE_FRAME_RATIO = thresholdValue("QG_MIN_USABLE_FRAME_RATIO");
 
 const TORSO_KEYPOINTS: readonly PoseKeypointName[] = ["left_shoulder", "right_shoulder", "left_hip", "right_hip"];
 

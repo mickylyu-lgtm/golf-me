@@ -9,22 +9,24 @@
 // `analysis_json.phases` object Gemini returns), and on a future V2
 // segmenter's SwingSegments directly.
 
+import { thresholdValue } from "./thresholds.ts";
 import type { PhaseConfidenceLabel, SwingPhaseMoment, SwingSegments } from "./types.ts";
 
 export const PHASE_ORDER_VERSION = "0.1.0";
 
 // ---------------------------------------------------------------------------
 // PROVISIONAL THRESHOLDS: placeholders, NOT validated.
+// Values and their status live in thresholds.ts (the single registry).
 // To be tuned on the coach-labeled evaluation set (audit §8). Do not quote
 // any pass/fail rate from these as accuracy.
 // ---------------------------------------------------------------------------
 
 /** Slack allowed outside the first/last pose frame time (one 8 fps sample). PROVISIONAL. */
-export const PO_RANGE_TOLERANCE_SECONDS = 0.125;
+export const PO_RANGE_TOLERANCE_SECONDS = thresholdValue("PO_RANGE_TOLERANCE_SECONDS");
 /** Longest plausible gap from top of backswing to the start of the impact window. PROVISIONAL. */
-export const PO_MAX_TOP_TO_IMPACT_SECONDS = 1.0;
+export const PO_MAX_TOP_TO_IMPACT_SECONDS = thresholdValue("PO_MAX_TOP_TO_IMPACT_SECONDS");
 /** Impact windows wider than this are flagged as too imprecise to anchor on. Matches V1 swingAssessment. PROVISIONAL. */
-export const PO_MAX_IMPACT_WINDOW_SECONDS = 0.3;
+export const PO_MAX_IMPACT_WINDOW_SECONDS = thresholdValue("PO_MAX_IMPACT_WINDOW_SECONDS");
 
 export type PhaseIssueCode =
   | "non_finite_timestamp"

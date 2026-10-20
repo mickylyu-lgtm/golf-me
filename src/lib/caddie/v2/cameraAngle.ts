@@ -15,35 +15,37 @@
 // confirmation step; this heuristic must never be the only signal shown.
 
 import { QG_MIN_KEYPOINT_CONFIDENCE, assessFrameQuality } from "./qualityGate.ts";
+import { thresholdValue } from "./thresholds.ts";
 import type { PoseFrame, PoseKeypoint, PoseSequence } from "./types.ts";
 
 export const CAMERA_ANGLE_VERSION = "0.1.0";
 
 // ---------------------------------------------------------------------------
 // PROVISIONAL THRESHOLDS: placeholders, NOT validated.
+// Values and their status live in thresholds.ts (the single registry).
 // Chosen from rough 2-D geometry, not from labeled clips. Must be tuned on
 // the coach-labeled evaluation set (audit §8), per pose backend, before any
 // result is shown to a user. No accuracy is claimed for these values.
 // ---------------------------------------------------------------------------
 
 /** Horizontal shoulder span / torso length at or above this votes face-on. PROVISIONAL. */
-export const CA_FACE_ON_MIN_SHOULDER_RATIO = 0.55;
+export const CA_FACE_ON_MIN_SHOULDER_RATIO = thresholdValue("CA_FACE_ON_MIN_SHOULDER_RATIO");
 /** Horizontal hip span / torso length at or above this is required for a face-on vote. PROVISIONAL. */
-export const CA_FACE_ON_MIN_HIP_RATIO = 0.35;
+export const CA_FACE_ON_MIN_HIP_RATIO = thresholdValue("CA_FACE_ON_MIN_HIP_RATIO");
 /** Horizontal shoulder span / torso length at or below this votes down-the-line. PROVISIONAL. */
-export const CA_DTL_MAX_SHOULDER_RATIO = 0.3;
+export const CA_DTL_MAX_SHOULDER_RATIO = thresholdValue("CA_DTL_MAX_SHOULDER_RATIO");
 /** Horizontal hip span / torso length at or below this is required for a down-the-line vote. PROVISIONAL. */
-export const CA_DTL_MAX_HIP_RATIO = 0.2;
+export const CA_DTL_MAX_HIP_RATIO = thresholdValue("CA_DTL_MAX_HIP_RATIO");
 /** Torso (shoulder-mid to hip-mid) more than this far from vertical: frame skipped (lying down, rotated video). PROVISIONAL. */
-export const CA_MAX_TORSO_TILT_DEGREES = 60;
+export const CA_MAX_TORSO_TILT_DEGREES = thresholdValue("CA_MAX_TORSO_TILT_DEGREES");
 /** Without an address hint, use this many earliest usable frames. PROVISIONAL. */
-export const CA_DEFAULT_ADDRESS_FRAMES = 5;
+export const CA_DEFAULT_ADDRESS_FRAMES = thresholdValue("CA_DEFAULT_ADDRESS_FRAMES");
 /** With an address hint, use usable frames within this many seconds of it. PROVISIONAL. */
-export const CA_ADDRESS_WINDOW_SECONDS = 0.25;
+export const CA_ADDRESS_WINDOW_SECONDS = thresholdValue("CA_ADDRESS_WINDOW_SECONDS");
 /** Minimum frames that must yield a measurement. PROVISIONAL. */
-export const CA_MIN_MEASURED_FRAMES = 3;
+export const CA_MIN_MEASURED_FRAMES = thresholdValue("CA_MIN_MEASURED_FRAMES");
 /** Minimum share of measured frames that must agree on the winning angle. PROVISIONAL. */
-export const CA_MIN_AGREEMENT = 0.67;
+export const CA_MIN_AGREEMENT = thresholdValue("CA_MIN_AGREEMENT");
 
 export type CameraAngle = "face_on" | "down_the_line" | "unknown";
 
