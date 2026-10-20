@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GolfMe Coach Confidentiality Agreement</title>
+<!--
+  GolfMe Caddie V2 testing: coach confidentiality and data-handling agreement.
+  AGREEMENT VERSION 1.0 (2026-10-20). Must match CURRENT_COACH_AGREEMENT_VERSION
+  in tools/caddie-eval/import-clip.mjs. Any wording change = new version
+  number, update the tool, re-render the PDF
+  (tools/caddie-eval/render-consent-pdf.mjs), and ask coaches to re-sign.
+
+  Not legal advice. Drafted for an informal, small testing exercise. Micky may
+  want a lawyer to review it before first use, especially if a coach lives
+  outside Micky's own jurisdiction or is paid.
+
+  Contains no personal data. Do not commit a filled-in or signed copy.
+-->
+<style>
+  :root {
+    --ink: #1a1a1a;
+    --muted: #555;
+    --rule: #999;
+    --box: #222;
+    --accent: #1f5f3a;
+    --paper: #ffffff;
+    --note-bg: #fff6d8;
+    --note-ink: #4a3b00;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ink: #ececec; --muted: #b5b5b5; --rule: #777; --box: #ddd; --accent: #7fd1a0;
+      --paper: #161816; --note-bg: #3a3215; --note-ink: #f3e3a6;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ink: #ececec; --muted: #b5b5b5; --rule: #777; --box: #ddd; --accent: #7fd1a0;
+    --paper: #161816; --note-bg: #3a3215; --note-ink: #f3e3a6;
+  }
+  @page { size: A4; margin: 16mm 16mm 18mm 16mm; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--paper); color: var(--ink); }
+  body {
+    font: 10pt/1.38 Georgia, "Times New Roman", serif;
+    max-width: 180mm;
+    margin: 0 auto;
+    padding: 16px;
+  }
+  h1 { font-size: 16pt; margin: 0 0 2px; color: var(--accent); }
+  .sub { color: var(--muted); font-size: 9.5pt; margin: 0 0 10px; }
+  h2 {
+    font-size: 11pt; margin: 12px 0 4px; padding-bottom: 2px;
+    border-bottom: 1px solid var(--rule); break-after: avoid;
+  }
+  p { margin: 4px 0; }
+  ul { margin: 4px 0 4px 18px; padding: 0; }
+  li { margin: 2px 0; }
+  .idrow { display: flex; flex-wrap: wrap; gap: 6px 24px; margin: 6px 0 8px; font-size: 10pt; }
+  .line { display: inline-block; min-width: 34mm; border-bottom: 1px solid var(--ink); height: 1.1em; vertical-align: bottom; }
+  .line.wide { min-width: 70mm; }
+  .tick {
+    display: grid; grid-template-columns: 7mm 1fr; gap: 0 6px;
+    margin: 6px 0; break-inside: avoid;
+  }
+  .box {
+    width: 5mm; height: 5mm; border: 1.4px solid var(--box); margin-top: 2px;
+  }
+  .tag { color: var(--muted); font-size: 8.5pt; font-family: system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.04em; margin-left: 4px; }
+  .label { font-weight: bold; }
+  .optin {
+    border: 1px solid var(--rule); padding: 6px 10px; margin: 6px 0; break-inside: avoid;
+  }
+  .sig { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 24px; margin-top: 10px; break-inside: avoid; }
+  .sig div { padding-top: 22px; border-bottom: 1px solid var(--ink); font-size: 9pt; color: var(--muted); }
+  .sig div span { position: relative; top: 16px; }
+  .keep { break-inside: avoid; }
+  .office { margin-top: 30px; padding: 6px 10px; border: 1px dashed var(--rule); font-size: 9pt; break-inside: avoid; }
+  .office table { border-collapse: collapse; width: 100%; }
+  .office td { padding: 3px 4px; vertical-align: bottom; }
+  .office td.v { border-bottom: 1px solid var(--rule); width: 30%; }
+  .small { font-size: 9pt; color: var(--muted); }
+  .screen-note {
+    background: var(--note-bg); color: var(--note-ink); padding: 8px 12px; margin: 0 0 12px;
+    font: 9.5pt/1.4 system-ui, sans-serif; border-radius: 4px;
+  }
+  @media print {
+    body { padding: 0; max-width: none; color: #000; background: #fff; }
+    .screen-note { display: none; }
+  }
+  @media (max-width: 520px) {
+    .sig { grid-template-columns: 1fr; }
+    .line.wide { min-width: 50vw; }
+  }
+</style>
+</head>
+<body>
+
+<div class="screen-note">
+  <strong>For Micky (not printed):</strong> agreement version 1.0. Not legal advice; consider a lawyer review before first use, especially if the coach is paid or abroad.
+  The signed copy goes in the identity key, never in the data folder or the repo. Record it with <code>coach-add</code>.
+  A pre-rendered blank copy is next to this file (<code>COACH_CONFIDENTIALITY_v1.pdf</code>).
+</div>
+
+<h1>GolfMe Caddie testing: coach confidentiality and data-handling agreement</h1>
+<p class="sub">Agreement version 1.0 &middot; Please read it all before your first review session. Ask Micky anything that is unclear. You get a copy.</p>
+
+<div class="idrow">
+  <span>Coach ID (written by Micky): <span class="line"></span></span>
+  <span>Session types (written by Micky): <span class="line wide"></span></span>
+</div>
+
+<h2>1. What this is</h2>
+<p>Micky, the developer of the GolfMe app, is testing how accurate GolfMe's swing-analysis feature ("Caddie") is. I have agreed to review short videos of golf swings filmed by adult volunteers ("participants") and label them (for example, swing phases, faults, and the main improvement), and later to judge whether Caddie's feedback is correct. This agreement sets out how I handle the videos and everything I learn from them.</p>
+
+<h2>2. What I will see</h2>
+<ul>
+  <li>Short swing videos, with no sound. Participants' faces and bodies are visible.</li>
+  <li>Each video is identified only by a clip ID (for example <code>C001-0001</code>). I am identified only by my coach ID above. I will not be told participants' names, and I won't try to find out who they are.</li>
+  <li>If I recognise a participant anyway, I keep that to myself and tell Micky, who decides whether I should skip that participant's clips.</li>
+</ul>
+
+<h2>3. How I may view the videos</h2>
+<ul>
+  <li><strong>In person:</strong> only on Micky's laptop, with Micky present.</li>
+  <li><strong>Remote (only if written in the session types above):</strong> only in a live video call where Micky shares his screen and plays the video. I join from a private place where nobody else can see my screen, using the meeting link and passcode Micky sends for that session only.</li>
+  <li>I will not receive a video file, and I will not ask for one.</li>
+</ul>
+
+<h2>4. What I will not do</h2>
+<ul>
+  <li>I will not record, screen-record, screenshot, photograph, or film the screen, the call, or any video, by any means (including another phone or camera).</li>
+  <li>I will not turn on, or let any tool turn on, call recording, transcripts, captions saved to a file, or AI note-taking or summary features during a session.</li>
+  <li>I will not download, save, copy, forward, or upload any video, still frame, or part of one, and I will not send files through the call's chat.</li>
+  <li>I will not show, describe in identifying detail, or discuss the videos or participants with anyone other than Micky. This includes the other coach, until Micky says both coaches have finished labelling independently.</li>
+  <li>I will not use the videos, my labels, or Caddie's output for any other purpose, including my own coaching, marketing, social media, teaching material, or training any software or machine-learning model.</li>
+</ul>
+
+<h2>5. My labels and notes</h2>
+<ul>
+  <li>I record labels only on the labelling sheet Micky gives me, keyed by clip ID and coach ID. I write no names, places, or other details that could identify a participant, including in free-text fields.</li>
+  <li>If I make any personal notes, I keep them only until I hand in the sheet, and then delete or destroy them.</li>
+  <li>My labels are kept by Micky with the videos, apart from anyone's identity, and are deleted when the videos are (at most 90 days after each participant's consent, or sooner on withdrawal). Test reports refer to me only by my coach ID.</li>
+</ul>
+
+<h2>6. Withdrawal and deletion requests</h2>
+<p>A participant can withdraw at any time. If Micky tells me a clip ID has been withdrawn, I stop using it and, within 7 days, delete or destroy anything I hold about it (for example a printed sheet or notes) and confirm to Micky in writing that I have done so.</p>
+
+<h2>7. If something goes wrong</h2>
+<p>If I think a video, still frame, or label may have been captured, saved, or seen by someone else (for example, a recording started by accident, or someone walked into the room during a remote call), I tell Micky as soon as possible and help delete anything that was captured.</p>
+
+<h2>8. Ending this agreement</h2>
+<p>Either of us can end my participation at any time. When it ends, or when the test finishes, I delete or destroy anything I still hold and confirm this to Micky. Sections 4 to 7 keep applying after it ends.</p>
+
+<section class="keep"><h2>9. Confirmations</h2>
+<div class="tick required">
+  <div class="box"></div>
+  <div><span class="label">I am a golf coach taking part voluntarily, and I have no stake in the result of this test.</span> <span class="tag">Required</span></div>
+</div>
+<div class="tick required">
+  <div class="box"></div>
+  <div><span class="label">I have read this agreement and agree to sections 1 to 8.</span> <span class="tag">Required</span></div>
+</div>
+<p class="small">Payment or thanks, if any, is agreed separately with Micky and doesn't change this agreement.</p>
+
+<div class="sig">
+  <div><span>Coach signature (or typed name if signing digitally)</span></div>
+  <div><span>Date (YYYY-MM-DD)</span></div>
+  <div><span>Coach name (printed)</span></div>
+  <div><span>Micky's signature and date</span></div>
+</div>
+
+</section>
+<div class="office">
+  <strong>Office use (Micky).</strong> Copy into the import tool exactly: <code>coach-add</code>. Keep this agreement in the identity key, apart from the video folder.
+  <table>
+    <tr><td>Coach ID</td><td class="v"></td><td>Agreement version</td><td class="v">1.0</td></tr>
+    <tr><td>Agreement date</td><td class="v"></td><td>Signed (required)</td><td class="v"></td></tr>
+    <tr><td>In person / remote</td><td class="v"></td><td>Recorded in tool on</td><td class="v"></td></tr>
+    <tr><td>Copy given to coach</td><td class="v"></td><td>Ended on / deletion confirmed</td><td class="v"></td></tr>
+  </table>
+</div>
+
+</body>
+</html>
