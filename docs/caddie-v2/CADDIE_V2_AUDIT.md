@@ -1,6 +1,6 @@
 # Caddie V2 — Audit and Plan
 
-Status: written 2026-10-20 on branch `caddie-v2` as a **read-only assessment**. Since then, **Phase 1 (testing foundation) work has landed on `caddie-v2` only** (see the status note in §11): pure V2 modules with unit tests, a thresholds registry, a local consent-gated clip import tool, and the testing, consent, and eval-report docs. **Production Caddie (`analyze-swing`, `api/`, the app's Caddie screens, the database) is still identical to `main`.** Nothing is pushed, deployed, or wired in, and no evaluation has been run.
+Status: written 2026-10-20 on branch `caddie-v2` as a **read-only assessment**. Since then, **Phase 1 (testing foundation) work has landed on `caddie-v2` only** (see the status note in §11): pure V2 modules with unit tests, a thresholds registry, a local consent-gated clip import tool, the testing, consent, and eval-report docs, and (same day) Micky's testing decisions: consent form v1.1, 90-day retention, vendor verification gate, 76-clip plan with a 10-clip pilot, two coaches (not yet recruited). **Production Caddie (`analyze-swing`, `api/`, the app's Caddie screens, the database) is still identical to `main`.** Nothing is pushed, deployed, or wired in, and no evaluation has been run.
 
 Every code claim below was re-checked against the current files. References are `path:line`, relative to the repo root. Anything that can't be known from code (billing, plan limits, retention settings, logs) is marked **UNKNOWN**.
 
@@ -426,7 +426,7 @@ flowchart TD
 ### 8.1 Dataset (consented only)
 
 - **Sources:** Micky's swings and friends who consent in writing. **Never existing user uploads** without explicit consent.
-- **Starting size (proposal):** 60–100 clips, stratified as follows:
+- **Starting size:** 60–100 clips proposed; **decided 2026-10-20: about 76, after a 10-clip pilot** (shot matrix in `TESTING_PROTOCOL.md` §4). Stratified as follows:
   - **Angle:** face-on and down-the-line, plus about 10 % deliberately bad angles (behind, steep, partial body).
   - **Club:** driver, a hybrid or wood, a mid iron.
   - **Golfer:** beginner and mid-handicap, both handedness if possible.
@@ -434,7 +434,7 @@ flowchart TD
   - **Light:** good daylight, backlit, dusk or indoor net.
   - **Trouble cases:** baggy clothing, second person in frame, no swing (practice waggle only), very short clip.
   - **Frame rate:** 30, 60, and 120/240 fps slow-motion where available.
-- **Consent record per clip:** who, date, permitted uses (evaluation only), and a retention date.
+- **Consent record per clip:** who, date, permitted uses (evaluation only), and a retention date. (Now: a signed form v1.1 per contributor, pseudonymous record in the tool, retention at most 90 days; see `VIDEO_IMPORT_AND_CONSENT.md`.)
 - **Storage:**
   - For Milestone 1, keep clips **outside the production app**, in a local data folder on Micky's laptop, never in git or any cloud. Coaches view them in person or from an encrypted USB drive, not via cloud links (superseded 2026-10-20 by `VIDEO_IMPORT_AND_CONSENT.md`). No production change needed.
   - A private `caddie-eval` bucket and a labels table, with coach/admin-only RLS in the same migration, are a Milestone 2 option. **Needs DB approval.**
@@ -581,8 +581,17 @@ Close behind: a stuck-row reaper (C3, needs DB/production approval) and cost tel
 >
 > **Phase 1 testing foundation (2026-10-20, approved by Micky as a testing foundation; branch only, not pushed):**
 > - **Thresholds registry** (`src/lib/caddie/v2/thresholds.ts`, `85b97b9`): all 18 V2 thresholds in one place, each with `status` (`placeholder` | `coach_validated`), `source`, and `date`. Modules read from it with unchanged behaviour. Tests reject any `coach_validated` threshold without an evidence reference to a report in `docs/caddie-v2/eval-reports/`. **All 18 are placeholders.** 64 unit tests (the original 53 plus 11 registry tests).
-> - **Consent-gated local import tool** (`tools/caddie-eval/import-clip.mjs`, `f014101`): data folder outside the repo (`GOLFME_EVAL_DATA_DIR`, default `~/golfme-eval-data`); refuses git checkouts and cloud-sync folders; refuses clips without active pseudonymous consent; sha256 per clip; ffmpeg strip when available; withdrawal and retention deletion. No network calls, no new dependencies. 14 `node --test` tests. `.gitignore` guard added.
-> - **Docs:** `TESTING_PROTOCOL.md` (what to film, shot matrix, coach labels, inter-rater agreement), `VIDEO_IMPORT_AND_CONSENT.md` (consent text v1.0, storage, import, retention, withdrawal), `EVAL_REPORT_TEMPLATE.md` (metric definitions and blank tables), `eval-reports/README.md`.
+> - **Consent-gated local import tool** (`tools/caddie-eval/import-clip.mjs`, `f014101`): data folder outside the repo (`GOLFME_EVAL_DATA_DIR`, default `~/golfme-eval-data`); refuses git checkouts and cloud-sync folders; refuses clips without active pseudonymous consent; sha256 per clip; ffmpeg strip when available; withdrawal and retention deletion. No network calls, no new dependencies. 14 `node --test` tests (19 after the decisions below). `.gitignore` guard added.
+> - **Docs:** `TESTING_PROTOCOL.md` (what to film, shot matrix, coach labels, inter-rater agreement), `VIDEO_IMPORT_AND_CONSENT.md` (consent text v1.0, since replaced by form v1.1 below; storage, import, retention, withdrawal), `EVAL_REPORT_TEMPLATE.md` (metric definitions and blank tables), `eval-reports/README.md`.
+>
+> **Testing decisions applied (2026-10-20, Micky; branch only, not pushed):**
+> - **Dataset:** about 76 clips (face-on + DTL; driver, hybrid, iron; mixed skill; 13 left-handed = 17 %), starting with a **10-clip pilot** (`PILOT_CHECKLIST.md`). Adults 18+ only.
+> - **Coaches:** two planned, `K01` in person and `K02` remote if feasible; **not recruited yet**. Independent labels; disagreements tracked, no forced consensus (`TESTING_PROTOCOL.md` §8 to 9). Remote options that keep clips off cloud storage are listed for Micky's approval (`VIDEO_IMPORT_AND_CONSENT.md` §7).
+> - **Consent:** printable form v1.1 (`consent/CONSENT_FORM_v1.html`, rendered `.pdf`), not legal advice. Tool consent schema 2 mirrors it (form version, affirmative consent, adult, coach in-person/remote, separate Roboflow and Gemini opt-ins). Import refuses without an affirmative record.
+> - **Retention:** provisional maximum **90 days** for raw clips and linked data (replaces 12/24 months). Withdrawal limits documented.
+> - **Third-party processing:** blocked until vendor terms are verified (`VENDOR_VERIFICATION.md`, Micky's checklist; public terms cited, not verified) **and** the contributor opted in to that processor. Enforced by `assertThirdPartyAllowed()`; `VENDOR_TERMS_VERIFIED` is `null` for both vendors. Consequence: the pilot can't produce V1 output for coach pass 2.
+> - Tool: 19 `node --test` tests.
+>
 > - **Not done, on purpose:** no production integration, no Edge Function or UI change, no Supabase or provider calls, no clips collected, no accuracy measured. The next build step, once a pilot set exists, is the scoring harness: it reads the manifest, labels, and cached pose, and writes the report tables.
 
 - **Shared location.** Pick one location that both the Vite app and the Supabase bundler can import, and prove it with a trivial import.
@@ -646,4 +655,6 @@ Close behind: a stuck-row reaper (C3, needs DB/production approval) and cost tel
    - clip lengths
 8. **Existing footage.** Is there already a consented clip set (e.g., the `raw-swings` folder that `scripts/extract-golf-training-frames` expects)?
 9. **Earlier validation.** Where is the offline validation of the six-phase workflow (AS:8-9, 59-60, 74-77), and what did it measure?
-10. **Coaches.** How many qualified coaches with the reviewer role are available, and how many clips can each label per week?
+10. **Coaches.** How many qualified coaches with the reviewer role are available, and how many clips can each label per week? **Partly answered 2026-10-20:** plan for two (one in person, one remote if feasible), not recruited yet; recruitment checklist in `TESTING_PROTOCOL.md` §8. Still open: who, and the remote viewing method.
+
+Questions 1 to 3 (Gemini and Roboflow data terms) now have a step-by-step checklist in `VENDOR_VERIFICATION.md`; no clip goes to either vendor until it's complete.
