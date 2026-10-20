@@ -577,6 +577,8 @@ Close behind: a stuck-row reaper (C3, needs DB/production approval) and cost tel
 
 **"Pose contract and V2 module skeleton with tests":**
 
+> **Status (2026-10-20): partly done on `caddie-v2`, not pushed, not wired into anything.** Done: Vitest 5.0.3 plus `npm test` (`9267264`); `src/lib/caddie/v2/` with the `PoseSequence` contract and V1 Roboflow adapter (`9267264`), quality gate (`37675c7`), phase-order check for V1 Gemini phases (`88188d3`), and camera-angle heuristic (`657b1d0`); 53 unit tests on synthetic fixtures. All thresholds are provisional placeholders until the coach-labeled eval set exists. Still open: proving the Supabase Edge bundler can import `src/lib/caddie/v2/` (the modules are written Deno-portable and import cleanly under Node's native TS stripping, but no Deno or Supabase CLI was available to test); the segmenter and `Measurement` producer (type only, for now).
+
 - **Shared location.** Pick one location that both the Vite app and the Supabase bundler can import, and prove it with a trivial import.
 - **Types.** Define `PoseSequence`, `QualityGateResult`, `CameraAngleResult`, `SwingSegments`, and `Measurement`, each with confidence and an `inconclusiveReason`.
 - **Pure functions:**
