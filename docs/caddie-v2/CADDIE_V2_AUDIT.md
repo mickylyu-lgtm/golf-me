@@ -1,6 +1,6 @@
 # Caddie V2 — Audit and Plan
 
-Status: **read-only assessment, nothing implemented.** Written 2026-10-20 on branch `caddie-v2`. All Caddie code on this branch is identical to `main` (the only working-tree changes are unrelated: Founding Golfer and Ready page).
+Status: written 2026-10-20 on branch `caddie-v2` as a **read-only assessment**. Since then, **Phase 1 (testing foundation) work has landed on `caddie-v2` only** (see the status note in §11): pure V2 modules with unit tests, a thresholds registry, a local consent-gated clip import tool, and the testing, consent, and eval-report docs. **Production Caddie (`analyze-swing`, `api/`, the app's Caddie screens, the database) is still identical to `main`.** Nothing is pushed, deployed, or wired in, and no evaluation has been run.
 
 Every code claim below was re-checked against the current files. References are `path:line`, relative to the repo root. Anything that can't be known from code (billing, plan limits, retention settings, logs) is marked **UNKNOWN**.
 
@@ -436,7 +436,7 @@ flowchart TD
   - **Frame rate:** 30, 60, and 120/240 fps slow-motion where available.
 - **Consent record per clip:** who, date, permitted uses (evaluation only), and a retention date.
 - **Storage:**
-  - For Milestone 1, keep clips **outside the production app** (Micky's own private storage) and share them with coaches via private links. No production change needed.
+  - For Milestone 1, keep clips **outside the production app**, in a local data folder on Micky's laptop, never in git or any cloud. Coaches view them in person or from an encrypted USB drive, not via cloud links (superseded 2026-10-20 by `VIDEO_IMPORT_AND_CONSENT.md`). No production change needed.
   - A private `caddie-eval` bucket and a labels table, with coach/admin-only RLS in the same migration, are a Milestone 2 option. **Needs DB approval.**
 
 ### 8.2 Labeling through coaches
@@ -491,7 +491,7 @@ flowchart TD
 
 ### 8.4 Harness design
 
-- A local CLI under `scripts/caddie-eval/` reads three things:
+- A local CLI under `tools/caddie-eval/` (the clip importer, `import-clip.mjs`, exists; the scoring harness doesn't yet) reads three things:
   - a manifest of consented clips
   - coach labels
   - **cached** pose output per backend, so re-scoring never re-spends API credits
@@ -578,6 +578,12 @@ Close behind: a stuck-row reaper (C3, needs DB/production approval) and cost tel
 **"Pose contract and V2 module skeleton with tests":**
 
 > **Status (2026-10-20): partly done on `caddie-v2`, not pushed, not wired into anything.** Done: Vitest 5.0.3 plus `npm test` (`9267264`); `src/lib/caddie/v2/` with the `PoseSequence` contract and V1 Roboflow adapter (`9267264`), quality gate (`37675c7`), phase-order check for V1 Gemini phases (`88188d3`), and camera-angle heuristic (`657b1d0`); 53 unit tests on synthetic fixtures. All thresholds are provisional placeholders until the coach-labeled eval set exists. Still open: proving the Supabase Edge bundler can import `src/lib/caddie/v2/` (the modules are written Deno-portable and import cleanly under Node's native TS stripping, but no Deno or Supabase CLI was available to test); the segmenter and `Measurement` producer (type only, for now).
+>
+> **Phase 1 testing foundation (2026-10-20, approved by Micky as a testing foundation; branch only, not pushed):**
+> - **Thresholds registry** (`src/lib/caddie/v2/thresholds.ts`, `85b97b9`): all 18 V2 thresholds in one place, each with `status` (`placeholder` | `coach_validated`), `source`, and `date`. Modules read from it with unchanged behaviour. Tests reject any `coach_validated` threshold without an evidence reference to a report in `docs/caddie-v2/eval-reports/`. **All 18 are placeholders.** 64 unit tests (the original 53 plus 11 registry tests).
+> - **Consent-gated local import tool** (`tools/caddie-eval/import-clip.mjs`, `f014101`): data folder outside the repo (`GOLFME_EVAL_DATA_DIR`, default `~/golfme-eval-data`); refuses git checkouts and cloud-sync folders; refuses clips without active pseudonymous consent; sha256 per clip; ffmpeg strip when available; withdrawal and retention deletion. No network calls, no new dependencies. 14 `node --test` tests. `.gitignore` guard added.
+> - **Docs:** `TESTING_PROTOCOL.md` (what to film, shot matrix, coach labels, inter-rater agreement), `VIDEO_IMPORT_AND_CONSENT.md` (consent text v1.0, storage, import, retention, withdrawal), `EVAL_REPORT_TEMPLATE.md` (metric definitions and blank tables), `eval-reports/README.md`.
+> - **Not done, on purpose:** no production integration, no Edge Function or UI change, no Supabase or provider calls, no clips collected, no accuracy measured. The next build step, once a pilot set exists, is the scoring harness: it reads the manifest, labels, and cached pose, and writes the report tables.
 
 - **Shared location.** Pick one location that both the Vite app and the Supabase bundler can import, and prove it with a trivial import.
 - **Types.** Define `PoseSequence`, `QualityGateResult`, `CameraAngleResult`, `SwingSegments`, and `Measurement`, each with confidence and an `inconclusiveReason`.
