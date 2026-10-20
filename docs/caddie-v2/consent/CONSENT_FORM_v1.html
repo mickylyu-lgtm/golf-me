@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GolfMe Caddie Testing Consent</title>
+<!--
+  GolfMe Caddie V2 testing: participant consent form.
+  FORM VERSION 1.1 (2026-10-20). Must match CURRENT_FORM_VERSION in
+  tools/caddie-eval/import-clip.mjs. Any wording change = new version number,
+  update the tool, re-render the PDF (tools/caddie-eval/render-consent-pdf.mjs),
+  and ask existing contributors to re-consent if the change widens what they
+  agreed to.
+
+  Not legal advice. Drafted for an informal, unpaid testing exercise with
+  adult friends. Micky may want a lawyer to review it before first use,
+  especially if any participant lives outside Micky's own jurisdiction.
+
+  Contains no personal data. Do not commit a filled-in or signed copy.
+-->
+<style>
+  :root {
+    --ink: #1a1a1a;
+    --muted: #555;
+    --rule: #999;
+    --box: #222;
+    --accent: #1f5f3a;
+    --paper: #ffffff;
+    --note-bg: #fff6d8;
+    --note-ink: #4a3b00;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ink: #ececec; --muted: #b5b5b5; --rule: #777; --box: #ddd; --accent: #7fd1a0;
+      --paper: #161816; --note-bg: #3a3215; --note-ink: #f3e3a6;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ink: #ececec; --muted: #b5b5b5; --rule: #777; --box: #ddd; --accent: #7fd1a0;
+    --paper: #161816; --note-bg: #3a3215; --note-ink: #f3e3a6;
+  }
+  @page { size: A4; margin: 16mm 16mm 18mm 16mm; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--paper); color: var(--ink); }
+  body {
+    font: 10pt/1.38 Georgia, "Times New Roman", serif;
+    max-width: 180mm;
+    margin: 0 auto;
+    padding: 16px;
+  }
+  h1 { font-size: 16pt; margin: 0 0 2px; color: var(--accent); }
+  .sub { color: var(--muted); font-size: 9.5pt; margin: 0 0 10px; }
+  h2 {
+    font-size: 11pt; margin: 12px 0 4px; padding-bottom: 2px;
+    border-bottom: 1px solid var(--rule); break-after: avoid;
+  }
+  p { margin: 4px 0; }
+  ul { margin: 4px 0 4px 18px; padding: 0; }
+  li { margin: 2px 0; }
+  .idrow { display: flex; flex-wrap: wrap; gap: 6px 24px; margin: 6px 0 8px; font-size: 10pt; }
+  .line { display: inline-block; min-width: 34mm; border-bottom: 1px solid var(--ink); height: 1.1em; vertical-align: bottom; }
+  .line.wide { min-width: 70mm; }
+  .tick {
+    display: grid; grid-template-columns: 7mm 1fr; gap: 0 6px;
+    margin: 6px 0; break-inside: avoid;
+  }
+  .box {
+    width: 5mm; height: 5mm; border: 1.4px solid var(--box); margin-top: 2px;
+  }
+  .tag { color: var(--muted); font-size: 8.5pt; font-family: system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.04em; margin-left: 4px; }
+  .label { font-weight: bold; }
+  .optin {
+    border: 1px solid var(--rule); padding: 6px 10px; margin: 6px 0; break-inside: avoid;
+  }
+  .sig { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 24px; margin-top: 10px; break-inside: avoid; }
+  .sig div { padding-top: 22px; border-bottom: 1px solid var(--ink); font-size: 9pt; color: var(--muted); }
+  .sig div span { position: relative; top: 16px; }
+  .keep { break-inside: avoid; }
+  .office { margin-top: 16px; padding: 6px 10px; border: 1px dashed var(--rule); font-size: 9pt; break-inside: avoid; }
+  .office table { border-collapse: collapse; width: 100%; }
+  .office td { padding: 3px 4px; vertical-align: bottom; }
+  .office td.v { border-bottom: 1px solid var(--rule); width: 30%; }
+  .small { font-size: 9pt; color: var(--muted); }
+  .screen-note {
+    background: var(--note-bg); color: var(--note-ink); padding: 8px 12px; margin: 0 0 12px;
+    font: 9.5pt/1.4 system-ui, sans-serif; border-radius: 4px;
+  }
+  @media print {
+    body { padding: 0; max-width: none; color: #000; background: #fff; }
+    .screen-note { display: none; }
+  }
+  @media (max-width: 520px) {
+    .sig { grid-template-columns: 1fr; }
+    .line.wide { min-width: 50vw; }
+  }
+</style>
+</head>
+<body>
+
+<div class="screen-note">
+  <strong>For Micky (not printed):</strong> form version 1.1. Not legal advice; consider a lawyer review before first use.
+  To make a PDF: open this file in Chrome, Print, Destination "Save as PDF", paper A4, margins Default, "Background graphics" off.
+  A pre-rendered copy is next to this file (<code>CONSENT_FORM_v1.pdf</code>). Never commit a filled-in or signed copy.
+</div>
+
+<h1>GolfMe Caddie testing: consent to film and use my golf swing</h1>
+<p class="sub">Form version 1.1 &middot; Please read it all before filming starts. Ask Micky anything that is unclear. You get a copy.</p>
+
+<div class="idrow">
+  <span>Contributor ID (written by Micky): <span class="line"></span></span>
+  <span>Contact for questions and withdrawal (written by Micky): <span class="line wide"></span></span>
+</div>
+
+<h2>1. What this is</h2>
+<p>Micky, the developer of the GolfMe app, is testing how accurate GolfMe's swing-analysis feature ("Caddie") is. To do that, he needs videos of real golf swings that qualified golf coaches have checked. This is a small, unpaid test with adult friends. It is not a medical or academic study.</p>
+
+<h2>2. What is filmed and recorded</h2>
+<ul>
+  <li>Short phone videos (about 10 seconds each) of my full golf swing, from the front ("face-on") and from behind my hands along the target line ("down-the-line"), with a driver, hybrid, or iron. My face and body are visible.</li>
+  <li>Alongside each video: the club, the camera angle, whether I swing right- or left-handed, the lighting, and my own rough skill level (beginner, mid, or advanced).</li>
+  <li><strong>Not recorded:</strong> my name, contact details, or where the filming took place. Sound and location data are removed from the videos when they are copied to Micky's computer.</li>
+  <li>My name is kept only on this signed form, stored apart from the videos. The videos are labelled with the Contributor ID above.</li>
+</ul>
+
+<h2>3. Why</h2>
+<p>Only to test and measure the accuracy of Caddie and to tune its settings. My videos will <strong>not</strong> be used for marketing, posted publicly, shown in the GolfMe app, sold, given to anyone else, or used to train a machine-learning model.</p>
+
+<h2>4. Where the videos are kept</h2>
+<p>On Micky's own encrypted laptop, in a folder that is not synced to any cloud service. They are <strong>not</strong> uploaded to GolfMe's servers, to cloud storage, or to a chat app.</p>
+
+<h2>5. Who sees the videos</h2>
+<p>Micky. Golf coaches only if I tick a box below. Coaches see my Contributor ID, never my name. Coaches label the videos (for example, the moment of impact, or which swing fault they see) and then judge whether Caddie's feedback is correct.</p>
+
+<h2>6. How long they are kept</h2>
+<p>At most <strong>90 days</strong> from the date I sign, until <span class="line"></span> (date written by Micky). Then the videos and everything made from them (coach labels, measurements, still frames) are deleted. Micky may ask me to sign a new form to keep them longer; if I don't, they are deleted on that date.</p>
+
+<h2>7. Changing my mind (withdrawal)</h2>
+<ul>
+  <li>I can withdraw at any time, for any reason or none, by telling Micky in person, by message, or by email using the contact above. I don't have to explain.</li>
+  <li>Within <strong>7 days</strong>, Micky deletes my videos, the coaches' labels of them, and all data made from them, and asks any coach who holds a copy to delete it.</li>
+  <li>Limits I understand: summary numbers already written into a test report (for example "82% of 70 clips") can't be un-calculated, but they don't identify me, and my videos are left out of all later reports. If a video was already sent to an outside service I agreed to in section 9, Micky will ask for deletion there too, but that service's own deletion rules apply.</li>
+  <li>Withdrawing has no effect on any GolfMe account I have, or on my friendship with Micky.</li>
+</ul>
+
+<section class="keep"><h2>8. Coaches (optional)</h2>
+<p>Coaches are qualified golf coaches helping with this test. Up to two coaches may watch each video and label it independently.</p>
+<div class="tick optional">
+  <div class="box"></div>
+  <div><span class="label">Coaches may watch my videos in person</span> on Micky's laptop, with Micky present. No copy is given to them. <span class="tag">Optional</span></div>
+</div>
+<div class="tick optional">
+  <div class="box"></div>
+  <div><span class="label">A coach in another place may also watch my videos</span> (only if the box above is also ticked) by one of these methods: <span class="tag">Optional</span>
+    <ul>
+      <li>a live video call where Micky shares his screen and plays the video; the call is not recorded and no video file is sent. The video-call service carries the picture live but does not receive a file; or</li>
+      <li>an encrypted USB drive sent by tracked post, with the password sent separately, returned to Micky and wiped afterwards.</li>
+    </ul>
+  </div>
+</div>
+
+</section>
+<section class="keep"><h2>9. Outside analysis services (optional, separate)</h2>
+<p>To compare Caddie's current results with the coaches' labels, Micky may want to run my videos through the outside services Caddie uses today. These are companies other than GolfMe, and they process the video under their own terms. Micky will only send anything after he has checked their data-retention and privacy terms. <strong>If I leave a box unticked, my videos are never sent to that service.</strong></p>
+<div class="optin">
+  <div class="tick optional">
+    <div class="box"></div>
+    <div><span class="label">Roboflow</span> (Roboflow, Inc., USA) may receive still frames from my videos to detect body positions. <span class="tag">Optional</span></div>
+  </div>
+  <div class="tick optional">
+    <div class="box"></div>
+    <div><span class="label">Google Gemini</span> (Google's AI service) may receive my videos, with sound and location removed, to produce swing feedback. <span class="tag">Optional</span></div>
+  </div>
+</div>
+
+</section>
+<section class="keep"><h2>10. Confirmations</h2>
+<div class="tick required">
+  <div class="box"></div>
+  <div><span class="label">I am 18 or older.</span> <span class="tag">Required</span></div>
+</div>
+<div class="tick required">
+  <div class="box"></div>
+  <div><span class="label">I have read this form and agree to be filmed and to the uses in sections 1 to 7.</span> Taking part is my choice and unpaid. I keep the right to withdraw at any time (section 7). <span class="tag">Required</span></div>
+</div>
+<p class="small">Anyone else who appears in a video needs to sign their own form.</p>
+
+<div class="sig">
+  <div><span>Participant signature (or typed name if signing digitally)</span></div>
+  <div><span>Date (YYYY-MM-DD)</span></div>
+  <div><span>Participant name (printed)</span></div>
+  <div><span>Micky's signature and date</span></div>
+</div>
+
+</section>
+<div class="office">
+  <strong>Office use (Micky).</strong> Copy into the import tool exactly: <code>consent-add</code>. Keep this form apart from the video folder.
+  <table>
+    <tr><td>Contributor ID</td><td class="v"></td><td>Form version</td><td class="v">1.1</td></tr>
+    <tr><td>Consent date</td><td class="v"></td><td>Retention until (max +90 days)</td><td class="v"></td></tr>
+    <tr><td>Adult / signed (both required)</td><td class="v"></td><td>Coach in person / remote</td><td class="v"></td></tr>
+    <tr><td>Roboflow / Gemini</td><td class="v"></td><td>Recorded in tool on</td><td class="v"></td></tr>
+    <tr><td>Copy given to participant</td><td class="v"></td><td>Withdrawn on</td><td class="v"></td></tr>
+  </table>
+</div>
+
+</body>
+</html>
