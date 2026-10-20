@@ -25,7 +25,7 @@ import { CLICKABLE_CARD_CLASS } from "../components/ui/cardStyles";
 import { inputClass, labelClass } from "../components/ui/FormControls";
 import { AvatarUpload } from "../components/profile/AvatarUpload";
 import { ReputationBadge } from "../components/golfer/ReputationBadge";
-import { FoundingGolferBadge } from "../components/golfer/FoundingGolfer";
+import { FoundingGolferBadge, FoundingMark } from "../components/golfer/FoundingGolfer";
 import { Pill } from "../components/ui/Pill";
 import { AGE_RANGES, GENDER_OPTIONS } from "../types";
 import type { AgeRange } from "../types";
@@ -166,7 +166,10 @@ export function Profile() {
           <Avatar golfer={currentUser} size="lg" />
         </button>
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-xl font-bold text-slate-900">{currentUser.name}</h1>
+          <h1 className="flex items-center gap-1.5 text-xl font-bold text-slate-900">
+            <span className="truncate">{currentUser.name}</span>
+            <FoundingMark golfer={currentUser} />
+          </h1>
           <FoundingGolferBadge golfer={currentUser} className="mr-1.5 mt-1" />
           {/* Was plain gray text -- reads as a stray line, not really part
               of the identity block. A badge (same pattern as the

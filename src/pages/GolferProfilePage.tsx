@@ -34,7 +34,7 @@ import { CompareModal } from "../components/golfer/CompareModal";
 import { MatchReasons } from "../components/golfer/MatchReasons";
 import { ReputationRow } from "../components/golfer/ReputationRow";
 import { TrustBadgeRow } from "../components/golfer/TrustBadges";
-import { FoundingGolferBadge } from "../components/golfer/FoundingGolfer";
+import { FoundingGolferBadge, FoundingMark } from "../components/golfer/FoundingGolfer";
 import { ReputationBadge } from "../components/golfer/ReputationBadge";
 import { computeCompatibility, golferDistanceMiles } from "../lib/compatibility";
 import { matchTier, golferMatchReasons } from "../lib/matchReasons";
@@ -188,6 +188,7 @@ export function GolferProfilePage() {
         <div>
           <h1 className="flex items-center justify-center gap-1 text-xl font-bold text-slate-900">
             {golfer.name}
+            <FoundingMark golfer={golfer} />
             {golfer.verification.verifiedGolfer && <ShieldCheck size={16} className="text-fairway-600" />}
           </h1>
           {(isFounder(golfer.id) || golfer.foundingMemberNumber != null) && (
