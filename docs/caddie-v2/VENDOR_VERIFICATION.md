@@ -2,11 +2,19 @@
 
 Status: **draft, 2026-10-20. Nothing in this file is verified.** Micky completes the checklists below in the vendors' dashboards and terms. Until he does, **no evaluation clip may be sent to Roboflow or Gemini**, and the import tool enforces that.
 
+**Pass/fail bar:** `VENDOR_APPROVAL_CRITERIA.md` (criteria V1 to V10, who signs off). A vendor needs every criterion there, including a **written no-training commitment** for our configuration, before anything is sent.
+
+**Micky's decisions (2026-10-20):**
+
+- **Roboflow:** no clips until Roboflow confirms **in writing** that our specific configuration won't use uploaded images/videos or derived data for training or improvement beyond our purpose. Until then Roboflow is **excluded from the pilot baseline**. The consent form is not weakened. Questions to send: §5.1.
+- **Gemini:** stays **blocked** for participant footage until every item in §4 is done.
+- The pilot uses a **local pose source** instead (`LOCAL_PILOT_WORKFLOW.md`).
+
 ## 1. Why this exists
 
 Running today's Caddie (V1) over the evaluation clips, as a baseline to compare against coach labels, means sending those clips to two outside companies. That is allowed only when **all three** hold:
 
-1. **Vendor terms verified** for that processor (this file, section 4 or 5, every box ticked and dated by Micky).
+1. **Vendor approved** for that processor: every criterion in `VENDOR_APPROVAL_CRITERIA.md` passes, with the evidence from this file (section 4 or 5, every box ticked and dated by Micky).
 2. **The contributor opted in to that processor** on the signed consent form (form v1.1, section 9: a separate tick for Roboflow and for Gemini). The tool records these as `thirdPartyRoboflow` and `thirdPartyGemini`.
 3. **Micky's spend approval** for the run (`CADDIE_V2_AUDIT.md` §11, "Approval needed vs not").
 
@@ -15,11 +23,11 @@ The tool can check 1 and 2; 3 is on trust.
 ## 2. How the tool enforces it
 
 - `tools/caddie-eval/import-clip.mjs` exports `VENDOR_TERMS_VERIFIED`, frozen at `{ roboflow: null, gemini: null }`. `null` means not verified.
-- `assertThirdPartyAllowed(dataDir, clipId, processor)` is **the** gate. It throws unless the processor is verified, the clip is in the manifest, its contributor's consent is active and affirmative, the contributor ticked that processor, and the clip's audio and metadata were stripped. **Any future baseline runner must call it for every clip before sending anything**, and must not cache its result across runs (a withdrawal or expiry must take effect immediately).
+- `assertThirdPartyAllowed(dataDir, clipId, processor)` is **the** gate. It throws unless the processor's entry has both `verifiedOn` and `noTrainingConfirmedOn` (the date of the written no-training commitment), the clip is in the manifest, its contributor's consent is active and affirmative, the contributor ticked that processor, and the clip's audio and metadata were stripped. **Any future baseline runner must call it for every clip before sending anything**, and must not cache its result across runs (a withdrawal or expiry must take effect immediately).
 - `node tools/caddie-eval/import-clip.mjs third-party-check --processor roboflow|gemini` lists eligible clips and the refusal reason for the rest. It exits 1 while the vendor is unverified.
 - Tests in `tools/caddie-eval/test/import-clip.test.mjs` ("third-party gate") pin this behaviour: shipped state refuses everything; a contributor without the tick is refused even when the vendor is verified.
 
-**To mark a vendor verified:** after every box in its section is ticked, change that vendor's entry to `{ verifiedOn: "YYYY-MM-DD", by: "Micky", checklist: "docs/caddie-v2/VENDOR_VERIFICATION.md" }` in a commit of its own, and fill in the "Verified" line of the section. If terms change later (section 6), set it back to `null`.
+**To mark a vendor verified:** after every box in its section is ticked and every criterion in `VENDOR_APPROVAL_CRITERIA.md` passes, change that vendor's entry to `{ verifiedOn: "YYYY-MM-DD", noTrainingConfirmedOn: "YYYY-MM-DD", by: "Micky", checklist: "docs/caddie-v2/VENDOR_APPROVAL_CRITERIA.md" }` in a commit of its own, and fill in the "Verified" line of the section. If terms change later (section 6), set it back to `null`.
 
 ## 3. What "verified" must cover, for each vendor
 
@@ -58,6 +66,9 @@ The tool can check 1 and 2; 3 is on trust.
 - [ ] DPA: confirm the processor terms apply to this account (accepted automatically or needs acceptance in the console).
 - [ ] Subprocessors list opened and noted.
 - [ ] Clips sent are stripped of audio (V1 sends trimmed copies **with** audio, audit P3; the baseline runner must send the stripped clip from the data folder, not re-trim the original).
+- [ ] Written no-training commitment (criterion V1): record the exact Paid Services sentence and its "last updated" date, and confirm it covers the Files API uploads and the outputs, not only prompts.
+
+**What remains before any participant footage goes to Gemini** (2026-10-20): every box above; the per-contributor Gemini tick; a baseline runner that doesn't exist yet (it must call `assertThirdPartyAllowed`, send the stripped clip, and check each Files API delete); Micky's spend approval. Until then Gemini is blocked, and coach pass 2 in the pilot has no V1 output to rate.
 
 Verified: ____-__-__ by ______ (leave blank until every box is ticked).
 
@@ -84,6 +95,34 @@ Verified: ____-__-__ by ______ (leave blank until every box is ticked).
 - [ ] DPA: is one available for this plan? Subprocessors list?
 - [ ] Region: where inference runs and data is stored.
 - [ ] Remove the workflow's visualization output for the baseline run if possible (audit §12 Q3), so annotated images aren't produced or stored.
+- [ ] **Written answer received** to the questions in §5.1, naming our configuration. Without it Roboflow fails criterion V1 and stays excluded.
+
+### 5.1 Written questions for Roboflow (draft; Micky sends)
+
+Send from the account owner's email to Roboflow support or sales (whichever the plan offers). Don't include API keys. The workspace name is fine; account IDs are optional.
+
+> **Subject:** Data use and retention for hosted workflow inference: written confirmation request
+>
+> Hello,
+>
+> I run the Roboflow workspace "<workspace name>" on the <plan name> plan. We call one private hosted Workflow ("<workflow name>", version <n>) from our server for body-pose keypoint detection on still frames from short golf-swing videos. The frames show identifiable adults who have given written consent for a small, private accuracy test. Our consent form promises that their footage is not used to train any machine-learning model and is deleted within 90 days.
+>
+> Before sending any of this footage, I need written answers to the following, for our specific configuration (this workspace, plan, and Workflow, called through the hosted inference API):
+>
+> 1. **Training and improvement:** Will Roboflow use the images we send for inference, or anything derived from them (keypoint outputs, visualizations, embeddings, logs), to train, fine-tune, evaluate, or improve any Roboflow model or service, or anyone else's? Your Terms of Service mention "internal research, optimization, training and improving the Services" for private projects. Does that apply to inference inputs on our plan? If it can be switched off, how, and how can we confirm it is off?
+> 2. **Storage:** Are inference images stored at all after the response is returned (including model monitoring, inference history, caches, or logs)? If so, where, for how long, and can we set this to zero?
+> 3. **Workflow blocks:** If our Workflow contains no dataset-upload, active-learning, or similar blocks, is any image still saved to our workspace or to Roboflow?
+> 4. **Deletion:** Can we have specific inputs deleted on request, including from backups and the "non-public archives" mentioned in your terms? How long does that take?
+> 5. **Human access:** Can Roboflow staff view inference images? Under what conditions?
+> 6. **Region:** Where is hosted inference processed and where is any data stored? Which transfer mechanism applies outside the US (e.g. Standard Contractual Clauses)?
+> 7. **DPA and subprocessors:** Is a Data Processing Addendum available on our plan, and does it apply automatically or need signing? Where is the current subprocessor list?
+> 8. **Self-hosted option:** If we ran the same Workflow with the open-source Inference server on our own machine, would any image, output, or telemetry be sent to Roboflow? Does that need a different plan or licence?
+>
+> A written reply I can keep on file is what I need; I can't send footage on a verbal or chat-only answer. Thank you.
+>
+> <name>
+
+Record the reply's date as `noTrainingConfirmedOn` only if answer 1 is an unambiguous "no" for our configuration and answers 2 to 7 pass the criteria. Save the email privately (not in the repo).
 
 Verified: ____-__-__ by ______ (leave blank until every box is ticked).
 
@@ -95,4 +134,4 @@ Verified: ____-__-__ by ______ (leave blank until every box is ticked).
 
 ## 7. If the terms don't fit the consent form
 
-Don't send clips. Options, each a decision for Micky: ask the vendor for a written commitment; change plan; use a local pose source for the baseline (e.g. an on-device or locally run model) and skip that vendor; or revise the form (new version, re-consent). Never send under the current form if the vendor's terms would break a promise the form makes.
+Don't send clips. Options, each a decision for Micky: ask the vendor for a written commitment; change plan; use a local pose source for the baseline (e.g. an on-device or locally run model) and skip that vendor. **Micky decided (2026-10-20) not to weaken the form**: never send under the current form if the vendor's terms would break a promise the form makes. For the pilot, Roboflow is skipped and a local pose source is proposed (`LOCAL_PILOT_WORKFLOW.md` §3).
