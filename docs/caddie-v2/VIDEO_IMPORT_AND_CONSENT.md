@@ -2,13 +2,15 @@
 
 Status: **draft for Micky's review, 2026-10-20; updated the same day with Micky's testing decisions** (2 coaches, 90-day retention, consent form v1.1, third-party processing only after vendor verification and a separate opt-in, adults only). Tool: `tools/caddie-eval/import-clip.mjs` (tests: `node --test tools/caddie-eval/test/*.test.mjs`). Not legal advice: see §3.
 
-Related: `consent/CONSENT_FORM_v1.html` (+ `.pdf`), `VENDOR_VERIFICATION.md`, `PILOT_CHECKLIST.md`, `TESTING_PROTOCOL.md`.
+Related: `consent/CONSENT_FORM_v1.html` (+ `.pdf`), `consent/COACH_CONFIDENTIALITY_v1.html` (+ `.pdf`), `VENDOR_APPROVAL_CRITERIA.md`, `VENDOR_VERIFICATION.md`, `COACH_REVIEW_PROCEDURE.md`, `LOCAL_PILOT_WORKFLOW.md`, `PILOT_CHECKLIST.md`, `TESTING_PROTOCOL.md`.
+
+**Update 2026-10-20 (Micky's final testing decisions):** remote coach review is **Option A, live screen-share with no recording**; coaches sign a confidentiality and data-handling agreement and are recorded with `coach-add`; `coach-session-check` gates every coach session. Roboflow is excluded from the pilot until it confirms in writing that our configuration won't use the footage for training; Gemini stays blocked; the form is **not** weakened. The pilot uses a local pose source.
 
 ## 1. Hard rules
 
 1. **Only Micky's own swings and adults (18+) who signed the consent form.** Never existing GolfMe user uploads, Swing Posts, or anything in Supabase Storage, even with a user's later permission, for this process.
 2. **Videos never go into git.** Not in a commit, a branch, a PR, an issue, or a doc.
-3. **Videos never go to the cloud as part of this process:** not production Supabase, not any bucket, not Vercel, not Google Drive, iCloud, Dropbox, or a chat app. Sending clips to **Roboflow or Gemini** for a V1 baseline needs **all three**: (a) that vendor's terms verified (`VENDOR_VERIFICATION.md`), (b) the contributor's **separate tick for that processor** on the form, (c) Micky's spend approval. The tool enforces (a) and (b) through `assertThirdPartyAllowed()`; today both vendors are unverified, so nothing may be sent.
+3. **Videos never go to the cloud as part of this process:** not production Supabase, not any bucket, not Vercel, not Google Drive, iCloud, Dropbox, or a chat app. Sending clips to **Roboflow or Gemini** for a V1 baseline needs **all three**: (a) that vendor approved against `VENDOR_APPROVAL_CRITERIA.md`, including a **written no-training commitment** for our configuration, (b) the contributor's **separate tick for that processor** on the form, (c) Micky's spend approval. The tool enforces (a) and (b) through `assertThirdPartyAllowed()`; today both vendors are unapproved, so nothing may be sent.
 4. **No names or emails in the repo or the data folder.** People are `C001`, `C002`, ...; coaches are `K01`, `K02`, ...
 5. **Raw clips are kept at most 90 days** (provisional maximum) from the consent date, then deleted with everything derived from them.
 6. **Withdrawal is honored within 7 days** and deletes the clips and all linked evaluation data (§6.1 lists the limits).
@@ -17,9 +19,9 @@ Related: `consent/CONSENT_FORM_v1.html` (+ `.pdf`), `VENDOR_VERIFICATION.md`, `P
 
 | Place | Holds | Never holds |
 |---|---|---|
-| This repo | Code, these docs, the **blank** consent form (HTML and PDF), templates | Videos, consent records, labels, names, the name-to-ID key, signed forms |
-| **Data folder** on Micky's laptop (`GOLFME_EVAL_DATA_DIR`, default `~/golfme-eval-data`) | Clips, pseudonymous consent records, manifest, derived data (pose caches, frames), coach labels, audit log | Names, emails, signed forms, the name-to-ID key |
-| **Identity key**, kept separately from the data folder | Signed consent forms and the list "C001 = <name>, contact" | Clips |
+| This repo | Code, these docs, the **blank** consent form and coach agreement (HTML and PDF), templates | Videos, consent records, coach records, labels, names, the name-to-ID key, signed forms |
+| **Data folder** on Micky's laptop (`GOLFME_EVAL_DATA_DIR`, default `~/golfme-eval-data`) | Clips, pseudonymous consent records, pseudonymous coach records (agreement version and date only), manifest, derived data (pose caches, frames), coach labels (clip ID + coach ID only), audit log | Names, emails, signed forms or agreements, the name-to-ID key |
+| **Identity key**, kept separately from the data folder | Signed consent forms, signed coach agreements, and the lists "C001 = <name>, contact" and "K01 = <coach name>, contact" | Clips, labels |
 
 The **identity key** is the only place that links a person to an ID. Keep it apart from the clips: a password-manager secure note plus a local folder for signed PDFs, or paper in a drawer. Then a lost data folder alone identifies nobody (faces are still visible in the clips, so the folder is still sensitive).
 
@@ -34,7 +36,10 @@ The **identity key** is the only place that links a person to an ID. Keep it apa
   clips/C001-0001.mov        the stored clip (stripped when ffmpeg is present)
   derived/C001-0001/...      pose caches, extracted frames, harness output
   labels/C001-0001-K01.json  coach labels, one file per clip per coach
+  coaches/K01.json           pseudonymous coach agreement record (no names)
 ```
+
+Coach labels and coach records are kept apart from participant identity: they carry only clip IDs and coach IDs, and `verify` flags a label file with any field outside the protocol list (`TESTING_PROTOCOL.md` §8), a name that isn't `<clip ID>-<coach ID>.json`, or a coach ID without a record. Free-text label fields are on trust (no names).
 
 The tool **refuses** a data folder that is:
 
@@ -117,6 +122,9 @@ T=tools/caddie-eval/import-clip.mjs
 | Check everything | `node $T verify` (re-hashes every clip, checks consent, flags unstripped clips and stray files) |
 | Which clips coaches may see | `node $T coach-check` (in person) / `node $T coach-check --remote` |
 | Which clips a vendor may get | `node $T third-party-check --processor roboflow` (refuses everything until verified) |
+| Record a signed coach agreement | `node $T coach-add --coach K01 --agreement-version 1.0 --agreement-date 2026-10-25 --signed yes --in-person yes --remote-sessions no` |
+| Gate a coach session (run on the day) | `node $T coach-session-check --coach K01` / `node $T coach-session-check --coach K02 --remote` |
+| End a coach's participation | `node $T coach-revoke --coach K02` |
 | Withdraw (preview) | `node $T withdraw --contributor C001` |
 | Withdraw (delete) | `node $T withdraw --contributor C001 --confirm` |
 | Retention (preview) | `node $T retention` |
@@ -161,13 +169,17 @@ Stated plainly on the form (§7) and here:
 
 Plan: **two qualified coaches**, `K01` **in person** and `K02` **remote** if feasible (`TESTING_PROTOCOL.md` §8). **Neither is recruited yet.** Only clips listed by `coach-check` (in person) or `coach-check --remote` may be shown: consent active, the right opt-in ticked, audio and metadata stripped.
 
+**Before any session** (Micky's decision 2026-10-20): the coach signs the confidentiality and data-handling agreement (`consent/COACH_CONFIDENTIALITY_v1.pdf`), Micky records it with `coach-add`, and `coach-session-check --coach K0X [--remote]` passes on the day. For remote, the screen-share platform must be reviewed in the last 30 days (`COACH_REVIEW_PROCEDURE.md` §4). Step-by-step procedure: `COACH_REVIEW_PROCEDURE.md`.
+
+**Consent coverage checked (2026-10-20):** form v1.1 §8 already covers remote review by live screen-share with no recording and no file sent, and §5 says coaches see the Contributor ID, never the name. No form change is needed; `remoteCoachViewing` maps to that tick.
+
 ### In person (K01)
 
 On Micky's laptop, with Micky present. No copy leaves the laptop. Labels are typed into the labeling sheet, keyed by clip ID and coach ID only.
 
 ### Remote (K02): options that keep clips off cloud storage
 
-None is approved yet. Each needs the contributor's `remoteCoachViewing` tick, and Micky's choice:
+**Chosen for the pilot: Option A** (Micky, 2026-10-20), with participant IDs only, no copies, recordings, screenshots, or downloads, a signed coach agreement, and a reviewed platform. Options B and C are not used in the pilot. Each option needs the contributor's `remoteCoachViewing` tick:
 
 | Option | How | Clip leaves the laptop? | Needs Micky's approval because |
 |---|---|---|---|
@@ -191,7 +203,9 @@ Clips without coach-viewing consent can still be used for checks Micky can label
 | Withdrawal and retention delete clips, `derived/`, `labels/` | Copies anywhere else (coach drives, sheets, scratch folders) deleted |
 | Duplicates refused; sha256 verified | Manual metadata strip, when attested |
 | `coach-check` lists only opted-in, stripped clips | Coaches shown only those clips; no screen recording |
-| `assertThirdPartyAllowed`: vendor verified **and** per-processor opt-in | Every baseline runner calls it; spend approval obtained |
+| `coach-session-check`: signed coach agreement recorded (current version), session type cleared, platform reviewed within 30 days for remote | The coach actually honours the agreement (no capture by another device); platform settings really match the review |
+| Label files: protocol fields only, `<clip>-<coach>.json`, known coach | Free-text label fields contain no names |
+| `assertThirdPartyAllowed`: vendor verified **with** a dated written no-training commitment, **and** per-processor opt-in | Every baseline runner calls it; spend approval obtained |
 | No network calls in the tool | Nobody uploads clips by other means |
 
 ## 9. If something goes wrong

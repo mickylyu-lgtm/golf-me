@@ -2,9 +2,9 @@
 
 Status: **draft, 2026-10-20. Not run yet.** Tick the boxes on the day. The point of the pilot is to find problems in the process before filming the other 66 clips, so write down every snag.
 
-Background: `TESTING_PROTOCOL.md` (camera setup, shot matrix, labels), `VIDEO_IMPORT_AND_CONSENT.md` (storage, consent, deletion), `consent/CONSENT_FORM_v1.pdf` (the form).
+Background: `LOCAL_PILOT_WORKFLOW.md` (the whole local-only flow and its blockers), `TESTING_PROTOCOL.md` (camera setup, shot matrix, labels), `VIDEO_IMPORT_AND_CONSENT.md` (storage, consent, deletion), `COACH_REVIEW_PROCEDURE.md` (coach sessions), `consent/CONSENT_FORM_v1.pdf` (the form), `consent/COACH_CONFIDENTIALITY_v1.pdf` (what coaches sign).
 
-**The pilot is local only.** No clip goes to Roboflow, Gemini, Supabase, or any cloud. Both vendors are unverified (`VENDOR_VERIFICATION.md`), so the tool refuses third-party use anyway.
+**The pilot is local only.** No clip goes to Roboflow, Gemini, Supabase, or any cloud. Roboflow is **excluded** from the pilot baseline until it confirms in writing that our configuration won't use the footage for training (Micky, 2026-10-20); Gemini is blocked until verified (`VENDOR_APPROVAL_CRITERIA.md`). The tool refuses third-party use anyway. Pose for the pilot comes from a **local model** (proposed: MediaPipe Pose Landmarker; not installed yet, needs Micky's approval).
 
 ---
 
@@ -12,7 +12,7 @@ Background: `TESTING_PROTOCOL.md` (camera setup, shot matrix, labels), `VIDEO_IM
 
 - [ ] **Contributors:** Micky (`C001`) plus at least one friend (`C002`), all 18+. Ideally one is left-handed (for clip 8). Nobody else will be in frame unless they also sign.
 - [ ] Send each friend the **blank** `CONSENT_FORM_v1.pdf` to read in advance. They sign **on the day**, not before (the 90-day clock starts at the consent date).
-- [ ] **Coaches:** note where recruitment stands (`TESTING_PROTOCOL.md` §8). The pilot can go ahead without coaches; their labeling then becomes the next step.
+- [ ] **Coaches:** note where recruitment stands (`TESTING_PROTOCOL.md` §8). The pilot can go ahead without coaches; their labeling then becomes the next step. Before any coach session: each coach signs `COACH_CONFIDENTIALITY_v1.pdf`, Micky records it with `coach-add`, and (remote) the screen-share platform is reviewed (`COACH_REVIEW_PROCEDURE.md` §1, §4).
 - [ ] **Laptop:** BitLocker (Windows) or FileVault (Mac) on. Enough free disk (about 2 GB for 10 clips).
 - [ ] **ffmpeg** available where the tool runs (WSL/Linux: `ffmpeg -version`; install with the system package manager if missing). Without it, plan the manual strip in `VIDEO_IMPORT_AND_CONSENT.md` §4.
 - [ ] **Data folder** created once, outside any repo and outside OneDrive/iCloud/Dropbox:
@@ -101,6 +101,7 @@ node $T import --contributor C001 --file /mnt/c/caddie-tmp/IMG_0412.MOV \
 - [ ] `node $T verify` prints `OK`. If it lists "metadata not stripped", fix before anyone else sees the clip.
 - [ ] `node $T status`: 10 clips, the expected slot codes, `leftHandedShare` (10 % if clip 8 was left-handed, else 0), skill mix.
 - [ ] `node $T coach-check` lists the clips coaches may watch in person; `coach-check --remote` for a remote coach.
+- [ ] `node $T coach-session-check --coach K01` (and `--coach K02 --remote`) refuses until the coach agreement is recorded and, for remote, the platform is reviewed. Expected until then.
 - [ ] `node $T third-party-check --processor gemini` reports `vendorVerified: false` and exits 1. Expected.
 - [ ] Spot-check two stored clips in the player: no sound, plays normally.
 - [ ] Delete the temporary folder, the phone copies, the phone's "Recently Deleted", and the session log.
@@ -113,13 +114,15 @@ node $T import --contributor C001 --file /mnt/c/caddie-tmp/IMG_0412.MOV \
 
 - The **blank labeling sheet** (columns from `TESTING_PROTOCOL.md` §8 pass 1), pre-filled with the clip IDs from `coach-check`, nothing else. Clip IDs and coach IDs only.
 - The fixed fault list and the phase definitions (`TESTING_PROTOCOL.md` §8).
-- The session plan: in person (`K01`) on Micky's laptop; remote (`K02`) only by the method Micky has approved (`VIDEO_IMPORT_AND_CONSENT.md` §7).
+- The blank coach agreement (`consent/COACH_CONFIDENTIALITY_v1.pdf`) to read before signing.
+- The session plan: in person (`K01`) on Micky's laptop; remote (`K02`) **only by live screen-share with no recording** (Option A, Micky's decision 2026-10-20), following `COACH_REVIEW_PROCEDURE.md` §3. No file is sent to a coach.
 
 Then:
 
+- [ ] On the day of each session: `node $T coach-session-check --coach K0X [--remote]` passes; show only its `eligible` clips.
 - [ ] Pass 1 (blind labels): each coach on their own, without seeing the other's sheet or any Caddie output.
-- [ ] Pass 2 (rate Caddie's feedback) **can't use V1 output in the pilot**: producing it means sending clips to Roboflow and Gemini, which is blocked until vendor verification, per-processor opt-ins, and spend approval. For the pilot, either skip pass 2 or dry-run the pass-2 sheet layout without real Caddie output.
-- [ ] Labels come back as a sheet keyed by clip ID and coach ID. Save each as `labels/<clip ID>-<coach ID>.json` (or the sheet export) inside the data folder, so withdrawal deletes them.
+- [ ] Pass 2 (rate Caddie's feedback) **can't use V1 output in the pilot**: producing it means sending clips to Roboflow and Gemini, which is blocked until vendor approval, per-processor opt-ins, and spend approval. For the pilot, either skip pass 2 or, if the local-pose prototype exists by then, rate that output, clearly labeled (Micky's call, `LOCAL_PILOT_WORKFLOW.md` B10).
+- [ ] Labels come back as a sheet keyed by clip ID and coach ID. Save each as `labels/<clip ID>-<coach ID>.json` inside the data folder (protocol fields only), so withdrawal deletes them. `node $T verify` checks the names, fields, and coach IDs.
 
 ## 9. Pilot review (before filming the other 66)
 
