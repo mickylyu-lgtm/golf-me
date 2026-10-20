@@ -47,7 +47,13 @@ export function isPoseKeypointName(name: string): name is PoseKeypointName {
 }
 
 /** Which pose model produced a sequence. Measurements and thresholds must be calibrated per backend. */
-export type PoseBackend = "roboflow_v1_workflow" | "apple_vision" | "browser_model" | "synthetic";
+export type PoseBackend =
+  | "roboflow_v1_workflow"
+  | "apple_vision"
+  | "browser_model"
+  /** Google MediaPipe Pose Landmarker (local, offline). The model variant (lite/full/heavy) goes in backendVersion. */
+  | "mediapipe_pose_landmarker"
+  | "synthetic";
 
 /**
  * Coordinate space of keypoint x/y.
@@ -56,6 +62,11 @@ export type PoseBackend = "roboflow_v1_workflow" | "apple_vision" | "browser_mod
  *   stored, so sourceWidth/sourceHeight are null for it.
  * - normalized: 0..1 of frame width/height, origin top-left, y grows downward.
  * Every V2 module must work from scale-free ratios so it is correct in both.
+ * Caveat: x and y in "normalized" are scaled by different amounts unless the
+ * frame is square, so a ratio that mixes x and y distances (cameraAngle.ts
+ * divides horizontal spans by torso length) is distorted there. Producers
+ * that know the frame size should emit source_pixels, as the MediaPipe
+ * adapter does.
  */
 export type PoseCoordinateSpace = "source_pixels" | "normalized";
 
