@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
+    "test": "vitest run",
     "preview": "vite preview",
     "ios:sync": "npm run build && npx cap sync ios",
     "ios:open": "npx cap open ios",
@@ -45,6 +46,7 @@
     "sharp": "^0.35.4",
     "tailwindcss": "^4.3.2",
     "typescript": "~6.0.2",
-    "vite": "^8.1.1"
+    "vite": "^8.1.1",
+    "vitest": "5.0.3"
   }
 }
