@@ -608,7 +608,7 @@ Close behind: a stuck-row reaper (C3, needs DB/production approval) and cost tel
 ## 12. Open questions only Micky can answer (dashboards and logs)
 
 1. **Gemini billing.**
-   - ~~Is the project on a paid tier?~~ **Answered 2026-10-20 (Micky's AI Studio screenshot):** Paid Tier 1, prepaid credits (HK$500 added 2026-08-21, HK$486.73 left; both "GolfMe" and "My First Project" on that billing account). Still to confirm: the Caddie key's project; auto-reload was off.
+   - ~~Is the project on a paid tier?~~ **Answered 2026-10-20 (Micky's AI Studio screenshot):** Paid Tier 1, prepaid credits (HK$500 added 2026-08-21, HK$486.73 left; both "GolfMe" and "My First Project" on that billing account). Still to confirm: the Caddie key's project. Auto-reload left off for now (Google won't accept a threshold below the current balance); a Google Cloud monthly budget alert was set 2026-10-20.
    - What is the actual price per 1M input and output tokens for `gemini-3.6-flash`?
    - What has total monthly spend been so far?
    - Are thinking tokens being billed by default?
