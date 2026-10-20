@@ -56,3 +56,20 @@ ios/.build
 
 # Telegram attachment copies (tools/telegram-inbox): local, temporary, never committed
 .claude/inbox/
+
+# Caddie V2 evaluation data (tools/caddie-eval): must live OUTSIDE the repo
+# (GOLFME_EVAL_DATA_DIR, default ~/golfme-eval-data) and the tool refuses a
+# folder inside any git checkout. These patterns are a belt-and-braces guard
+# in case a copy ever lands in the tree anyway. Never commit swing videos.
+golfme-eval-data/
+**/golfme-eval-data/
+caddie-eval-data/
+tools/caddie-eval/data/
+tools/caddie-eval/**/*.mp4
+tools/caddie-eval/**/*.mov
+tools/caddie-eval/**/*.m4v
+tools/caddie-eval/**/*.MP4
+tools/caddie-eval/**/*.MOV
+docs/caddie-v2/**/*.mp4
+docs/caddie-v2/**/*.mov
+docs/caddie-v2/**/*.MOV
