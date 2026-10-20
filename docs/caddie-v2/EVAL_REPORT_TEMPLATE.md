@@ -24,7 +24,8 @@
 | Contributors | (count only) |
 | Coaches (pseudonymous IDs) | |
 | Pose source | (e.g. cached V1 Roboflow output, Apple Vision prototype; model or workflow version) |
-| V1 outputs used? | (yes/no; if yes, the date V1 was run and the spend approval reference) |
+| V1 outputs used? | (yes/no; if yes, the date V1 was run, the spend approval reference, the `VENDOR_TERMS_VERIFIED` dates for Roboflow and Gemini, and confirmation every clip sent passed `assertThirdPartyAllowed`) |
+| Consent form version(s) | (e.g. 1.1; every clip within its 90-day retention on the run date) |
 | Module versions | `qualityGate` , `cameraAngle` , `phaseOrder` , `roboflowAdapter` |
 | Threshold registry | (commit of `thresholds.ts`; count placeholder / coach_validated) |
 | Provider spend for this run | (actual, from invoices or usage pages; `—` if none) |
@@ -38,14 +39,19 @@ Counts of clips actually scored. Slot codes and condition tags come from the man
 | A. Core (tripod, daylight) | | | | |
 | B. Handheld | | | | |
 | C. Light (backlit / overcast or dusk / indoor) | | | | |
-| D. Left-handed | | | | |
-| E. Slow motion (60 / 240 fps) | | | | |
-| F. Trouble cases | | | | |
-| **Total** | | | | |
+| D. Slow motion (60 / 240 fps) | | | | |
+| E. Trouble cases | | | | |
+| **Total** (target 76) | | | | |
 
-| Club | Driver | Wood/hybrid | Iron |
+| Club | Driver | Hybrid (or wood) | Iron |
 |---|---|---|---|
 | Clips | | | |
+
+| Handedness / skill | Right | Left (target 15 to 20 %) | Beginner | Mid | Advanced |
+|---|---|---|---|---|---|
+| Clips | | | | | |
+
+If no left-handed contributor was available, write "left-handed: not measured" here and in §9.
 
 Excluded clips and why (clip ID, reason):
 
@@ -75,9 +81,13 @@ Self-consistency (same coach, re-label after a week or more):
 |---|---|---|---|---|
 | | | | | |
 
-Ambiguous clips (coaches disagreed), per field: count and clip IDs. Say how each was settled (third coach, discussion, or left ambiguous).
+Disagreements (tracked, never settled): one row per clip and field where the coaches differ, with each coach's answer. No tie-break or discussion is used to resolve them (`TESTING_PROTOCOL.md` §9).
 
-**Truth used below** = the consensus label where coaches agree or settled; ambiguous fields are scored in a separate row, never mixed in.
+| Clip ID | Field | K01 | K02 |
+|---|---|---|---|
+| | | | |
+
+**Truth used below** = the **agreed** label (both coaches gave the same answer; for phase times, both within ±67 ms, truth = their mean). Ambiguous fields are scored in a separate row, never mixed in. Where a section shows a headline metric, also give it **against each coach separately** (K01 truth, K02 truth). If only one coach labeled, say so at the top of the report; no threshold may be validated from single-coach labels.
 
 ---
 
@@ -207,7 +217,7 @@ Also report the distributions of `medianShoulderRatio` and `medianHipRatio` per 
 
 **What it measures:** how often Caddie claims a fault that isn't there, and whether its main advice is right. Applies to V1 output now, and V2 once it produces feedback.
 
-**Truth:** coach pass-1 fault labels (consensus); coach pass-2 ratings.
+**Truth:** coach pass-1 fault labels (agreed); coach pass-2 ratings, per coach.
 **Unit:** one fault claim, or one clip.
 
 **How computed:**
