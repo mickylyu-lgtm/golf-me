@@ -1,6 +1,6 @@
 # Caddie V2 — Audit and Plan
 
-Status: written 2026-10-20 on branch `caddie-v2` as a **read-only assessment**. Since then, **Phase 1 (testing foundation) work has landed on `caddie-v2` only** (see the status note in §11): pure V2 modules with unit tests, a thresholds registry, a local consent-gated clip import tool, the testing, consent, and eval-report docs, and (same day) Micky's testing decisions: consent form v1.1, 90-day retention, vendor verification gate, 76-clip plan with a 10-clip pilot, two coaches (not yet recruited). **Production Caddie (`analyze-swing`, `api/`, the app's Caddie screens, the database) is still identical to `main`.** Nothing is pushed, deployed, or wired in, and no evaluation has been run.
+Status: written 2026-10-20 on branch `caddie-v2` as a **read-only assessment**. Since then, **Phase 1 (testing foundation) work has landed on `caddie-v2` only** (see the status note in §11): pure V2 modules with unit tests, a thresholds registry, a local consent-gated clip import tool, the testing, consent, and eval-report docs, and (same day) Micky's testing decisions: consent form v1.1, 90-day retention, vendor verification gate, 76-clip plan with a 10-clip pilot, two coaches (not yet recruited); then Micky's final decisions: remote coach review by live screen-share only, a signed coach agreement and a `coach-session-check` gate, Roboflow excluded from the pilot until written no-training confirmation, Gemini blocked, and an all-local pilot with a local pose source (proposed, not installed). **Production Caddie (`analyze-swing`, `api/`, the app's Caddie screens, the database) is still identical to `main`.** Nothing is pushed, deployed, or wired in, and no evaluation has been run.
 
 Every code claim below was re-checked against the current files. References are `path:line`, relative to the repo root. Anything that can't be known from code (billing, plan limits, retention settings, logs) is marked **UNKNOWN**.
 
@@ -592,7 +592,15 @@ Close behind: a stuck-row reaper (C3, needs DB/production approval) and cost tel
 > - **Third-party processing:** blocked until vendor terms are verified (`VENDOR_VERIFICATION.md`, Micky's checklist; public terms cited, not verified) **and** the contributor opted in to that processor. Enforced by `assertThirdPartyAllowed()`; `VENDOR_TERMS_VERIFIED` is `null` for both vendors. Consequence: the pilot can't produce V1 output for coach pass 2.
 > - Tool: 19 `node --test` tests.
 >
-> - **Not done, on purpose:** no production integration, no Edge Function or UI change, no Supabase or provider calls, no clips collected, no accuracy measured. The next build step, once a pilot set exists, is the scoring harness: it reads the manifest, labels, and cached pose, and writes the report tables.
+> **Final testing decisions applied (2026-10-20, Micky; branch only, not pushed):**
+> - **Remote coach review = Option A**, live screen-share with no recording, for the 10-clip pilot. Coaches sign a **confidentiality and data-handling agreement v1.0** (`consent/COACH_CONFIDENTIALITY_v1.html` + blank PDF, not legal advice). Step-by-step in-person and remote procedure, screen-share platform checklist, and a FaceTime/Zoom/Google Meet comparison from public docs (unverified): `COACH_REVIEW_PROCEDURE.md`. Consent form v1.1 §8 was checked and already covers remote screen-share review; no form change.
+> - **Tool gate:** `coach-add` / `coach-revoke` record pseudonymous coach agreements (`coaches/K01.json`, no names); `coach-session-check --coach K0X [--remote]` refuses unless the signed agreement is recorded on the current version, the session type is cleared, a clip is eligible, and (remote) `SCREEN_SHARE_PLATFORM_REVIEW` is set and under 30 days old. It ships `null`, so every remote session is refused. `verify` checks label files (protocol fields only, `<clip>-<coach>.json`, known coach). 23 `node --test` tests.
+> - **Roboflow:** no clips until **written** confirmation that our configuration won't use the footage or derived data for training or improvement; **excluded from the pilot baseline** meanwhile. Consent form not weakened. Email draft: `VENDOR_VERIFICATION.md` §5.1 (Micky sends). The third-party gate now also needs a dated `noTrainingConfirmedOn` per vendor.
+> - **Gemini:** stays blocked for participant footage; remaining items in `VENDOR_VERIFICATION.md` §4.
+> - **Vendor approval criteria** (pass/fail V1 to V10, Micky signs off): `VENDOR_APPROVAL_CRITERIA.md`.
+> - **Local pilot:** `LOCAL_PILOT_WORKFLOW.md` proposes the all-local flow and recommends **MediaPipe Pose Landmarker run locally** as the pilot pose source (Apple Vision 2D stays the iOS candidate, RTMPose an optional cross-check; Ultralytics AGPL and OpenPose excluded). **Nothing installed**; the extractor and scoring harness need Micky's approval to install the runtime and model file. Blockers and owners: `LOCAL_PILOT_WORKFLOW.md` §5.
+>
+> - **Not done, on purpose:** no production integration, no Edge Function or UI change, no Supabase or provider calls, no clips collected, no accuracy measured. The next build step, once Micky approves the local pose install, is the local pose extractor, then the scoring harness: it reads the manifest, labels, and cached pose, and writes the report tables.
 
 - **Shared location.** Pick one location that both the Vite app and the Supabase bundler can import, and prove it with a trivial import.
 - **Types.** Define `PoseSequence`, `QualityGateResult`, `CameraAngleResult`, `SwingSegments`, and `Measurement`, each with confidence and an `inconclusiveReason`.
@@ -610,7 +618,9 @@ Close behind: a stuck-row reaper (C3, needs DB/production approval) and cost tel
 | Item | Needs approval? |
 |---|---|
 | Harness, modules, tests on the `caddie-v2` branch | No (local branch work; ask before pushing) |
-| Running V1, Roboflow, or Gemini on the eval set | **Yes, spend** |
+| Running V1, Roboflow, or Gemini on the eval set | **Yes, spend**, and the vendor must first pass `VENDOR_APPROVAL_CRITERIA.md` (Roboflow: written no-training confirmation) |
+| Installing a local pose runtime and model file for the pilot (`LOCAL_PILOT_WORKFLOW.md` §4) | **Yes, install** (dev tool on the branch; no spend, no production) |
+| Marking the screen-share platform reviewed, or a vendor approved | **Micky only**, each in a commit of its own |
 | Read-only SQL on production for historical counts and timings | **Yes, production read** |
 | SA/UI hotfixes and the retry fix | **Yes, web deploy** |
 | Shadow-mode V2 in `analyze-swing`, telemetry | **Yes, Edge deploy** |
@@ -655,6 +665,6 @@ Close behind: a stuck-row reaper (C3, needs DB/production approval) and cost tel
    - clip lengths
 8. **Existing footage.** Is there already a consented clip set (e.g., the `raw-swings` folder that `scripts/extract-golf-training-frames` expects)?
 9. **Earlier validation.** Where is the offline validation of the six-phase workflow (AS:8-9, 59-60, 74-77), and what did it measure?
-10. **Coaches.** How many qualified coaches with the reviewer role are available, and how many clips can each label per week? **Partly answered 2026-10-20:** plan for two (one in person, one remote if feasible), not recruited yet; recruitment checklist in `TESTING_PROTOCOL.md` §8. Still open: who, and the remote viewing method.
+10. **Coaches.** How many qualified coaches with the reviewer role are available, and how many clips can each label per week? **Partly answered 2026-10-20:** plan for two (one in person, one remote if feasible), not recruited yet; recruitment checklist in `TESTING_PROTOCOL.md` §8. Still open: who. **Remote method decided 2026-10-20:** live screen-share, no recording (`COACH_REVIEW_PROCEDURE.md`).
 
-Questions 1 to 3 (Gemini and Roboflow data terms) now have a step-by-step checklist in `VENDOR_VERIFICATION.md`; no clip goes to either vendor until it's complete.
+Questions 1 to 3 (Gemini and Roboflow data terms) now have a step-by-step checklist in `VENDOR_VERIFICATION.md` and pass/fail criteria in `VENDOR_APPROVAL_CRITERIA.md`; no clip goes to either vendor until both are met. Roboflow is excluded from the pilot until it answers the written questions (§5.1 there).
