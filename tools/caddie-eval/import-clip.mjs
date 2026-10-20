@@ -9,28 +9,38 @@
 //   (GOLFME_EVAL_DATA_DIR, default ~/golfme-eval-data). The tool refuses a
 //   directory inside any git work tree or a known cloud-sync folder;
 // - nothing is uploaded anywhere. This file makes no network calls;
-// - a clip is refused unless its contributor has an ACTIVE consent record
-//   (not withdrawn, not past its retention date);
+// - a clip is refused unless its contributor has an ACTIVE, AFFIRMATIVE
+//   consent record on the current form version (signed, adult, not
+//   withdrawn, not past its retention date; retention is at most 90 days);
+// - third-party processing (Roboflow, Gemini) is a separate per-processor
+//   opt-in on the form. Any baseline runner MUST call
+//   assertThirdPartyAllowed() per clip, which also refuses until the
+//   vendor's terms are verified (VENDOR_TERMS_VERIFIED, see
+//   docs/caddie-v2/VENDOR_VERIFICATION.md);
 // - clips get pseudonymous IDs (C001-0001); original file names are never
 //   recorded; consent records hold no names or emails (strict key set);
 // - audio and container metadata (incl. location) are stripped when ffmpeg
 //   is on PATH; otherwise the clip is flagged metadataStripped=false and the
 //   manual step in the docs applies;
-// - `withdraw` deletes every clip and all derived data for a contributor.
+// - `withdraw` deletes every clip and all derived and label data for a
+//   contributor.
 //
 // Development tooling only; never imported by src/. No dependencies beyond
 // Node's standard library.
 //
 // Usage: node tools/caddie-eval/import-clip.mjs <command> [options]
 //   init
-//   consent-add  --contributor C001 --consent-date YYYY-MM-DD --consent-version 1.0
-//                --retention-until YYYY-MM-DD --adult yes
-//                --coach-viewing yes|no --third-party-processing yes|no
+//   consent-add  --contributor C001 --form-version 1.1 --consent-date YYYY-MM-DD
+//                --retention-until YYYY-MM-DD --adult yes --signed yes
+//                --coach-viewing yes|no --remote-coach-viewing yes|no
+//                --roboflow yes|no --gemini yes|no
 //   import       --contributor C001 --file <video> --angle <a> --club <c>
-//                --mount <m> --handedness <h> --lighting <l>
+//                --mount <m> --handedness <h> --lighting <l> --skill <s>
 //                [--fps N] [--condition <tag>]... [--require-strip | --stripped-manually]
 //   status
 //   verify
+//   coach-check        [--remote]
+//   third-party-check  --processor roboflow|gemini
 //   withdraw     --contributor C001 [--confirm]
 //   retention    [--apply]
 
@@ -46,10 +56,24 @@ export const DATA_DIR_ENV = "GOLFME_EVAL_DATA_DIR";
 export const FFMPEG_ENV = "GOLFME_EVAL_FFMPEG";
 export const FFPROBE_ENV = "GOLFME_EVAL_FFPROBE";
 export const MANIFEST_SCHEMA = 1;
-export const CONSENT_SCHEMA = 1;
-/** The consent text version the docs currently ship (VIDEO_IMPORT_AND_CONSENT.md). */
-export const CURRENT_CONSENT_VERSION = "1.0";
-export const MAX_RETENTION_MONTHS = 24;
+export const CONSENT_SCHEMA = 2;
+/**
+ * The consent form version currently in use
+ * (docs/caddie-v2/consent/CONSENT_FORM_v1.html). Version 1.0 was an unsigned
+ * draft text and is refused.
+ */
+export const CURRENT_FORM_VERSION = "1.1";
+/** Provisional maximum retention for raw clips and everything derived from them. */
+export const MAX_RETENTION_DAYS = 90;
+export const THIRD_PARTY_PROCESSORS = ["roboflow", "gemini"];
+/**
+ * Vendor terms verification, per processor. null = NOT verified, so every
+ * third-party send is refused. Set to { verifiedOn: "YYYY-MM-DD", by:
+ * "Micky", checklist: "docs/caddie-v2/VENDOR_VERIFICATION.md" } only after
+ * Micky completes that vendor's checklist, in a commit of its own. Spend
+ * approval is a separate, additional requirement the tool cannot check.
+ */
+export const VENDOR_TERMS_VERIFIED = Object.freeze({ roboflow: null, gemini: null });
 export const MAX_CLIP_BYTES = 2 * 1024 * 1024 * 1024;
 export const ALLOWED_EXTENSIONS = [".mp4", ".mov", ".m4v"];
 
@@ -62,6 +86,8 @@ export const CAPTURE_ENUMS = {
   mount: ["tripod", "handheld"],
   handedness: ["right", "left"],
   lighting: ["daylight", "overcast", "backlit", "dusk", "indoor"],
+  // Self-reported by the contributor; coaches give their own estimate.
+  skill: ["beginner", "mid", "advanced"],
 };
 export const CONDITION_TAGS = [
   "baggy_clothing",
@@ -89,13 +115,16 @@ const CONSENT_KEYS = [
   "schema",
   "contributorId",
   "status",
-  "consentVersion",
+  "formVersion",
   "consentDate",
   "retentionUntil",
   "adult",
+  "affirmativeConsent",
   "permittedUses",
   "coachViewing",
-  "thirdPartyProcessing",
+  "remoteCoachViewing",
+  "thirdPartyRoboflow",
+  "thirdPartyGemini",
   "withdrawnAt",
   "expiredAt",
 ];
@@ -131,9 +160,9 @@ function isIsoDate(s) {
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
 }
 
-function addMonthsIso(iso, months) {
+export function addDaysIso(iso, days) {
   const d = new Date(`${iso}T00:00:00Z`);
-  d.setUTCMonth(d.getUTCMonth() + months);
+  d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 }
 
@@ -284,20 +313,23 @@ export function validateConsentRecord(rec) {
   if (rec.schema !== CONSENT_SCHEMA) problems.push("schema");
   if (!CONTRIBUTOR_ID_RE.test(rec.contributorId ?? "")) problems.push("contributorId must look like C001");
   if (!["active", "withdrawn", "expired"].includes(rec.status)) problems.push("status");
-  if (typeof rec.consentVersion !== "string" || !rec.consentVersion) problems.push("consentVersion");
+  if (typeof rec.formVersion !== "string" || !rec.formVersion) problems.push("formVersion");
   if (!isIsoDate(rec.consentDate)) problems.push("consentDate");
   if (!isIsoDate(rec.retentionUntil)) problems.push("retentionUntil");
   else if (isIsoDate(rec.consentDate)) {
     if (rec.retentionUntil <= rec.consentDate) problems.push("retentionUntil must be after consentDate");
-    if (rec.retentionUntil > addMonthsIso(rec.consentDate, MAX_RETENTION_MONTHS)) {
-      problems.push(`retentionUntil exceeds ${MAX_RETENTION_MONTHS} months after consentDate`);
+    if (rec.retentionUntil > addDaysIso(rec.consentDate, MAX_RETENTION_DAYS)) {
+      problems.push(`retentionUntil exceeds ${MAX_RETENTION_DAYS} days after consentDate`);
     }
   }
   if (rec.adult !== true) problems.push("adult must be true (contributors must be 18+)");
+  if (rec.affirmativeConsent !== true) problems.push("affirmativeConsent must be true (signed and dated form, main consent given)");
   if (!Array.isArray(rec.permittedUses) || !rec.permittedUses.includes("caddie_eval")) problems.push("permittedUses must include caddie_eval");
   if (Array.isArray(rec.permittedUses) && rec.permittedUses.some((u) => u !== "caddie_eval")) problems.push("permittedUses may only contain caddie_eval");
-  if (typeof rec.coachViewing !== "boolean") problems.push("coachViewing");
-  if (typeof rec.thirdPartyProcessing !== "boolean") problems.push("thirdPartyProcessing");
+  for (const k of ["coachViewing", "remoteCoachViewing", "thirdPartyRoboflow", "thirdPartyGemini"]) {
+    if (typeof rec[k] !== "boolean") problems.push(k);
+  }
+  if (rec.remoteCoachViewing === true && rec.coachViewing !== true) problems.push("remoteCoachViewing requires coachViewing");
   return problems;
 }
 
@@ -316,6 +348,7 @@ export function readConsent(L, contributorId) {
 export function assertActiveConsent(L, contributorId, today) {
   const rec = readConsent(L, contributorId);
   if (!rec) throw new EvalError(`no consent record for ${contributorId}; record written consent first (consent-add)`);
+  if (rec.affirmativeConsent !== true || rec.adult !== true) throw new EvalError(`consent for ${contributorId} is not affirmative; clip refused`);
   if (rec.status !== "active") throw new EvalError(`consent for ${contributorId} is ${rec.status}; clip refused`);
   if (rec.consentDate > today) throw new EvalError(`consent for ${contributorId} is dated in the future`);
   if (rec.retentionUntil <= today) throw new EvalError(`consent for ${contributorId} reached its retention date; clip refused`);
@@ -328,13 +361,16 @@ export function addConsent(dataDir, opts, today = todayIso()) {
     schema: CONSENT_SCHEMA,
     contributorId: opts.contributor,
     status: "active",
-    consentVersion: opts.consentVersion,
+    formVersion: opts.formVersion,
     consentDate: opts.consentDate,
     retentionUntil: opts.retentionUntil,
     adult: opts.adult === true,
+    affirmativeConsent: opts.affirmativeConsent === true,
     permittedUses: ["caddie_eval"],
     coachViewing: opts.coachViewing,
-    thirdPartyProcessing: opts.thirdPartyProcessing,
+    remoteCoachViewing: opts.remoteCoachViewing,
+    thirdPartyRoboflow: opts.thirdPartyRoboflow,
+    thirdPartyGemini: opts.thirdPartyGemini,
     withdrawnAt: null,
     expiredAt: null,
   };
@@ -342,15 +378,15 @@ export function addConsent(dataDir, opts, today = todayIso()) {
   if (problems.length) throw new EvalError(`consent refused: ${problems.join("; ")}`);
   if (rec.consentDate > today) throw new EvalError("consent date is in the future");
   if (rec.retentionUntil <= today) throw new EvalError("retention date has already passed");
-  if (rec.consentVersion !== CURRENT_CONSENT_VERSION) {
-    throw new EvalError(`consent version ${rec.consentVersion} is not the current form (${CURRENT_CONSENT_VERSION})`);
+  if (rec.formVersion !== CURRENT_FORM_VERSION) {
+    throw new EvalError(`form version ${rec.formVersion} is not the current form (${CURRENT_FORM_VERSION})`);
   }
   const file = consentPath(L, rec.contributorId);
   if (fs.existsSync(file)) {
     throw new EvalError(`${rec.contributorId} already has a consent record; a returning contributor after withdrawal gets a NEW ID`);
   }
   fs.writeFileSync(file, `${JSON.stringify(rec, null, 2)}\n`, { mode: 0o600, flag: "wx" });
-  audit(L, { action: "consent_recorded", contributorId: rec.contributorId, consentVersion: rec.consentVersion }, today);
+  audit(L, { action: "consent_recorded", contributorId: rec.contributorId, formVersion: rec.formVersion }, today);
   return rec;
 }
 
@@ -473,6 +509,7 @@ export async function importClip(dataDir, opts, env = process.env, today = today
     mount: opts.mount,
     handedness: opts.handedness,
     lighting: opts.lighting,
+    skill: opts.skill,
     fps: opts.fps ?? null,
     conditions: [...new Set(opts.conditions ?? [])].sort(),
   };
@@ -524,7 +561,7 @@ export async function importClip(dataDir, opts, env = process.env, today = today
   const entry = {
     clipId,
     contributorId: opts.contributor,
-    consentVersion: consent.consentVersion,
+    formVersion: consent.formVersion,
     importedOn: today,
     storedFile,
     bytes: fs.statSync(dest).size,
@@ -665,13 +702,103 @@ export function statusSummary(dataDir, today = todayIso()) {
       status: rec.status === "active" && rec.retentionUntil <= today ? "retention_due" : rec.status,
       retentionUntil: rec.retentionUntil,
       coachViewing: rec.coachViewing,
-      thirdPartyProcessing: rec.thirdPartyProcessing,
+      remoteCoachViewing: rec.remoteCoachViewing,
+      thirdPartyRoboflow: rec.thirdPartyRoboflow,
+      thirdPartyGemini: rec.thirdPartyGemini,
       clips: manifest.clips.filter((c) => c.contributorId === rec.contributorId).length,
     });
   }
   const bySlot = {};
-  for (const c of manifest.clips) bySlot[c.protocolSlot] = (bySlot[c.protocolSlot] ?? 0) + 1;
-  return { dataDir: L.root, revision: manifest.revision, clips: manifest.clips.length, contributors, bySlot };
+  const coverage = { angle: {}, club: {}, handedness: {}, skill: {}, mount: {}, lighting: {} };
+  for (const c of manifest.clips) {
+    bySlot[c.protocolSlot] = (bySlot[c.protocolSlot] ?? 0) + 1;
+    for (const k of Object.keys(coverage)) {
+      const v = c.capture?.[k] ?? "unknown";
+      coverage[k][v] = (coverage[k][v] ?? 0) + 1;
+    }
+  }
+  const n = manifest.clips.length;
+  // Target 15 to 20 % left-handed (TESTING_PROTOCOL.md section 4).
+  const leftHandedShare = n ? Math.round(((coverage.handedness.left ?? 0) / n) * 1000) / 10 : null;
+  return { dataDir: L.root, revision: manifest.revision, clips: n, contributors, bySlot, coverage, leftHandedShare };
+}
+
+// ---------------------------------------------------------------------------
+// Sharing gates: coaches and third-party processors
+// ---------------------------------------------------------------------------
+
+function clipReadyToShare(c) {
+  return c.metadataStripped === true && c.metadataVerified !== false;
+}
+
+/**
+ * Clips a coach may watch. In person needs coachViewing; remote (live
+ * screen-share or encrypted USB, see VIDEO_IMPORT_AND_CONSENT.md section 7)
+ * also needs remoteCoachViewing. Unstripped clips are never shareable.
+ */
+export function coachEligible(dataDir, { remote = false } = {}, today = todayIso()) {
+  const L = openDataDir(dataDir);
+  const manifest = loadManifest(L);
+  const eligible = [];
+  const refused = [];
+  for (const c of manifest.clips) {
+    let reason = null;
+    try {
+      const rec = assertActiveConsent(L, c.contributorId, today);
+      if (!rec.coachViewing) reason = "no coach-viewing consent";
+      else if (remote && !rec.remoteCoachViewing) reason = "no remote coach-viewing consent";
+      else if (!clipReadyToShare(c)) reason = "audio/metadata not stripped";
+    } catch (err) {
+      reason = err.message;
+    }
+    if (reason) refused.push({ clipId: c.clipId, reason });
+    else eligible.push(c.clipId);
+  }
+  return { remote, eligible, refused };
+}
+
+/**
+ * THE gate every future Roboflow/Gemini baseline runner must call for each
+ * clip before sending anything. Throws unless:
+ * - the processor's terms are verified (VENDOR_TERMS_VERIFIED);
+ * - the clip exists, its contributor's consent is active and affirmative;
+ * - the contributor ticked that processor's separate opt-in;
+ * - the clip's audio and metadata were stripped.
+ * Spend approval from Micky is required on top of this.
+ */
+export function assertThirdPartyAllowed(dataDir, clipId, processor, { vendorStatus = VENDOR_TERMS_VERIFIED, today = todayIso() } = {}) {
+  if (!THIRD_PARTY_PROCESSORS.includes(processor)) throw new EvalError(`unknown processor "${processor}" (allowed: ${THIRD_PARTY_PROCESSORS.join(", ")})`);
+  const v = vendorStatus[processor];
+  if (!v || !isIsoDate(v.verifiedOn)) {
+    throw new EvalError(`${processor} terms are not verified (docs/caddie-v2/VENDOR_VERIFICATION.md); nothing may be sent`);
+  }
+  const L = openDataDir(dataDir);
+  if (!CLIP_ID_RE.test(clipId ?? "")) throw new EvalError("clip ID must look like C001-0001");
+  const c = loadManifest(L).clips.find((x) => x.clipId === clipId);
+  if (!c) throw new EvalError(`${clipId} is not in the manifest`);
+  const rec = assertActiveConsent(L, c.contributorId, today);
+  const flag = processor === "roboflow" ? rec.thirdPartyRoboflow : rec.thirdPartyGemini;
+  if (flag !== true) throw new EvalError(`${c.contributorId} did not opt in to ${processor} processing; ${clipId} must not be sent`);
+  if (!clipReadyToShare(c)) throw new EvalError(`${clipId} still has audio/metadata; strip it first`);
+  return { clipId, contributorId: c.contributorId, processor };
+}
+
+/** Lists which clips assertThirdPartyAllowed() would pass for a processor, and why the rest are refused. */
+export function thirdPartyEligible(dataDir, processor, opts = {}) {
+  if (!THIRD_PARTY_PROCESSORS.includes(processor)) throw new EvalError(`--processor must be one of: ${THIRD_PARTY_PROCESSORS.join(", ")}`);
+  const L = openDataDir(dataDir);
+  const eligible = [];
+  const refused = [];
+  for (const c of loadManifest(L).clips) {
+    try {
+      assertThirdPartyAllowed(dataDir, c.clipId, processor, opts);
+      eligible.push(c.clipId);
+    } catch (err) {
+      refused.push({ clipId: c.clipId, reason: err.message });
+    }
+  }
+  const v = (opts.vendorStatus ?? VENDOR_TERMS_VERIFIED)[processor];
+  return { processor, vendorVerified: Boolean(v && isIsoDate(v.verifiedOn)), eligible, refused };
 }
 
 // ---------------------------------------------------------------------------
@@ -696,11 +823,17 @@ async function main(argv) {
     options: {
       contributor: { type: "string" },
       "consent-date": { type: "string" },
-      "consent-version": { type: "string" },
+      "form-version": { type: "string" },
       "retention-until": { type: "string" },
       adult: { type: "string" },
+      signed: { type: "string" },
       "coach-viewing": { type: "string" },
-      "third-party-processing": { type: "string" },
+      "remote-coach-viewing": { type: "string" },
+      roboflow: { type: "string" },
+      gemini: { type: "string" },
+      skill: { type: "string" },
+      remote: { type: "boolean" },
+      processor: { type: "string" },
       file: { type: "string" },
       angle: { type: "string" },
       club: { type: "string" },
@@ -728,11 +861,14 @@ async function main(argv) {
       const rec = addConsent(dataDir, {
         contributor: values.contributor,
         consentDate: values["consent-date"],
-        consentVersion: values["consent-version"],
+        formVersion: values["form-version"],
         retentionUntil: values["retention-until"],
         adult: yesNo(values.adult, "--adult"),
+        affirmativeConsent: yesNo(values.signed, "--signed"),
         coachViewing: yesNo(values["coach-viewing"], "--coach-viewing"),
-        thirdPartyProcessing: yesNo(values["third-party-processing"], "--third-party-processing"),
+        remoteCoachViewing: yesNo(values["remote-coach-viewing"], "--remote-coach-viewing"),
+        thirdPartyRoboflow: yesNo(values.roboflow, "--roboflow"),
+        thirdPartyGemini: yesNo(values.gemini, "--gemini"),
       });
       out(rec);
       return 0;
@@ -746,6 +882,7 @@ async function main(argv) {
         mount: values.mount,
         handedness: values.handedness,
         lighting: values.lighting,
+        skill: values.skill,
         fps: values.fps === undefined ? null : Number(values.fps),
         conditions: values.condition ?? [],
         requireStrip: values["require-strip"] === true,
@@ -765,6 +902,16 @@ async function main(argv) {
       out(problems.length ? problems.join("\n") : "OK: every clip hashes correctly and has active consent.");
       return problems.length ? 1 : 0;
     }
+    case "coach-check": {
+      const r = coachEligible(dataDir, { remote: values.remote === true });
+      out(r);
+      return 0;
+    }
+    case "third-party-check": {
+      const r = thirdPartyEligible(dataDir, values.processor);
+      out(r);
+      return r.vendorVerified ? 0 : 1;
+    }
     case "withdraw": {
       const r = withdrawContributor(dataDir, values.contributor, { confirm: values.confirm === true });
       if (r.dryRun) {
@@ -783,7 +930,7 @@ async function main(argv) {
       return 0;
     }
     default:
-      out("Commands: init | consent-add | import | status | verify | withdraw | retention. See the header of this file.");
+      out("Commands: init | consent-add | import | status | verify | coach-check | third-party-check | withdraw | retention. See the header of this file.");
       return command ? 2 : 0;
   }
 }

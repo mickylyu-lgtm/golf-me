@@ -8,13 +8,18 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   EvalError,
+  MAX_RETENTION_DAYS,
+  VENDOR_TERMS_VERIFIED,
   addConsent,
   assertSafeDataDir,
+  assertThirdPartyAllowed,
+  coachEligible,
   enforceRetention,
   importClip,
   initDataDir,
   protocolSlot,
   statusSummary,
+  thirdPartyEligible,
   validateConsentRecord,
   verifyDataDir,
   withdrawContributor,
@@ -51,19 +56,22 @@ function consent(dataDir, overrides = {}) {
     dataDir,
     {
       contributor: "C001",
+      formVersion: "1.1",
       consentDate: "2026-10-20",
-      consentVersion: "1.0",
-      retentionUntil: "2027-10-20",
+      retentionUntil: "2027-01-18",
       adult: true,
+      affirmativeConsent: true,
       coachViewing: true,
-      thirdPartyProcessing: false,
+      remoteCoachViewing: false,
+      thirdPartyRoboflow: false,
+      thirdPartyGemini: false,
       ...overrides,
     },
     TODAY,
   );
 }
 
-const CAPTURE = { angle: "face_on", club: "driver", mount: "tripod", handedness: "right", lighting: "daylight" };
+const CAPTURE = { angle: "face_on", club: "driver", mount: "tripod", handedness: "right", lighting: "daylight", skill: "mid" };
 
 function importOpts(file, overrides = {}) {
   return { contributor: "C001", file, ...CAPTURE, conditions: [], ...overrides };
@@ -102,34 +110,45 @@ test("refuses a clip with no consent record", async () => {
   await assert.rejects(importClip(dataDir, importOpts(fakeVideo(srcDir)), NO_FFMPEG, TODAY), /no consent record/);
 });
 
-test("consent record rejects extra fields (no names or emails), minors, and long retention", () => {
+test("consent record rejects extra fields (no names or emails), minors, non-affirmative consent, and retention over 90 days", () => {
   const good = {
-    schema: 1,
+    schema: 2,
     contributorId: "C001",
     status: "active",
-    consentVersion: "1.0",
+    formVersion: "1.1",
     consentDate: "2026-10-20",
-    retentionUntil: "2027-10-20",
+    retentionUntil: "2027-01-18",
     adult: true,
+    affirmativeConsent: true,
     permittedUses: ["caddie_eval"],
     coachViewing: true,
-    thirdPartyProcessing: false,
+    remoteCoachViewing: false,
+    thirdPartyRoboflow: false,
+    thirdPartyGemini: false,
     withdrawnAt: null,
     expiredAt: null,
   };
+  assert.equal(MAX_RETENTION_DAYS, 90);
   assert.deepEqual(validateConsentRecord(good), []);
   assert.ok(validateConsentRecord({ ...good, name: "Jane" }).some((p) => p.includes('"name"')));
   assert.ok(validateConsentRecord({ ...good, email: "a@b.c" }).length > 0);
   assert.ok(validateConsentRecord({ ...good, adult: false }).length > 0);
-  assert.ok(validateConsentRecord({ ...good, retentionUntil: "2029-01-01" }).length > 0);
+  assert.ok(validateConsentRecord({ ...good, affirmativeConsent: false }).some((p) => p.includes("affirmativeConsent")));
+  assert.ok(validateConsentRecord({ ...good, affirmativeConsent: undefined }).length > 0);
+  // 2026-10-20 + 90 days = 2027-01-18: allowed; one day more is refused.
+  assert.ok(validateConsentRecord({ ...good, retentionUntil: "2027-01-19" }).some((p) => p.includes("90 days")));
+  assert.ok(validateConsentRecord({ ...good, retentionUntil: "2027-10-20" }).length > 0);
+  assert.ok(validateConsentRecord({ ...good, remoteCoachViewing: true, coachViewing: false }).length > 0);
+  assert.ok(validateConsentRecord({ ...good, thirdPartyGemini: "yes" }).length > 0);
+  assert.ok(validateConsentRecord({ ...good, schema: 1 }).length > 0);
   assert.ok(validateConsentRecord({ ...good, permittedUses: ["caddie_eval", "marketing"] }).length > 0);
   assert.ok(validateConsentRecord({ ...good, contributorId: "jane" }).length > 0);
 });
 
 test("consent-add refuses an old form version, a duplicate ID, and an already-passed retention date", () => {
   const { dataDir } = setup();
-  assert.throws(() => consent(dataDir, { consentVersion: "0.9" }), /not the current form/);
-  assert.throws(() => consent(dataDir, { consentDate: "2025-01-01", retentionUntil: "2026-01-01" }), /already passed/);
+  assert.throws(() => consent(dataDir, { formVersion: "1.0" }), /not the current form/);
+  assert.throws(() => consent(dataDir, { consentDate: "2026-07-01", retentionUntil: "2026-09-01" }), /already passed/);
   consent(dataDir);
   assert.throws(() => consent(dataDir), /NEW ID/);
 });
@@ -278,6 +297,83 @@ test("retention: past-date contributors are refused, listed, and purged only wit
   enforceRetention(dataDir, { apply: true }, later);
   assert.ok(!fs.existsSync(path.join(dataDir, "clips", entry.storedFile)));
   assert.equal(statusSummary(dataDir, later).contributors[0].status, "expired");
+});
+
+test("import refuses without an affirmative consent record, even if the file was edited by hand", async () => {
+  const { dataDir, srcDir } = setup();
+  assert.throws(() => consent(dataDir, { affirmativeConsent: false }), /affirmativeConsent/);
+  assert.throws(() => consent(dataDir, { adult: false }), /adult/);
+  await assert.rejects(importClip(dataDir, importOpts(fakeVideo(srcDir)), NO_FFMPEG, TODAY), /no consent record/);
+  consent(dataDir);
+  const file = path.join(dataDir, "consent", "C001.json");
+  const rec = JSON.parse(fs.readFileSync(file, "utf8"));
+  fs.writeFileSync(file, JSON.stringify({ ...rec, affirmativeConsent: false }));
+  await assert.rejects(importClip(dataDir, importOpts(fakeVideo(srcDir)), NO_FFMPEG, TODAY), /affirmativeConsent/);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(dataDir, "manifest.json"), "utf8")).clips.length, 0);
+});
+
+test("import requires a self-reported skill level from the fixed list", async () => {
+  const { dataDir, srcDir } = setup();
+  consent(dataDir);
+  await assert.rejects(importClip(dataDir, importOpts(fakeVideo(srcDir), { skill: undefined }), NO_FFMPEG, TODAY), /--skill/);
+  await assert.rejects(importClip(dataDir, importOpts(fakeVideo(srcDir), { skill: "scratch" }), NO_FFMPEG, TODAY), /--skill/);
+});
+
+test("third-party gate: refused while vendor terms are unverified, and per-contributor opt-in is required", async () => {
+  const { dataDir, srcDir } = setup();
+  consent(dataDir, { contributor: "C001", thirdPartyRoboflow: true, thirdPartyGemini: false });
+  consent(dataDir, { contributor: "C002" });
+  const a = await importClip(dataDir, importOpts(fakeVideo(srcDir), { strippedManually: true }), NO_FFMPEG, TODAY);
+  const b = await importClip(dataDir, importOpts(fakeVideo(srcDir), { contributor: "C002", strippedManually: true }), NO_FFMPEG, TODAY);
+  const c = await importClip(dataDir, importOpts(fakeVideo(srcDir)), NO_FFMPEG, TODAY); // C001, not stripped
+
+  // Shipped state: no vendor is verified, so nothing may be sent at all.
+  assert.equal(VENDOR_TERMS_VERIFIED.roboflow, null);
+  assert.equal(VENDOR_TERMS_VERIFIED.gemini, null);
+  assert.ok(Object.isFrozen(VENDOR_TERMS_VERIFIED));
+  assert.throws(() => assertThirdPartyAllowed(dataDir, a.clipId, "roboflow", { today: TODAY }), /not verified/);
+  const shipped = thirdPartyEligible(dataDir, "roboflow", { today: TODAY });
+  assert.equal(shipped.vendorVerified, false);
+  assert.deepEqual(shipped.eligible, []);
+
+  // Hypothetical: once a vendor is verified, the per-contributor flag decides.
+  const verified = { roboflow: { verifiedOn: "2026-10-21" }, gemini: { verifiedOn: "2026-10-21" } };
+  const opts = { vendorStatus: verified, today: TODAY };
+  assert.deepEqual(assertThirdPartyAllowed(dataDir, a.clipId, "roboflow", opts), { clipId: a.clipId, contributorId: "C001", processor: "roboflow" });
+  assert.throws(() => assertThirdPartyAllowed(dataDir, a.clipId, "gemini", opts), /did not opt in to gemini/);
+  assert.throws(() => assertThirdPartyAllowed(dataDir, b.clipId, "roboflow", opts), /C002 did not opt in to roboflow/);
+  assert.throws(() => assertThirdPartyAllowed(dataDir, c.clipId, "roboflow", opts), /strip/);
+  assert.throws(() => assertThirdPartyAllowed(dataDir, a.clipId, "openai", opts), /unknown processor/);
+  assert.throws(() => assertThirdPartyAllowed(dataDir, "C009-0001", "roboflow", opts), /not in the manifest/);
+  assert.deepEqual(thirdPartyEligible(dataDir, "roboflow", opts).eligible, [a.clipId]);
+
+  // Withdrawal removes eligibility immediately.
+  withdrawContributor(dataDir, "C001", { confirm: true }, TODAY);
+  assert.throws(() => assertThirdPartyAllowed(dataDir, a.clipId, "roboflow", opts), /not in the manifest/);
+});
+
+test("coach gate: in-person needs coach viewing; remote also needs remote coach viewing; unstripped never shared", async () => {
+  const { dataDir, srcDir } = setup();
+  consent(dataDir, { contributor: "C001", coachViewing: true, remoteCoachViewing: true });
+  consent(dataDir, { contributor: "C002", coachViewing: true, remoteCoachViewing: false });
+  consent(dataDir, { contributor: "C003", coachViewing: false });
+  const a = await importClip(dataDir, importOpts(fakeVideo(srcDir), { strippedManually: true }), NO_FFMPEG, TODAY);
+  const b = await importClip(dataDir, importOpts(fakeVideo(srcDir), { contributor: "C002", strippedManually: true }), NO_FFMPEG, TODAY);
+  await importClip(dataDir, importOpts(fakeVideo(srcDir), { contributor: "C003", strippedManually: true }), NO_FFMPEG, TODAY);
+  await importClip(dataDir, importOpts(fakeVideo(srcDir)), NO_FFMPEG, TODAY); // C001, not stripped
+  assert.deepEqual(coachEligible(dataDir, {}, TODAY).eligible, [a.clipId, b.clipId]);
+  assert.deepEqual(coachEligible(dataDir, { remote: true }, TODAY).eligible, [a.clipId]);
+});
+
+test("status reports coverage, including the left-handed share", async () => {
+  const { dataDir, srcDir } = setup();
+  consent(dataDir);
+  await importClip(dataDir, importOpts(fakeVideo(srcDir), { handedness: "left", skill: "beginner" }), NO_FFMPEG, TODAY);
+  for (let i = 0; i < 4; i++) await importClip(dataDir, importOpts(fakeVideo(srcDir)), NO_FFMPEG, TODAY);
+  const s = statusSummary(dataDir, TODAY);
+  assert.equal(s.leftHandedShare, 20);
+  assert.deepEqual(s.coverage.skill, { beginner: 1, mid: 4 });
+  assert.equal(s.contributors[0].thirdPartyGemini, false);
 });
 
 test("protocol slot codes", () => {
