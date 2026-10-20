@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bell, Check } from "lucide-react";
 import { Button } from "../components/ui/Button";
+import { FoundingGolferReveal } from "../components/golfer/FoundingGolfer";
+import { useAuth } from "../context/AuthContext";
 import { useLocale } from "../i18n/LocaleContext";
 import { track } from "../lib/analytics";
 import type { TranslationKey } from "../i18n/locales/en";
@@ -13,7 +15,9 @@ import type { TranslationKey } from "../i18n/locales/en";
 // available for later, lightweight personalization, never persisted server-
 // side or required to proceed. The notification-permission ask is folded in
 // here too (shown at most once ever, tracked separately in localStorage),
-// right before landing on Home.
+// right before landing on Home. A golfer the server just made a Founding
+// Golfer sees the number reveal first (ProfileSetup's save refetches the
+// profile after the award trigger, so the number is already there).
 const NOTIF_SHOWN_KEY = "golfme:notifPermissionShown";
 export const ONBOARDING_INTENT_KEY = "golfme:onboardingIntent";
 
@@ -31,6 +35,12 @@ export function Ready() {
   const { t } = useLocale();
   const [intents, setIntents] = useState<OnboardingIntent[]>([]);
   const [showingNotifAsk, setShowingNotifAsk] = useState(false);
+  const { isDemo, profile } = useAuth();
+  const [revealDone, setRevealDone] = useState(false);
+  // Dev-server only: /ready?previewFounding=8 replays the reveal with that
+  // number (stripped from production builds by import.meta.env.DEV).
+  const previewNumber = import.meta.env.DEV ? Number(new URLSearchParams(window.location.search).get("previewFounding")) || undefined : undefined;
+  const foundingNumber = previewNumber ?? (isDemo ? undefined : profile?.foundingMemberNumber);
 
   function toggleIntent(key: OnboardingIntent) {
     setIntents((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
@@ -60,6 +70,10 @@ export function Ready() {
       track("notifications_permission_dismissed");
     }
     navigate("/");
+  }
+
+  if (foundingNumber != null && !revealDone) {
+    return <FoundingGolferReveal number={foundingNumber} onContinue={() => setRevealDone(true)} />;
   }
 
   if (showingNotifAsk) {

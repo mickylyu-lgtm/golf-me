@@ -83,6 +83,8 @@ export const ja: Record<TranslationKey, string> = {
   "founding.founderBody": "GolfMeとニューヨークの創設コミュニティを立ち上げました。",
   "founding.spotsRemaining": "創設ゴルファー枠の残り：{remaining} / {cap}",
   "founding.spotsClaimed": "創設ゴルファーの{cap}枠はすべて埋まりました。",
+  "founding.revealEyebrow": "GolfMeへようこそ",
+  "founding.revealBody": "ニューヨークでGolfMeを築く最初の250人のゴルファーの一人です。この番号はずっとあなたのものです。",
   "credibility.excellent": "非常に高い信頼度",
   "credibility.good": "高い信頼度",
   "credibility.building": "信頼度構築中",

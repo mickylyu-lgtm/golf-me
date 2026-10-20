@@ -83,6 +83,8 @@ export const ko: Record<TranslationKey, string> = {
   "founding.founderBody": "GolfMe와 뉴욕 창립 커뮤니티를 시작했습니다.",
   "founding.spotsRemaining": "남은 창립 골퍼 자리: {remaining} / {cap}",
   "founding.spotsClaimed": "창립 골퍼 {cap}자리가 모두 마감되었습니다.",
+  "founding.revealEyebrow": "GolfMe에 오신 것을 환영합니다",
+  "founding.revealBody": "뉴욕에서 GolfMe를 함께 만드는 최초의 골퍼 250명 중 한 명입니다. 이 번호는 영원히 당신의 것입니다.",
   "credibility.excellent": "매우 높은 신뢰도",
   "credibility.good": "좋은 신뢰도",
   "credibility.building": "신뢰도 쌓는 중",

@@ -83,6 +83,8 @@ export const es: Record<TranslationKey, string> = {
   "founding.founderBody": "Creó GolfMe y su comunidad original en Nueva York.",
   "founding.spotsRemaining": "Plazas de Golfista Fundador disponibles: {remaining} de {cap}",
   "founding.spotsClaimed": "Las {cap} plazas originales de Golfista Fundador ya están ocupadas.",
+  "founding.revealEyebrow": "Te damos la bienvenida a GolfMe",
+  "founding.revealBody": "Eres uno de los primeros 250 golfistas que construyen GolfMe en Nueva York. Este número es tuyo para siempre.",
   "credibility.excellent": "Credibilidad Excelente",
   "credibility.good": "Buena Credibilidad",
   "credibility.building": "Generando Credibilidad",

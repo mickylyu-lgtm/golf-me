@@ -93,6 +93,8 @@ export const en = {
   "founding.founderBody": "Started GolfMe and its original NYC community.",
   "founding.spotsRemaining": "Founding Golfer spots remaining: {remaining} of {cap}",
   "founding.spotsClaimed": "The original {cap} Founding Golfer spots have been claimed.",
+  "founding.revealEyebrow": "Welcome to GolfMe",
+  "founding.revealBody": "You're one of the first 250 golfers building GolfMe in New York. This number is yours for good.",
   "credibility.excellent": "Excellent Credibility",
   "credibility.good": "Good Credibility",
   "credibility.building": "Building Credibility",

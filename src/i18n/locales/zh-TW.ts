@@ -83,6 +83,8 @@ export const zhTW: Record<TranslationKey, string> = {
   "founding.founderBody": "創立了 GolfMe 及其紐約初創社群。",
   "founding.spotsRemaining": "創始球友名額剩餘：{remaining} / {cap}",
   "founding.spotsClaimed": "首批 {cap} 個創始球友名額已全部額滿。",
+  "founding.revealEyebrow": "歡迎加入 GolfMe",
+  "founding.revealBody": "你是在紐約共建 GolfMe 的首批 250 位球友之一。這個編號永遠屬於你。",
   "credibility.excellent": "極佳口碑",
   "credibility.good": "良好口碑",
   "credibility.building": "口碑累積中",
