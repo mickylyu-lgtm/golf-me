@@ -7,7 +7,14 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  CURRENT_COACH_AGREEMENT_VERSION,
   EvalError,
+  SCREEN_SHARE_PLATFORM_REVIEW,
+  addCoach,
+  assertCoachSessionAllowed,
+  revokeCoach,
+  validateCoachRecord,
+  validateLabelRecord,
   MAX_RETENTION_DAYS,
   VENDOR_TERMS_VERIFIED,
   addConsent,
@@ -337,7 +344,12 @@ test("third-party gate: refused while vendor terms are unverified, and per-contr
   assert.deepEqual(shipped.eligible, []);
 
   // Hypothetical: once a vendor is verified, the per-contributor flag decides.
-  const verified = { roboflow: { verifiedOn: "2026-10-21" }, gemini: { verifiedOn: "2026-10-21" } };
+  // Checklist done but no written no-training commitment: still refused.
+  const noWritten = { roboflow: { verifiedOn: "2026-10-21" }, gemini: { verifiedOn: "2026-10-21" } };
+  assert.throws(() => assertThirdPartyAllowed(dataDir, a.clipId, "roboflow", { vendorStatus: noWritten, today: TODAY }), /no-training/);
+  assert.equal(thirdPartyEligible(dataDir, "roboflow", { vendorStatus: noWritten, today: TODAY }).vendorVerified, false);
+  const approved = { verifiedOn: "2026-10-21", noTrainingConfirmedOn: "2026-10-21" };
+  const verified = { roboflow: approved, gemini: approved };
   const opts = { vendorStatus: verified, today: TODAY };
   assert.deepEqual(assertThirdPartyAllowed(dataDir, a.clipId, "roboflow", opts), { clipId: a.clipId, contributorId: "C001", processor: "roboflow" });
   assert.throws(() => assertThirdPartyAllowed(dataDir, a.clipId, "gemini", opts), /did not opt in to gemini/);
@@ -381,4 +393,105 @@ test("protocol slot codes", () => {
     protocolSlot({ angle: "down_the_line", club: "iron", mount: "handheld", handedness: "left", lighting: "backlit" }),
     "DTL-IR-HND-LH-BKL",
   );
+});
+
+// ---------------------------------------------------------------------------
+// Coach agreements, session gate, and label files
+// ---------------------------------------------------------------------------
+
+function coach(dataDir, overrides = {}) {
+  return addCoach(
+    dataDir,
+    { coach: "K01", agreementVersion: "1.0", agreementDate: "2026-10-20", agreementSigned: true, inPerson: true, remote: false, ...overrides },
+    TODAY,
+  );
+}
+
+const PLATFORM_OK = { platform: "zoom", reviewedOn: "2026-10-15", by: "Micky" };
+
+async function coachFixture() {
+  const fx = setup();
+  consent(fx.dataDir, { contributor: "C001", coachViewing: true, remoteCoachViewing: true });
+  consent(fx.dataDir, { contributor: "C002", coachViewing: true, remoteCoachViewing: false });
+  fx.a = await importClip(fx.dataDir, importOpts(fakeVideo(fx.srcDir), { strippedManually: true }), NO_FFMPEG, TODAY);
+  fx.b = await importClip(fx.dataDir, importOpts(fakeVideo(fx.srcDir), { contributor: "C002", strippedManually: true }), NO_FFMPEG, TODAY);
+  return fx;
+}
+
+test("coach records: signed agreement required, current version, pseudonymous only, IDs never reused", () => {
+  const { dataDir } = setup();
+  assert.equal(CURRENT_COACH_AGREEMENT_VERSION, "1.0");
+  assert.throws(() => coach(dataDir, { agreementSigned: false }), /agreementSigned/);
+  assert.throws(() => coach(dataDir, { agreementVersion: "0.9" }), /not the current agreement/);
+  assert.throws(() => coach(dataDir, { coach: "Coach Bob" }), /K01/);
+  assert.throws(() => coach(dataDir, { agreementDate: "2026-12-01" }), /future/);
+  assert.throws(() => coach(dataDir, { inPerson: false, remote: false }), /at least one/);
+  const rec = coach(dataDir);
+  assert.deepEqual(validateCoachRecord(rec), []);
+  assert.ok(validateCoachRecord({ ...rec, name: "Bob" }).some((p) => p.includes('"name"')));
+  assert.ok(validateCoachRecord({ ...rec, email: "b@c.d" }).length > 0);
+  assert.throws(() => coach(dataDir), /never reused/);
+});
+
+test("coach-session-check: refused without a coach record, with a revoked coach, or for an uncleared session type", async () => {
+  const { dataDir } = await coachFixture();
+  assert.throws(() => assertCoachSessionAllowed(dataDir, "K01", { today: TODAY }), /no coach record/);
+  coach(dataDir);
+  const ok = assertCoachSessionAllowed(dataDir, "K01", { today: TODAY });
+  assert.equal(ok.remote, false);
+  assert.equal(ok.eligible.length, 2);
+  assert.throws(() => assertCoachSessionAllowed(dataDir, "K01", { remote: true, platformReview: PLATFORM_OK, today: TODAY }), /not cleared for remote/);
+  revokeCoach(dataDir, "K01", TODAY);
+  assert.throws(() => assertCoachSessionAllowed(dataDir, "K01", { today: TODAY }), /revoked/);
+});
+
+test("coach-session-check remote: needs a reviewed, in-date platform and remote consent; shipped state refuses", async () => {
+  const { dataDir, a } = await coachFixture();
+  coach(dataDir, { coach: "K02", inPerson: false, remote: true });
+  // Shipped state: no platform reviewed, so no remote session at all.
+  assert.equal(SCREEN_SHARE_PLATFORM_REVIEW, null);
+  assert.throws(() => assertCoachSessionAllowed(dataDir, "K02", { remote: true, today: TODAY }), /not reviewed/);
+  assert.throws(() => assertCoachSessionAllowed(dataDir, "K02", { remote: true, platformReview: { platform: "skype", reviewedOn: "2026-10-15" }, today: TODAY }), /not reviewed/);
+  assert.throws(() => assertCoachSessionAllowed(dataDir, "K02", { remote: true, platformReview: { platform: "zoom", reviewedOn: "2026-09-01" }, today: TODAY }), /older than 30 days/);
+  const ok = assertCoachSessionAllowed(dataDir, "K02", { remote: true, platformReview: PLATFORM_OK, today: TODAY });
+  // Only C001 ticked remote coach viewing.
+  assert.deepEqual(ok.eligible, [a.clipId]);
+  assert.equal(ok.platform, "zoom");
+  assert.throws(() => assertCoachSessionAllowed(dataDir, "K02", { remote: false, today: TODAY }), /not cleared for in-person/);
+  withdrawContributor(dataDir, "C001", { confirm: true }, TODAY);
+  assert.throws(() => assertCoachSessionAllowed(dataDir, "K02", { remote: true, platformReview: PLATFORM_OK, today: TODAY }), /no clip is eligible/);
+});
+
+test("labels: stored by clip ID and coach ID only, apart from identity; verify flags extra fields, unknown coaches, bad names", async () => {
+  const { dataDir, a } = await coachFixture();
+  coach(dataDir);
+  const good = { clip_id: a.clipId, coach_id: "K01", camera_angle: "face_on", analyzable: "yes", t_impact: 1.234, fault_sway: "no", main_improvement: "none" };
+  assert.deepEqual(validateLabelRecord(good, { clipId: a.clipId, coachId: "K01" }), []);
+  const labels = path.join(dataDir, "labels");
+  fs.writeFileSync(path.join(labels, `${a.clipId}-K01.json`), JSON.stringify(good));
+  assert.deepEqual(await verifyDataDir(dataDir, TODAY), []);
+
+  // Identity never belongs in a label file.
+  fs.writeFileSync(path.join(labels, `${a.clipId}-K01.json`), JSON.stringify({ ...good, participant_name: "Jane", coach_email: "x@y.z" }));
+  const p1 = await verifyDataDir(dataDir, TODAY);
+  assert.ok(p1.some((p) => p.includes('"participant_name"')));
+  assert.ok(p1.some((p) => p.includes('"coach_email"')));
+  fs.writeFileSync(path.join(labels, `${a.clipId}-K01.json`), JSON.stringify({ ...good, coach_id: "K02" }));
+  assert.ok((await verifyDataDir(dataDir, TODAY)).some((p) => p.includes("coach_id does not match")));
+  fs.writeFileSync(path.join(labels, `${a.clipId}-K01.json`), JSON.stringify(good));
+
+  fs.writeFileSync(path.join(labels, `${a.clipId}-K09.json`), JSON.stringify({ ...good, coach_id: "K09" }));
+  assert.ok((await verifyDataDir(dataDir, TODAY)).some((p) => p.includes("no coach record for K09")));
+  fs.rmSync(path.join(labels, `${a.clipId}-K09.json`));
+  fs.writeFileSync(path.join(labels, "Jane-labels.csv"), "x");
+  assert.ok((await verifyDataDir(dataDir, TODAY)).some((p) => p.includes("<clip ID>-<coach ID>.json")));
+  fs.rmSync(path.join(labels, "Jane-labels.csv"));
+
+  // Coach records carry no participant data; labels go with the clip on withdrawal, the coach record stays.
+  const coachFile = fs.readFileSync(path.join(dataDir, "coaches", "K01.json"), "utf8");
+  assert.ok(!coachFile.includes("C001"));
+  withdrawContributor(dataDir, "C001", { confirm: true }, TODAY);
+  assert.ok(!fs.existsSync(path.join(labels, `${a.clipId}-K01.json`)));
+  assert.ok(fs.existsSync(path.join(dataDir, "coaches", "K01.json")));
+  assert.deepEqual(await verifyDataDir(dataDir, TODAY), []);
 });

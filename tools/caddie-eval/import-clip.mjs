@@ -41,6 +41,10 @@
 //   verify
 //   coach-check        [--remote]
 //   third-party-check  --processor roboflow|gemini
+//   coach-add    --coach K01 --agreement-version 1.0 --agreement-date YYYY-MM-DD
+//                --signed yes --in-person yes|no --remote-sessions yes|no
+//   coach-revoke --coach K01
+//   coach-session-check --coach K01 [--remote]
 //   withdraw     --contributor C001 [--confirm]
 //   retention    [--apply]
 
@@ -68,12 +72,36 @@ export const MAX_RETENTION_DAYS = 90;
 export const THIRD_PARTY_PROCESSORS = ["roboflow", "gemini"];
 /**
  * Vendor terms verification, per processor. null = NOT verified, so every
- * third-party send is refused. Set to { verifiedOn: "YYYY-MM-DD", by:
- * "Micky", checklist: "docs/caddie-v2/VENDOR_VERIFICATION.md" } only after
- * Micky completes that vendor's checklist, in a commit of its own. Spend
- * approval is a separate, additional requirement the tool cannot check.
+ * third-party send is refused. Set to { verifiedOn: "YYYY-MM-DD",
+ * noTrainingConfirmedOn: "YYYY-MM-DD", by: "Micky", checklist:
+ * "docs/caddie-v2/VENDOR_APPROVAL_CRITERIA.md" } only after the vendor passes
+ * every criterion there, in a commit of its own. noTrainingConfirmedOn is the
+ * date of the WRITTEN commitment (contract terms or a saved written reply)
+ * that our configuration's inputs and derived data are not used for training
+ * or improvement; without it the vendor stays refused (Micky's decision
+ * 2026-10-20). Spend approval is a separate requirement the tool can't check.
  */
 export const VENDOR_TERMS_VERIFIED = Object.freeze({ roboflow: null, gemini: null });
+/**
+ * Coach confidentiality and data-handling agreement version in use
+ * (docs/caddie-v2/consent/COACH_CONFIDENTIALITY_v1.html).
+ */
+export const CURRENT_COACH_AGREEMENT_VERSION = "1.0";
+export const COACH_ID_RE = /^K\d{2}$/;
+/** Screen-share platform reviews older than this must be redone before a remote session. */
+export const PLATFORM_REVIEW_MAX_AGE_DAYS = 30;
+export const SCREEN_SHARE_PLATFORMS = ["facetime", "zoom", "google_meet", "microsoft_teams"];
+/**
+ * Review of the screen-sharing platform used for remote coach sessions
+ * (docs/caddie-v2/COACH_REVIEW_PROCEDURE.md section 4). null = NOT reviewed,
+ * so every remote coach session is refused. After Micky completes that
+ * checklist on the account he will host from, set it, in a commit of its
+ * own, to { platform: "<one of SCREEN_SHARE_PLATFORMS>", reviewedOn:
+ * "YYYY-MM-DD", by: "Micky", checklist:
+ * "docs/caddie-v2/COACH_REVIEW_PROCEDURE.md" }. Re-review after
+ * PLATFORM_REVIEW_MAX_AGE_DAYS, or when the platform, plan, or account changes.
+ */
+export const SCREEN_SHARE_PLATFORM_REVIEW = null;
 export const MAX_CLIP_BYTES = 2 * 1024 * 1024 * 1024;
 export const ALLOWED_EXTENSIONS = [".mp4", ".mov", ".m4v"];
 
@@ -110,6 +138,36 @@ const SLOT_CODES = {
   handedness: { right: "RH", left: "LH" },
   lighting: { daylight: "DAY", overcast: "OVC", backlit: "BKL", dusk: "DSK", indoor: "IND" },
 };
+
+const COACH_KEYS = ["schema", "coachId", "status", "agreementVersion", "agreementDate", "agreementSigned", "inPerson", "remote", "revokedAt"];
+export const COACH_SCHEMA = 1;
+
+// Coach label files: labels/<clipId>-<coachId>.json, pass 1 and pass 2 fields
+// from docs/caddie-v2/TESTING_PROTOCOL.md section 8 only. Pseudonymous IDs;
+// no participant or coach identity. Free-text fields are on trust (no names).
+export const LABEL_FILE_RE = /^(C\d{3}-\d{4})-(K\d{2})\.json$/;
+const LABEL_KEYS = [
+  "clip_id",
+  "coach_id",
+  "camera_angle",
+  "handedness",
+  "analyzable",
+  "t_address",
+  "t_top",
+  "t_impact",
+  "t_finish",
+  "main_improvement",
+  "main_improvement_reason",
+  "drill",
+  "skill_estimate",
+  "confidence",
+  "rating_main_improvement",
+  "rating_drill",
+  "false_faults",
+  "rating_note",
+  "keyframe_keypoints",
+];
+const LABEL_FAULT_KEY_RE = /^fault_[a-z_]+$/;
 
 const CONSENT_KEYS = [
   "schema",
@@ -227,6 +285,7 @@ function layout(dataDir) {
     clips: path.join(dataDir, "clips"),
     derived: path.join(dataDir, "derived"),
     labels: path.join(dataDir, "labels"),
+    coaches: path.join(dataDir, "coaches"),
     tmp: path.join(dataDir, ".tmp"),
     manifest: path.join(dataDir, "manifest.json"),
     auditLog: path.join(dataDir, "audit-log.jsonl"),
@@ -245,7 +304,7 @@ function mkdirPrivate(dir) {
 export function initDataDir(dataDir) {
   const safe = assertSafeDataDir(dataDir);
   const L = layout(safe);
-  for (const d of [L.root, L.consent, L.clips, L.derived, L.labels, L.tmp]) mkdirPrivate(d);
+  for (const d of [L.root, L.consent, L.clips, L.derived, L.labels, L.coaches, L.tmp]) mkdirPrivate(d);
   if (!fs.existsSync(L.manifest)) {
     writeJsonAtomic(L, L.manifest, { schema: MANIFEST_SCHEMA, revision: 0, updatedAt: null, clips: [] });
   }
@@ -255,7 +314,7 @@ export function initDataDir(dataDir) {
       readme,
       "GolfMe Caddie V2 evaluation data. LOCAL ONLY: do not sync, upload, commit, or share this folder.\n" +
         "Managed by tools/caddie-eval/import-clip.mjs; process in docs/caddie-v2/VIDEO_IMPORT_AND_CONSENT.md.\n" +
-        "Signed consent forms and the name-to-ID key are NOT kept here.\n",
+        "Signed consent forms, signed coach agreements, and the name-to-ID key are NOT kept here.\n",
       { mode: 0o600 },
     );
   }
@@ -686,6 +745,7 @@ export async function verifyDataDir(dataDir, today = todayIso()) {
     if (!c.metadataStripped || c.metadataVerified === false) problems.push(`${c.clipId}: metadata not stripped (manual step pending)`);
   }
   for (const name of fs.readdirSync(L.clips)) if (!known.has(name)) problems.push(`clips/${name}: not in manifest`);
+  problems.push(...checkLabels(L, manifest));
   return problems;
 }
 
@@ -769,8 +829,10 @@ export function coachEligible(dataDir, { remote = false } = {}, today = todayIso
 export function assertThirdPartyAllowed(dataDir, clipId, processor, { vendorStatus = VENDOR_TERMS_VERIFIED, today = todayIso() } = {}) {
   if (!THIRD_PARTY_PROCESSORS.includes(processor)) throw new EvalError(`unknown processor "${processor}" (allowed: ${THIRD_PARTY_PROCESSORS.join(", ")})`);
   const v = vendorStatus[processor];
-  if (!v || !isIsoDate(v.verifiedOn)) {
-    throw new EvalError(`${processor} terms are not verified (docs/caddie-v2/VENDOR_VERIFICATION.md); nothing may be sent`);
+  if (!vendorApproved(v)) {
+    throw new EvalError(
+      `${processor} terms are not verified, or there is no written no-training commitment (docs/caddie-v2/VENDOR_APPROVAL_CRITERIA.md); nothing may be sent`,
+    );
   }
   const L = openDataDir(dataDir);
   if (!CLIP_ID_RE.test(clipId ?? "")) throw new EvalError("clip ID must look like C001-0001");
@@ -798,7 +860,171 @@ export function thirdPartyEligible(dataDir, processor, opts = {}) {
     }
   }
   const v = (opts.vendorStatus ?? VENDOR_TERMS_VERIFIED)[processor];
-  return { processor, vendorVerified: Boolean(v && isIsoDate(v.verifiedOn)), eligible, refused };
+  return { processor, vendorVerified: vendorApproved(v), eligible, refused };
+}
+
+function vendorApproved(v) {
+  return Boolean(v && isIsoDate(v.verifiedOn) && isIsoDate(v.noTrainingConfirmedOn));
+}
+
+// ---------------------------------------------------------------------------
+// Coaches: agreement records, session gate, label files
+// ---------------------------------------------------------------------------
+
+function coachPath(L, coachId) {
+  return path.join(L.coaches, `${coachId}.json`);
+}
+
+/** Returns a list of problems with a coach record's shape (empty = valid). No names, emails, or notes. */
+export function validateCoachRecord(rec) {
+  const problems = [];
+  if (typeof rec !== "object" || rec === null || Array.isArray(rec)) return ["not an object"];
+  for (const k of Object.keys(rec)) if (!COACH_KEYS.includes(k)) problems.push(`unexpected field "${k}" (no names, emails, or notes allowed)`);
+  if (rec.schema !== COACH_SCHEMA) problems.push("schema");
+  if (!COACH_ID_RE.test(rec.coachId ?? "")) problems.push("coachId must look like K01");
+  if (!["active", "revoked"].includes(rec.status)) problems.push("status");
+  if (typeof rec.agreementVersion !== "string" || !rec.agreementVersion) problems.push("agreementVersion");
+  if (!isIsoDate(rec.agreementDate)) problems.push("agreementDate");
+  if (rec.agreementSigned !== true) problems.push("agreementSigned must be true (signed confidentiality and data-handling agreement)");
+  for (const k of ["inPerson", "remote"]) if (typeof rec[k] !== "boolean") problems.push(k);
+  if (rec.inPerson !== true && rec.remote !== true) problems.push("at least one of inPerson or remote must be true");
+  return problems;
+}
+
+export function readCoach(L, coachId) {
+  if (!COACH_ID_RE.test(coachId ?? "")) throw new EvalError("coach ID must look like K01");
+  const file = coachPath(L, coachId);
+  if (!fs.existsSync(file)) return null;
+  const rec = readJson(file);
+  const problems = validateCoachRecord(rec);
+  if (problems.length) throw new EvalError(`coach record ${coachId} is invalid: ${problems.join("; ")}`);
+  if (rec.coachId !== coachId) throw new EvalError(`coach record ${coachId} names a different coach`);
+  return rec;
+}
+
+/** Records a signed coach agreement, pseudonymously. The signed copy stays in the identity key. */
+export function addCoach(dataDir, opts, today = todayIso()) {
+  const L = openDataDir(dataDir);
+  mkdirPrivate(L.coaches);
+  const rec = {
+    schema: COACH_SCHEMA,
+    coachId: opts.coach,
+    status: "active",
+    agreementVersion: opts.agreementVersion,
+    agreementDate: opts.agreementDate,
+    agreementSigned: opts.agreementSigned === true,
+    inPerson: opts.inPerson,
+    remote: opts.remote,
+    revokedAt: null,
+  };
+  const problems = validateCoachRecord(rec);
+  if (problems.length) throw new EvalError(`coach record refused: ${problems.join("; ")}`);
+  if (rec.agreementDate > today) throw new EvalError("agreement date is in the future");
+  if (rec.agreementVersion !== CURRENT_COACH_AGREEMENT_VERSION) {
+    throw new EvalError(`coach agreement version ${rec.agreementVersion} is not the current agreement (${CURRENT_COACH_AGREEMENT_VERSION})`);
+  }
+  const file = coachPath(L, rec.coachId);
+  if (fs.existsSync(file)) throw new EvalError(`${rec.coachId} already has a coach record; coach IDs are never reused`);
+  fs.writeFileSync(file, `${JSON.stringify(rec, null, 2)}\n`, { mode: 0o600, flag: "wx" });
+  audit(L, { action: "coach_agreement_recorded", coachId: rec.coachId, agreementVersion: rec.agreementVersion }, today);
+  return rec;
+}
+
+/** Marks a coach revoked (agreement ended or breached). Their labels stay until withdrawal/retention removes the clips. */
+export function revokeCoach(dataDir, coachId, today = todayIso()) {
+  const L = openDataDir(dataDir);
+  const rec = readCoach(L, coachId);
+  if (!rec) throw new EvalError(`no coach record for ${coachId}`);
+  rec.status = "revoked";
+  rec.revokedAt = today;
+  writeJsonAtomic(L, coachPath(L, coachId), rec);
+  audit(L, { action: "coach_revoked", coachId }, today);
+  return rec;
+}
+
+/** Throws unless the platform review exists, names a known platform, and is recent enough. */
+export function assertPlatformReviewed(review, today = todayIso()) {
+  if (!review || !isIsoDate(review.reviewedOn) || !SCREEN_SHARE_PLATFORMS.includes(review.platform)) {
+    throw new EvalError("the screen-share platform is not reviewed (docs/caddie-v2/COACH_REVIEW_PROCEDURE.md section 4); no remote session");
+  }
+  if (review.reviewedOn > today) throw new EvalError("platform review is dated in the future");
+  if (addDaysIso(review.reviewedOn, PLATFORM_REVIEW_MAX_AGE_DAYS) < today) {
+    throw new EvalError(`platform review is older than ${PLATFORM_REVIEW_MAX_AGE_DAYS} days; re-review before a remote session`);
+  }
+  return review;
+}
+
+/**
+ * THE gate before any coach session (in person or remote). Throws unless:
+ * - the coach has an active record with a signed agreement on the current
+ *   version, dated today or earlier, allowing this session type;
+ * - for remote: the screen-share platform is reviewed and in date;
+ * - at least one clip is eligible (coachEligible), i.e. contributor consent
+ *   covers this session type and the clip is stripped.
+ * Returns the clip IDs that may be shown. Re-run on the day of every session.
+ */
+export function assertCoachSessionAllowed(
+  dataDir,
+  coachId,
+  { remote = false, platformReview = SCREEN_SHARE_PLATFORM_REVIEW, today = todayIso() } = {},
+) {
+  const L = openDataDir(dataDir);
+  const rec = readCoach(L, coachId);
+  if (!rec) throw new EvalError(`no coach record for ${coachId}; record the signed confidentiality agreement first (coach-add)`);
+  if (rec.status !== "active") throw new EvalError(`coach ${coachId} is ${rec.status}; no session`);
+  if (rec.agreementVersion !== CURRENT_COACH_AGREEMENT_VERSION) {
+    throw new EvalError(`coach ${coachId} signed agreement ${rec.agreementVersion}, not the current ${CURRENT_COACH_AGREEMENT_VERSION}; re-sign first`);
+  }
+  if (rec.agreementDate > today) throw new EvalError(`coach ${coachId}'s agreement is dated in the future`);
+  if (remote && !rec.remote) throw new EvalError(`coach ${coachId} is not cleared for remote sessions`);
+  if (!remote && !rec.inPerson) throw new EvalError(`coach ${coachId} is not cleared for in-person sessions`);
+  if (remote) assertPlatformReviewed(platformReview, today);
+  const { eligible, refused } = coachEligible(dataDir, { remote }, today);
+  if (!eligible.length) throw new EvalError(`no clip is eligible for a${remote ? " remote" : "n in-person"} coach session`);
+  return { coachId, remote, platform: remote ? platformReview.platform : null, eligible, refused };
+}
+
+/** Returns problems with a label record (empty = valid). Only protocol fields; IDs must match the file name. */
+export function validateLabelRecord(rec, { clipId, coachId } = {}) {
+  const problems = [];
+  if (typeof rec !== "object" || rec === null || Array.isArray(rec)) return ["not an object"];
+  for (const k of Object.keys(rec)) {
+    if (!LABEL_KEYS.includes(k) && !LABEL_FAULT_KEY_RE.test(k)) problems.push(`unexpected field "${k}" (protocol label fields only; no names or identity)`);
+  }
+  if (!CLIP_ID_RE.test(rec.clip_id ?? "")) problems.push("clip_id must look like C001-0001");
+  if (!COACH_ID_RE.test(rec.coach_id ?? "")) problems.push("coach_id must look like K01");
+  if (clipId && rec.clip_id !== clipId) problems.push("clip_id does not match the file name");
+  if (coachId && rec.coach_id !== coachId) problems.push("coach_id does not match the file name");
+  return problems;
+}
+
+function checkLabels(L, manifest) {
+  const problems = [];
+  if (!fs.existsSync(L.labels)) return problems;
+  const clipIds = new Set(manifest.clips.map((c) => c.clipId));
+  for (const name of fs.readdirSync(L.labels)) {
+    const m = LABEL_FILE_RE.exec(name);
+    if (!m) {
+      problems.push(`labels/${name}: name must be <clip ID>-<coach ID>.json`);
+      continue;
+    }
+    const [, clipId, coachId] = m;
+    if (!clipIds.has(clipId)) problems.push(`labels/${name}: clip ${clipId} is not in the manifest`);
+    try {
+      if (!readCoach(L, coachId)) problems.push(`labels/${name}: no coach record for ${coachId}`);
+    } catch (err) {
+      problems.push(`labels/${name}: ${err.message}`);
+    }
+    let rec;
+    try {
+      rec = readJson(path.join(L.labels, name));
+    } catch {
+      problems.push(`labels/${name}: not valid JSON`);
+      continue;
+    }
+    for (const p of validateLabelRecord(rec, { clipId, coachId })) problems.push(`labels/${name}: ${p}`);
+  }
+  return problems;
 }
 
 // ---------------------------------------------------------------------------
@@ -834,6 +1060,11 @@ async function main(argv) {
       skill: { type: "string" },
       remote: { type: "boolean" },
       processor: { type: "string" },
+      coach: { type: "string" },
+      "agreement-version": { type: "string" },
+      "agreement-date": { type: "string" },
+      "in-person": { type: "string" },
+      "remote-sessions": { type: "string" },
       file: { type: "string" },
       angle: { type: "string" },
       club: { type: "string" },
@@ -912,6 +1143,32 @@ async function main(argv) {
       out(r);
       return r.vendorVerified ? 0 : 1;
     }
+    case "coach-add": {
+      const rec = addCoach(dataDir, {
+        coach: values.coach,
+        agreementVersion: values["agreement-version"],
+        agreementDate: values["agreement-date"],
+        agreementSigned: yesNo(values.signed, "--signed"),
+        inPerson: yesNo(values["in-person"], "--in-person"),
+        remote: yesNo(values["remote-sessions"], "--remote-sessions"),
+      });
+      out(rec);
+      return 0;
+    }
+    case "coach-revoke":
+      out(revokeCoach(dataDir, values.coach));
+      return 0;
+    case "coach-session-check": {
+      try {
+        const r = assertCoachSessionAllowed(dataDir, values.coach, { remote: values.remote === true });
+        out({ allowed: true, ...r });
+        return 0;
+      } catch (err) {
+        if (!(err instanceof EvalError)) throw err;
+        out({ allowed: false, coachId: values.coach ?? null, remote: values.remote === true, reason: err.message });
+        return 1;
+      }
+    }
     case "withdraw": {
       const r = withdrawContributor(dataDir, values.contributor, { confirm: values.confirm === true });
       if (r.dryRun) {
@@ -930,7 +1187,9 @@ async function main(argv) {
       return 0;
     }
     default:
-      out("Commands: init | consent-add | import | status | verify | coach-check | third-party-check | withdraw | retention. See the header of this file.");
+      out(
+        "Commands: init | consent-add | import | status | verify | coach-check | third-party-check | coach-add | coach-revoke | coach-session-check | withdraw | retention. See the header of this file.",
+      );
       return command ? 2 : 0;
   }
 }
