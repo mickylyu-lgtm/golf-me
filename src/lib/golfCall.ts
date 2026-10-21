@@ -124,10 +124,8 @@ export function realRoundToGolfCall(round: RoundRow, participants: ParticipantRo
 
   // undefined (never 0) when coordinates aren't known -- a round with no
   // course coordinates is unknown-distance, not "right next to the user."
-  const distanceMiles =
-    viewerLocation && round.course_lat != null && round.course_lng != null
-      ? haversineMiles(viewerLocation, { lat: round.course_lat, lng: round.course_lng })
-      : undefined;
+  const courseCoords = round.course_lat != null && round.course_lng != null ? { lat: round.course_lat, lng: round.course_lng } : undefined;
+  const distanceMiles = viewerLocation && courseCoords ? haversineMiles(viewerLocation, courseCoords) : undefined;
 
   return {
     id: round.id,
@@ -136,6 +134,7 @@ export function realRoundToGolfCall(round: RoundRow, participants: ParticipantRo
     courseId: round.course_id ?? undefined,
     areaLabel: round.course_area_label,
     distanceMiles,
+    courseCoords,
     dateISO: round.date_iso,
     timeLabel: round.tee_time_label,
     estimatedPricePerPerson: round.estimated_price_per_person ?? 0,

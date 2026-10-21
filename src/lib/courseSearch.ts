@@ -12,8 +12,12 @@ import { COURSES, areaForCourse, coordsForCourse } from "./courses";
 // Golf Calls, ahead of preference compatibility. Undefined means "unknown,"
 // never a fabricated distance — callers filtering by radius must treat it
 // as not matching, not as 0 mi.
+// Real rounds carry their own course coordinates (courseCoords), so a
+// searched city -- "Hong Kong, 25 mi" from a NYC profile -- measures from that
+// city, not the viewer's saved area baked into distanceMiles. Demo rounds
+// fall back to the static fixture coordinates.
 export function resolveCallDistanceMiles(call: GolfCall, location: PlayingArea): number | undefined {
-  const courseCoords = coordsForCourse(call.course);
+  const courseCoords = call.courseCoords ?? coordsForCourse(call.course);
   if (location.coords && courseCoords) return haversineMiles(location.coords, courseCoords);
   return call.distanceMiles;
 }
