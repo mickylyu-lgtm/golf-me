@@ -150,10 +150,13 @@ test("pose accuracy: perfect labels score PCK 1, shifted labels fail, not_visibl
 
   const shifted = scorePoseAgainstLabels(seq, keyframeLabels(POSES.FACE_ON_ADDRESS, { offset: 400 }));
   assert.equal(shifted.overall.pck02, 0);
+  assert.equal(shifted.overall.confidentWrongRate, 1);
+  assert.equal(perfect.overall.confidentWrongRate, 0);
 
   const hidden = scorePoseAgainstLabels(seq, keyframeLabels(POSES.FACE_ON_ADDRESS, { notVisible: ["left_wrist", "right_wrist"] }));
   assert.equal(hidden.overall.labeledNotVisible, 2);
   assert.equal(hidden.overall.falseObservationRate, 1, "the synthetic pose reports both wrists confidently");
+  assert.equal(hidden.overall.honestAbstention, 0);
   assert.equal(hidden.byKeypoint.left_wrist.labeledVisible, 0);
 });
 

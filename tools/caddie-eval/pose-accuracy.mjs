@@ -9,15 +9,17 @@
 //                   "points": { "left_shoulder": [x, y] | "not_visible", ... } } ] }
 // Points use the GOLFER's anatomical left/right. A point left out = not labeled.
 //
-// Metric (close to the BlazePose model card's PDJ / PCK@0.2):
-// - error = 2-D distance / torso diameter, where torso diameter = the larger
-//   of the two labeled shoulder-to-opposite-hip diagonals in that frame
-//   (frame not scorable without both diagonals' endpoints);
+// Metric (EVAL_REPORT_TEMPLATE.md §5):
+// - error = 2-D distance / torso length, where torso length = labeled
+//   shoulder midpoint to hip midpoint in that frame (frame not scorable
+//   unless both shoulders and both hips are labeled visible). The BlazePose
+//   model card normalizes by torso DIAMETER instead, so its PDJ numbers are
+//   not directly comparable;
 // - a prediction counts only if its confidence passes the quality gate's
 //   keypoint threshold; a missing prediction for a visible label is a miss;
 // - PCK@0.1 and PCK@0.2 per keypoint, per phase, overall;
 // - abstention: for "not_visible" labels, how often the model still reported
-//   a confident point (false observation).
+//   a confident point (false observation); confident-wrong as in the template.
 // The pose frame used is the one nearest to t, within half a frame interval.
 //
 // Usage: node tools/caddie-eval/pose-accuracy.mjs --clip C001-0001 --labeler K01 [--variant full]
@@ -35,7 +37,7 @@ export const POSE_ACCURACY_VERSION = "0.1.0";
 const PHASES = ["address", "top", "impact"];
 
 function emptyCounts() {
-  return { labeledVisible: 0, predicted: 0, within01: 0, within02: 0, errorSum: 0, labeledNotVisible: 0, falseObservations: 0 };
+  return { labeledVisible: 0, predicted: 0, within01: 0, within02: 0, confidentFar: 0, errorSum: 0, labeledNotVisible: 0, falseObservations: 0 };
 }
 
 function add(a, b) {
@@ -53,6 +55,9 @@ export function finalize(c) {
     pck02: c.labeledVisible ? r(c.within02 / c.labeledVisible) : null,
     meanNormalizedErrorWhenPredicted: c.predicted ? r(c.errorSum / c.predicted) : null,
     falseObservationRate: c.labeledNotVisible ? r(c.falseObservations / c.labeledNotVisible) : null,
+    honestAbstention: c.labeledNotVisible ? r(1 - c.falseObservations / c.labeledNotVisible) : null,
+    // Template §5: confident points > 0.2 torso lengths off, or confident on a hidden point, over all confident points.
+    confidentWrongRate: c.predicted + c.falseObservations ? r((c.confidentFar + c.falseObservations) / (c.predicted + c.falseObservations)) : null,
   };
 }
 
@@ -88,17 +93,15 @@ function nearestFrame(sequence, t) {
   return best?.f ?? null;
 }
 
-function torsoDiameter(points) {
+/** Shoulder-midpoint to hip-midpoint distance in the labels (EVAL_REPORT_TEMPLATE.md §5), or null. */
+function torsoLength(points) {
   const p = (n) => (Array.isArray(points[n]) ? points[n] : null);
   const ls = p("left_shoulder");
   const rs = p("right_shoulder");
   const lh = p("left_hip");
   const rh = p("right_hip");
-  const diags = [];
-  if (ls && rh) diags.push(Math.hypot(ls[0] - rh[0], ls[1] - rh[1]));
-  if (rs && lh) diags.push(Math.hypot(rs[0] - lh[0], rs[1] - lh[1]));
-  if (diags.length < 2) return null;
-  const d = Math.max(...diags);
+  if (!ls || !rs || !lh || !rh) return null;
+  const d = Math.hypot((ls[0] + rs[0]) / 2 - (lh[0] + rh[0]) / 2, (ls[1] + rs[1]) / 2 - (lh[1] + rh[1]) / 2);
   return d > 0 ? d : null;
 }
 
@@ -123,9 +126,9 @@ export function scorePoseAgainstLabels(sequence, labels, { minConfidence = QG_MI
       skipped.push({ phase: lf.phase, t: lf.t, reason: "no pose frame within half a frame of t" });
       continue;
     }
-    const diameter = torsoDiameter(lf.points);
-    if (diameter === null) {
-      skipped.push({ phase: lf.phase, t: lf.t, reason: "torso diagonals not labeled" });
+    const torso = torsoLength(lf.points);
+    if (torso === null) {
+      skipped.push({ phase: lf.phase, t: lf.t, reason: "both shoulders and both hips must be labeled visible" });
       continue;
     }
     for (const [name, v] of Object.entries(lf.points)) {
@@ -139,10 +142,11 @@ export function scorePoseAgainstLabels(sequence, labels, { minConfidence = QG_MI
         c.labeledVisible = 1;
         if (confident) {
           c.predicted = 1;
-          const err = Math.hypot(confident.x * sx - v[0], confident.y * sy - v[1]) / diameter;
+          const err = Math.hypot(confident.x * sx - v[0], confident.y * sy - v[1]) / torso;
           c.errorSum = err;
           if (err <= 0.1) c.within01 = 1;
           if (err <= 0.2) c.within02 = 1;
+          else c.confidentFar = 1;
         }
       }
       add(overall, c);
