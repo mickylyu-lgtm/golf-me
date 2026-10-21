@@ -15,6 +15,7 @@ import { golferDistanceMiles } from "../../lib/compatibility";
 import { useData } from "../../context/DataContext";
 import { useCredibilityStats } from "../../lib/useCredibility";
 import { useLocale } from "../../i18n/LocaleContext";
+import { AreaLabel } from "../location/AreaLabel";
 
 interface GolferCardProps {
   golfer: GolferProfile;
@@ -42,7 +43,7 @@ export function GolferCard({ golfer, compatibility, onClick }: GolferCardProps) 
             </p>
             <p className="flex items-center gap-1 text-xs text-slate-500">
               <MapPin size={12} /> {distance !== undefined && `${t("golfCallCard.miAway", { miles: distance.toFixed(1) })} · `}
-              {golfer.areaLabel}
+              <AreaLabel areaLabel={golfer.areaLabel} place={golfer.playingAreaPlace} />
             </p>
           </div>
         </div>

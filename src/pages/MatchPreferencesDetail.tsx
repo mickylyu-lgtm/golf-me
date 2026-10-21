@@ -13,6 +13,7 @@ import type { AvailabilitySlot } from "../types";
 import type { PlayingArea } from "../lib/geo";
 import { matchPreferencesFromGolfer } from "../lib/matchPreferences";
 import type { MatchPreferencesValue } from "../lib/matchPreferences";
+import { AreaLabel } from "../components/location/AreaLabel";
 
 // Everything on this page is a local draft until "Save Changes" is tapped —
 // no per-field auto-save. Rebuilt this way after live per-field saving
@@ -112,7 +113,9 @@ export function MatchPreferencesDetail() {
           <MapPin size={16} className="shrink-0 text-fairway-600" />
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t("host.playingArea")}</p>
-            <p className="text-sm font-semibold text-slate-800">{draftArea.label}</p>
+            <p className="text-sm font-semibold text-slate-800">
+              <AreaLabel areaLabel={draftArea.label} place={draftArea.place} />
+            </p>
           </div>
         </div>
         <Button size="sm" variant="outline" onClick={() => setLocationPickerOpen(true)}>

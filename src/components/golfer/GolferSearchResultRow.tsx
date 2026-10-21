@@ -4,6 +4,7 @@ import { Avatar } from "../ui/Avatar";
 import { FoundingMark } from "./FoundingGolfer";
 import { Button } from "../ui/Button";
 import type { FriendSearchResult } from "../../lib/useFriendSearch";
+import { AreaLabel } from "../location/AreaLabel";
 
 interface GolferSearchResultRowProps {
   golfer: FriendSearchResult;
@@ -39,7 +40,7 @@ export function GolferSearchResultRow({ golfer, following, onOpenProfile, onTogg
           <p className="text-xs text-slate-500">
             {golfer.username && <>@{golfer.username} · </>}
             {golfer.handicap !== null ? t("golfCallDetail.handicapValue", { handicap: golfer.handicap }) : t("golfCallDetail.noHandicapYet")}
-            {golfer.areaLabel && <> · {golfer.areaLabel}</>}
+            {golfer.areaLabel && <> · <AreaLabel areaLabel={golfer.areaLabel} /></>}
           </p>
         </div>
       </button>

@@ -47,6 +47,7 @@ import { isFounder } from "../lib/founder";
 import { vibeLabel, walkOrCartLabel } from "../lib/enumLabels";
 import { VIBE_TONE } from "../lib/theme";
 import { useIsCoachReviewer } from "../lib/useIsCoachReviewer";
+import { AreaLabel } from "../components/location/AreaLabel";
 
 // Stable (module-level, not re-created per render) zeroed fallback for the
 // brief window before the route's golfer id resolves — useCredibilityStats
@@ -209,7 +210,7 @@ export function GolferProfilePage() {
                 <span className={handicapColorClass(golfer.handicap)}>{formatHandicapNumber(golfer.handicap)}</span>
               </>
             )}{" "}
-            · {golfer.areaLabel}
+            · <AreaLabel areaLabel={golfer.areaLabel} place={golfer.playingAreaPlace} />
           </p>
           {distance !== undefined && (
             <p className="flex items-center justify-center gap-1 text-xs text-slate-400">

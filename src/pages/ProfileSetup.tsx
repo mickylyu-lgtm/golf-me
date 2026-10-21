@@ -18,6 +18,7 @@ import { track } from "../lib/analytics";
 import { clearOnboardingDraft, loadOnboardingDraft, saveOnboardingDraft } from "../lib/onboardingDraft";
 import type { OnboardingDraft } from "../lib/onboardingDraft";
 import { isObjectionableContentError } from "../lib/objectionableContent";
+import { AreaLabel } from "../components/location/AreaLabel";
 
 function draftDefaults(): OnboardingDraft {
   return {
@@ -259,7 +260,9 @@ export function ProfileSetup() {
               <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white p-4">
                 <div className="flex items-center gap-2.5">
                   <MapPin size={16} className="shrink-0 text-fairway-600" />
-                  <p className="text-sm font-semibold text-slate-800">{areaLabel}</p>
+                  <p className="text-sm font-semibold text-slate-800">
+                    <AreaLabel areaLabel={areaLabel} place={playingAreaPlace} />
+                  </p>
                 </div>
                 <button onClick={() => setLocationPickerMode("manual")} className="shrink-0 text-xs font-semibold text-fairway-700 hover:underline">
                   {t("common.change")}

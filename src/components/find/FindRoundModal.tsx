@@ -30,6 +30,7 @@ import type { NewPreferenceSelections } from "../../lib/preferenceMatch";
 import { locationParams } from "../../lib/travelLocation";
 import type { PlayingArea } from "../../lib/geo";
 import { coarsenOptionalGeoPoint } from "../../lib/coarseLocation";
+import { AreaLabel } from "../location/AreaLabel";
 
 export type WhenChoice = "today" | "tomorrow" | "weekend" | "date";
 
@@ -252,7 +253,9 @@ export function FindRoundModal({ onClose }: { onClose: () => void }) {
               {travelLocation ? t("common.change") : t("filters.playingSomewhereElse")}
             </button>
           </div>
-          <p className="text-sm text-slate-600">{effectiveAreaLabel}</p>
+          <p className="text-sm text-slate-600">
+            <AreaLabel areaLabel={effectiveAreaLabel} place={travelLocation ? travelLocation.place : currentUser.playingAreaPlace} />
+          </p>
           {travelLocation && (
             <div className="mt-2 flex items-center justify-between gap-2">
               <p className="text-xs text-slate-500">{t("filters.temporarySearch")}</p>

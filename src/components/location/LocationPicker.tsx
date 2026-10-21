@@ -14,6 +14,8 @@ import { useCityLookup } from "../../lib/useCityLookup";
 import { geocodeLangForLocale, normalizeGeocodeText } from "../../../supabase/functions/_shared/cityGeocode.ts";
 import { useLocale } from "../../i18n/LocaleContext";
 import { useAuth } from "../../context/AuthContext";
+import { localizedAreaLabel, englishPlaceLabel } from "../../lib/placeNames";
+import { ensurePlaceNames } from "../../lib/usePlaceNames";
 
 // How close a real geolocation fix needs to be to one of our curated
 // region centroids before we're willing to label it with that city name —
@@ -67,7 +69,15 @@ export function LocationPicker({ title, onSelect, onClose, autoRequestLocation =
   const { isDemo } = useAuth();
   const [query, setQuery] = useState("");
   const [geoStatus, setGeoStatus] = useState<GeoStatus>("idle");
+  const [resolvingPlaceId, setResolvingPlaceId] = useState<string | null>(null);
   const autoRequested = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   const cityLookup = useCityLookup(query, { enabled: !isDemo, lang: geocodeLangForLocale(locale), bias: biasCoords });
   const trimmedQuery = query.trim();
@@ -108,10 +118,25 @@ export function LocationPicker({ title, onSelect, onClose, autoRequestLocation =
     requestCurrentLocation();
   }, [autoRequestLocation]);
 
-  function selectCity(area: CityArea) {
+  async function selectCity(area: CityArea) {
+    if (resolvingPlaceId) return;
     // Already coarsened (regionToArea / cityPlaceToArea); coarsen once more
     // so nothing precise can reach a profile from here whatever the source.
-    onSelect({ label: area.label, coords: coarsenGeoPoint(area.coords), place: area.place });
+    const coords = coarsenGeoPoint(area.coords);
+    let label = area.label;
+    if (!isDemo && area.place.id.startsWith("geoapify:")) {
+      // The searched label is in the SEARCHER's language. Store the English
+      // canonical label instead (old clients, text matching and every
+      // fallback read area_label) and fill the shared per-city names so other
+      // viewers see their own language. Bounded wait; on any failure keep the
+      // searched label -- the place id still identifies the city.
+      setResolvingPlaceId(area.place.id);
+      const names = await ensurePlaceNames(area.place.id);
+      if (!mounted.current) return; // closed while resolving: the pick is abandoned
+      setResolvingPlaceId(null);
+      label = (names && englishPlaceLabel(names, area.place.countryCode)) || area.label;
+    }
+    onSelect({ label, coords, place: area.place });
   }
 
   function useFreeTextLabel() {
@@ -149,11 +174,15 @@ export function LocationPicker({ title, onSelect, onClose, autoRequestLocation =
           {results.map((r) => (
             <button
               key={r.place.id}
-              onClick={() => selectCity(r)}
-              className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-700 transition-colors duration-150 hover:bg-fairway-50"
+              onClick={() => void selectCity(r)}
+              disabled={resolvingPlaceId !== null}
+              aria-busy={resolvingPlaceId === r.place.id}
+              className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-700 transition-colors duration-150 hover:bg-fairway-50 disabled:opacity-60"
             >
               <MapPin size={15} className="shrink-0 text-fairway-600" />
-              <span className="flex-1">{r.label}</span>
+              {/* Built-in cities in the viewer's language; geocoded results
+                  already come back in it (autocomplete lang). */}
+              <span className="flex-1">{r.place.id.startsWith("golfme:") ? localizedAreaLabel({ areaLabel: r.label, place: r.place }, locale, () => undefined) : r.label}</span>
             </button>
           ))}
           {trimmedQuery && !exactMatch && (
