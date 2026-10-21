@@ -8,6 +8,8 @@
 > - If n is under 20 for a cell, write the number but mark it **"too few to conclude"**. No threshold may be validated from such a cell.
 > - Clips are referred to only by clip ID. No video, frames, screenshots, names, or emails in a report.
 > - Results describe **this dataset only**. Don't word them as product accuracy claims.
+> - **Local-prototype tables (§0 offline check, §4a, §5, §5a, §8a, §8b) are generated** by `node tools/caddie-eval/pilot-report.mjs [--variant full]` from the data folder's own run files. It writes "no data" for any cell with nothing behind it and marks rows under 20 clips "too few to conclude" (`*`). Paste its tables; don't retype or round them.
+> - Numbers scored against **K00** key-frame labels are against **PROTOTYPE labels** (one annotator, not validated ground truth; `KEYFRAME_ANNOTATION_GUIDE.md`). Say so next to every such table, and never use them to validate a threshold.
 
 ---
 
@@ -24,7 +26,7 @@
 | Contributors | (count only) |
 | Coaches (pseudonymous IDs) | |
 | Pose source | (e.g. local MediaPipe Pose Landmarker Full / Heavy, cached V1 Roboflow output, Apple Vision prototype; for MediaPipe: `@mediapipe/tasks-vision` version, model file and sha256 from `tools/caddie-eval/models/models.json`, adapter version, decode settings: fps, long side) |
-| Offline check (local runs) | (from each `pose-mediapipe-<variant>.run.json`: `network.blocked` hosts and counts; must show only expected blocks, e.g. MediaPipe's `odml.pa.googleapis.com` logger, and no request served from anywhere but the local allowlist) |
+| Offline check (local runs) | (from `pilot-report.mjs` §0, built from each `pose-mediapipe-<variant>.run.json`: `network.externalRequestsAllowed` must be 0, `network.blocked` only the expected `odml.pa.googleapis.com` logger (`MEDIAPIPE_TELEMETRY_AUDIT.md`), no WebSockets, and `network.osIsolation.isolated` true (run inside an empty network namespace). Give "X of Y runs verified offline" and list any run that isn't) |
 | V1 outputs used? | (yes/no; if yes, the date V1 was run, the spend approval reference, the `VENDOR_TERMS_VERIFIED` dates for Roboflow and Gemini, and confirmation every clip sent passed `assertThirdPartyAllowed`) |
 | Consent form version(s) | (e.g. 1.1; every clip within its 90-day retention on the run date) |
 | Module versions | `qualityGate` , `cameraAngle` , `phaseOrder` , `roboflowAdapter` , `mediapipeAdapter` , `pose-accuracy` |
@@ -154,14 +156,29 @@ Also report the distributions of `medianShoulderRatio` and `medianHipRatio` per 
 |---|---|---|---|---|---|---|
 | | | | | | | |
 
+## 4a. Key-frame identification (local prototype)
+
+**What it measures:** whether an automatic detector picks the same address, top, impact, and finish frames as the labels.
+
+**Truth:** K00 key frames (`annotations/<clip>-K00.vNNN.json`, latest version; **prototype labels**), and later the coach `t_*` times. `not_in_clip` / `cant_tell` are excluded and counted.
+**Prediction:** a key-frame detector's frame per event. **The local prototype has none (`PROTOTYPE_CAPABILITIES.swing_phases` = not implemented), so this section reads "not implemented" and holds no accuracy numbers.**
+**Tolerance:** within ±67 ms (2 frames at 30 fps, 4 at 60 fps), and within ±1 frame, on the shared export/pose timeline. A missing prediction for a labeled key frame is a miss. Scorer: `tools/caddie-eval/lib/keyframeAccuracy.mjs`.
+
+| Key frame | K00 labeled (clips) | K00 not in clip / can't tell | Detector: within ±67 ms | Within ±1 frame | Median abs. error (ms) |
+|---|---|---|---|---|---|
+| Address | | | not implemented | not implemented | not implemented |
+| Top | | | not implemented | not implemented | not implemented |
+| Impact | | | not implemented | not implemented | not implemented |
+| Finish | | | not implemented | not implemented | not implemented |
+
 ## 5. Pose landmark stability
 
 **What it measures:** whether body points are where coaches put them, stay still when the golfer is still, and get low confidence when hidden.
 
-**Truth:** coach or Micky keypoints on address/top/impact frames of the keypoint subset (`TESTING_PROTOCOL.md` §8), with "not visible" allowed.
+**Truth:** coach keypoints, or Micky's K00 **prototype** keypoints, on the address/top/impact/finish frames of the keypoint subset (`TESTING_PROTOCOL.md` §8, `KEYFRAME_ANNOTATION_GUIDE.md`), with "not visible" allowed. Report K00-based tables separately from coach-based ones and label them prototype.
 **Prediction:** the pose source's keypoints on the nearest analyzed frame (within half a frame). One table per pose source and variant (e.g. MediaPipe Full, MediaPipe Heavy); never pool them.
 **Unit:** one keypoint on one labeled frame (accuracy, abstention); one clip (jitter).
-**Tool:** `node tools/caddie-eval/pose-accuracy.mjs --all --variant full` computes PCK@0.1, PCK@0.2, honest abstention, and confident-wrong as defined below, per keypoint, per phase, and overall. Jitter isn't computed by a tool yet (next).
+**Tool:** `node tools/caddie-eval/pose-accuracy.mjs --all --variant full` computes PCK@0.1, PCK@0.2, honest abstention, and confident-wrong as defined below, per keypoint, per key frame, and overall; `pilot-report.mjs` fills the tables below per view (all, face-on, down-the-line). Points labeled `occluded` (estimated) are reported in their own columns, never inside PCK. Jitter isn't computed by a tool yet.
 
 **How computed:**
 
@@ -187,6 +204,7 @@ Also report the distributions of `medianShoulderRatio` and `medianHipRatio` per 
 | Address | | | | |
 | Top | | | | |
 | Impact | | | | |
+| Finish | | | | |
 
 The BlazePose model card's PDJ (PCK@0.2 of torso **diameter**, on Google's own photo set) is not comparable with these numbers; don't put it in the same table.
 
@@ -195,6 +213,18 @@ The BlazePose model card's PDJ (PCK@0.2 of torso **diameter**, on Google's own p
 | All | | | |
 | Tripod | | | |
 | Handheld | | | |
+
+## 5a. Landmark detection rate and confidence (local pose runs)
+
+**What it measures:** how often the pose source reports each keypoint at all, and confidently, on every analyzed frame. Needs no labels, so it covers every clip.
+**Unit:** one keypoint on one analyzed frame; the per-clip rate is averaged over clips (each clip counts once), with a clip-level bootstrap interval.
+**Confident** = confidence ≥ `QG_MIN_KEYPOINT_CONFIDENCE` (provisional). Confidence is MediaPipe's visibility (or min of visibility and presence), not calibrated.
+
+| Keypoint | Face-on: confident rate | Face-on: any | Face-on: confidence median / p10 | Down-the-line: confident rate | DTL: any | DTL: confidence median / p10 |
+|---|---|---|---|---|---|---|
+| (one row per keypoint, 13) | | | | | | |
+
+A high rate is not accuracy: a confidently reported point can still be in the wrong place (§5).
 
 ## 6. Quality-gate rejection accuracy
 
@@ -315,7 +345,27 @@ From each clip's `pose-mediapipe-<variant>.run.json` (and `v2-checks-...json` fo
 | Peak RSS, Chromium (MB) | | | | | | `resources.peakRssBytes.chromium` |
 | V2 checks run time (ms) | | | | | | `v2-checks-...json` `runMs` |
 
-These are laptop numbers. They say nothing about a phone or WKWebView (`MEDIAPIPE_POC.md` §6).
+These are laptop numbers. They say nothing about a phone or WKWebView (`MEDIAPIPE_POC.md` §6). `pilot-report.mjs` gives each measure for all clips and split by view, with a bootstrap interval on the median. "Processing time per swing" = `wallSecondsTotal` (hashing, probing, browser start, decoding, inference, writing files), the honest end-to-end cost of one clip on this laptop.
+
+### 8b. Face-on vs down-the-line (local prototype)
+
+One column per view, from §5, §5a, §6 inputs, and §8a. Same cell rules ("no data", `*` under 20 clips).
+
+| Measure | Face-on | Down-the-line |
+|---|---|---|
+| Clips with a pose run (n) | | |
+| Frames with a pose (clip mean) | | |
+| Confident detection, all 13 / per point group | | |
+| Median keypoint confidence | | |
+| PCK@0.2 vs K00 (prototype labels) | | |
+| Honest abstention vs K00 | | |
+| Confident-wrong vs K00 | | |
+| Quality gate pass | | |
+| Camera angle = filmed angle | | |
+| Inference ms/frame (median) | | |
+| Processing time per swing, s (median) | | |
+| Peak RSS MB (median) | | |
+| Key-frame identification | not implemented | not implemented |
 
 | Cost item | Units per swing (mean) | Price (source, date) | Cost per swing (mean) | p90 |
 |---|---|---|---|---|
