@@ -108,3 +108,51 @@ export const FIXTURE_CITIES: FixtureCity[] = [
 ];
 
 export const RAW_FIXTURE_RESULTS = FIXTURE_CITIES.map((c) => c.raw);
+
+// Synthetic Geoapify Place Details responses (features=details,details.names,
+// lang=en) for the same six cities: GeoJSON FeatureCollection whose "details"
+// feature carries name_international (OSM name:* tags). Shaped like the real
+// API per apidocs.geoapify.com/docs/place-details (2026-10-20); names are the
+// public city names, ids match FIXTURE_CITIES. No coordinates are read.
+function details(props: Record<string, unknown>): Record<string, unknown> {
+  return {
+    type: "FeatureCollection",
+    features: [{ type: "Feature", properties: { feature_type: "details", ...props }, geometry: { type: "Point", coordinates: [0, 0] } }],
+  };
+}
+
+export const FIXTURE_PLACE_DETAILS: Record<FixtureCity["key"], Record<string, unknown>> = {
+  nyc: details({
+    name: "New York",
+    city: "New York",
+    state_code: "NY",
+    country_code: "us",
+    name_international: { en: "New York", es: "Nueva York", ja: "ニューヨーク", ko: "뉴욕", zh: "纽约", "zh-Hant": "紐約", fr: "New York" },
+  }),
+  hongkong: details({
+    name: "Hong Kong",
+    country_code: "hk",
+    name_international: { en: "Hong Kong", es: "Hong Kong", ja: "香港", ko: "홍콩", "zh-Hans": "香港", "zh-Hant": "香港" },
+  }),
+  tokyo: details({
+    name: "Tokyo",
+    country_code: "jp",
+    name_international: { en: "Tokyo", es: "Tokio", ja: "東京都", ko: "도쿄", zh: "东京都", "zh-Hant": "東京都" },
+  }),
+  seoul: details({
+    name: "Seoul",
+    country_code: "kr",
+    name_international: { en: "Seoul", es: "Seúl", ja: "ソウル", ko: "서울", zh: "首尔", "zh-TW": "首爾" },
+  }),
+  london: details({
+    name: "London",
+    country_code: "gb",
+    name_international: { en: "London", es: "Londres", ja: "ロンドン", ko: "런던", zh: "伦敦" },
+  }),
+  auckland: details({
+    name: "Auckland",
+    country_code: "nz",
+    // Sparse on purpose: missing languages must fall back to English.
+    name_international: { en: "Auckland", ja: "オークランド" },
+  }),
+};
