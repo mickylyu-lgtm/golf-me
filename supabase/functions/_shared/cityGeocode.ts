@@ -217,3 +217,145 @@ export function sanitizeCityPlaces(raw: unknown): CityPlaceDto[] {
   }
   return out.slice(0, GEOCODE_RESULT_LIMIT);
 }
+
+// ---------------------------------------------------------------------------
+// Localized city names (global hosting Phase 2, items 3-4).
+//
+// A profile stores the canonical place (playing_area_place_id + country code
+// + zone + coarse coords) and an English area_label fallback. The city's name
+// in every GolfMe language lives once per PLACE, not per profile, in
+// public.geo_places (names jsonb keyed by PLACE_NAME_KEYS), filled by
+// course-search `mode: "place"` from one Geoapify Place Details request with
+// the `details.names` feature (2 credits per new distinct city, ever; see
+// docs/GLOBAL_HOSTING.md). Country names never need the network: the client
+// uses Intl.DisplayNames. Built-in regions ship their names in the bundle
+// (src/data/regionNames.ts).
+// ---------------------------------------------------------------------------
+
+/** Keys of geo_places.names. zh-CN reads zh-Hans, zh-TW reads zh-Hant. */
+export const PLACE_NAME_KEYS = ["en", "es", "ja", "ko", "zh-Hans", "zh-Hant"] as const;
+export type PlaceNameKey = (typeof PLACE_NAME_KEYS)[number];
+export type PlaceNames = Partial<Record<PlaceNameKey, string>>;
+
+/** State/province code shape (NY, ON, NSW). Same as the geo_places CHECK. */
+export const REGION_CODE_RE = /^[A-Z0-9]{1,3}$/;
+
+/** Row/wire shape of public.geo_places and course-search `mode: "place"`. */
+export interface PlaceNamesDto {
+  placeId: string; // "geoapify:<id>"
+  names: PlaceNames;
+  countryCode: string | null;
+  regionCode: string | null;
+}
+
+/** App locale to the geo_places.names key it reads first. */
+export function placeNameKeyForLocale(locale: unknown): PlaceNameKey {
+  if (typeof locale !== "string") return "en";
+  const l = locale.toLowerCase();
+  if (l === "zh-tw" || l === "zh-hk" || l === "zh-hant" || l.startsWith("zh-hant")) return "zh-Hant";
+  if (l.startsWith("zh")) return "zh-Hans";
+  const base = l.split("-")[0];
+  return (PLACE_NAME_KEYS as readonly string[]).includes(base) ? (base as PlaceNameKey) : "en";
+}
+
+/** "geoapify:<raw>" to the raw Geoapify id, or null for anything else. */
+export function geoapifyRawPlaceId(placeId: unknown): string | null {
+  if (typeof placeId !== "string" || !PLACE_ID_RE.test(placeId) || !placeId.startsWith("geoapify:")) return null;
+  const raw = placeId.slice("geoapify:".length);
+  return GEOAPIFY_RAW_ID_RE.test(raw) ? raw : null;
+}
+
+/** Geoapify Place Details params (apiKey added by the caller). English base
+ * name plus the `details.names` feature (international names). */
+export function geoapifyPlaceDetailsParams(rawId: string): URLSearchParams {
+  return new URLSearchParams({ id: rawId, lang: "en", features: "details,details.names" });
+}
+
+// OSM-style name_international keys we accept for each GolfMe key, in order.
+const NAME_SOURCE_KEYS: Record<PlaceNameKey, string[]> = {
+  en: ["en"],
+  es: ["es"],
+  ja: ["ja"],
+  ko: ["ko"],
+  "zh-Hans": ["zh-Hans", "zh-CN", "zh_Hans", "zh"],
+  "zh-Hant": ["zh-Hant", "zh-TW", "zh-HK", "zh_Hant"],
+};
+
+function cleanName(v: unknown): string | undefined {
+  const s = str(v);
+  if (!s || Array.from(s).length > MAX_LABEL_CHARS) return undefined;
+  return s;
+}
+
+/** Keeps only GolfMe's 6 keys, each a short normalized string. */
+export function sanitizePlaceNames(raw: unknown): PlaceNames {
+  const out: PlaceNames = {};
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+  const r = raw as Record<string, unknown>;
+  for (const key of PLACE_NAME_KEYS) {
+    const name = cleanName(r[key]);
+    if (name) out[key] = name;
+  }
+  return out;
+}
+
+/**
+ * Maps a Geoapify Place Details response (GeoJSON FeatureCollection) to the
+ * names of one city. Returns null when nothing usable came back. Never reads
+ * or returns coordinates: the profile already holds the coarse point.
+ */
+export function mapGeoapifyPlaceDetails(raw: unknown, placeId: string): PlaceNamesDto | null {
+  if (!geoapifyRawPlaceId(placeId)) return null;
+  const features = (raw as { features?: unknown } | null)?.features;
+  if (!Array.isArray(features)) return null;
+  // The "details" feature is the place itself; ignore any others.
+  const feature = features.find((f) => (f as { properties?: { feature_type?: unknown } })?.properties?.feature_type === "details") ?? features[0];
+  const props = (feature as { properties?: Record<string, unknown> } | undefined)?.properties;
+  if (!props || typeof props !== "object") return null;
+
+  const intl = props.name_international && typeof props.name_international === "object" ? (props.name_international as Record<string, unknown>) : {};
+  const names: PlaceNames = {};
+  for (const key of PLACE_NAME_KEYS) {
+    for (const source of NAME_SOURCE_KEYS[key]) {
+      const name = cleanName(intl[source]);
+      if (name) {
+        names[key] = name;
+        break;
+      }
+    }
+  }
+  // lang=en, so the base name/city is the English (or local, when OSM has no
+  // English) name -- the right fallback for "en".
+  if (!names.en) {
+    const base = cleanName(props.city) ?? cleanName(props.name);
+    if (base) names.en = base;
+  }
+  if (!names.en) return null;
+
+  const cc = str(props.country_code)?.toLowerCase();
+  const rc = str(props.state_code)?.toUpperCase();
+  return {
+    placeId,
+    names,
+    countryCode: cc && COUNTRY_CODE_RE.test(cc) ? cc : null,
+    regionCode: rc && REGION_CODE_RE.test(rc) ? rc : null,
+  };
+}
+
+/** Re-validates a geo_places row or a `mode: "place"` response. */
+export function sanitizePlaceNamesDto(raw: unknown): PlaceNamesDto | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const placeId = r.placeId ?? r.place_id;
+  if (typeof placeId !== "string" || !PLACE_ID_RE.test(placeId)) return null;
+  const names = sanitizePlaceNames(r.names);
+  if (!names.en) return null;
+  const cc = r.countryCode ?? r.country_code;
+  const rc = r.regionCode ?? r.region_code;
+  return {
+    placeId,
+    names,
+    countryCode: typeof cc === "string" && COUNTRY_CODE_RE.test(cc) ? cc : null,
+    regionCode: typeof rc === "string" && REGION_CODE_RE.test(rc) ? rc : null,
+  };
+}

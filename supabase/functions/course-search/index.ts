@@ -17,16 +17,21 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
   geoapifyAutocompleteParams,
+  geoapifyPlaceDetailsParams,
+  geoapifyRawPlaceId,
   geocodeCacheKey,
+  mapGeoapifyPlaceDetails,
   mapGeoapifyResults,
   sanitizeCityPlaces,
+  sanitizePlaceNamesDto,
   validateGeocodeRequest,
 } from "../_shared/cityGeocode.ts";
 import type { CityPlaceDto } from "../_shared/cityGeocode.ts";
 
 interface RequestBody {
-  mode: "search" | "nearby" | "geocode";
+  mode: "search" | "nearby" | "geocode" | "place";
   query?: string;
+  placeId?: string;
   lat?: number;
   lng?: number;
   radiusMiles?: number;
@@ -98,6 +103,7 @@ Deno.serve(async (req: Request) => {
   }
 
   if (body.mode === "geocode") return handleGeocode(req, body, apiKey);
+  if (body.mode === "place") return handlePlaceNames(req, body, apiKey);
 
   const limit = Math.min(body.limit ?? 10, 20);
   const params = new URLSearchParams({
@@ -119,7 +125,7 @@ Deno.serve(async (req: Request) => {
     // radius filter, so out-of-area matches still surface, just lower.
     if (body.lat != null && body.lng != null) params.set("bias", `proximity:${body.lng},${body.lat}`);
   } else {
-    return jsonResponse({ error: "mode must be 'search', 'nearby' or 'geocode'." }, 400);
+    return jsonResponse({ error: "mode must be 'search', 'nearby', 'geocode' or 'place'." }, 400);
   }
 
   let geoapifyRes: Response;
@@ -215,17 +221,15 @@ function memoSet(key: string, results: CityPlaceDto[]): void {
   geocodeMemo.set(key, { at: Date.now(), results });
 }
 
-async function handleGeocode(req: Request, body: RequestBody, apiKey: string): Promise<Response> {
-  const validation = validateGeocodeRequest(body);
-  if (!validation.ok) return jsonResponse({ error: validation.error, code: "invalid" }, 400);
-  const geoReq = validation.value;
-
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const callerClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+// Spends `cost` Geoapify credits from the CALLER's quota (auth.uid() inside
+// the RPC, never a parameter). Returns an error response, or null when the
+// request may go ahead. Fails closed: a missing RPC (migration not applied)
+// or any error refuses the request and the client falls back.
+async function consumeGeocodeQuota(req: Request, cost: number): Promise<Response | null> {
+  const callerClient = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
     global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
   });
-
-  const { data: quota, error: quotaError } = await callerClient.rpc("consume_geocode_quota");
+  const { data: quota, error: quotaError } = await callerClient.rpc("consume_geocode_quota", { p_cost: cost });
   if (quotaError) {
     console.error("course-search geocode: quota check failed", quotaError.code ?? "");
     return jsonResponse({ error: "City search is temporarily unavailable.", code: "unavailable" }, 503);
@@ -233,6 +237,17 @@ async function handleGeocode(req: Request, body: RequestBody, apiKey: string): P
   if (quota === "unauthenticated") return jsonResponse({ error: "Sign in to search cities.", code: "unauthenticated" }, 401);
   if (quota === "user_limit") return jsonResponse({ error: "Too many city searches. Try again later.", code: "rate_limited" }, 429);
   if (quota !== "ok") return jsonResponse({ error: "City search is busy right now.", code: "quota_exhausted" }, 429);
+  return null;
+}
+
+async function handleGeocode(req: Request, body: RequestBody, apiKey: string): Promise<Response> {
+  const validation = validateGeocodeRequest(body);
+  if (!validation.ok) return jsonResponse({ error: validation.error, code: "invalid" }, 400);
+  const geoReq = validation.value;
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const denied = await consumeGeocodeQuota(req, 1);
+  if (denied) return denied;
 
   const key = await geocodeCacheKey(geoReq);
   const memo = memoGet(key);
@@ -278,4 +293,68 @@ async function handleGeocode(req: Request, body: RequestBody, apiKey: string): P
   }
 
   return jsonResponse({ results });
+}
+
+// ---------------------------------------------------------------------------
+// mode: "place" -- a picked city's name in GolfMe's six languages, stored
+// once per place in public.geo_places (never per user). The client calls it
+// only after a direct geo_places read missed, right after the golfer picks a
+// geocoded city. Order: validate the id -> quota (2 credits: Place Details +
+// details.names) -> geo_places re-check (a concurrent pick may have filled
+// it) -> Geoapify -> upsert. Needs the service-role client: without it the
+// names can't be stored, so the request is refused before spending credits.
+// Returns names only, never coordinates.
+// ---------------------------------------------------------------------------
+
+async function handlePlaceNames(req: Request, body: RequestBody, apiKey: string): Promise<Response> {
+  const placeId = typeof body.placeId === "string" ? body.placeId : "";
+  const rawId = geoapifyRawPlaceId(placeId);
+  if (!rawId) return jsonResponse({ error: "Invalid placeId.", code: "invalid" }, 400);
+
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!serviceKey) return jsonResponse({ error: "City names are temporarily unavailable.", code: "unavailable" }, 503);
+  const adminClient = createClient(Deno.env.get("SUPABASE_URL")!, serviceKey, { auth: { persistSession: false } });
+
+  const denied = await consumeGeocodeQuota(req, 2);
+  if (denied) return denied;
+
+  const { data: existing, error: readError } = await adminClient
+    .from("geo_places")
+    .select("place_id, names, country_code, region_code")
+    .eq("place_id", placeId)
+    .maybeSingle();
+  if (readError) {
+    console.error("course-search place: cache read failed", readError.code ?? "");
+    return jsonResponse({ error: "City names are temporarily unavailable.", code: "unavailable" }, 503);
+  }
+  const cachedDto = sanitizePlaceNamesDto(existing);
+  if (cachedDto) return jsonResponse({ place: cachedDto, cached: true });
+
+  const params = geoapifyPlaceDetailsParams(rawId);
+  params.set("apiKey", apiKey);
+  let geoRes: Response;
+  try {
+    geoRes = await fetch(`https://api.geoapify.com/v2/place-details?${params.toString()}`);
+  } catch {
+    return jsonResponse({ error: "Could not reach the city search provider.", code: "provider_unreachable" }, 502);
+  }
+  if (!geoRes.ok) {
+    console.error("course-search place: provider error", geoRes.status);
+    const code = geoRes.status === 429 || geoRes.status === 402 ? "quota_exhausted" : "provider_error";
+    return jsonResponse({ error: "City search provider returned an error.", code }, 502);
+  }
+
+  const dto = mapGeoapifyPlaceDetails(await geoRes.json().catch(() => null), placeId);
+  if (!dto) return jsonResponse({ error: "No names for this city.", code: "not_found" }, 404);
+
+  const { error: putError } = await adminClient.from("geo_places").upsert({
+    place_id: dto.placeId,
+    names: dto.names,
+    country_code: dto.countryCode,
+    region_code: dto.regionCode,
+    fetched_at: new Date().toISOString(),
+  });
+  if (putError) console.error("course-search place: cache write failed", putError.code ?? "");
+
+  return jsonResponse({ place: dto });
 }
