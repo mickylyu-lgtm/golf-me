@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Modal } from "../ui/Modal";
 import { useLocale } from "../../i18n/LocaleContext";
-import { formatFoundingNumber, isFounder } from "../../lib/founder";
-import { useFoundingCohortStatus } from "../../lib/useFoundingCohortStatus";
+import { formatFoundingNumber, hasFoundingSpotsToShow, isFounder } from "../../lib/founder";
+import { useFoundingCohortStatus, type FoundingCohortStatus } from "../../lib/useFoundingCohortStatus";
 
 // Founding Golfer identity (20261006120000). The number is awarded
 // server-side only; these components just render what the profile row
@@ -133,10 +133,12 @@ export function FoundingGolferBadge({ golfer, className = "" }: { golfer: Foundi
   );
 }
 
-// Onboarding / landing line: spots left while the cohort is open, a
-// "claimed" note once all of them are gone, nothing otherwise (demo,
-// loading, cohort not opened yet, or closed early by an admin). `onDark`
-// is the landing hero's light-on-green variant.
+// NYC spots line: spots left while the cohort is open, a "claimed" note once
+// all of them are gone, nothing otherwise (demo, loading, load error, cohort
+// not opened yet, or closed early by an admin). NYC-only program: render it
+// only where NYC is the context -- onboarding once the chosen area is in the
+// zone, or the landing page's NYC section -- never as a global offer.
+// `onDark` is the light-on-green variant.
 export function FoundingSpotsNote({
   enabled,
   onDark = false,
@@ -146,11 +148,24 @@ export function FoundingSpotsNote({
   onDark?: boolean;
   className?: string;
 }) {
-  const { t } = useLocale();
   const status = useFoundingCohortStatus(enabled);
-  if (!status) return null;
+  return <FoundingSpotsLine status={status} onDark={onDark} className={className} />;
+}
+
+// Presentational half of FoundingSpotsNote, for callers that already hold
+// the status (e.g. a section that hides itself when there's no count).
+export function FoundingSpotsLine({
+  status,
+  onDark = false,
+  className = "",
+}: {
+  status: FoundingCohortStatus | null;
+  onDark?: boolean;
+  className?: string;
+}) {
+  const { t } = useLocale();
+  if (!hasFoundingSpotsToShow(status)) return null;
   const claimed = status.awardedCount >= status.cap;
-  if (!claimed && !(status.isOpen && status.remaining > 0)) return null;
   return (
     <p className={`flex items-center gap-2 text-xs ${onDark ? "text-fairway-100" : "text-slate-500"} ${className}`}>
       <FoundingFlagIcon size={13} className={onDark ? "text-sun-300" : "text-sun-600"} />

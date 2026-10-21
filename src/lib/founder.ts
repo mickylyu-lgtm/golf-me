@@ -1,5 +1,6 @@
 import type { GeoPoint } from "./geo";
 import { haversineMiles } from "./geo";
+import type { FoundingCohortStatus } from "./useFoundingCohortStatus";
 
 // The one official GolfMe founder account — Micky's real, existing account
 // (same one used for /admin tools), not a separate system persona: replies
@@ -24,4 +25,13 @@ const FOUNDING_ZONE_RADIUS_MILES = 30;
 
 export function isInFoundingZone(coords: GeoPoint | undefined): boolean {
   return coords != null && haversineMiles(coords, FOUNDING_ZONE_CENTER) <= FOUNDING_ZONE_RADIUS_MILES;
+}
+
+// True when there is a live, authoritative count worth showing: spots left
+// in an open cohort, or every spot claimed. False while loading, on error,
+// before the cohort opens, or after an admin closed it early -- callers then
+// show no count at all rather than a guessed one.
+export function hasFoundingSpotsToShow(status: FoundingCohortStatus | null): status is FoundingCohortStatus {
+  if (!status) return false;
+  return status.awardedCount >= status.cap || (status.isOpen && status.remaining > 0);
 }

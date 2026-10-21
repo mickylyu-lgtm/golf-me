@@ -7,7 +7,9 @@ import { HighlightGolfMe } from "../components/brand/HighlightGolfMe";
 import { CaddieNavIcon } from "../components/icons/CaddieNavIcon";
 import { Reveal } from "../components/ui/Reveal";
 import { useLocale } from "../i18n/LocaleContext";
-import { FoundingSpotsNote } from "../components/golfer/FoundingGolfer";
+import { FoundingFlagIcon, FoundingSpotsLine } from "../components/golfer/FoundingGolfer";
+import { useFoundingCohortStatus } from "../lib/useFoundingCohortStatus";
+import { hasFoundingSpotsToShow } from "../lib/founder";
 
 function PillarCard({
   id,
@@ -42,6 +44,30 @@ function StepCard({ n, title, body, delayMs }: { n: number; title: string; body:
       <h3 className="text-base font-bold text-slate-900">{title}</h3>
       <p className="max-w-[16rem] text-sm text-slate-500">{body}</p>
     </Reveal>
+  );
+}
+
+// NYC Founding Golfer offer, deliberately its own clearly NYC-labelled
+// section instead of a line in the global hero: visitors anywhere see the
+// worldwide pitch first. Shown only with a live, authoritative count from
+// get_founding_cohort_status(); while loading, on error, before the cohort
+// opens or after an early close the whole section is hidden, so no stale or
+// guessed number is ever shown. Logged-out page, so there is no demo path.
+function FoundingNycSection() {
+  const { t } = useLocale();
+  const status = useFoundingCohortStatus(true);
+  if (!hasFoundingSpotsToShow(status)) return null;
+  return (
+    <section className="px-6 py-14">
+      <Reveal className="mx-auto flex max-w-xl flex-col items-center gap-3 rounded-2xl border border-sun-300/60 bg-sun-50 p-6 text-center">
+        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-forest">
+          <FoundingFlagIcon size={30} variant="full" />
+        </span>
+        <h2 className="text-lg font-bold text-slate-900">{t("landing.nyc.title")}</h2>
+        <p className="text-sm text-slate-600">{t("landing.nyc.body")}</p>
+        <FoundingSpotsLine status={status} className="justify-center text-center font-semibold" />
+      </Reveal>
+    </section>
   );
 }
 
@@ -96,7 +122,7 @@ export function Welcome() {
             >
               {t("landing.hero.secondaryCta")}
             </button>
-            <FoundingSpotsNote enabled onDark className="justify-center text-center" />
+            <p className="text-center text-xs text-fairway-100">{t("landing.hero.worldwide")}</p>
           </Reveal>
         </section>
       </div>
@@ -131,6 +157,8 @@ export function Welcome() {
           </div>
         </div>
       </section>
+
+      <FoundingNycSection />
 
       <section className="bg-fairway-950 px-6 py-16 text-center text-white">
         <Reveal>
