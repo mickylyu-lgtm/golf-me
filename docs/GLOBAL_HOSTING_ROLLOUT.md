@@ -185,6 +185,8 @@ PGlite verified that this runs cleanly and leaves the ledger identical. If the r
 
 ## d. Isolated non-production environment [Micky to choose; nothing created]
 
+Micky chose option 3 below (a separate Supabase project, free plan if it meets the pilot's needs) on 2026-10-21. The Founding B test cases for it are in `docs/FOUNDING_B_STAGING_TEST_PLAN.md`.
+
 **Read-only check on this machine (2026-10-21):** none of Docker, the Supabase CLI, Deno or psql is installed. `npx supabase` isn't cached either. The local PGlite harness above is the only thing that ran here.
 
 | Option | Cost | Fidelity | Notes |
