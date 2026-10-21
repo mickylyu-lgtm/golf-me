@@ -3,7 +3,7 @@
 // course data, identity verification) can be swapped in without touching
 // the UI layer — components only ever talk to these types + the DataContext.
 
-import type { GeoPoint } from "../lib/geo";
+import type { GeoPoint, PlayingAreaPlace } from "../lib/geo";
 
 export type GolfVibe =
   | "Casual & Social"
@@ -142,6 +142,11 @@ export interface GolferProfile {
   // computed distance are shown). Absent for free-typed labels with no
   // known match — every consumer must handle that gracefully.
   playingAreaCoords?: GeoPoint;
+  // The city behind areaLabel/playingAreaCoords when it was picked from the
+  // geocoder or the built-in list (global hosting Phase 2). Absent for
+  // free-text and raw device locations, and for every profile until the
+  // 20261021120000 migration is applied.
+  playingAreaPlace?: PlayingAreaPlace;
   // Mock distance from the current user — demo fixtures only. Real profiles
   // leave it undefined; read distance through golferDistanceMiles()
   // (compatibility.ts), which falls back to real playing-area coordinates.

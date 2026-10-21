@@ -1,4 +1,6 @@
 import type { GolferProfile } from "../types";
+import type { PlayingAreaPlace } from "./geo";
+import { COUNTRY_CODE_RE, PLACE_ID_RE, TIMEZONE_RE } from "../../supabase/functions/_shared/cityGeocode.ts";
 import { avatarColorForName, initialsFromName } from "./avatar";
 
 // Shape of a row from public.profiles (snake_case, as Postgres returns it).
@@ -60,6 +62,29 @@ export interface ProfileRow {
   founding_member_number?: number | null;
   founding_cohort?: string | null;
   founding_awarded_at?: string | null;
+  // Global hosting Phase 2 (20261021120000). Optional: absent from the row
+  // entirely until that migration is applied -- see
+  // profileSupportsPlaceColumns().
+  playing_area_place_id?: string | null;
+  playing_area_country_code?: string | null;
+  playing_area_timezone?: string | null;
+  distance_unit?: "mi" | "km" | null;
+}
+
+/**
+ * True once the database has the Phase 2 place columns. The profile is always
+ * fetched with select("*"), so a key that exists in the row (even as null)
+ * means the column exists. Lets the web build ship before or after the
+ * migration: until then the client never sends the new fields, so an update
+ * can't fail with "column does not exist".
+ */
+export function profileSupportsPlaceColumns(row: Partial<ProfileRow> | null | undefined): boolean {
+  return Boolean(row && "playing_area_place_id" in row);
+}
+
+export interface ProfileWriteOptions {
+  /** Write playing_area_place_id/_country_code/_timezone. See profileSupportsPlaceColumns. */
+  placeColumns?: boolean;
 }
 
 // Used only for the brief window (if ever reached) where a real session
@@ -113,7 +138,7 @@ export function placeholderGolferProfile(id: string, name: string): GolferProfil
 // excludes fields the client should never overwrite directly: id,
 // distanceMiles (mock-computed, not stored), reputation/circleSize
 // (server/aggregate-owned), memberSince.
-export function golferPatchToProfileRow(patch: Partial<GolferProfile>): Record<string, unknown> {
+export function golferPatchToProfileRow(patch: Partial<GolferProfile>, options: ProfileWriteOptions = {}): Record<string, unknown> {
   const row: Record<string, unknown> = {};
   if ("name" in patch) row.name = patch.name;
   if ("username" in patch) row.username = patch.username || null;
@@ -129,6 +154,12 @@ export function golferPatchToProfileRow(patch: Partial<GolferProfile>): Record<s
   if ("playingAreaCoords" in patch) {
     row.playing_area_lat = patch.playingAreaCoords?.lat ?? null;
     row.playing_area_lng = patch.playingAreaCoords?.lng ?? null;
+  }
+  // The place travels with the coordinates: any patch that moves the area
+  // also rewrites (or clears) the place, so a stale city id can never sit
+  // next to a new free-text label or device fix.
+  if (options.placeColumns && ("playingAreaPlace" in patch || "playingAreaCoords" in patch)) {
+    Object.assign(row, placeToProfileColumns(patch.playingAreaPlace));
   }
   if ("handicap" in patch) row.handicap = patch.handicap;
   if ("favoriteCourses" in patch) row.favorite_courses = patch.favoriteCourses;
@@ -179,6 +210,7 @@ export function profileRowToGolferProfile(row: ProfileRow): GolferProfile {
       row.playing_area_lat != null && row.playing_area_lng != null
         ? { lat: row.playing_area_lat, lng: row.playing_area_lng }
         : undefined,
+    playingAreaPlace: profileRowToPlace(row),
     // No stored distance for real profiles — golferDistanceMiles() computes
     // it from both golfers' playing-area coordinates when known.
     distanceMiles: undefined,
@@ -220,5 +252,24 @@ export function profileRowToGolferProfile(row: ProfileRow): GolferProfile {
     groupTypePreference: (row.group_type_preference as GolferProfile["groupTypePreference"]) || "No Preference",
     gameFormatPreference: (row.game_format_preference as GolferProfile["gameFormatPreference"]) || "No Preference",
     networkingPreference: (row.networking_preference as GolferProfile["networkingPreference"]) || "No Preference",
+  };
+}
+
+// Validated against the same shapes as the database CHECK constraints, so a
+// malformed value (e.g. an old onboarding draft from localStorage) is
+// dropped to null instead of failing the whole profile save.
+export function placeToProfileColumns(place: PlayingAreaPlace | undefined): Record<string, string | null> {
+  const id = place?.id && PLACE_ID_RE.test(place.id) ? place.id : null;
+  const countryCode = id && place?.countryCode && COUNTRY_CODE_RE.test(place.countryCode) ? place.countryCode : null;
+  const timezone = id && place?.timezone && place.timezone.length <= 64 && TIMEZONE_RE.test(place.timezone) ? place.timezone : null;
+  return { playing_area_place_id: id, playing_area_country_code: countryCode, playing_area_timezone: timezone };
+}
+
+function profileRowToPlace(row: ProfileRow): PlayingAreaPlace | undefined {
+  if (!row.playing_area_place_id) return undefined;
+  return {
+    id: row.playing_area_place_id,
+    countryCode: row.playing_area_country_code ?? undefined,
+    timezone: row.playing_area_timezone ?? undefined,
   };
 }

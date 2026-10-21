@@ -34,7 +34,11 @@ export function MatchPreferencesDetail() {
 
   const [draftPrefs, setDraftPrefs] = useState<MatchPreferencesValue>(() => matchPreferencesFromGolfer(currentUser));
   const [draftAvailability, setDraftAvailability] = useState<AvailabilitySlot[]>(currentUser.availability);
-  const [draftArea, setDraftArea] = useState<PlayingArea>({ label: currentUser.areaLabel, coords: currentUser.playingAreaCoords });
+  const [draftArea, setDraftArea] = useState<PlayingArea>({
+    label: currentUser.areaLabel,
+    coords: currentUser.playingAreaCoords,
+    place: currentUser.playingAreaPlace,
+  });
 
   const availabilityChanged =
     draftAvailability.length !== currentUser.availability.length || draftAvailability.some((s) => !currentUser.availability.includes(s));
@@ -48,7 +52,8 @@ export function MatchPreferencesDetail() {
   const areaChanged =
     draftArea.label !== currentUser.areaLabel ||
     draftArea.coords?.lat !== currentUser.playingAreaCoords?.lat ||
-    draftArea.coords?.lng !== currentUser.playingAreaCoords?.lng;
+    draftArea.coords?.lng !== currentUser.playingAreaCoords?.lng ||
+    draftArea.place?.id !== currentUser.playingAreaPlace?.id;
   const prefsChanged = JSON.stringify(draftPrefs) !== JSON.stringify(matchPreferencesFromGolfer(currentUser));
   const isDirty = availabilityChanged || areaChanged || prefsChanged;
 
@@ -77,6 +82,7 @@ export function MatchPreferencesDetail() {
         availability: draftAvailability,
         areaLabel: draftArea.label,
         playingAreaCoords: draftArea.coords,
+        playingAreaPlace: draftArea.place,
       });
       showToast(t("preferences.savedToast"), "success");
       navigate("/");
@@ -144,6 +150,7 @@ export function MatchPreferencesDetail() {
       {locationPickerOpen && (
         <LocationPicker
           title={t("preferences.changePlayingArea")}
+          biasCoords={currentUser.playingAreaCoords}
           onSelect={(area) => {
             setDraftArea(area);
             setLocationPickerOpen(false);

@@ -102,7 +102,11 @@ export function FindRoundModal({ onClose }: { onClose: () => void }) {
     if (!travelLocation) return;
     // Defensive: LocationPicker already coarsens, but never let a precise
     // point reach the (broadly readable) profile row from here either.
-    updateCurrentUserProfile({ areaLabel: travelLocation.label, playingAreaCoords: coarsenOptionalGeoPoint(travelLocation.coords) });
+    updateCurrentUserProfile({
+      areaLabel: travelLocation.label,
+      playingAreaCoords: coarsenOptionalGeoPoint(travelLocation.coords),
+      playingAreaPlace: travelLocation.place,
+    });
     showToast(`Default playing area set to ${travelLocation.label}.`, "success");
     setTravelLocation(null);
   }
@@ -356,6 +360,7 @@ export function FindRoundModal({ onClose }: { onClose: () => void }) {
       {locationPickerOpen && (
         <LocationPicker
           title={t("filters.playingSomewhereElse")}
+          biasCoords={currentUser.playingAreaCoords}
           onSelect={(area) => {
             setTravelLocation(area);
             setLocationPickerOpen(false);

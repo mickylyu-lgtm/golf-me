@@ -6,9 +6,14 @@ import { inputClass } from "../ui/FormControls";
 import { REGIONS, searchRegions } from "../../data/regions";
 import type { Region } from "../../data/regions";
 import { haversineMiles } from "../../lib/geo";
-import type { PlayingArea } from "../../lib/geo";
+import type { GeoPoint, PlayingArea } from "../../lib/geo";
 import { coarsenGeoPoint } from "../../lib/coarseLocation";
+import { isGeocodeQueryEligible, mergeCityResults, regionToArea } from "../../lib/cityGeocode";
+import type { CityArea } from "../../lib/cityGeocode";
+import { useCityLookup } from "../../lib/useCityLookup";
+import { geocodeLangForLocale, normalizeGeocodeText } from "../../../supabase/functions/_shared/cityGeocode.ts";
 import { useLocale } from "../../i18n/LocaleContext";
+import { useAuth } from "../../context/AuthContext";
 
 // How close a real geolocation fix needs to be to one of our curated
 // region centroids before we're willing to label it with that city name —
@@ -26,6 +31,9 @@ interface LocationPickerProps {
    * only fires after that explicit tap opened this modal in the first
    * place, never on a silent/automatic mount elsewhere. */
   autoRequestLocation?: boolean;
+  /** Ranking hint for worldwide city search (e.g. the saved playing area).
+   * Rounded to whole degrees before it leaves the device. */
+  biasCoords?: GeoPoint;
 }
 
 type GeoStatus = "idle" | "requesting" | "denied" | "unsupported";
@@ -48,15 +56,29 @@ function nearestRegion(lat: number, lng: number): Region | undefined {
 // non-blocking fallback to manual search when denied/unsupported. Reuses
 // the shared Modal, which is already a full-screen sheet on mobile and a
 // centered dialog on desktop.
-export function LocationPicker({ title, onSelect, onClose, autoRequestLocation = false }: LocationPickerProps) {
-  const { t } = useLocale();
+//
+// Manual search (global hosting Phase 2): real accounts get worldwide city
+// autocomplete through the course-search Edge Function (useCityLookup:
+// debounced, 3+ chars, coarsened server-side). The built-in REGIONS list is
+// always shown first when it matches and is the whole list in demo mode,
+// offline, or whenever city search is unavailable; free text always works.
+export function LocationPicker({ title, onSelect, onClose, autoRequestLocation = false, biasCoords }: LocationPickerProps) {
+  const { t, locale } = useLocale();
+  const { isDemo } = useAuth();
   const [query, setQuery] = useState("");
   const [geoStatus, setGeoStatus] = useState<GeoStatus>("idle");
   const autoRequested = useRef(false);
 
-  const results = searchRegions(query);
+  const cityLookup = useCityLookup(query, { enabled: !isDemo, lang: geocodeLangForLocale(locale), bias: biasCoords });
   const trimmedQuery = query.trim();
+  const regionMatches = searchRegions(query);
+  // Only show geocoded results that answer the current text (a stale
+  // "ready" state for a previous query is never mixed in).
+  const geocoded = cityLookup.status === "ready" && cityLookup.query.toLowerCase() === normalizeGeocodeText(query).toLowerCase() ? cityLookup.results : [];
+  const results: CityArea[] = mergeCityResults(regionMatches, geocoded);
   const exactMatch = results.some((r) => r.label.toLowerCase() === trimmedQuery.toLowerCase());
+  const searchingCities = !isDemo && cityLookup.status === "loading" && isGeocodeQueryEligible(query);
+  const citySearchUnavailable = !isDemo && cityLookup.status === "unavailable" && isGeocodeQueryEligible(query);
 
   function requestCurrentLocation() {
     if (!("geolocation" in navigator)) {
@@ -71,7 +93,9 @@ export function LocationPicker({ title, onSelect, onClose, autoRequestLocation =
         // to course search). See lib/coarseLocation.ts.
         const coords = coarsenGeoPoint({ lat: pos.coords.latitude, lng: pos.coords.longitude });
         const region = nearestRegion(coords.lat, coords.lng);
-        onSelect({ label: region?.label ?? "Current Location", coords });
+        // Within range of a built-in city: keep that city's id/zone too.
+        // Otherwise no place -- a raw fix is not a named city.
+        onSelect(region ? { label: region.label, coords, place: regionToArea(region).place } : { label: "Current Location", coords });
       },
       () => setGeoStatus("denied"),
       { enableHighAccuracy: false, timeout: 10_000, maximumAge: 5 * 60_000 },
@@ -84,10 +108,10 @@ export function LocationPicker({ title, onSelect, onClose, autoRequestLocation =
     requestCurrentLocation();
   }, [autoRequestLocation]);
 
-  function selectRegion(region: Region) {
-    // Region centroids are public, but coarsen them too so what the client
-    // holds matches what the server stores (it rounds every write).
-    onSelect({ label: region.label, coords: coarsenGeoPoint(region.coords) });
+  function selectCity(area: CityArea) {
+    // Already coarsened (regionToArea / cityPlaceToArea); coarsen once more
+    // so nothing precise can reach a profile from here whatever the source.
+    onSelect({ label: area.label, coords: coarsenGeoPoint(area.coords), place: area.place });
   }
 
   function useFreeTextLabel() {
@@ -124,8 +148,8 @@ export function LocationPicker({ title, onSelect, onClose, autoRequestLocation =
         <div className="flex max-h-72 flex-col gap-1 overflow-y-auto">
           {results.map((r) => (
             <button
-              key={r.id}
-              onClick={() => selectRegion(r)}
+              key={r.place.id}
+              onClick={() => selectCity(r)}
               className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-700 transition-colors duration-150 hover:bg-fairway-50"
             >
               <MapPin size={15} className="shrink-0 text-fairway-600" />
@@ -147,7 +171,11 @@ export function LocationPicker({ title, onSelect, onClose, autoRequestLocation =
             // showing an empty "nearby" list later.
             <p className="px-3 pb-1 text-xs text-slate-400">{t("location.freeTextHint")}</p>
           )}
+          {searchingCities && <p className="px-3 py-1 text-xs text-slate-400">{t("location.searchingCities")}</p>}
+          {citySearchUnavailable && <p className="px-3 py-1 text-xs text-slate-400">{t("location.citySearchUnavailable")}</p>}
           {results.length === 0 && !trimmedQuery && <p className="px-3 py-2.5 text-sm text-slate-400">{t("location.startTyping")}</p>}
+          {/* Geoapify free plan requires Geoapify + OpenStreetMap attribution wherever its results are shown. */}
+          {geocoded.length > 0 && <p className="px-3 pt-1 text-[11px] text-slate-400">{t("location.cityAttribution")}</p>}
         </div>
       </div>
     </Modal>

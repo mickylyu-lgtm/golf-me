@@ -1,4 +1,4 @@
-import type { GeoPoint } from "./geo";
+import type { GeoPoint, PlayingAreaPlace } from "./geo";
 
 // Draft-only resume (no account exists until the final ProfileSetup step) —
 // answers are written here as the user fills the single Quick Profile
@@ -15,6 +15,7 @@ export interface OnboardingDraft {
   is18Plus: boolean;
   areaLabel: string;
   playingAreaCoords?: GeoPoint;
+  playingAreaPlace?: PlayingAreaPlace;
   hasHandicap: boolean;
   handicap: number | "";
 }

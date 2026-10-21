@@ -41,7 +41,7 @@ import { loadData, saveData, resetToSeedData } from "../lib/storage";
 import { avatarColorForName, initialsFromName } from "../lib/avatar";
 import { dmConversationId, otherParticipant } from "../lib/dm";
 import { useAuth } from "./AuthContext";
-import { placeholderGolferProfile, golferPatchToProfileRow } from "../lib/profile";
+import { placeholderGolferProfile, golferPatchToProfileRow, profileSupportsPlaceColumns } from "../lib/profile";
 import { isObjectionableContentError } from "../lib/objectionableContent";
 import type { SendMessageResult } from "../lib/objectionableContent";
 import { useRealRounds } from "./RealRoundsContext";
@@ -470,7 +470,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       // persistently show a stale/regressed value. Chaining off the queue
       // makes each save's full round trip finish before the next one
       // starts, so completion order always matches initiation order.
-      const row = golferPatchToProfileRow(patch);
+      const row = golferPatchToProfileRow(patch, { placeColumns: profileSupportsPlaceColumns(auth.profileRow) });
       const thisSave = profileSaveQueueRef.current.then(
         () => auth.saveProfile(row),
         () => auth.saveProfile(row), // a previous save's failure must never block this one

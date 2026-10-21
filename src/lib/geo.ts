@@ -13,6 +13,18 @@ export interface GeoPoint {
 export interface PlayingArea {
   label: string;
   coords?: GeoPoint;
+  /** The city this area was picked from (geocoded or built-in region).
+   * Absent for free-text labels and raw device locations. */
+  place?: PlayingAreaPlace;
+}
+
+// Canonical identity of a picked city, stored alongside the coarse coords
+// (profiles.playing_area_place_id / _country_code / _timezone, global
+// hosting Phase 2). Names a city, never a point.
+export interface PlayingAreaPlace {
+  id: string; // "geoapify:<place_id>" or "golfme:<region id>"
+  countryCode?: string; // ISO 3166-1 alpha-2, lowercase
+  timezone?: string; // IANA zone
 }
 
 const EARTH_RADIUS_MILES = 3958.8;

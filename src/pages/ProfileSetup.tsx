@@ -12,7 +12,8 @@ import { FoundingSpotsNote } from "../components/golfer/FoundingGolfer";
 import { isInFoundingZone } from "../lib/founder";
 import { inputClass, labelClass } from "../components/ui/FormControls";
 import { initialsFromName, avatarColorForName } from "../lib/avatar";
-import type { GeoPoint } from "../lib/geo";
+import type { GeoPoint, PlayingArea, PlayingAreaPlace } from "../lib/geo";
+import { placeToProfileColumns, profileSupportsPlaceColumns } from "../lib/profile";
 import { track } from "../lib/analytics";
 import { clearOnboardingDraft, loadOnboardingDraft, saveOnboardingDraft } from "../lib/onboardingDraft";
 import type { OnboardingDraft } from "../lib/onboardingDraft";
@@ -63,6 +64,7 @@ export function ProfileSetup() {
 
   const [areaLabel, setAreaLabel] = useState(initial.areaLabel);
   const [playingAreaCoords, setPlayingAreaCoords] = useState<GeoPoint | undefined>(initial.playingAreaCoords);
+  const [playingAreaPlace, setPlayingAreaPlace] = useState<PlayingAreaPlace | undefined>(initial.playingAreaPlace);
   const [locationPickerMode, setLocationPickerMode] = useState<"none" | "auto" | "manual">("none");
 
   const [hasHandicap, setHasHandicap] = useState(initial.hasHandicap);
@@ -80,8 +82,8 @@ export function ProfileSetup() {
   // image would bloat localStorage for a draft that might never be
   // finished; a golfer who abandons and returns just re-picks a photo).
   useEffect(() => {
-    saveOnboardingDraft({ name, is18Plus, areaLabel, playingAreaCoords, hasHandicap, handicap });
-  }, [name, is18Plus, areaLabel, playingAreaCoords, hasHandicap, handicap]);
+    saveOnboardingDraft({ name, is18Plus, areaLabel, playingAreaCoords, playingAreaPlace, hasHandicap, handicap });
+  }, [name, is18Plus, areaLabel, playingAreaCoords, playingAreaPlace, hasHandicap, handicap]);
 
   const formValid = Boolean(name.trim()) && is18Plus && Boolean(areaLabel.trim());
 
@@ -147,6 +149,8 @@ export function ProfileSetup() {
           area_label: areaLabel.trim(),
           playing_area_lat: playingAreaCoords?.lat ?? null,
           playing_area_lng: playingAreaCoords?.lng ?? null,
+          // Only once the Phase 2 columns exist (see profileSupportsPlaceColumns).
+          ...(profileSupportsPlaceColumns(profileRow) ? placeToProfileColumns(playingAreaPlace) : {}),
           handicap: hasHandicap ? finalHandicap : null,
           ...preferenceDefaults,
           has_onboarded: true,
@@ -177,9 +181,10 @@ export function ProfileSetup() {
     setTimeout(() => navigate("/ready"), 0);
   }
 
-  function handleLocationSelected(area: { label: string; coords?: GeoPoint }) {
+  function handleLocationSelected(area: PlayingArea) {
     setAreaLabel(area.label);
     setPlayingAreaCoords(area.coords);
+    setPlayingAreaPlace(area.place);
     setLocationPickerMode("none");
     track("location_selected", { hasCoords: Boolean(area.coords) });
   }
