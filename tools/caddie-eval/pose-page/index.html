@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Caddie V2 local pose</title>
+<!-- Served only to the headless Chromium run by tools/caddie-eval/pose-local.mjs,
+     from a fake origin whose every request is answered locally by Playwright.
+     Anything not on the allowlist is aborted, so this page cannot reach the network. -->
+</head>
+<body>
+<script type="module">
+import { FilesetResolver, PoseLandmarker } from "/mp/vision_bundle.mjs";
+
+let landmarker = null;
+
+window.__caddieInit = async ({ numPoses, delegate }) => {
+  const t0 = performance.now();
+  const fileset = await FilesetResolver.forVisionTasks("/mp/wasm");
+  landmarker = await PoseLandmarker.createFromOptions(fileset, {
+    baseOptions: { modelAssetPath: "/model/pose.task", delegate },
+    runningMode: "VIDEO",
+    numPoses,
+    outputSegmentationMasks: false,
+  });
+  return { loadMs: performance.now() - t0, wasmFile: fileset.wasmBinaryPath ?? null };
+};
+
+window.__caddieDetect = async ({ index, timestampMs, width, height }) => {
+  const res = await fetch(`/frame/${index}`);
+  if (!res.ok) throw new Error(`frame ${index}: HTTP ${res.status}`);
+  const pixels = new Uint8ClampedArray(await res.arrayBuffer());
+  const image = new ImageData(pixels, width, height);
+  const t0 = performance.now();
+  const result = landmarker.detectForVideo(image, timestampMs);
+  const inferMs = performance.now() - t0;
+  const poses = (result.landmarks ?? []).map((pose) =>
+    pose.map((l) => [l.x, l.y, l.z, l.visibility, typeof l.presence === "number" ? l.presence : null]),
+  );
+  return { inferMs, poses };
+};
+
+window.__caddieClose = () => {
+  if (landmarker) landmarker.close();
+  landmarker = null;
+};
+
+window.__caddieReady = true;
+</script>
+</body>
+</html>
