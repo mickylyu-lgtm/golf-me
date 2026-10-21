@@ -48,6 +48,7 @@
 //                --signed yes --in-person yes|no --remote-sessions yes|no
 //   coach-revoke --coach K01
 //   coach-session-check --coach K01 [--remote]
+//   annotator-add --annotator K00     (Micky's prototype key-frame annotator; not a coach)
 //   withdraw     --contributor C001 [--confirm]
 //   retention    [--apply]
 
@@ -58,6 +59,15 @@ import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import {
+  ANNOTATION_FILE_RE,
+  ANNOTATION_LABEL_STATUS,
+  ANNOTATOR_IDS,
+  ANNOTATOR_ROLE,
+  ANNOTATOR_SCHEMA,
+  readAnnotationChain,
+  validateAnnotatorRecord,
+} from "./lib/annotations.mjs";
 
 export const DATA_DIR_ENV = "GOLFME_EVAL_DATA_DIR";
 export const FFMPEG_ENV = "GOLFME_EVAL_FFMPEG";
@@ -330,6 +340,8 @@ function layout(dataDir) {
     derived: path.join(dataDir, "derived"),
     labels: path.join(dataDir, "labels"),
     coaches: path.join(dataDir, "coaches"),
+    annotators: path.join(dataDir, "annotators"),
+    annotations: path.join(dataDir, "annotations"),
     tmp: path.join(dataDir, ".tmp"),
     manifest: path.join(dataDir, "manifest.json"),
     auditLog: path.join(dataDir, "audit-log.jsonl"),
@@ -348,7 +360,7 @@ function mkdirPrivate(dir) {
 export function initDataDir(dataDir) {
   const safe = assertSafeDataDir(dataDir);
   const L = layout(safe);
-  for (const d of [L.root, L.consent, L.clips, L.derived, L.labels, L.coaches, L.tmp]) mkdirPrivate(d);
+  for (const d of [L.root, L.consent, L.clips, L.derived, L.labels, L.coaches, L.annotators, L.annotations, L.tmp]) mkdirPrivate(d);
   if (!fs.existsSync(L.manifest)) {
     writeJsonAtomic(L, L.manifest, { schema: MANIFEST_SCHEMA, revision: 0, updatedAt: null, clips: [] });
   }
@@ -699,8 +711,9 @@ function deleteClipData(L, clipId) {
       removed.push(`clips/${name}`);
     }
   }
-  for (const base of ["derived", "labels"]) {
+  for (const base of ["derived", "labels", "annotations"]) {
     const dir = path.join(L.root, base);
+    if (!fs.existsSync(dir)) continue;
     for (const name of fs.readdirSync(dir)) {
       if (name === clipId || name.startsWith(`${clipId}.`) || name.startsWith(`${clipId}-`) || name.startsWith(`${clipId}_`)) {
         fs.rmSync(path.join(dir, name), { recursive: true, force: true });
@@ -715,7 +728,8 @@ function clipIdsFor(L, manifest, contributorId) {
   const ids = new Set(manifest.clips.filter((c) => c.contributorId === contributorId).map((c) => c.clipId));
   // Also catch files the manifest lost track of.
   const re = new RegExp(`^(${contributorId}-\\d{4})`);
-  for (const base of ["clips", "derived", "labels"]) {
+  for (const base of ["clips", "derived", "labels", "annotations"]) {
+    if (!fs.existsSync(path.join(L.root, base))) continue;
     for (const name of fs.readdirSync(path.join(L.root, base))) {
       const m = re.exec(name);
       if (m) ids.add(m[1]);
@@ -728,6 +742,18 @@ function purgeContributor(L, contributorId, newStatus, today) {
   const manifest = loadManifest(L);
   const clipIds = clipIdsFor(L, manifest, contributorId);
   const removed = clipIds.flatMap((id) => deleteClipData(L, id));
+  // Pilot reports (reports/, written by pilot-report.mjs) are aggregates but name
+  // clip IDs: delete any that mention a removed clip; re-generate afterwards.
+  const reportsDir = path.join(L.root, "reports");
+  if (clipIds.length && fs.existsSync(reportsDir)) {
+    for (const name of fs.readdirSync(reportsDir)) {
+      const f = path.join(reportsDir, name);
+      if (fs.statSync(f).isFile() && clipIds.some((id) => fs.readFileSync(f, "utf8").includes(id))) {
+        fs.rmSync(f, { force: true });
+        removed.push(`reports/${name}`);
+      }
+    }
+  }
   manifest.clips = manifest.clips.filter((c) => c.contributorId !== contributorId);
   saveManifest(L, manifest, today);
   const rec = readConsent(L, contributorId);
@@ -790,6 +816,7 @@ export async function verifyDataDir(dataDir, today = todayIso()) {
   }
   for (const name of fs.readdirSync(L.clips)) if (!known.has(name)) problems.push(`clips/${name}: not in manifest`);
   problems.push(...checkLabels(L, manifest));
+  problems.push(...checkAnnotations(L, manifest));
   return problems;
 }
 
@@ -943,7 +970,7 @@ export function writeDataJson(L, file, value) {
   writeJsonAtomic(L, file, value);
 }
 
-export { mkdirPrivate };
+export { mkdirPrivate, openDataDir };
 
 function vendorApproved(v) {
   return Boolean(v && isIsoDate(v.verifiedOn) && isIsoDate(v.noTrainingConfirmedOn));
@@ -999,6 +1026,9 @@ export function addCoach(dataDir, opts, today = todayIso()) {
     remote: opts.remote,
     revokedAt: null,
   };
+  if (ANNOTATOR_IDS.includes(rec.coachId)) {
+    throw new EvalError(`${rec.coachId} is reserved for Micky's prototype key-frame annotations, not a coach; use annotator-add`);
+  }
   const problems = validateCoachRecord(rec);
   if (problems.length) throw new EvalError(`coach record refused: ${problems.join("; ")}`);
   if (rec.agreementDate > today) throw new EvalError("agreement date is in the future");
@@ -1123,6 +1153,82 @@ function checkLabels(L, manifest) {
 }
 
 // ---------------------------------------------------------------------------
+// Annotators (K00): prototype key-frame labels, not coaches
+// ---------------------------------------------------------------------------
+
+/**
+ * Records the K00 annotator: Micky, labeling body keypoints on key frames for
+ * the local pose measurement. A separate record type, not coach-add, because
+ * K00 signs no coach agreement, is never shown clips in a coach session, and
+ * must never count as a coach in agreement statistics. Pseudonymous: no name.
+ */
+export function addAnnotator(dataDir, annotatorId, today = todayIso()) {
+  const L = openDataDir(dataDir);
+  mkdirPrivate(L.annotators);
+  const rec = {
+    schema: ANNOTATOR_SCHEMA,
+    annotatorId,
+    role: ANNOTATOR_ROLE,
+    scope: "keyframe_keypoints",
+    labelStatus: ANNOTATION_LABEL_STATUS,
+    recordedOn: today,
+    status: "active",
+  };
+  const problems = validateAnnotatorRecord(rec);
+  if (problems.length) throw new EvalError(`annotator record refused: ${problems.join("; ")}`);
+  if (fs.existsSync(path.join(L.coaches, `${annotatorId}.json`))) throw new EvalError(`${annotatorId} already has a coach record; annotator IDs are never coach IDs`);
+  const file = path.join(L.annotators, `${annotatorId}.json`);
+  if (fs.existsSync(file)) throw new EvalError(`${annotatorId} already has an annotator record`);
+  fs.writeFileSync(file, `${JSON.stringify(rec, null, 2)}\n`, { mode: 0o600, flag: "wx" });
+  audit(L, { action: "annotator_recorded", annotatorId }, today);
+  return rec;
+}
+
+/** The annotator record, validated, or null. */
+export function readAnnotator(dataDirOrLayout, annotatorId) {
+  const L = typeof dataDirOrLayout === "string" ? openDataDir(dataDirOrLayout) : dataDirOrLayout;
+  if (!ANNOTATOR_IDS.includes(annotatorId)) throw new EvalError(`annotator ID must be one of: ${ANNOTATOR_IDS.join(", ")}`);
+  const file = path.join(L.annotators, `${annotatorId}.json`);
+  if (!fs.existsSync(file)) return null;
+  const rec = readJson(file);
+  const problems = validateAnnotatorRecord(rec);
+  if (problems.length) throw new EvalError(`annotator record ${annotatorId} is invalid: ${problems.join("; ")}`);
+  if (rec.annotatorId !== annotatorId) throw new EvalError(`annotator record ${annotatorId} names a different annotator`);
+  return rec;
+}
+
+function checkAnnotations(L, manifest) {
+  const problems = [];
+  if (!fs.existsSync(L.annotations)) return problems;
+  const clipIds = new Set(manifest.clips.map((c) => c.clipId));
+  const chains = new Set();
+  for (const name of fs.readdirSync(L.annotations)) {
+    const m = ANNOTATION_FILE_RE.exec(name);
+    if (!m) {
+      problems.push(`annotations/${name}: name must be <clip ID>-K00.v<NNN>.json`);
+      continue;
+    }
+    const [, clipId, annotatorId] = m;
+    if (!clipIds.has(clipId)) problems.push(`annotations/${name}: clip ${clipId} is not in the manifest`);
+    if (!ANNOTATOR_IDS.includes(annotatorId)) {
+      problems.push(`annotations/${name}: ${annotatorId} is not an annotator ID`);
+      continue;
+    }
+    chains.add(`${clipId}|${annotatorId}`);
+  }
+  for (const key of chains) {
+    const [clipId, annotatorId] = key.split("|");
+    try {
+      if (!readAnnotator(L, annotatorId)) problems.push(`annotations/${clipId}-${annotatorId}: no annotator record for ${annotatorId} (annotator-add)`);
+    } catch (err) {
+      problems.push(`annotations/${clipId}-${annotatorId}: ${err.message}`);
+    }
+    for (const p of readAnnotationChain(L.annotations, clipId, annotatorId).problems) problems.push(`annotations/${p}`);
+  }
+  return problems;
+}
+
+// ---------------------------------------------------------------------------
 // CLI
 // ---------------------------------------------------------------------------
 
@@ -1156,6 +1262,7 @@ async function main(argv) {
       remote: { type: "boolean" },
       processor: { type: "string" },
       coach: { type: "string" },
+      annotator: { type: "string" },
       "agreement-version": { type: "string" },
       "agreement-date": { type: "string" },
       "in-person": { type: "string" },
@@ -1250,6 +1357,10 @@ async function main(argv) {
       out(rec);
       return 0;
     }
+    case "annotator-add":
+      out(addAnnotator(dataDir, values.annotator));
+      out("Recorded. K00's key-frame labels are PROTOTYPE labels, not validated ground truth (docs/caddie-v2/KEYFRAME_ANNOTATION_GUIDE.md).");
+      return 0;
     case "coach-revoke":
       out(revokeCoach(dataDir, values.coach));
       return 0;
@@ -1283,7 +1394,7 @@ async function main(argv) {
     }
     default:
       out(
-        "Commands: init | consent-add | import | status | verify | coach-check | third-party-check | coach-add | coach-revoke | coach-session-check | withdraw | retention. See the header of this file.",
+        "Commands: init | consent-add | import | status | verify | coach-check | third-party-check | coach-add | coach-revoke | coach-session-check | annotator-add | withdraw | retention. See the header of this file.",
       );
       return command ? 2 : 0;
   }

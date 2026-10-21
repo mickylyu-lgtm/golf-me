@@ -2,17 +2,23 @@
 // Pose accuracy of the local pose source against hand-marked key-frame
 // keypoints (TESTING_PROTOCOL.md §8 "Key-frame keypoints"). Local only.
 //
-// Label format: the `keyframe_keypoints` field of labels/<clip>-<labeler>.json
-// (labeler = a coach ID, K01, or Micky's ID for geometry labels, also Kxx):
+// Label sources:
+// - K00 (Micky, PROTOTYPE labels, not validated ground truth): the latest
+//   valid version of annotations/<clip>-K00.vNNN.json (lib/annotations.mjs,
+//   docs/caddie-v2/KEYFRAME_ANNOTATION_GUIDE.md), converted to the shape below;
+// - a coach (K01, K02): the `keyframe_keypoints` field of labels/<clip>-<coach>.json:
 //   { "frame_width": 1080, "frame_height": 1920,   // pixel size the points were marked in (as displayed, upright)
-//     "frames": [ { "phase": "address" | "top" | "impact", "t": 1.234,
-//                   "points": { "left_shoulder": [x, y] | "not_visible", ... } } ] }
+//     "frames": [ { "phase": "address" | "top" | "impact" | "finish", "t": 1.234,
+//                   "points": { "left_shoulder": [x, y] | { "occluded": [x, y] } | "not_visible", ... } } ] }
 // Points use the GOLFER's anatomical left/right. A point left out = not labeled.
+// "occluded" = partly hidden, position estimated: scored in its own columns,
+// never mixed into PCK, which uses clearly visible points only.
 //
 // Metric (EVAL_REPORT_TEMPLATE.md §5):
 // - error = 2-D distance / torso length, where torso length = labeled
 //   shoulder midpoint to hip midpoint in that frame (frame not scorable
-//   unless both shoulders and both hips are labeled visible). The BlazePose
+//   unless both shoulders and both hips have a position, visible or
+//   occluded-estimate; frames using an estimate are counted). The BlazePose
 //   model card normalizes by torso DIAMETER instead, so its PDJ numbers are
 //   not directly comparable;
 // - a prediction counts only if its confidence passes the quality gate's
@@ -22,7 +28,7 @@
 //   a confident point (false observation); confident-wrong as in the template.
 // The pose frame used is the one nearest to t, within half a frame interval.
 //
-// Usage: node tools/caddie-eval/pose-accuracy.mjs --clip C001-0001 --labeler K01 [--variant full]
+// Usage: node tools/caddie-eval/pose-accuracy.mjs --clip C001-0001 --labeler K00|K01 [--variant full]
 //        node tools/caddie-eval/pose-accuracy.mjs --all [--variant full]
 import fs from "node:fs";
 import path from "node:path";
@@ -32,12 +38,25 @@ import { QG_MIN_KEYPOINT_CONFIDENCE } from "../../src/lib/caddie/v2/qualityGate.
 import { POSE_KEYPOINT_NAMES } from "../../src/lib/caddie/v2/types.ts";
 import { EvalError, LABEL_FILE_RE, assertLocalProcessingAllowed, auditEvent, defaultDataDir, todayIso, writeDataJson } from "./import-clip.mjs";
 import { validatePoseSequence } from "./run-v2-checks.mjs";
+import { ANNOTATION_LABEL_STATUS, ANNOTATOR_IDS, annotationToScorerLabels, readAnnotationChain } from "./lib/annotations.mjs";
 
-export const POSE_ACCURACY_VERSION = "0.1.0";
-const PHASES = ["address", "top", "impact"];
+export const POSE_ACCURACY_VERSION = "0.2.0";
+export const PHASES = ["address", "top", "impact", "finish"];
 
 function emptyCounts() {
-  return { labeledVisible: 0, predicted: 0, within01: 0, within02: 0, confidentFar: 0, errorSum: 0, labeledNotVisible: 0, falseObservations: 0 };
+  return {
+    labeledVisible: 0,
+    predicted: 0,
+    within01: 0,
+    within02: 0,
+    confidentFar: 0,
+    errorSum: 0,
+    labeledNotVisible: 0,
+    falseObservations: 0,
+    labeledOccluded: 0,
+    occludedPredicted: 0,
+    occludedWithin02: 0,
+  };
 }
 
 function add(a, b) {
@@ -58,8 +77,14 @@ export function finalize(c) {
     honestAbstention: c.labeledNotVisible ? r(1 - c.falseObservations / c.labeledNotVisible) : null,
     // Template §5: confident points > 0.2 torso lengths off, or confident on a hidden point, over all confident points.
     confidentWrongRate: c.predicted + c.falseObservations ? r((c.confidentFar + c.falseObservations) / (c.predicted + c.falseObservations)) : null,
+    // Occluded (estimated) labels, reported separately: how often the model reports them confidently, and how close.
+    occludedConfidentRate: c.labeledOccluded ? r(c.occludedPredicted / c.labeledOccluded) : null,
+    occludedPck02: c.labeledOccluded ? r(c.occludedWithin02 / c.labeledOccluded) : null,
   };
 }
+
+const isXY = (v) => Array.isArray(v) && v.length === 2 && v.every(Number.isFinite);
+const positionOf = (v) => (isXY(v) ? v : v && typeof v === "object" && isXY(v.occluded) ? v.occluded : null);
 
 /** Validates the keyframe_keypoints block. Returns problems (empty = valid). */
 export function validateKeyframeLabels(k) {
@@ -76,7 +101,7 @@ export function validateKeyframeLabels(k) {
     }
     for (const [name, v] of Object.entries(f.points)) {
       if (!POSE_KEYPOINT_NAMES.includes(name)) problems.push(`frames[${i}]: unknown keypoint ${name}`);
-      else if (v !== "not_visible" && !(Array.isArray(v) && v.length === 2 && v.every(Number.isFinite))) problems.push(`frames[${i}].${name}`);
+      else if (v !== "not_visible" && !isXY(v) && !(v && typeof v === "object" && isXY(v.occluded) && Object.keys(v).length === 1)) problems.push(`frames[${i}].${name}`);
     }
   }
   return problems;
@@ -95,14 +120,11 @@ function nearestFrame(sequence, t) {
 
 /** Shoulder-midpoint to hip-midpoint distance in the labels (EVAL_REPORT_TEMPLATE.md §5), or null. */
 function torsoLength(points) {
-  const p = (n) => (Array.isArray(points[n]) ? points[n] : null);
-  const ls = p("left_shoulder");
-  const rs = p("right_shoulder");
-  const lh = p("left_hip");
-  const rh = p("right_hip");
+  const names = ["left_shoulder", "right_shoulder", "left_hip", "right_hip"];
+  const [ls, rs, lh, rh] = names.map((n) => positionOf(points[n]));
   if (!ls || !rs || !lh || !rh) return null;
   const d = Math.hypot((ls[0] + rs[0]) / 2 - (lh[0] + rh[0]) / 2, (ls[1] + rs[1]) / 2 - (lh[1] + rh[1]) / 2);
-  return d > 0 ? d : null;
+  return d > 0 ? { length: d, usedEstimate: names.some((n) => !isXY(points[n])) } : null;
 }
 
 /** Pure scoring of one sequence against one keyframe_keypoints block. */
@@ -120,6 +142,7 @@ export function scorePoseAgainstLabels(sequence, labels, { minConfidence = QG_MI
   const byKeypoint = Object.fromEntries(POSE_KEYPOINT_NAMES.map((n) => [n, emptyCounts()]));
   const byPhase = Object.fromEntries(PHASES.map((p) => [p, emptyCounts()]));
   const skipped = [];
+  let framesTorsoFromEstimate = 0;
   for (const lf of labels.frames) {
     const pf = nearestFrame(sequence, lf.t);
     if (!pf) {
@@ -128,9 +151,10 @@ export function scorePoseAgainstLabels(sequence, labels, { minConfidence = QG_MI
     }
     const torso = torsoLength(lf.points);
     if (torso === null) {
-      skipped.push({ phase: lf.phase, t: lf.t, reason: "both shoulders and both hips must be labeled visible" });
+      skipped.push({ phase: lf.phase, t: lf.t, reason: "both shoulders and both hips need a labeled position" });
       continue;
     }
+    if (torso.usedEstimate) framesTorsoFromEstimate++;
     for (const [name, v] of Object.entries(lf.points)) {
       const c = emptyCounts();
       const kp = pf.keypoints[name];
@@ -138,11 +162,17 @@ export function scorePoseAgainstLabels(sequence, labels, { minConfidence = QG_MI
       if (v === "not_visible") {
         c.labeledNotVisible = 1;
         if (confident) c.falseObservations = 1;
+      } else if (!isXY(v)) {
+        c.labeledOccluded = 1;
+        if (confident) {
+          c.occludedPredicted = 1;
+          if (Math.hypot(confident.x * sx - v.occluded[0], confident.y * sy - v.occluded[1]) / torso.length <= 0.2) c.occludedWithin02 = 1;
+        }
       } else {
         c.labeledVisible = 1;
         if (confident) {
           c.predicted = 1;
-          const err = Math.hypot(confident.x * sx - v[0], confident.y * sy - v[1]) / torso;
+          const err = Math.hypot(confident.x * sx - v[0], confident.y * sy - v[1]) / torso.length;
           c.errorSum = err;
           if (err <= 0.1) c.within01 = 1;
           if (err <= 0.2) c.within02 = 1;
@@ -159,6 +189,7 @@ export function scorePoseAgainstLabels(sequence, labels, { minConfidence = QG_MI
     minConfidence,
     framesLabeled: labels.frames.length,
     framesScored: labels.frames.length - skipped.length,
+    framesTorsoFromEstimate,
     skipped,
     overall: finalize(overall),
     byPhase: Object.fromEntries(Object.entries(byPhase).map(([k, v]) => [k, finalize(v)])),
@@ -167,18 +198,36 @@ export function scorePoseAgainstLabels(sequence, labels, { minConfidence = QG_MI
   };
 }
 
-export async function scoreClip(dataDir, clipId, labeler, { variant = "full", today = todayIso() } = {}) {
-  const { derivedDir, layout } = await assertLocalProcessingAllowed(dataDir, clipId, { today, checkFile: false });
+/**
+ * The key-frame labels for one clip and labeler, in the scorer's shape, plus
+ * where they came from. K00 = latest valid annotation version (prototype).
+ */
+export function loadKeyframeLabels(layout, clipId, labeler) {
+  if (ANNOTATOR_IDS.includes(labeler)) {
+    const chain = readAnnotationChain(layout.annotations, clipId, labeler);
+    if (chain.problems.length) throw new EvalError(`${clipId}-${labeler} annotations are invalid: ${chain.problems.join("; ")}`);
+    if (!chain.latest) throw new EvalError(`no annotation ${clipId}-${labeler}.v001.json`);
+    return {
+      labels: annotationToScorerLabels(chain.latest),
+      source: { kind: "prototype_annotation", labelStatus: ANNOTATION_LABEL_STATUS, annotatorId: labeler, version: chain.latest.version, versions: chain.versions.length },
+    };
+  }
   const labelFile = path.join(layout.labels, `${clipId}-${labeler}.json`);
   if (!LABEL_FILE_RE.test(path.basename(labelFile)) || !fs.existsSync(labelFile)) throw new EvalError(`no label file ${clipId}-${labeler}.json`);
   const label = JSON.parse(fs.readFileSync(labelFile, "utf8"));
   if (!label.keyframe_keypoints) throw new EvalError(`${clipId}-${labeler}: no keyframe_keypoints`);
+  return { labels: label.keyframe_keypoints, source: { kind: "coach_label", coachId: labeler } };
+}
+
+export async function scoreClip(dataDir, clipId, labeler, { variant = "full", today = todayIso() } = {}) {
+  const { derivedDir, layout } = await assertLocalProcessingAllowed(dataDir, clipId, { today, checkFile: false });
+  const { labels, source } = loadKeyframeLabels(layout, clipId, labeler);
   const poseFile = path.join(derivedDir, `pose-mediapipe-${variant}.json`);
   if (!fs.existsSync(poseFile)) throw new EvalError(`${clipId}: no pose for variant ${variant}`);
   const seq = JSON.parse(fs.readFileSync(poseFile, "utf8"));
   const problems = validatePoseSequence(seq);
   if (problems.length) throw new EvalError(`${clipId}: pose file is malformed: ${problems.join("; ")}`);
-  const result = { clipId, labeler, variant, createdOn: today, ...scorePoseAgainstLabels(seq, label.keyframe_keypoints) };
+  const result = { clipId, labeler, labelSource: source, variant, createdOn: today, ...scorePoseAgainstLabels(seq, labels) };
   writeDataJson(layout, path.join(derivedDir, `pose-accuracy-mediapipe-${variant}-${labeler}.json`), result);
   auditEvent(layout, { action: "pose_accuracy_scored_locally", clipId, labeler, variant }, today);
   return result;
@@ -187,11 +236,13 @@ export async function scoreClip(dataDir, clipId, labeler, { variant = "full", to
 /** Scores every label file with keyframe_keypoints that has a matching pose; sums raw counts. */
 export async function scoreAll(dataDir, { variant = "full", today = todayIso() } = {}) {
   const labelsDir = path.join(dataDir, "labels");
+  const annotationsDir = path.join(dataDir, "annotations");
   const total = emptyCounts();
   const byKeypoint = Object.fromEntries(POSE_KEYPOINT_NAMES.map((n) => [n, emptyCounts()]));
   const byPhase = Object.fromEntries(PHASES.map((p) => [p, emptyCounts()]));
   const clips = [];
   const refused = [];
+  const pairs = [];
   for (const name of fs.existsSync(labelsDir) ? fs.readdirSync(labelsDir).sort() : []) {
     const m = LABEL_FILE_RE.exec(name);
     if (!m) continue;
@@ -202,13 +253,22 @@ export async function scoreAll(dataDir, { variant = "full", today = todayIso() }
       refused.push({ file: name, reason: "not valid JSON" });
       continue;
     }
-    if (!label.keyframe_keypoints) continue;
+    if (label.keyframe_keypoints) pairs.push([m[1], m[2], name]);
+  }
+  const seen = new Set();
+  for (const name of fs.existsSync(annotationsDir) ? fs.readdirSync(annotationsDir).sort() : []) {
+    const m = /^(C\d{3}-\d{4})-(K\d{2})\.v\d{3}\.json$/.exec(name);
+    if (!m || seen.has(`${m[1]}-${m[2]}`)) continue;
+    seen.add(`${m[1]}-${m[2]}`);
+    pairs.push([m[1], m[2], `${m[1]}-${m[2]} (annotations, latest version)`]);
+  }
+  for (const [clipId, labeler, name] of pairs) {
     try {
-      const r = await scoreClip(dataDir, m[1], m[2], { variant, today });
+      const r = await scoreClip(dataDir, clipId, labeler, { variant, today });
       add(total, r.raw.overall);
       for (const k of POSE_KEYPOINT_NAMES) add(byKeypoint[k], r.raw.byKeypoint[k]);
       for (const p of PHASES) add(byPhase[p], r.raw.byPhase[p]);
-      clips.push({ clipId: m[1], labeler: m[2], framesScored: r.framesScored, pck02: r.overall.pck02 });
+      clips.push({ clipId, labeler, labelSource: r.labelSource, framesScored: r.framesScored, pck02: r.overall.pck02 });
     } catch (err) {
       if (!(err instanceof EvalError)) throw err;
       refused.push({ file: name, reason: err.message });

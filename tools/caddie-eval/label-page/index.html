@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Key-frame labels</title>
+<!-- Served only by tools/caddie-eval/keyframes.mjs on 127.0.0.1. No external
+     resources (CSP 'self'), no browser storage, no model output shown. -->
+<link rel="stylesheet" href="/app.css?t={{TOKEN}}">
+</head>
+<body data-token="{{TOKEN}}">
+<header>
+  <strong id="title">Key-frame labels</strong>
+  <span class="badge">PROTOTYPE labels (K00), not validated ground truth</span>
+  <span id="intent"></span>
+</header>
+<main>
+  <section id="viewer">
+    <div id="toolbar">
+      <button id="b-10" title="Back 10 frames (Shift+Left)">&laquo; 10</button>
+      <button id="b-1" title="Back 1 frame (Left)">&lsaquo; 1</button>
+      <input id="slider" type="range" min="0" value="0">
+      <button id="f1" title="Forward 1 frame (Right)">1 &rsaquo;</button>
+      <button id="f10" title="Forward 10 frames (Shift+Right)">10 &raquo;</button>
+      <span id="frameinfo"></span>
+      <label>Zoom <select id="zoom"><option value="fit">fit</option><option value="1">100 %</option><option value="2">200 %</option><option value="3">300 %</option></select></label>
+    </div>
+    <div id="scroller">
+      <div id="stage">
+        <img id="frame" alt="exported frame" draggable="false">
+        <svg id="marks" xmlns="http://www.w3.org/2000/svg"></svg>
+      </div>
+    </div>
+    <p class="hint">Keys: Left/Right frame (Shift = 10) &middot; 1-4 key frame &middot; Up/Down point &middot; V visible, O occluded (estimate), N not visible, X out of frame &middot; click the picture to place the selected point. Left side = golfer's own left (cyan), right = orange.</p>
+  </section>
+  <section id="panel">
+    <h2>Key frames</h2>
+    <table id="events"></table>
+    <h2 id="points-title">Points</h2>
+    <p id="points-warning" class="warn" hidden></p>
+    <table id="points"></table>
+    <h2>Save</h2>
+    <div id="correction" hidden>
+      <p>This saves a <strong>correction</strong> as a new version. Earlier versions are kept.</p>
+      <label>Reason <select id="reason"></select></label>
+      <label>Note (no names) <input id="note" type="text"></label>
+    </div>
+    <button id="save">Save new version</button>
+    <button id="done">Done (stop server)</button>
+    <div id="result"></div>
+    <details>
+      <summary>Definitions (guide)</summary>
+      <ul class="guide">
+        <li><b>address</b>: last still frame before the club starts back.</li>
+        <li><b>top</b>: frame where the club head changes direction at the end of the backswing.</li>
+        <li><b>impact</b>: frame closest to club-ball contact.</li>
+        <li><b>finish</b>: first frame of a held, balanced finish; if never held, the last frame of the follow-through.</li>
+        <li><b>visible</b>: clearly seen, click the joint centre. <b>occluded</b>: partly hidden, click your best estimate from what is visible. <b>not visible</b>: can't locate it; no point. <b>out of frame</b>: outside the picture.</li>
+        <li>Full rules: docs/caddie-v2/KEYFRAME_ANNOTATION_GUIDE.md.</li>
+      </ul>
+    </details>
+  </section>
+</main>
+<script src="/app.js?t={{TOKEN}}"></script>
+</body>
+</html>
