@@ -1,3 +1,16 @@
+// Local, throwaway SQL checks for supabase/migrations/20261021120000_*.sql
+// (global hosting Phase 2). Runs the migration in PGlite (in-process WASM
+// Postgres; no Docker, no Supabase project, no network) on a minimal
+// Supabase-like stub: anon/authenticated/service_role roles, Supabase-style
+// default privileges, auth.uid() from a GUC, a reduced profiles table with
+// its RLS policies and a stub of the Founding award trigger. It is NOT a
+// substitute for applying the migration to an isolated Supabase project
+// (see docs/GLOBAL_HOSTING_ROLLOUT.md), only an early check.
+//
+// Run (PGlite is deliberately not a repo dependency):
+//   cd "$(mktemp -d)" && npm init -y >/dev/null && npm i @electric-sql/pglite@0.3.7
+//   cp /path/to/GolfMe/scripts/migration-checks/global-hosting-phase2.mjs .
+//   node global-hosting-phase2.mjs /path/to/GolfMe/supabase/migrations/20261021120000_profiles_playing_area_place_and_geocode.sql
 import { PGlite } from "@electric-sql/pglite";
 import { readFileSync } from "node:fs";
 const migration = readFileSync(process.argv[2], "utf8");
@@ -6,10 +19,6 @@ const results = [];
 async function check(name, fn) {
   try { const r = await fn(); results.push(["PASS", name, r ?? ""]); }
   catch (e) { results.push(["FAIL", name, e.message]); }
-}
-async function expectError(sql, re) {
-  try { await db.exec(sql); } catch (e) { if (re.test(e.message)) return e.message; throw new Error("wrong error: " + e.message); }
-  throw new Error("expected error, none");
 }
 async function q(sql, params) { return (await db.query(sql, params)).rows; }
 async function asUser(role, sub, sql) {
@@ -129,8 +138,29 @@ await check("Founding trigger does NOT fire on place/unit column changes", async
   const n2 = (await q("select count(*)::int c from private.award_calls"))[0].c;
   return `place-only update: 0 calls; lat change: ${n2} call (unchanged behaviour)`;
 });
+await check("stale place cleared when an old client moves the area; kept otherwise", async () => {
+  await q(`update public.profiles set area_label='Tokyo, Japan', playing_area_lat=35.69, playing_area_lng=139.69, playing_area_place_id='geoapify:51synthTYO0001', playing_area_country_code='jp', playing_area_timezone='Asia/Tokyo' where id='${B}'`);
+  // Old client: label + coords only.
+  await asUser("authenticated", B, `update public.profiles set area_label='London', playing_area_lat=51.51, playing_area_lng=-0.13 where id='${B}'`);
+  const r1 = (await q(`select playing_area_place_id p, playing_area_timezone t, area_label l, playing_area_lat lat from public.profiles where id='${B}'`))[0];
+  if (r1.p || r1.t || r1.l !== 'London' || r1.lat !== 51.51) throw new Error("old-client move: " + JSON.stringify(r1));
+  // New client: place sent with the move.
+  await asUser("authenticated", B, `update public.profiles set area_label='Tokyo, Japan', playing_area_lat=35.69, playing_area_lng=139.69, playing_area_place_id='geoapify:51synthTYO0001', playing_area_country_code='jp', playing_area_timezone='Asia/Tokyo' where id='${B}'`);
+  // Same city re-picked with a different label (coords unchanged): kept.
+  await asUser("authenticated", B, `update public.profiles set area_label='東京都、日本' where id='${B}'`);
+  // Device fix near the same built-in city: same label, new coords: kept.
+  await q(`update public.profiles set area_label='New York, NY', playing_area_lat=40.71, playing_area_lng=-74.01, playing_area_place_id='golfme:nyc' where id='${A}'`);
+  await asUser("authenticated", A, `update public.profiles set playing_area_lat=40.73, playing_area_lng=-73.99 where id='${A}'`);
+  // Unrelated update (bio-like): kept.
+  await asUser("authenticated", B, `update public.profiles set name='B2' where id='${B}'`);
+  const r2 = await q(`select id, playing_area_place_id p from public.profiles order by id`);
+  if (r2.some((x) => !x.p)) throw new Error("wrongly cleared: " + JSON.stringify(r2));
+  return "old-client move clears; new-client, relabel, device fix and unrelated updates keep";
+});
 await check("rollback SQL from docs runs cleanly", async () => {
   await db.exec(`begin;
+  drop trigger if exists profiles_clear_stale_place on public.profiles;
+  drop function if exists public.profiles_clear_stale_place();
   drop table if exists public.geo_places;
   drop function if exists public.geocode_cache_put(text, jsonb);
   drop function if exists public.geocode_cache_get(text);

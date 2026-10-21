@@ -78,6 +78,39 @@ alter table public.profiles
   add constraint profiles_distance_unit_values
     check (distance_unit is null or distance_unit in ('mi', 'km'));
 
+-- A client built before Phase 2 (an old cached web bundle, or the iOS app
+-- resumed without a reload) moves the playing area by writing only
+-- area_label + lat/lng, so it would leave a stale city id behind (labels
+-- would then read "Tokyo" for someone who moved to London). When the label
+-- AND the coordinates change but the place id was not part of the change,
+-- drop the place fields. New clients always send the place (or null)
+-- together with the area, so they never hit this. Touches only the three
+-- place columns; never coordinates, labels, trust or founding columns.
+create function public.profiles_clear_stale_place()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if old.playing_area_place_id is not null
+     and new.playing_area_place_id is not distinct from old.playing_area_place_id
+     and new.area_label is distinct from old.area_label
+     and (new.playing_area_lat is distinct from old.playing_area_lat
+          or new.playing_area_lng is distinct from old.playing_area_lng) then
+    new.playing_area_place_id := null;
+    new.playing_area_country_code := null;
+    new.playing_area_timezone := null;
+  end if;
+  return new;
+end;
+$$;
+revoke execute on function public.profiles_clear_stale_place() from public, anon, authenticated;
+
+create trigger profiles_clear_stale_place
+  before update of area_label, playing_area_lat, playing_area_lng on public.profiles
+  for each row
+  execute function public.profiles_clear_stale_place();
+
 -- No grant changes: profiles uses table-level grants and the existing
 -- profiles_update_own / profiles_select_authenticated policies, which cover
 -- new columns automatically. A city id / country / zone is no more revealing
