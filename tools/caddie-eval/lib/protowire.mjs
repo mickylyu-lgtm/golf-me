@@ -29,7 +29,11 @@ function printable(bytes) {
   if (bytes.length === 0) return "";
   const s = Buffer.from(bytes).toString("utf8");
   // Reject replacement characters and control characters other than tab/newline.
-  if (s.includes("�") || /[\u0000-\u0008\u000B-\u001F\u007F]/.test(s)) return null;
+  if (s.includes("�")) return null;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if ((c < 0x20 && c !== 0x09 && c !== 0x0a) || c === 0x7f) return null;
+  }
   return s;
 }
 
