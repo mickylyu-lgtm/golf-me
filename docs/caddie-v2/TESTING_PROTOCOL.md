@@ -1,12 +1,12 @@
 # Caddie V2: swing-video testing protocol
 
-Status: **draft for Micky's review, 2026-10-20; updated the same day with Micky's testing decisions** (and later that day: Google Meet for remote coaches, pilot pass 2 on the local prototype) (about 76 clips starting with a 10-clip pilot, 2 coaches, 90-day retention, adults only). Nothing here has been run yet. Every count below is a **target to collect**, not a result. **No coach is recruited yet.**
+Status: **draft for Micky's review, 2026-10-20; updated the same day with Micky's testing decisions** (and later that day: Google Meet for remote coaches, pilot pass 2 on the local prototype) (about 76 clips starting with a pilot, since 2026-10-21 of 3 to 5 golfers, 2 coaches, 90-day retention, adults only). Nothing here has been run yet. Every count below is a **target to collect**, not a result. **No coach is recruited yet.**
 
 Related:
 
 - `VIDEO_IMPORT_AND_CONSENT.md`: consent, import, storage, withdrawal, retention. **Read it before filming anyone.**
 - `consent/CONSENT_FORM_v1.pdf`: the form every person in frame signs (form version 1.1).
-- `PILOT_CHECKLIST.md`: the step-by-step list for the 10-clip pilot day.
+- `PILOT_CHECKLIST.md`: the step-by-step list for the pilot day (3 to 5 golfers).
 - `VENDOR_VERIFICATION.md`: what must be checked before any clip goes to Roboflow or Gemini.
 - `EVAL_REPORT_TEMPLATE.md`: how the clips and labels turn into metrics.
 - `CADDIE_V2_AUDIT.md` §8: the evaluation plan this protocol puts into practice.
@@ -18,7 +18,7 @@ Related:
 - **Full swings only:** driver, a hybrid, a mid iron (6 to 8). No chipping, pitching, or putting. (A fairway wood can stand in for the hybrid; import it as `--club wood` and note it.)
 - **Two supported camera angles:** face-on and down-the-line. A small, deliberate set of **unsuitable** angles tests that Caddie refuses or says "inconclusive".
 - **Golfers:** Micky and consenting adult (18+) friends only, mixed skill levels. Never clips from existing GolfMe users.
-- **Size:** about **76 clips**, starting with a **10-clip pilot** (section 4).
+- **Size:** about **76 clips**, starting with a **local pilot of 3 to 5 golfers** (about 8 core clips each; section 4; Micky's decision 2026-10-21, replacing the 10-clip pilot).
 - **Purpose:** measure the current Caddie (V1) and the V2 modules against coach labels. Not for training a model.
 - **Time limit:** raw clips are kept **at most 90 days** from each contributor's consent date. Sign consent on the filming day (not earlier) so the clock starts then, and plan so coach labeling and scoring finish well inside 90 days: aim to have both coaches' labels within **6 weeks** of filming.
 
@@ -95,9 +95,9 @@ Group E, each tagged with `--condition` at import:
 - **Left-handed at 15 to 20 %** (target 13 of 76) where practical. This needs at least one left-handed contributor who consents. `node tools/caddie-eval/import-clip.mjs status` shows `leftHandedShare`. If no left-handed golfer is available, film those slots right-handed and report left-handed metrics as **"not measured"**. Never count mirrored right-handed clips as left-handed coverage (a mirrored copy may be used as a separate, clearly labeled synthetic check only).
 - Mix clothing colors and backgrounds (range mat, grass, net).
 
-### Pilot first (10 clips)
+### Pilot first (3 to 5 golfers)
 
-Before the full set, film a **10-clip pilot** and run it end to end: consent, import, `verify`, coach labeling (both passes, both coaches if recruited by then), and a dry run of the report template. Fix the process, then film the rest. The step-by-step list for the day is `PILOT_CHECKLIST.md`. Pilot clips count toward the 76 only if the process didn't change in a way that affects them (same form version, same labeling sheet, same camera setup rules).
+Before the full set, film a **local pilot with 3 to 5 consenting golfers** (at least one left-handed if available): per golfer 2 swings each of face-on driver, face-on iron, down-the-line driver, down-the-line iron (8 core clips; hybrid optional), plus 3 trouble clips of Micky. Run it end to end: consent, import, `verify`, local pose, K00 key-frame labels, `pilot-report.mjs`, coach labeling (both passes, both coaches if recruited by then). Fix the process, then film the rest. The step-by-step list for the day is `PILOT_CHECKLIST.md`. Pilot clips count toward the 76 only if the process didn't change in a way that affects them (same form version, same labeling sheet, same camera setup rules).
 
 ## 5. Handedness
 
@@ -179,9 +179,9 @@ Some faults can't be seen from one angle. `cant_tell_from_angle` is the right an
 
 ### Key-frame keypoints (subset)
 
-On about 20 clips, coaches (or Micky, since this is geometry, not coaching) mark the 13 body points on the address, top, and impact frames. Use the rules in `scripts/extract-golf-training-frames/ANNOTATION_GUIDE.md`, including **"not visible" when a point is hidden**. Guessing hidden points spoils the abstention metric.
+On a subset of clips, Micky (as `K00`, PROTOTYPE labels; in the pilot at least one face-on and one down-the-line clip per golfer) or a coach marks the 13 body points on the address, top, impact, and finish frames. K00's definitions, visibility codes, and correction rules: `KEYFRAME_ANNOTATION_GUIDE.md`. Use the rules in `scripts/extract-golf-training-frames/ANNOTATION_GUIDE.md`, including **"not visible" when a point is hidden**. Guessing hidden points spoils the abstention metric.
 
-Stored in the clip's label file as `keyframe_keypoints` (format in the header of `tools/caddie-eval/pose-accuracy.mjs`): the pixel size the points were marked in, then per frame the phase, the time in seconds, and each point as `[x, y]` or `"not_visible"`, golfer's anatomical left/right. Label files are keyed by a coach ID, so Micky's own geometry labels need an ID too (proposal: `K00`, recorded once with `coach-add`; Micky's call). `pose-accuracy.mjs` scores the local pose against them (`EVAL_REPORT_TEMPLATE.md` §5).
+K00 labels live in versioned files `annotations/<clip ID>-K00.vNNN.json` made with `tools/caddie-eval/keyframes.mjs` (decided 2026-10-21: `K00`, recorded with `annotator-add`, not `coach-add`). A coach's keypoints go in the clip's label file as `keyframe_keypoints` (format in the header of `tools/caddie-eval/pose-accuracy.mjs`), golfer's anatomical left/right. `pose-accuracy.mjs` and `pilot-report.mjs` score the local pose against either (`EVAL_REPORT_TEMPLATE.md` §5); K00-based numbers are always marked prototype.
 
 ### Pass 2: rate Caddie's output (V1, later; not in the pilot)
 

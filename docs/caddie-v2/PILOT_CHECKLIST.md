@@ -1,42 +1,66 @@
-# Caddie V2: 10-clip pilot day checklist
+# Caddie V2: pilot day checklist (3 to 5 golfers, local only)
 
-Status: **draft, 2026-10-20. Not run yet.** Tick the boxes on the day. The point of the pilot is to find problems in the process before filming the other 66 clips, so write down every snag.
+Status: **draft, 2026-10-21. Not run yet.** Micky's decision (2026-10-21): a local pilot with **3 to 5 consenting golfers**, real face-on and down-the-line videos, replacing the earlier 10-clip framing. Tick the boxes on the day and write down every snag: the pilot exists to find problems in the process before filming the full set.
 
-Background: `LOCAL_PILOT_WORKFLOW.md` (the whole local-only flow and its blockers), `TESTING_PROTOCOL.md` (camera setup, shot matrix, labels), `VIDEO_IMPORT_AND_CONSENT.md` (storage, consent, deletion), `COACH_REVIEW_PROCEDURE.md` (coach sessions), `consent/CONSENT_FORM_v1.pdf` (the form), `consent/COACH_CONFIDENTIALITY_v1.pdf` (what coaches sign).
+Background: `LOCAL_PILOT_WORKFLOW.md` (the whole flow and its blockers), `TESTING_PROTOCOL.md` (camera setup, labels), `VIDEO_IMPORT_AND_CONSENT.md` (storage, consent, deletion), `COACH_REVIEW_PROCEDURE.md` (coach sessions), `KEYFRAME_ANNOTATION_GUIDE.md` (K00 labels), `MEDIAPIPE_TELEMETRY_AUDIT.md` (what is blocked and why), `consent/CONSENT_FORM_v1.pdf`, `consent/COACH_CONFIDENTIALITY_v1.pdf`.
 
-**The pilot is local only.** No clip goes to Roboflow, Gemini, Supabase, or any cloud. Roboflow is **excluded** from the pilot baseline until it confirms in writing that our configuration won't use the footage for training (Micky, 2026-10-20); Gemini is blocked until verified (`VENDOR_APPROVAL_CRITERIA.md`). The tool refuses third-party use anyway. Pose for the pilot comes from a **local model**: MediaPipe Pose Landmarker (Full; Heavy for comparison), installed 2026-10-20 as a pinned devDependency and run fully offline (`MEDIAPIPE_POC.md`). It has only been tested on a synthetic clip; the pilot is its first real run.
+**Local only.** No video, frame, landmark, label, or identifier goes to Roboflow, Gemini, Supabase, Google, or any cloud. Pose comes from MediaPipe running offline inside an empty network namespace, with MediaPipe's own usage logger blocked. Roboflow and Gemini stay blocked (`VENDOR_APPROVAL_CRITERIA.md`), and the tool refuses third-party use anyway.
 
 ---
 
+## 0. Targets
+
+| | Target |
+|---|---|
+| Golfers | **3 to 5**, all adults with signed consent. Micky is `C001`, others `C002` onwards |
+| Left-handed | **At least one left-handed golfer if available.** If none, report left-handed results as "not measured" (`TESTING_PROTOCOL.md` §4); never mirror a right-handed clip to stand in |
+| Skill | A mix if possible (self-reported at import) |
+| Clips per golfer | **8 core clips** (table below): 2 views x 2 clubs x 2 swings. Optional: 1 hybrid per view if time allows (up to 10) |
+| Extra trouble clips | **3, filmed of Micky only:** `no_swing`, `partial_body`, handheld (§3) |
+| Total | about 27 to 43 clips, of which 24 to 40 core |
+| No one golfer | more than 50 % of the clips (`TESTING_PROTOCOL.md` §4) |
+| K00 key-frame labels | **at least 1 face-on and 1 down-the-line clip per golfer** (6 to 10 clips), all four key frames; more if time allows |
+
+Core clips, per golfer (same matrix for left-handers: the camera positions mirror, `TESTING_PROTOCOL.md` §5):
+
+| View | Club | Swings (keepers) |
+|---|---|---|
+| face_on | driver | 2 |
+| face_on | iron (6 to 8) | 2 |
+| down_the_line | driver | 2 |
+| down_the_line | iron (6 to 8) | 2 |
+| (optional) face_on / down_the_line | hybrid | 1 each |
+
 ## 1. One week before
 
-- [ ] **Contributors:** Micky (`C001`) plus at least one friend (`C002`), all 18+. Ideally one is left-handed (for clip 8). Nobody else will be in frame unless they also sign.
-- [ ] Send each friend the **blank** `CONSENT_FORM_v1.pdf` to read in advance. They sign **on the day**, not before (the 90-day clock starts at the consent date).
-- [ ] **Coaches:** note where recruitment stands (`TESTING_PROTOCOL.md` §8). The pilot can go ahead without coaches; their labeling then becomes the next step. Before any coach session: each coach signs `COACH_CONFIDENTIALITY_v1.pdf`, Micky records it with `coach-add`, and (remote) the screen-share platform is reviewed (`COACH_REVIEW_PROCEDURE.md` §1, §4).
-- [ ] **Laptop:** BitLocker (Windows) or FileVault (Mac) on. Enough free disk (about 2 GB for 10 clips).
-- [ ] **ffmpeg** available where the tool runs (WSL/Linux: `ffmpeg -version`; install with the system package manager if missing). If it isn't installed, the `ffmpeg-static` binary already in the repo's `node_modules` works for stripping and decoding: `export GOLFME_EVAL_FFMPEG=$PWD/node_modules/ffmpeg-static/ffmpeg`. It has no `ffprobe`, so `metadataVerified` stays `null` (not checked); spot-check one stripped clip's metadata by hand. Without any ffmpeg, plan the manual strip in `VIDEO_IMPORT_AND_CONSENT.md` §4.
-- [ ] **Local pose ready:** `npm install` done on `caddie-v2`; `node tools/caddie-eval/fetch-models.mjs --check` prints `sha256 OK` for full and heavy (download them with `node tools/caddie-eval/fetch-models.mjs` if missing; the only network step, a public model file, no clip data). Headless Chromium launches (on WSL it may need the extra libraries described in `tools/caddie-eval/README.md`).
-- [ ] **Data folder** created once, outside any repo and outside OneDrive/iCloud/Dropbox:
+- [ ] **Golfers:** 3 to 5 adults lined up, ideally one left-handed. Nobody else in frame unless they also sign.
+- [ ] Send each the **blank** `CONSENT_FORM_v1.pdf` to read. They sign **on the day**, not before (the 90-day clock starts at the consent date).
+- [ ] **Coaches:** note where recruitment stands (`TESTING_PROTOCOL.md` §8). The pilot goes ahead without them; coach labeling is then the next step. Before any coach session: signed `COACH_CONFIDENTIALITY_v1.pdf`, `coach-add`, and (remote) the Google Meet review (`COACH_REVIEW_PROCEDURE.md` §4.1).
+- [ ] **Laptop:** BitLocker (Windows) or FileVault (Mac) on. Free disk: about **6 GB** (clips plus exported frames for the labeled subset; frames are about 30 MB per labeled clip).
+- [ ] **ffmpeg** where the tool runs (`ffmpeg -version`). Without a system ffmpeg: `export GOLFME_EVAL_FFMPEG=$PWD/node_modules/ffmpeg-static/ffmpeg` (no `ffprobe`, so `metadataVerified` stays `null`; spot-check one stripped clip's metadata by hand).
+- [ ] **Local pose ready:** `npm install` on `caddie-v2`; `node tools/caddie-eval/fetch-models.mjs --check` prints `sha256 OK` for full and heavy; headless Chromium launches (WSL may need the extra libraries in `tools/caddie-eval/README.md`).
+- [ ] **OS isolation works:** `unshare --user --map-root-user --net true && echo ok` prints `ok`. (`pose-local.mjs` uses it automatically. If it fails, tell the assistant before the pilot; don't just pass `--no-netns`.)
+- [ ] **Labeling page reaches the browser:** run `node tools/caddie-eval/keyframes.mjs demo`, open the printed `http://127.0.0.1:...` address in an InPrivate/Incognito window in Windows, label one frame of the test pattern, Save, Done. (Synthetic, no person, deleted on exit. Confirms WSL's localhost forwarding on this laptop.)
+- [ ] **Data folder** created once, outside any repo and any synced folder, and K00 recorded once:
 
   ```
   cd <GolfMe checkout>            # on branch caddie-v2
   export GOLFME_EVAL_DATA_DIR=~/golfme-eval-data
   T=tools/caddie-eval/import-clip.mjs
   node $T init
+  node $T annotator-add --annotator K00
   ```
 
-  On Windows + WSL, `~/golfme-eval-data` lives inside the WSL disk image; that's fine as long as the drive holding it is BitLocker-encrypted.
-- [ ] A **frame-step video player** for later labeling (QuickTime Player or VLC).
-- [ ] Print or open the session log table (section 4 below), contributor IDs only.
+- [ ] Print or open the session log (§4), contributor IDs only.
 
 ## 2. On the day, before filming
 
-- [ ] **Phone cloud backup off:** iCloud Photos (Settings > Photos) or Google Photos backup turned off on the filming phone. Check it's off, not paused.
-- [ ] Phone storage free for about 20 clips (some retakes).
-- [ ] Tripod, clamp, balls or mat. A friend available to film the handheld clip.
-- [ ] **Consent, per person:**
+- [ ] **Phone cloud backup off** (iCloud Photos / Google Photos): off, not paused.
+- [ ] Phone storage for about 60 clips (retakes).
+- [ ] Tripod, clamp, balls or mat. A friend to film the handheld clip.
+- [ ] **Consent, per golfer:**
   - [ ] They read the form, ask questions, tick their choices, sign and date it.
-  - [ ] Micky writes the Contributor ID, contact line, and retention date (consent date + 90 days at most), and countersigns.
+  - [ ] Micky writes the Contributor ID, contact line, retention date (consent date + 90 days at most), and countersigns.
   - [ ] Give them a copy. File the original in the identity key (not the data folder).
   - [ ] Record it (copy the office-use block exactly):
 
@@ -48,27 +72,22 @@ Background: `LOCAL_PILOT_WORKFLOW.md` (the whole local-only flow and its blocker
       --roboflow no --gemini no
     ```
 
-    Use `no` for any box they didn't tick. The tool refuses if `--signed` or `--adult` isn't `yes`, or if retention is over 90 days.
-- [ ] Set up the tripod for face-on (3 m to 4 m, hand height, portrait, 1x lens). Film **one test clip** and check the full body, club at the top, and finish are in frame. Delete the test clip.
+    `no` for any box they didn't tick. The tool refuses if `--signed` or `--adult` isn't `yes`, or retention is over 90 days.
+- [ ] Face-on tripod: 3 m to 4 m, hand height, portrait, 1x lens. **One test clip**: full body, club at the top, and finish all in frame. Delete it. Repeat the check when moving to down-the-line (behind the hands, on the target line).
 
-## 3. Filming slots (10 clips)
+## 3. Filming
 
-Record 2 s before address, stop 1 s after the finish, 10 s or less, one swing per clip. Note the phone's file name in the session log right after each clip. Retakes are fine; log only the keeper.
+Record 2 s before address, stop 1 s after the finish, 10 s or less, one swing per clip. Note the phone's file name in the session log right after each keeper. Film one golfer's 8 core clips in one go (face-on driver, face-on iron, then move the tripod: down-the-line driver, down-the-line iron), then the next golfer.
 
-| # | Slot code | Who | Angle | Club | Mount | Light | Condition | Notes |
-|---|---|---|---|---|---|---|---|---|
-| 1 | `FO-DR-TRI-RH-DAY` | C001 | face_on | driver | tripod | daylight | | |
-| 2 | `DTL-DR-TRI-RH-DAY` | C001 | down_the_line | driver | tripod | daylight | | Move tripod behind the hands |
-| 3 | `FO-HY-TRI-RH-DAY` | C001 | face_on | hybrid | tripod | daylight | | |
-| 4 | `DTL-HY-TRI-RH-DAY` | C002 | down_the_line | hybrid | tripod | daylight | | |
-| 5 | `FO-IR-TRI-RH-DAY` | C002 | face_on | iron | tripod | daylight | | 6 to 8 iron |
-| 6 | `DTL-IR-TRI-RH-DAY` | C002 | down_the_line | iron | tripod | daylight | | |
-| 7 | `FO-IR-HND-RH-DAY` | C001 | face_on | iron | handheld | daylight | | Friend films, no zoom, no following the ball |
-| 8 | `FO-DR-TRI-LH-DAY` | left-handed contributor | face_on | driver | tripod | daylight | | If nobody is left-handed: film `DTL-IR-HND-RH-DAY` instead and note "no LH" |
-| 9 | `FO-IR-TRI-RH-DAY` | C002 | face_on | iron | tripod | daylight | `no_swing` | Waggle and setup only |
-| 10 | `DTL-DR-TRI-RH-DAY` | C001 or C002 | down_the_line | driver | tripod | daylight | `partial_body` | Frame so the feet or club head is cut off |
+Slot code: `<view>-<club>-<mount>-<hand>-<light>`, e.g. `FO-DR-TRI-RH-DAY`, `DTL-IR-TRI-LH-DAY`. Use the right handedness for whoever swings.
 
-Swap who does which slot as needed, keeping **at most 5 clips per person** and both angles for each person. Use the right handedness for whoever swings.
+Micky's 3 trouble clips (after his core clips):
+
+| Slot | Condition | Notes |
+|---|---|---|
+| `FO-IR-HND-RH-DAY` | (handheld) | A friend films, no zoom, no following the ball |
+| `FO-IR-TRI-RH-DAY` | `no_swing` | Waggle and setup only |
+| `DTL-DR-TRI-RH-DAY` | `partial_body` | Frame so the feet or club head is cut off |
 
 ## 4. Session log (scratch, deleted after import)
 
@@ -79,71 +98,71 @@ Swap who does which slot as needed, keeping **at most 5 clips per person** and b
 
 ## 5. Transfer to the laptop
 
-- [ ] USB cable (Windows: Photos app import or File Explorer; Mac: Image Capture) or AirDrop. **Not** email, chat apps, or a shared drive.
-- [ ] Into a temporary folder that's **not** in OneDrive/iCloud/Dropbox and **not** in the repo (on Windows, avoid Documents/Desktop if OneDrive syncs them; e.g. `C:\caddie-tmp\`, which WSL sees as `/mnt/c/caddie-tmp/`).
-- [ ] Check the count: 10 files.
+- [ ] USB cable (Windows: Photos import or File Explorer; Mac: Image Capture) or AirDrop. **Not** email, chat apps, or a shared drive.
+- [ ] Into a temporary folder **not** in OneDrive/iCloud/Dropbox and **not** in the repo (e.g. `C:\caddie-tmp\`, `/mnt/c/caddie-tmp/` in WSL).
+- [ ] Count the files against the session log.
 
 ## 6. Import
 
-One command per clip, labels from the session log. Example for clip 1:
+One command per clip, from the session log:
 
 ```
-node $T import --contributor C001 --file /mnt/c/caddie-tmp/IMG_0412.MOV \
-  --angle face_on --club driver --mount tripod --handedness right \
+node $T import --contributor C002 --file /mnt/c/caddie-tmp/IMG_0412.MOV \
+  --angle face_on --club driver --mount tripod --handedness left \
   --lighting daylight --skill mid --fps 30 --require-strip
 ```
 
-- Add `--condition no_swing` (clip 9) or `--condition partial_body` (clip 10).
-- `--require-strip` refuses if ffmpeg is missing. If ffmpeg isn't available, do the manual strip first and use `--stripped-manually` instead.
-- Each import prints the new clip ID (`C001-0001`, ...). Write it next to the row in the session log until all 10 are in.
+- Add `--condition no_swing` / `--condition partial_body` for the trouble clips, `--mount handheld` for the handheld one.
+- `--require-strip` refuses if ffmpeg is missing (then do the manual strip and use `--stripped-manually`).
+- Write each printed clip ID (`C002-0001`, ...) next to its row until all are in.
 
 ## 7. Checks after import
 
-- [ ] `node $T verify` prints `OK`. If it lists "metadata not stripped", fix before anyone else sees the clip.
-- [ ] `node $T status`: 10 clips, the expected slot codes, `leftHandedShare` (10 % if clip 8 was left-handed, else 0), skill mix.
-- [ ] `node $T coach-check` lists the clips coaches may watch in person; `coach-check --remote` for a remote coach.
-- [ ] `node $T coach-session-check --coach K01` (and `--coach K02 --remote`) refuses until the coach agreement is recorded and, for remote, the platform is reviewed. Expected until then.
+- [ ] `node $T verify` prints `OK`. Fix any "metadata not stripped" before anyone else sees the clip.
+- [ ] `node $T status`: the expected clip count and slots, `leftHandedShare` (0 if no left-hander), skill mix.
+- [ ] `node $T coach-check` (and `--remote`); `coach-session-check --coach K01` refuses until the coach is recorded. Expected.
 - [ ] `node $T third-party-check --processor gemini` reports `vendorVerified: false` and exits 1. Expected.
-- [ ] Spot-check two stored clips in the player: no sound, plays normally.
-- [ ] Delete the temporary folder, the phone copies, the phone's "Recently Deleted", and the session log.
-- [ ] Turn phone cloud backup back on only after the phone copies are gone.
-- [ ] Calendar reminder: each contributor's retention date, and a weekly `node $T retention`.
+- [ ] Spot-check two stored clips: no sound, plays normally.
+- [ ] Delete the temp folder, phone copies, the phone's "Recently Deleted", and the session log. Cloud backup back on only after that.
+- [ ] Calendar: each contributor's retention date, and a weekly `node $T retention`.
 
-## 7a. Local pose run (after import, before any coach session)
+## 7a. Local pose run (before any labeling or coach session)
 
-Everything stays in the data folder; nothing goes online.
+- [ ] Per clip: `node tools/caddie-eval/pose-local.mjs --clip C001-0001` (Full; add `--variant heavy` to compare). It re-runs itself in an empty network namespace.
+- [ ] The printed line shows `network blocked: {"odml.pa.googleapis.com":1}` (or `{}`) and `OS isolation: no network interfaces (isolated)`. Anything else: stop and note it.
+- [ ] Left/right check on one of Micky's own clips: render the overlay (below); the golfer's lead arm (left, for a right-hander) must be cyan. If orange, stop: the mapping is mirrored.
+- [ ] Per clip: `node tools/caddie-eval/run-v2-checks.mjs --clip C001-0001`, then `node tools/caddie-eval/render-overlay.mjs --clip C001-0001` (for coach pass 2).
+- [ ] Note any clip a tool refused, and why.
 
-- [ ] Per clip: `node tools/caddie-eval/pose-local.mjs --clip C001-0001` (Full). Optional comparison: `--variant heavy`.
-- [ ] Check the printed `network blocked` line lists only `odml.pa.googleapis.com` (MediaPipe's usage logger, blocked on purpose) or nothing.
-- [ ] Left/right check on one of Micky's own clips: in the overlay, the golfer's lead (left, for a right-hander) arm must be drawn cyan. If it's orange, stop: the mapping is mirrored.
-- [ ] Per clip: `node tools/caddie-eval/run-v2-checks.mjs --clip C001-0001`, then `node tools/caddie-eval/render-overlay.mjs --clip C001-0001` (overlay for pass 2).
-- [ ] Note any clip the extractor or the checks refused, and why.
+## 7b. K00 key-frame labels (Micky; PROTOTYPE labels, not ground truth)
+
+Follow `KEYFRAME_ANNOTATION_GUIDE.md`. **Label before looking at any overlay or report for that clip**, so labels stay blind to the model.
+
+- [ ] Pick the subset: at least one face-on and one down-the-line clip per golfer.
+- [ ] Per clip: `node tools/caddie-eval/keyframes.mjs export --clip C002-0001`, then `node tools/caddie-eval/keyframes.mjs label --clip C002-0001` and open the printed address in an InPrivate/Incognito window.
+- [ ] Mark address, top, impact, finish (or `not_in_clip` / `cant_tell`) and all 13 points per labeled frame: golfer's own left/right; V / O / N / X codes. Save, then Done.
+- [ ] A mistake found later: reopen with `label`, fix, pick a reason, save (a new version; the old one stays). `keyframes.mjs list --clip <ID>` shows the history.
+- [ ] `node $T verify` still prints `OK` (it checks every annotation version).
+
+## 7c. Measurements
+
+- [ ] `node tools/caddie-eval/pilot-report.mjs` (and `--variant heavy` if run). It writes `reports/pilot-report-<variant>-<date>.md` in the data folder: offline check, detection per keypoint per view, accuracy vs K00 (prototype), time / CPU / memory per swing, face-on vs down-the-line. Cells with nothing behind them say "no data"; key-frame identification says "not implemented".
+- [ ] Read it. Copy it into `docs/caddie-v2/eval-reports/` only after checking it holds clip IDs and numbers only, and only with Micky's go-ahead.
 
 ## 8. What to send coaches
 
-**Nothing by cloud, email, or chat.** Send only:
+**Nothing by cloud, email, or chat.** Only: the blank labeling sheet pre-filled with clip IDs from `coach-check`; the fault list and phase definitions (`TESTING_PROTOCOL.md` §8); the blank coach agreement to read before signing; the session plan (in person `K01` on Micky's laptop; remote `K02` only by live Google Meet screen-share, no recording or screenshots); the pass-2 sheet with five of six items pre-filled "not implemented, not rated". K00's labels are never shown to coaches before their own pass 1.
 
-- The **blank labeling sheet** (columns from `TESTING_PROTOCOL.md` §8 pass 1), pre-filled with the clip IDs from `coach-check`, nothing else. Clip IDs and coach IDs only.
-- The fixed fault list and the phase definitions (`TESTING_PROTOCOL.md` §8).
-- The blank coach agreement (`consent/COACH_CONFIDENTIALITY_v1.pdf`) to read before signing.
-- The session plan: in person (`K01`) on Micky's laptop; remote (`K02`) **only by live Google Meet screen-share with no recording or screenshots** (Micky's decisions 2026-10-20), following `COACH_REVIEW_PROCEDURE.md` §3. No file is sent to a coach.
-- The pass-2 sheet with the six items, five of them pre-filled "not implemented, not rated" (`TESTING_PROTOCOL.md` §8, "Pass 2 in the pilot").
+Then, per session: `coach-session-check --coach K0X [--remote]` passes; pass 1 blind; pass 2 on the overlay (only body landmark reliability is rateable); labels saved as `labels/<clip ID>-<coach ID>.json`; `verify` passes. Details: `COACH_REVIEW_PROCEDURE.md`.
 
-Then:
-
-- [ ] On the day of each session: `node $T coach-session-check --coach K0X [--remote]` passes; show only its `eligible` clips.
-- [ ] Pass 1 (blind labels): each coach on their own, without seeing the other's sheet or any Caddie output.
-- [ ] **Remote only:** Micky has done the Google Meet settings review (`COACH_REVIEW_PROCEDURE.md` §4.1) and set `SCREEN_SHARE_PLATFORM_REVIEW` in its own commit. Until then `coach-session-check --remote` refuses.
-- [ ] **Pass 2 (on):** after a coach's pass 1 is saved and `verify` passes, show that coach the overlay and the gate/angle summary for each eligible clip and record the six ratings (`COACH_REVIEW_PROCEDURE.md` §5.1). Only body landmark reliability can be rated; the other five stay `not_implemented`. V1 output isn't used (Roboflow and Gemini stay blocked).
-- [ ] Labels come back as a sheet keyed by clip ID and coach ID. Save each as `labels/<clip ID>-<coach ID>.json` inside the data folder (protocol fields only), so withdrawal deletes them. `node $T verify` checks the names, fields, and coach IDs.
-
-## 9. Pilot review (before filming the other 66)
+## 9. Pilot review (before filming the full set)
 
 Write down, without names:
 
-- Did consent take longer than expected? Any question the form didn't answer? (A wording change means form 1.2.)
-- Framing: did any clip lose the club or feet unintentionally?
-- Did ffmpeg strip work and `verify` pass first time?
-- Labeling time per clip, per coach. Any field coaches found unclear? Any disagreement on clips 1 to 6?
-- Did the left-handed slot work? If no left-handed contributor exists, decide whether the 15 to 20 % target is achievable.
-- Go / no-go for the full set, and any process change. Pilot clips count toward the 76 only if nothing affecting them changed.
+- Consent: time taken, questions the form didn't answer (a wording change means form 1.2).
+- Framing: any clip that lost the club or feet unintentionally? Down-the-line set-up time?
+- Import: did ffmpeg strip work and `verify` pass first time?
+- Pose: any refused run, any unexpected blocked host, any run not OS-isolated?
+- K00 labeling: minutes per clip; points that were hard to code (which, which view); corrections needed and why.
+- Left-handed: did it work? If nobody was left-handed, is the 15 to 20 % target realistic?
+- Go / no-go for the full set and any process change. Pilot clips count toward the full set only if nothing affecting them changed (same form, sheet, camera rules).

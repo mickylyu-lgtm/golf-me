@@ -32,9 +32,9 @@ Downloaded 2026-10-20. The server's MD5 header matched both files. Server last-m
 
 ## 3. Offline by construction, and one finding
 
-The page is served from a fake origin (`http://caddie-eval.invalid`). Playwright answers every request from a fixed allowlist (page, MediaPipe bundle, WASM, model, current frame). Anything else is aborted and counted, WebSockets are closed, service workers blocked, and Chromium's DNS is mapped to nothing as a second layer. No frame is written to disk.
+The page is served from a fake origin (`http://caddie-eval.invalid`). Playwright answers every request from a fixed allowlist (page, MediaPipe bundle, WASM, model, current frame). Anything else is aborted and counted, WebSockets are closed, service workers blocked, and Chromium's DNS is mapped to nothing as a second layer. Since 2026-10-21, on Linux/WSL the whole run also sits in an **empty network namespace** (`unshare --user --map-root-user --net`), and the run file records `osIsolation` and `externalRequestsAllowed: 0`. The extractor writes no frame to disk (the separate key-frame export for labeling does, into `derived/`).
 
-**Finding: MediaPipe Tasks 1.x sends usage logs to Google by default.** The bundle contains a logger that POSTs to `https://odml.pa.googleapis.com/v1/log` with an API key taken from the WASM, every 60 s and when the task closes. From the code it appears to send task type, running mode, and latency counters, not images, but I haven't verified the payload. In every run it was blocked: each run file shows `"blocked": {"odml.pa.googleapis.com": 1}` and nothing else. **For any future in-app use this matters** (§6): it's a third-party call the privacy policy doesn't mention today.
+**Finding: MediaPipe Tasks 1.x sends usage logs to Google by default.** The bundle contains a logger that POSTs to `https://odml.pa.googleapis.com/v1/log` with an API key taken from the WASM, every 60 s and when the task closes. **Audited 2026-10-21** (`MEDIAPIPE_TELEMETRY_AUDIT.md`): it is the only Google endpoint, it's created unconditionally for every task, inference doesn't need it, and no supported option turns it off in 1.1.0. An intercepted (never sent) body held counters, timings, task type, running mode, OS family, and SDK version; no pixels or landmarks. Micky's decision: keep it blocked. In every run it was blocked: each run file shows `"blocked": {"odml.pa.googleapis.com": 1}` and nothing else. **For any future in-app use this matters** (§6): it's a third-party call the privacy policy doesn't mention today.
 
 ## 4. Measured performance (synthetic test pattern only)
 
@@ -102,4 +102,5 @@ Swing phases, measurements, faults, coaching explanations, and drills. Every res
 | Coach pass 1 (blind) | Unchanged; blocked on coach recruitment and agreements |
 | Coach pass 2 on the prototype | Possible for **body landmarks only** (overlay). Phases, measurements, faults, explanations, drills: "not implemented, not rated" |
 | Remote pass 2 | Google Meet screen-share, after Micky's Meet settings review (`SCREEN_SHARE_PLATFORM_REVIEW` is still `null`, so remote sessions are refused) |
-| Still to build (next) | Scoring harness for the rest of the template: quality gate vs coach `analyzable`, camera angle vs coach `camera_angle`, inter-rater kappa, address jitter, pass-2 tallies; a frame-export step for key-frame keypoint labeling |
+| Key-frame labels and measurement | **Built 2026-10-21:** K00 frame export and labeling page (`keyframes.mjs`), pilot measurement report (`pilot-report.mjs`). Key-frame identification: not implemented (no detector) |
+| Still to build (next) | The coach-label parts of the harness: quality gate vs coach `analyzable`, camera angle vs coach `camera_angle`, inter-rater kappa, address jitter, pass-2 tallies |

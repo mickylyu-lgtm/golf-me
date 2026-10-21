@@ -2,7 +2,7 @@
 
 Status: **draft, 2026-10-20. No coach recruited, no session run.** Micky's decisions (2026-10-20):
 
-- The remote method for the 10-clip pilot is **Option A, live screen-share with no recording** (`VIDEO_IMPORT_AND_CONSENT.md` §7). Encrypted USB by post (Option B) isn't used in the pilot.
+- The remote method for the pilot (3 to 5 golfers, decided 2026-10-21) is **Option A, live screen-share with no recording** (`VIDEO_IMPORT_AND_CONSENT.md` §7). Encrypted USB by post (Option B) isn't used in the pilot.
 - The remote platform is **Google Meet**: screen-share only, no recordings or screenshots, Meet's privacy and data settings verified on Micky's account (section 4), only consented, de-identified clips (contributor IDs, audio and metadata stripped), a signed coach agreement, and the tool gates unchanged. Zoom was considered and **not chosen**.
 - **Pilot pass 2 is on:** after pass 1 is locked, coaches rate the **local prototype's** output (section 5).
 

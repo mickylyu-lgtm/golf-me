@@ -1,6 +1,6 @@
 # Caddie V2: local-only pilot workflow (proposal)
 
-Status: **2026-10-20. Local pose tools built and tested on synthetic data; not yet run on a real clip.** Micky approved the MediaPipe install and model download, chose Google Meet for the remote coach, and turned pilot pass 2 on (rating the local prototype). This is the safest end-to-end workflow for the 10-clip pilot that I can propose: **no clip, frame, or derived data leaves Micky's laptop**, except the live picture in a reviewed Google Meet screen-share for the remote coach. Roboflow and Gemini are not used (`VENDOR_APPROVAL_CRITERIA.md` §6). What was built, measured, and what it can't do yet: `MEDIAPIPE_POC.md`.
+Status: **2026-10-21. Local pose, labeling, and measurement tools built and tested on synthetic data; not yet run on a real clip.** Micky approved the MediaPipe install and model download, chose Google Meet for the remote coach, turned pilot pass 2 on (rating the local prototype), and (2026-10-21) approved a local pilot with **3 to 5 consenting golfers** (face-on and down-the-line), `K00` as his annotator ID, and keeping all MediaPipe telemetry blocked. This is the safest end-to-end workflow for that pilot that I can propose: **no clip, frame, or derived data leaves Micky's laptop**, except the live picture in a reviewed Google Meet screen-share for the remote coach. Roboflow and Gemini are not used (`VENDOR_APPROVAL_CRITERIA.md` §6). What was built, measured, and what it can't do yet: `MEDIAPIPE_POC.md`.
 
 Related: `PILOT_CHECKLIST.md` (the day itself), `VIDEO_IMPORT_AND_CONSENT.md` (rules), `COACH_REVIEW_PROCEDURE.md` (coach sessions), `TESTING_PROTOCOL.md` (what's filmed and labeled), `EVAL_REPORT_TEMPLATE.md` (the report).
 
@@ -13,16 +13,16 @@ Related: `PILOT_CHECKLIST.md` (the day itself), `VIDEO_IMPORT_AND_CONSENT.md` (r
 | 3 | **Transfer** by USB cable or AirDrop to a temp folder outside the repo and any synced folder | Laptop | `PILOT_CHECKLIST.md` §5 | Ready |
 | 4 | **Consent check + import**: refuses without active affirmative consent; strips audio and metadata; pseudonymous clip IDs; sha256 | Data folder | `import --require-strip`, `verify` | Ready (needs ffmpeg in WSL) |
 | 5 | **Cleanup**: delete temp folder, phone copies, phone "Recently Deleted" | Phone, laptop | `PILOT_CHECKLIST.md` §7 | Ready |
-| 6 | **Local pose extraction**: every frame of each stored clip through MediaPipe Pose Landmarker, offline, written as raw landmarks + `PoseSequence` + run file (timing, CPU, memory, network log) in `derived/<clip ID>/` | Laptop, offline | `pose-local.mjs` (§4) | **Built**; tested on a synthetic clip only |
+| 6 | **Local pose extraction**: every frame of each stored clip through MediaPipe Pose Landmarker, offline inside an empty network namespace, written as raw landmarks + `PoseSequence` + run file (timing, CPU, memory, network log, OS isolation) in `derived/<clip ID>/` | Laptop, offline | `pose-local.mjs` (§4), `MEDIAPIPE_TELEMETRY_AUDIT.md` | **Built**; tested on a synthetic clip only |
 | 7 | **V2 checks** on the local pose: quality gate, camera-angle heuristic | Laptop | `run-v2-checks.mjs` over `qualityGate.ts`, `cameraAngle.ts` | **Built** (thresholds still placeholders) |
 | 7a | **Pose overlay** for coach pass 2 | Laptop | `render-overlay.mjs` | **Built** |
 | 8 | **Coach labeling**, pass 1 (blind): K01 in person, K02 by Google Meet screen-share. Then **pass 2** on the local prototype (overlay + gate/angle summary; only landmark reliability is rateable) | Laptop; live call | `coach-session-check`, `COACH_REVIEW_PROCEDURE.md` §5.1 | **Blocked: coaches, agreements, Meet settings review** |
-| 9 | **Keypoint labels** on the key frames of a subset (address, top, impact), by Micky (geometry, not coaching) | Laptop | `TESTING_PROTOCOL.md` §8 "Key-frame keypoints" | Label format defined; **a frame-export step is still needed** |
-| 10 | **Scoring**: local pose vs keypoint labels; quality gate and angle vs coach `analyzable` and `camera_angle`; coach-vs-coach agreement; pass-2 tallies | Laptop | `pose-accuracy.mjs` (**built**); the rest of the harness: **not built (next)** | Needs steps 6 to 9 |
-| 11 | **Report**: clip IDs and numbers only, no video, frames, or names | Repo (`eval-reports/`) | `EVAL_REPORT_TEMPLATE.md` | Template ready |
+| 9 | **K00 key-frame labels** (PROTOTYPE, not ground truth): 13 points on address, top, impact, finish, at least one face-on and one down-the-line clip per golfer, by Micky; versioned, corrections append-only | Laptop, loopback-only page | `keyframes.mjs export` / `label`, `KEYFRAME_ANNOTATION_GUIDE.md` | **Built**; tested on synthetic data only |
+| 10 | **Measurement**: offline check, detection rate and confidence per keypoint and view, pose accuracy vs K00, key-frame identification (**not implemented**: no detector), time / CPU / memory per swing, face-on vs down-the-line. Still to build: gate vs coach `analyzable`, angle vs coach `camera_angle`, coach agreement, jitter, pass-2 tallies | Laptop | `pilot-report.mjs`, `pose-accuracy.mjs` (**built**) | Needs steps 6 to 9 |
+| 11 | **Report**: clip IDs and numbers only, no video, frames, or names. `pilot-report.mjs` writes into the data folder; Micky reviews before anything is copied to the repo | Data folder, then repo (`eval-reports/`) | `EVAL_REPORT_TEMPLATE.md` §0, §4a, §5, §5a, §8a, §8b | Built |
 | 12 | **Retention**: weekly `retention`; withdrawal within 7 days | Data folder | `retention --apply`, `withdraw --confirm` | Ready |
 
-What the pilot **can't** measure: V1 (today's Caddie) on these clips, since that means Roboflow and Gemini; coach pass 2 on V1 feedback; and any phase, measurement, fault, explanation, or drill output, because the prototype doesn't produce them yet. The pilot measures the local pose source (accuracy against keypoint labels, coach-rated landmark reliability, speed, resources), the V2 checks, the process, and coach agreement. That is enough to decide go/no-go for the other 66 clips.
+What the pilot **can't** measure: V1 (today's Caddie) on these clips, since that means Roboflow and Gemini; coach pass 2 on V1 feedback; and any phase, measurement, fault, explanation, or drill output, because the prototype doesn't produce them yet. The pilot measures the local pose source (accuracy against keypoint labels, coach-rated landmark reliability, speed, resources), the V2 checks, the process, and coach agreement. That is enough to decide go/no-go for the full set.
 
 ## 2. Why local pose for the pilot
 
@@ -73,11 +73,14 @@ node tools/caddie-eval/fetch-models.mjs --check              # model files prese
 node tools/caddie-eval/pose-local.mjs --clip C001-0001       # Full; add --variant heavy to compare
 node tools/caddie-eval/run-v2-checks.mjs --clip C001-0001    # or --all
 node tools/caddie-eval/render-overlay.mjs --clip C001-0001   # overlay for coach pass 2
-node tools/caddie-eval/pose-accuracy.mjs --all               # once key-frame keypoint labels exist
+node tools/caddie-eval/keyframes.mjs export --clip C001-0001 # frames for K00 labeling
+node tools/caddie-eval/keyframes.mjs label --clip C001-0001  # loopback-only labeling page
+node tools/caddie-eval/pose-accuracy.mjs --all               # once key-frame labels exist
+node tools/caddie-eval/pilot-report.mjs                      # the measurement tables
 ```
 
 - Every tool first calls `assertLocalProcessingAllowed()`: manifest entry, active consent, stripped, sha256 intact. No vendor gate, because nothing leaves the machine.
-- The browser can't reach the network: every request is served from a local allowlist or aborted and logged. MediaPipe's own usage logger (`odml.pa.googleapis.com`) is blocked and shows up in each run file.
+- The browser can't reach the network: every request is served from a local allowlist or aborted and logged, and on Linux/WSL the whole run sits in an empty network namespace (no interface to send on). MediaPipe's own usage logger (`odml.pa.googleapis.com`) is blocked and shows up in each run file; what it is and what it would send: `MEDIAPIPE_TELEMETRY_AUDIT.md`.
 - Frames are decoded by ffmpeg into memory, never written to disk. Output only under `derived/<clip ID>/`, deleted by `withdraw` and `retention`.
 - Tests: synthetic only (adapter in Vitest; gate, runner, overlay, scorer, extractor plumbing in `node --test`); an opt-in smoke run (`CADDIE_EVAL_SMOKE=1`) drives the real browser and model on an ffmpeg test pattern.
 
@@ -91,14 +94,14 @@ Option 2 (Python `mediapipe`) wasn't needed.
 | B2 | Each coach signs agreement v1.0; Micky countersigns and runs `coach-add` | Step 8 | **Micky + coach** |
 | B3 | Platform **chosen: Google Meet** (2026-10-20). Still open: Micky does the Meet settings review (`COACH_REVIEW_PROCEDURE.md` §4.1) on his account and sets `SCREEN_SHARE_PLATFORM_REVIEW` in its own commit | Remote coach (K02) | **Micky** |
 | B4 | ~~Approval to install the local pose runtime and download the model files~~ **Done 2026-10-20** (`@mediapipe/tasks-vision` 1.1.0; Full and Heavy, pinned by sha256) | — | Done |
-| B5 | Part 1 **done**: extractor, V2-checks runner, overlay, pose-accuracy scorer. **Next:** the rest of the scoring harness (gate vs `analyzable`, angle vs `camera_angle`, kappa, jitter, pass-2 tallies) and a key-frame export for keypoint labeling | Steps 9, 10, 11 | **Assistant** |
+| B5 | **Done:** extractor, V2-checks runner, overlay, pose-accuracy scorer, key-frame export and labeling page, pilot measurement report, OS network isolation. **Next:** gate vs `analyzable`, angle vs `camera_angle`, kappa, jitter, pass-2 tallies (need coach labels) | Step 10 (coach parts) | **Assistant** |
 | B5a | First real run of the extractor on a pilot clip, including the left/right check (`PILOT_CHECKLIST.md` §7a) | Steps 6 onwards | **Micky** (clips) |
 | B6 | `ffmpeg` available in WSL (system package) or the manual strip planned | Step 4 | **Micky** |
-| B7 | Contributors lined up: C002 at least, ideally a left-handed golfer | Steps 1, 2 | **Micky** |
+| B7 | 3 to 5 consenting golfers lined up, at least one left-handed if available | Steps 1, 2 | **Micky** |
 | B8 | Laptop full-disk encryption confirmed on | Step 4 onwards | **Micky** |
 | B9 | Optional lawyer review of the consent form and coach agreement (recommended if anyone lives in another country, or a coach is paid) | Step 1 (Micky's call) | **Micky** |
 | B10 | ~~Pass 2 in the pilot?~~ **Decided 2026-10-20: on**, rating the local prototype after a blind pass 1; unimplemented items "not implemented, not rated" | — | Done |
-| B11 | Who labels key-frame keypoints, and under which ID (proposal: Micky as `K00`, recorded with `coach-add`) | Step 9 | **Micky** |
+| B11 | ~~Who labels key-frame keypoints~~ **Decided 2026-10-21:** Micky as `K00`, recorded with its own `annotator-add` record (not `coach-add`: no coach agreement, never in a coach session or coach agreement stats); labels are PROTOTYPE labels | — | Done |
 | — | Roboflow written no-training answer (`VENDOR_VERIFICATION.md` §5.1) | **Not the pilot.** Only a later V1 baseline | **Micky** sends; Roboflow answers |
 | — | Gemini checklist (`VENDOR_VERIFICATION.md` §4) | **Not the pilot.** Only a later V1 baseline or coach pass 2 on V1 | **Micky** |
 
