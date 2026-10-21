@@ -172,6 +172,42 @@ const LABEL_KEYS = [
 ];
 const LABEL_FAULT_KEY_RE = /^fault_[a-z_]+$/;
 
+/**
+ * What the LOCAL PROTOTYPE (pose-local.mjs + run-v2-checks.mjs) produces
+ * today. Pilot pass 2 rates only what is implemented; every other rating
+ * field must say "not_implemented", so a sheet can never record a rating of
+ * output that doesn't exist. Change an entry only in the commit that ships
+ * that capability.
+ */
+export const PROTOTYPE_CAPABILITIES = Object.freeze({
+  body_landmarks: "implemented (MediaPipe Pose Landmarker, 13 keypoints)",
+  quality_gate: "implemented (provisional thresholds)",
+  camera_angle: "implemented (provisional heuristic; face_on / down_the_line / unknown)",
+  swing_phases: "not implemented",
+  measurements: "not implemented",
+  faults: "not implemented",
+  coaching_explanations: "not implemented",
+  drills: "not implemented",
+});
+
+/**
+ * Pilot pass-2 rating fields (TESTING_PROTOCOL.md §8, "Pass 2 in the pilot")
+ * -> the capability each rates and the values allowed while implemented.
+ */
+export const PROTOTYPE_RATING_FIELDS = Object.freeze({
+  p2_phase_rating: { capability: "swing_phases", values: ["correct", "partly", "wrong", "cant_tell"] },
+  p2_landmark_rating: { capability: "body_landmarks", values: ["reliable", "mostly_reliable", "unreliable", "cant_tell"] },
+  p2_measurement_rating: { capability: "measurements", values: ["correct", "partly", "wrong", "cant_tell"] },
+  p2_fault_rating: { capability: "faults", values: ["correct", "partly", "wrong", "harmful", "cant_tell"] },
+  p2_explanation_rating: { capability: "coaching_explanations", values: ["useful", "partly", "not_useful", "harmful", "cant_tell"] },
+  p2_drill_rating: { capability: "drills", values: ["safe_and_practical", "partly", "unsuitable", "harmful", "cant_tell"] },
+});
+const PROTOTYPE_EXTRA_KEYS = ["p2_prototype", "p2_landmark_problem_phases", "p2_note"];
+
+export function isImplemented(capability) {
+  return String(PROTOTYPE_CAPABILITIES[capability] ?? "").startsWith("implemented");
+}
+
 const CONSENT_KEYS = [
   "schema",
   "contributorId",
@@ -1030,8 +1066,21 @@ export function validateLabelRecord(rec, { clipId, coachId } = {}) {
   const problems = [];
   if (typeof rec !== "object" || rec === null || Array.isArray(rec)) return ["not an object"];
   for (const k of Object.keys(rec)) {
-    if (!LABEL_KEYS.includes(k) && !LABEL_FAULT_KEY_RE.test(k)) problems.push(`unexpected field "${k}" (protocol label fields only; no names or identity)`);
+    if (!LABEL_KEYS.includes(k) && !LABEL_FAULT_KEY_RE.test(k) && !(k in PROTOTYPE_RATING_FIELDS) && !PROTOTYPE_EXTRA_KEYS.includes(k)) {
+      problems.push(`unexpected field "${k}" (protocol label fields only; no names or identity)`);
+    }
   }
+  for (const [field, { capability, values }] of Object.entries(PROTOTYPE_RATING_FIELDS)) {
+    if (!(field in rec)) continue;
+    const v = rec[field];
+    if (!isImplemented(capability)) {
+      if (v !== "not_implemented") problems.push(`${field}: the prototype has no ${capability} output, so the only allowed value is "not_implemented"`);
+    } else if (!values.includes(v)) {
+      problems.push(`${field} must be one of: ${values.join(", ")}`);
+    }
+  }
+  const anyP2 = Object.keys(PROTOTYPE_RATING_FIELDS).some((f) => f in rec);
+  if (anyP2 && typeof rec.p2_prototype !== "string") problems.push("p2_prototype (the rated prototype, e.g. mediapipe-full) is required with pass-2 ratings");
   if (!CLIP_ID_RE.test(rec.clip_id ?? "")) problems.push("clip_id must look like C001-0001");
   if (!COACH_ID_RE.test(rec.coach_id ?? "")) problems.push("coach_id must look like K01");
   if (clipId && rec.clip_id !== clipId) problems.push("clip_id does not match the file name");

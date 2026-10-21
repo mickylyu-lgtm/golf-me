@@ -182,3 +182,28 @@ test("pose accuracy CLI path: reads labels/<clip>-<labeler>.json and writes resu
   assert.ok(fs.existsSync(path.join(dataDir, "derived", clipId, "pose-accuracy-mediapipe-full-K01.json")));
   await assert.rejects(scoreClip(dataDir, clipId, "K02", { today: TODAY }), EvalError);
 });
+
+test("pass-2 prototype ratings: only implemented capabilities can be rated; the rest must say not_implemented", async () => {
+  const { validateLabelRecord, PROTOTYPE_RATING_FIELDS, isImplemented } = await import("../import-clip.mjs");
+  const base = { clip_id: "C001-0001", coach_id: "K01", p2_prototype: "mediapipe-full" };
+  const good = {
+    ...base,
+    p2_landmark_rating: "mostly_reliable",
+    p2_landmark_problem_phases: "downswing wrists",
+    p2_phase_rating: "not_implemented",
+    p2_measurement_rating: "not_implemented",
+    p2_fault_rating: "not_implemented",
+    p2_explanation_rating: "not_implemented",
+    p2_drill_rating: "not_implemented",
+  };
+  assert.deepEqual(validateLabelRecord(good, { clipId: "C001-0001", coachId: "K01" }), []);
+  assert.ok(isImplemented("body_landmarks"));
+  for (const f of ["p2_phase_rating", "p2_measurement_rating", "p2_fault_rating", "p2_explanation_rating", "p2_drill_rating"]) {
+    assert.ok(!isImplemented(PROTOTYPE_RATING_FIELDS[f].capability), `${f} capability is not implemented today`);
+    const p = validateLabelRecord({ ...good, [f]: "correct" });
+    assert.ok(p.some((x) => x.includes(f) && x.includes("not_implemented")), `${f}: a rating of missing output is refused`);
+  }
+  assert.ok(validateLabelRecord({ ...good, p2_landmark_rating: "not_implemented" }).some((x) => x.includes("p2_landmark_rating must be one of")));
+  const { p2_prototype: _omit, ...noProto } = good;
+  assert.ok(validateLabelRecord(noProto).some((x) => x.includes("p2_prototype")));
+});

@@ -24,24 +24,11 @@ import { CAMERA_ANGLE_VERSION, classifyCameraAngle } from "../../src/lib/caddie/
 import { QUALITY_GATE_VERSION, runQualityGate } from "../../src/lib/caddie/v2/qualityGate.ts";
 import { CADDIE_V2_THRESHOLDS } from "../../src/lib/caddie/v2/thresholds.ts";
 import { POSE_KEYPOINT_NAMES, POSE_SEQUENCE_VERSION } from "../../src/lib/caddie/v2/types.ts";
-import { EvalError, assertLocalProcessingAllowed, auditEvent, defaultDataDir, todayIso, writeDataJson } from "./import-clip.mjs";
+import { EvalError, PROTOTYPE_CAPABILITIES, assertLocalProcessingAllowed, auditEvent, defaultDataDir, todayIso, writeDataJson } from "./import-clip.mjs";
+
+export { PROTOTYPE_CAPABILITIES };
 
 export const CHECKS_SCHEMA = 1;
-
-/**
- * What the local prototype does and does not produce, stated in every
- * results file so a rating sheet can never imply more than exists.
- */
-export const PROTOTYPE_CAPABILITIES = Object.freeze({
-  body_landmarks: "implemented (MediaPipe Pose Landmarker, 13 keypoints)",
-  quality_gate: "implemented (provisional thresholds)",
-  camera_angle: "implemented (provisional heuristic; face_on / down_the_line / unknown)",
-  swing_phases: "not implemented",
-  measurements: "not implemented",
-  faults: "not implemented",
-  coaching_explanations: "not implemented",
-  drills: "not implemented",
-});
 
 const KEYPOINT_SET = new Set(POSE_KEYPOINT_NAMES);
 
