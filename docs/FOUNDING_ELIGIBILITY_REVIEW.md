@@ -1,6 +1,6 @@
 # Founding Golfer eligibility review (global hosting Phase 2)
 
-Status: **proposal only.** Nothing in this file has been implemented. Award behaviour is unchanged on every branch. Micky decides before any change (Phase 2 decisions, items 6 to 8).
+Status: **Micky chose B on 2026-10-21** (award at onboarding, 14-day correction window with automatic award, manual admin review after that). Implemented on branch `global-hosting` as migration `20261022120000_founding_onboarding_window.sql`, **not applied**. Production still runs the rules in "How the award works today" until Micky approves applying it (`docs/GLOBAL_HOSTING_ROLLOUT.md`, step 2a). The analysis and proposals below are kept as the decision record.
 
 ## How the award works today (verified against the applied migrations)
 
@@ -122,8 +122,52 @@ A location can be edited at any time. The award trigger fires on any change to `
 
 Use B (onboarding-time award with a short correction window). If remote claims are seen in practice, add C as an optional extra signal. Until Micky decides, keep A unchanged. If the larger qualifying population matters before the decision, hold the Phase 2 web deploy.
 
+## Decision B, as implemented (`20261022120000`, not applied)
+
+### Rules
+
+1. **Qualifying onboarding is unchanged.** The save that first sets `has_onboarded = true` calls `private.award_founding_golfer()` exactly as before: confirmed email, saved coordinates within 30 mi of Midtown, no excluded role, cohort open, never held a number.
+2. **Correction window: 14 days from onboarding, automatic.** If a later save moves the saved coordinates into the zone within 14 days of onboarding, the server awards automatically through the same function. Typical cases: a wrong city at signup, or a typed free-text area (no coordinates) later replaced by a search result. Every such award is also written to `public.founding_eligibility_reviews` with status `auto_awarded` and its flags, so an admin can review it and, if needed, revoke it with the existing `admin_revoke_founding_award()`.
+3. **Outside the window: never automatic.** A move into the zone creates one pending review per golfer (later moves refresh it). On the admin dashboard an admin either approves, which awards through the same function and only if the golfer is eligible at that moment (saved area in the zone, confirmed email, no exclusion, never held a number, cohort open), or dismisses. A dismissed golfer who later moves into the zone again gets a new pending review.
+4. **Only saved coordinates count.** The trigger still fires only on `has_onboarded` / `playing_area_lat` / `playing_area_lng`. A save whose coordinates didn't actually change (label, bio, place id, country, time zone, unit, or re-sending the same area) makes **0 award calls and creates no review**. City searches never write the profile.
+
+### Thresholds (constants in `private.founding_on_location_change`)
+
+| Check | Value | Effect |
+|---|---|---|
+| Window | 14 days from `profiles.onboarded_at` | Inside: automatic. Outside: manual review. |
+| Move cap | 3 coordinate changes after onboarding | Changes 1 to 3 that land in the zone auto-award. A 4th or later change that lands in the zone goes to manual review (`correction_over_cap`, flag `move_cap_exceeded`). |
+| `rapid_moves` flag | 3 or more coordinate changes within 24 hours | Recorded only. |
+| `far_jump` flag | Previous saved area more than 500 mi from Midtown | Recorded only, because a wrong-city pick is exactly what the window is for. |
+| `no_previous_coordinates` flag | Previous area was free text (no coordinates) | Recorded only. |
+
+Only the move cap blocks an automatic award. The flags make suspicious awards easy to spot on the dashboard. Changing any value needs a new migration.
+
+Why this is enough: inside the window, abusing the correction path is no easier than declaring NYC at signup, which a new account can always do (one confirmed email per account, one award per account, cap 250, admin revoke). The real risk, existing worldwide accounts "moving" to NYC later, now always needs an admin.
+
+### Transition rule for existing accounts
+
+- `profiles.onboarded_at` is new. It is stamped by the server on the first `has_onboarded` transition, and clients can't write it.
+- Accounts that onboarded before the migration keep `onboarded_at = NULL`. Their window is measured from `profiles.created_at` (signup). Signup always comes before onboarding, so this can only make the window shorter, never longer.
+- An account that signed up **less than 14 days before the migration is applied** keeps the rest of its window. An older account goes to manual review.
+- Applying the migration awards nobody, revokes nothing and updates no row. All existing numbers stay exactly as they are.
+- Edge case: a pre-migration account that an admin resets with the test tool (`admin_reset_test_account_onboarding`) is treated as onboarding again, as it was before this migration. Accounts onboarded after the migration keep their first `onboarded_at` through a reset.
+
+### What stays the same
+
+The cap of 250, the append-only ledger and its guards, numbers never reused (a revoked number stays consumed and that account is never re-awarded or put up for review), the exclusion roles, the confirmed-email rule, the zone, and a failing check never breaking a profile save.
+
+### Proof (PGlite, `scripts/migration-checks/founding-onboarding-window.mjs`, 22/22 pass)
+
+Onboarding in the zone awards. A Tokyo → NYC correction within 14 days awards (flag `far_jump`). Free text → Brooklyn within 14 days awards. A correction after 14 days creates a review and no award. A client can't rewrite `onboarded_at`. A pre-migration account 30 days old goes to review and one 5 days old auto-awards. A 4th move goes to review. Place-only, label, bio and same-coordinate saves make 0 award calls. Excluded and unconfirmed accounts get no award and no review. A revoked number isn't reused or re-awarded. Non-admins can't read or write reviews or call the RPCs, and nobody can read the move log. Approve awards the next number, and a repeat approve fails. Approve refuses when the golfer left the zone; dismiss works. The cap of 250 closes the cohort, after which nothing more is awarded. Rollback keeps the ledger identical.
+
+### Admin UI
+
+The admin dashboard (`/admin/dashboard`) has a "Founding Golfer reviews" section: pending reviews with from/to areas (label + miles from Midtown, never coordinates), the current area and whether it's in the zone, flags, moves counted, plus approve/dismiss buttons and a list of recent auto-awarded corrections. It shows "Unavailable" until the migration is applied.
+
 ## Item 6: NYC messaging only where NYC is relevant
 
 - **Onboarding.** The spots line already shows only when the chosen area is inside the zone (`FoundingSpotsNote enabled={isInFoundingZone(playingAreaCoords)}`). So a Tokyo or London pick shows nothing, and an NYC-area pick shows it.
 - **Copy.** The strings say "NYC Founding Golfer" in every language (`founding.spotsRemaining` / `founding.spotsClaimed`).
-- **Open point for Micky: the landing hero.** The public landing hero (`Welcome.tsx`) shows the NYC spots line to every visitor, wherever they are. It is labelled NYC and NYC is the launch market, so it reads as launch marketing, not a promise to non-NYC visitors. Whether it should stay global is a marketing call. Not changed.
+- **Landing page (decided 2026-10-21, on the branch).** The hero no longer shows the NYC spots line to every visitor. It now says rounds can be hosted anywhere in the world. The NYC offer lives in its own clearly NYC-labelled section ("Golfing in the New York area?"), with the live count from `get_founding_cohort_status()`. The whole section is hidden while loading, on error, before the cohort opens or after an early close, so a stale or guessed number never shows. All 6 locales.
+- **In the app** the line appears only in onboarding, once the chosen area is inside the zone (demo accounts never fetch it). Nowhere else in the app shows the offer.

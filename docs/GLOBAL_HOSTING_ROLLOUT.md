@@ -134,6 +134,55 @@ commit;
 - Coordinates and labels are untouched. Labels are English, so display is unaffected apart from localization.
 - PGlite verified it runs cleanly and keeps every profile row.
 
+## c2. Migration review: `20261022120000_founding_onboarding_window.sql` (Founding decision B) [done, not applied]
+
+What it does, how it decides and the thresholds: `docs/FOUNDING_ELIGIBILITY_REVIEW.md` ("Decision B, as implemented"). In short: the award at onboarding is unchanged; a move of the saved coordinates into the zone within 14 days of onboarding auto-awards; after that it opens an admin review.
+
+| Check | Result |
+|---|---|
+| Independent of Phase 2 | It neither reads nor needs the place columns. It can be applied before or after `20261021120000`. **Apply it before the Phase 2 web deploy (step 4)**, because Phase 2 lets more people pick an NYC-area city later. |
+| Changes on apply | None to data. It adds `profiles.onboarded_at` (nullable, no default, metadata-only), one BEFORE trigger, `private.founding_location_moves`, `public.founding_eligibility_reviews` (RLS on, admin-only SELECT, no client writes), 2 private functions and 3 admin RPCs. It replaces the body of `award_founding_golfer_on_profile_change()`; the trigger's column list and WHEN clause are unchanged. No UPDATE of any row (so no `updated_at` bump). |
+| Untouched | `private.award_founding_golfer()`, `private.in_founding_zone()`, cap 250, the ledger and its guards, numbers never reused, exclusion roles, confirmed-email rule. Existing awards, the counter and every profile row are unchanged (PGlite-verified). |
+| PGlite | `scripts/migration-checks/founding-onboarding-window.mjs` runs the real `20261006120000`, a stand-in for `20261006120100`, the real `20261021120000`, then this file: **22/22 pass** (2026-10-21). |
+| Locks | `ALTER TABLE profiles ADD COLUMN` and `CREATE TRIGGER` take a brief ACCESS EXCLUSIVE / SHARE ROW EXCLUSIVE lock on `profiles`. Use `set local lock_timeout = '5s'`. |
+| Admin access | The RPCs check `private.has_role(auth.uid(), 'admin')`, so they work from the app (admin dashboard section, ships with the web deploy), not from the SQL editor (no `auth.uid()` there). Before the web deploy, read `public.founding_eligibility_reviews` directly in the SQL editor. |
+
+**Rollback SQL** (one transaction). It restores the original trigger body verbatim, so any-time awards resume. Awards made under the new rules stay in the ledger (never silently revoked); review records are dropped.
+
+```sql
+begin;
+set local lock_timeout = '5s';
+create or replace function public.award_founding_golfer_on_profile_change()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  begin
+    perform private.award_founding_golfer(new.id);
+  exception when others then
+    raise warning 'award_founding_golfer failed for %: % (%)', new.id, sqlerrm, sqlstate;
+  end;
+  return null;
+end;
+$$;
+revoke execute on function public.award_founding_golfer_on_profile_change() from public, anon, authenticated;
+drop function if exists public.admin_dismiss_founding_review(bigint, text);
+drop function if exists public.admin_approve_founding_review(bigint, text);
+drop function if exists public.admin_list_founding_reviews(text, integer);
+drop function if exists private.founding_on_location_change(uuid, boolean, boolean, double precision, double precision, text);
+drop function if exists private.founding_zone_distance_mi(double precision, double precision);
+drop table if exists public.founding_eligibility_reviews;
+drop table if exists private.founding_location_moves;
+drop trigger if exists profiles_stamp_onboarded_at on public.profiles;
+drop function if exists public.profiles_stamp_onboarded_at();
+alter table public.profiles drop column if exists onboarded_at;
+commit;
+```
+
+PGlite verified that this runs cleanly and leaves the ledger identical. If the review rows matter, export `public.founding_eligibility_reviews` first.
+
 ## d. Isolated non-production environment [Micky to choose; nothing created]
 
 **Read-only check on this machine (2026-10-21):** none of Docker, the Supabase CLI, Deno or psql is installed. `npx supabase` isn't cached either. The local PGlite harness above is the only thing that ran here.
@@ -241,11 +290,13 @@ Use two staging accounts, A and B, with different app languages (for example A =
 - Use a build from `main` against staging after A picked Tokyo, and move A to London.
 - `playing_area_place_id` is cleared, and B sees "London".
 
-**8. Founding (staging cohort):**
+**8. Founding (staging cohort, with `20261022120000` applied):**
 
-- Search NYC without saving → no award.
-- Save Brooklyn (search result) on a fresh confirmed account → awarded, the same as picking "New York, NY" today.
-- Free-text "Brooklyn" → no award.
+- Search NYC without saving → no award, no review row.
+- Onboard with Brooklyn (search result) on a fresh confirmed account → awarded, the same as picking "New York, NY" today.
+- Free-text "Brooklyn" at onboarding → no award. Then pick the Brooklyn search result within 14 days → awarded, plus an `auto_awarded` review row flagged `no_previous_coordinates`.
+- Onboard with Tokyo, then save New York → awarded, flagged `far_jump`.
+- An account older than 14 days moves to New York → no award, one pending review on the admin dashboard; approve → next number; dismiss on another → closed.
 - The record matches `docs/FOUNDING_ELIGIBILITY_REVIEW.md`.
 
 **9. Advisors:** run the security and performance advisors on staging.
@@ -256,11 +307,12 @@ Each step needs its own OK. Stop on any failure. Every step has its own rollback
 
 | # | Step | Verify | Rollback |
 |---|---|---|---|
-| 0 | Decide on Founding (review doc) and the hero copy. Complete a and b. Run the staging matrix (d, f). | All boxes ticked | — |
+| 0 | Founding decision B and the NYC copy are decided (2026-10-21) and implemented on the branch; Micky reviews the thresholds. Complete a and b. Run the staging matrix (d, f). | All boxes ticked | — |
 | 1 | `git push origin global-hosting` (branch only; approved in the decisions file, but this session didn't push) | Remote hash matches local | Delete the remote branch |
+| 2a | Apply the Founding migration `20261022120000` to `golfme-dev` in the SQL editor the same way (`begin; set local lock_timeout = '5s';` + file + `commit;`). Independent of step 2; do it first or right after, but before step 4. | Advisors are clean. `select count(*) from public.founding_golfer_awards` and `founding_cohort_state.next_number` are unchanged. Role-simulated SQL: authenticated non-admin reads 0 rows from `founding_eligibility_reviews`, can't insert/update it, can't read `private.founding_location_moves`; anon is denied. | Rollback SQL (c2) |
 | 2 | Apply the migration to `golfme-dev` in the SQL editor: `begin; set local lock_timeout = '5s';` + the file contents + `commit;`. Then record the version name the same way as the Founding migrations. | Advisors are clean. Role-simulated SQL: anon → permission denied on `consume_geocode_quota`; authenticated can't read `private.*` or write `geo_places`. A valid place update works and an invalid one is rejected. The **released iOS app** is unchanged (e). | Rollback SQL (c) |
 | 3 | Set the `GEOAPIFY_API_KEY` secret if a new key was chosen (otherwise none), then `supabase functions deploy course-search` from Micky's Mac, keeping verify_jwt on. Never `--no-verify-jwt`. | Smoke test (f.1) against production with Micky's own account, including `mode: "place"` once. Geoapify usage +1 and +2. `search`/`nearby` unchanged. | Redeploy `course-search` from `main` (clients fall back by themselves) |
 | 4 | Merge `global-hosting` → `main` and deploy to Vercel production | golfme.app: pick a city in each test language. Two real accounts see each other's label in their own language. The iOS app picks it up on reload. | Vercel "Promote" the previous deployment (instant), or revert the merge |
-| 5 | Watch for 48 h: Geoapify daily usage under budget, the `geocode_rate_buckets` sum per day, Edge Function 4xx/5xx, any Founding awards for searched NYC-area cities | Numbers in DEVELOPMENT_STATUS | Steps 4 → 3 → 2 rollbacks, in that order |
+| 5 | Watch for 48 h: Geoapify daily usage under budget, the `geocode_rate_buckets` sum per day, Edge Function 4xx/5xx, any Founding awards for searched NYC-area cities, and the pending / auto-awarded Founding reviews on the admin dashboard | Numbers in DEVELOPMENT_STATUS | Steps 4 → 3 → 2 → 2a rollbacks, in that order (2a only if the Founding rules themselves are the problem) |
 
 Privacy Policy one-liner (city text is sent to Geoapify) ships with step 4 if Micky approves the copy.
