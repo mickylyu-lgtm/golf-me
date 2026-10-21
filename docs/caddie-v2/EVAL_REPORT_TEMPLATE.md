@@ -23,10 +23,11 @@
 | Clips in this run / excluded | / (list exclusion reasons in §1) |
 | Contributors | (count only) |
 | Coaches (pseudonymous IDs) | |
-| Pose source | (e.g. cached V1 Roboflow output, Apple Vision prototype; model or workflow version) |
+| Pose source | (e.g. local MediaPipe Pose Landmarker Full / Heavy, cached V1 Roboflow output, Apple Vision prototype; for MediaPipe: `@mediapipe/tasks-vision` version, model file and sha256 from `tools/caddie-eval/models/models.json`, adapter version, decode settings: fps, long side) |
+| Offline check (local runs) | (from each `pose-mediapipe-<variant>.run.json`: `network.blocked` hosts and counts; must show only expected blocks, e.g. MediaPipe's `odml.pa.googleapis.com` logger, and no request served from anywhere but the local allowlist) |
 | V1 outputs used? | (yes/no; if yes, the date V1 was run, the spend approval reference, the `VENDOR_TERMS_VERIFIED` dates for Roboflow and Gemini, and confirmation every clip sent passed `assertThirdPartyAllowed`) |
 | Consent form version(s) | (e.g. 1.1; every clip within its 90-day retention on the run date) |
-| Module versions | `qualityGate` , `cameraAngle` , `phaseOrder` , `roboflowAdapter` |
+| Module versions | `qualityGate` , `cameraAngle` , `phaseOrder` , `roboflowAdapter` , `mediapipeAdapter` , `pose-accuracy` |
 | Threshold registry | (commit of `thresholds.ts`; count placeholder / coach_validated) |
 | Provider spend for this run | (actual, from invoices or usage pages; `—` if none) |
 
@@ -158,7 +159,9 @@ Also report the distributions of `medianShoulderRatio` and `medianHipRatio` per 
 **What it measures:** whether body points are where coaches put them, stay still when the golfer is still, and get low confidence when hidden.
 
 **Truth:** coach or Micky keypoints on address/top/impact frames of the keypoint subset (`TESTING_PROTOCOL.md` §8), with "not visible" allowed.
+**Prediction:** the pose source's keypoints on the nearest analyzed frame (within half a frame). One table per pose source and variant (e.g. MediaPipe Full, MediaPipe Heavy); never pool them.
 **Unit:** one keypoint on one labeled frame (accuracy, abstention); one clip (jitter).
+**Tool:** `node tools/caddie-eval/pose-accuracy.mjs --all --variant full` computes PCK@0.1, PCK@0.2, honest abstention, and confident-wrong as defined below, per keypoint, per phase, and overall. Jitter isn't computed by a tool yet (next).
 
 **How computed:**
 
@@ -168,15 +171,24 @@ Also report the distributions of `medianShoulderRatio` and `medianHipRatio` per 
 - **Confident-wrong points** = share of confident predicted points more than 0.2 torso lengths from a visible label, or confident on a point labeled "not visible".
 - **Address jitter** = over the still-address window (coach `t_address` back to 0.5 s earlier), the standard deviation of each confident point's position ÷ torso length, then the median across points per clip. Report the median and p90 across clips.
 
-| Point group | Visible labels (n) | PCK@0.1 | 95 % CI | "Not visible" labels (n) | Honest abstention | Confident-wrong |
-|---|---|---|---|---|---|---|
-| Shoulders | | | | | | |
-| Hips | | | | | | |
-| Elbows | | | | | | |
-| Wrists | | | | | | |
-| Knees | | | | | | |
-| Ankles | | | | | | |
-| Nose | | | | | | |
+| Point group | Visible labels (n) | PCK@0.1 | PCK@0.2 | 95 % CI (PCK@0.1) | "Not visible" labels (n) | Honest abstention | Confident-wrong |
+|---|---|---|---|---|---|---|---|
+| Shoulders | | | | | | | |
+| Hips | | | | | | | |
+| Elbows | | | | | | | |
+| Wrists | | | | | | | |
+| Knees | | | | | | | |
+| Ankles | | | | | | | |
+| Nose | | | | | | | |
+| **All 13** | | | | | | | |
+
+| Phase | Labeled frames scored (n) | PCK@0.1 | PCK@0.2 | Confident-wrong |
+|---|---|---|---|---|
+| Address | | | | |
+| Top | | | | |
+| Impact | | | | |
+
+The BlazePose model card's PDJ (PCK@0.2 of torso **diameter**, on Google's own photo set) is not comparable with these numbers; don't put it in the same table.
 
 | Address jitter | Clips (n) | Median (torso lengths) | p90 |
 |---|---|---|---|
@@ -243,6 +255,32 @@ Also report the distributions of `medianShoulderRatio` and `medianHipRatio` per 
 
 **Every `harmful` rating, listed:** clip ID, coach ID, what Caddie said (paraphrased, no names), why the coach called it harmful.
 
+## 7a. Coach pass 2 on the local prototype (pilot)
+
+**What it measures:** how coaches judge the output the local prototype actually produces, after their blind pass 1 (`TESTING_PROTOCOL.md` §8, "Pass 2 in the pilot").
+
+**Prototype rated:** (e.g. `mediapipe-full`, the `p2_prototype` value) and its commit.
+**Unit:** one clip, per coach. Report each coach separately, then agreement where both rated.
+
+State what the prototype did **at the time of the run**, from `PROTOTYPE_CAPABILITIES`. A row for an item the prototype doesn't produce says "not implemented, not rated", with no counts. **Never fill such a row with numbers, and never rate hand-written or invented feedback.**
+
+| # | Item | Prototype at run time | Clips rated (n) | Distribution (per coach) | Agreement (both coaches) |
+|---|---|---|---|---|---|
+| 1 | Swing-phase identification accuracy | not implemented | not rated | — | — |
+| 2 | Body landmark reliability | implemented (pose overlay) | | reliable / mostly_reliable / unreliable / cant_tell | % exact; kappa if n ≥ 20 |
+| 3 | Accuracy of observable swing measurements | not implemented | not rated | — | — |
+| 4 | Correctness of identified faults | not implemented | not rated | — | — |
+| 5 | Usefulness of coaching explanations | not implemented | not rated | — | — |
+| 6 | Safety and practicality of suggested drills | not implemented | not rated | — | — |
+
+Landmark problems by phase (from `p2_landmark_problem_phases`, tallied; no names):
+
+| Phase / body part | Clips mentioning it (n) |
+|---|---|
+| | |
+
+The quality gate and camera angle are scored against pass-1 labels in §3 and §6, not rated here.
+
 ## 8. Processing time and cost
 
 **What it measures:** how long a user waits and what each analyzed swing costs.
@@ -259,6 +297,25 @@ Also report the distributions of `medianShoulderRatio` and `medianHipRatio` per 
 | Pose | | | | |
 | Gemini | | | | |
 | **Total (tap to result)** | | | | |
+
+### 8a. Local processing performance and resources (local pose runs)
+
+From each clip's `pose-mediapipe-<variant>.run.json` (and `v2-checks-...json` for the checks). One table per variant. Write the hardware once: CPU model, logical cores, memory, OS (WSL or not), Node and Chromium versions, delegate (CPU/GPU).
+
+| Measure | Variant | Clips (n) | p50 | p90 | Max | Source field |
+|---|---|---|---|---|---|---|
+| Model load (ms) | | | | | | `performance.modelLoadMs` |
+| Inference per frame (ms) | | | | | | `performance.inferenceMsPerFrame.median` per clip |
+| Round trip per frame (ms) | | | | | | `performance.roundTripMsPerFrame.median` (harness transfer cost) |
+| Wall time per clip (s) | | | | | | `performance.wallSecondsTotal` |
+| Wall time / clip length | | | | | | `performance.realtimeFactor` |
+| CPU seconds per clip (all processes) | | | | | | `resources.cpuSeconds.total` |
+| Average cores busy | | | | | | `resources.avgCoresBusy` |
+| Peak RSS, sum of processes (MB) | | | | | | `resources.peakRssBytes.total` (upper bound: shared pages counted more than once) |
+| Peak RSS, Chromium (MB) | | | | | | `resources.peakRssBytes.chromium` |
+| V2 checks run time (ms) | | | | | | `v2-checks-...json` `runMs` |
+
+These are laptop numbers. They say nothing about a phone or WKWebView (`MEDIAPIPE_POC.md` §6).
 
 | Cost item | Units per swing (mean) | Price (source, date) | Cost per swing (mean) | p90 |
 |---|---|---|---|---|

@@ -1,6 +1,6 @@
 # Caddie V2: swing-video testing protocol
 
-Status: **draft for Micky's review, 2026-10-20; updated the same day with Micky's testing decisions** (about 76 clips starting with a 10-clip pilot, 2 coaches, 90-day retention, adults only). Nothing here has been run yet. Every count below is a **target to collect**, not a result. **No coach is recruited yet.**
+Status: **draft for Micky's review, 2026-10-20; updated the same day with Micky's testing decisions** (and later that day: Google Meet for remote coaches, pilot pass 2 on the local prototype) (about 76 clips starting with a 10-clip pilot, 2 coaches, 90-day retention, adults only). Nothing here has been run yet. Every count below is a **target to collect**, not a result. **No coach is recruited yet.**
 
 Related:
 
@@ -125,9 +125,9 @@ Don't rename files by hand. The import tool assigns `C001-0001`, `C001-0002`, ..
 - **Two qualified golf coaches:** `K01` **in person** and `K02` **remote** if feasible. If no remote coach is feasible, both in person.
 - **Status: neither is recruited yet.** Until two are, there is no inter-rater agreement for phases or faults; with one coach, the report says so and validates no threshold.
 - Each coach labels **independently**: they don't see each other's labels or discuss specific clips until both have locked pass 1 and pass 2.
-- Both do pass 1 (phases, faults, main improvement) and pass 2 (feedback-accuracy review of Caddie's output).
+- Both do pass 1 (phases, faults, main improvement) and pass 2 (review of the analysis output). **In the pilot, pass 2 rates the local prototype** (section "Pass 2 in the pilot" below), because no V1 output can be produced.
 - Coaches are identified only by pseudonymous IDs (`K01`, `K02`). They hold the `coach_reviewer` role in GolfMe (audit §8.2), but labeling happens **outside the app**, on a sheet keyed by clip ID and coach ID, for Milestone 1.
-- **Which clips they may see:** only those listed by `coach-check` (in person) or `coach-check --remote` (`VIDEO_IMPORT_AND_CONSENT.md` §7). The remote method (live screen-share without recording, encrypted USB by post, or a split) is **Micky's choice and not yet approved**. No cloud sharing.
+- **Which clips they may see:** only those listed by `coach-session-check` for that coach on that day (in person, or `--remote`; `VIDEO_IMPORT_AND_CONSENT.md` §7). The remote method is **live Google Meet screen-share with no recording** (Micky, 2026-10-20; `COACH_REVIEW_PROCEDURE.md` §3 to §4). No file or cloud sharing.
 
 ### Coach recruitment and qualification checklist
 
@@ -181,7 +181,9 @@ Some faults can't be seen from one angle. `cant_tell_from_angle` is the right an
 
 On about 20 clips, coaches (or Micky, since this is geometry, not coaching) mark the 13 body points on the address, top, and impact frames. Use the rules in `scripts/extract-golf-training-frames/ANNOTATION_GUIDE.md`, including **"not visible" when a point is hidden**. Guessing hidden points spoils the abstention metric.
 
-### Pass 2: rate Caddie's output
+Stored in the clip's label file as `keyframe_keypoints` (format in the header of `tools/caddie-eval/pose-accuracy.mjs`): the pixel size the points were marked in, then per frame the phase, the time in seconds, and each point as `[x, y]` or `"not_visible"`, golfer's anatomical left/right. Label files are keyed by a coach ID, so Micky's own geometry labels need an ID too (proposal: `K00`, recorded once with `coach-add`; Micky's call). `pose-accuracy.mjs` scores the local pose against them (`EVAL_REPORT_TEMPLATE.md` §5).
+
+### Pass 2: rate Caddie's output (V1, later; not in the pilot)
 
 Only after pass 1 is locked, coaches see Caddie's result for each clip and rate:
 
@@ -191,6 +193,27 @@ Only after pass 1 is locked, coaches see Caddie's result for each clip and rate:
 - `rating_note`: free text, no names.
 
 `harmful` means following the advice would likely make the swing worse or risk injury. Every `harmful` rating is listed by clip ID in the report.
+
+### Pass 2 in the pilot: rate the local prototype
+
+Micky's decision (2026-10-20): pass 2 runs in the pilot, on the **local prototype** (`MEDIAPIPE_POC.md`), never on hand-written or invented feedback.
+
+1. **Blind first.** Each coach annotates the original clips in pass 1 without any prototype output. Pass 2 starts only after that coach's pass-1 labels are saved and `verify` passes.
+2. **Shown per clip:** the pose overlay video and the gate/angle summary (`COACH_REVIEW_PROCEDURE.md` §5.1). Nothing else.
+3. **Rated**, six items, one field each in the clip's label file. The sheet must make clear what the prototype actually does. Today it only produces body landmarks (plus the quality gate and a camera-angle guess), so five of the six items are pre-filled **"not implemented, not rated"**:
+
+| # | Item | Field | Prototype today | Allowed values |
+|---|---|---|---|---|
+| 1 | Swing-phase identification accuracy | `p2_phase_rating` | **Not implemented** | `not_implemented` only |
+| 2 | Body landmark reliability (overlay) | `p2_landmark_rating` | **Implemented** | `reliable` / `mostly_reliable` / `unreliable` / `cant_tell`; plus `p2_landmark_problem_phases` (free text, e.g. "downswing wrists", no names) |
+| 3 | Accuracy of observable swing measurements | `p2_measurement_rating` | **Not implemented** | `not_implemented` only |
+| 4 | Correctness of identified faults | `p2_fault_rating` | **Not implemented** | `not_implemented` only |
+| 5 | Usefulness of coaching explanations | `p2_explanation_rating` | **Not implemented** | `not_implemented` only |
+| 6 | Safety and practicality of suggested drills | `p2_drill_rating` | **Not implemented** | `not_implemented` only |
+
+Also required with any pass-2 field: `p2_prototype` (e.g. `mediapipe-full`), and optional `p2_note` (free text, no names). `verify` refuses a rating for an item the prototype doesn't produce (`PROTOTYPE_CAPABILITIES` in `tools/caddie-eval/import-clip.mjs`). When a capability ships, its entry changes in the same commit, and only then can that item be rated.
+
+The quality-gate and camera-angle results are **scored automatically** against the coach's pass-1 `analyzable` and `camera_angle` (`EVAL_REPORT_TEMPLATE.md` §3, §6), so coaches don't rate them separately.
 
 ### Micky's usability pass
 

@@ -179,11 +179,11 @@ On Micky's laptop, with Micky present. No copy leaves the laptop. Labels are typ
 
 ### Remote (K02): options that keep clips off cloud storage
 
-**Chosen for the pilot: Option A** (Micky, 2026-10-20), with participant IDs only, no copies, recordings, screenshots, or downloads, a signed coach agreement, and a reviewed platform. Options B and C are not used in the pilot. Each option needs the contributor's `remoteCoachViewing` tick:
+**Chosen for the pilot: Option A on Google Meet** (Micky, 2026-10-20), with participant IDs only, no copies, recordings, screenshots, or downloads, a signed coach agreement, and Meet's settings reviewed (`COACH_REVIEW_PROCEDURE.md` §4.1). Options B and C are not used in the pilot. Each option needs the contributor's `remoteCoachViewing` tick:
 
 | Option | How | Clip leaves the laptop? | Needs Micky's approval because |
 |---|---|---|---|
-| **A. Live screen-share, no recording** (proposed default) | Micky plays the clip on his laptop and shares his screen in a video call. Recording off on both sides; the coach agrees in writing not to screen-record. Coach uses Micky's frame-step controls by asking ("back one frame") | No file is sent; the call service carries the picture live | A video-call service (e.g. FaceTime, Zoom, Google Meet, Teams) relays the stream; its own recording/retention settings must be checked, and the coach could screen-capture on trust. Frame-accurate phase timing is slower this way |
+| **A. Live screen-share, no recording** (**chosen**, on Google Meet) | Micky plays the clip on his laptop and shares his screen in a video call. Recording off on both sides; the coach agrees in writing not to screen-record. Coach uses Micky's frame-step controls by asking ("back one frame") | No file is sent; the call service carries the picture live | A video-call service (e.g. FaceTime, Zoom, Google Meet, Teams) relays the stream; its own recording/retention settings must be checked, and the coach could screen-capture on trust. Frame-accurate phase timing is slower this way |
 | **B. Encrypted USB drive by tracked post** | Clips copied to a hardware-encrypted drive or an encrypted container (e.g. VeraCrypt, BitLocker To Go); password sent by a different channel; coach returns the drive; Micky wipes it. The coach confirms no copies were made | Yes, physically, encrypted | Postal loss risk, a copy on a third-party device, and a return/wipe step to track |
 | **C. Remote coach labels only what they can from screen-share; timing done in person by K01** | K02 does faults and feedback-accuracy (pass 2) by screen-share; phase times come from K01 only | No | Reduces double-labeling for phase times, which weakens the agreement statistics |
 

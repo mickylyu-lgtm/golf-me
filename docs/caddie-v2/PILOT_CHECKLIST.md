@@ -4,7 +4,7 @@ Status: **draft, 2026-10-20. Not run yet.** Tick the boxes on the day. The point
 
 Background: `LOCAL_PILOT_WORKFLOW.md` (the whole local-only flow and its blockers), `TESTING_PROTOCOL.md` (camera setup, shot matrix, labels), `VIDEO_IMPORT_AND_CONSENT.md` (storage, consent, deletion), `COACH_REVIEW_PROCEDURE.md` (coach sessions), `consent/CONSENT_FORM_v1.pdf` (the form), `consent/COACH_CONFIDENTIALITY_v1.pdf` (what coaches sign).
 
-**The pilot is local only.** No clip goes to Roboflow, Gemini, Supabase, or any cloud. Roboflow is **excluded** from the pilot baseline until it confirms in writing that our configuration won't use the footage for training (Micky, 2026-10-20); Gemini is blocked until verified (`VENDOR_APPROVAL_CRITERIA.md`). The tool refuses third-party use anyway. Pose for the pilot comes from a **local model** (proposed: MediaPipe Pose Landmarker; not installed yet, needs Micky's approval).
+**The pilot is local only.** No clip goes to Roboflow, Gemini, Supabase, or any cloud. Roboflow is **excluded** from the pilot baseline until it confirms in writing that our configuration won't use the footage for training (Micky, 2026-10-20); Gemini is blocked until verified (`VENDOR_APPROVAL_CRITERIA.md`). The tool refuses third-party use anyway. Pose for the pilot comes from a **local model**: MediaPipe Pose Landmarker (Full; Heavy for comparison), installed 2026-10-20 as a pinned devDependency and run fully offline (`MEDIAPIPE_POC.md`). It has only been tested on a synthetic clip; the pilot is its first real run.
 
 ---
 
@@ -14,7 +14,8 @@ Background: `LOCAL_PILOT_WORKFLOW.md` (the whole local-only flow and its blocker
 - [ ] Send each friend the **blank** `CONSENT_FORM_v1.pdf` to read in advance. They sign **on the day**, not before (the 90-day clock starts at the consent date).
 - [ ] **Coaches:** note where recruitment stands (`TESTING_PROTOCOL.md` §8). The pilot can go ahead without coaches; their labeling then becomes the next step. Before any coach session: each coach signs `COACH_CONFIDENTIALITY_v1.pdf`, Micky records it with `coach-add`, and (remote) the screen-share platform is reviewed (`COACH_REVIEW_PROCEDURE.md` §1, §4).
 - [ ] **Laptop:** BitLocker (Windows) or FileVault (Mac) on. Enough free disk (about 2 GB for 10 clips).
-- [ ] **ffmpeg** available where the tool runs (WSL/Linux: `ffmpeg -version`; install with the system package manager if missing). Without it, plan the manual strip in `VIDEO_IMPORT_AND_CONSENT.md` §4.
+- [ ] **ffmpeg** available where the tool runs (WSL/Linux: `ffmpeg -version`; install with the system package manager if missing). If it isn't installed, the `ffmpeg-static` binary already in the repo's `node_modules` works for stripping and decoding: `export GOLFME_EVAL_FFMPEG=$PWD/node_modules/ffmpeg-static/ffmpeg`. It has no `ffprobe`, so `metadataVerified` stays `null` (not checked); spot-check one stripped clip's metadata by hand. Without any ffmpeg, plan the manual strip in `VIDEO_IMPORT_AND_CONSENT.md` §4.
+- [ ] **Local pose ready:** `npm install` done on `caddie-v2`; `node tools/caddie-eval/fetch-models.mjs --check` prints `sha256 OK` for full and heavy (download them with `node tools/caddie-eval/fetch-models.mjs` if missing; the only network step, a public model file, no clip data). Headless Chromium launches (on WSL it may need the extra libraries described in `tools/caddie-eval/README.md`).
 - [ ] **Data folder** created once, outside any repo and outside OneDrive/iCloud/Dropbox:
 
   ```
@@ -108,6 +109,16 @@ node $T import --contributor C001 --file /mnt/c/caddie-tmp/IMG_0412.MOV \
 - [ ] Turn phone cloud backup back on only after the phone copies are gone.
 - [ ] Calendar reminder: each contributor's retention date, and a weekly `node $T retention`.
 
+## 7a. Local pose run (after import, before any coach session)
+
+Everything stays in the data folder; nothing goes online.
+
+- [ ] Per clip: `node tools/caddie-eval/pose-local.mjs --clip C001-0001` (Full). Optional comparison: `--variant heavy`.
+- [ ] Check the printed `network blocked` line lists only `odml.pa.googleapis.com` (MediaPipe's usage logger, blocked on purpose) or nothing.
+- [ ] Left/right check on one of Micky's own clips: in the overlay, the golfer's lead (left, for a right-hander) arm must be drawn cyan. If it's orange, stop: the mapping is mirrored.
+- [ ] Per clip: `node tools/caddie-eval/run-v2-checks.mjs --clip C001-0001`, then `node tools/caddie-eval/render-overlay.mjs --clip C001-0001` (overlay for pass 2).
+- [ ] Note any clip the extractor or the checks refused, and why.
+
 ## 8. What to send coaches
 
 **Nothing by cloud, email, or chat.** Send only:
@@ -115,13 +126,15 @@ node $T import --contributor C001 --file /mnt/c/caddie-tmp/IMG_0412.MOV \
 - The **blank labeling sheet** (columns from `TESTING_PROTOCOL.md` §8 pass 1), pre-filled with the clip IDs from `coach-check`, nothing else. Clip IDs and coach IDs only.
 - The fixed fault list and the phase definitions (`TESTING_PROTOCOL.md` §8).
 - The blank coach agreement (`consent/COACH_CONFIDENTIALITY_v1.pdf`) to read before signing.
-- The session plan: in person (`K01`) on Micky's laptop; remote (`K02`) **only by live screen-share with no recording** (Option A, Micky's decision 2026-10-20), following `COACH_REVIEW_PROCEDURE.md` §3. No file is sent to a coach.
+- The session plan: in person (`K01`) on Micky's laptop; remote (`K02`) **only by live Google Meet screen-share with no recording or screenshots** (Micky's decisions 2026-10-20), following `COACH_REVIEW_PROCEDURE.md` §3. No file is sent to a coach.
+- The pass-2 sheet with the six items, five of them pre-filled "not implemented, not rated" (`TESTING_PROTOCOL.md` §8, "Pass 2 in the pilot").
 
 Then:
 
 - [ ] On the day of each session: `node $T coach-session-check --coach K0X [--remote]` passes; show only its `eligible` clips.
 - [ ] Pass 1 (blind labels): each coach on their own, without seeing the other's sheet or any Caddie output.
-- [ ] Pass 2 (rate Caddie's feedback) **can't use V1 output in the pilot**: producing it means sending clips to Roboflow and Gemini, which is blocked until vendor approval, per-processor opt-ins, and spend approval. For the pilot, either skip pass 2 or, if the local-pose prototype exists by then, rate that output, clearly labeled (Micky's call, `LOCAL_PILOT_WORKFLOW.md` B10).
+- [ ] **Remote only:** Micky has done the Google Meet settings review (`COACH_REVIEW_PROCEDURE.md` §4.1) and set `SCREEN_SHARE_PLATFORM_REVIEW` in its own commit. Until then `coach-session-check --remote` refuses.
+- [ ] **Pass 2 (on):** after a coach's pass 1 is saved and `verify` passes, show that coach the overlay and the gate/angle summary for each eligible clip and record the six ratings (`COACH_REVIEW_PROCEDURE.md` §5.1). Only body landmark reliability can be rated; the other five stay `not_implemented`. V1 output isn't used (Roboflow and Gemini stay blocked).
 - [ ] Labels come back as a sheet keyed by clip ID and coach ID. Save each as `labels/<clip ID>-<coach ID>.json` inside the data folder (protocol fields only), so withdrawal deletes them. `node $T verify` checks the names, fields, and coach IDs.
 
 ## 9. Pilot review (before filming the other 66)

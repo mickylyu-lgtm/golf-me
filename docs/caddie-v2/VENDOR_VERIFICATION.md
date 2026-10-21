@@ -68,7 +68,7 @@ The tool can check 1 and 2; 3 is on trust.
 - [ ] Clips sent are stripped of audio (V1 sends trimmed copies **with** audio, audit P3; the baseline runner must send the stripped clip from the data folder, not re-trim the original).
 - [ ] Written no-training commitment (criterion V1): record the exact Paid Services sentence and its "last updated" date, and confirm it covers the Files API uploads and the outputs, not only prompts.
 
-**What remains before any participant footage goes to Gemini** (2026-10-20): every box above; the per-contributor Gemini tick; a baseline runner that doesn't exist yet (it must call `assertThirdPartyAllowed`, send the stripped clip, and check each Files API delete); Micky's spend approval. Until then Gemini is blocked, and coach pass 2 in the pilot has no V1 output to rate.
+**What remains before any participant footage goes to Gemini** (2026-10-20): every box above; the per-contributor Gemini tick; a baseline runner that doesn't exist yet (it must call `assertThirdPartyAllowed`, send the stripped clip, and check each Files API delete); Micky's spend approval. Until then Gemini is blocked, and coach pass 2 in the pilot has no V1 output to rate; it rates the local prototype instead (`TESTING_PROTOCOL.md` §8).
 
 Verified: ____-__-__ by ______ (leave blank until every box is ticked).
 
