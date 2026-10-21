@@ -17,6 +17,9 @@
 //   assertThirdPartyAllowed() per clip, which also refuses until the
 //   vendor's terms are verified (VENDOR_TERMS_VERIFIED, see
 //   docs/caddie-v2/VENDOR_VERIFICATION.md);
+// - local processing (pose-local.mjs, run-v2-checks.mjs, render-overlay.mjs,
+//   pose-accuracy.mjs) calls assertLocalProcessingAllowed() per clip:
+//   active consent, stripped, sha256 intact. Its output stays in derived/;
 // - clips get pseudonymous IDs (C001-0001); original file names are never
 //   recorded; consent records hold no names or emails (strict key set);
 // - audio and container metadata (incl. location) are stripped when ffmpeg
@@ -862,6 +865,44 @@ export function thirdPartyEligible(dataDir, processor, opts = {}) {
   const v = (opts.vendorStatus ?? VENDOR_TERMS_VERIFIED)[processor];
   return { processor, vendorVerified: vendorApproved(v), eligible, refused };
 }
+
+/**
+ * THE gate every local processing step (pose extraction, V2 checks, overlay
+ * rendering) must call before reading a clip or anything derived from it.
+ * Nothing leaves the machine, so no vendor or opt-in check applies, but the
+ * clip still needs: a manifest entry, active affirmative consent, audio and
+ * metadata stripped, and a stored file whose sha256 still matches. Returns
+ * the manifest entry, the absolute clip path, and the clip's derived folder.
+ */
+export async function assertLocalProcessingAllowed(dataDir, clipId, { today = todayIso(), checkFile = true } = {}) {
+  const L = openDataDir(dataDir);
+  if (!CLIP_ID_RE.test(clipId ?? "")) throw new EvalError("clip ID must look like C001-0001");
+  const entry = loadManifest(L).clips.find((x) => x.clipId === clipId);
+  if (!entry) throw new EvalError(`${clipId} is not in the manifest`);
+  assertActiveConsent(L, entry.contributorId, today);
+  if (!clipReadyToShare(entry)) throw new EvalError(`${clipId} still has audio/metadata; strip it before any processing`);
+  const file = path.join(L.clips, entry.storedFile);
+  if (checkFile) {
+    const st = fs.lstatSync(file, { throwIfNoEntry: false });
+    if (!st || !st.isFile() || st.isSymbolicLink()) throw new EvalError(`${clipId}: stored file is missing`);
+    if ((await sha256File(file)) !== entry.storedSha256) throw new EvalError(`${clipId}: sha256 mismatch; run verify`);
+  }
+  return { entry, file, derivedDir: path.join(L.derived, clipId), layout: L };
+}
+
+/** Appends a metadata-only audit event (IDs, action, date). For the local processing tools. */
+export function auditEvent(L, event, today = todayIso()) {
+  audit(L, event, today);
+}
+
+/** Atomic private JSON write inside the data folder. For the local processing tools. */
+export function writeDataJson(L, file, value) {
+  if (!path.resolve(file).startsWith(L.root + path.sep)) throw new EvalError("refusing to write outside the data folder");
+  mkdirPrivate(path.dirname(file));
+  writeJsonAtomic(L, file, value);
+}
+
+export { mkdirPrivate };
 
 function vendorApproved(v) {
   return Boolean(v && isIsoDate(v.verifiedOn) && isIsoDate(v.noTrainingConfirmedOn));

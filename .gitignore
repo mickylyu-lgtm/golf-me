@@ -73,3 +73,9 @@ tools/caddie-eval/**/*.MOV
 docs/caddie-v2/**/*.mp4
 docs/caddie-v2/**/*.mov
 docs/caddie-v2/**/*.MOV
+# Caddie V2 local pose models (tools/caddie-eval/models/models.json records
+# their source and sha256; the binaries live in GOLFME_EVAL_MODEL_DIR, outside
+# the repo). Never commit model files or overlay videos.
+*.task
+*.tflite
+tools/caddie-eval/**/*.wasm

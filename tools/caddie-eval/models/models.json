@@ -1,0 +1,40 @@
+{
+  "schema": 1,
+  "note": "Provenance of the local pose model files. The .task binaries are NEVER committed: they live in GOLFME_EVAL_MODEL_DIR (default ~/.cache/golfme-caddie-eval/models). fetch-models.mjs downloads them and refuses a file whose sha256 differs from this manifest; pose-local.mjs re-checks the hash before every run.",
+  "runtime": {
+    "package": "@mediapipe/tasks-vision",
+    "version": "1.1.0",
+    "licence": "Apache-2.0 (npm registry metadata, read 2026-10-20)",
+    "publishedOn": "2026-10-06"
+  },
+  "modelCard": {
+    "title": "MediaPipe BlazePose GHUM 3D model card",
+    "url": "https://storage.googleapis.com/mediapipe-assets/Model%20Card%20BlazePose%20GHUM%203D.pdf",
+    "cardDate": "2021-04-16",
+    "readOn": "2026-10-20",
+    "sha256": "e982460cedece5ad9a46aa8f13523328e9ab95d7d5b2b8c99b33f13f6a79ca86",
+    "licence": "Apache License, Version 2.0 (stated under 'LICENSED UNDER' on page 2 of the card, read 2026-10-20). The card covers the Lite, Full and Heavy pose landmark models; the .task bundle also contains the pose detector, which this card does not separately name.",
+    "outOfScopePerCard": ["multiple people in an image", "people further than about 4 m (14 ft) from the camera", "head not visible", "applications needing metric-accurate depth", "surveillance or identity recognition"],
+    "reportedAccuracy": "PDJ (PCK@0.2 of torso diameter) on the vendor's own smartphone fitness/AR photo set: Lite 87.0, Full 91.8, Heavy 94.2 average across 14 regions. Not golf; not our clips."
+  },
+  "models": {
+    "full": {
+      "file": "pose_landmarker_full.task",
+      "url": "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task",
+      "bytes": 9398198,
+      "sha256": "5134a3aad27a58b93da0088d431f366da362b44e3ccfbe3462b3827a839011b1",
+      "md5Base64MatchesServer": "g4eWidNz0UO+CUyXI1Xkjg==",
+      "serverLastModified": "2023-04-28",
+      "downloadedOn": "2026-10-20"
+    },
+    "heavy": {
+      "file": "pose_landmarker_heavy.task",
+      "url": "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/1/pose_landmarker_heavy.task",
+      "bytes": 30664242,
+      "sha256": "64437af838a65d18e5ba7a0d39b465540069bc8aae8308de3e318aad31fcbc7b",
+      "md5Base64MatchesServer": "RT3sTQLMxNPOgStt6E+lFg==",
+      "serverLastModified": "2023-04-28",
+      "downloadedOn": "2026-10-20"
+    }
+  }
+}
