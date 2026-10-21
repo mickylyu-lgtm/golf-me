@@ -93,7 +93,12 @@ export const CURRENT_COACH_AGREEMENT_VERSION = "1.0";
 export const COACH_ID_RE = /^K\d{2}$/;
 /** Screen-share platform reviews older than this must be redone before a remote session. */
 export const PLATFORM_REVIEW_MAX_AGE_DAYS = 30;
-export const SCREEN_SHARE_PLATFORMS = ["facetime", "zoom", "google_meet", "microsoft_teams"];
+/**
+ * Platforms a remote coach session may use. Micky's decision (2026-10-20):
+ * Google Meet only (Zoom considered, not chosen). Adding one needs his
+ * decision and a review against COACH_REVIEW_PROCEDURE.md section 4 first.
+ */
+export const SCREEN_SHARE_PLATFORMS = ["google_meet"];
 /**
  * Review of the screen-sharing platform used for remote coach sessions
  * (docs/caddie-v2/COACH_REVIEW_PROCEDURE.md section 4). null = NOT reviewed,
@@ -1022,7 +1027,7 @@ export function revokeCoach(dataDir, coachId, today = todayIso()) {
 /** Throws unless the platform review exists, names a known platform, and is recent enough. */
 export function assertPlatformReviewed(review, today = todayIso()) {
   if (!review || !isIsoDate(review.reviewedOn) || !SCREEN_SHARE_PLATFORMS.includes(review.platform)) {
-    throw new EvalError("the screen-share platform is not reviewed (docs/caddie-v2/COACH_REVIEW_PROCEDURE.md section 4); no remote session");
+    throw new EvalError(`the screen-share platform is not reviewed, or is not an approved platform (${SCREEN_SHARE_PLATFORMS.join(", ")}); see docs/caddie-v2/COACH_REVIEW_PROCEDURE.md section 4. No remote session`);
   }
   if (review.reviewedOn > today) throw new EvalError("platform review is dated in the future");
   if (addDaysIso(review.reviewedOn, PLATFORM_REVIEW_MAX_AGE_DAYS) < today) {

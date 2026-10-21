@@ -407,7 +407,7 @@ function coach(dataDir, overrides = {}) {
   );
 }
 
-const PLATFORM_OK = { platform: "zoom", reviewedOn: "2026-10-15", by: "Micky" };
+const PLATFORM_OK = { platform: "google_meet", reviewedOn: "2026-10-15", by: "Micky" };
 
 async function coachFixture() {
   const fx = setup();
@@ -452,11 +452,12 @@ test("coach-session-check remote: needs a reviewed, in-date platform and remote 
   assert.equal(SCREEN_SHARE_PLATFORM_REVIEW, null);
   assert.throws(() => assertCoachSessionAllowed(dataDir, "K02", { remote: true, today: TODAY }), /not reviewed/);
   assert.throws(() => assertCoachSessionAllowed(dataDir, "K02", { remote: true, platformReview: { platform: "skype", reviewedOn: "2026-10-15" }, today: TODAY }), /not reviewed/);
-  assert.throws(() => assertCoachSessionAllowed(dataDir, "K02", { remote: true, platformReview: { platform: "zoom", reviewedOn: "2026-09-01" }, today: TODAY }), /older than 30 days/);
+  assert.throws(() => assertCoachSessionAllowed(dataDir, "K02", { remote: true, platformReview: { platform: "google_meet", reviewedOn: "2026-09-01" }, today: TODAY }), /older than 30 days/);
   const ok = assertCoachSessionAllowed(dataDir, "K02", { remote: true, platformReview: PLATFORM_OK, today: TODAY });
   // Only C001 ticked remote coach viewing.
   assert.deepEqual(ok.eligible, [a.clipId]);
-  assert.equal(ok.platform, "zoom");
+  assert.equal(ok.platform, "google_meet");
+  assert.throws(() => assertCoachSessionAllowed(dataDir, "K02", { remote: true, platformReview: { ...PLATFORM_OK, platform: "zoom" }, today: TODAY }), /not reviewed/, "Zoom was not chosen");
   assert.throws(() => assertCoachSessionAllowed(dataDir, "K02", { remote: false, today: TODAY }), /not cleared for in-person/);
   withdrawContributor(dataDir, "C001", { confirm: true }, TODAY);
   assert.throws(() => assertCoachSessionAllowed(dataDir, "K02", { remote: true, platformReview: PLATFORM_OK, today: TODAY }), /no clip is eligible/);

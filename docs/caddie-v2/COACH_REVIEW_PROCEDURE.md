@@ -1,6 +1,12 @@
 # Caddie V2: coach review procedure (in person and remote)
 
-Status: **draft, 2026-10-20. No coach recruited, no session run.** Micky's decision (2026-10-20): the remote method for the 10-clip pilot is **Option A, live screen-share with no recording** (`VIDEO_IMPORT_AND_CONSENT.md` §7). Encrypted USB by post (Option B) isn't used in the pilot.
+Status: **draft, 2026-10-20. No coach recruited, no session run.** Micky's decisions (2026-10-20):
+
+- The remote method for the 10-clip pilot is **Option A, live screen-share with no recording** (`VIDEO_IMPORT_AND_CONSENT.md` §7). Encrypted USB by post (Option B) isn't used in the pilot.
+- The remote platform is **Google Meet**: screen-share only, no recordings or screenshots, Meet's privacy and data settings verified on Micky's account (section 4), only consented, de-identified clips (contributor IDs, audio and metadata stripped), a signed coach agreement, and the tool gates unchanged. Zoom was considered and **not chosen**.
+- **Pilot pass 2 is on:** after pass 1 is locked, coaches rate the **local prototype's** output (section 5).
+
+`SCREEN_SHARE_PLATFORM_REVIEW` stays `null` until Micky has done the Meet settings review himself and recorded it in its own commit, so every remote session is refused until then.
 
 **No coach session of any kind, in person or remote, until `coach-session-check` passes for that coach on that day.** The tool enforces the parts it can see (section 1); the rest is this procedure.
 
@@ -29,10 +35,10 @@ Use `--remote-sessions yes` for a remote coach (`K02`). If a coach leaves or bre
 **Mark the platform reviewed** (remote only): after every box in section 4 is ticked for the platform and account Micky will host from, set in `tools/caddie-eval/import-clip.mjs`, in a commit of its own:
 
 ```js
-export const SCREEN_SHARE_PLATFORM_REVIEW = { platform: "zoom", reviewedOn: "YYYY-MM-DD", by: "Micky", checklist: "docs/caddie-v2/COACH_REVIEW_PROCEDURE.md" };
+export const SCREEN_SHARE_PLATFORM_REVIEW = { platform: "google_meet", reviewedOn: "YYYY-MM-DD", by: "Micky", checklist: "docs/caddie-v2/COACH_REVIEW_PROCEDURE.md" };
 ```
 
-Allowed platforms: `facetime`, `zoom`, `google_meet`, `microsoft_teams`. Re-review (new date) every 30 days and whenever the platform, plan, account, or app version's privacy settings change. The tool refuses a review older than 30 days.
+Use `google_meet`: since Micky's decision the tool accepts no other platform (`SCREEN_SHARE_PLATFORMS`). Re-review (new date) every 30 days and whenever the platform, plan, account, or app version's privacy settings change. The tool refuses a review older than 30 days.
 
 **On the day of every session**, run and keep the output's clip list:
 
@@ -62,77 +68,96 @@ It exits 1 with the reason if anything is missing. Show only the clips it lists 
    2. Micky saves one file per clip as `labels/<clip ID>-K01.json` in the data folder (fields from `TESTING_PROTOCOL.md` §8 only), then runs `node $T verify`. It flags unknown fields, a coach ID that doesn't match the file name, or an unknown coach.
    3. Shred a paper sheet once its labels are saved and checked. Delete any sheet file kept outside the data folder.
 
-## 3. Remote session by live screen-share (K02, Option A)
+## 3. Remote session by Google Meet screen-share (K02, Option A)
 
-The coach never receives a file. The call service relays the picture live; the coach could capture it with another device, which only the signed agreement covers.
+The coach never receives a file. Google Meet relays the picture live (encrypted in transit to Google, not end-to-end); the coach could capture it with another device, which only the signed agreement covers.
 
 1. **Before the call (day before)**
    1. Platform reviewed in the last 30 days (section 4) and `SCREEN_SHARE_PLATFORM_REVIEW` set.
-   2. Create **one meeting for this session only**: new meeting ID, passcode on, waiting room or knock-to-join on, no recurring or personal meeting link. Send the link and passcode to the coach only, by a direct message, not a group or calendar invite with other people.
+   2. Create **one meeting for this session only**: in Meet, "New meeting" > "Create a meeting for later" (a fresh link), not a recurring Calendar event or a reused link. Don't create it from a Calendar event that invites other people or carries attachments. Send the link to the coach only, by a direct message. Delete the link after the session.
    3. Send the coach the **blank** labeling sheet with the eligible clip IDs and `K02` only, or plan to type their answers yourself (step 3.4).
 2. **Before the coach joins (on the day)**
    1. `node $T retention`, `node $T verify`, then `node $T coach-session-check --coach K02 --remote`. If it refuses, cancel the session.
-   2. Re-check the meeting's settings from section 4: recording, transcripts, captions saved to file, AI notes or summary, chat file transfer all **off**.
-   3. Close everything except the frame-step player. Identity key closed. Notifications off. Start the meeting from the desktop app.
-   4. Plan to share **only the player window**, not the whole screen.
+   2. Re-check the Meet settings from section 4.1: recording, transcripts, "Take notes for me" (Gemini), captions, chat, and participant screen-sharing all **off**; Host management on.
+   3. Close everything except the frame-step player (and, for pass 2, the overlay video and the results summary). Identity key closed. Notifications off. Join from Chrome or Edge on the laptop, signed in to the account that was reviewed.
+   4. Plan to share **only the player window** ("Present" > "A window"), not the entire screen or a browser tab with other tabs open.
 3. **Admit and confirm**
-   1. Admit only the expected coach from the waiting room. Check it's them by video before sharing anything. **Lock the meeting** if the platform allows it.
+   1. Admit only the expected coach (Meet's "asks to join" prompt). Check it's them by video before sharing anything. Deny anyone else. Meet has no meeting lock for personal accounts as far as the help pages say; with Host management on, only the host admits people.
    2. Ask the coach to confirm aloud: they're in a private place, nobody else can see their screen, nothing is recording on their side, and AI note-takers or meeting bots are off. Remove any bot or unexpected participant immediately.
 4. **Labeling**
    1. Share the player window. Play clips by clip ID. The coach says "back one frame", "play", "stop"; Micky steps frames and reads out the player's timestamp when the coach marks a phase.
    2. Labels go on the sheet keyed by clip ID and `K02`. The safest default is that **Micky types the coach's answers** into the sheet on his laptop during the call, so no sheet file sits on the coach's side. If the coach fills their own copy, they send it back as a file containing only clip IDs, `K02`, and labels (no footage, no names), and delete their copy afterwards (agreement §5).
    3. Expect this to be slower than in person, and phase times less exact (compression and lag on the shared picture). Note any clip where the coach says the shared picture was too poor to time, as `cant_tell` rather than a guess.
 5. **End**
-   1. Stop sharing, end the meeting for everyone.
-   2. Check the platform's account dashboard for any recording, transcript, summary, or chat file that appeared anyway. If one did, delete it, and treat it as an incident (section 6).
+   1. Stop presenting, then "End call for everyone" (host option), or leave last.
+   2. Check Google Drive (the "Meet Recordings" folder), Google Docs (auto "Notes by Gemini"), and the Calendar event (if any) for a recording, transcript, notes, or attachment that appeared anyway. If one did, delete it (and empty the Drive trash), and treat it as an incident (section 6).
    3. Save labels as `labels/<clip ID>-K02.json`, run `node $T verify`, and delete any emailed sheet from the inbox and trash once saved.
 
-## 4. Screen-share platform checklist
+## 4. Screen-share platform checklist (Google Meet)
 
-Tick every box on the **account Micky hosts from**, then set `SCREEN_SHARE_PLATFORM_REVIEW` (section 1). Record the plan and app version you checked, not the account ID.
+Tick every box on the **Google account Micky hosts from**, then set `SCREEN_SHARE_PLATFORM_REVIEW` with `platform: "google_meet"` (section 1). Record the account type (personal Google account, Google One, or a Workspace edition) and the browser version you checked, not the account address. Re-do it every 30 days and whenever the account type, plan, or Google's Meet settings change.
 
-**Account and meeting settings**
+Facts below come from Google's Meet help pages read on 2026-10-20 (**unverified**; settings move and differ by account type). Where Google's page didn't say, the item says so: check it on the account.
 
-- [ ] **Cloud recording off** (account level, and locked if the plan allows locking).
-- [ ] **Local recording by participants off** (only the host can allow it; leave it disallowed).
-- [ ] **Live transcription / captions saved to file off**; transcripts not stored.
-- [ ] **AI features off:** meeting summaries, AI notes, AI companions or assistants, "catch me up", smart recordings. Check both the account setting and the in-meeting toggle; some platforms turn these on per meeting.
-- [ ] **Chat file transfer off** (or in-meeting chat off).
-- [ ] **Third-party apps and bots off** in meetings (note-taker bots, in-meeting apps, whiteboards that save content).
-- [ ] **Passcode required**, **waiting room / knock-to-join on**, **meeting lock** available.
-- [ ] **One-time meeting ID**, not a personal meeting room or a recurring link.
-- [ ] **Screen-share limited to the host**.
-- [ ] **End-to-end encryption on** if the platform offers it for this kind of meeting (it usually also blocks cloud recording and AI features, which is what we want).
+### 4.1 Meet settings to verify
 
-**Platform terms**
+**Before the first session (account level)**
 
-- [ ] Read the platform's privacy notice for what it keeps from a call **without** recording (e.g. metadata, diagnostics) and for how long. Note the "last updated" date.
-- [ ] Confirm meeting content isn't used to train AI models on this plan, or that the relevant setting is off. Note where it says so.
-- [ ] Note where the service processes calls (region), for contributors in other countries.
+- [ ] **Account type noted.** Recording, transcripts, and Gemini "Take notes for me" depend on the plan (Google's help says "Take notes for me" needs an eligible Workspace subscription). On a personal account some of these may simply not exist; write "not available" rather than skipping the line.
+- [ ] **Meet settings > Meeting records:** automatic recording **off**, automatic transcripts **off**, "Automatic note taking" / "Take notes for me" **off** (where shown).
+- [ ] **Gemini in Meet:** any "Ask Gemini", summary, or "catch me up" option off or not present. Turning off one Gemini feature doesn't turn off the others (third-party guide, not Google; check each).
+- [ ] **Captions:** off by default for the meeting. Captions themselves aren't saved, but transcripts are a separate feature; keep both off.
+- [ ] **Google account "Smart features" and Workspace data settings** (Google's "smart features & controls" page): note what they cover and set them so meeting content isn't used for personalization. Note the page's date.
+- [ ] **Browser:** Chrome or Edge up to date; **no extensions** that capture meetings (note-takers, transcript or recording extensions). Use a separate browser profile with no extensions if needed.
 
-Reviewed: platform ________ plan ________ app version ________ on ____-__-__ by ______
+**In every meeting, before admitting the coach (Host controls, the shield or "Host controls" panel)**
 
-### 4.1 Comparison of common platforms (public docs, unverified)
+- [ ] **Host management on** (only the host and co-hosts mute, remove, and change these settings). No co-hosts.
+- [ ] **Quick access off** (Workspace) so everyone has to ask to join; on a personal account, people not invited ask to join by default.
+- [ ] **"Let everyone share their screen" off** (only Micky presents).
+- [ ] **"Let everyone send chat messages" off** (no files or links via chat).
+- [ ] **No recording, transcript, or "Take notes for me" running:** no red recording dot, no "Gemini is taking notes" banner. If one appears, stop it at once and follow section 6.
+- [ ] **No add-ons** opened in the meeting (Meet add-ons, whiteboards, shared docs).
 
-Read by the assistant on 2026-10-20. **Unverified**: settings and terms change, and plan tiers differ. Micky checks the real settings on his account with the checklist above.
+**Platform terms (once, then on each re-review)**
 
-| | FaceTime | Zoom | Google Meet |
+- [ ] Google's *Meet security & privacy* page (<https://support.google.com/meet/answer/9852160>, read 2026-10-20) says media is encrypted in transit by default, that Google doesn't store video or audio of a meeting unless recording, transcription, or note-taking is turned on, and that Google Cloud doesn't use customer data for advertising. It shows no "last updated" date, and **it doesn't say whether meeting content is used to train AI models**. Find that answer for the account type (Google privacy policy, Workspace terms, or the smart-features page) and note where it says so. If it can't be found, write "not found" and decide whether that's acceptable.
+- [ ] Meet is **not end-to-end encrypted** in a default meeting (client-side encryption exists only for some Workspace editions). Google could technically access the live stream. Accepted by Micky's decision; noted here so the contributor-facing answer stays honest.
+- [ ] Note any meeting length limit for the account (from memory: one-to-one calls on a personal account are long enough for a session; unverified).
+- [ ] Note whether the coach needs a Google account to join a meeting hosted from this account type.
+
+Reviewed: platform Google Meet; account type ________ browser ________ on ____-__-__ by ______
+
+### 4.2 Platforms considered (public docs, unverified)
+
+Read by the assistant on 2026-10-20. **Decision: Google Meet** (Micky, 2026-10-20). The others are kept only as the record of what was compared.
+
+| | FaceTime | Zoom (not chosen) | Google Meet (**chosen**) |
 |---|---|---|---|
-| Encryption | Apple's Platform Security guide says FaceTime audio and video are end-to-end encrypted and Apple can't decrypt them; call setup goes through Apple servers (<https://support.apple.com/guide/security/facetime-security-seca331c55cd/web>) | Optional end-to-end encryption, set by admins or per meeting; Zoom's support article says enabling it disables cloud recording, Zoom AI features, and live transcription, and needs every participant on the desktop or mobile app, not the web client (<https://support.zoom.com/hc/en/article?id=zm_kb&sysparm_article=KB0065408>) | Google's Meet help says media is encrypted in transit by default, and that Google doesn't keep meeting video or audio unless recording, transcription, or note-taking is turned on (<https://support.google.com/meet/answer/9852160>). Client-side encryption is mentioned only for some Workspace setups (not read) |
-| Recording / transcripts / AI notes | No built-in call recording (from memory, not checked); the main risk is the coach's own screen recording | Cloud and local recording, transcripts, and AI Companion are settings; E2EE turns several off | Recording, transcripts, and AI note-taking are features to switch off; availability depends on plan (not read) |
-| Host from Micky's laptop | **Only from a Mac.** The pilot laptop appears to be Windows + WSL (the dev environment this branch was built in; Micky to confirm), and copying clips to an iPhone or Mac to host would break "clips stay on the laptop" | Windows desktop app works | Browser on Windows works |
-| Coach joins from | Apple device, or a browser via a FaceTime link (from memory, not checked) | Desktop or mobile app (required for E2EE) | Browser or app |
-| Fit for the pilot | Good privacy story, but not usable unless the data folder lives on a Mac | **Likely best fit if Micky has a Zoom account**: E2EE meeting with passcode and waiting room, recording and AI off by design | Workable with every capture feature checked off; no E2EE in a default meeting |
-
-Microsoft Teams wasn't researched. If Micky prefers it, run the checklist above on his account first.
-
-**Assistant's suggestion (Micky decides):** Zoom, with an end-to-end encrypted, passcode-protected, one-time meeting hosted from the Windows desktop app, and the account-level recording, transcript, AI, and chat-file settings off. Google Meet is the fallback.
+| Encryption | Apple's Platform Security guide says FaceTime audio and video are end-to-end encrypted (<https://support.apple.com/guide/security/facetime-security-seca331c55cd/web>) | Optional end-to-end encryption; Zoom's support article says it disables cloud recording, AI features, and live transcription (<https://support.zoom.com/hc/en/article?id=zm_kb&sysparm_article=KB0065408>) | Encrypted in transit by default; Google doesn't keep meeting video or audio unless recording, transcription, or note-taking is on (<https://support.google.com/meet/answer/9852160>) |
+| Host from Micky's laptop | Only from a Mac | Windows desktop app | Browser on Windows |
+| Why not / why | Not usable unless the data folder lives on a Mac | E2EE is the stronger privacy story, but not chosen | Chosen: works from the Windows laptop in a browser; every capture feature must be checked off (4.1) |
 
 ## 5. Independence and blinding
 
-- K01 and K02 label alone. Neither sees the other's sheet, and they don't discuss specific clips until both have locked pass 1 (and pass 2, if run).
+- K01 and K02 label alone. Neither sees the other's sheet, and they don't discuss specific clips until both have locked pass 1 and pass 2.
 - Micky doesn't comment on swings, faults, or phases during any session.
-- Pass 2 (rating Caddie's output) **can't run in the pilot with V1 output**: both vendors are blocked (`VENDOR_APPROVAL_CRITERIA.md` §6). If a local-pose V2 output exists by then (`LOCAL_PILOT_WORKFLOW.md`), pass 2 may rate that, clearly labeled as the local-pose prototype, after pass 1 is locked.
+- **Pass 1 first, always blind:** coaches annotate the original clips without seeing any prototype output. Only after a coach's pass-1 sheet is locked (saved, `verify` passes) does that coach see prototype output.
+
+### 5.1 Pass 2 in the pilot: rating the local prototype
+
+V1 output can't exist in the pilot (both vendors blocked, `VENDOR_APPROVAL_CRITERIA.md` §6), so pass 2 rates the **local prototype**: MediaPipe pose, the V2 quality gate, and the camera-angle heuristic (`MEDIAPIPE_POC.md`). Say it to the coach in these words: "This is a local prototype, not GolfMe's Caddie. It only finds body points. It doesn't produce phases, measurements, faults, explanations, or drills yet."
+
+What the coach is shown, per eligible clip, on Micky's laptop (in person) or in the shared player window (remote):
+
+1. The **overlay video** `derived/<clip ID>/overlay-mediapipe-full.mp4` (from `render-overlay.mjs`): the clip with the prototype's confident body points drawn on it; a red border on frames the quality gate rejects.
+2. The **results summary** printed by `run-v2-checks.mjs` for the clip: quality gate pass/inconclusive and why, camera angle (or `unknown`).
+
+Nothing else. Never show a fault, tip, drill, or explanation: the prototype has none, and none may be written by hand.
+
+The coach rates the six items on the pass-2 sheet (`TESTING_PROTOCOL.md` §8, `EVAL_REPORT_TEMPLATE.md` §7a). Items the prototype doesn't produce are pre-filled **"not implemented, not rated"** (`not_implemented` in the label file). The tool refuses any other value for them.
+
+Rules: same agreement, same no-recording and no-screenshot rules, same `coach-session-check` gate on the day. The overlay is derived data: it stays in `derived/`, is never sent as a file, and is deleted with the clip on withdrawal or retention.
 
 ## 6. Incidents
 
