@@ -22,8 +22,15 @@
 //   pose-mediapipe-<variant>.json  PoseSequence v1 (13 keypoints) via the adapter
 //   pose-mediapipe-<variant>.run.json  provenance, timing, CPU/memory, network log
 //
+// - on Linux (WSL included) the whole run is re-executed inside an empty
+//   network namespace (unshare --user --map-root-user --net, no root), so the
+//   OS itself has no interface to send on. The run file records the
+//   interface count it saw (osIsolation). --no-netns turns this off;
+// - blocked requests are summarized (method, host, path, header NAMES, body
+//   size and decoded protobuf structure; never header values) in the run file.
+//
 // Usage: node tools/caddie-eval/pose-local.mjs --clip C001-0001 [--variant full|heavy]
-//          [--fps N] [--max-side 1280] [--max-frames 1200] [--num-poses 2] [--delegate CPU|GPU]
+//          [--fps N] [--max-side 1280] [--max-frames 1200] [--num-poses 2] [--delegate CPU|GPU] [--no-netns]
 // Env: GOLFME_EVAL_DATA_DIR, GOLFME_EVAL_MODEL_DIR, GOLFME_EVAL_FFMPEG,
 //      GOLFME_EVAL_CHROMIUM (browser binary), GOLFME_EVAL_CHROMIUM_LIB_DIR (extra
 //      shared libraries for WSL; defaults to ~/.cache/golfme-chromium-libs/root/usr/lib/x86_64-linux-gnu if present).
@@ -31,11 +38,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
 import { adaptMediaPipeRun, MEDIAPIPE_ADAPTER_VERSION } from "../../src/lib/caddie/v2/mediapipeAdapter.ts";
 import { EvalError, assertLocalProcessingAllowed, auditEvent, defaultDataDir, todayIso, writeDataJson } from "./import-clip.mjs";
 import { resolveVerifiedModel } from "./lib/models.mjs";
+import { summarizeBlockedRequest } from "./lib/protowire.mjs";
 import { hardwareSummary, startResourceMonitor } from "./lib/resources.mjs";
 import { DEFAULT_MAX_FRAMES, DEFAULT_MAX_SIDE, decodeFrames, planDecode, resolveFfmpeg } from "./lib/video.mjs";
 
@@ -43,6 +52,43 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(HERE, "..", "..");
 export const OFFLINE_ORIGIN = "http://caddie-eval.invalid";
 export const RUN_SCHEMA = 1;
+const MAX_BLOCKED_SUMMARIES = 10;
+/**
+ * Hosts the page is EXPECTED to try (and be refused): MediaPipe's usage
+ * logger (docs/caddie-v2/MEDIAPIPE_TELEMETRY_AUDIT.md). Anything else blocked
+ * is reported as unexpected by the pilot report.
+ */
+export const EXPECTED_BLOCKED_HOSTS = Object.freeze(["odml.pa.googleapis.com"]);
+export const NETNS_ENV = "GOLFME_EVAL_IN_NETNS";
+
+/**
+ * OS-level evidence for the run file: how many non-loopback network
+ * interfaces this process can see. Inside `unshare --net` it is 0, so no
+ * packet can leave the machine whatever the browser does. Names and
+ * addresses are not recorded.
+ */
+export function osNetworkIsolation(env = process.env, interfaces = os.networkInterfaces()) {
+  const nonLoopback = Object.values(interfaces).filter((addrs) => (addrs ?? []).some((a) => !a.internal)).length;
+  return { netns: env[NETNS_ENV] === "1", nonLoopbackInterfaces: nonLoopback, isolated: nonLoopback === 0 };
+}
+
+/**
+ * Re-runs this command inside a fresh, empty network namespace
+ * (`unshare --user --map-root-user --net`, no root needed). Returns the
+ * child's exit code, or throws when the OS can't provide one.
+ */
+function reExecInNetns(argv) {
+  const probe = spawnSync("unshare", ["--user", "--map-root-user", "--net", "true"], { stdio: "ignore", timeout: 10_000 });
+  if (probe.error || probe.status !== 0) {
+    throw new EvalError("OS network isolation (unshare --net) is not available here. Pass --no-netns to rely on the browser-level block only; the run file will then show isolated: false");
+  }
+  const r = spawnSync("unshare", ["--user", "--map-root-user", "--net", process.execPath, ...process.execArgv, fileURLToPath(import.meta.url), ...argv], {
+    stdio: "inherit",
+    env: { ...process.env, [NETNS_ENV]: "1" },
+  });
+  if (r.error) throw new EvalError(`could not start the isolated run: ${r.error.message}`);
+  return r.status ?? 1;
+}
 const MP_DIR = path.join(REPO, "node_modules", "@mediapipe", "tasks-vision");
 
 const CONTENT_TYPES = { ".html": "text/html; charset=utf-8", ".mjs": "text/javascript", ".js": "text/javascript", ".wasm": "application/wasm", ".task": "application/octet-stream" };
@@ -89,7 +135,10 @@ export async function openOfflinePage({ modelPath, env = process.env }) {
   });
   const context = await browser.newContext({ serviceWorkers: "block", acceptDownloads: false });
   const allowlist = buildAllowlist(modelPath);
-  const network = { allowedRequests: 0, framesServed: 0, blocked: {}, blockedWebSockets: 0 };
+  // allowedRequests and framesServed are all answered from local files/memory by
+  // this handler: no request is ever continued to the network (externalRequestsAllowed
+  // stays 0 by construction, and is recorded so the report can show it).
+  const network = { allowedRequests: 0, framesServed: 0, externalRequestsAllowed: 0, blocked: {}, blockedWebSockets: 0, blockedRequests: [] };
   const frameSlot = { index: -1, rgba: null };
   await context.route("**/*", async (route) => {
     const d = routeDecision(route.request().url(), allowlist);
@@ -103,6 +152,11 @@ export async function openOfflinePage({ modelPath, env = process.env }) {
     }
     const host = d.host ?? "frame-mismatch";
     network.blocked[host] = (network.blocked[host] ?? 0) + 1;
+    if (network.blockedRequests.length < MAX_BLOCKED_SUMMARIES) {
+      // Intercepted, never sent: record its shape for the telemetry audit (no header values).
+      const req = route.request();
+      network.blockedRequests.push(summarizeBlockedRequest({ url: req.url(), method: req.method(), headers: req.headers(), body: req.postDataBuffer() }));
+    }
     return route.abort("blockedbyclient");
   });
   await context.routeWebSocket(/.*/, (ws) => {
@@ -228,7 +282,7 @@ export async function extractPose(dataDir, clipId, opts = {}, env = process.env)
     },
     resources,
     hardware: hardwareSummary(),
-    network: { ...session.network, pageErrors: session.consoleErrors },
+    network: { ...session.network, expectedBlockedHosts: EXPECTED_BLOCKED_HOSTS, osIsolation: osNetworkIsolation(env), pageErrors: session.consoleErrors },
   };
 
   writeDataJson(layout, path.join(derivedDir, `mediapipe-${variant}.raw.json`), raw);
@@ -249,8 +303,10 @@ async function main(argv) {
       "max-frames": { type: "string" },
       "num-poses": { type: "string" },
       delegate: { type: "string" },
+      "no-netns": { type: "boolean" },
     },
   });
+  if (!values["no-netns"] && process.env[NETNS_ENV] !== "1" && os.platform() === "linux") return reExecInNetns(argv);
   if (!values.clip) throw new EvalError("--clip C001-0001 is required");
   const num = (v, name) => {
     if (v === undefined) return undefined;
@@ -273,7 +329,7 @@ async function main(argv) {
     `${run.clipId} ${run.variant}: ${run.decode.frames} frames at ${run.decode.width}x${run.decode.height}, ${run.decode.analysisFps} fps\n` +
       `  inference ms/frame: median ${p.inferenceMsPerFrame.median}, p95 ${p.inferenceMsPerFrame.p95}; wall ${p.wallSecondsTotal} s\n` +
       `  frames with no pose: ${run.adapterStats.framesWithNoPose}; with several poses: ${run.adapterStats.framesWithMultiplePoses}\n` +
-      `  network blocked: ${JSON.stringify(run.network.blocked)}\n` +
+      `  network blocked: ${JSON.stringify(run.network.blocked)}; OS isolation: ${run.network.osIsolation.isolated ? "no network interfaces (isolated)" : "NOT isolated"}\n` +
       `Next: node tools/caddie-eval/run-v2-checks.mjs --clip ${run.clipId} --variant ${run.variant}\n`,
   );
   return 0;

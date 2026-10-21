@@ -158,6 +158,9 @@ test("smoke: extractor + runner end to end on a synthetic clip, offline", { skip
   assert.equal(run.adapterStats.framesWithNoPose, 60, "a test pattern has no person");
   assert.equal(run.network.allowedRequests >= 4, true);
   for (const host of Object.keys(run.network.blocked)) assert.ok(!host.startsWith("caddie-eval.invalid"), `unexpected local miss ${host}`);
+  assert.equal(run.network.externalRequestsAllowed, 0);
+  for (const b of run.network.blockedRequests) assert.ok(run.network.expectedBlockedHosts.includes(b.host), `unexpected blocked host ${b.host}`);
+  assert.equal(typeof run.network.osIsolation.isolated, "boolean", "isolation evidence recorded (true when run under unshare --net)");
   const checks = await runV2ChecksForClip(dataDir, e.clipId, { today });
   assert.equal(checks.qualityGate.status, "inconclusive");
 });
