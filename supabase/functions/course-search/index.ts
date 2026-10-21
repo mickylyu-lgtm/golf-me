@@ -15,9 +15,17 @@
 // transaction, so no caller can create a duplicate canonical course row.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  geoapifyAutocompleteParams,
+  geocodeCacheKey,
+  mapGeoapifyResults,
+  sanitizeCityPlaces,
+  validateGeocodeRequest,
+} from "../_shared/cityGeocode.ts";
+import type { CityPlaceDto } from "../_shared/cityGeocode.ts";
 
 interface RequestBody {
-  mode: "search" | "nearby";
+  mode: "search" | "nearby" | "geocode";
   query?: string;
   lat?: number;
   lng?: number;
@@ -89,6 +97,8 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: "Invalid request body." }, 400);
   }
 
+  if (body.mode === "geocode") return handleGeocode(req, body, apiKey);
+
   const limit = Math.min(body.limit ?? 10, 20);
   const params = new URLSearchParams({
     categories: GEOAPIFY_CATEGORY,
@@ -109,7 +119,7 @@ Deno.serve(async (req: Request) => {
     // radius filter, so out-of-area matches still surface, just lower.
     if (body.lat != null && body.lng != null) params.set("bias", `proximity:${body.lng},${body.lat}`);
   } else {
-    return jsonResponse({ error: "mode must be 'search' or 'nearby'." }, 400);
+    return jsonResponse({ error: "mode must be 'search', 'nearby' or 'geocode'." }, 400);
   }
 
   let geoapifyRes: Response;
@@ -165,3 +175,107 @@ Deno.serve(async (req: Request) => {
 
   return jsonResponse({ results });
 });
+
+// ---------------------------------------------------------------------------
+// mode: "geocode" -- worldwide city autocomplete for the playing-area picker
+// (global hosting Phase 2). Geoapify Address Autocomplete with type=city;
+// one request = 1 Geoapify credit, shared with course search's daily
+// allowance, so every request goes through, in order:
+//   1. input validation (min 3 chars, 2 for CJK; max 80; lang allow-list);
+//   2. consume_geocode_quota() with the CALLER's JWT -- per-user 60/hour and
+//      200/day, global 2000/day. Fails closed: if the RPC is missing (the
+//      migration isn't applied yet) or errors, the request is refused and the
+//      client falls back to the built-in city list;
+//   3. a per-isolate memo (cheap repeat hits while one user types);
+//   4. the shared 30-day DB cache (private.geocode_cache, service_role only);
+//   5. Geoapify, whose results are coarsened to 2 dp before they are cached
+//      or returned.
+// Never logs the query text or any coordinate.
+// ---------------------------------------------------------------------------
+
+const GEOCODE_MEMO_TTL_MS = 60 * 60 * 1000;
+const GEOCODE_MEMO_MAX = 200;
+const geocodeMemo = new Map<string, { at: number; results: CityPlaceDto[] }>();
+
+function memoGet(key: string): CityPlaceDto[] | undefined {
+  const hit = geocodeMemo.get(key);
+  if (!hit) return undefined;
+  if (Date.now() - hit.at > GEOCODE_MEMO_TTL_MS) {
+    geocodeMemo.delete(key);
+    return undefined;
+  }
+  return hit.results;
+}
+
+function memoSet(key: string, results: CityPlaceDto[]): void {
+  if (geocodeMemo.size >= GEOCODE_MEMO_MAX) {
+    const oldest = geocodeMemo.keys().next().value;
+    if (oldest !== undefined) geocodeMemo.delete(oldest);
+  }
+  geocodeMemo.set(key, { at: Date.now(), results });
+}
+
+async function handleGeocode(req: Request, body: RequestBody, apiKey: string): Promise<Response> {
+  const validation = validateGeocodeRequest(body);
+  if (!validation.ok) return jsonResponse({ error: validation.error, code: "invalid" }, 400);
+  const geoReq = validation.value;
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const callerClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } },
+  });
+
+  const { data: quota, error: quotaError } = await callerClient.rpc("consume_geocode_quota");
+  if (quotaError) {
+    console.error("course-search geocode: quota check failed", quotaError.code ?? "");
+    return jsonResponse({ error: "City search is temporarily unavailable.", code: "unavailable" }, 503);
+  }
+  if (quota === "unauthenticated") return jsonResponse({ error: "Sign in to search cities.", code: "unauthenticated" }, 401);
+  if (quota === "user_limit") return jsonResponse({ error: "Too many city searches. Try again later.", code: "rate_limited" }, 429);
+  if (quota !== "ok") return jsonResponse({ error: "City search is busy right now.", code: "quota_exhausted" }, 429);
+
+  const key = await geocodeCacheKey(geoReq);
+  const memo = memoGet(key);
+  if (memo) return jsonResponse({ results: memo, cached: true });
+
+  // Service-role client for the cache only. Missing key = no shared cache,
+  // still correct (memo + quota still apply).
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const adminClient = serviceKey ? createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } }) : null;
+
+  if (adminClient) {
+    const { data: cached, error: cacheError } = await adminClient.rpc("geocode_cache_get", { p_key: key });
+    if (cacheError) console.error("course-search geocode: cache read failed", cacheError.code ?? "");
+    else if (Array.isArray(cached)) {
+      const results = sanitizeCityPlaces(cached);
+      memoSet(key, results);
+      return jsonResponse({ results, cached: true });
+    }
+  }
+
+  const params = geoapifyAutocompleteParams(geoReq);
+  params.set("apiKey", apiKey);
+  let geoRes: Response;
+  try {
+    geoRes = await fetch(`https://api.geoapify.com/v1/geocode/autocomplete?${params.toString()}`);
+  } catch {
+    return jsonResponse({ error: "Could not reach the city search provider.", code: "provider_unreachable" }, 502);
+  }
+  if (!geoRes.ok) {
+    // Status only: the provider's error body is never echoed to clients.
+    console.error("course-search geocode: provider error", geoRes.status);
+    const code = geoRes.status === 429 || geoRes.status === 402 ? "quota_exhausted" : "provider_error";
+    return jsonResponse({ error: "City search provider returned an error.", code }, 502);
+  }
+
+  const geoBody = (await geoRes.json().catch(() => null)) as { results?: unknown } | null;
+  const results = mapGeoapifyResults(geoBody?.results);
+  memoSet(key, results);
+
+  if (adminClient) {
+    const { error: putError } = await adminClient.rpc("geocode_cache_put", { p_key: key, p_results: results });
+    if (putError) console.error("course-search geocode: cache write failed", putError.code ?? "");
+  }
+
+  return jsonResponse({ results });
+}
