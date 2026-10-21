@@ -8,6 +8,7 @@ import { supabase } from "../lib/supabase";
 import { Avatar } from "../components/ui/Avatar";
 import { Badge } from "../components/ui/Badge";
 import { EmptyState } from "../components/ui/EmptyState";
+import { FoundingReviewsSection } from "../components/admin/FoundingReviewsSection";
 
 // Internal admin tool only — same access model as AdminReviewers.tsx
 // (hidden from nav, gated on isAdmin client-side, re-verified server-side
@@ -474,6 +475,8 @@ export function AdminDashboard() {
           </div>
         )}
       </section>
+
+      <FoundingReviewsSection />
 
       <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
