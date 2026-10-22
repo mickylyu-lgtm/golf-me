@@ -42,6 +42,8 @@ test("real courses stay", () => {
   assert.equal(rejectGeoapifyCourse(course("Shek O Country Club", { club: "sport", sport: "golf" })), null);
   // A course whose name mentions its range is still a course.
   assert.equal(rejectGeoapifyCourse(course("Riverside Golf Club & Driving Range")), null);
+  assert.equal(rejectGeoapifyCourse(course("Riverside Golf Club and Practice Range")), null);
+  assert.equal(rejectGeoapifyCourse(course("河畔高爾夫球會及練習場")), null);
   assert.equal(rejectGeoapifyCourse(course("Pitch and Putt at Lakeside", { leisure: "golf_course", golf_course: "pitch_and_putt" })), null);
 });
 
@@ -71,6 +73,10 @@ test("driving ranges, simulators and practice areas are dropped", () => {
     "강남 골프연습장",
     "스크린골프 존",
     "Topgolf Las Vegas",
+    // A club's own range: the club word doesn't protect it without "&"/"and".
+    "珀麗高爾夫球會高爾夫球練習場 Golf Park Driving Range",
+    "珀麗高爾夫球會高爾夫球練習場",
+    "Sunset Golf Club Driving Range",
   ]) {
     assert.notEqual(rejectGeoapifyCourse(course(n)), null, n);
   }

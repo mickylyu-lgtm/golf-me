@@ -11,7 +11,9 @@
 //      golf and other non-course leisure features.
 //   3. Name keywords, as a last resort, in English, Chinese, Japanese and
 //      Korean. A driving-range keyword is ignored when the name also says it
-//      is a course or club ("... Golf Club & Driving Range" stays).
+//      is a course or club and joins the two ("... Golf Club & Driving Range"
+//      stays). Without a joiner the range belongs to the club ("珀麗高爾夫球會
+//      高爾夫球練習場" is the Golf Park club's range) and is dropped.
 //
 // Bias: keep when unsure. Hiding a real course is worse than showing a range.
 
@@ -99,6 +101,10 @@ const COURSE_NAME_PATTERNS: RegExp[] = [
   /컨트리\s?클럽/,
 ];
 
+/** "&", "and" and their CJK equivalents: a name that pairs a course with a
+ * range ("Golf Club & Driving Range") rather than naming a club's range. */
+const COURSE_AND_RANGE_JOINER = /&|＆|\+|\band\b|與|与|及|和|및/i;
+
 function matchesAny(patterns: RegExp[], s: string): boolean {
   return patterns.some((p) => p.test(s));
 }
@@ -112,7 +118,7 @@ export function rejectCourseByName(name: string | null | undefined): CourseRejec
   // The old course-search fallback label for a feature with no name.
   if (/^unnamed course$/i.test(n)) return "unnamed";
   if (matchesAny(MINI_NAME_PATTERNS, n)) return "miniature_golf";
-  if (matchesAny(RANGE_NAME_PATTERNS, n) && !matchesAny(COURSE_NAME_PATTERNS, n)) return "name_keyword";
+  if (matchesAny(RANGE_NAME_PATTERNS, n) && !(matchesAny(COURSE_NAME_PATTERNS, n) && COURSE_AND_RANGE_JOINER.test(n))) return "name_keyword";
   return null;
 }
 
