@@ -35,12 +35,27 @@ export function DevFirstRoundHarness() {
   // Exercises shareOrCopy's real fallback branch: no Web Share API, clipboard
   // stubbed (headless screenshots have no user gesture to grant it).
   useEffect(() => {
-    if (view !== "share" || params.get("fallback") !== "1" || ranFallback.current) return;
+    if (view !== "share" || params.get("fallback") !== "1" || params.get("frame") === "1" || ranFallback.current) return;
     ranFallback.current = true;
     Object.defineProperty(navigator, "share", { value: undefined, configurable: true });
     Object.defineProperty(navigator, "clipboard", { value: { writeText: async () => undefined }, configurable: true });
     void shareRound(SAMPLE_ROUND);
   }, [view, params, shareRound]);
+
+  // frame=1: the same view inside an exact 390x844 iframe. Headless Chrome on
+  // Windows won't lay a window out narrower than ~500px, so phone-width
+  // screenshots need a real 390px viewport.
+  if (params.get("frame") === "1") {
+    const inner = new URLSearchParams(params);
+    inner.delete("frame");
+    return (
+      <iframe
+        title="harness"
+        src={`/__dev/first-round?${inner.toString()}`}
+        style={{ border: 0, width: 390, height: 844, display: "block" }}
+      />
+    );
+  }
 
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col gap-4 bg-[#faf9f6] px-4 py-6">
