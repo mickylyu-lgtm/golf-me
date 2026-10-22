@@ -94,7 +94,7 @@ export function LocationPicker({ title = "Where do you usually play?", onSelect,
   }
 
   return (
-    <Modal title={title} onClose={onClose}>
+    <Modal title={title} onClose={onClose} keyboardAware>
       <div className="flex flex-col gap-4">
         <Button variant="outline" fullWidth icon={<LocateFixed size={16} />} onClick={requestCurrentLocation} disabled={geoStatus === "requesting"}>
           {geoStatus === "requesting" ? "Getting your location..." : "Use My Current Location"}

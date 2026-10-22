@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, LocateFixed, MapPin } from "lucide-react";
 import { useData } from "../context/DataContext";
@@ -10,6 +10,8 @@ import { AvatarUpload } from "../components/profile/AvatarUpload";
 import { LocationPicker } from "../components/location/LocationPicker";
 import { FoundingSpotsNote } from "../components/golfer/FoundingGolfer";
 import { inputClass, labelClass } from "../components/ui/FormControls";
+import { revealFocusedField } from "../lib/revealFocusedField";
+import { useKeyboardHeight } from "../lib/useKeyboardHeight";
 import { initialsFromName, avatarColorForName } from "../lib/avatar";
 import type { GeoPoint } from "../lib/geo";
 import { track } from "../lib/analytics";
@@ -183,13 +185,48 @@ export function ProfileSetup() {
     track("location_selected", { hasCoords: Boolean(area.coords) });
   }
 
+  // iOS keyboard (native app). With Keyboard resize:"body", 100dvh and
+  // window.innerHeight stay full-screen when the keyboard opens, so the
+  // bottom of the scroller (the handicap field) and the Continue button sat
+  // under it. Same technique as KeyboardAwareModal / DirectMessageThread:
+  // while the plugin reports a keyboard, the page is sized to end exactly
+  // at the keyboard's top, and only the page's own scroller moves to show
+  // the focused field. keyboardHeight is always 0 off-native, so web/PWA is
+  // unchanged apart from the body being scroll-locked (this screen is a
+  // fixed-height column that never scrolls the body anyway).
+  const keyboardHeight = useKeyboardHeight();
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
+  useLayoutEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller || keyboardHeight <= 0) return;
+    let frame = requestAnimationFrame(() => revealFocusedField(scroller));
+    // Moving between fields with the keyboard already up doesn't change
+    // keyboardHeight, so reveal on focus too.
+    const onFocusIn = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => revealFocusedField(scroller));
+    };
+    scroller.addEventListener("focusin", onFocusIn);
+    return () => {
+      scroller.removeEventListener("focusin", onFocusIn);
+      cancelAnimationFrame(frame);
+    };
+  }, [keyboardHeight]);
+
   return (
     // Fixed to the real visible viewport (dvh, not vh/min-h-screen -- mobile
     // Safari's 100vh includes space the collapsible address bar is actually
     // covering). Content scrolls independently in the middle; the button
     // stays a non-shrinking footer, always reachable without hunting for
     // it, however long the content gets on a small screen.
-    <div className="flex h-[100dvh] flex-col bg-[#faf9f6]">
+    <div className="flex h-[100dvh] flex-col bg-[#faf9f6]" style={keyboardHeight > 0 ? { height: `${window.innerHeight - keyboardHeight}px` } : undefined}>
       <div className="flex items-center px-6" style={{ paddingTop: "max(2rem, env(safe-area-inset-top))" }}>
         {/* Deliberately signs out first, then navigates -- plain
             navigate(-1)/"/login" alone did nothing, because every
@@ -210,7 +247,7 @@ export function ProfileSetup() {
         </button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-6">
+      <div ref={scrollerRef} className="min-h-0 flex-1 overflow-y-auto px-6">
         <div className="flex flex-col gap-5 py-6">
           <div>
             <h1 className="text-xl font-bold text-slate-900">{t("profileSetup.quickProfileTitle")}</h1>
@@ -297,7 +334,7 @@ export function ProfileSetup() {
         </div>
       </div>
 
-      <div className="shrink-0 px-6 pb-8 pt-3">
+      <div className={`shrink-0 px-6 pt-3 ${keyboardHeight > 0 ? "pb-3" : "pb-8"}`}>
         <Button size="lg" fullWidth disabled={!formValid || submitting} onClick={submit}>
           {t("common.continue")}
         </Button>

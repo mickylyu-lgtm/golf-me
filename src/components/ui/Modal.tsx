@@ -3,6 +3,7 @@ import type { CSSProperties, ReactNode, RefObject } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useKeyboardHeight } from "../../lib/useKeyboardHeight";
+import { KEYBOARD_GAP_PX, revealFocusedField } from "../../lib/revealFocusedField";
 
 interface ModalProps {
   title: string;
@@ -88,21 +89,6 @@ function ModalFrame({ title, onClose, children, footer, overlayStyle, sheetStyle
   );
 }
 
-// Gap kept between the focused field / sheet top and the screen edges.
-const KEYBOARD_GAP_PX = 12;
-
-// Scrolls only `scroller` (never the window) so the focused element inside
-// it sits at least KEYBOARD_GAP_PX inside its visible edges.
-function revealFocusedField(scroller: HTMLElement) {
-  const active = document.activeElement;
-  if (!(active instanceof HTMLElement) || !scroller.contains(active)) return;
-  const scrollerRect = scroller.getBoundingClientRect();
-  const fieldRect = active.getBoundingClientRect();
-  const overflowBelow = fieldRect.bottom - (scrollerRect.bottom - KEYBOARD_GAP_PX);
-  const overflowAbove = scrollerRect.top + KEYBOARD_GAP_PX - fieldRect.top;
-  if (overflowBelow > 0) scroller.scrollTop += overflowBelow;
-  else if (overflowAbove > 0) scroller.scrollTop -= overflowAbove;
-}
 
 // With capacitor.config.ts's Keyboard resize:"body", the plugin only sets
 // document.body.style.height -- the WKWebView frame, 100dvh,
