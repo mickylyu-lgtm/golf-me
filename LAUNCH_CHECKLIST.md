@@ -2,7 +2,7 @@
 
 **Target:** App Store launch → real NYC usage. golfme.app is live with open signup.
 **Launched:** **1.0 live on the App Store** ("Ready for Distribution", build 2, seen 2026-10-17). **1.1 approved and live on the App Store 2026-10-18** (native launch screen + entry animation, Sign in with Apple + Google, email code sign-in); on-device check of the App Store build pending.
-**Last updated:** 2026-10-18. Phase is now **post-launch**: ship 1.1 cleanly, then seed the marketplace (real rounds, Founding Golfer, outreach).
+**Last updated:** 2026-10-22 (First Round Hosting Onboarding on a branch). Phase is now **post-launch**: ship 1.1 cleanly, then seed the marketplace (real rounds, Founding Golfer, outreach).
 
 Statuses: `[ ]` NOT STARTED · `[~]` IN PROGRESS · `[?]` NEEDS VERIFICATION · `[!]` BLOCKED · `[x]` COMPLETE (only with evidence it works).
 Classify every request: **A** blocks the launch going well (now: 1.1 release + marketplace) · **B** improves launch quality · **C** nonessential, later.
@@ -154,6 +154,8 @@ Current state: `track()` in `src/lib/analytics.ts` **does nothing in production*
 | [~] | Caddie usage | `caddie_analyses` + admin Caddie stats RPCs |
 | [ ] | Retention | not measured (no last-active timestamp) |
 
+Update 2026-10-22 (branch `feat/first-round-prompt`, not deployed): `track()` now sends anonymous +1 daily counts for 5 funnel events (`first_round_prompt_shown`, `first_round_host_started`, `first_round_hosted`, `round_shared`, `app_shared`) to `analytics_daily_counts` via `track_analytics_event`, real signed-in accounts only, never from dev; admin read RPC `admin_analytics_daily_counts` (not yet on the dashboard). Needs migration `20261022130100` applied.
+
 **Smallest launch-ready recommendation:** don't add an analytics vendor. Add one read-only SQL funnel (signup → onboarded → first round viewed/joined/hosted → first DM → Caddie) to the existing admin dashboard, plus a "last active" column updated on app open for retention. Fix the Privacy Policy to disclose Vercel page analytics. (B)
 
 ## 7. MONITORING
@@ -212,6 +214,7 @@ Record results here with date, device and build number.
 |---|---|---|
 | [!] | Real hosted rounds available | 0 upcoming (2026-10-18). |
 | [ ] | Initial real users recruited | ~26 accounts (25 after the QA deletion), ~1 new per week. |
+| [~] | **First Round Hosting Onboarding** (A — marketplace: rounds to join) | Branch `feat/first-round-prompt` (2026-10-22, not pushed/deployed). Popup "Host your first round" after the tutorial / at session start for real accounts that never hosted (never demo, never over another modal, never mid-session); Maybe Later → `profiles.first_round_prompt_dismissed_at` (never again, any device) + Home card until the first round exists. Host Share button + share card after hosting (native share sheet or copy link; course/date/time + round link only). Signed-out round link → sign in/up → that round. Universal Links prepared (AASA Team ID placeholder). Anonymous daily counts (`analytics_daily_counts`). Evidence: `tsc -b`, lint (0 errors), build, `test:courses` 6/6, `test:onboarding` 17/17; harness bundle absent from `dist`; both migrations role-simulated in PGlite; screenshots of popup (en, zh-CN), Home card, share card + copy fallback from a DEV-only harness. **Not yet:** migrations applied (needs Micky's OK), device check of the popup + share sheet in the iOS app, real Team ID, Universal Links (needs a Mac build). |
 | [ ] | Creator hosts | See section 12. |
 | [ ] | Micro-creator outreach | |
 | [ ] | Golf communities | |
