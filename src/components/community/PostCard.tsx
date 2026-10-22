@@ -324,7 +324,18 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
 
       {isSwingPost && post.videoUrl && (
         <div onClick={stop} className="flex flex-col gap-2.5">
-          <div className="relative overflow-hidden rounded-xl bg-black">
+          <div className="relative overflow-hidden rounded-xl bg-slate-800">
+            {/* Phone swing videos are usually portrait, so the sides would
+                letterbox in black. Fill them with a blurred copy of the
+                video's own thumbnail instead, like the iOS Photos app. */}
+            {post.videoThumbnailUrl && (
+              <img
+                src={post.videoThumbnailUrl}
+                alt=""
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 h-full w-full scale-125 object-cover opacity-90 blur-2xl"
+              />
+            )}
             {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
             <video
               ref={videoRef}
@@ -335,7 +346,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
               loop
               playsInline
               onClick={handleVideoTap}
-              className="max-h-96 w-full cursor-pointer rounded-xl bg-black"
+              className="relative max-h-96 w-full cursor-pointer rounded-xl"
             />
             {/* A real button, not a decorative overlay — it sits above the
                 video in stacking order and stops its own click from
