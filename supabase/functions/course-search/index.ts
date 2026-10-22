@@ -15,6 +15,7 @@
 // transaction, so no caller can create a duplicate canonical course row.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { COURSE_FILTER_VERSION, geoapifyCourseName, rejectGeoapifyCourse } from "../_shared/courseFilter.ts";
 
 interface RequestBody {
   mode: "search" | "nearby";
@@ -36,6 +37,8 @@ interface GeoapifyFeature {
     formatted?: string;
     lat: number;
     lon: number;
+    categories?: string[];
+    datasource?: { raw?: Record<string, unknown> };
   };
 }
 
@@ -90,9 +93,12 @@ Deno.serve(async (req: Request) => {
   }
 
   const limit = Math.min(body.limit ?? 10, 20);
+  // Always ask Geoapify for 20 (one credit covers up to 20 places) so the
+  // list is still full after unnamed features, ranges and mini golf are
+  // dropped below; the response is cut back to `limit`.
   const params = new URLSearchParams({
     categories: GEOAPIFY_CATEGORY,
-    limit: String(limit),
+    limit: "20",
     apiKey,
   });
 
@@ -127,8 +133,14 @@ Deno.serve(async (req: Request) => {
   const geoapifyBody = (await geoapifyRes.json()) as { features?: GeoapifyFeature[] };
   const features = geoapifyBody.features ?? [];
 
-  const candidates = features.filter((f) => f.properties?.place_id && f.properties.lat != null && f.properties.lon != null);
-  if (candidates.length === 0) return jsonResponse({ results: [] });
+  // Only real, playable, named courses are cached or returned: no unnamed
+  // features (never a street address as the name), no miniature golf, no
+  // driving ranges/simulators (see _shared/courseFilter.ts).
+  const candidates = features
+    .filter((f) => f.properties?.place_id && f.properties.lat != null && f.properties.lon != null)
+    .filter((f) => rejectGeoapifyCourse(f.properties) === null)
+    .slice(0, limit);
+  if (candidates.length === 0) return jsonResponse({ results: [], courseFilter: COURSE_FILTER_VERSION });
 
   const authHeader = req.headers.get("Authorization") ?? "";
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
@@ -146,7 +158,7 @@ Deno.serve(async (req: Request) => {
   // one canonical courses.id.
   const results = [];
   for (const f of candidates) {
-    const name = f.properties.name?.trim() || f.properties.address_line1?.trim() || "Unnamed course";
+    const name = geoapifyCourseName(f.properties);
     const { data, error } = await supabase.rpc("upsert_external_course", {
       p_provider: "geoapify",
       p_external_id: f.properties.place_id,
@@ -163,5 +175,5 @@ Deno.serve(async (req: Request) => {
     results.push(data);
   }
 
-  return jsonResponse({ results });
+  return jsonResponse({ results, courseFilter: COURSE_FILTER_VERSION });
 });
