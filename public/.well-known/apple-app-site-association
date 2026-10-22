@@ -1,0 +1,13 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["APPLE_TEAM_ID_PLACEHOLDER.com.golfme.ios"],
+        "components": [
+          { "/": "/golf-calls/new", "exclude": true, "comment": "Hosting form stays on the web/app route it was opened from" },
+          { "/": "/golf-calls/*", "comment": "Shared round links open the app on that round" }
+        ]
+      }
+    ]
+  }
+}
