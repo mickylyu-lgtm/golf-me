@@ -36,6 +36,7 @@ import { postCategoryLabel } from "../../lib/enumLabels";
 import { areaForCourse } from "../../lib/courses";
 import { enterNativeVideoFullscreen, isVideoInNativeFullscreen } from "../../lib/video";
 import { isStaleProcessing, usePeriodicRerender } from "../../lib/caddieAnalysis";
+import { useBlurredBackdrop } from "../../lib/blurredBackdrop";
 import { useLocale } from "../../i18n/LocaleContext";
 
 interface PostCardProps {
@@ -76,6 +77,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
   const [feedMuted, setFeedMuted] = useState(true);
   const [askingCaddie, setAskingCaddie] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const videoBackdrop = useBlurredBackdrop(post.type === "swing" ? post.videoThumbnailUrl : undefined);
 
   // One tap anywhere on the video opens the fullscreen viewer directly —
   // previously this waited out a double-tap window (a single tap toggled
@@ -324,16 +326,21 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
 
       {isSwingPost && post.videoUrl && (
         <div onClick={stop} className="flex flex-col gap-2.5">
-          <div className="relative overflow-hidden rounded-xl bg-slate-800">
+          <div className="relative flex items-center justify-center overflow-hidden rounded-xl bg-slate-800">
             {/* Phone swing videos are usually portrait, so the sides would
                 letterbox in black. Fill them with a blurred copy of the
-                video's own thumbnail instead, like the iOS Photos app. */}
-            {post.videoThumbnailUrl && (
+                video's own thumbnail instead, like the iOS Photos app.
+                The video's own box is sized to its picture (w-auto/h-auto
+                within the max bounds), so there is no letterbox inside the
+                element itself: WebKit paints the whole element box black
+                while the native fullscreen player animates back, which
+                showed as a black band across the card. */}
+            {videoBackdrop && (
               <img
-                src={post.videoThumbnailUrl}
+                src={videoBackdrop}
                 alt=""
                 aria-hidden="true"
-                className="pointer-events-none absolute inset-0 h-full w-full scale-125 object-cover opacity-90 blur-2xl"
+                className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-90"
               />
             )}
             {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
@@ -346,7 +353,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
               loop
               playsInline
               onClick={handleVideoTap}
-              className="relative max-h-96 w-full cursor-pointer rounded-xl"
+              className="relative block h-auto max-h-96 w-auto max-w-full cursor-pointer"
             />
             {/* A real button, not a decorative overlay — it sits above the
                 video in stacking order and stops its own click from
