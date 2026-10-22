@@ -39,6 +39,12 @@ import { isStaleProcessing, usePeriodicRerender } from "../../lib/caddieAnalysis
 import { useBlurredBackdrop } from "../../lib/blurredBackdrop";
 import { useLocale } from "../../i18n/LocaleContext";
 
+// A touch that moves further than this between press and release is a
+// scroll or swipe, never a tap: it must not open the post or the video.
+const TAP_SLOP_PX = 10;
+// How long native fullscreen gets to start before the in-app viewer is used.
+const NATIVE_FULLSCREEN_GRACE_MS = 1000;
+
 interface PostCardProps {
   post: CommunityPost;
   /** Detail view renders the full text/comment affordances differently —
@@ -78,6 +84,41 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
   const [askingCaddie, setAskingCaddie] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const videoBackdrop = useBlurredBackdrop(post.type === "swing" ? post.videoThumbnailUrl : undefined);
+  const fallbackTimerRef = useRef<number | null>(null);
+  const fallbackCleanupRef = useRef<(() => void) | null>(null);
+  const pressRef = useRef<{ x: number; y: number; moved: boolean } | null>(null);
+
+  function cancelFullscreenFallback() {
+    if (fallbackTimerRef.current !== null) window.clearTimeout(fallbackTimerRef.current);
+    fallbackTimerRef.current = null;
+    fallbackCleanupRef.current?.();
+    fallbackCleanupRef.current = null;
+  }
+  useEffect(() => cancelFullscreenFallback, []);
+
+  // Tap vs drag, for every tap target on the card that has no native
+  // button of its own (the card body, the swing video, a photo). iOS already
+  // drops the click after a real scroll, but a short drag that never became a
+  // scroll (or a drag that ends back near its start) could still land as a
+  // click and open something mid-gesture. Keyboard activation (detail 0)
+  // never has a press, so it is never treated as a drag.
+  function onCardPointerDown(e: React.PointerEvent) {
+    pressRef.current = { x: e.clientX, y: e.clientY, moved: false };
+  }
+  function onCardPointerMove(e: React.PointerEvent) {
+    const press = pressRef.current;
+    if (press && !press.moved && Math.hypot(e.clientX - press.x, e.clientY - press.y) > TAP_SLOP_PX) press.moved = true;
+  }
+  function onCardPointerCancel() {
+    if (pressRef.current) pressRef.current.moved = true; // the browser took the gesture for scrolling
+  }
+  function isDragClick(e?: React.MouseEvent): boolean {
+    if (e && e.detail === 0) return false;
+    const press = pressRef.current;
+    if (!press) return false;
+    if (press.moved) return true;
+    return !!e && Math.hypot(e.clientX - press.x, e.clientY - press.y) > TAP_SLOP_PX;
+  }
 
   // One tap anywhere on the video opens the fullscreen viewer directly —
   // previously this waited out a double-tap window (a single tap toggled
@@ -86,6 +127,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
   // has its own handler below and never reaches this one.
   function handleVideoTap(e: React.MouseEvent) {
     stop(e);
+    if (isDragClick(e) || mediaLightboxIndex !== null) return;
     // No preventDefault here — WebKit only honors webkitEnterFullscreen()
     // as a real user gesture when it's called with nothing upstream of it
     // in the same event having called preventDefault; doing so was
@@ -102,14 +144,34 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
       videoRef.current?.pause(); // never two copies playing (with sound) at once
       setMediaLightboxIndex(0);
     };
+    cancelFullscreenFallback(); // a repeat tap replaces, never stacks, the pending check
+    // Remember whether native fullscreen actually started at any point,
+    // rather than sampling "is it fullscreen right now" after the grace
+    // period: a golfer who opens and drags the native player away within
+    // that second used to get the in-app viewer popping up as well.
+    let nativeStarted = false;
+    const markStarted = () => {
+      nativeStarted = true;
+    };
+    video.addEventListener("webkitbeginfullscreen", markStarted);
+    video.addEventListener("fullscreenchange", markStarted);
+    fallbackCleanupRef.current = () => {
+      video.removeEventListener("webkitbeginfullscreen", markStarted);
+      video.removeEventListener("fullscreenchange", markStarted);
+    };
     if (!enterNativeVideoFullscreen(video)) {
+      cancelFullscreenFallback();
       openInAppViewer();
       return;
     }
-    window.setTimeout(() => {
+    if (isVideoInNativeFullscreen(video)) nativeStarted = true;
+    fallbackTimerRef.current = window.setTimeout(() => {
+      fallbackTimerRef.current = null;
       const v = videoRef.current;
-      if (v && !isVideoInNativeFullscreen(v)) openInAppViewer();
-    }, 1000);
+      const started = nativeStarted || (!!v && isVideoInNativeFullscreen(v));
+      cancelFullscreenFallback();
+      if (v && !started) openInAppViewer();
+    }, NATIVE_FULLSCREEN_GRACE_MS);
   }
 
   function toggleFeedMute(e: React.MouseEvent) {
@@ -158,8 +220,9 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
   const isOwn = post.authorId === currentUser.id;
   const call = post.golfCallId ? getGolfCall(post.golfCallId) : undefined;
 
-  function goToDetail() {
-    if (linkToDetail) navigate(`/community/${post.id}`);
+  function goToDetail(e: React.MouseEvent) {
+    if (!linkToDetail || isDragClick(e)) return;
+    navigate(`/community/${post.id}`);
   }
 
   // Previously this button called goToDetail() unconditionally, which is a
@@ -236,6 +299,9 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
     <div
       className={`flex flex-col gap-3 p-4 ${linkToDetail ? "cursor-pointer" : ""} ${isSwingPost ? "border-2 border-fairway-300" : ""} ${CLICKABLE_CARD_CLASS}`}
       onClick={goToDetail}
+      onPointerDown={onCardPointerDown}
+      onPointerMove={onCardPointerMove}
+      onPointerCancel={onCardPointerCancel}
     >
       {isSwingPost && (
         <p className="flex w-fit items-center gap-1 rounded-full bg-fairway-600 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
@@ -320,7 +386,9 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
 
       {!isSwingPost && displayMedia.length > 0 && (
         <div onClick={stop} className="overflow-hidden rounded-xl border border-slate-100">
-          <MediaCarousel media={displayMedia} variant="card" onItemClick={(i) => setMediaLightboxIndex(i)} />
+          <MediaCarousel media={displayMedia} variant="card" onItemClick={(i) => {
+              if (!isDragClick()) setMediaLightboxIndex(i);
+            }} />
         </div>
       )}
 

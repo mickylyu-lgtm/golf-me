@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { PostMediaItem } from "../../types";
+import { createPortal } from "react-dom";
 import { MediaCarousel } from "./MediaCarousel";
 import { perfHudViewer } from "../../lib/perfHud";
 
@@ -56,9 +57,39 @@ export function FullscreenMediaViewer({ media, initialIndex = 0, onClose }: Full
     startedOnInteractive: boolean;
   } | null>(null);
 
+  const surfaceRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     perfHudViewer(true);
     return () => perfHudViewer(false);
+  }, []);
+
+  // While open, the feed underneath must not scroll: a drag-to-dismiss on a
+  // fixed overlay otherwise scrolls the page behind it on iOS, so the feed
+  // had moved by the time the viewer closed. Two layers:
+  // - body overflow lock, same as Modal;
+  // - a non-passive touchmove that cancels mostly-vertical moves only (the
+  //   dismiss drag). Horizontal moves are never cancelled, so the carousel's
+  //   native swipe between items keeps working. Runs before React's own
+  //   onTouchMove (which only reads the touch), using the same drag state.
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const surface = surfaceRef.current;
+    const onNativeTouchMove = (e: TouchEvent) => {
+      const state = dragStateRef.current;
+      if (!state || !e.cancelable || state.axis === "horizontal") return;
+      const t = e.touches[0];
+      if (!t) return;
+      const dx = t.clientX - state.startX;
+      const dy = t.clientY - state.startY;
+      if (state.axis === "vertical" || Math.abs(dy) >= Math.abs(dx)) e.preventDefault();
+    };
+    surface?.addEventListener("touchmove", onNativeTouchMove, { passive: false });
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      surface?.removeEventListener("touchmove", onNativeTouchMove);
+    };
   }, []);
 
   function onTouchStart(e: React.TouchEvent) {
@@ -111,15 +142,22 @@ export function FullscreenMediaViewer({ media, initialIndex = 0, onClose }: Full
   // the content just sliding over a flat black field.
   const backdropOpacity = Math.max(0, 1 - Math.abs(dragY) / 400);
 
-  return (
+  // Portaled to <body>: rendered inside a feed card, `position: fixed` was
+  // relative to the card whenever the card had a transform/translate (its
+  // :active press state), collapsing the viewer into the card, and its
+  // touches reached RootTabCarousel's tab-swipe listener. data-no-swipe is
+  // kept as a second guard in case it is ever rendered inline again.
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
       data-gm-media
+      data-no-swipe
       className="fixed inset-0 z-[95] overflow-hidden"
       style={{ backgroundColor: `rgba(0,0,0,${backdropOpacity})` }}
     >
       <div
+        ref={surfaceRef}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
@@ -129,6 +167,7 @@ export function FullscreenMediaViewer({ media, initialIndex = 0, onClose }: Full
       >
         <MediaCarousel media={media} variant="lightbox" initialIndex={initialIndex} />
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
