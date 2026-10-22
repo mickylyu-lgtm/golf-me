@@ -10,6 +10,7 @@ import { supabase } from "./supabase";
 import { haversineMiles } from "./geo";
 import type { PlayingArea, GeoPoint } from "./geo";
 import type { GolferProfile } from "../types";
+import { looksLikeStreetAddressName, rejectCourseByName } from "../../supabase/functions/_shared/courseFilter.ts";
 
 export class CourseSearchError extends Error {}
 
@@ -46,9 +47,21 @@ function sortByDistance(results: RealCourseResult[]): RealCourseResult[] {
 async function invokeCourseSearch(mode: "search" | "nearby", params: Record<string, unknown>): Promise<CourseRow[]> {
   const { data, error } = await supabase.functions.invoke("course-search", { body: { mode, ...params } });
   if (error) throw new CourseSearchError(error.message || "Course search failed. Please try again.");
-  const body = data as { results?: CourseRow[]; error?: string } | null;
+  const body = data as { results?: CourseRow[]; error?: string; courseFilter?: number } | null;
   if (body?.error) throw new CourseSearchError(body.error);
-  return body?.results ?? [];
+  return keepPlayableCourses(body?.results ?? [], body?.courseFilter != null);
+}
+
+// Client-side guard for discovery lists (nearby + search) only -- never for
+// getRealCourseById, since a real round may point at any cached course.
+// The name check (mini golf / driving range keywords, the old "Unnamed
+// course" label) always runs. The street-address check is only for a
+// course-search deployment that predates the server filter (no
+// `courseFilter` marker): that version named unnamed features after their
+// street ("Ho Chung Road"), and only the server can tell those apart
+// reliably, so the heuristic retires itself once the function is updated.
+function keepPlayableCourses(rows: CourseRow[], serverFiltered: boolean): CourseRow[] {
+  return rows.filter((r) => rejectCourseByName(r.name) === null && (serverFiltered || !looksLikeStreetAddressName(r.name)));
 }
 
 export async function searchRealCourses(query: string, location?: PlayingArea, limit = 8): Promise<RealCourseResult[]> {
