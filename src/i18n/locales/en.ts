@@ -1070,6 +1070,26 @@ export const en = {
   "following.unfollowedToast": "Unfollowed {name}.",
   "following.unfollowError": "Couldn't unfollow. Please try again.",
   "following.rounds": "{count} GolfMe rounds",
+  // First Round Hosting Onboarding + sharing (2026-10-22)
+  "firstRound.title": "Host your first round",
+  "firstRound.body": "Pick a course and time, and we'll help golfers nearby find it. Invite your friends to join.",
+  "firstRound.host": "Host a Round",
+  "firstRound.later": "Maybe Later",
+  "firstRound.inviteFriends": "Invite friends to GolfMe",
+  "firstRound.close": "Close",
+  "firstRound.reminderTitle": "Host your first round",
+  "firstRound.reminderBody": "Pick a course and time. Golfers nearby can join you.",
+  "share.roundTitle": "Join my round on GolfMe",
+  "share.roundText": "Join my round at {course} on {date}, {time}.",
+  "share.appTitle": "GolfMe",
+  "share.appText": "Find golf partners and rounds near you on GolfMe.",
+  "share.copiedToast": "Link copied.",
+  "share.failedToast": "Couldn't share the link. Please try again.",
+  "share.shareRound": "Share",
+  "share.justHostedTitle": "Your round is live",
+  "share.justHostedBody": "Share it with friends so they can join.",
+  "share.shareRoundButton": "Share round",
+  "share.dismiss": "Dismiss",
 } as const;
 
 export type TranslationKey = keyof typeof en;
