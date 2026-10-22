@@ -45,6 +45,18 @@ const TAP_SLOP_PX = 10;
 // How long native fullscreen gets to start before the in-app viewer is used.
 const NATIVE_FULLSCREEN_GRACE_MS = 1000;
 
+// Router navigations render in a transition, so the tapped card stays on
+// screen (and tappable) for a moment after the first tap. A second tap in
+// that window pushed the same post again, and Back then needed two presses.
+const POST_NAV_GUARD_MS = 600;
+let lastPostNavAt = 0;
+function claimPostNavigation(): boolean {
+  const now = Date.now();
+  if (now - lastPostNavAt < POST_NAV_GUARD_MS) return false;
+  lastPostNavAt = now;
+  return true;
+}
+
 interface PostCardProps {
   post: CommunityPost;
   /** Detail view renders the full text/comment affordances differently —
@@ -221,7 +233,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
   const call = post.golfCallId ? getGolfCall(post.golfCallId) : undefined;
 
   function goToDetail(e: React.MouseEvent) {
-    if (!linkToDetail || isDragClick(e)) return;
+    if (!linkToDetail || isDragClick(e) || !claimPostNavigation()) return;
     navigate(`/community/${post.id}`);
   }
 
@@ -235,7 +247,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
   // and focuses the existing comment composer instead.
   function goToComments() {
     if (linkToDetail) {
-      navigate(`/community/${post.id}`);
+      if (claimPostNavigation()) navigate(`/community/${post.id}`);
       return;
     }
     const input = document.getElementById("comment-composer-input");
