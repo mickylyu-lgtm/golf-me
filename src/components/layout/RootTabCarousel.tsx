@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { Home } from "../../pages/Home";
 import { Find } from "../../pages/Find";
@@ -26,6 +26,16 @@ const PANELS = [
   { path: "/caddie", render: () => <Caddie /> },
   { path: "/profile", render: () => <Profile /> },
 ] as const;
+
+// The carousel's own state (drag offset on every touchmove of a tab swipe,
+// measured heights whenever any panel resizes) must not re-render all five
+// root pages. Each page still updates from its own contexts/router hooks;
+// this only stops the parent from re-rendering them. `render` is a stable
+// module-level function from PANELS; `active` makes a page re-render when it
+// becomes (or stops being) the visible tab, as before (e.g. Home's greeting).
+const Panel = memo(function Panel({ render }: { render: () => ReactNode; active: boolean }) {
+  return <>{render()}</>;
+});
 
 // A flick past either threshold commits the swipe; falling short of both
 // snaps back. Distance alone handles a slow deliberate drag, velocity alone
@@ -272,7 +282,7 @@ export function RootTabCarousel({ activePath }: { activePath: string }) {
               style={{ width: `${100 / PANELS.length}%` }}
               className="min-w-0 shrink-0"
             >
-              {render()}
+              <Panel render={render} active={i === activeIndex} />
             </div>
           ))}
         </div>
