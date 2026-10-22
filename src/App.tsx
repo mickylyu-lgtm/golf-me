@@ -13,6 +13,10 @@ import { LocaleProvider, ForceLocale, useLocale, LOCALES } from "./i18n/LocaleCo
 import type { Locale } from "./i18n/LocaleContext";
 import { AppShell } from "./components/layout/AppShell";
 import { TutorialProvider } from "./context/TutorialContext";
+import { FirstRoundPromptProvider } from "./context/FirstRoundPromptContext";
+import { clearReturnTo, peekReturnTo, routeForAppUrl, saveReturnTo } from "./lib/returnTo";
+import { setAnalyticsServerCounting } from "./lib/analytics";
+import { App as CapacitorApp } from "@capacitor/app";
 import { isStandalone } from "./lib/pwa";
 import { checkPushPermission, registerPushNotifications } from "./lib/push";
 import { Capacitor } from "@capacitor/core";
@@ -80,6 +84,12 @@ const AdminReviewers = lazyPage(() => import("./pages/AdminReviewers"), "AdminRe
 const AdminDashboard = lazyPage(() => import("./pages/AdminDashboard"), "AdminDashboard");
 const CoachInvite = lazyPage(() => import("./pages/CoachInvite"), "CoachInvite");
 const NotFound = lazyPage(() => import("./pages/NotFound"), "NotFound");
+// DEV-ONLY visual harness (First Round Hosting Onboarding screenshots). The
+// constant folds to null in production builds, so neither the route nor the
+// module ships.
+const DevFirstRoundHarness = import.meta.env.DEV
+  ? lazyPage(() => import("./pages/DevFirstRoundHarness"), "DevFirstRoundHarness")
+  : null;
 
 // Logged-in area: sidebar/bottom nav shell. Three real states, not two —
 // no session -> Welcome (or straight to Login if this is the installed
@@ -90,8 +100,13 @@ const NotFound = lazyPage(() => import("./pages/NotFound"), "NotFound");
 // onboarded -> the app.
 function AuthedLayout() {
   const { session } = useData();
+  const { isDemo } = useAuth();
   const location = useLocation();
   if (!session.isLoggedIn) {
+    // A shared round link opened while signed out: remember it so sign-in /
+    // sign-up (and onboarding, for a new account) ends on that round
+    // (lib/returnTo). Idempotent localStorage write; only round paths kept.
+    saveReturnTo(location.pathname);
     // With the entry test switch on, EntryOverlay covers the launch, so skip
     // the old fixed 2.75s /splash hold; otherwise today's launch is unchanged.
     return <Navigate to={isStandalone() ? (isEntryEnabled() ? "/login" : "/splash") : "/welcome"} replace />;
@@ -99,16 +114,26 @@ function AuthedLayout() {
   if (!session.hasOnboarded) {
     return <Navigate to="/profile-setup" replace />;
   }
+  // Every sign-in path lands on "/" -- redirect here, during render, so Home
+  // never mounts first (it would auto-start the tutorial on top of the round).
+  // Demo accounts never use it: a real round id means nothing in demo data.
+  const returnTo = isDemo ? null : peekReturnTo();
+  if (returnTo && location.pathname === "/") {
+    return <Navigate to={returnTo} replace />;
+  }
   const shell = (
     <TutorialProvider>
-      <AppShell>
-        <Suspense fallback={<GolfMeLoader className="py-12" />}>
-          <Outlet />
-        </Suspense>
-      </AppShell>
-      <TutorialOverlay />
-      <PushPrePermissionPrompt />
-      <CaddieHistoryReset />
+      <FirstRoundPromptProvider>
+        <AppShell>
+          <Suspense fallback={<GolfMeLoader className="py-12" />}>
+            <Outlet />
+          </Suspense>
+        </AppShell>
+        <TutorialOverlay />
+        <PushPrePermissionPrompt />
+        <CaddieHistoryReset />
+        <ReturnToArrival />
+      </FirstRoundPromptProvider>
     </TutorialProvider>
   );
   // Admin tools (dashboard, coach-reviewer management) stay pinned to
@@ -116,6 +141,17 @@ function AuthedLayout() {
   // surrounding nav chrome (TopBar/SideNav/BottomNav) to English since
   // they read useLocale() too and AppShell is inside this override.
   return location.pathname.startsWith("/admin") ? <ForceLocale locale="en">{shell}</ForceLocale> : shell;
+}
+
+// Clears the stored return path once its round is on screen, so it's used
+// exactly once (it also expires after 24 h, see lib/returnTo).
+function ReturnToArrival() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    const stored = peekReturnTo();
+    if (stored && pathname === stored) clearReturnTo();
+  }, [pathname]);
+  return null;
 }
 
 // Caddie's history list remembers how far "View more" was expanded while the
@@ -224,6 +260,45 @@ function usePushRegistration() {
   }, [isDemo, authUser, pushEnabled]);
 }
 
+// Anonymous daily counters (lib/analytics) only for a real, signed-in
+// account; demo and signed-out visitors never send.
+function useAnalyticsGate() {
+  const { isDemo, authUser } = useAuth();
+  useEffect(() => {
+    setAnalyticsServerCounting(!isDemo && Boolean(authUser));
+  }, [isDemo, authUser]);
+}
+
+// Universal Links (applinks:golfme.app, see public/.well-known): iOS opens
+// the app with the https URL instead of Safari, and Capacitor reports it as
+// appUrlOpen. Route it in-app. The auth callback scheme
+// (com.golfme.ios://) is handled by AuthContext and ignored here.
+// A cold launch from a link is also checked via getLaunchUrl, in case the
+// event fired before this listener existed; the same URL is never routed
+// twice.
+function AppUrlOpenRouting() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    let lastUrl: string | null = null;
+    const route = (url: string | undefined) => {
+      if (!url || url === lastUrl) return;
+      const path = routeForAppUrl(url);
+      if (!path) return;
+      lastUrl = url;
+      navigate(path);
+    };
+    CapacitorApp.getLaunchUrl()
+      .then((launch) => route(launch?.url))
+      .catch(() => {});
+    const listener = CapacitorApp.addListener("appUrlOpen", ({ url }) => route(url));
+    return () => {
+      listener.then((l) => l.remove());
+    };
+  }, [navigate]);
+  return null;
+}
+
 // Rendered inside BrowserRouter (unlike usePushRegistration, which only
 // needs authUser) because tapping a delivered push has to navigate -- the
 // route is carried as a custom top-level "link_to" field alongside "aps",
@@ -258,6 +333,7 @@ function AppGate({ children }: { children: ReactNode }) {
   // own comment for why this can't wait for AuthedLayout to mount.
   usePendingReviewerInviteRedemption();
   usePushRegistration();
+  useAnalyticsGate();
   useDisableKeyboardAccessoryBar();
   useDismissKeyboardOnDrag();
   if (isLoading || authLoading || retrying) return <GolfMeLoader fullScreen slowLoadRetry message={t("loading.gettingReady")} />;
@@ -306,6 +382,7 @@ export default function App() {
               <BrowserRouter>
               <ScrollToTop />
               <PushNotificationRouting />
+              <AppUrlOpenRouting />
               <Suspense fallback={<GolfMeLoader fullScreen slowLoadRetry />}>
               <Routes>
                 {/* Standalone, outside both GuestOnly and AuthedLayout — by the
@@ -328,6 +405,7 @@ export default function App() {
                 <Route path="/privacy" element={<PrivacyPolicy />} />
                 <Route path="/terms" element={<TermsOfService />} />
                 <Route path="/support" element={<Support />} />
+                {DevFirstRoundHarness && <Route path="/__dev/first-round" element={<DevFirstRoundHarness />} />}
                 <Route element={<GuestOnly />}>
                   <Route path="/welcome" element={<Welcome />} />
                   <Route path="/splash" element={isEntryEnabled() ? <Navigate to="/login" replace /> : <Splash />} />

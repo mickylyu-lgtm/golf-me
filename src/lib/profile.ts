@@ -52,6 +52,9 @@ export interface ProfileRow {
   circle_size: number;
   has_onboarded: boolean;
   onboarding_tutorial_completed: boolean;
+  // First Round Hosting Onboarding (20261022130000). Optional so rows fetched
+  // before that migration is applied still type-check (and read as "never").
+  first_round_prompt_dismissed_at?: string | null;
   member_since: string;
   // Founding Golfer (20261006120000). Server-awarded only; the client can
   // never write these (guard_profile_founding_columns). Optional so rows

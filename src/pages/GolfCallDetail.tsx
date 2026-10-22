@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
   CalendarDays,
@@ -11,6 +11,7 @@ import {
   MessageCircle,
   MoreHorizontal,
   Pencil,
+  Share2,
   ShieldAlert,
   Users,
   Wallet,
@@ -19,6 +20,8 @@ import {
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
 import { useRealRounds } from "../context/RealRoundsContext";
+import { useRealSocial } from "../context/RealSocialContext";
+import { useShareActions } from "../lib/useShareActions";
 import { GolfMeLoader } from "../components/loading/GolfMeLoader";
 import { useToast } from "../context/ToastContext";
 import { useLocale } from "../i18n/LocaleContext";
@@ -65,6 +68,17 @@ export function GolfCallDetail() {
   } = useData();
   const { isDemo } = useAuth();
   const { hasLoaded: roundsLoaded } = useRealRounds();
+  const { hasLoaded: socialLoaded } = useRealSocial();
+  const { shareRound } = useShareActions();
+  const location = useLocation();
+  // Set by CreateGolfCall right after a successful host: offer sharing once.
+  // Cleared from history so a refresh/back doesn't show it again.
+  const [justHosted, setJustHosted] = useState(() => Boolean((location.state as { justHosted?: boolean } | null)?.justHosted));
+  useEffect(() => {
+    if ((location.state as { justHosted?: boolean } | null)?.justHosted) {
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location.state, location.pathname, navigate]);
   const { showToast } = useToast();
   const { t, locale } = useLocale();
   const [joining, setJoining] = useState(false);
@@ -94,8 +108,11 @@ export function GolfCallDetail() {
   }, [isDemo, call?.courseId]);
 
   // Opened cold (push tap, refresh, shared link) the round list may not have
-  // loaded yet — wait rather than flash "not found".
-  if (!call && !roundsLoaded) return <GolfMeLoader className="py-12" />;
+  // loaded yet — wait rather than flash "not found". Also wait for the block
+  // list: until it's in, a round whose host blocked this golfer (or that
+  // they blocked) would briefly resolve before DataContext hides it.
+  const waitingForBlocks = !isDemo && !socialLoaded && call?.hostId !== currentUser.id;
+  if ((!call && !roundsLoaded) || waitingForBlocks) return <GolfMeLoader className="py-12" />;
   if (!call) {
     return (
       <div className="py-12 text-center text-slate-500">
@@ -250,8 +267,31 @@ export function GolfCallDetail() {
         </Badge>
       </div>
 
+      {!isDemo && isHost && !isCompleted && !isCancelled && justHosted && (
+        <div className="flex items-center gap-3 rounded-2xl border border-fairway-100 bg-fairway-50/70 p-4">
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-bold text-slate-900">{t("share.justHostedTitle")}</span>
+            <span className="block text-xs text-slate-500">{t("share.justHostedBody")}</span>
+          </span>
+          <Button size="sm" icon={<Share2 size={13} />} onClick={() => void shareRound(call)}>
+            {t("share.shareRoundButton")}
+          </Button>
+          <button
+            type="button"
+            onClick={() => setJustHosted(false)}
+            aria-label={t("share.dismiss")}
+            className="shrink-0 rounded-full p-1.5 text-slate-400 hover:bg-white hover:text-slate-700"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       {!isDemo && isHost && !isCompleted && !isCancelled && (
         <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" variant="outline" icon={<Share2 size={13} />} onClick={() => void shareRound(call)}>
+            {t("share.shareRound")}
+          </Button>
           <Button size="sm" variant="outline" icon={<Pencil size={13} />} onClick={() => setEditTeeTimeOpen(true)}>
             {t("golfCallDetail.editTeeTime")}
           </Button>

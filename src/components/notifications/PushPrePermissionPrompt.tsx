@@ -5,8 +5,12 @@ import { useTutorial } from "../../context/TutorialContext";
 import { useLocale } from "../../i18n/LocaleContext";
 import { Button } from "../ui/Button";
 import { checkPushPermission, registerPushNotifications } from "../../lib/push";
+import { claimOverlay, releaseOverlay } from "../../lib/blockingOverlays";
 
 const ASKED_KEY = "golfme:pushPrePermissionAsked";
+// While the permission check runs and while this screen is up, other
+// onboarding prompts (the first-round hosting popup) wait their turn.
+const OVERLAY_KEY = "push-pre-permission";
 
 function alreadyAsked(): boolean {
   if (typeof window === "undefined") return true;
@@ -45,10 +49,14 @@ export function PushPrePermissionPrompt() {
     if (isDemo || !authUser || !hasOnboarded || tutorialActive) return;
     if (checkedRef.current || alreadyAsked()) return;
     checkedRef.current = true;
+    claimOverlay(OVERLAY_KEY);
     checkPushPermission().then((state) => {
       if (state === "prompt") {
         setVisible(true);
-      } else if (state === "unavailable") {
+        return;
+      }
+      releaseOverlay(OVERLAY_KEY);
+      if (state === "unavailable") {
         // The plugin call failed (e.g. an older native build without the
         // push plugin). Leave the one-time flag unset so a fixed build can
         // still show this screen.
@@ -61,21 +69,29 @@ export function PushPrePermissionPrompt() {
     });
   }, [isDemo, authUser, hasOnboarded, tutorialActive]);
 
+  // Signed out (or the shell unmounted) mid-check: never leave a stale claim.
+  useEffect(() => () => releaseOverlay(OVERLAY_KEY), []);
+
   if (!visible || !authUser) return null;
 
   function dismiss() {
     markAsked();
     setVisible(false);
+    releaseOverlay(OVERLAY_KEY);
   }
 
   function enable() {
     markAsked();
     setVisible(false);
+    releaseOverlay(OVERLAY_KEY);
     registerPushNotifications(authUser!.id);
   }
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={t("pushPrePermission.title")}
       className="fixed inset-0 z-[105] flex items-end justify-center bg-slate-900/40 px-4 pb-8 sm:items-center"
       style={{ paddingBottom: "max(2rem, env(safe-area-inset-bottom))" }}
     >

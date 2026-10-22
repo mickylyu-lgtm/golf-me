@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight, ChevronDown, ShieldCheck, Users } from "lucide-r
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
 import { useRealRounds } from "../context/RealRoundsContext";
+import { useFirstRoundPrompt } from "../context/FirstRoundPromptContext";
 import { useToast } from "../context/ToastContext";
 import { useLocale } from "../i18n/LocaleContext";
 import type { TranslationKey } from "../i18n/locales/en";
@@ -86,6 +87,7 @@ export function CreateGolfCall() {
   const { currentUser, golfCalls, createGolfCall, visibleGolfers, circleGolfers, attachGolfCallToPost } = useData();
   const { isDemo, authUser } = useAuth();
   const { hostRound } = useRealRounds();
+  const { hasHosted } = useFirstRoundPrompt();
   const { showToast } = useToast();
   const { t, locale } = useLocale();
   const [searchParams] = useSearchParams();
@@ -329,6 +331,8 @@ export function CreateGolfCall() {
     }
 
     setSubmitting(true);
+    // Read before hosting: after it, the refetched round list says "hosted".
+    const isFirstRound = hasHosted === false;
     try {
       const call = await hostRound({
         courseId: pickedCourseId,
@@ -347,7 +351,7 @@ export function CreateGolfCall() {
         walkOrCart,
         notes: notes.trim() || undefined,
       });
-      track("first_round_hosted");
+      if (isFirstRound) track("first_round_hosted");
       clearHostRoundDraft();
       // Best-effort: the round itself already exists and is posted either
       // way — a failed proof upload here must never look like the whole
@@ -363,7 +367,8 @@ export function CreateGolfCall() {
         }
       }
       showToast(t("host.postedFreshToast"), "success");
-      navigate(`/golf-calls/${call.id}`);
+      // justHosted: the round page offers to share it right away.
+      navigate(`/golf-calls/${call.id}`, { state: { justHosted: true } });
     } catch (err) {
       setSubmitting(false);
       showToast(

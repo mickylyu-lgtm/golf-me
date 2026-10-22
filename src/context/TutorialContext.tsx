@@ -11,6 +11,10 @@ interface TutorialContextValue {
   next: () => void;
   back: () => void;
   skip: () => void;
+  // The walkthrough ended (finished or skipped) during this app session --
+  // lets the first-round hosting popup follow it right away even if saving
+  // onboarding_tutorial_completed failed. Never persisted.
+  completedThisSession: boolean;
 }
 
 const TutorialContext = createContext<TutorialContextValue | null>(null);
@@ -20,6 +24,7 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
   const { isDemo, saveProfile } = useAuth();
   const [active, setActive] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
+  const [completedThisSession, setCompletedThisSession] = useState(false);
 
   // Demo accounts have no real profiles row to persist the flag on -- the
   // walkthrough itself still works if launched manually (Settings ->
@@ -49,6 +54,7 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
   const next = useCallback(() => {
     if (stepIndex >= TUTORIAL_LAST_INDEX) {
       setActive(false);
+      setCompletedThisSession(true);
       void persistCompleted();
       navigate("/");
       return;
@@ -67,10 +73,14 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
 
   const skip = useCallback(() => {
     setActive(false);
+    setCompletedThisSession(true);
     void persistCompleted();
   }, [persistCompleted]);
 
-  const value = useMemo(() => ({ active, stepIndex, start, next, back, skip }), [active, stepIndex, start, next, back, skip]);
+  const value = useMemo(
+    () => ({ active, stepIndex, start, next, back, skip, completedThisSession }),
+    [active, stepIndex, start, next, back, skip, completedThisSession],
+  );
 
   return <TutorialContext.Provider value={value}>{children}</TutorialContext.Provider>;
 }

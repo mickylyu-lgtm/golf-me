@@ -101,6 +101,9 @@ export function EntryOverlay() {
   return (
     <div
       aria-hidden="true"
+      // Tells onboarding prompts (lib/blockingOverlays) to wait until the
+      // entry is gone instead of appearing underneath it.
+      data-blocking-overlay=""
       className={`fixed inset-0 z-[120] overflow-hidden bg-[#143822] transition-opacity duration-[350ms] ease-out ${
         phase === "out" ? "pointer-events-none opacity-0" : "opacity-100"
       }`}

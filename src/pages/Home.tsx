@@ -18,6 +18,8 @@ import { isPastRound } from "../lib/golfCall";
 import { COMMUNITY_TUTORIAL_ID } from "../lib/tutorialSteps";
 import { SUPPORTED_TEE_TIME_COURSES } from "../services/teeTimes/types";
 import { NearbyCoursesHomeCard } from "../components/courses/NearbyCoursesHomeCard";
+import { HostReminderCard } from "../components/onboarding/HostReminderCard";
+import { useFirstRoundPrompt } from "../context/FirstRoundPromptContext";
 
 const HOME_RADIUS_MILES = 25;
 const NEARBY_ROUNDS_SHOWN = 3;
@@ -43,6 +45,7 @@ export function Home() {
   const navigate = useNavigate();
   const { start: startTutorial } = useTutorial();
   const { eligible: tutorialEligible } = useTutorialEligibility();
+  const { showReminderCard: showHostReminder, startHosting } = useFirstRoundPrompt();
 
   // Home stays mounted for the whole session (RootTabCarousel keeps all 5
   // root panels alive, see its own header comment), so this only ever runs
@@ -219,6 +222,10 @@ export function Home() {
           </span>
           <ArrowRight size={16} className="shrink-0 text-slate-400" />
         </button>
+
+        {/* After the first-round popup was closed: a quiet nudge that stays
+            until the first round is created (real accounts only). */}
+        {showHostReminder && <HostReminderCard onHost={startHosting} />}
       </div>
 
       {/* Available rounds, right below the Tee Times card (per product
