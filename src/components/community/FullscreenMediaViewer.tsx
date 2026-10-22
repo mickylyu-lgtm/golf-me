@@ -1,6 +1,7 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { PostMediaItem } from "../../types";
 import { MediaCarousel } from "./MediaCarousel";
+import { perfHudViewer } from "../../lib/perfHud";
 
 interface FullscreenMediaViewerProps {
   media: PostMediaItem[];
@@ -54,6 +55,11 @@ export function FullscreenMediaViewer({ media, initialIndex = 0, onClose }: Full
     axis: "none" | "vertical" | "horizontal";
     startedOnInteractive: boolean;
   } | null>(null);
+
+  useEffect(() => {
+    perfHudViewer(true);
+    return () => perfHudViewer(false);
+  }, []);
 
   function onTouchStart(e: React.TouchEvent) {
     // A touchstart landing inside the ignore window is the same physical
@@ -109,6 +115,7 @@ export function FullscreenMediaViewer({ media, initialIndex = 0, onClose }: Full
     <div
       role="dialog"
       aria-modal="true"
+      data-gm-media
       className="fixed inset-0 z-[95] overflow-hidden"
       style={{ backgroundColor: `rgba(0,0,0,${backdropOpacity})` }}
     >

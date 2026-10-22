@@ -5,6 +5,7 @@ import { Find } from "../../pages/Find";
 import { Inbox } from "../../pages/Inbox";
 import { Caddie } from "../../pages/Caddie";
 import { Profile } from "../../pages/Profile";
+import { perfHudTabSwipe } from "../../lib/perfHud";
 
 // The 5 root sections, in swipe order — Home / Chat / Play / Caddie / Me,
 // matching NAV_ITEMS (Play centered as the single most important tab).
@@ -83,6 +84,7 @@ interface TouchTrack {
   decided: boolean;
   isHorizontalSwipe: boolean;
   startedOnInteractive: boolean;
+  startTarget: EventTarget | null;
 }
 
 // Persistent-mounted carousel of the 5 root tabs — all 5 stay alive at
@@ -164,6 +166,7 @@ export function RootTabCarousel({ activePath }: { activePath: string }) {
         decided: false,
         isHorizontalSwipe: false,
         startedOnInteractive: isTappableTarget(e.target),
+        startTarget: e.target,
       };
     }
 
@@ -184,6 +187,7 @@ export function RootTabCarousel({ activePath }: { activePath: string }) {
           touchRef.current = null; // hand off to native scroll / the element's own tap entirely
           return;
         }
+        perfHudTabSwipe(state.startTarget);
       }
       if (!state.isHorizontalSwipe) return;
 

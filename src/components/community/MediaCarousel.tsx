@@ -154,6 +154,7 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
       <div
         ref={trackRef}
         onScroll={handleScroll}
+        data-gm-media
         className={`no-scrollbar flex w-full snap-x snap-mandatory overflow-x-auto scroll-smooth ${variant === "card" ? "rounded-xl" : "h-dvh"}`}
       >
         {media.map((item, i) =>
