@@ -135,7 +135,10 @@ export function GroupChat({ callId }: { callId: string }) {
   }
 
   return (
-    <div className="flex flex-col rounded-2xl border border-slate-100 bg-white">
+    // Opted out of useDismissKeyboardOnDrag: while the composer is docked
+    // the message list is the one thing that still scrolls, so dragging it
+    // to read back keeps the keyboard (and the docked composer) up.
+    <div data-keyboard-drag-dismiss="off" className="flex flex-col rounded-2xl border border-slate-100 bg-white">
       {/* justify-end bottom-anchors a short thread against the composer
           (same fix as DirectMessageThread) instead of stacking from the top
           and leaving the gap below instead. */}

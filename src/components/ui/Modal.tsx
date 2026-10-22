@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useKeyboardHeight } from "../../lib/useKeyboardHeight";
 import { KEYBOARD_GAP_PX, revealFocusedField } from "../../lib/revealFocusedField";
+import { wasKeyboardDismissedByDrag } from "../../lib/useDismissKeyboardOnDrag";
 
 interface ModalProps {
   title: string;
@@ -139,7 +140,9 @@ function KeyboardAwareModal(props: Omit<ModalProps, "keyboardAware">) {
     }
 
     if (previous > 0 && scrollTopBeforeKeyboardRef.current !== null) {
-      scroller.scrollTop = scrollTopBeforeKeyboardRef.current;
+      // Closed by dragging the sheet (useDismissKeyboardOnDrag): the golfer
+      // is scrolling on purpose, so don't snap the sheet back under them.
+      if (!wasKeyboardDismissedByDrag()) scroller.scrollTop = scrollTopBeforeKeyboardRef.current;
       scrollTopBeforeKeyboardRef.current = null;
     }
   }, [keyboardHeight]);

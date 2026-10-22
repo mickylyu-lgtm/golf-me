@@ -175,7 +175,13 @@ export function CourseAutocomplete({ value, onChange, onPickKnownCourse, recentC
           className={docked ? "pointer-events-none fixed inset-x-0 z-[35] mx-auto flex max-w-3xl flex-col px-4" : "relative"}
           style={docked ? { top: dockLayout.top, bottom: keyboardHeight + DOCK_GAP_PX } : undefined}
         >
-          <div className={docked ? "pointer-events-auto flex min-h-0 flex-col rounded-2xl border border-slate-200 bg-white p-3 shadow-lg" : undefined}>
+          {/* Opted out of useDismissKeyboardOnDrag: the suggestions only show
+              while the field has focus, so dragging this list to reach a
+              course keeps the keyboard up. A drag elsewhere still closes it. */}
+          <div
+            data-keyboard-drag-dismiss="off"
+            className={docked ? "pointer-events-auto flex min-h-0 flex-col rounded-2xl border border-slate-200 bg-white p-3 shadow-lg" : undefined}
+          >
             {quickPicks.length > 0 && <label className={labelClass}>{t("courseAutocomplete.searchAllCourses")}</label>}
             <input
               ref={inputRef}
