@@ -10,6 +10,10 @@ interface CourseHeroProps {
   imageCredit?: string;
   /** AI-generated flyover; always shown with an "AI-generated preview" tag. */
   videoUrl?: string;
+  /** The image carries its own provider logo/attribution along the bottom
+   * (Mapbox satellite), so the location pill moves to the top instead of
+   * covering it. */
+  attributionInImage?: boolean;
 }
 
 function prefersReducedMotion(): boolean {
@@ -24,12 +28,13 @@ function prefersReducedMotion(): boolean {
 // (rolling fairway + flag, no specific course details) so it can't be
 // mistaken for photography of any particular place. An AI flyover video
 // (videoUrl) plays over the photo when one is set, always tagged as AI.
-export function CourseHero({ courseName, city, state, imageUrl, imageCredit, videoUrl }: CourseHeroProps) {
+export function CourseHero({ courseName, city, state, imageUrl, imageCredit, videoUrl, attributionInImage = false }: CourseHeroProps) {
   const { t } = useLocale();
   const [imageFailed, setImageFailed] = useState(false);
   const [videoFailed, setVideoFailed] = useState(false);
   const showImage = Boolean(imageUrl) && !imageFailed;
   const showVideo = Boolean(videoUrl) && !videoFailed;
+  const place = [city, state].filter(Boolean).join(", ");
 
   return (
     <div>
@@ -38,7 +43,7 @@ export function CourseHero({ courseName, city, state, imageUrl, imageCredit, vid
           <video
             src={videoUrl}
             poster={showImage ? imageUrl : undefined}
-            aria-label={`${courseName}, ${city}, ${state}`}
+            aria-label={[courseName, place].filter(Boolean).join(", ")}
             autoPlay={!prefersReducedMotion()}
             controls={prefersReducedMotion()}
             muted
@@ -51,7 +56,7 @@ export function CourseHero({ courseName, city, state, imageUrl, imageCredit, vid
         ) : showImage ? (
           <img
             src={imageUrl}
-            alt={`${courseName}, ${city}, ${state}`}
+            alt={[courseName, place].filter(Boolean).join(", ")}
             loading="lazy"
             className="h-full w-full object-cover"
             onError={() => setImageFailed(true)}
@@ -68,10 +73,10 @@ export function CourseHero({ courseName, city, state, imageUrl, imageCredit, vid
             {t("courseHero.aiPreview")}
           </span>
         )}
-        {(showImage || showVideo) && (
-          <span className="absolute bottom-2.5 left-2.5 flex items-center gap-1 rounded-full bg-slate-900/55 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-sm">
+        {(showImage || showVideo) && place && (
+          <span className={`absolute left-2.5 ${attributionInImage && !showVideo ? "top-2.5" : "bottom-2.5"} flex items-center gap-1 rounded-full bg-slate-900/55 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-sm`}>
             <MapPin size={11} className="shrink-0" />
-            {city}, {state}
+            {place}
           </span>
         )}
       </div>

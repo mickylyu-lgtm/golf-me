@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { ArrowLeft, LocateFixed, MapPin, Search } from "lucide-react";
+import { ArrowLeft, ChevronRight, LocateFixed, MapPin, Search } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useLocale } from "../i18n/LocaleContext";
 import { Button } from "../components/ui/Button";
@@ -13,6 +13,7 @@ import { resolveTravelRadiusMiles } from "../lib/matchPreferences";
 import { formatDistanceMiles } from "../lib/geo";
 import type { PlayingArea } from "../lib/geo";
 import { matchSupportedTeeTimeCourse } from "../services/teeTimes/types";
+import { openCourse } from "../lib/openCourse";
 
 // Standalone "Golf Courses Near You" results screen — reuses the existing
 // nearby-course source end to end (Geoapify via useNearbyCourses, the same
@@ -113,24 +114,23 @@ export function NearbyCourses() {
                     <span className="shrink-0 text-xs font-semibold text-slate-500">
                       {r.distanceMiles != null ? formatDistanceMiles(r.distanceMiles) : t("nearbyCourses.distanceUnknown")}
                     </span>
+                    <ChevronRight size={16} className="shrink-0 text-slate-400" />
                   </>
                 );
-                // Only courses GolfMe can actually help book are tappable —
-                // every other real nearby course stays plainly informational
-                // (name/distance/area), never implying live booking it
-                // doesn't have (same truthfulness rule as Phase 8).
-                return supported ? (
+                // Every course opens a page: the hand-picked ones keep their
+                // tee-time page with the official booking link; the rest get
+                // the general course page (satellite image, directions,
+                // tee-time web search, host here), which never claims a
+                // booking GolfMe doesn't have (same truthfulness rule as
+                // Phase 8).
+                return (
                   <button
                     key={r.id ?? r.name}
-                    onClick={() => navigate(`/tee-times/${supported.id}`)}
+                    onClick={() => openCourse(navigate, r, supported?.id)}
                     className="flex w-full items-center gap-3 rounded-2xl border border-slate-100 bg-white p-3.5 text-left transition-colors duration-150 hover:border-fairway-300"
                   >
                     {content}
                   </button>
-                ) : (
-                  <div key={r.id ?? r.name} className="flex w-full items-center gap-3 rounded-2xl border border-slate-100 bg-white p-3.5">
-                    {content}
-                  </div>
                 );
               })}
             </div>

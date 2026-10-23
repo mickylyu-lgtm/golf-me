@@ -9,6 +9,7 @@ import { useNearbyCourses } from "../../lib/useCourseSearch";
 import { resolveTravelRadiusMiles } from "../../lib/matchPreferences";
 import { formatDistanceMiles } from "../../lib/geo";
 import { matchSupportedTeeTimeCourse } from "../../services/teeTimes/types";
+import { openCourse } from "../../lib/openCourse";
 import type { PlayingArea } from "../../lib/geo";
 
 const HOME_PREVIEW_COUNT = 2;
@@ -77,9 +78,8 @@ export function NearbyCoursesHomeCard() {
       </div>
       <div className="flex flex-col gap-2.5">
         {results.slice(0, HOME_PREVIEW_COUNT).map((r) => {
-          // Same rule as the full Nearby screen: only the hand-picked
-          // courses with a course page (photo/preview + official booking
-          // link) are tappable; every other course stays informational.
+          // Same rule as the full Nearby screen: every course opens a page
+          // (see openCourse).
           const supported = matchSupportedTeeTimeCourse(r.name);
           const content = (
             <>
@@ -97,21 +97,17 @@ export function NearbyCoursesHomeCard() {
               <span className="shrink-0 text-xs font-semibold text-fairway-700">
                 {r.distanceMiles != null ? formatDistanceMiles(r.distanceMiles) : t("nearbyCourses.distanceUnknown")}
               </span>
-              {supported && <ChevronRight size={16} className="shrink-0 text-slate-400" />}
+              <ChevronRight size={16} className="shrink-0 text-slate-400" />
             </>
           );
-          return supported ? (
+          return (
             <button
               key={r.id ?? r.name}
-              onClick={() => navigate(`/tee-times/${supported.id}`)}
+              onClick={() => openCourse(navigate, r, supported?.id)}
               className="flex w-full items-center gap-3 rounded-2xl border border-slate-100 bg-white p-3.5 text-left transition-colors duration-150 hover:border-fairway-300"
             >
               {content}
             </button>
-          ) : (
-            <div key={r.id ?? r.name} className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white p-3.5">
-              {content}
-            </div>
           );
         })}
       </div>

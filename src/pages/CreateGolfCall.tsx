@@ -105,10 +105,21 @@ export function CreateGolfCall() {
   // a real Golf Circle/Following to invite by id, which doesn't exist yet —
   // real hosting this phase is "Starting Fresh" only. Demo mode keeps both.
   const [fillMode, setFillMode] = useState(initial?.fillMode ?? (isDemo && searchParams.get("mode") === "fill"));
-  const [course, setCourse] = useState(() => initial?.course ?? searchParams.get("course") ?? "");
-  const [pickedCourseId, setPickedCourseId] = useState<string | null>(initial?.pickedCourseId ?? null);
-  const [pickedCourseLat, setPickedCourseLat] = useState<number | null>(initial?.pickedCourseLat ?? null);
-  const [pickedCourseLng, setPickedCourseLng] = useState<number | null>(initial?.pickedCourseLng ?? null);
+  // "Host a round here" from a course page (?course=&courseId=&lat=&lng=)
+  // names the course explicitly, so it wins over a saved draft's course.
+  const courseParam = searchParams.get("course");
+  const numberParam = (key: string): number | null => {
+    const n = Number(searchParams.get(key));
+    return searchParams.get(key) != null && Number.isFinite(n) ? n : null;
+  };
+  const uuidParam = (key: string): string | null => {
+    const v = searchParams.get(key);
+    return v && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v) ? v : null;
+  };
+  const [course, setCourse] = useState(() => courseParam ?? initial?.course ?? "");
+  const [pickedCourseId, setPickedCourseId] = useState<string | null>(() => (courseParam ? uuidParam("courseId") : initial?.pickedCourseId ?? null));
+  const [pickedCourseLat, setPickedCourseLat] = useState<number | null>(() => (courseParam ? numberParam("lat") : initial?.pickedCourseLat ?? null));
+  const [pickedCourseLng, setPickedCourseLng] = useState<number | null>(() => (courseParam ? numberParam("lng") : initial?.pickedCourseLng ?? null));
   const [submitting, setSubmitting] = useState(false);
   const [areaLabel, setAreaLabel] = useState(() => initial?.areaLabel ?? currentUser.areaLabel);
   const [editingArea, setEditingArea] = useState(false);

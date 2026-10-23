@@ -60,6 +60,7 @@ const Ready = lazyPage(() => import("./pages/Ready"), "Ready");
 const TeeTimes = lazyPage(() => import("./pages/TeeTimes"), "TeeTimes");
 const TeeTimeCourseDetail = lazyPage(() => import("./pages/TeeTimeCourseDetail"), "TeeTimeCourseDetail");
 const NearbyCourses = lazyPage(() => import("./pages/NearbyCourses"), "NearbyCourses");
+const CourseDetail = lazyPage(() => import("./pages/CourseDetail"), "CourseDetail");
 const AnalyzeSwing = lazyPage(() => import("./pages/AnalyzeSwing"), "AnalyzeSwing");
 const CaddieAnalysisDetail = lazyPage(() => import("./pages/CaddieAnalysisDetail"), "CaddieAnalysisDetail");
 const AutoMatch = lazyPage(() => import("./pages/AutoMatch"), "AutoMatch");
@@ -455,6 +456,7 @@ export default function App() {
                   <Route path="/tee-times" element={<TeeTimes />} />
                   <Route path="/tee-times/:courseId" element={<TeeTimeCourseDetail />} />
                   <Route path="/courses/nearby" element={<NearbyCourses />} />
+                  <Route path="/courses/:courseId" element={<CourseDetail />} />
                   <Route path="/caddie" element={<Caddie />} />
                   <Route path="/caddie/analyze" element={<AnalyzeSwing />} />
                   <Route path="/caddie/:analysisId" element={<CaddieAnalysisDetail />} />
