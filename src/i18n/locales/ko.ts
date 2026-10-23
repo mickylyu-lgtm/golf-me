@@ -137,6 +137,7 @@ export const ko: Record<TranslationKey, string> = {
   "nearbyCourses.radiusLabel": "{radius}마일 이내",
   "nearbyCourses.distanceUnknown": "거리 알 수 없음",
   "nearbyCourses.teeTimesAvailable": "예약 가능",
+  "courseHero.aiPreview": "AI 생성 미리보기",
   "nearbyCourses.emptyTitle": "근처에 골프장이 없어요",
   "nearbyCourses.emptyDescription": "매칭 환경설정에서 이동 반경을 넓혀보거나 나중에 다시 확인해 주세요.",
   "teeTimes.holesLabel": "{holes}홀",

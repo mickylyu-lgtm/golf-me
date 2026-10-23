@@ -17,6 +17,13 @@ export interface SupportedTeeTimeCourse {
   // this is absent, never a fake/generated "photo."
   heroImageUrl?: string;
   heroImageCredit?: string; // shown alongside the image when set, per its license's attribution requirement
+  // AI-generated drone-style flyover (Micky, 2026-10-23), made once by hand
+  // in Higgsfield image-to-video from public-domain USGS NAIP aerial
+  // imagery of the course, reviewed by Micky before it's set here, and
+  // served as a static file from public/courses/. CourseHero always labels
+  // it "AI-generated preview" -- it can invent details, so it's never
+  // presented as real footage. heroImageUrl doubles as its poster.
+  previewVideoUrl?: string;
 }
 
 export const SUPPORTED_TEE_TIME_COURSES: SupportedTeeTimeCourse[] = [
@@ -26,11 +33,12 @@ export const SUPPORTED_TEE_TIME_COURSES: SupportedTeeTimeCourse[] = [
     city: "Jersey City",
     state: "NJ",
     holes: 9,
-    // No legitimate real photo found -- checked GolfCourseAPI (no image
-    // field at all in its course schema), Geoapify (Skyway doesn't appear
-    // in OpenStreetMap's sport.golf_course data near Jersey City, so no
-    // Wikidata link to check either). CourseHero shows the generic
-    // illustration for this course until a real, licensed photo surfaces.
+    // No ground-level photo found (GolfCourseAPI has no image field;
+    // Skyway isn't in OpenStreetMap's golf data, so no Wikidata link).
+    // Real aerial instead: USGS NAIP orthoimagery, public domain (US
+    // federal work), exported 2026-10-23 from imagery.nationalmap.gov.
+    heroImageUrl: "/courses/skyway-aerial.jpg",
+    heroImageCredit: "Aerial: USGS NAIP (public domain)",
   },
   {
     id: "dyker-beach",

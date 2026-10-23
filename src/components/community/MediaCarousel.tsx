@@ -154,6 +154,10 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
       <div
         ref={trackRef}
         onScroll={handleScroll}
+        data-gm-media
+        // A horizontal swipe on a photo carousel scrolls the carousel; it
+        // never changes root tab (RootTabCarousel skips [data-no-swipe]).
+        data-no-swipe
         className={`no-scrollbar flex w-full snap-x snap-mandatory overflow-x-auto scroll-smooth ${variant === "card" ? "rounded-xl" : "h-dvh"}`}
       >
         {media.map((item, i) =>

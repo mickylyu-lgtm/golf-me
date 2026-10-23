@@ -147,6 +147,7 @@ export const en = {
   "nearbyCourses.radiusLabel": "Within {radius} mi",
   "nearbyCourses.distanceUnknown": "Distance unknown",
   "nearbyCourses.teeTimesAvailable": "Tee times available",
+  "courseHero.aiPreview": "AI-generated preview",
   "nearbyCourses.emptyTitle": "No courses found nearby",
   "nearbyCourses.emptyDescription": "Try widening your travel radius in Match Preferences, or check back later.",
   "teeTimes.holesLabel": "{holes} Holes",

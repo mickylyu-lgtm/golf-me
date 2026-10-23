@@ -137,6 +137,7 @@ export const ja: Record<TranslationKey, string> = {
   "nearbyCourses.radiusLabel": "{radius} マイル圏内",
   "nearbyCourses.distanceUnknown": "距離不明",
   "nearbyCourses.teeTimesAvailable": "予約可能",
+  "courseHero.aiPreview": "AI生成のプレビュー",
   "nearbyCourses.emptyTitle": "近くにコースが見つかりません",
   "nearbyCourses.emptyDescription": "マッチング設定で移動範囲を広げてみるか、後でもう一度確認してください。",
   "teeTimes.holesLabel": "{holes}ホール",

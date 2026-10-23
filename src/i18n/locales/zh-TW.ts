@@ -137,6 +137,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "nearbyCourses.radiusLabel": "{radius} 英里範圍內",
   "nearbyCourses.distanceUnknown": "距離未知",
   "nearbyCourses.teeTimesAvailable": "可預約開球時間",
+  "courseHero.aiPreview": "AI 生成的預覽",
   "nearbyCourses.emptyTitle": "附近找不到球場",
   "nearbyCourses.emptyDescription": "試著在配對偏好中擴大你的活動範圍，或稍後再查看。",
   "teeTimes.holesLabel": "{holes} 洞",

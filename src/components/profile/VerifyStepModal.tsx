@@ -14,7 +14,7 @@ export function VerifyStepModal({ channel, target, onClose, onVerified }: Verify
   const [sent, setSent] = useState(true);
 
   return (
-    <Modal title={`Verify your ${channel}`} onClose={onClose}>
+    <Modal title={`Verify your ${channel}`} onClose={onClose} keyboardAware>
       <div className="flex flex-col gap-4">
         <p className="text-sm text-slate-600">
           {sent ? (
