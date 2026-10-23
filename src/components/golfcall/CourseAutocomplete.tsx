@@ -200,8 +200,10 @@ export function CourseAutocomplete({ value, onChange, onPickKnownCourse, recentC
           while the field has focus, so dragging this list to reach a course
           keeps the keyboard up. A drag elsewhere still closes it. The input
           is never remounted or moved between parents, so focus (and the
-          keyboard) never drops. */}
-      <div ref={fieldRef} data-keyboard-drag-dismiss="off" className="relative">
+          keyboard) never drops. With inlineSuggestions this component does
+          its own keyboard scroll, so it opts out of the app-wide one
+          (useRevealFocusedFieldAboveKeyboard). */}
+      <div ref={fieldRef} data-keyboard-drag-dismiss="off" data-keyboard-reveal={inlineSuggestions ? "off" : undefined} className="relative">
         {inlineSuggestions && isNative && focused && revealTop !== null && (
           // Invisible scroll room (see `revealing` above): absolutely
           // positioned, so it adds to the page's scroll range without

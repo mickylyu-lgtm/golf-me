@@ -45,6 +45,7 @@ import { PostDetail } from "./pages/PostDetail";
 import { usePendingReviewerInviteRedemption } from "./lib/usePendingReviewerInviteRedemption";
 import { useDisableKeyboardAccessoryBar } from "./lib/useDisableKeyboardAccessoryBar";
 import { useDismissKeyboardOnDrag } from "./lib/useDismissKeyboardOnDrag";
+import { useRevealFocusedFieldAboveKeyboard } from "./lib/useRevealFocusedFieldAboveKeyboard";
 import { lazyPage } from "./lib/lazyPage";
 
 // Code-split routes (Health Audit P3-4): pages not needed on first open load
@@ -260,6 +261,7 @@ function AppGate({ children }: { children: ReactNode }) {
   usePushRegistration();
   useDisableKeyboardAccessoryBar();
   useDismissKeyboardOnDrag();
+  useRevealFocusedFieldAboveKeyboard();
   if (isLoading || authLoading || retrying) return <GolfMeLoader fullScreen slowLoadRetry message={t("loading.gettingReady")} />;
   // Signed in but the very first profile load failed (nothing cached to fall
   // back on). Rendering the router here would read "no profile" as "not
