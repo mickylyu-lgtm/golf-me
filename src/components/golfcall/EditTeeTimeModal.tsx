@@ -74,6 +74,7 @@ export function EditTeeTimeModal({ call, onClose }: EditTeeTimeModalProps) {
     <Modal
       title={t("golfCallDetail.editTeeTime")}
       onClose={onClose}
+      keyboardAware
       footer={
         <Button fullWidth disabled={!canSave || saving} onClick={handleSave}>
           {saving ? t("golfCallDetail.savingChanges") : t("common.save")}

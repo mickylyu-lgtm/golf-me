@@ -64,7 +64,7 @@ export function ShareRoundPrompt({ call, onClose }: ShareRoundPromptProps) {
   }
 
   return (
-    <Modal title="Share your round?" onClose={onClose}>
+    <Modal title="Share your round?" onClose={onClose} keyboardAware>
       <div className="flex flex-col gap-3">
         <p className="text-sm text-slate-500">Let other golfers know how it went — totally optional.</p>
         <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3">

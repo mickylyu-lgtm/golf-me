@@ -91,6 +91,7 @@ export function BookingProofHostControls({ golfCallId }: { golfCallId: string })
         <Modal
           title={proof ? t("golfCallDetail.replaceBookingProof") : t("golfCallDetail.addBookingProof")}
           onClose={() => setFormOpen(false)}
+          keyboardAware
           footer={
             <Button fullWidth disabled={!file || submitting} onClick={handleSubmit}>
               {submitting ? t("golfCallDetail.uploading") : t("golfCallDetail.saveBookingProof")}

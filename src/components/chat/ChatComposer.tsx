@@ -22,6 +22,8 @@ export function ChatComposer({ value, onChange, onSend, placeholder = "Type a me
   const [emojiOpen, setEmojiOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const emojiButtonRef = useRef<HTMLButtonElement>(null);
+  // Whether the textarea had focus when the send button was pressed.
+  const focusedAtPressRef = useRef(false);
 
   useEffect(() => {
     const el = textareaRef.current;
@@ -35,6 +37,23 @@ export function ChatComposer({ value, onChange, onSend, placeholder = "Type a me
       e.preventDefault();
       onSend();
     }
+  }
+
+  // Sending keeps the cursor in the textbox and the keyboard open, like
+  // iMessage/WhatsApp. Tapping a <button> normally moves focus off the
+  // textarea (its mousedown default action), which on iOS closes the
+  // keyboard after every send. preventDefault on mousedown stops that focus
+  // move; click still fires, and keyboard Enter/Space on the button still
+  // works. As a fallback (if a WebView moves focus anyway), the textarea is
+  // refocused synchronously inside the same tap -- iOS only shows the
+  // keyboard for a focus() made within a user gesture -- and only when it
+  // had focus at press time, so a send never opens a closed keyboard.
+  function handleSendClick() {
+    const wasFocused = focusedAtPressRef.current;
+    focusedAtPressRef.current = false;
+    onSend();
+    const el = textareaRef.current;
+    if (wasFocused && el && document.activeElement !== el) el.focus({ preventScroll: true });
   }
 
   function insertEmoji(emoji: string) {
@@ -79,7 +98,11 @@ export function ChatComposer({ value, onChange, onSend, placeholder = "Type a me
         className="max-h-[120px] flex-1 resize-none overflow-y-auto rounded-2xl bg-slate-100 px-3.5 py-2 text-base leading-snug outline-none focus:bg-slate-50 focus:ring-2 focus:ring-fairway-100 sm:text-sm"
       />
       <button
-        onClick={onSend}
+        onPointerDown={() => {
+          focusedAtPressRef.current = document.activeElement === textareaRef.current;
+        }}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={handleSendClick}
         disabled={!value.trim()}
         aria-label="Send message"
         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-fairway-600 text-white transition-all duration-200 ease-out hover:bg-fairway-700 hover:-translate-y-px active:translate-y-0 active:bg-fairway-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-40 motion-reduce:transition-none motion-reduce:hover:translate-y-0"

@@ -196,7 +196,10 @@ export function PostDetail() {
           bottom of the page there's otherwise no room to scroll the latest
           content up above the docked bar (it's hidden under the keyboard). */}
       {composerDocked && <div aria-hidden="true" style={{ height: composerHeight + keyboardHeight }} />}
+      {/* Opted out of useRevealFocusedFieldAboveKeyboard: this composer docks
+          itself above the keyboard. */}
       <div
+        data-keyboard-reveal="off"
         className={
           composerDocked
             ? "fixed inset-x-0 z-40 border-t border-slate-200/70 bg-[#faf9f6] py-2 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]"
