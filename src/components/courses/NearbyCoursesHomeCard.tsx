@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronRight, LocateFixed, MapPin } from "lucide-react";
+import { ChevronRight, LocateFixed } from "lucide-react";
 import { useData } from "../../context/DataContext";
 import { useLocale } from "../../i18n/LocaleContext";
 import { Button } from "../ui/Button";
@@ -9,6 +9,8 @@ import { useNearbyCourses } from "../../lib/useCourseSearch";
 import { resolveTravelRadiusMiles } from "../../lib/matchPreferences";
 import { formatDistanceMiles } from "../../lib/geo";
 import { matchSupportedTeeTimeCourse } from "../../services/teeTimes/types";
+import { CourseThumb, SatelliteAttribution } from "./CourseThumb";
+import { satelliteImageryEnabled } from "../../lib/courseImagery";
 import { openCourse } from "../../lib/openCourse";
 import type { PlayingArea } from "../../lib/geo";
 
@@ -83,13 +85,7 @@ export function NearbyCoursesHomeCard() {
           const supported = matchSupportedTeeTimeCourse(r.name);
           const content = (
             <>
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-fairway-50 text-fairway-600">
-                {supported?.heroImageUrl ? (
-                  <img src={supported.heroImageUrl} alt="" loading="lazy" className="h-full w-full object-cover" />
-                ) : (
-                  <MapPin size={16} />
-                )}
-              </span>
+              <CourseThumb imageUrl={supported?.heroImageUrl} lat={r.lat} lng={r.lng} className="h-12 w-12" />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-semibold text-slate-800">{r.name}</span>
                 {r.area && <span className="block truncate text-xs text-slate-500">{r.area}</span>}
@@ -111,6 +107,7 @@ export function NearbyCoursesHomeCard() {
           );
         })}
       </div>
+      {satelliteImageryEnabled() && <div className="mt-1.5"><SatelliteAttribution /></div>}
     </section>
   );
 }

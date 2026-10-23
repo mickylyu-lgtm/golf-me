@@ -13,6 +13,8 @@ import { resolveTravelRadiusMiles } from "../lib/matchPreferences";
 import { formatDistanceMiles } from "../lib/geo";
 import type { PlayingArea } from "../lib/geo";
 import { matchSupportedTeeTimeCourse } from "../services/teeTimes/types";
+import { CourseThumb, SatelliteAttribution } from "../components/courses/CourseThumb";
+import { satelliteImageryEnabled } from "../lib/courseImagery";
 import { openCourse } from "../lib/openCourse";
 
 // Standalone "Golf Courses Near You" results screen — reuses the existing
@@ -97,13 +99,7 @@ export function NearbyCourses() {
                 const supported = matchSupportedTeeTimeCourse(r.name);
                 const content = (
                   <>
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-fairway-50 text-fairway-600">
-                      {supported?.heroImageUrl ? (
-                        <img src={supported.heroImageUrl} alt="" loading="lazy" className="h-full w-full object-cover" />
-                      ) : (
-                        <MapPin size={18} />
-                      )}
-                    </span>
+                    <CourseThumb imageUrl={supported?.heroImageUrl} lat={r.lat} lng={r.lng} className="h-14 w-14" />
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-1.5">
                         <span className="truncate text-sm font-bold text-slate-900">{r.name}</span>
@@ -133,6 +129,7 @@ export function NearbyCourses() {
                   </button>
                 );
               })}
+              {satelliteImageryEnabled() && <SatelliteAttribution />}
             </div>
           )}
         </>
