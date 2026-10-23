@@ -137,6 +137,7 @@ export const es: Record<TranslationKey, string> = {
   "nearbyCourses.radiusLabel": "Dentro de {radius} mi",
   "nearbyCourses.distanceUnknown": "Distancia desconocida",
   "nearbyCourses.teeTimesAvailable": "Horarios disponibles",
+  "courseHero.aiPreview": "Vista previa generada por IA",
   "nearbyCourses.emptyTitle": "No se encontraron campos cercanos",
   "nearbyCourses.emptyDescription": "Intenta ampliar tu radio de viaje en Preferencias de Coincidencia, o vuelve más tarde.",
   "teeTimes.holesLabel": "{holes} Hoyos",

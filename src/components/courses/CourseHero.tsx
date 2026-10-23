@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { MapPin } from "lucide-react";
+import { MapPin, Sparkles } from "lucide-react";
+import { useLocale } from "../../i18n/LocaleContext";
 
 interface CourseHeroProps {
   courseName: string;
@@ -7,6 +8,12 @@ interface CourseHeroProps {
   state: string;
   imageUrl?: string;
   imageCredit?: string;
+  /** AI-generated flyover; always shown with an "AI-generated preview" tag. */
+  videoUrl?: string;
+}
+
+function prefersReducedMotion(): boolean {
+  return typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
 }
 
 // Wide landscape hero for a course-detail screen -- a real, legitimately-
@@ -15,15 +22,33 @@ interface CourseHeroProps {
 // clearly-generic illustration. Never a generated/fake "photo" presented
 // as the real course -- the illustration is deliberately abstract
 // (rolling fairway + flag, no specific course details) so it can't be
-// mistaken for photography of any particular place.
-export function CourseHero({ courseName, city, state, imageUrl, imageCredit }: CourseHeroProps) {
+// mistaken for photography of any particular place. An AI flyover video
+// (videoUrl) plays over the photo when one is set, always tagged as AI.
+export function CourseHero({ courseName, city, state, imageUrl, imageCredit, videoUrl }: CourseHeroProps) {
+  const { t } = useLocale();
   const [imageFailed, setImageFailed] = useState(false);
+  const [videoFailed, setVideoFailed] = useState(false);
   const showImage = Boolean(imageUrl) && !imageFailed;
+  const showVideo = Boolean(videoUrl) && !videoFailed;
 
   return (
     <div>
       <div className="relative aspect-[16/9] w-full overflow-hidden rounded-2xl bg-fairway-50">
-        {showImage ? (
+        {showVideo ? (
+          <video
+            src={videoUrl}
+            poster={showImage ? imageUrl : undefined}
+            aria-label={`${courseName}, ${city}, ${state}`}
+            autoPlay={!prefersReducedMotion()}
+            controls={prefersReducedMotion()}
+            muted
+            loop
+            playsInline
+            preload="metadata"
+            className="h-full w-full object-cover"
+            onError={() => setVideoFailed(true)}
+          />
+        ) : showImage ? (
           <img
             src={imageUrl}
             alt={`${courseName}, ${city}, ${state}`}
@@ -37,7 +62,13 @@ export function CourseHero({ courseName, city, state, imageUrl, imageCredit }: C
         {/* Small location pill -- only adds value on top of a real photo,
             where the course's own identity isn't already obvious from the
             (deliberately generic) illustration underneath it. */}
-        {showImage && (
+        {showVideo && (
+          <span className="absolute right-2.5 top-2.5 flex items-center gap-1 rounded-full bg-slate-900/55 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-sm">
+            <Sparkles size={11} className="shrink-0" />
+            {t("courseHero.aiPreview")}
+          </span>
+        )}
+        {(showImage || showVideo) && (
           <span className="absolute bottom-2.5 left-2.5 flex items-center gap-1 rounded-full bg-slate-900/55 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-sm">
             <MapPin size={11} className="shrink-0" />
             {city}, {state}

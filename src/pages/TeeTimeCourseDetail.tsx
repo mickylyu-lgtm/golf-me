@@ -55,7 +55,7 @@ export function TeeTimeCourseDetail() {
         </p>
       </div>
 
-      <CourseHero courseName={course.name} city={course.city} state={course.state} imageUrl={course.heroImageUrl} imageCredit={course.heroImageCredit} />
+      <CourseHero courseName={course.name} city={course.city} state={course.state} imageUrl={course.heroImageUrl} imageCredit={course.heroImageCredit} videoUrl={course.previewVideoUrl} />
 
       {/* Only shown once a course is actually live-integrated -- for an
           external-booking-only course (both today), the selected date

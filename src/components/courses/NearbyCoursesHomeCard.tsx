@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { LocateFixed, MapPin } from "lucide-react";
+import { ChevronRight, LocateFixed, MapPin } from "lucide-react";
 import { useData } from "../../context/DataContext";
 import { useLocale } from "../../i18n/LocaleContext";
 import { Button } from "../ui/Button";
@@ -8,6 +8,7 @@ import { LocationPicker } from "../location/LocationPicker";
 import { useNearbyCourses } from "../../lib/useCourseSearch";
 import { resolveTravelRadiusMiles } from "../../lib/matchPreferences";
 import { formatDistanceMiles } from "../../lib/geo";
+import { matchSupportedTeeTimeCourse } from "../../services/teeTimes/types";
 import type { PlayingArea } from "../../lib/geo";
 
 const HOME_PREVIEW_COUNT = 2;
@@ -75,20 +76,44 @@ export function NearbyCoursesHomeCard() {
         </button>
       </div>
       <div className="flex flex-col gap-2.5">
-        {results.slice(0, HOME_PREVIEW_COUNT).map((r) => (
-          <div key={r.id ?? r.name} className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white p-3.5">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-fairway-50 text-fairway-600">
-              <MapPin size={16} />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-semibold text-slate-800">{r.name}</span>
-              {r.area && <span className="block truncate text-xs text-slate-500">{r.area}</span>}
-            </span>
-            <span className="shrink-0 text-xs font-semibold text-fairway-700">
-              {r.distanceMiles != null ? formatDistanceMiles(r.distanceMiles) : t("nearbyCourses.distanceUnknown")}
-            </span>
-          </div>
-        ))}
+        {results.slice(0, HOME_PREVIEW_COUNT).map((r) => {
+          // Same rule as the full Nearby screen: only the hand-picked
+          // courses with a course page (photo/preview + official booking
+          // link) are tappable; every other course stays informational.
+          const supported = matchSupportedTeeTimeCourse(r.name);
+          const content = (
+            <>
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-fairway-50 text-fairway-600">
+                {supported?.heroImageUrl ? (
+                  <img src={supported.heroImageUrl} alt="" loading="lazy" className="h-full w-full object-cover" />
+                ) : (
+                  <MapPin size={16} />
+                )}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold text-slate-800">{r.name}</span>
+                {r.area && <span className="block truncate text-xs text-slate-500">{r.area}</span>}
+              </span>
+              <span className="shrink-0 text-xs font-semibold text-fairway-700">
+                {r.distanceMiles != null ? formatDistanceMiles(r.distanceMiles) : t("nearbyCourses.distanceUnknown")}
+              </span>
+              {supported && <ChevronRight size={16} className="shrink-0 text-slate-400" />}
+            </>
+          );
+          return supported ? (
+            <button
+              key={r.id ?? r.name}
+              onClick={() => navigate(`/tee-times/${supported.id}`)}
+              className="flex w-full items-center gap-3 rounded-2xl border border-slate-100 bg-white p-3.5 text-left transition-colors duration-150 hover:border-fairway-300"
+            >
+              {content}
+            </button>
+          ) : (
+            <div key={r.id ?? r.name} className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white p-3.5">
+              {content}
+            </div>
+          );
+        })}
       </div>
     </section>
   );
