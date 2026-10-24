@@ -1,7 +1,7 @@
 {
-  "name": "Golf Me",
-  "short_name": "Golf Me",
-  "description": "Golf Me — Find your next foursome.",
+  "name": "GolfMe",
+  "short_name": "GolfMe",
+  "description": "Find golf partners, join rounds near you, and get AI swing feedback.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#faf9f6",

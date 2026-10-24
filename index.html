@@ -41,7 +41,7 @@
     <meta name="theme-color" content="#166534" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Golf Me" />
+    <meta name="apple-mobile-web-app-title" content="GolfMe" />
     <!-- interactive-widget=resizes-content: tells a supporting engine (WKWebView
          on iOS 17.4+, recent Chrome) to genuinely resize the layout viewport
          for the on-screen keyboard rather than just overlaying/panning over
@@ -49,8 +49,76 @@
          config (see capacitor.config.ts) but at the web-platform level, so
          the plain browser/PWA path (not just the native app) benefits too. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
-    <meta name="description" content="Golf Me — Find your next foursome." />
-    <title>Golf Me</title>
+    <!-- SEO / sharing. One static page serves both the public landing page
+         and the app shell; the landing page is what crawlers and link
+         previews see, so these describe GolfMe the product. The app does not
+         manage document.title itself, so the title below is what shows in
+         the tab everywhere — keep it the brand name first. -->
+    <title>GolfMe — Find golf partners, join rounds &amp; get AI swing feedback</title>
+    <meta
+      name="description"
+      content="GolfMe helps golfers find playing partners, fill foursomes, host and join rounds near you, chat, and improve with AI Caddie swing analysis. Free on the App Store. Built in NYC."
+    />
+    <link rel="canonical" href="https://golfme.app/" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <!-- Shows the native App Store banner at the top of Safari on iOS -->
+    <meta name="apple-itunes-app" content="app-id=6806917441" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="GolfMe" />
+    <meta property="og:url" content="https://golfme.app/" />
+    <meta property="og:title" content="GolfMe — Find your foursome. Get better with AI Caddie." />
+    <meta
+      property="og:description"
+      content="Find golfers near you, join open rounds, and get AI swing analysis. Free on the App Store."
+    />
+    <meta property="og:image" content="https://golfme.app/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="GolfMe — Find your foursome. Get better with AI Caddie." />
+    <meta property="og:locale" content="en_US" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="GolfMe — Find your foursome. Get better with AI Caddie." />
+    <meta
+      name="twitter:description"
+      content="Find golfers near you, join open rounds, and get AI swing analysis. Free on the App Store."
+    />
+    <meta name="twitter:image" content="https://golfme.app/og.png" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://golfme.app/#organization",
+            "name": "GolfMe",
+            "url": "https://golfme.app/",
+            "logo": "https://golfme.app/icons/icon-512-v3.png"
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://golfme.app/#website",
+            "url": "https://golfme.app/",
+            "name": "GolfMe",
+            "publisher": { "@id": "https://golfme.app/#organization" }
+          },
+          {
+            "@type": "MobileApplication",
+            "@id": "https://golfme.app/#app",
+            "name": "GolfMe",
+            "url": "https://golfme.app/",
+            "installUrl": "https://apps.apple.com/us/app/golfme/id6806917441",
+            "operatingSystem": "iOS",
+            "applicationCategory": "SportsApplication",
+            "description": "Find golf partners, fill foursomes, host and join rounds near you, chat with golfers, and improve with AI Caddie swing analysis.",
+            "image": "https://golfme.app/og.png",
+            "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+            "author": { "@id": "https://golfme.app/#organization" }
+          }
+        ]
+      }
+    </script>
     <!-- Paint the app's cream from the very first frame, before the CSS
          bundle arrives, so a launch never flashes white (matches the native
          web view's backgroundColor in capacitor.config.ts). -->

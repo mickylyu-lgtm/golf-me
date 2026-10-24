@@ -1,0 +1,22 @@
+# golfme.app
+# Vercel serves files in public/ before the SPA rewrite in vercel.json,
+# so this file is reachable at /robots.txt without any config change.
+User-agent: *
+Allow: /
+# Authenticated / per-user surfaces — nothing indexable, and crawling them
+# only produces an empty app shell or a login redirect.
+Disallow: /admin/
+Disallow: /messages
+Disallow: /settings
+Disallow: /profile
+Disallow: /profile-setup
+Disallow: /onboarding
+Disallow: /login
+Disallow: /signup
+Disallow: /splash
+Disallow: /ready
+Disallow: /coach-invite/
+Disallow: /coach-reviews
+Disallow: /__dev/
+
+Sitemap: https://golfme.app/sitemap.xml
