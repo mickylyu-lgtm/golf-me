@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as cameraAngle from "./cameraAngle.ts";
+import * as keyFrames from "./keyFrames.ts";
 import * as phaseOrder from "./phaseOrder.ts";
 import * as qualityGate from "./qualityGate.ts";
 import { CADDIE_V2_THRESHOLDS, validateThresholdRegistry } from "./thresholds.ts";
@@ -29,10 +30,35 @@ const PHASE1_VALUES: Record<string, number> = {
   PO_MAX_IMPACT_WINDOW_SECONDS: 0.3,
 };
 
+// Key-frame detector thresholds as introduced on 2026-10-24 (all placeholders).
+const KEYFRAME_VALUES: Record<string, number> = {
+  KF_MIN_WRIST_CONFIDENCE: 0.5,
+  KF_MAX_WRIST_SEPARATION: 0.6,
+  KF_MAX_GAP_SECONDS: 0.12,
+  KF_SMOOTHING_WINDOW_SECONDS: 0.07,
+  KF_SPEED_BASELINE_SECONDS: 0.05,
+  KF_MIN_CLIP_SECONDS: 1.0,
+  KF_MIN_HAND_RISE: 0.8,
+  KF_MIN_DOWNSWING_SPEED: 2.0,
+  KF_MAX_DOWNSWING_SECONDS: 0.6,
+  KF_MAX_IMPACT_SEARCH_SECONDS: 0.3,
+  KF_STILL_MAX_SPEED: 0.6,
+  KF_MIN_STILL_SECONDS: 0.2,
+  KF_MAX_ADDRESS_SEARCH_SECONDS: 3.0,
+  KF_MAX_FINISH_SEARCH_SECONDS: 2.5,
+  KF_LOCAL_WINDOW_SECONDS: 0.05,
+  KF_MIN_LOCAL_COVERAGE: 0.4,
+  KF_MULTI_SWING_RATIO: 0.8,
+  KF_MAX_MULTI_PERSON_RATIO: 0.1,
+  KF_MAX_BODY_JUMP: 0.5,
+  KF_MIN_IMPACT_FPS: 24,
+};
+
 const MODULE_EXPORTS: Record<ThresholdEntry["module"], Record<string, unknown>> = {
   qualityGate,
   cameraAngle,
   phaseOrder,
+  keyFrames,
 };
 
 const registry: Record<string, ThresholdEntry> = CADDIE_V2_THRESHOLDS;
@@ -78,9 +104,10 @@ describe("threshold registry", () => {
     for (const [id, t] of Object.entries(registry)) expect(t.status, id).toBe("placeholder");
   });
 
-  it("keeps the Phase 1 values (refactor did not change behaviour)", () => {
-    expect(Object.keys(registry).sort()).toEqual(Object.keys(PHASE1_VALUES).sort());
-    for (const [id, value] of Object.entries(PHASE1_VALUES)) expect(registry[id].value, id).toBe(value);
+  it("keeps the Phase 1 values (refactor did not change behaviour) and the key-frame values", () => {
+    const expected = { ...PHASE1_VALUES, ...KEYFRAME_VALUES };
+    expect(Object.keys(registry).sort()).toEqual(Object.keys(expected).sort());
+    for (const [id, value] of Object.entries(expected)) expect(registry[id].value, id).toBe(value);
   });
 
   it("is what each module actually exports and uses", () => {
@@ -92,7 +119,7 @@ describe("threshold registry", () => {
   it("covers every threshold constant a module exports", () => {
     for (const [module, exports] of Object.entries(MODULE_EXPORTS)) {
       for (const name of Object.keys(exports)) {
-        if (/^(QG|CA|PO)_/.test(name)) expect(registry[name]?.module, `${module}.${name}`).toBe(module);
+        if (/^(QG|CA|PO|KF)_/.test(name)) expect(registry[name]?.module, `${module}.${name}`).toBe(module);
       }
     }
   });

@@ -15,7 +15,7 @@
 // - changing a value means updating `date` and `source`; changing a
 //   validated value sends it back to "placeholder" until re-validated.
 //
-// As of 2026-10-20 EVERY threshold below is a placeholder. No accuracy is
+// As of 2026-10-24 EVERY threshold below is a placeholder. No accuracy is
 // claimed for any of them.
 
 export type ThresholdStatus = "placeholder" | "coach_validated";
@@ -33,7 +33,7 @@ export interface ThresholdEvidence {
 
 export interface ThresholdEntry {
   /** Module that reads this threshold. */
-  module: "qualityGate" | "cameraAngle" | "phaseOrder";
+  module: "qualityGate" | "cameraAngle" | "phaseOrder" | "keyFrames";
   value: number;
   unit: string;
   description: string;
@@ -47,6 +47,7 @@ export interface ThresholdEntry {
 }
 
 const PHASE1_DATE = "2026-10-20";
+const KEYFRAMES_DATE = "2026-10-24";
 
 function placeholder(
   module: ThresholdEntry["module"],
@@ -58,8 +59,14 @@ function placeholder(
   return { module, value, unit, description, status: "placeholder", source, date: PHASE1_DATE, evidence: null };
 }
 
+function keyFramePlaceholder(value: number, unit: string, description: string, source: string): ThresholdEntry {
+  return { module: "keyFrames", value, unit, description, status: "placeholder", source, date: KEYFRAMES_DATE, evidence: null };
+}
+
 const GEOMETRY_GUESS = "Rough 2-D geometry estimate, not fitted to labeled clips";
 const ENGINEERING_GUESS = "Engineering judgement, not fitted to labeled clips";
+const SIGNAL_LOOK =
+  "Engineering judgement after looking at the hand-height signal of the unlabeled C001 pilot clips (no labels, so not fitted to anything)";
 
 export const CADDIE_V2_THRESHOLDS = {
   // --- qualityGate.ts ------------------------------------------------------
@@ -192,6 +199,123 @@ export const CADDIE_V2_THRESHOLDS = {
     "seconds",
     "Impact windows wider than this are flagged as too imprecise to anchor on.",
     "Copied from V1 src/lib/swingAssessment.ts MAX_IMPACT_WINDOW_SECONDS; never validated in V1 either",
+  ),
+
+  // --- keyFrames.ts --------------------------------------------------------
+  KF_MIN_WRIST_CONFIDENCE: keyFramePlaceholder(
+    0.5,
+    "confidence (0-1)",
+    "A wrist below this confidence gives no hand evidence for that frame (each wrist judged on its own).",
+    "Same value as QG_MIN_KEYPOINT_CONFIDENCE; never validated",
+  ),
+  KF_MAX_WRIST_SEPARATION: keyFramePlaceholder(
+    0.6,
+    "torso lengths",
+    "Both hands are on the grip; two confident wrists further apart than this mean one is mis-tracked, so only one is used.",
+    GEOMETRY_GUESS,
+  ),
+  KF_MAX_GAP_SECONDS: keyFramePlaceholder(
+    0.12,
+    "seconds",
+    "Gaps in the hand track up to this long (e.g. downswing blur) are bridged by linear interpolation; longer gaps stay gaps.",
+    SIGNAL_LOOK,
+  ),
+  KF_SMOOTHING_WINDOW_SECONDS: keyFramePlaceholder(
+    0.07,
+    "seconds",
+    "Centred running-median window over the hand track, against landmark jitter (at least 3 frames).",
+    SIGNAL_LOOK,
+  ),
+  KF_SPEED_BASELINE_SECONDS: keyFramePlaceholder(
+    0.05,
+    "seconds",
+    "Half-baseline of the finite differences used for hand velocity and speed (at least 1 frame).",
+    ENGINEERING_GUESS,
+  ),
+  KF_MIN_CLIP_SECONDS: keyFramePlaceholder(1.0, "seconds", "Sequences shorter than this are too short to hold a swing.", ENGINEERING_GUESS),
+  KF_MIN_HAND_RISE: keyFramePlaceholder(
+    0.8,
+    "torso lengths",
+    "Minimum hand height difference between the top and the bottom of the downswing to count as a swing.",
+    SIGNAL_LOOK,
+  ),
+  KF_MIN_DOWNSWING_SPEED: keyFramePlaceholder(
+    2.0,
+    "torso lengths / second",
+    "Minimum peak downward hand speed for a downswing candidate.",
+    SIGNAL_LOOK,
+  ),
+  KF_MAX_DOWNSWING_SECONDS: keyFramePlaceholder(
+    0.6,
+    "seconds",
+    "The top is searched up to this long before the fastest downward hand motion.",
+    ENGINEERING_GUESS,
+  ),
+  KF_MAX_IMPACT_SEARCH_SECONDS: keyFramePlaceholder(
+    0.3,
+    "seconds",
+    "Impact (lowest hand point) is searched up to this long after the fastest downward hand motion.",
+    ENGINEERING_GUESS,
+  ),
+  KF_STILL_MAX_SPEED: keyFramePlaceholder(
+    0.6,
+    "torso lengths / second",
+    "Hands slower than this (after smoothing) count as still, for address and a held finish.",
+    SIGNAL_LOOK,
+  ),
+  KF_MIN_STILL_SECONDS: keyFramePlaceholder(
+    0.2,
+    "seconds",
+    "A still period must last this long to count as address or as a held finish.",
+    ENGINEERING_GUESS,
+  ),
+  KF_MAX_ADDRESS_SEARCH_SECONDS: keyFramePlaceholder(
+    3.0,
+    "seconds",
+    "Address is searched up to this long before the top.",
+    ENGINEERING_GUESS,
+  ),
+  KF_MAX_FINISH_SEARCH_SECONDS: keyFramePlaceholder(
+    2.5,
+    "seconds",
+    "The finish is searched up to this long after impact.",
+    ENGINEERING_GUESS,
+  ),
+  KF_LOCAL_WINDOW_SECONDS: keyFramePlaceholder(
+    0.05,
+    "seconds",
+    "Half-width of the window around a key frame used for its local evidence (at least 1 frame).",
+    ENGINEERING_GUESS,
+  ),
+  KF_MIN_LOCAL_COVERAGE: keyFramePlaceholder(
+    0.4,
+    "ratio (0-1)",
+    "Minimum share of frames around a key frame with an observed (not interpolated) hand point; below it the key frame is inconclusive.",
+    SIGNAL_LOOK,
+  ),
+  KF_MULTI_SWING_RATIO: keyFramePlaceholder(
+    0.8,
+    "ratio (0-1)",
+    "A second, separate downswing at least this large and fast (relative to the best) makes the clip ambiguous: multiple swings.",
+    ENGINEERING_GUESS,
+  ),
+  KF_MAX_MULTI_PERSON_RATIO: keyFramePlaceholder(
+    0.1,
+    "ratio (0-1)",
+    "If more than this share of swing frames had several people detected, the clip is inconclusive.",
+    ENGINEERING_GUESS,
+  ),
+  KF_MAX_BODY_JUMP: keyFramePlaceholder(
+    0.5,
+    "torso lengths per frame",
+    "A hip-centre jump larger than this between neighbouring frames during the swing means tracking switched person or failed.",
+    GEOMETRY_GUESS,
+  ),
+  KF_MIN_IMPACT_FPS: keyFramePlaceholder(
+    24,
+    "frames / second",
+    "Below this sampling rate impact is not reported (the downswing spans only a few frames).",
+    ENGINEERING_GUESS,
   ),
 } satisfies Record<string, ThresholdEntry>;
 
