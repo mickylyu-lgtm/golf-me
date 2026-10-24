@@ -334,135 +334,35 @@ type Phase = "idle" | "uploading" | "pose" | "scoring" | "done";
 
 const FEEDBACK = ["Strong tempo through transition.", "Hips open slightly early at the top.", "Try: hold the turn one beat longer."];
 
-// Face-on golfer in a 200x260 box, as four key poses of one swing. Limbs
-// are thick round-capped strokes between joints, so the same joint table
-// drives both the drawn figure and Caddie's pose overlay — the skeleton
-// tracks the moving body exactly. The scene tweens between poses with an
-// ease on each segment (useSwingPose below).
-type Pose = Record<Joint, readonly [number, number]> & { club: readonly [number, number] };
-type JointName =
-  | "head" | "neck" | "shL" | "shR" | "elL" | "elR" | "hands"
-  | "hipL" | "hipR" | "kneeL" | "kneeR" | "ankL" | "ankR";
-type Joint = JointName;
+// The swing is real footage: 30 frames of a face-on driver swing (the
+// founder's own clip), run through a brand-green duotone so it reads as
+// analysis footage, not a home video — no face detail survives. Served as
+// one sprite sheet (public/caddie/swing-sprite.webp, 6 x 5 frames of
+// 240 x 327) and stepped at the clip's own 12 fps. Frame 11 is the top of
+// the backswing, where the demo freezes for the pose overlay.
+const SPRITE = { url: "/caddie/swing-sprite.webp", cols: 6, rows: 5, frames: 30, fps: 12, w: 240, h: 327 };
+const TOP_FRAME = 11;
+// Where the four scrubber ticks fall in the clip (frame indices).
+const PHASE_FRAMES = [0, TOP_FRAME, 16, 22];
+const PHASES = ["Address", "Top", "Impact", "Finish"];
 
-// Right-handed golfer facing the camera. Joint positions traced frame by
-// frame from a real face-on driver swing (viewer-left = trail side, target
-// to the right): shaft parallel to the ground pointing at the target at
-// the top, lead leg braced and hips open at impact, arms extended toward
-// the target, then a high finish with the club wrapped behind the back
-// and the trail foot up on its toe.
-const POSE_ADDRESS: Pose = {
-  head: [98, 46], neck: [100, 66], shL: [80, 79], shR: [120, 79],
-  elL: [84, 116], elR: [116, 116], hands: [102, 133],
-  hipL: [84, 145], hipR: [116, 145], kneeL: [80, 191], kneeR: [120, 191], ankL: [73, 232], ankR: [129, 232],
-  club: [181, 236],
+// Joints on the top-of-backswing frame, in sprite pixels (240 x 327).
+const TOP_JOINTS: Record<string, [number, number]> = {
+  head: [88, 78],
+  neck: [95, 110],
+  shL: [62, 118],
+  shR: [128, 122],
+  elL: [66, 72],
+  elR: [120, 78],
+  hands: [100, 30],
+  hipL: [78, 180],
+  hipR: [122, 178],
+  kneeL: [76, 236],
+  kneeR: [124, 236],
+  ankL: [70, 296],
+  ankR: [134, 296],
 };
-const POSE_TAKEAWAY: Pose = {
-  head: [98, 46], neck: [100, 66], shL: [78, 76], shR: [118, 81],
-  elL: [70, 104], elR: [96, 110], hands: [59, 115],
-  hipL: [84, 145], hipR: [116, 145], kneeL: [80, 191], kneeR: [120, 191], ankL: [73, 232], ankR: [129, 232],
-  club: [-4, 98],
-};
-const POSE_THREE_QUARTER: Pose = {
-  head: [95, 47], neck: [98, 66], shL: [77, 75], shR: [116, 85],
-  elL: [64, 91], elR: [86, 83], hands: [62, 75],
-  hipL: [84, 145], hipR: [116, 145], kneeL: [80, 191], kneeR: [120, 191], ankL: [73, 232], ankR: [129, 232],
-  club: [28, 8],
-};
-const POSE_TOP: Pose = {
-  head: [98, 51], neck: [100, 68], shL: [77, 76], shR: [116, 86],
-  elL: [60, 58], elR: [96, 61], hands: [76, 36],
-  hipL: [86, 146], hipR: [118, 144], kneeL: [82, 191], kneeR: [120, 189], ankL: [73, 232], ankR: [129, 232],
-  club: [204, 30],
-};
-const POSE_HALF_DOWN: Pose = {
-  head: [97, 48], neck: [100, 67], shL: [78, 78], shR: [118, 82],
-  elL: [74, 100], elR: [108, 96], hands: [92, 118],
-  hipL: [88, 144], hipR: [118, 141], kneeL: [86, 190], kneeR: [120, 188], ankL: [73, 232], ankR: [129, 232],
-  club: [44, 184],
-};
-const POSE_IMPACT: Pose = {
-  head: [96, 48], neck: [99, 67], shL: [82, 80], shR: [120, 76],
-  elL: [104, 108], elR: [126, 100], hands: [134, 126],
-  hipL: [89, 143], hipR: [118, 138], kneeL: [91, 189], kneeR: [120, 186], ankL: [74, 232], ankR: [129, 232],
-  club: [190, 237],
-};
-const POSE_FOLLOW: Pose = {
-  head: [98, 46], neck: [101, 65], shL: [91, 81], shR: [125, 76],
-  elL: [113, 100], elR: [132, 86], hands: [145, 91],
-  hipL: [95, 143], hipR: [120, 139], kneeL: [95, 189], kneeR: [121, 187], ankL: [75, 231], ankR: [130, 232],
-  club: [217, 33],
-};
-const POSE_FINISH: Pose = {
-  head: [105, 43], neck: [106, 62], shL: [105, 83], shR: [131, 80],
-  elL: [138, 75], elR: [154, 70], hands: [174, 60],
-  hipL: [104, 143], hipR: [123, 141], kneeL: [105, 189], kneeR: [125, 188], ankL: [91, 226], ankR: [131, 232],
-  club: [104, 137],
-};
-// (pose, time in the cycle 0..1), from the reference clip's frame times
-// (12 fps): a short held address, backswing to the top in ~1 s, impact a
-// third of a second later, finish reached ~0.7 s after that and held,
-// then a return to address.
-const SWING: [Pose, number][] = [
-  [POSE_ADDRESS, 0],
-  [POSE_ADDRESS, 0.06],
-  [POSE_TAKEAWAY, 0.13],
-  [POSE_THREE_QUARTER, 0.18],
-  [POSE_TOP, 0.26],
-  [POSE_HALF_DOWN, 0.31],
-  [POSE_IMPACT, 0.35],
-  [POSE_FOLLOW, 0.39],
-  [POSE_FINISH, 0.44],
-  [POSE_FINISH, 0.8],
-  [POSE_ADDRESS, 1],
-];
-const SWING_MS = 3800;
-const JOINTS = Object.keys(POSE_TOP).filter((k) => k !== "club") as Joint[];
-
-function easeInOut(t: number): number {
-  return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-}
-function tweenPose(t: number): Pose {
-  for (let i = 0; i < SWING.length - 1; i++) {
-    const [a, ta] = SWING[i];
-    const [b, tb] = SWING[i + 1];
-    if (t >= ta && t <= tb) {
-      const k = tb === ta ? 0 : easeInOut((t - ta) / (tb - ta));
-      const out = {} as Record<string, readonly [number, number]>;
-      for (const key of [...JOINTS, "club"] as (Joint | "club")[]) {
-        out[key] = [a[key][0] + (b[key][0] - a[key][0]) * k, a[key][1] + (b[key][1] - a[key][1]) * k];
-      }
-      return out as Pose;
-    }
-  }
-  return POSE_ADDRESS;
-}
-
-// Drives the swing loop with requestAnimationFrame while `playing`; when
-// paused it rests at the top of the backswing (where the angle callouts
-// are measured). First render is the top pose too, so the prerender shows
-// a finished-looking frame. Reduced-motion users get the still frame.
-function useSwingPose(playing: boolean): { pose: Pose; progress: number } {
-  const [state, setState] = useState<{ pose: Pose; progress: number }>({ pose: POSE_TOP, progress: 0.26 });
-  useEffect(() => {
-    if (!playing || prefersReducedMotion()) {
-      setState({ pose: POSE_TOP, progress: 0.26 });
-      return;
-    }
-    let raf = 0;
-    const start = performance.now();
-    const tick = (now: number) => {
-      const t = ((now - start) % SWING_MS) / SWING_MS;
-      setState({ pose: tweenPose(t), progress: t });
-      raf = window.requestAnimationFrame(tick);
-    };
-    raf = window.requestAnimationFrame(tick);
-    return () => window.cancelAnimationFrame(raf);
-  }, [playing]);
-  return state;
-}
-
-const BONES: [Joint, Joint][] = [
+const TOP_BONES: [string, string][] = [
   ["head", "neck"],
   ["neck", "shL"],
   ["neck", "shR"],
@@ -478,174 +378,130 @@ const BONES: [Joint, Joint][] = [
   ["hipR", "kneeR"],
   ["kneeR", "ankR"],
 ];
-const PHASES = ["Address", "Top", "Impact", "Finish"];
 
-function SwingScene({ phase, pose, progress }: { phase: Phase; pose: Pose; progress: number }) {
-  const J = pose;
+// Steps the sprite at 12 fps while `playing`; rests on the top frame
+// otherwise (and under prefers-reduced-motion, and in the prerender).
+function useSwingFrame(playing: boolean): number {
+  const [frame, setFrame] = useState(TOP_FRAME);
+  useEffect(() => {
+    if (!playing || prefersReducedMotion()) {
+      setFrame(TOP_FRAME);
+      return;
+    }
+    let raf = 0;
+    const start = performance.now();
+    const tick = (now: number) => {
+      setFrame(Math.floor(((now - start) / 1000) * SPRITE.fps) % SPRITE.frames);
+      raf = window.requestAnimationFrame(tick);
+    };
+    raf = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(raf);
+  }, [playing]);
+  return frame;
+}
+
+function SwingScene({ phase, frame }: { phase: Phase; frame: number }) {
   const showPose = phase === "pose" || phase === "scoring" || phase === "done";
   const showAngles = phase === "scoring" || phase === "done";
-  const ballStruck = phase !== "done" && progress > 0.35 && progress < 0.98;
-  const limb = (a: Joint, b: Joint, w: number) => (
-    <line key={`${a}${b}`} x1={J[a][0]} y1={J[a][1]} x2={J[b][0]} y2={J[b][1]} stroke="url(#gm-body)" strokeWidth={w} strokeLinecap="round" />
-  );
-  // Club: shaft from the hands toward the pose's club point, head at the end.
-  const [cx, cy] = J.club;
-  const ang = Math.atan2(cy - J.hands[1], cx - J.hands[0]);
-  const len = Math.hypot(cx - J.hands[0], cy - J.hands[1]);
-  const hx = J.hands[0] + Math.cos(ang) * (len - 6);
-  const hy = J.hands[1] + Math.sin(ang) * (len - 6);
+  const col = frame % SPRITE.cols;
+  const row = Math.floor(frame / SPRITE.cols);
+  const J = TOP_JOINTS;
   return (
-    <svg viewBox="0 0 400 300" className="h-full w-full" role="img" aria-label="Illustration of a golfer at the top of the backswing with Caddie's pose analysis overlay">
-      <defs>
-        <linearGradient id="gm-sky" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#0b2a18" />
-          <stop offset="0.55" stopColor="#1b4a2d" />
-          <stop offset="1" stopColor="#3f8a4a" />
-        </linearGradient>
-        <radialGradient id="gm-sun" cx="0.78" cy="0.42" r="0.45">
-          <stop offset="0" stopColor="#f6c96f" stopOpacity="0.55" />
-          <stop offset="0.5" stopColor="#f4b942" stopOpacity="0.12" />
-          <stop offset="1" stopColor="#f4b942" stopOpacity="0" />
-        </radialGradient>
-        <linearGradient id="gm-grass" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#2e8f45" />
-          <stop offset="1" stopColor="#176a30" />
-        </linearGradient>
-        <linearGradient id="gm-body" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#1c2e24" />
-          <stop offset="1" stopColor="#060f0a" />
-        </linearGradient>
-        <linearGradient id="gm-bone" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#bbf7d0" />
-          <stop offset="1" stopColor="#4ade80" />
-        </linearGradient>
-        <filter id="gm-glow" x="-80%" y="-80%" width="260%" height="260%">
-          <feGaussianBlur stdDeviation="2.2" result="b" />
-          <feMerge>
-            <feMergeNode in="b" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
-        <filter id="gm-soft" x="-20%" y="-20%" width="140%" height="140%">
-          <feGaussianBlur stdDeviation="6" />
-        </filter>
-        <clipPath id="gm-clip">
-          <rect width="400" height="300" rx="0" />
-        </clipPath>
-      </defs>
-
-      <g clipPath="url(#gm-clip)">
-        {/* sky + low sun */}
-        <rect width="400" height="300" fill="url(#gm-sky)" />
-        <rect width="400" height="300" fill="url(#gm-sun)" />
-        <circle cx="312" cy="126" r="26" fill="#f6c96f" opacity="0.9" />
-        <circle cx="312" cy="126" r="44" fill="#f6c96f" opacity="0.12" filter="url(#gm-soft)" />
-        {/* distant treeline */}
+    <div className="absolute inset-0 overflow-hidden bg-gradient-to-b from-[#0b2a18] via-[#143822] to-[#2f7d3f]">
+      {/* backdrop: low sun, treeline, fairway — the footage sits on top */}
+      <svg viewBox="0 0 400 300" preserveAspectRatio="xMidYMid slice" className="absolute inset-0 h-full w-full" aria-hidden="true">
+        <defs>
+          <radialGradient id="gm-sun" cx="0.5" cy="0.5" r="0.5">
+            <stop offset="0" stopColor="#f6c96f" stopOpacity="0.55" />
+            <stop offset="1" stopColor="#f4b942" stopOpacity="0" />
+          </radialGradient>
+          <linearGradient id="gm-grass" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#2e8f45" />
+            <stop offset="1" stopColor="#176a30" />
+          </linearGradient>
+        </defs>
+        <circle cx="330" cy="92" r="70" fill="url(#gm-sun)" />
+        <circle cx="330" cy="92" r="22" fill="#f6c96f" opacity="0.9" />
         <g fill="#0d2d1a" opacity="0.9">
           <ellipse cx="40" cy="182" rx="60" ry="26" />
           <ellipse cx="110" cy="176" rx="48" ry="30" />
           <ellipse cx="330" cy="184" rx="70" ry="24" />
           <ellipse cx="390" cy="178" rx="50" ry="30" />
         </g>
-        <g fill="#123b22">
-          <ellipse cx="70" cy="190" rx="54" ry="18" />
-          <ellipse cx="350" cy="192" rx="62" ry="16" />
-        </g>
-        {/* fairway with mown stripes, in perspective */}
         <rect x="0" y="196" width="400" height="104" fill="url(#gm-grass)" />
         <g fill="#ffffff" opacity="0.07">
           <path d="M-20 300 L60 196 L92 196 L40 300 Z" />
-          <path d="M100 300 L150 196 L182 196 L160 300 Z" />
-          <path d="M220 300 L240 196 L272 196 L280 300 Z" />
           <path d="M340 300 L330 196 L362 196 L400 300 Z" />
         </g>
-        {/* flag on the far green */}
         <g>
-          <ellipse cx="250" cy="206" rx="34" ry="5" fill="#4fc169" opacity="0.6" />
-          <line x1="250" y1="206" x2="250" y2="168" stroke="#f8faf8" strokeWidth="1.5" />
-          <path d="M250 168 L268 174 L250 180 Z" fill="#f4b942" />
+          <ellipse cx="330" cy="222" rx="30" ry="5" fill="#4fc169" opacity="0.6" />
+          <line x1="330" y1="222" x2="330" y2="186" stroke="#f8faf8" strokeWidth="1.5" />
+          <path d="M330 186 L348 192 L330 198 Z" fill="#f4b942" />
         </g>
-        {/* tee box glow + shadow */}
-        <ellipse cx="100" cy="250" rx="56" ry="9" fill="#031208" opacity="0.5" filter="url(#gm-soft)" />
+      </svg>
 
-        {/* ball on the tee (gone after impact until the next address) */}
-        {!ballStruck && <circle cx="190" cy="241" r="3.2" fill="#f8faf8" />}
-        {ballStruck && <circle cx={190 + (progress - 0.35) * 620} cy={241 - (progress - 0.35) * 700} r="2.6" fill="#f8faf8" opacity="0.9" />}
-
-        {/* golfer: club first so the shaft sits behind the body */}
-        <g transform="translate(0 6)">
-          <line x1={J.hands[0]} y1={J.hands[1]} x2={hx} y2={hy} stroke="#cbd5e1" strokeWidth="3" strokeLinecap="round" />
-          <ellipse cx={hx} cy={hy} rx="7" ry="4" fill="#1f2937" stroke="#9ca3af" strokeWidth="1" transform={`rotate(${(ang * 180) / Math.PI + 90} ${hx} ${hy})`} />
-          {/* torso */}
-          <path
-            d={`M${J.shL[0]} ${J.shL[1] - 4} C${J.shL[0] - 4} ${(J.shL[1] + J.hipL[1]) / 2} ${J.hipL[0] - 6} ${J.hipL[1] - 18} ${J.hipL[0]} ${J.hipL[1] + 4} L${J.hipR[0]} ${J.hipR[1] + 4} C${J.hipR[0] + 6} ${J.hipR[1] - 18} ${J.shR[0] + 4} ${(J.shR[1] + J.hipR[1]) / 2} ${J.shR[0]} ${J.shR[1] - 4} Z`}
-            fill="url(#gm-body)"
-          />
-          {/* legs */}
-          {limb("hipL", "kneeL", 17)}
-          {limb("kneeL", "ankL", 15)}
-          {limb("hipR", "kneeR", 17)}
-          {limb("kneeR", "ankR", 15)}
-          {/* shoes */}
-          <ellipse cx={J.ankL[0] - 2} cy={J.ankL[1] + 6} rx="15" ry="6" fill="#0a1510" />
-          <ellipse cx={J.ankR[0] + 4} cy={J.ankR[1] + 6} rx="15" ry="6" fill="#0a1510" />
-          {/* arms */}
-          {limb("shL", "elL", 13)}
-          {limb("elL", "hands", 12)}
-          {limb("shR", "elR", 13)}
-          {limb("elR", "hands", 12)}
-          <circle cx={J.hands[0]} cy={J.hands[1]} r="8" fill="#0d1a12" />
-          {/* head + cap */}
-          <circle cx={J.head[0]} cy={J.head[1]} r="15" fill="url(#gm-body)" />
-          <path d={`M${J.head[0] - 17} ${J.head[1] - 4} C${J.head[0] - 12} ${J.head[1] - 18} ${J.head[0] + 14} ${J.head[1] - 18} ${J.head[0] + 18} ${J.head[1] - 4} Z`} fill="#0b1a10" />
-          <path d={`M${J.head[0] - 18} ${J.head[1] - 3} L${J.head[0] + 22} ${J.head[1] - 3} L${J.head[0] + 26} ${J.head[1] + 1} L${J.head[0] - 20} ${J.head[1] + 1} Z`} fill="#0b1a10" />
-          {/* rim light from the sun */}
-          <path d={`M${J.shR[0]} ${J.shR[1]} C${J.shR[0] + 4} ${J.shR[1] + 22} ${J.hipR[0] + 8} ${J.hipR[1] - 16} ${J.hipR[0]} ${J.hipR[1] + 4}`} stroke="#f6c96f" strokeWidth="2" strokeOpacity="0.35" fill="none" strokeLinecap="round" />
-          <line x1={J.kneeR[0]} y1={J.kneeR[1]} x2={J.ankR[0]} y2={J.ankR[1]} stroke="#f6c96f" strokeWidth="2" strokeOpacity="0.3" strokeLinecap="round" />
-        </g>
-
-        {/* pose overlay */}
-        {showPose && (
-          <g transform="translate(0 6)" className="animate-pop">
-            {BONES.map(([a, b]) => (
+      {/* the clip, centred, full height */}
+      <div className="absolute left-1/2 top-0 h-full -translate-x-1/2" style={{ aspectRatio: `${SPRITE.w} / ${SPRITE.h}` }}>
+        <div
+          role="img"
+          aria-label="Face-on video of a golfer's driver swing, stylised in green"
+          className="h-full w-full"
+          style={{
+            backgroundImage: `url(${SPRITE.url})`,
+            backgroundSize: `${SPRITE.cols * 100}% ${SPRITE.rows * 100}%`,
+            backgroundPosition: `${(col / (SPRITE.cols - 1)) * 100}% ${(row / (SPRITE.rows - 1)) * 100}%`,
+            maskImage: "linear-gradient(to right, transparent, black 12%, black 88%, transparent)",
+            WebkitMaskImage: "linear-gradient(to right, transparent, black 12%, black 88%, transparent)",
+          }}
+        />
+        {/* pose overlay, locked to the top-of-backswing frame */}
+        {showPose && frame === TOP_FRAME && (
+          <svg viewBox={`0 0 ${SPRITE.w} ${SPRITE.h}`} className="absolute inset-0 h-full w-full animate-pop" aria-hidden="true">
+            <defs>
+              <linearGradient id="gm-bone" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stopColor="#bbf7d0" />
+                <stop offset="1" stopColor="#4ade80" />
+              </linearGradient>
+              <filter id="gm-glow" x="-80%" y="-80%" width="260%" height="260%">
+                <feGaussianBlur stdDeviation="2.2" result="b" />
+                <feMerge>
+                  <feMergeNode in="b" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+            {TOP_BONES.map(([a, b]) => (
               <line key={`${a}-${b}`} x1={J[a][0]} y1={J[a][1]} x2={J[b][0]} y2={J[b][1]} stroke="url(#gm-bone)" strokeWidth="2.4" strokeLinecap="round" opacity="0.95" />
             ))}
-            {JOINTS.map((k, i) => (
+            <line x1={J.neck[0]} y1={J.neck[1]} x2={(J.hipL[0] + J.hipR[0]) / 2} y2={(J.hipL[1] + J.hipR[1]) / 2} stroke="#ffffff" strokeWidth="1" strokeDasharray="3 3" opacity="0.6" />
+            <line x1={J.shL[0]} y1={J.shL[1]} x2={J.shR[0]} y2={J.shR[1]} stroke="#ffffff" strokeWidth="1" strokeDasharray="3 3" opacity="0.6" />
+            <line x1={J.hipL[0]} y1={J.hipL[1]} x2={J.hipR[0]} y2={J.hipR[1]} stroke="#ffffff" strokeWidth="1" strokeDasharray="3 3" opacity="0.6" />
+            {Object.keys(J).map((k, i) => (
               <g key={k} filter="url(#gm-glow)">
                 <circle cx={J[k][0]} cy={J[k][1]} r="4.6" fill="#f4b942" className="animate-pose-pulse" style={{ animationDelay: `${i * 70}ms`, transformBox: "fill-box", transformOrigin: "center" }} />
                 <circle cx={J[k][0]} cy={J[k][1]} r="1.8" fill="#fff7e0" />
               </g>
             ))}
-            {/* spine + shoulder + hip guides */}
-            <line x1={J.neck[0]} y1={J.neck[1]} x2={(J.hipL[0] + J.hipR[0]) / 2} y2={(J.hipL[1] + J.hipR[1]) / 2} stroke="#ffffff" strokeWidth="1" strokeDasharray="3 3" opacity="0.6" />
-            <line x1={J.shL[0]} y1={J.shL[1]} x2={J.shR[0]} y2={J.shR[1]} stroke="#ffffff" strokeWidth="1" strokeDasharray="3 3" opacity="0.6" />
-            <line x1={J.hipL[0]} y1={J.hipL[1]} x2={J.hipR[0]} y2={J.hipR[1]} stroke="#ffffff" strokeWidth="1" strokeDasharray="3 3" opacity="0.6" />
-          </g>
+          </svg>
         )}
+      </div>
 
-        {/* angle callouts */}
-        {showAngles && (
-          <g className="animate-slide-up" fontFamily="Inter, system-ui, sans-serif" fontWeight="700">
-            {[
-              { x: 178, y: 58, label: "Shoulder turn", value: "94°", ok: true },
-              { x: 178, y: 128, label: "Hip turn", value: "46°", ok: true },
-              { x: 178, y: 198, label: "Knee flex", value: "22°", ok: false },
-            ].map((c) => (
-              <g key={c.label}>
-                <line x1={c.x - 14} y1={c.y + 10} x2={c.x - 44} y2={c.y + 10} stroke="#ffffff" strokeOpacity="0.5" strokeWidth="1" />
-                <rect x={c.x - 10} y={c.y - 2} width="112" height="26" rx="13" fill="#0b1a10" fillOpacity="0.85" stroke={c.ok ? "#4ade80" : "#f4b942"} strokeOpacity="0.6" />
-                <text x={c.x} y={c.y + 15} fontSize="10" fill="#dcfce7" fontWeight="500">
-                  {c.label}
-                </text>
-                <text x={c.x + 98} y={c.y + 15} fontSize="11" fill={c.ok ? "#86efac" : "#f6c96f"} textAnchor="end">
-                  {c.value}
-                </text>
-              </g>
-            ))}
-          </g>
-        )}
-      </g>
-    </svg>
+      {/* angle callouts, in the free space to the right of the clip */}
+      {showAngles && (
+        <div className="absolute right-3 top-14 space-y-2 animate-slide-up">
+          {[
+            { label: "Shoulder turn", value: "94°", ok: true },
+            { label: "Hip turn", value: "46°", ok: true },
+            { label: "Knee flex", value: "22°", ok: false },
+          ].map((c) => (
+            <div key={c.label} className={`flex items-center justify-between gap-3 rounded-full border bg-[#0b1a10]/85 px-3 py-1 text-[11px] backdrop-blur ${c.ok ? "border-fairway-400/60" : "border-sun-400/60"}`}>
+              <span className="font-medium text-fairway-100">{c.label}</span>
+              <span className={`font-bold tabular-nums ${c.ok ? "text-fairway-300" : "text-sun-300"}`}>{c.value}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -678,29 +534,20 @@ export function CaddieDemo() {
     done: "Analysis saved to your history",
   };
   const stepIndex = ["uploading", "pose", "scoring", "done"].indexOf(phase);
-  // The figure swings continuously until the analysis lands, then rests at
-  // the top of the backswing so the angle callouts match what's drawn.
-  const { pose, progress } = useSwingPose(phase !== "done");
-  // Scrubber: follows the swing while it plays (address -> finish spans
-  // the first 72% of the cycle), parks on "Top" once the result is in.
-  // Scrubber: piecewise map of the cycle onto the four evenly spaced phase
-  // ticks (Address 0, Top 1/3, Impact 2/3, Finish 1), so the playhead sits
-  // on "Top" exactly when the figure is at the top, etc.
-  const marks: [number, number][] = [
-    [0, 0],
-    [0.26, 100 / 3],
-    [0.35, 200 / 3],
-    [0.44, 100],
-  ];
-  const mapPlayhead = (t: number) => {
-    for (let i = 0; i < marks.length - 1; i++) {
-      const [ta, pa] = marks[i];
-      const [tb, pb] = marks[i + 1];
-      if (t <= tb) return pa + ((Math.max(t, ta) - ta) / (tb - ta)) * (pb - pa);
+  // The clip loops until the pose step, then freezes on the top of the
+  // backswing so the skeleton and angle callouts sit on a still frame.
+  const frame = useSwingFrame(phase === "idle" || phase === "uploading");
+  // Scrubber: piecewise map of the frame index onto the four evenly spaced
+  // ticks, so the playhead sits on "Top" exactly on the top frame, etc.
+  const mapPlayhead = (f: number) => {
+    for (let i = 0; i < PHASE_FRAMES.length - 1; i++) {
+      const fa = PHASE_FRAMES[i];
+      const fb = PHASE_FRAMES[i + 1];
+      if (f <= fb) return ((i + (Math.max(f, fa) - fa) / (fb - fa)) / (PHASE_FRAMES.length - 1)) * 100;
     }
     return 100;
   };
-  const playhead = phase === "done" ? 100 / 3 : mapPlayhead(progress);
+  const playhead = mapPlayhead(frame);
 
   const metrics = [
     { label: "Tempo", value: "3.1 : 1", pct: 86, ok: true },
@@ -714,7 +561,7 @@ export function CaddieDemo() {
       <div className="overflow-hidden rounded-3xl border border-white/10 bg-[#0b1a10] shadow-2xl shadow-black/40 ring-1 ring-white/5">
         {/* video frame */}
         <div className="relative aspect-[4/3]">
-          <SwingScene phase={phase} pose={pose} progress={progress} />
+          <SwingScene phase={phase} frame={frame} />
           {phase === "uploading" && <div aria-hidden="true" className="absolute inset-x-0 h-px bg-sun-300/90 shadow-[0_0_14px_3px_rgba(246,201,111,0.6)] animate-scan" />}
           {(phase === "uploading" || phase === "pose") && (
             <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:24px_24px]" />
@@ -729,7 +576,7 @@ export function CaddieDemo() {
           </div>
           {phase !== "idle" && phase !== "done" && (
             <div className="absolute left-3 top-10 flex items-center gap-1.5 rounded-full bg-black/45 px-2.5 py-1 text-[10px] font-semibold text-fairway-200 backdrop-blur">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-400" /> {phase === "pose" ? "POSE DETECTION" : "LIVE"}
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-400" /> {phase === "pose" ? "POSE DETECTION" : "REC"}
             </div>
           )}
           {/* scrubber with swing phases */}
