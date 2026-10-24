@@ -50,14 +50,15 @@ test("offline verdicts: isolated + only expected blocks = verified; anything els
   assert.equal(offlineVerdict({}).verdict, "not recorded");
 });
 
-test("report with no data: every measurement cell says 'no data'; key frames say 'not implemented'", async () => {
+test("report with no data: every measurement cell says 'no data'; key frames say 'not measured'", async () => {
   const root = tmp("caddie-eval-report-");
   const dataDir = path.join(root, "data");
   initDataDir(dataDir);
   const { markdown, report } = await buildPilotReport(dataDir, { today: TODAY });
   assert.equal(report.clips.length, 0);
   assert.match(markdown, /## §0 Offline check \(per pose run\)\n\nno data/);
-  assert.match(markdown, /Key-frame identification\n\n\*\*Not implemented\.\*\*/);
+  assert.match(markdown, /No K00 key-frame labels yet: accuracy not measured/);
+  assert.match(markdown, /\| address \| all \| no data \| no data \| no data \|/);
   // No measured number anywhere in the measurement tables.
   for (const section of ["§5 Pose accuracy", "§5a", "§8a", "§8b"]) {
     const start = markdown.indexOf(`## ${section}`);
@@ -65,7 +66,7 @@ test("report with no data: every measurement cell says 'no data'; key frames say
     const rows = body.split("\n").filter((l) => l.startsWith("| ") && !l.startsWith("| Point group") && !l.startsWith("| Keypoint") && !l.startsWith("| Measure") && !l.startsWith("| Key frame"));
     for (const r of rows) {
       const cells = r.split("|").slice(2, -1).map((c) => c.trim());
-      for (const c of cells) assert.ok(["no data", "not implemented", "0", "all", "face_on", "down_the_line"].includes(c), `${section}: unexpected cell "${c}" in ${r}`);
+      for (const c of cells) assert.ok(["no data", "not implemented", "see §4a", "0", "all", "face_on", "down_the_line"].includes(c), `${section}: unexpected cell "${c}" in ${r}`);
     }
   }
 });
@@ -96,7 +97,11 @@ test("report with synthetic data: per-view detection, accuracy vs K00 (prototype
   assert.match(foClip.offline.verdict, /^offline verified/);
   assert.match(dtlClip.offline.verdict, /NOT OS-isolated/);
   assert.equal(report.labelStatus, "prototype_not_validated");
-  assert.equal(report.keyframeIdentification, "not implemented");
+  // The face-on clip has K00 labels and detector output (12 still frames: too short, so all inconclusive).
+  assert.equal(report.keyframeIdentification, "scored vs K00 (prototype labels)");
+  assert.equal(foClip.keyFrames.inconclusiveReason, "too_short");
+  assert.equal(foClip.keyFrameError.byEvent.address.labeled, 1);
+  assert.equal(foClip.keyFrameError.byEvent.address.missing, 1, "inconclusive for a labeled key frame = a miss");
 
   assert.match(markdown, /K00 PROTOTYPE labels/);
   assert.match(markdown, /Runs verified offline .*: 1 of 2/);
@@ -104,8 +109,10 @@ test("report with synthetic data: per-view detection, accuracy vs K00 (prototype
   assert.match(markdown, /\| left_shoulder \| 1 \(n=1\) \* \|/, "face-on detection with n and marker");
   assert.match(markdown, /\| Frames with a pose \(clip mean\) \| 1 \(n=1\) \* \| 0\.5 \(n=1\) \* \|/);
   assert.match(markdown, /\| Quality gate pass \| 1 \(1\/1\) .* \| no data \|/, "DTL has no checks file: no data, not zero");
-  assert.match(markdown, /\| Key-frame identification \| not implemented \| not implemented \|/);
-  assert.match(markdown, /\| address \| 1 \| 0 \| not implemented \|/);
+  assert.match(markdown, /\| Key-frame identification \| see §4a \| see §4a \|/);
+  assert.match(markdown, /\| address \| all \| 0 \(0\/1\) .* \| no data \| too_short \(1\) \|/, "detector output with its reason");
+  assert.match(markdown, /\| address \| 1 \* \| 0 \(1 inconclusive = miss\) \| 0 \(0\/1\)/, "error table counts the miss");
+  assert.match(markdown, /\| top \| no data \|/, "cant_tell labels are excluded, not scored");
   assert.match(markdown, /Right \/ left-handed clips \| 2 \/ 0 \(left-handed: not measured\)/);
   assert.ok(!markdown.includes(fo.root), "no local paths in the report");
 });
@@ -127,4 +134,29 @@ test("report refuses nothing silently: a clip whose consent lapsed is listed as 
   const { markdown } = await buildPilotReport(dataDir, { today: TODAY });
   assert.match(markdown, /Refused by the local gate/);
   assert.match(markdown, /Clips in manifest \/ usable today \| 1 \/ 0/);
+});
+
+test("pose-accuracy: detector key frames scored against K00 in frames and ms", async () => {
+  const { keyFrameErrorFor } = await import("../pose-accuracy.mjs");
+  const { dataDir, clipId } = await setupWithClip();
+  const derived = path.join(dataDir, "derived", clipId);
+  fs.mkdirSync(derived, { recursive: true });
+  const annotation = {
+    frame_source: { analysis_fps: 30 },
+    keyframes: { address: { status: "labeled", frame_index: 10 }, top: { status: "labeled", frame_index: 40 }, impact: { status: "labeled", frame_index: 50 }, finish: { status: "not_in_clip" } },
+  };
+  assert.match(keyFrameErrorFor(derived, "full", annotation), /no detector output/);
+  assert.match(keyFrameErrorFor(derived, "full", null), /coach labels/);
+  const pred = { analysisFps: 30, events: { address: { frame_index: 11 }, top: { frame_index: 43 }, impact: null, finish: { frame_index: 70 } } };
+  fs.writeFileSync(path.join(derived, "keyframes-mediapipe-full.json"), JSON.stringify(pred));
+  const r = keyFrameErrorFor(derived, "full", annotation);
+  assert.deepEqual(r.byEvent.address.errorsFrames, [1]);
+  assert.deepEqual(r.byEvent.address.errorsMs, [33.3]);
+  assert.deepEqual(r.byEvent.top.signedErrorsFrames, [3], "positive = detector late");
+  assert.equal(r.byEvent.address.withinTolerance, 1);
+  assert.equal(r.byEvent.top.withinTolerance, 0, "3 frames at 30 fps = 100 ms > 67 ms");
+  assert.equal(r.byEvent.impact.missing, 1);
+  assert.equal(r.byEvent.finish.excluded, 1);
+  fs.writeFileSync(path.join(derived, "keyframes-mediapipe-full.json"), JSON.stringify({ ...pred, analysisFps: 60 }));
+  assert.match(keyFrameErrorFor(derived, "full", annotation), /differs from pose fps/);
 });

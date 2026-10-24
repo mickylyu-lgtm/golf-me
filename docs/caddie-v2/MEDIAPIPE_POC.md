@@ -76,9 +76,13 @@ The run file (`pose-mediapipe-<variant>.run.json`) records all of this for every
 - **Timing:** frame times start at 0 at the first decoded frame. A coach's player time for the same frame can differ slightly; the scorer matches within half a frame.
 - `personConfidence` is always `null` (the Tasks API doesn't expose a person score), so the gate's person-score check never applies to MediaPipe.
 
+### Key frames (2026-10-24)
+
+`src/lib/caddie/v2/keyFrames.ts`, run by `run-v2-checks.mjs`: address, top, impact, finish from the hand height relative to the hip centre (torso lengths), each with a heuristic confidence or an explicit inconclusive reason. On the 10 local pilot clips (C001-0001 to 0008, C002-0001, C003-0001; no labels, so **no accuracy is known**) it reported all four key frames on 8, three on 2 (C001-0001 impact: wrists not observed around the lowest hand point at 30 fps; C001-0008 address: no still address on a handheld phone video of a simulator screen). A by-eye look at two clips found the frames plausible; that is not a measurement. Expected biases, to measure on K00 labels: "top" is the hands' peak, while coaches mark the club turning, usually a few frames later; "impact" is the hands' lowest point; address comes late on a slow takeaway (the hands barely move while the club head starts back); a finish that slowly sags is never "held", so the follow-through peak is used instead, at half confidence. The detector can't tell a real swing from a filmed screen (C001-0008).
+
 ### Not implemented
 
-Swing phases, measurements, faults, coaching explanations, and drills. Every results file says so, and the pass-2 rating fields refuse a rating for any of them (`PROTOTYPE_CAPABILITIES` in `import-clip.mjs`).
+Measurements, faults, coaching explanations, and drills. Every results file says so, and the pass-2 rating fields refuse a rating for any of them (`PROTOTYPE_CAPABILITIES` in `import-clip.mjs`).
 
 ## 6. Fit with the GolfMe web app and future iOS
 

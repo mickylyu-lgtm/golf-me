@@ -146,12 +146,12 @@ Read by the assistant on 2026-10-20. **Decision: Google Meet** (Micky, 2026-10-2
 
 ### 5.1 Pass 2 in the pilot: rating the local prototype
 
-V1 output can't exist in the pilot (both vendors blocked, `VENDOR_APPROVAL_CRITERIA.md` §6), so pass 2 rates the **local prototype**: MediaPipe pose, the V2 quality gate, and the camera-angle heuristic (`MEDIAPIPE_POC.md`). Say it to the coach in these words: "This is a local prototype, not GolfMe's Caddie. It only finds body points. It doesn't produce phases, measurements, faults, explanations, or drills yet."
+V1 output can't exist in the pilot (both vendors blocked, `VENDOR_APPROVAL_CRITERIA.md` §6), so pass 2 rates the **local prototype**: MediaPipe pose, the V2 quality gate, the camera-angle heuristic, and the key-frame detector (`MEDIAPIPE_POC.md`). Say it to the coach in these words: "This is a local prototype, not GolfMe's Caddie. It finds body points and guesses four key frames (address, top, impact, finish). It doesn't produce measurements, faults, explanations, or drills yet."
 
 What the coach is shown, per eligible clip, on Micky's laptop (in person) or in the shared player window (remote):
 
 1. The **overlay video** `derived/<clip ID>/overlay-mediapipe-full.mp4` (from `render-overlay.mjs`): the clip with the prototype's confident body points drawn on it; a red border on frames the quality gate rejects.
-2. The **results summary** printed by `run-v2-checks.mjs` for the clip: quality gate pass/inconclusive and why, camera angle (or `unknown`).
+2. The **results summary** printed by `run-v2-checks.mjs` for the clip: quality gate pass/inconclusive and why, camera angle (or `unknown`), and the detected key frames (frame number and heuristic confidence, or "inconclusive" and why). Step to each key frame in the player so the coach can rate `p2_phase_rating`.
 
 Nothing else. Never show a fault, tip, drill, or explanation: the prototype has none, and none may be written by hand.
 

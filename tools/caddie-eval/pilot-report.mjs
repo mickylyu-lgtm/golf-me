@@ -3,7 +3,8 @@
 // Reads ONLY what the local tools wrote into the data folder and fills the
 // local-prototype tables of docs/caddie-v2/EVAL_REPORT_TEMPLATE.md:
 //   §0  offline check per run (browser log + OS network isolation)
-//   §4a key-frame identification (states "not implemented": no detector)
+//   §4a key-frame identification: detector output per view (no labels
+//       needed) and error vs K00 key frames in frames and ms (when labeled)
 //   §5  pose accuracy vs K00 key-frame labels (PROTOTYPE labels), per view
 //   §5a landmark detection rate and confidence, per keypoint, per view
 //   §8a processing time per swing, CPU and memory, per view
@@ -11,8 +12,8 @@
 // Rules: numbers only from real run files; a table with nothing behind it
 // says "no data"; rows with fewer than 20 clips are marked "too few to
 // conclude"; proportions carry a Wilson 95 % interval, clip-level values a
-// seeded bootstrap 95 % interval. Phases, faults, drills, coaching: not
-// implemented, and the report says so.
+// seeded bootstrap 95 % interval. Measurements, faults, drills, coaching:
+// not implemented, and the report says so.
 //
 // "View" = the angle the clip was FILMED as (manifest capture.angle), which
 // is the protocol slot, not a coach label.
@@ -29,7 +30,7 @@ import { fileURLToPath } from "node:url";
 import { QG_MIN_KEYPOINT_CONFIDENCE } from "../../src/lib/caddie/v2/qualityGate.ts";
 import { EvalError, PROTOTYPE_CAPABILITIES, assertLocalProcessingAllowed, defaultDataDir, isImplemented, mkdirPrivate, openDataDir, todayIso, writeDataJson } from "./import-clip.mjs";
 import { ANNOTATION_KEYPOINTS, ANNOTATION_LABEL_STATUS, KEYFRAME_EVENTS, annotationToScorerLabels, readAnnotationChain } from "./lib/annotations.mjs";
-import { KEYFRAME_TOLERANCE_MS } from "./lib/keyframeAccuracy.mjs";
+import { KEYFRAME_TOLERANCE_MS, scoreKeyframePredictions } from "./lib/keyframeAccuracy.mjs";
 import { MIN_CLIPS_TO_CONCLUDE, bootstrapCi, mean, median, quantile, wilson } from "./lib/stats.mjs";
 import { EXPECTED_BLOCKED_HOSTS } from "./pose-local.mjs";
 import { PHASES, scorePoseAgainstLabels } from "./pose-accuracy.mjs";
@@ -117,8 +118,18 @@ async function collectClip(dataDir, layout, entry, variant, today) {
   if (run) out.run = run;
   const checks = readJsonIf(path.join(dir, `v2-checks-mediapipe-${variant}.json`));
   if (checks) out.checks = checks;
+  const keyframes = readJsonIf(path.join(dir, `keyframes-mediapipe-${variant}.json`));
+  if (keyframes === undefined) out.problems.push("key-frame file unreadable");
+  else if (keyframes) out.keyframes = keyframes;
   const chain = readAnnotationChain(layout.annotations, clipId, ANNOTATOR);
   if (chain.problems.length) out.problems.push(...chain.problems);
+  if (chain.latest && out.keyframes) {
+    const labelFps = chain.latest.frame_source.analysis_fps;
+    const predFps = out.keyframes.analysisFps;
+    // Frame indices only compare on the same timeline (export and pose run share fps and frame numbering).
+    if (Number.isFinite(predFps) && Math.abs(predFps - labelFps) / labelFps > 0.01) out.problems.push(`key frames not scored: label fps ${labelFps} differs from pose fps ${predFps}`);
+    else out.keyframeScore = scoreKeyframePredictions(out.keyframes, chain.latest);
+  }
   if (chain.latest) {
     out.annotation = { version: chain.latest.version, keyframes: Object.fromEntries(KEYFRAME_EVENTS.map((e) => [e, chain.latest.keyframes[e].status])) };
     if (out.detection) {
@@ -263,8 +274,70 @@ function comparisonRows(byView) {
   add("Inference ms/frame (median of clip medians)", (cs) => distCells(cs.map((c) => c.run?.performance?.inferenceMsPerFrame?.median))[1]);
   add("Processing time per swing, s (median)", (cs) => distCells(cs.map((c) => c.run?.performance?.wallSecondsTotal), 2)[1]);
   add("Peak RSS MB (median)", (cs) => distCells(cs.map((c) => (Number.isFinite(c.run?.resources?.peakRssBytes?.total) ? c.run.resources.peakRssBytes.total / 1048576 : null)), 0)[1]);
+  add("All four key frames detected", (cs) => {
+    const s = cs.filter((c) => c.keyframes);
+    return propCell(s.filter((c) => c.keyframes.status === "detected").length, s.length, s.length);
+  });
+  add("Key frames within tolerance vs K00", (cs) => {
+    const rows = cs.filter((c) => c.keyframeScore).flatMap((c) => Object.values(c.keyframeScore.byEvent));
+    const labeled = rows.reduce((a, r) => a + r.labeled, 0);
+    return propCell(rows.reduce((a, r) => a + r.withinTolerance, 0), labeled, cs.filter((c) => c.keyframeScore).length);
+  });
   add("Key-frame identification", () => (isImplemented("swing_phases") ? "see §4a" : "not implemented"));
   return rows;
+}
+
+/** Detector output per key frame for a set of clips: detected / with a key-frame file, median confidence, inconclusive reasons. */
+function keyframeDetectionRows(byViewAll) {
+  return KEYFRAME_EVENTS.flatMap((e) =>
+    Object.entries(byViewAll).map(([view, cs]) => {
+      const withFile = cs.filter((c) => c.keyframes);
+      if (!withFile.length) return [e, view, NO_DATA, NO_DATA, NO_DATA];
+      const hits = withFile.filter((c) => c.keyframes.events?.[e]);
+      const confs = hits.map((c) => c.keyframes.events[e].confidence).filter(Number.isFinite);
+      const reasons = {};
+      for (const c of withFile) {
+        const r = c.keyframes.inconclusive?.[e];
+        if (r) reasons[r] = (reasons[r] ?? 0) + 1;
+      }
+      return [
+        e,
+        view,
+        propCell(hits.length, withFile.length, withFile.length),
+        confs.length ? fmt(median(confs), 2) : NO_DATA,
+        Object.entries(reasons).map(([r, k]) => `${r} (${k})`).join(", ") || "none",
+      ];
+    }),
+  );
+}
+
+/** Error vs K00 per key frame: frames and ms, tolerance hit rates. Missing predictions count as misses. */
+function keyframeErrorRows(clips) {
+  const scored = clips.filter((c) => c.keyframeScore);
+  return KEYFRAME_EVENTS.map((e) => {
+    const rows = scored.map((c) => c.keyframeScore.byEvent[e]);
+    const labeled = rows.reduce((a, r) => a + r.labeled, 0);
+    const predicted = rows.reduce((a, r) => a + r.predicted, 0);
+    const within = rows.reduce((a, r) => a + r.withinTolerance, 0);
+    const within1 = rows.reduce((a, r) => a + r.withinOneFrame, 0);
+    const errFrames = rows.flatMap((r) => r.errorsFrames);
+    const errMs = rows.flatMap((r) => r.errorsMs);
+    const signed = rows.flatMap((r) => r.signedErrorsFrames ?? []);
+    const nClips = rows.filter((r) => r.labeled).length;
+    if (!labeled) return [e, NO_DATA, NO_DATA, NO_DATA, NO_DATA, NO_DATA, NO_DATA, NO_DATA, NO_DATA];
+    const [, medMs, p90Ms, maxMs] = distCells(errMs, 0);
+    return [
+      e,
+      `${labeled}${few(nClips)}`,
+      `${predicted} (${labeled - predicted} inconclusive = miss)`,
+      propCell(within, labeled, nClips),
+      propCell(within1, labeled, nClips),
+      errFrames.length ? fmt(median(errFrames), 1) : NO_DATA,
+      signed.length ? fmt(mean(signed), 1) : NO_DATA,
+      medMs,
+      `${p90Ms} / ${maxMs}`,
+    ];
+  });
 }
 
 function gitCommit() {
@@ -338,7 +411,22 @@ export async function buildPilotReport(dataDir, { variant = "full", today = toda
   md.push("", `Runs verified offline (0 external requests allowed, only expected blocks, no network interface): ${offline.length ? `${offline.filter((o) => o.verdict.startsWith("offline verified")).length} of ${offline.length}` : NO_DATA}. Expected block: ${EXPECTED_BLOCKED_HOSTS.join(", ")} (MediaPipe usage logger, see MEDIAPIPE_TELEMETRY_AUDIT.md).`);
 
   md.push("", "## §4a Key-frame identification", "");
-  if (!isImplemented("swing_phases")) {
+  if (isImplemented("swing_phases")) {
+    const scoredClips = active.filter((c) => c.keyframeScore);
+    md.push(`Detector: \`src/lib/caddie/v2/keyFrames.ts\` (pose-only, provisional placeholder thresholds; confidences are heuristic, not calibrated). "View" = the manifest angle (participant-confirmed where relabeled).`);
+    md.push("");
+    md.push("Detector output (no labels needed): how often each key frame was reported, and why it wasn't.");
+    md.push("");
+    md.push(table(["Key frame", "View", "Detected (clips)", "Median confidence", "Inconclusive reasons (clips)"], keyframeDetectionRows({ all: active, face_on: byView.face_on, down_the_line: byView.down_the_line, unsuitable: byView.unsuitable })));
+    md.push("");
+    md.push(`Error vs K00 key frames (PROTOTYPE labels). Unit: one labeled key frame on one clip; \`not_in_clip\` / \`cant_tell\` labels excluded; an inconclusive prediction for a labeled key frame counts as a miss. Tolerance ±${KEYFRAME_TOLERANCE_MS} ms. Clips scored: ${scoredClips.length}.${scoredClips.length ? "" : " **No K00 key-frame labels yet: accuracy not measured.**"}`);
+    md.push("");
+    md.push(table(["Key frame", "K00 labeled (n)", "Predicted", `Within ±${KEYFRAME_TOLERANCE_MS} ms`, "Within ±1 frame", "Median error (frames)", "Mean signed error (frames; + = late)", "Median error ms [95 % CI]", "p90 / max ms"], keyframeErrorRows(active)));
+    for (const v of VIEWS) {
+      md.push("", `${v}:`, "");
+      md.push(table(["Key frame", "K00 labeled (n)", "Predicted", `Within ±${KEYFRAME_TOLERANCE_MS} ms`, "Within ±1 frame", "Median error (frames)", "Mean signed error (frames; + = late)", "Median error ms [95 % CI]", "p90 / max ms"], keyframeErrorRows(byView[v])));
+    }
+  } else {
     md.push(`**Not implemented.** The local prototype has no key-frame detector, so there is no prediction to score and no accuracy is claimed. When one exists, it is scored against K00 key frames with a tolerance of ±${KEYFRAME_TOLERANCE_MS} ms (and ±1 frame) by \`lib/keyframeAccuracy.mjs\`.`);
     md.push("");
     md.push(table(["Key frame", "K00 labeled (clips)", "K00 not in clip / can't tell", "Detector accuracy"], KEYFRAME_EVENTS.map((e) => [e, annotated.length ? String(annotated.filter((c) => c.annotation.keyframes[e] === "labeled").length) : NO_DATA, annotated.length ? String(annotated.filter((c) => c.annotation.keyframes[e] !== "labeled").length) : NO_DATA, "not implemented"])));
@@ -372,7 +460,7 @@ export async function buildPilotReport(dataDir, { variant = "full", today = toda
   md.push("", "## §8b Face-on vs down-the-line", "");
   md.push(table(["Measure", ...VIEWS], comparisonRows(byView)));
   md.push("");
-  md.push("Swing phases, measurements, faults, coaching explanations, drills: **not implemented** in the prototype; nothing to compare.");
+  md.push("Measurements, faults, coaching explanations, drills: **not implemented** in the prototype; nothing to compare.");
 
   const report = {
     schema: REPORT_SCHEMA,
@@ -389,10 +477,12 @@ export async function buildPilotReport(dataDir, { variant = "full", today = toda
       problems: c.problems ?? [],
       detection: c.detection ? { frames: c.detection.frames, framesWithPose: c.detection.framesWithPose, confidentRate: Object.fromEntries(ANNOTATION_KEYPOINTS.map((n) => [n, detectionRate(c, [n])])) } : null,
       accuracy: c.accuracy ? { overall: c.accuracy.overall, framesScored: c.accuracy.framesScored, annotationVersion: c.annotation.version } : null,
+      keyFrames: c.keyframes ? { status: c.keyframes.status, inconclusiveReason: c.keyframes.inconclusiveReason, events: c.keyframes.events, inconclusive: c.keyframes.inconclusive } : null,
+      keyFrameError: c.keyframeScore ?? null,
       offline: c.run ? offlineVerdict(c.run) : null,
       performance: c.run ? { wallSecondsTotal: c.run.performance?.wallSecondsTotal ?? null, inferenceMedianMs: c.run.performance?.inferenceMsPerFrame?.median ?? null, cpuSeconds: c.run.resources?.cpuSeconds?.total ?? null, peakRssBytes: c.run.resources?.peakRssBytes?.total ?? null } : null,
     })),
-    keyframeIdentification: isImplemented("swing_phases") ? "see markdown" : "not implemented",
+    keyframeIdentification: isImplemented("swing_phases") ? (active.some((c) => c.keyframeScore) ? "scored vs K00 (prototype labels)" : "detected; not scored (no K00 key-frame labels)") : "not implemented",
   };
   return { report, markdown: `${md.join("\n")}\n` };
 }

@@ -200,7 +200,7 @@ export const PROTOTYPE_CAPABILITIES = Object.freeze({
   body_landmarks: "implemented (MediaPipe Pose Landmarker, 13 keypoints)",
   quality_gate: "implemented (provisional thresholds)",
   camera_angle: "implemented (provisional heuristic; face_on / down_the_line / unknown)",
-  swing_phases: "not implemented",
+  swing_phases: "implemented (key frames address, top, impact, finish; provisional thresholds, not validated)",
   measurements: "not implemented",
   faults: "not implemented",
   coaching_explanations: "not implemented",

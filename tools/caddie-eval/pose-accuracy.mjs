@@ -28,6 +28,12 @@
 //   a confident point (false observation); confident-wrong as in the template.
 // The pose frame used is the one nearest to t, within half a frame interval.
 //
+// Key frames (K00 annotations only, which carry frame indices): when
+// run-v2-checks.mjs wrote derived/<clip>/keyframes-mediapipe-<variant>.json,
+// the detector's frames are also scored against K00's (lib/keyframeAccuracy.mjs:
+// error in frames and ms, within ±67 ms, within ±1 frame; an inconclusive
+// prediction for a labeled key frame is a miss).
+//
 // Usage: node tools/caddie-eval/pose-accuracy.mjs --clip C001-0001 --labeler K00|K01 [--variant full]
 //        node tools/caddie-eval/pose-accuracy.mjs --all [--variant full]
 import fs from "node:fs";
@@ -38,9 +44,10 @@ import { QG_MIN_KEYPOINT_CONFIDENCE } from "../../src/lib/caddie/v2/qualityGate.
 import { POSE_KEYPOINT_NAMES } from "../../src/lib/caddie/v2/types.ts";
 import { EvalError, LABEL_FILE_RE, assertLocalProcessingAllowed, auditEvent, defaultDataDir, todayIso, writeDataJson } from "./import-clip.mjs";
 import { validatePoseSequence } from "./run-v2-checks.mjs";
-import { ANNOTATION_LABEL_STATUS, ANNOTATOR_IDS, annotationToScorerLabels, readAnnotationChain } from "./lib/annotations.mjs";
+import { ANNOTATION_LABEL_STATUS, ANNOTATOR_IDS, KEYFRAME_EVENTS, annotationToScorerLabels, readAnnotationChain } from "./lib/annotations.mjs";
+import { scoreKeyframePredictions } from "./lib/keyframeAccuracy.mjs";
 
-export const POSE_ACCURACY_VERSION = "0.2.0";
+export const POSE_ACCURACY_VERSION = "0.3.0";
 export const PHASES = ["address", "top", "impact", "finish"];
 
 function emptyCounts() {
@@ -208,6 +215,7 @@ export function loadKeyframeLabels(layout, clipId, labeler) {
     if (chain.problems.length) throw new EvalError(`${clipId}-${labeler} annotations are invalid: ${chain.problems.join("; ")}`);
     if (!chain.latest) throw new EvalError(`no annotation ${clipId}-${labeler}.v001.json`);
     return {
+      annotation: chain.latest,
       labels: annotationToScorerLabels(chain.latest),
       source: { kind: "prototype_annotation", labelStatus: ANNOTATION_LABEL_STATUS, annotatorId: labeler, version: chain.latest.version, versions: chain.versions.length },
     };
@@ -219,15 +227,31 @@ export function loadKeyframeLabels(layout, clipId, labeler) {
   return { labels: label.keyframe_keypoints, source: { kind: "coach_label", coachId: labeler } };
 }
 
+/**
+ * Detector key frames vs a K00 annotation, or a reason string when not
+ * scorable (coach labels carry no frame index; no detector output; fps differ).
+ */
+export function keyFrameErrorFor(derivedDir, variant, annotation) {
+  if (!annotation) return "not scored: coach labels carry no key-frame indices";
+  const file = path.join(derivedDir, `keyframes-mediapipe-${variant}.json`);
+  if (!fs.existsSync(file)) return "not scored: no detector output (run run-v2-checks.mjs)";
+  const predicted = JSON.parse(fs.readFileSync(file, "utf8"));
+  const labelFps = annotation.frame_source.analysis_fps;
+  if (Number.isFinite(predicted.analysisFps) && Math.abs(predicted.analysisFps - labelFps) / labelFps > 0.01) {
+    return `not scored: label fps ${labelFps} differs from pose fps ${predicted.analysisFps}`;
+  }
+  return scoreKeyframePredictions(predicted, annotation);
+}
+
 export async function scoreClip(dataDir, clipId, labeler, { variant = "full", today = todayIso() } = {}) {
   const { derivedDir, layout } = await assertLocalProcessingAllowed(dataDir, clipId, { today, checkFile: false });
-  const { labels, source } = loadKeyframeLabels(layout, clipId, labeler);
+  const { labels, source, annotation } = loadKeyframeLabels(layout, clipId, labeler);
   const poseFile = path.join(derivedDir, `pose-mediapipe-${variant}.json`);
   if (!fs.existsSync(poseFile)) throw new EvalError(`${clipId}: no pose for variant ${variant}`);
   const seq = JSON.parse(fs.readFileSync(poseFile, "utf8"));
   const problems = validatePoseSequence(seq);
   if (problems.length) throw new EvalError(`${clipId}: pose file is malformed: ${problems.join("; ")}`);
-  const result = { clipId, labeler, labelSource: source, variant, createdOn: today, ...scorePoseAgainstLabels(seq, labels) };
+  const result = { clipId, labeler, labelSource: source, variant, createdOn: today, ...scorePoseAgainstLabels(seq, labels), keyFrameError: keyFrameErrorFor(derivedDir, variant, annotation) };
   writeDataJson(layout, path.join(derivedDir, `pose-accuracy-mediapipe-${variant}-${labeler}.json`), result);
   auditEvent(layout, { action: "pose_accuracy_scored_locally", clipId, labeler, variant }, today);
   return result;
@@ -243,6 +267,7 @@ export async function scoreAll(dataDir, { variant = "full", today = todayIso() }
   const clips = [];
   const refused = [];
   const pairs = [];
+  const keyFrames = Object.fromEntries(KEYFRAME_EVENTS.map((e) => [e, { labeled: 0, predicted: 0, withinTolerance: 0, withinOneFrame: 0, errorsFrames: [], errorsMs: [], signedErrorsFrames: [] }]));
   for (const name of fs.existsSync(labelsDir) ? fs.readdirSync(labelsDir).sort() : []) {
     const m = LABEL_FILE_RE.exec(name);
     if (!m) continue;
@@ -268,7 +293,16 @@ export async function scoreAll(dataDir, { variant = "full", today = todayIso() }
       add(total, r.raw.overall);
       for (const k of POSE_KEYPOINT_NAMES) add(byKeypoint[k], r.raw.byKeypoint[k]);
       for (const p of PHASES) add(byPhase[p], r.raw.byPhase[p]);
-      clips.push({ clipId, labeler, labelSource: r.labelSource, framesScored: r.framesScored, pck02: r.overall.pck02 });
+      if (typeof r.keyFrameError === "object" && r.keyFrameError) {
+        for (const e of KEYFRAME_EVENTS) {
+          const row = r.keyFrameError.byEvent[e];
+          for (const k of ["labeled", "predicted", "withinTolerance", "withinOneFrame"]) keyFrames[e][k] += row[k];
+          keyFrames[e].errorsFrames.push(...row.errorsFrames);
+          keyFrames[e].errorsMs.push(...row.errorsMs);
+          keyFrames[e].signedErrorsFrames.push(...row.signedErrorsFrames);
+        }
+      }
+      clips.push({ clipId, labeler, labelSource: r.labelSource, framesScored: r.framesScored, pck02: r.overall.pck02, keyFramesScored: typeof r.keyFrameError === "object" });
     } catch (err) {
       if (!(err instanceof EvalError)) throw err;
       refused.push({ file: name, reason: err.message });
@@ -281,6 +315,7 @@ export async function scoreAll(dataDir, { variant = "full", today = todayIso() }
     overall: finalize(total),
     byPhase: Object.fromEntries(Object.entries(byPhase).map(([k, v]) => [k, finalize(v)])),
     byKeypoint: Object.fromEntries(Object.entries(byKeypoint).map(([k, v]) => [k, finalize(v)])),
+    keyFrames,
   };
 }
 
@@ -294,7 +329,7 @@ async function main(argv) {
   }
   if (!values.clip || !values.labeler) throw new EvalError("--clip and --labeler (e.g. K01) are required, or --all");
   const r = await scoreClip(dataDir, values.clip, values.labeler, { variant });
-  process.stdout.write(`${JSON.stringify({ clipId: r.clipId, labeler: r.labeler, framesScored: r.framesScored, overall: r.overall, byPhase: r.byPhase }, null, 2)}\n`);
+  process.stdout.write(`${JSON.stringify({ clipId: r.clipId, labeler: r.labeler, framesScored: r.framesScored, overall: r.overall, byPhase: r.byPhase, keyFrameError: r.keyFrameError }, null, 2)}\n`);
   return 0;
 }
 

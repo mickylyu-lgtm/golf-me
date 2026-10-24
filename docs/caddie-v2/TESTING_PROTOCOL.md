@@ -199,12 +199,12 @@ Only after pass 1 is locked, coaches see Caddie's result for each clip and rate:
 Micky's decision (2026-10-20): pass 2 runs in the pilot, on the **local prototype** (`MEDIAPIPE_POC.md`), never on hand-written or invented feedback.
 
 1. **Blind first.** Each coach annotates the original clips in pass 1 without any prototype output. Pass 2 starts only after that coach's pass-1 labels are saved and `verify` passes.
-2. **Shown per clip:** the pose overlay video and the gate/angle summary (`COACH_REVIEW_PROCEDURE.md` §5.1). Nothing else.
-3. **Rated**, six items, one field each in the clip's label file. The sheet must make clear what the prototype actually does. Today it only produces body landmarks (plus the quality gate and a camera-angle guess), so five of the six items are pre-filled **"not implemented, not rated"**:
+2. **Shown per clip:** the pose overlay video and the gate/angle/key-frame summary (`COACH_REVIEW_PROCEDURE.md` §5.1). Nothing else.
+3. **Rated**, six items, one field each in the clip's label file. The sheet must make clear what the prototype actually does. Today it produces body landmarks and four key frames (plus the quality gate and a camera-angle guess), so four of the six items are pre-filled **"not implemented, not rated"**:
 
 | # | Item | Field | Prototype today | Allowed values |
 |---|---|---|---|---|
-| 1 | Swing-phase identification accuracy | `p2_phase_rating` | **Not implemented** | `not_implemented` only |
+| 1 | Swing-phase identification accuracy | `p2_phase_rating` | **Implemented** (2026-10-24: key frames address, top, impact, finish; provisional) | `correct` / `partly` / `wrong` / `cant_tell` |
 | 2 | Body landmark reliability (overlay) | `p2_landmark_rating` | **Implemented** | `reliable` / `mostly_reliable` / `unreliable` / `cant_tell`; plus `p2_landmark_problem_phases` (free text, e.g. "downswing wrists", no names) |
 | 3 | Accuracy of observable swing measurements | `p2_measurement_rating` | **Not implemented** | `not_implemented` only |
 | 4 | Correctness of identified faults | `p2_fault_rating` | **Not implemented** | `not_implemented` only |

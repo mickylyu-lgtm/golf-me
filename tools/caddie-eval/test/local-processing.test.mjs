@@ -46,15 +46,25 @@ test("withdrawal deletes everything derived for the clip (pose, checks, overlay)
   assert.ok(!fs.existsSync(path.join(dataDir, "derived", clipId)));
 });
 
-test("runner: face-on synthetic pose passes the gate and reads face_on; output states what isn't implemented", async () => {
+test("runner: face-on synthetic pose passes the gate and reads face_on; key frames inconclusive, never invented; output states what isn't implemented", async () => {
   const { dataDir, clipId } = await setupWithClip({ angle: "face_on" });
   writeSyntheticPose(dataDir, clipId, POSES.FACE_ON_ADDRESS);
   const r = await runV2ChecksForClip(dataDir, clipId, { today: TODAY });
   assert.equal(r.qualityGate.status, "pass");
   assert.equal(r.cameraAngle.angle, "face_on");
   assert.equal(r.angleVsIntent, "match");
-  for (const k of ["swing_phases", "measurements", "faults", "coaching_explanations", "drills"]) assert.equal(r.capabilities[k], "not implemented");
+  for (const k of ["measurements", "faults", "coaching_explanations", "drills"]) assert.equal(r.capabilities[k], "not implemented");
+  assert.match(r.capabilities.swing_phases, /^implemented/);
   assert.deepEqual(r.capabilities, PROTOTYPE_CAPABILITIES);
+  // 12 still frames (0.4 s): too short to hold a swing, so every key frame is inconclusive.
+  assert.equal(r.keyFrames.status, "inconclusive");
+  assert.equal(r.keyFrames.inconclusiveReason, "too_short");
+  assert.equal(r.phaseOrder.status, "inconclusive");
+  assert.ok(r.thresholdsProvisional.includes("KF_MIN_HAND_RISE"));
+  const kf = JSON.parse(fs.readFileSync(path.join(dataDir, "derived", clipId, "keyframes-mediapipe-full.json"), "utf8"));
+  assert.deepEqual(kf.events, { address: null, top: null, impact: null, finish: null });
+  assert.equal(kf.inconclusive.top, "too_short");
+  assert.equal(r.multiPersonCheck, "skipped (no raw run file)");
   assert.ok(r.thresholdsProvisional.includes("QG_MIN_KEYPOINT_CONFIDENCE"));
   assert.ok(r.thresholdsProvisional.includes("CA_MIN_AGREEMENT"));
   const onDisk = JSON.parse(fs.readFileSync(path.join(dataDir, "derived", clipId, "v2-checks-mediapipe-full.json"), "utf8"));
@@ -190,7 +200,7 @@ test("pass-2 prototype ratings: only implemented capabilities can be rated; the 
     ...base,
     p2_landmark_rating: "mostly_reliable",
     p2_landmark_problem_phases: "downswing wrists",
-    p2_phase_rating: "not_implemented",
+    p2_phase_rating: "partly",
     p2_measurement_rating: "not_implemented",
     p2_fault_rating: "not_implemented",
     p2_explanation_rating: "not_implemented",
@@ -198,7 +208,10 @@ test("pass-2 prototype ratings: only implemented capabilities can be rated; the 
   };
   assert.deepEqual(validateLabelRecord(good, { clipId: "C001-0001", coachId: "K01" }), []);
   assert.ok(isImplemented("body_landmarks"));
-  for (const f of ["p2_phase_rating", "p2_measurement_rating", "p2_fault_rating", "p2_explanation_rating", "p2_drill_rating"]) {
+  // Key frames ship with the local detector (2026-10-24), so phases can be rated; "not_implemented" no longer can.
+  assert.ok(isImplemented("swing_phases"));
+  assert.ok(validateLabelRecord({ ...good, p2_phase_rating: "not_implemented" }).some((x) => x.includes("p2_phase_rating must be one of")));
+  for (const f of ["p2_measurement_rating", "p2_fault_rating", "p2_explanation_rating", "p2_drill_rating"]) {
     assert.ok(!isImplemented(PROTOTYPE_RATING_FIELDS[f].capability), `${f} capability is not implemented today`);
     const p = validateLabelRecord({ ...good, [f]: "correct" });
     assert.ok(p.some((x) => x.includes(f) && x.includes("not_implemented")), `${f}: a rating of missing output is refused`);

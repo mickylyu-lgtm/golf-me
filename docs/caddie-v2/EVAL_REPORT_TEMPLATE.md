@@ -161,15 +161,24 @@ Also report the distributions of `medianShoulderRatio` and `medianHipRatio` per 
 **What it measures:** whether an automatic detector picks the same address, top, impact, and finish frames as the labels.
 
 **Truth:** K00 key frames (`annotations/<clip>-K00.vNNN.json`, latest version; **prototype labels**), and later the coach `t_*` times. `not_in_clip` / `cant_tell` are excluded and counted.
-**Prediction:** a key-frame detector's frame per event. **The local prototype has none (`PROTOTYPE_CAPABILITIES.swing_phases` = not implemented), so this section reads "not implemented" and holds no accuracy numbers.**
+**Prediction:** the frame per event from `src/lib/caddie/v2/keyFrames.ts`, written by `run-v2-checks.mjs` to `derived/<clip>/keyframes-mediapipe-<variant>.json`. An `inconclusive` key frame is no prediction: for a labeled key frame it counts as a miss, never dropped. Detector output per view (detected share, median heuristic confidence, inconclusive reasons) is reported even without labels; error needs K00 labels. `pilot-report.mjs` fills both; `pose-accuracy.mjs` adds `keyFrameError` per clip for K00.
 **Tolerance:** within ±67 ms (2 frames at 30 fps, 4 at 60 fps), and within ±1 frame, on the shared export/pose timeline. A missing prediction for a labeled key frame is a miss. Scorer: `tools/caddie-eval/lib/keyframeAccuracy.mjs`.
 
-| Key frame | K00 labeled (clips) | K00 not in clip / can't tell | Detector: within ±67 ms | Within ±1 frame | Median abs. error (ms) |
-|---|---|---|---|---|---|
-| Address | | | not implemented | not implemented | not implemented |
-| Top | | | not implemented | not implemented | not implemented |
-| Impact | | | not implemented | not implemented | not implemented |
-| Finish | | | not implemented | not implemented | not implemented |
+| Key frame | View | Detected (clips) | Median confidence | Inconclusive reasons (clips) |
+|---|---|---|---|---|
+| Address | all / face-on / DTL | | | |
+| Top | | | | |
+| Impact | | | | |
+| Finish | | | | |
+
+| Key frame | K00 labeled (n) | Predicted | Within ±67 ms | Within ±1 frame | Median error (frames) | Mean signed error (frames; + = late) | Median error ms [95 % CI] | p90 / max ms |
+|---|---|---|---|---|---|---|---|---|
+| Address | | | | | | | | |
+| Top | | | | | | | | |
+| Impact | | | | | | | | |
+| Finish | | | | | | | | |
+
+The signed error (detector minus label) matters: the pose-only "top" (hands' peak) and "impact" (hands' lowest point) are expected to carry a systematic offset, which a mean signed error shows and an absolute error hides.
 
 ## 5. Pose landmark stability
 
