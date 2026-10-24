@@ -671,8 +671,12 @@ export function CaddieDemo() {
 export function CourseTicker({ items }: { items: string[] }) {
   const doubled = [...items, ...items];
   return (
-    <div className="relative mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-white py-3 [mask-image:linear-gradient(to_right,transparent,black_8%,black_92%,transparent)]" aria-hidden="true">
-      <div className="flex w-max gap-3 animate-marquee hover:[animation-play-state:paused]">
+    // The track is absolutely positioned inside a fixed-height box so its
+    // (very wide) intrinsic width never reaches the grid column — a block
+    // child with overflow:hidden still contributes its full content width
+    // to a grid item's min-content size, which stretched the whole page.
+    <div className="relative mt-3 h-12 w-full overflow-hidden rounded-2xl border border-slate-200 bg-white [mask-image:linear-gradient(to_right,transparent,black_8%,black_92%,transparent)]" aria-hidden="true">
+      <div className="absolute left-0 top-0 flex h-full w-max items-center gap-3 px-3 animate-marquee hover:[animation-play-state:paused]">
         {doubled.map((c, i) => (
           <span key={`${c}-${i}`} className="flex items-center gap-1.5 whitespace-nowrap rounded-full bg-fairway-50 px-3 py-1 text-sm font-medium text-fairway-800">
             <span className="h-1.5 w-1.5 rounded-full bg-fairway-500" /> {c}

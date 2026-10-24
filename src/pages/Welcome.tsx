@@ -92,7 +92,7 @@ export function Welcome() {
   const campuses = ["NYU", "Columbia", "Fordham", "CUNY", "St. John's", "Pace"];
 
   return (
-    <div className="min-h-screen bg-[#faf9f6] text-slate-900">
+    <div className="min-h-screen overflow-x-clip bg-[#faf9f6] text-slate-900">
       {/* ─── Hero ─────────────────────────────────────────────────────── */}
       {/* No overflow-hidden on this wrapper: it holds the sticky nav, and a
           clipping ancestor would stop the nav sticking past the hero. The
@@ -253,7 +253,7 @@ export function Welcome() {
       <section id="nyc" className="scroll-mt-20 py-16 sm:py-24">
         <div className="mx-auto max-w-6xl px-6">
           <div className="grid items-start gap-12 lg:grid-cols-2">
-            <Reveal>
+            <Reveal className="min-w-0">
               <Kicker>{t("landing.nyc.kicker")}</Kicker>
               <h2 className="mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl">
                 <HighlightGolfMe text={t("landing.nyc.title")} />
