@@ -6,11 +6,14 @@ function prefersReducedMotion(): boolean {
 }
 
 // The build-time prerender of the public landing page (scripts/prerender-
-// landing.mjs) sets <html data-prerender> before loading the app so every
-// section is captured fully visible — otherwise the static HTML Google
-// reads would carry `opacity-0` on everything below the fold.
+// landing.mjs renders Welcome with react-dom/server, no DOM at all) must
+// capture every section fully visible — otherwise the static HTML Google
+// reads would carry `opacity-0` on everything below the fold. The
+// <html data-prerender> check is for a browser-driven capture if one is
+// ever used instead.
 function isPrerendering(): boolean {
-  return typeof document !== "undefined" && document.documentElement.hasAttribute("data-prerender");
+  if (typeof document === "undefined") return true;
+  return document.documentElement.hasAttribute("data-prerender");
 }
 
 interface RevealProps {

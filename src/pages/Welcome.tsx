@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { Check, ChevronRight, MapPin, MessageCircle, Sparkles, Target, Users } from "lucide-react";
@@ -71,6 +71,16 @@ export function Welcome() {
   const navigate = useNavigate();
   const { t } = useLocale();
   const [tab, setTab] = useState<HeroTab>("rounds");
+
+  // The build-time prerender ships a static copy of this page in
+  // <div id="prerender"> ahead of #root (see index.html + scripts/
+  // prerender-landing.mjs). The moment the real page is mounted, swap it
+  // out: identical markup, so the hand-off is invisible. Idempotent for
+  // StrictMode's double effect.
+  useEffect(() => {
+    document.getElementById("prerender")?.remove();
+    document.documentElement.classList.remove("gm-static-landing");
+  }, []);
 
   const heroTabs: { id: HeroTab; label: string; icon: ReactNode }[] = [
     { id: "rounds", label: t("landing.hero.tabRounds"), icon: <Target size={14} /> },
