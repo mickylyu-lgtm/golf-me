@@ -5,6 +5,14 @@ function prefersReducedMotion(): boolean {
   return typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
 }
 
+// The build-time prerender of the public landing page (scripts/prerender-
+// landing.mjs) sets <html data-prerender> before loading the app so every
+// section is captured fully visible — otherwise the static HTML Google
+// reads would carry `opacity-0` on everything below the fold.
+function isPrerendering(): boolean {
+  return typeof document !== "undefined" && document.documentElement.hasAttribute("data-prerender");
+}
+
 interface RevealProps {
   children: ReactNode;
   delayMs?: number;
@@ -21,7 +29,7 @@ interface RevealProps {
 // observer entirely and shows content immediately.
 export function Reveal({ children, delayMs = 0, className = "", id }: RevealProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const [revealed, setRevealed] = useState(() => prefersReducedMotion());
+  const [revealed, setRevealed] = useState(() => prefersReducedMotion() || isPrerendering());
 
   useEffect(() => {
     if (revealed) return;
