@@ -103,13 +103,17 @@ export function Welcome() {
   return (
     <div className="min-h-screen bg-[#faf9f6] text-slate-900">
       {/* ─── Hero ─────────────────────────────────────────────────────── */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-fairway-800 via-fairway-900 to-fairway-950 text-white">
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-          <div className="absolute -left-24 top-10 h-72 w-72 rounded-full bg-fairway-400/25 blur-3xl animate-drift" />
-          <div className="absolute -right-16 top-64 h-80 w-80 rounded-full bg-sun-400/15 blur-3xl animate-drift" style={{ animationDelay: "-9s" }} />
-        </div>
+      {/* No overflow-hidden on this wrapper: it holds the sticky nav, and a
+          clipping ancestor would stop the nav sticking past the hero. The
+          drifting blobs are clipped by the <section> below instead. */}
+      <div className="bg-gradient-to-br from-fairway-800 via-fairway-900 to-fairway-950 text-white">
         <LandingNav />
-        <section className="relative mx-auto grid max-w-6xl items-center gap-12 px-6 pb-16 pt-12 sm:pt-16 lg:grid-cols-[1.1fr_0.9fr] lg:gap-8 lg:pb-24 lg:pt-20">
+        <section className="relative overflow-hidden">
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+            <div className="absolute -left-24 top-10 h-72 w-72 rounded-full bg-fairway-400/25 blur-3xl animate-drift" />
+            <div className="absolute -right-16 top-64 h-80 w-80 rounded-full bg-sun-400/15 blur-3xl animate-drift" style={{ animationDelay: "-9s" }} />
+          </div>
+          <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-6 pb-16 pt-12 sm:pt-16 lg:grid-cols-[1.1fr_0.9fr] lg:gap-8 lg:pb-24 lg:pt-20">
           <div className="text-center lg:text-left">
             <Reveal delayMs={0}>
               <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold text-fairway-100 backdrop-blur-sm">
@@ -179,6 +183,7 @@ export function Welcome() {
               <p className="mt-4 text-[11px] text-fairway-200/70">{t("landing.hero.mockLabel")}</p>
             </div>
           </Reveal>
+          </div>
         </section>
       </div>
 
