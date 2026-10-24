@@ -2,7 +2,8 @@
 
 Local-only, consent-gated import of Caddie V2 evaluation clips, and the local (offline) pose prototype that processes them. The full process, storage, and retention rules are in `docs/caddie-v2/VIDEO_IMPORT_AND_CONSENT.md`; the consent form is `docs/caddie-v2/consent/CONSENT_FORM_v1.html` (form version 1.2). Read those first.
 
-- `import-clip.mjs`: `init`, `consent-add`, `import`, `status`, `verify`, `coach-check`, `third-party-check`, `coach-add`, `coach-revoke`, `coach-session-check`, `annotator-add`, `withdraw`, `retention`. Usage is in the file header.
+- `import-clip.mjs`: `init`, `consent-add`, `import`, `status`, `verify`, `coach-check`, `third-party-check`, `coach-add`, `coach-revoke`, `coach-session-check`, `annotator-add`, `relabel`, `withdraw`, `retention`. Usage is in the file header.
+- **Capture corrections:** `relabel --clip C001-0002 --by K00 --reason "participant confirmed 2026-10-24" [--angle ..] [--club ..] [--mount ..] [--handedness ..] [--lighting ..] [--skill ..]` fixes capture metadata after import. History is append-only (`captureHistory` on the manifest entry: version, date, operator, reason, from/to per field), the protocol slot is recomputed, an audit event is written, and `verify` checks that the history chains to the current values. The operator must be a recorded annotator (K00).
 - **K00** (Micky) is recorded with `annotator-add --annotator K00`, not `coach-add` (which refuses it). K00 key-frame labels are **PROTOTYPE labels, not validated ground truth**: `docs/caddie-v2/KEYFRAME_ANNOTATION_GUIDE.md`. `verify` checks every annotation version.
 - Data lives in `GOLFME_EVAL_DATA_DIR` (default `~/golfme-eval-data`), never in this repo. The tool refuses a folder inside any git checkout or a cloud-sync folder.
 - Consent records must be affirmative (signed form, adult, current form version) and keep clips at most **90 days**.

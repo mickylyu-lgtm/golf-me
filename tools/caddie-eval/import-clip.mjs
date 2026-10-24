@@ -49,6 +49,8 @@
 //   coach-revoke --coach K01
 //   coach-session-check --coach K01 [--remote]
 //   annotator-add --annotator K00     (Micky's prototype key-frame annotator; not a coach)
+//   relabel --clip C001-0002 --by K00 --reason "participant confirmed 2026-10-24" [--angle ..] [--club ..]
+//                                     (corrects capture metadata; append-only captureHistory + audit event)
 //   withdraw     --contributor C001 [--confirm]
 //   retention    [--apply]
 
@@ -699,6 +701,89 @@ export async function importClip(dataDir, opts, env = process.env, today = today
 }
 
 // ---------------------------------------------------------------------------
+// Capture relabeling (audited, append-only history)
+// ---------------------------------------------------------------------------
+
+/** Capture fields that can be corrected after import (the enum fields). */
+export const RELABEL_FIELDS = Object.keys(CAPTURE_ENUMS);
+const RELABEL_REASON_RE = /^[\x20-\x7e]{3,200}$/;
+
+/**
+ * Corrects capture metadata on an imported clip (e.g. the angle or club the
+ * participant later confirmed). Never rewrites history: each call appends
+ * one `captureHistory` entry { version, date, by, reason, changes: { field:
+ * { from, to } } } to the manifest entry, recomputes the protocol slot, and
+ * writes an audit event. `by` must be a recorded, active annotator (K00, the
+ * data operator); the reason is one line, no names or emails.
+ */
+export function relabelClip(dataDir, clipId, { by, reason, changes }, today = todayIso()) {
+  const L = openDataDir(dataDir);
+  if (!CLIP_ID_RE.test(clipId ?? "")) throw new EvalError("--clip must look like C001-0001");
+  const rec = readAnnotator(L, by);
+  if (!rec || rec.status !== "active") throw new EvalError(`--by ${by}: no active annotator record (run annotator-add first)`);
+  if (typeof reason !== "string" || !RELABEL_REASON_RE.test(reason) || reason.includes("@")) {
+    throw new EvalError("--reason is required: one line, 3 to 200 printable characters, no email addresses or names");
+  }
+  const manifest = loadManifest(L);
+  const entry = manifest.clips.find((c) => c.clipId === clipId);
+  if (!entry) throw new EvalError(`${clipId} is not in the manifest`);
+  assertActiveConsent(L, entry.contributorId, today);
+
+  const diff = {};
+  for (const [field, value] of Object.entries(changes ?? {})) {
+    if (value === undefined) continue;
+    if (!RELABEL_FIELDS.includes(field)) throw new EvalError(`cannot relabel "${field}" (allowed: ${RELABEL_FIELDS.join(", ")})`);
+    if (entry.capture[field] !== value) diff[field] = { from: entry.capture[field], to: value };
+  }
+  if (Object.keys(diff).length === 0) throw new EvalError(`${clipId}: nothing to change (values already match)`);
+  const capture = { ...entry.capture };
+  for (const [field, { to }] of Object.entries(diff)) capture[field] = to;
+  const problems = validateCapture(capture);
+  if (problems.length) throw new EvalError(problems.join("; "));
+
+  const history = Array.isArray(entry.captureHistory) ? entry.captureHistory : [];
+  const last = history.at(-1);
+  if (last && last.date > today) throw new EvalError(`${clipId}: last relabel is dated after today`);
+  const change = { version: history.length + 1, date: today, by, reason, changes: diff };
+  entry.capture = capture;
+  entry.protocolSlot = protocolSlot(capture);
+  entry.captureHistory = [...history, change];
+  saveManifest(L, manifest, today);
+  audit(L, { action: "clip_relabeled", clipId, by, version: change.version, fields: Object.keys(diff) }, today);
+  return { clipId, protocolSlot: entry.protocolSlot, change };
+}
+
+/** Checks every clip's capture history: versions 1..n, dated in order, each change chaining to the current value. */
+function checkCaptureHistory(manifest) {
+  const problems = [];
+  for (const c of manifest.clips) {
+    if (c.captureHistory === undefined) continue;
+    if (!Array.isArray(c.captureHistory)) {
+      problems.push(`${c.clipId}: captureHistory is not a list`);
+      continue;
+    }
+    const latest = {};
+    let prevDate = "";
+    c.captureHistory.forEach((h, i) => {
+      if (h?.version !== i + 1) problems.push(`${c.clipId}: captureHistory version ${i + 1} missing or out of order`);
+      if (!isIsoDate(h?.date) || h.date < prevDate) problems.push(`${c.clipId}: captureHistory v${i + 1} date invalid or earlier than the one before`);
+      prevDate = h?.date ?? prevDate;
+      if (!ANNOTATOR_IDS.includes(h?.by)) problems.push(`${c.clipId}: captureHistory v${i + 1} has no recorded operator`);
+      if (typeof h?.reason !== "string" || !RELABEL_REASON_RE.test(h.reason)) problems.push(`${c.clipId}: captureHistory v${i + 1} reason missing`);
+      for (const [field, ch] of Object.entries(h?.changes ?? {})) {
+        if (field in latest && latest[field] !== ch?.from) problems.push(`${c.clipId}: captureHistory v${i + 1} ${field} does not chain from the previous change`);
+        latest[field] = ch?.to;
+      }
+    });
+    for (const [field, value] of Object.entries(latest)) {
+      if (c.capture?.[field] !== value) problems.push(`${c.clipId}: capture.${field} differs from its last recorded change`);
+    }
+    if (c.capture && c.protocolSlot !== protocolSlot(c.capture)) problems.push(`${c.clipId}: protocolSlot does not match capture`);
+  }
+  return problems;
+}
+
+// ---------------------------------------------------------------------------
 // Withdrawal, retention, verification
 // ---------------------------------------------------------------------------
 
@@ -817,6 +902,7 @@ export async function verifyDataDir(dataDir, today = todayIso()) {
   for (const name of fs.readdirSync(L.clips)) if (!known.has(name)) problems.push(`clips/${name}: not in manifest`);
   problems.push(...checkLabels(L, manifest));
   problems.push(...checkAnnotations(L, manifest));
+  problems.push(...checkCaptureHistory(manifest));
   return problems;
 }
 
@@ -1263,6 +1349,9 @@ async function main(argv) {
       processor: { type: "string" },
       coach: { type: "string" },
       annotator: { type: "string" },
+      clip: { type: "string" },
+      by: { type: "string" },
+      reason: { type: "string" },
       "agreement-version": { type: "string" },
       "agreement-date": { type: "string" },
       "in-person": { type: "string" },
@@ -1361,6 +1450,15 @@ async function main(argv) {
       out(addAnnotator(dataDir, values.annotator));
       out("Recorded. K00's key-frame labels are PROTOTYPE labels, not validated ground truth (docs/caddie-v2/KEYFRAME_ANNOTATION_GUIDE.md).");
       return 0;
+    case "relabel": {
+      const r = relabelClip(dataDir, values.clip, {
+        by: values.by,
+        reason: values.reason,
+        changes: Object.fromEntries(RELABEL_FIELDS.map((f) => [f, values[f]])),
+      });
+      out(`${r.clipId} relabeled (history v${r.change.version}): ${Object.entries(r.change.changes).map(([f, c]) => `${f} ${c.from} -> ${c.to}`).join(", ")}; slot ${r.protocolSlot}`);
+      return 0;
+    }
     case "coach-revoke":
       out(revokeCoach(dataDir, values.coach));
       return 0;
@@ -1394,7 +1492,7 @@ async function main(argv) {
     }
     default:
       out(
-        "Commands: init | consent-add | import | status | verify | coach-check | third-party-check | coach-add | coach-revoke | coach-session-check | annotator-add | withdraw | retention. See the header of this file.",
+        "Commands: init | consent-add | import | status | verify | coach-check | third-party-check | coach-add | coach-revoke | coach-session-check | annotator-add | relabel | withdraw | retention. See the header of this file.",
       );
       return command ? 2 : 0;
   }
