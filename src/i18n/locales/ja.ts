@@ -450,6 +450,9 @@ export const ja: Record<TranslationKey, string> = {
   "landing.faq.a6": "コース、日付、ティータイムを選び、公開する枠数を決めるだけ。GolfMeが近くのゴルファーにラウンドを表示します。誰が参加するかはあなたが決めます。",
   "landing.footer.tagline": "ゴルファーを見つける。4サムを埋める。スイングを直す。",
   "landing.footer.appStore": "App Store",
+  "landing.demo.tryIt": "試してみる",
+  "landing.demo.replay": "もう一度",
+  "landing.cta.floating": "App Storeで無料",
 
   "onboarding.screen1Title": "好きな時にゴルフを",
   "onboarding.screen1Body": "近くの空きラウンドやゴルファーを見つけよう — いつものメンバーの予定を待つ必要はありません。",

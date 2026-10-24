@@ -450,6 +450,9 @@ export const es: Record<TranslationKey, string> = {
   "landing.faq.a6": "Elige campo, fecha y hora de salida, decide cuántos lugares abrir y GolfMe mostrará tu ronda a golfistas cercanos. Tú decides quién se une.",
   "landing.footer.tagline": "Encuentra golfistas. Completa foursomes. Mejora tu swing.",
   "landing.footer.appStore": "App Store",
+  "landing.demo.tryIt": "Pruébalo",
+  "landing.demo.replay": "Repetir",
+  "landing.cta.floating": "Gratis en el App Store",
 
   "onboarding.screen1Title": "Juega cuando quieras",
   "onboarding.screen1Body": "Encuentra rondas abiertas y golfistas cerca — sin esperar el horario de tu grupo habitual.",

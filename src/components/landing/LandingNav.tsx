@@ -2,6 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { GolfMeIcon } from "../brand/GolfMeIcon";
 import { GolfMeWordmark } from "../brand/GolfMeWordmark";
 import { AppStoreButton } from "./AppStoreButton";
+import { useActiveSection } from "./Interactive";
 import { useLocale } from "../../i18n/LocaleContext";
 
 // Public landing nav: logo, section anchors (desktop), Log In, and the App
@@ -13,12 +14,13 @@ export function LandingNav() {
   const { t } = useLocale();
   const navigate = useNavigate();
 
-  const anchors: { href: string; label: string }[] = [
-    { href: "#find-partners", label: t("landing.nav.findPartners") },
-    { href: "#community", label: t("landing.nav.community") },
-    { href: "#caddie", label: t("landing.nav.caddie") },
-    { href: "#how-it-works", label: t("landing.nav.howItWorks") },
+  const anchors: { id: string; label: string }[] = [
+    { id: "find-partners", label: t("landing.nav.findPartners") },
+    { id: "community", label: t("landing.nav.community") },
+    { id: "caddie", label: t("landing.nav.caddie") },
+    { id: "how-it-works", label: t("landing.nav.howItWorks") },
   ];
+  const active = useActiveSection(anchors.map((a) => a.id));
 
   return (
     <nav className="sticky top-0 z-20 border-b border-white/10 bg-fairway-950/85 backdrop-blur-md" aria-label="Main">
@@ -39,8 +41,17 @@ export function LandingNav() {
           </a>
           <div className="hidden items-center gap-5 lg:flex">
             {anchors.map((a) => (
-              <a key={a.href} href={a.href} className="text-sm font-semibold text-fairway-100 transition-colors hover:text-white">
+              <a
+                key={a.id}
+                href={`#${a.id}`}
+                aria-current={active === a.id ? "location" : undefined}
+                className={`relative text-sm font-semibold transition-colors hover:text-white ${active === a.id ? "text-white" : "text-fairway-100"}`}
+              >
                 {a.label}
+                <span
+                  aria-hidden="true"
+                  className={`absolute -bottom-1.5 left-0 h-0.5 rounded-full bg-sun-300 transition-all duration-300 ${active === a.id ? "w-full" : "w-0"}`}
+                />
               </a>
             ))}
           </div>

@@ -462,6 +462,9 @@ export const en = {
   "landing.faq.a6": "Pick a course, date and tee time, choose how many spots to open, and GolfMe shows your round to golfers nearby. You decide who joins.",
   "landing.footer.tagline": "Find golfers. Fill foursomes. Fix your swing.",
   "landing.footer.appStore": "App Store",
+  "landing.demo.tryIt": "Try it",
+  "landing.demo.replay": "Replay",
+  "landing.cta.floating": "Free on the App Store",
 
   // Onboarding (3-screen intro carousel)
   "onboarding.screen1Title": "Play when you want",

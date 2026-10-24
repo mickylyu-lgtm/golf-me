@@ -1,14 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, ChevronRight, MapPin, MessageCircle, Sparkles, Target, Users } from "lucide-react";
+import { Check, ChevronRight, MessageCircle, Sparkles, Users } from "lucide-react";
 import { LandingNav } from "../components/landing/LandingNav";
 import { AppStoreButton } from "../components/landing/AppStoreButton";
 import { FoundingCounter } from "../components/landing/FoundingCounter";
-import { PhoneFrame, RoundsScreen, GolfersScreen, CaddieScreen, RoundCard, ChatVignette, ScoreRing } from "../components/landing/PhoneMock";
+import { ChatVignette } from "../components/landing/PhoneMock";
+import { HeroShowcase, MatchDemo, FoursomeDemo, CaddieDemo, CourseTicker, FloatingCta } from "../components/landing/Interactive";
 import { GolfMeIcon } from "../components/brand/GolfMeIcon";
 import { HighlightGolfMe } from "../components/brand/HighlightGolfMe";
-import { CaddieNavIcon } from "../components/icons/CaddieNavIcon";
 import { Reveal } from "../components/ui/Reveal";
 import { useLocale } from "../i18n/LocaleContext";
 import { APP_STORE_URL } from "../lib/appStore";
@@ -27,8 +27,6 @@ import { APP_STORE_URL } from "../lib/appStore";
 //     is the one network call, and it renders nothing until it answers.
 // Rounds, golfers and scores inside the phone mockups are illustrative
 // examples (see PhoneMock.tsx), never real users or claims.
-
-type HeroTab = "rounds" | "golfers" | "caddie";
 
 function Kicker({ children, tone = "light" }: { children: ReactNode; tone?: "light" | "dark" }) {
   return (
@@ -70,7 +68,6 @@ function StepCard({ n, title, body, delayMs }: { n: number; title: string; body:
 export function Welcome() {
   const navigate = useNavigate();
   const { t } = useLocale();
-  const [tab, setTab] = useState<HeroTab>("rounds");
 
   // The build-time prerender ships a static copy of this page in
   // <div id="prerender"> ahead of #root (see index.html + scripts/
@@ -81,12 +78,6 @@ export function Welcome() {
     document.getElementById("prerender")?.remove();
     document.documentElement.classList.remove("gm-static-landing");
   }, []);
-
-  const heroTabs: { id: HeroTab; label: string; icon: ReactNode }[] = [
-    { id: "rounds", label: t("landing.hero.tabRounds"), icon: <Target size={14} /> },
-    { id: "golfers", label: t("landing.hero.tabGolfers"), icon: <Users size={14} /> },
-    { id: "caddie", label: t("landing.hero.tabCaddie"), icon: <CaddieNavIcon size={15} /> },
-  ];
 
   const faq: { q: string; a: string }[] = [
     { q: t("landing.faq.q1"), a: t("landing.faq.a1") },
@@ -157,31 +148,7 @@ export function Welcome() {
           </div>
 
           <Reveal delayMs={300} className="relative">
-            <div className="mx-auto flex w-fit flex-col items-center">
-              <div role="tablist" aria-label={t("landing.hero.mockLabel")} className="mb-5 flex rounded-full border border-white/15 bg-white/10 p-1 text-xs font-semibold backdrop-blur-sm">
-                {heroTabs.map((h) => (
-                  <button
-                    key={h.id}
-                    role="tab"
-                    aria-selected={tab === h.id}
-                    onClick={() => setTab(h.id)}
-                    className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 transition ${
-                      tab === h.id ? "bg-white text-fairway-900 shadow-sm" : "text-fairway-100 hover:text-white"
-                    }`}
-                  >
-                    {h.icon} {h.label}
-                  </button>
-                ))}
-              </div>
-              <div className="animate-float">
-                <PhoneFrame>
-                  {tab === "rounds" && <RoundsScreen />}
-                  {tab === "golfers" && <GolfersScreen />}
-                  {tab === "caddie" && <CaddieScreen />}
-                </PhoneFrame>
-              </div>
-              <p className="mt-4 text-[11px] text-fairway-200/70">{t("landing.hero.mockLabel")}</p>
-            </div>
+            <HeroShowcase />
           </Reveal>
           </div>
         </section>
@@ -211,11 +178,8 @@ export function Welcome() {
             </p>
             <Points items={[t("landing.find.point1"), t("landing.find.point2"), t("landing.find.point3")]} />
           </Reveal>
-          <Reveal delayMs={200} className="relative">
-            <div aria-hidden="true" className="absolute inset-x-8 bottom-4 top-12 rounded-[3rem] bg-gradient-to-br from-fairway-100 to-sun-100" />
-            <PhoneFrame className="relative">
-              <GolfersScreen />
-            </PhoneFrame>
+          <Reveal delayMs={200}>
+            <MatchDemo />
           </Reveal>
         </div>
       </section>
@@ -224,38 +188,7 @@ export function Welcome() {
       <section id="rounds" className="scroll-mt-20 py-16 sm:py-24">
         <div className="mx-auto grid max-w-6xl items-center gap-12 px-6 lg:grid-cols-2">
           <Reveal delayMs={200} className="order-2 lg:order-1">
-            <div className="relative mx-auto max-w-sm space-y-3">
-              <div aria-hidden="true" className="absolute -inset-6 -z-10 rounded-[2.5rem] bg-gradient-to-br from-fairway-50 to-fairway-100" />
-              <RoundCard
-                course="Forest Park Golf Course"
-                when="SAT · 8:20 AM"
-                distance="4 mi away"
-                spots="2 spots remaining"
-                joined="2 of 4 joined"
-                host="hosted by you"
-                tags={["Casual & Social", "Walking"]}
-                hosting
-              />
-              <RoundCard
-                course="Pelham Bay Golf Course"
-                when="SUN · 10:00 AM"
-                distance="11 mi away"
-                spots="1 spot remaining"
-                joined="3 of 4 joined"
-                host="hosted by Alexis"
-                tags={["Beginner-Friendly"]}
-                highlight
-              />
-              <RoundCard
-                course="Marine Park Golf Course"
-                when="WED · 5:30 PM"
-                distance="8 mi away"
-                spots="3 spots remaining"
-                joined="1 of 4 joined"
-                host="hosted by Theo"
-                tags={["Twilight 9"]}
-              />
-            </div>
+            <FoursomeDemo />
           </Reveal>
           <Reveal className="order-1 lg:order-2">
             <Kicker>{t("landing.rounds.kicker")}</Kicker>
@@ -302,15 +235,7 @@ export function Welcome() {
         <div aria-hidden="true" className="pointer-events-none absolute -right-24 -top-24 h-96 w-96 rounded-full bg-fairway-500/15 blur-3xl" />
         <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-6 lg:grid-cols-2">
           <Reveal delayMs={200} className="order-2 lg:order-1">
-            <div className="mx-auto flex w-fit flex-col items-center gap-5 sm:flex-row sm:items-end">
-              <PhoneFrame>
-                <CaddieScreen />
-              </PhoneFrame>
-              <div className="rounded-3xl border border-white/10 bg-white/5 p-5 text-center backdrop-blur-sm sm:mb-10">
-                <ScoreRing score={81} size={120} />
-                <p className="mt-2 text-xs font-semibold text-fairway-100">{t("landing.caddie.ringCaption")}</p>
-              </div>
-            </div>
+            <CaddieDemo />
           </Reveal>
           <Reveal className="order-1 lg:order-2">
             <Kicker tone="dark">{t("landing.caddie.kicker")}</Kicker>
@@ -345,13 +270,7 @@ export function Welcome() {
                 ))}
               </div>
               <p className="mt-5 text-xs font-bold uppercase tracking-wider text-slate-400">{t("landing.nyc.coursesLabel")}</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {nycCourses.map((c) => (
-                  <span key={c} className="flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-sm font-medium text-slate-700">
-                    <MapPin size={12} className="text-fairway-600" /> {c}
-                  </span>
-                ))}
-              </div>
+              <CourseTicker items={nycCourses} />
             </Reveal>
             <Reveal delayMs={200}>
               <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-fairway-800 to-fairway-950 p-6 text-white shadow-xl shadow-fairway-950/20 sm:p-8">
@@ -431,7 +350,7 @@ export function Welcome() {
       </section>
 
       {/* ─── Footer ───────────────────────────────────────────────────── */}
-      <footer className="border-t border-slate-200 bg-white px-6 py-10 text-sm text-slate-500">
+      <footer className="border-t border-slate-200 bg-white px-6 pb-28 pt-10 text-sm text-slate-500 sm:pb-10">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-6 sm:flex-row sm:items-start">
           <div className="text-center sm:text-left">
             <span className="flex items-center justify-center gap-1.5 text-base font-extrabold tracking-tight text-slate-900 sm:justify-start">
@@ -462,6 +381,7 @@ export function Welcome() {
           </nav>
         </div>
       </footer>
+      <FloatingCta />
     </div>
   );
 }

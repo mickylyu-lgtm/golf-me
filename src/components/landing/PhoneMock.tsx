@@ -173,17 +173,24 @@ export function RoundsScreen() {
   );
 }
 
-export function GolfersScreen() {
-  const golfer = (initials: string, tone: string, name: string, meta: string, match: string) => (
-    <div className="flex items-center gap-2.5 rounded-2xl border border-slate-100 bg-white p-2.5 shadow-sm">
-      <Avatar initials={initials} tone={tone} />
-      <span className="min-w-0 flex-1">
-        <span className="block text-[11.5px] font-bold leading-tight">{name}</span>
-        <span className="block truncate text-[9px] text-slate-500">{meta}</span>
-      </span>
-      <span className="rounded-full bg-sun-100 px-2 py-0.5 text-[9px] font-bold text-sun-700">{match}</span>
-    </div>
-  );
+export interface MockGolfer {
+  initials: string;
+  tone: string;
+  name: string;
+  meta: string;
+  match: string;
+}
+
+export const DEFAULT_MOCK_GOLFERS: MockGolfer[] = [
+  { initials: "JL", tone: "bg-fairway-700", name: "Jordan L.", meta: "Handicap 14 · Weekends · Manhattan", match: "Great Match" },
+  { initials: "SA", tone: "bg-sky-600", name: "Sam A.", meta: "Handicap 22 · Weeknights · Brooklyn", match: "Great Match" },
+  { initials: "RK", tone: "bg-rose-500", name: "Riya K.", meta: "Beginner · Mornings · Queens", match: "Strong Match" },
+  { initials: "DM", tone: "bg-amber-600", name: "Dan M.", meta: "Handicap 8 · Flexible · Bronx", match: "Strong Match" },
+];
+
+// `golfers` lets the Find-partners demo (Interactive.tsx) re-rank the list
+// live as the visitor taps preference chips; the hero uses the default.
+export function GolfersScreen({ golfers = DEFAULT_MOCK_GOLFERS }: { golfers?: MockGolfer[] }) {
   return (
     <>
       <MockTopBar />
@@ -195,10 +202,22 @@ export function GolfersScreen() {
           <span className="flex-1 rounded-full bg-fairway-900 py-1 text-center text-white">Golfers</span>
         </div>
         <div className="mt-3 space-y-2">
-          {golfer("JL", "bg-fairway-700", "Jordan L.", "Handicap 14 · Weekends · Manhattan", "Great Match")}
-          {golfer("SA", "bg-sky-600", "Sam A.", "Handicap 22 · Weeknights · Brooklyn", "Great Match")}
-          {golfer("RK", "bg-rose-500", "Riya K.", "Beginner · Mornings · Queens", "Strong Match")}
-          {golfer("DM", "bg-amber-600", "Dan M.", "Handicap 8 · Flexible · Bronx", "Strong Match")}
+          {golfers.map((g) => (
+            <div key={g.name} className="flex items-center gap-2.5 rounded-2xl border border-slate-100 bg-white p-2.5 shadow-sm animate-pop">
+              <Avatar initials={g.initials} tone={g.tone} />
+              <span className="min-w-0 flex-1">
+                <span className="block text-[11.5px] font-bold leading-tight">{g.name}</span>
+                <span className="block truncate text-[9px] text-slate-500">{g.meta}</span>
+              </span>
+              <span
+                className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${
+                  g.match === "Great Match" ? "bg-sun-100 text-sun-700" : g.match === "Strong Match" ? "bg-fairway-100 text-fairway-800" : "bg-slate-100 text-slate-500"
+                }`}
+              >
+                {g.match}
+              </span>
+            </div>
+          ))}
         </div>
         <div className="mt-3 flex items-center justify-center gap-1.5 rounded-full bg-fairway-900 py-2 text-[10.5px] font-bold text-white">
           <Users size={12} /> Auto-Match Me

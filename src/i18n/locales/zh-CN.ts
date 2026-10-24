@@ -450,6 +450,9 @@ export const zhCN: Record<TranslationKey, string> = {
   "landing.faq.a6": "选择球场、日期和开球时间，决定开放几个名额，GolfMe 就会把你的球局展示给附近的球友。谁能加入由你决定。",
   "landing.footer.tagline": "找球友。凑四人组。改挥杆。",
   "landing.footer.appStore": "App Store",
+  "landing.demo.tryIt": "试一试",
+  "landing.demo.replay": "重播",
+  "landing.cta.floating": "App Store 免费下载",
 
   "onboarding.screen1Title": "想打就打",
   "onboarding.screen1Body": "找到附近的空缺球局和球友——不用再等老球友的档期。",

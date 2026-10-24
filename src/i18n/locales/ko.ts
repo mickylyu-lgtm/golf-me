@@ -450,6 +450,9 @@ export const ko: Record<TranslationKey, string> = {
   "landing.faq.a6": "코스, 날짜, 티타임을 고르고 공개할 자리 수를 정하면 GolfMe가 근처 골퍼에게 라운드를 보여줍니다. 누가 참여할지는 당신이 정합니다.",
   "landing.footer.tagline": "골퍼를 찾고. 포섬을 채우고. 스윙을 고치세요.",
   "landing.footer.appStore": "App Store",
+  "landing.demo.tryIt": "직접 해보기",
+  "landing.demo.replay": "다시 보기",
+  "landing.cta.floating": "App Store 무료",
 
   "onboarding.screen1Title": "원할 때 라운드하세요",
   "onboarding.screen1Body": "근처의 열린 라운드와 골퍼를 찾아보세요 — 평소 멤버의 일정을 기다릴 필요 없어요.",
