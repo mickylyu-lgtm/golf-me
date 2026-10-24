@@ -28,7 +28,7 @@
 | Pose source | (e.g. local MediaPipe Pose Landmarker Full / Heavy, cached V1 Roboflow output, Apple Vision prototype; for MediaPipe: `@mediapipe/tasks-vision` version, model file and sha256 from `tools/caddie-eval/models/models.json`, adapter version, decode settings: fps, long side) |
 | Offline check (local runs) | (from `pilot-report.mjs` §0, built from each `pose-mediapipe-<variant>.run.json`: `network.externalRequestsAllowed` must be 0, `network.blocked` only the expected `odml.pa.googleapis.com` logger (`MEDIAPIPE_TELEMETRY_AUDIT.md`), no WebSockets, and `network.osIsolation.isolated` true (run inside an empty network namespace). Give "X of Y runs verified offline" and list any run that isn't) |
 | V1 outputs used? | (yes/no; if yes, the date V1 was run, the spend approval reference, the `VENDOR_TERMS_VERIFIED` dates for Roboflow and Gemini, and confirmation every clip sent passed `assertThirdPartyAllowed`) |
-| Consent form version(s) | (e.g. 1.1; every clip within its 90-day retention on the run date) |
+| Consent form version(s) | (e.g. 1.2; every clip within its 90-day retention on the run date) |
 | Module versions | `qualityGate` , `cameraAngle` , `phaseOrder` , `roboflowAdapter` , `mediapipeAdapter` , `pose-accuracy` |
 | Threshold registry | (commit of `thresholds.ts`; count placeholder / coach_validated) |
 | Provider spend for this run | (actual, from invoices or usage pages; `—` if none) |

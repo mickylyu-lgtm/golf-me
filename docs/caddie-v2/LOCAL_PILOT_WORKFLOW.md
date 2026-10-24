@@ -8,7 +8,7 @@ Related: `PILOT_CHECKLIST.md` (the day itself), `VIDEO_IMPORT_AND_CONSENT.md` (r
 
 | # | Step | Where | Tool / doc | Status |
 |---|---|---|---|---|
-| 1 | **Consent** signed on paper or PDF before filming; recorded pseudonymously | Paper/identity key; data folder | Form v1.1; `consent-add` | Ready |
+| 1 | **Consent** signed on paper or PDF before filming; recorded pseudonymously | Paper/identity key; data folder | Form v1.2; `consent-add` | Ready |
 | 2 | **Filming** on Micky's phone, cloud photo backup off | Phone | `PILOT_CHECKLIST.md` §2 to 3 | Ready |
 | 3 | **Transfer** by USB cable or AirDrop to a temp folder outside the repo and any synced folder | Laptop | `PILOT_CHECKLIST.md` §5 | Ready |
 | 4 | **Consent check + import**: refuses without active affirmative consent; strips audio and metadata; pseudonymous clip IDs; sha256 | Data folder | `import --require-strip`, `verify` | Ready (needs ffmpeg in WSL) |

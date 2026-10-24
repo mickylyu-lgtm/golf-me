@@ -122,7 +122,7 @@ test("report refuses nothing silently: a clip whose consent lapsed is listed as 
   const root = tmp("caddie-eval-report2-");
   const dataDir = path.join(root, "data");
   initDataDir(dataDir);
-  addConsent(dataDir, { contributor: "C002", formVersion: "1.1", consentDate: "2026-10-01", retentionUntil: "2026-10-20", adult: true, affirmativeConsent: true, coachViewing: false, remoteCoachViewing: false, thirdPartyRoboflow: false, thirdPartyGemini: false }, "2026-10-01");
+  addConsent(dataDir, { contributor: "C002", formVersion: "1.2", consentDate: "2026-10-01", retentionUntil: "2026-10-20", adult: true, affirmativeConsent: true, coachViewing: false, remoteCoachViewing: false, thirdPartyRoboflow: false, thirdPartyGemini: false }, "2026-10-01");
   await importClip(dataDir, { contributor: "C002", file: fakeVideo(root), angle: "face_on", club: "driver", mount: "tripod", handedness: "left", lighting: "daylight", skill: "mid", conditions: [], strippedManually: true }, NO_FFMPEG, "2026-10-01");
   const { markdown } = await buildPilotReport(dataDir, { today: TODAY });
   assert.match(markdown, /Refused by the local gate/);

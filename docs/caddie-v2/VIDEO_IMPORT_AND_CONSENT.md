@@ -52,7 +52,7 @@ The tool **refuses** a data folder that is:
 
 ## 3. Consent
 
-**The form:** `docs/caddie-v2/consent/CONSENT_FORM_v1.html`, **form version 1.1**, with a pre-rendered `CONSENT_FORM_v1.pdf` beside it. To re-render after a change: `node tools/caddie-eval/render-consent-pdf.mjs`, or open the HTML in Chrome (e.g. on Windows), Print, Destination "Save as PDF", A4, margins Default, background graphics off. The earlier inline text "version 1.0" was an unsigned draft and is no longer valid; the tool refuses it.
+**The form:** `docs/caddie-v2/consent/CONSENT_FORM_v1.html`, **form version 1.2** (2026-10-24; adds videos recorded before signing, §2 and §4), with a pre-rendered `CONSENT_FORM_v1.pdf` beside it. To re-render after a change: `node tools/caddie-eval/render-consent-pdf.mjs`, or open the HTML in Chrome (e.g. on Windows), Print, Destination "Save as PDF", A4, margins Default, background graphics off. The earlier inline text "version 1.0" was an unsigned draft and is no longer valid; the tool refuses it.
 
 > **Not legal advice.** The form was drafted for an informal, unpaid test with adult friends. Micky may want a lawyer to review it before first use, particularly if any participant lives in another country (data-protection rules differ, e.g. UK/EU GDPR, Hong Kong PDPO).
 
@@ -70,7 +70,7 @@ The form covers: what is filmed and recorded; purpose (Caddie testing only, no m
 
 | Form | `consent-add` flag | Record field | Rule enforced by the tool |
 |---|---|---|---|
-| Form version 1.1 | `--form-version 1.1` | `formVersion` | Must equal `CURRENT_FORM_VERSION` |
+| Form version 1.2 | `--form-version 1.2` | `formVersion` | Must equal `CURRENT_FORM_VERSION` |
 | Date signed | `--consent-date` | `consentDate` | Not in the future |
 | Retention date (§6) | `--retention-until` | `retentionUntil` | After consent date, **at most 90 days** later, not already passed |
 | "I am 18 or older" (§10) | `--adult yes` | `adult` | Must be `true` |
@@ -80,13 +80,22 @@ The form covers: what is filmed and recorded; purpose (Caddie testing only, no m
 | Roboflow (§9) | `--roboflow yes\|no` | `thirdPartyRoboflow` | Checked by `assertThirdPartyAllowed` |
 | Google Gemini (§9) | `--gemini yes\|no` | `thirdPartyGemini` | Checked by `assertThirdPartyAllowed` |
 
-Changing the form's wording means a new version number (`1.2`, ...), updating `CURRENT_FORM_VERSION` in the tool, re-rendering the PDF, and asking existing contributors to re-consent if the change widens what they agreed to.
+Changing the form's wording means a new version number (`1.3`, ...), updating `CURRENT_FORM_VERSION` in the tool, re-rendering the PDF, and asking existing contributors to re-consent if the change widens what they agreed to.
 
 ## 4. Getting clips onto the laptop
 
 - **Turn off iCloud Photos** (or Google Photos backup, etc.) on the filming phone before the session. If it was on, the clips were already uploaded to that cloud; delete them there too and tell the contributor.
 - Transfer by **USB cable** (on Windows: Photos app import or File Explorer; on a Mac: Image Capture) or **AirDrop**. Not by email, chat apps, or a shared drive.
 - Put the files in a temporary folder **outside** the repo and outside any synced folder, import them (§5), then delete the temporary copies, the phone copies, and the phone's "Recently Deleted".
+
+### Earlier videos (filmed or sent before the form was signed)
+
+Form v1.2 (Micky, 2026-10-24) also covers swing videos that already exist, for example ones Micky filmed earlier or a golfer sent him by iMessage or WhatsApp. Only for adults who sign v1.2, and never GolfMe app uploads or Swing Posts (rule 1 still applies).
+
+1. Before signing, Micky writes the number of earlier videos and their date or dates in §2 of the form. Videos not listed there are not covered.
+2. The signed form comes back first; nothing is imported before the consent record exists (`consent-add --form-version 1.2`).
+3. A video that arrived in a chat app is saved to Photos, then copied to the laptop by cable like any other clip. It is never forwarded again (not to Telegram, email, or a drive).
+4. After import, Micky deletes his copies in the chat thread, on the phone, in "Recently Deleted", and in iCloud Photos (or another photo backup). The golfer may delete theirs; §4 of the form tells them so.
 
 ### Stripping audio and location
 
@@ -115,7 +124,7 @@ T=tools/caddie-eval/import-clip.mjs
 | Step | Command |
 |---|---|
 | Create the folder | `node $T init` |
-| Record consent | `node $T consent-add --contributor C001 --form-version 1.1 --consent-date 2026-10-25 --retention-until 2027-01-23 --adult yes --signed yes --coach-viewing yes --remote-coach-viewing no --roboflow no --gemini no` |
+| Record consent | `node $T consent-add --contributor C001 --form-version 1.2 --consent-date 2026-10-25 --retention-until 2027-01-23 --adult yes --signed yes --coach-viewing yes --remote-coach-viewing no --roboflow no --gemini no` |
 | Import a clip | `node $T import --contributor C001 --file /path/IMG_0412.MOV --angle face_on --club driver --mount tripod --handedness right --lighting daylight --skill mid --fps 30` |
 | Add trouble tags | add `--condition partial_body` (repeatable) |
 | See totals and coverage | `node $T status` (per slot, per angle/club/handedness/skill, left-handed share) |

@@ -151,7 +151,7 @@ test("smoke: extractor + runner end to end on a synthetic clip, offline", { skip
   const dataDir = path.join(root, "data");
   const today = todayIso();
   initDataDir(dataDir);
-  addConsent(dataDir, { contributor: "C001", formVersion: "1.1", consentDate: today, retentionUntil: new Date(Date.parse(today) + 30 * 864e5).toISOString().slice(0, 10), adult: true, affirmativeConsent: true, coachViewing: false, remoteCoachViewing: false, thirdPartyRoboflow: false, thirdPartyGemini: false }, today);
+  addConsent(dataDir, { contributor: "C001", formVersion: "1.2", consentDate: today, retentionUntil: new Date(Date.parse(today) + 30 * 864e5).toISOString().slice(0, 10), adult: true, affirmativeConsent: true, coachViewing: false, remoteCoachViewing: false, thirdPartyRoboflow: false, thirdPartyGemini: false }, today);
   const e = await importClip(dataDir, { contributor: "C001", file: src, angle: "face_on", club: "driver", mount: "tripod", handedness: "right", lighting: "daylight", skill: "mid", conditions: ["no_swing"], requireStrip: true }, { GOLFME_EVAL_FFMPEG: ff, GOLFME_EVAL_FFPROBE: "/nonexistent" }, today);
   const run = await extractPose(dataDir, e.clipId, { variant: "full", today });
   assert.equal(run.decode.frames, 60);

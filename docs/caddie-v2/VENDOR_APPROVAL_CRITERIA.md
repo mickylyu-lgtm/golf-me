@@ -2,7 +2,7 @@
 
 Status: **draft, 2026-10-20. No vendor has passed.** This file sets the pass/fail bar a third-party processor must clear before **any** participant clip, still frame, or data derived from one is sent to it. `VENDOR_VERIFICATION.md` holds the per-vendor evidence and checklists; this file is the rule those checklists are judged against.
 
-Not legal advice. These criteria are written to keep the promises in consent form v1.1 (`consent/CONSENT_FORM_v1.html`), not to meet any particular law. A lawyer may set a stricter bar.
+Not legal advice. These criteria are written to keep the promises in consent form v1.2 (`consent/CONSENT_FORM_v1.html`), not to meet any particular law. A lawyer may set a stricter bar.
 
 ## 1. The rule
 
@@ -24,7 +24,7 @@ Approval alone still sends nothing. Each clip also needs the contributor's separ
 | V6 | **Processor terms (DPA)** | A data processing addendum or equivalent processor terms apply **to our account** (accepted in the console, or applying automatically to our plan), naming the vendor as processor acting on our instructions | No DPA for our plan, or one that names the vendor as owner/controller of our inputs |
 | V7 | **Subprocessors and access controls** | A current subprocessor list is published or provided; the vendor states security controls (e.g. SOC 2 or ISO 27001 report, encryption at rest and in transit, staff access controls) | No list; no stated controls |
 | V8 | **No public or shared exposure** | Our project, workspace, and outputs are private by default and can't become public or visible to other customers; no dataset, gallery, or "share" feature is active | Free/public-plan terms; public projects; dataset or active-learning blocks in the pipeline |
-| V9 | **Consent coverage** | The form names this vendor and what it receives (form v1.1 §9: Roboflow gets still frames; Gemini gets videos with sound and location removed). The planned call sends **only** that | Sending more than the form says (e.g. full video to a vendor the form says gets frames), or a vendor the form doesn't name |
+| V9 | **Consent coverage** | The form names this vendor and what it receives (form v1.2 §9: Roboflow gets still frames; Gemini gets videos with sound and location removed). The planned call sends **only** that | Sending more than the form says (e.g. full video to a vendor the form says gets frames), or a vendor the form doesn't name |
 | V10 | **Our side of the pipeline** | The runner sends the stripped clip from the data folder, calls `assertThirdPartyAllowed()` per clip, deletes uploaded files right after use and **checks** the deletion result, and uses no feature that adds retention (e.g. grounding, context caching, stored state, visualization outputs) | Any of these missing |
 
 V1 is the criterion most likely to fail for Roboflow (`VENDOR_VERIFICATION.md` §5): its public terms appear to allow private-project content to be used for "internal research, optimization, training and improving the Services". Without a written answer that rules this out for our configuration, Roboflow fails V1 and stays excluded.

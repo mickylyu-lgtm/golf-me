@@ -1,6 +1,6 @@
 # tools/caddie-eval
 
-Local-only, consent-gated import of Caddie V2 evaluation clips, and the local (offline) pose prototype that processes them. The full process, storage, and retention rules are in `docs/caddie-v2/VIDEO_IMPORT_AND_CONSENT.md`; the consent form is `docs/caddie-v2/consent/CONSENT_FORM_v1.html` (form version 1.1). Read those first.
+Local-only, consent-gated import of Caddie V2 evaluation clips, and the local (offline) pose prototype that processes them. The full process, storage, and retention rules are in `docs/caddie-v2/VIDEO_IMPORT_AND_CONSENT.md`; the consent form is `docs/caddie-v2/consent/CONSENT_FORM_v1.html` (form version 1.2). Read those first.
 
 - `import-clip.mjs`: `init`, `consent-add`, `import`, `status`, `verify`, `coach-check`, `third-party-check`, `coach-add`, `coach-revoke`, `coach-session-check`, `annotator-add`, `withdraw`, `retention`. Usage is in the file header.
 - **K00** (Micky) is recorded with `annotator-add --annotator K00`, not `coach-add` (which refuses it). K00 key-frame labels are **PROTOTYPE labels, not validated ground truth**: `docs/caddie-v2/KEYFRAME_ANNOTATION_GUIDE.md`. `verify` checks every annotation version.

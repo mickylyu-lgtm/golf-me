@@ -33,7 +33,7 @@
 //
 // Usage: node tools/caddie-eval/import-clip.mjs <command> [options]
 //   init
-//   consent-add  --contributor C001 --form-version 1.1 --consent-date YYYY-MM-DD
+//   consent-add  --contributor C001 --form-version 1.2 --consent-date YYYY-MM-DD
 //                --retention-until YYYY-MM-DD --adult yes --signed yes
 //                --coach-viewing yes|no --remote-coach-viewing yes|no
 //                --roboflow yes|no --gemini yes|no
@@ -79,7 +79,7 @@ export const CONSENT_SCHEMA = 2;
  * (docs/caddie-v2/consent/CONSENT_FORM_v1.html). Version 1.0 was an unsigned
  * draft text and is refused.
  */
-export const CURRENT_FORM_VERSION = "1.1";
+export const CURRENT_FORM_VERSION = "1.2";
 /** Provisional maximum retention for raw clips and everything derived from them. */
 export const MAX_RETENTION_DAYS = 90;
 export const THIRD_PARTY_PROCESSORS = ["roboflow", "gemini"];

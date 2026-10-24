@@ -377,7 +377,7 @@ export async function makeDemoDataDir(env = process.env) {
     const dataDir = path.join(root, "data");
     const today = todayIso();
     initDataDir(dataDir);
-    addConsent(dataDir, { contributor: "C001", formVersion: "1.1", consentDate: today, retentionUntil: new Date(Date.parse(today) + 864e5).toISOString().slice(0, 10), adult: true, affirmativeConsent: true, coachViewing: false, remoteCoachViewing: false, thirdPartyRoboflow: false, thirdPartyGemini: false }, today);
+    addConsent(dataDir, { contributor: "C001", formVersion: "1.2", consentDate: today, retentionUntil: new Date(Date.parse(today) + 864e5).toISOString().slice(0, 10), adult: true, affirmativeConsent: true, coachViewing: false, remoteCoachViewing: false, thirdPartyRoboflow: false, thirdPartyGemini: false }, today);
     const e = await importClip(dataDir, { contributor: "C001", file: src, angle: "face_on", club: "driver", mount: "tripod", handedness: "right", lighting: "daylight", skill: "mid", conditions: ["no_swing"], requireStrip: true }, { ...env, GOLFME_EVAL_FFMPEG: ff, GOLFME_EVAL_FFPROBE: "/nonexistent" }, today);
     addAnnotator(dataDir, "K00", today);
     await exportFrames(dataDir, e.clipId, { today }, { ...env, GOLFME_EVAL_FFMPEG: ff });

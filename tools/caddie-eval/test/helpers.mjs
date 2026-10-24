@@ -35,7 +35,7 @@ export async function setupWithClip({ angle = "face_on", consent = {}, strippedM
     dataDir,
     {
       contributor: "C001",
-      formVersion: "1.1",
+      formVersion: "1.2",
       consentDate: "2026-10-20",
       retentionUntil: "2027-01-18",
       adult: true,

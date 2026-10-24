@@ -65,7 +65,7 @@ Core clips, per golfer (same matrix for left-handers: the camera positions mirro
   - [ ] Record it (copy the office-use block exactly):
 
     ```
-    node $T consent-add --contributor C002 --form-version 1.1 \
+    node $T consent-add --contributor C002 --form-version 1.2 \
       --consent-date 2026-MM-DD --retention-until 2026-MM-DD \
       --adult yes --signed yes \
       --coach-viewing yes --remote-coach-viewing no \

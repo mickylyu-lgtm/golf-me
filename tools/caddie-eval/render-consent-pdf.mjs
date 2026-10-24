@@ -3,7 +3,7 @@
 // A4 PDFs next to them, using playwright-core (already a devDependency) and
 // its locally cached headless Chromium. Offline: every non-file:// request is
 // blocked.
-//   - CONSENT_FORM_v1.html          participant consent (form version 1.1)
+//   - CONSENT_FORM_v1.html          participant consent (form version 1.2)
 //   - COACH_CONFIDENTIALITY_v1.html coach agreement (agreement version 1.0)
 //
 // Usage: node tools/caddie-eval/render-consent-pdf.mjs [NAME.html ...]

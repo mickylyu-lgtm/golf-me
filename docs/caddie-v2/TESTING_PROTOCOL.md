@@ -5,7 +5,7 @@ Status: **draft for Micky's review, 2026-10-20; updated the same day with Micky'
 Related:
 
 - `VIDEO_IMPORT_AND_CONSENT.md`: consent, import, storage, withdrawal, retention. **Read it before filming anyone.**
-- `consent/CONSENT_FORM_v1.pdf`: the form every person in frame signs (form version 1.1).
+- `consent/CONSENT_FORM_v1.pdf`: the form every person in frame signs (form version 1.2).
 - `PILOT_CHECKLIST.md`: the step-by-step list for the pilot day (3 to 5 golfers).
 - `VENDOR_VERIFICATION.md`: what must be checked before any clip goes to Roboflow or Gemini.
 - `EVAL_REPORT_TEMPLATE.md`: how the clips and labels turn into metrics.
@@ -235,7 +235,7 @@ Coach labels are only ground truth if coaches agree with each other.
 
 ## 10. Session checklist
 
-1. Consent form v1.1 signed and dated **on the day**, and recorded (`consent-add --form-version 1.1 --signed yes ...`) for every person who will appear in frame. Adults (18+) only.
+1. Consent form v1.2 signed and dated **on the day**, and recorded (`consent-add --form-version 1.2 --signed yes ...`) for every person who will appear in frame. Adults (18+) only.
 2. iCloud Photos (or other photo cloud backup) off on the filming phone.
 3. Tripod position checked with one test clip; full body and club visible at the top and finish.
 4. Session log open; contributor IDs only.

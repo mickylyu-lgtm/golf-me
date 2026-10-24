@@ -63,7 +63,7 @@ function consent(dataDir, overrides = {}) {
     dataDir,
     {
       contributor: "C001",
-      formVersion: "1.1",
+      formVersion: "1.2",
       consentDate: "2026-10-20",
       retentionUntil: "2027-01-18",
       adult: true,
@@ -122,7 +122,7 @@ test("consent record rejects extra fields (no names or emails), minors, non-affi
     schema: 2,
     contributorId: "C001",
     status: "active",
-    formVersion: "1.1",
+    formVersion: "1.2",
     consentDate: "2026-10-20",
     retentionUntil: "2027-01-18",
     adult: true,

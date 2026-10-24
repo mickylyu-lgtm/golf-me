@@ -15,7 +15,7 @@ Status: **draft, 2026-10-20. Nothing in this file is verified.** Micky completes
 Running today's Caddie (V1) over the evaluation clips, as a baseline to compare against coach labels, means sending those clips to two outside companies. That is allowed only when **all three** hold:
 
 1. **Vendor approved** for that processor: every criterion in `VENDOR_APPROVAL_CRITERIA.md` passes, with the evidence from this file (section 4 or 5, every box ticked and dated by Micky).
-2. **The contributor opted in to that processor** on the signed consent form (form v1.1, section 9: a separate tick for Roboflow and for Gemini). The tool records these as `thirdPartyRoboflow` and `thirdPartyGemini`.
+2. **The contributor opted in to that processor** on the signed consent form (form v1.2, section 9: a separate tick for Roboflow and for Gemini). The tool records these as `thirdPartyRoboflow` and `thirdPartyGemini`.
 3. **Micky's spend approval** for the run (`CADDIE_V2_AUDIT.md` §11, "Approval needed vs not").
 
 The tool can check 1 and 2; 3 is on trust.

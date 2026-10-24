@@ -6,7 +6,8 @@
 <title>GolfMe Caddie Testing Consent</title>
 <!--
   GolfMe Caddie V2 testing: participant consent form.
-  FORM VERSION 1.1 (2026-10-20). Must match CURRENT_FORM_VERSION in
+  FORM VERSION 1.2 (2026-10-24; 1.1 was 2026-10-20). 1.2 adds videos
+  recorded before signing (section 2) and their earlier copies (section 4). Must match CURRENT_FORM_VERSION in
   tools/caddie-eval/import-clip.mjs. Any wording change = new version number,
   update the tool, re-render the PDF (tools/caddie-eval/render-consent-pdf.mjs),
   and ask existing contributors to re-consent if the change widens what they
@@ -98,13 +99,13 @@
 <body>
 
 <div class="screen-note">
-  <strong>For Micky (not printed):</strong> form version 1.1. Not legal advice; consider a lawyer review before first use.
+  <strong>For Micky (not printed):</strong> form version 1.2. Not legal advice; consider a lawyer review before first use.
   To make a PDF: open this file in Chrome, Print, Destination "Save as PDF", paper A4, margins Default, "Background graphics" off.
   A pre-rendered copy is next to this file (<code>CONSENT_FORM_v1.pdf</code>). Never commit a filled-in or signed copy.
 </div>
 
 <h1>GolfMe Caddie testing: consent to film and use my golf swing</h1>
-<p class="sub">Form version 1.1 &middot; Please read it all before filming starts. Ask Micky anything that is unclear. You get a copy.</p>
+<p class="sub">Form version 1.2 &middot; Please read it all before filming starts, or before any earlier videos of me are used. Ask Micky anything that is unclear. You get a copy.</p>
 
 <div class="idrow">
   <span>Contributor ID (written by Micky): <span class="line"></span></span>
@@ -120,6 +121,7 @@
   <li>Alongside each video: the club, the camera angle, whether I swing right- or left-handed, the lighting, and my own rough skill level (beginner, mid, or advanced).</li>
   <li><strong>Not recorded:</strong> my name, contact details, or where the filming took place. Sound and location data are removed from the videos when they are copied to Micky's computer.</li>
   <li>My name is kept only on this signed form, stored apart from the videos. The videos are labelled with the Contributor ID above.</li>
+  <li><strong>Earlier videos (if any):</strong> this form also covers these videos of my swing that I already recorded or sent to Micky before signing: <span class="line wide"></span> (number of videos and date or dates, written by Micky). Leave blank if none.</li>
 </ul>
 
 <h2>3. Why</h2>
@@ -127,6 +129,7 @@
 
 <h2>4. Where the videos are kept</h2>
 <p>On Micky's own encrypted laptop, in a folder that is not synced to any cloud service. They are <strong>not</strong> uploaded to GolfMe's servers, to cloud storage, or to a chat app.</p>
+<p><strong>Earlier videos listed in section 2:</strong> copies of these may already exist in a chat app (for example iMessage or WhatsApp) or in a phone photo backup (for example iCloud Photos), because they were recorded or sent before this form. After copying them to his laptop, Micky deletes his own copies in those places. I can delete my own copies there too.</p>
 
 <h2>5. Who sees the videos</h2>
 <p>Micky. Golf coaches only if I tick a box below. Coaches see my Contributor ID, never my name. Coaches label the videos (for example, the moment of impact, or which swing fault they see) and then judge whether Caddie's feedback is correct.</p>
@@ -180,7 +183,7 @@
 </div>
 <div class="tick required">
   <div class="box"></div>
-  <div><span class="label">I have read this form and agree to be filmed and to the uses in sections 1 to 7.</span> Taking part is my choice and unpaid. I keep the right to withdraw at any time (section 7). <span class="tag">Required</span></div>
+  <div><span class="label">I have read this form and agree to be filmed, to the use of any earlier videos listed in section 2, and to the uses in sections 1 to 7.</span> Taking part is my choice and unpaid. I keep the right to withdraw at any time (section 7). <span class="tag">Required</span></div>
 </div>
 <p class="small">Anyone else who appears in a video needs to sign their own form.</p>
 
@@ -195,7 +198,7 @@
 <div class="office">
   <strong>Office use (Micky).</strong> Copy into the import tool exactly: <code>consent-add</code>. Keep this form apart from the video folder.
   <table>
-    <tr><td>Contributor ID</td><td class="v"></td><td>Form version</td><td class="v">1.1</td></tr>
+    <tr><td>Contributor ID</td><td class="v"></td><td>Form version</td><td class="v">1.2</td></tr>
     <tr><td>Consent date</td><td class="v"></td><td>Retention until (max +90 days)</td><td class="v"></td></tr>
     <tr><td>Adult / signed (both required)</td><td class="v"></td><td>Coach in person / remote</td><td class="v"></td></tr>
     <tr><td>Roboflow / Gemini</td><td class="v"></td><td>Recorded in tool on</td><td class="v"></td></tr>
