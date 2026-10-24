@@ -345,41 +345,77 @@ type JointName =
   | "hipL" | "hipR" | "kneeL" | "kneeR" | "ankL" | "ankR";
 type Joint = JointName;
 
+// Right-handed golfer facing the camera, posed from a real face-on driver
+// swing: viewer-left is the trail side, viewer-right the lead side, the
+// target is off to the right. Takeaway low and left, hands at head height
+// over the trail shoulder at the top with the shaft pointing up-right
+// behind the head, lead leg straight at impact, arms extended toward the
+// target, club wrapped behind the back at the finish, trail foot on its toe.
 const POSE_ADDRESS: Pose = {
   head: [100, 46], neck: [100, 66], shL: [78, 76], shR: [122, 76],
-  elL: [84, 108], elR: [116, 108], hands: [100, 142],
+  elL: [84, 106], elR: [116, 106], hands: [102, 140],
   hipL: [84, 134], hipR: [116, 134], kneeL: [76, 182], kneeR: [124, 182], ankL: [66, 232], ankR: [134, 232],
-  club: [62, 238],
+  club: [126, 240],
+};
+const POSE_TAKEAWAY: Pose = {
+  head: [100, 46], neck: [100, 66], shL: [78, 76], shR: [122, 78],
+  elL: [70, 100], elR: [102, 100], hands: [64, 118],
+  hipL: [84, 134], hipR: [116, 134], kneeL: [76, 182], kneeR: [124, 182], ankL: [66, 232], ankR: [134, 232],
+  club: [4, 128],
+};
+const POSE_THREE_QUARTER: Pose = {
+  head: [100, 46], neck: [100, 66], shL: [80, 70], shR: [118, 82],
+  elL: [60, 84], elR: [86, 76], hands: [50, 78],
+  hipL: [86, 134], hipR: [118, 134], kneeL: [78, 182], kneeR: [124, 182], ankL: [66, 232], ankR: [134, 232],
+  club: [8, 14],
 };
 const POSE_TOP: Pose = {
-  head: [104, 40], neck: [104, 62], shL: [82, 70], shR: [126, 70],
-  elL: [114, 58], elR: [146, 76], hands: [150, 44],
-  hipL: [88, 134], hipR: [120, 134], kneeL: [80, 182], kneeR: [128, 182], ankL: [70, 232], ankR: [140, 232],
-  club: [60, 14],
+  head: [100, 44], neck: [100, 64], shL: [80, 66], shR: [114, 82],
+  elL: [58, 76], elR: [84, 58], hands: [54, 42],
+  hipL: [86, 134], hipR: [118, 132], kneeL: [78, 182], kneeR: [124, 182], ankL: [66, 232], ankR: [134, 232],
+  club: [152, 8],
+};
+const POSE_HALF_DOWN: Pose = {
+  head: [98, 46], neck: [100, 66], shL: [80, 72], shR: [118, 76],
+  elL: [66, 104], elR: [98, 100], hands: [64, 122],
+  hipL: [90, 132], hipR: [118, 128], kneeL: [82, 182], kneeR: [122, 180], ankL: [66, 232], ankR: [134, 232],
+  club: [20, 190],
 };
 const POSE_IMPACT: Pose = {
-  head: [100, 44], neck: [100, 64], shL: [80, 74], shR: [122, 70],
-  elL: [92, 106], elR: [122, 102], hands: [102, 142],
-  hipL: [90, 132], hipR: [118, 128], kneeL: [80, 182], kneeR: [124, 182], ankL: [66, 232], ankR: [134, 232],
-  club: [60, 238],
+  head: [98, 46], neck: [100, 66], shL: [82, 76], shR: [120, 70],
+  elL: [98, 106], elR: [124, 102], hands: [116, 140],
+  hipL: [94, 128], hipR: [118, 124], kneeL: [92, 180], kneeR: [122, 176], ankL: [68, 232], ankR: [134, 232],
+  club: [128, 240],
+};
+const POSE_FOLLOW: Pose = {
+  head: [102, 44], neck: [102, 64], shL: [86, 76], shR: [120, 66],
+  elL: [124, 96], elR: [146, 90], hands: [160, 86],
+  hipL: [96, 130], hipR: [118, 126], kneeL: [92, 178], kneeR: [120, 176], ankL: [76, 228], ankR: [134, 232],
+  club: [198, 12],
 };
 const POSE_FINISH: Pose = {
-  head: [96, 40], neck: [98, 62], shL: [84, 74], shR: [118, 70],
-  elL: [72, 52], elR: [86, 40], hands: [60, 36],
-  hipL: [92, 132], hipR: [116, 130], kneeL: [82, 182], kneeR: [116, 180], ankL: [68, 232], ankR: [128, 226],
-  club: [116, -6],
+  head: [106, 40], neck: [106, 60], shL: [92, 70], shR: [118, 66],
+  elL: [112, 54], elR: [132, 60], hands: [140, 36],
+  hipL: [98, 130], hipR: [118, 128], kneeL: [94, 176], kneeR: [120, 178], ankL: [82, 226], ankR: [134, 232],
+  club: [40, 72],
 };
-// (pose, time in the cycle 0..1). Address -> top is the slow part,
-// top -> impact the fast part, then the finish holds before resetting.
+// (pose, time in the cycle 0..1). Timed off the reference clip: a held
+// address, a ~1 s backswing, a quick downswing, arms extended through
+// the ball, then a long held finish before resetting.
 const SWING: [Pose, number][] = [
   [POSE_ADDRESS, 0],
-  [POSE_TOP, 0.38],
-  [POSE_IMPACT, 0.56],
+  [POSE_ADDRESS, 0.08],
+  [POSE_TAKEAWAY, 0.2],
+  [POSE_THREE_QUARTER, 0.31],
+  [POSE_TOP, 0.42],
+  [POSE_HALF_DOWN, 0.49],
+  [POSE_IMPACT, 0.54],
+  [POSE_FOLLOW, 0.6],
   [POSE_FINISH, 0.72],
-  [POSE_FINISH, 0.86],
+  [POSE_FINISH, 0.9],
   [POSE_ADDRESS, 1],
 ];
-const SWING_MS = 3200;
+const SWING_MS = 3600;
 const JOINTS = Object.keys(POSE_TOP).filter((k) => k !== "club") as Joint[];
 
 function easeInOut(t: number): number {
@@ -406,10 +442,10 @@ function tweenPose(t: number): Pose {
 // are measured). First render is the top pose too, so the prerender shows
 // a finished-looking frame. Reduced-motion users get the still frame.
 function useSwingPose(playing: boolean): { pose: Pose; progress: number } {
-  const [state, setState] = useState<{ pose: Pose; progress: number }>({ pose: POSE_TOP, progress: 0.38 });
+  const [state, setState] = useState<{ pose: Pose; progress: number }>({ pose: POSE_TOP, progress: 0.42 });
   useEffect(() => {
     if (!playing || prefersReducedMotion()) {
-      setState({ pose: POSE_TOP, progress: 0.38 });
+      setState({ pose: POSE_TOP, progress: 0.42 });
       return;
     }
     let raf = 0;
@@ -447,7 +483,7 @@ function SwingScene({ phase, pose, progress }: { phase: Phase; pose: Pose; progr
   const J = pose;
   const showPose = phase === "pose" || phase === "scoring" || phase === "done";
   const showAngles = phase === "scoring" || phase === "done";
-  const ballStruck = phase !== "done" && progress > 0.56 && progress < 0.98;
+  const ballStruck = phase !== "done" && progress > 0.54 && progress < 0.98;
   const limb = (a: Joint, b: Joint, w: number) => (
     <line key={`${a}${b}`} x1={J[a][0]} y1={J[a][1]} x2={J[b][0]} y2={J[b][1]} stroke="url(#gm-body)" strokeWidth={w} strokeLinecap="round" />
   );
@@ -529,11 +565,11 @@ function SwingScene({ phase, pose, progress }: { phase: Phase; pose: Pose; progr
           <path d="M250 168 L268 174 L250 180 Z" fill="#f4b942" />
         </g>
         {/* tee box glow + shadow */}
-        <ellipse cx="105" cy="250" rx="54" ry="9" fill="#031208" opacity="0.5" filter="url(#gm-soft)" />
+        <ellipse cx="100" cy="250" rx="56" ry="9" fill="#031208" opacity="0.5" filter="url(#gm-soft)" />
 
         {/* ball on the tee (gone after impact until the next address) */}
-        {!ballStruck && <circle cx="62" cy="241" r="3.2" fill="#f8faf8" />}
-        {ballStruck && <circle cx={62 + (progress - 0.56) * 420} cy={241 - (progress - 0.56) * 520} r="2.6" fill="#f8faf8" opacity="0.9" />}
+        {!ballStruck && <circle cx="126" cy="241" r="3.2" fill="#f8faf8" />}
+        {ballStruck && <circle cx={128 + (progress - 0.54) * 500} cy={241 - (progress - 0.54) * 540} r="2.6" fill="#f8faf8" opacity="0.9" />}
 
         {/* golfer: club first so the shaft sits behind the body */}
         <g transform="translate(0 6)">
@@ -646,7 +682,24 @@ export function CaddieDemo() {
   const { pose, progress } = useSwingPose(phase !== "done");
   // Scrubber: follows the swing while it plays (address -> finish spans
   // the first 72% of the cycle), parks on "Top" once the result is in.
-  const playhead = phase === "done" ? 38 : Math.min(100, (progress / 0.72) * 100);
+  // Scrubber: piecewise map of the cycle onto the four evenly spaced phase
+  // ticks (Address 0, Top 1/3, Impact 2/3, Finish 1), so the playhead sits
+  // on "Top" exactly when the figure is at the top, etc.
+  const marks: [number, number][] = [
+    [0, 0],
+    [0.42, 100 / 3],
+    [0.54, 200 / 3],
+    [0.72, 100],
+  ];
+  const mapPlayhead = (t: number) => {
+    for (let i = 0; i < marks.length - 1; i++) {
+      const [ta, pa] = marks[i];
+      const [tb, pb] = marks[i + 1];
+      if (t <= tb) return pa + ((Math.max(t, ta) - ta) / (tb - ta)) * (pb - pa);
+    }
+    return 100;
+  };
+  const playhead = phase === "done" ? 100 / 3 : mapPlayhead(progress);
 
   const metrics = [
     { label: "Tempo", value: "3.1 : 1", pct: 86, ok: true },
