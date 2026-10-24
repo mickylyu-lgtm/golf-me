@@ -36,7 +36,7 @@ import { postCategoryLabel } from "../../lib/enumLabels";
 import { areaForCourse } from "../../lib/courses";
 import { enterNativeVideoFullscreen, isVideoInNativeFullscreen } from "../../lib/video";
 import { isStaleProcessing, usePeriodicRerender } from "../../lib/caddieAnalysis";
-import { useBlurredBackdrop } from "../../lib/blurredBackdrop";
+import { barsClipPath, useBlurredBackdrop } from "../../lib/blurredBackdrop";
 import { useLocale } from "../../i18n/LocaleContext";
 
 // A touch that moves further than this between press and release is a
@@ -414,10 +414,12 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
                 within the max bounds), so there is no letterbox inside the
                 element itself: WebKit paints the whole element box black
                 while the native fullscreen player animates back, which
-                showed as a black band across the card. */}
+                showed as a black band across the card. Black bars baked
+                into the video's own frames are clipped off the same way
+                (see blurredBackdrop). */}
             {videoBackdrop && (
               <img
-                src={videoBackdrop}
+                src={videoBackdrop.src}
                 alt=""
                 aria-hidden="true"
                 className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-90"
@@ -433,6 +435,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
               loop
               playsInline
               onClick={handleVideoTap}
+              style={{ clipPath: barsClipPath(videoBackdrop?.bars) }}
               className="relative block h-auto max-h-96 w-auto max-w-full cursor-pointer"
             />
             {/* A real button, not a decorative overlay — it sits above the
