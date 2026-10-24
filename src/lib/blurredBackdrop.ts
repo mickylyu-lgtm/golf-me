@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type React from "react";
 
 // A soft, pre-blurred copy of an image, as a tiny data URL. Shrinking the
 // image to a few pixels and letting the browser stretch it back up looks like
@@ -32,11 +33,12 @@ export interface BarInsets {
 export interface BlurredBackdrop {
   src: string;
   bars: BarInsets | null;
+  aspect: number; // width / height of the whole frame, bars included
 }
 
 const cache = new Map<string, BlurredBackdrop | null>();
 
-function findBars(img: HTMLImageElement): BarInsets | null {
+export function findBars(img: HTMLImageElement): BarInsets | null {
   const scale = SCAN / Math.max(img.naturalWidth, img.naturalHeight, 1);
   const w = Math.max(1, Math.round(img.naturalWidth * scale));
   const h = Math.max(1, Math.round(img.naturalHeight * scale));
@@ -104,7 +106,7 @@ export function buildBlurredBackdrop(url: string): Promise<BlurredBackdrop | nul
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = "high";
         ctx.drawImage(small, 0, 0, out.width, out.height);
-        resolve({ src: out.toDataURL("image/jpeg", 0.7), bars });
+        resolve({ src: out.toDataURL("image/jpeg", 0.7), bars, aspect: img.naturalWidth / Math.max(img.naturalHeight, 1) });
       } catch {
         resolve(null); // tainted canvas (no CORS): caller falls back to a flat colour
       }
@@ -138,4 +140,33 @@ export function barsClipPath(bars: BarInsets | null | undefined): string | undef
   if (!bars) return undefined;
   const pct = (n: number) => `${(n * 100).toFixed(2)}%`;
   return `inset(${pct(bars.top)} ${pct(bars.right)} ${pct(bars.bottom)} ${pct(bars.left)})`;
+}
+
+/** findBars for an image already on screen; null when it can't be read (no CORS). */
+export function safeFindBars(img: HTMLImageElement): BarInsets | null {
+  try {
+    return findBars(img);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Inline style that zooms media filling a fixed box (object-cover style) so
+ * its baked-in bars fall outside the box. The box must be `position:
+ * relative; overflow: hidden; container-type: size` (see BarCropBox).
+ */
+export function barsCoverStyle(bars: BarInsets, aspect: number): React.CSSProperties {
+  const cw = 1 - bars.left - bars.right;
+  const ch = 1 - bars.top - bars.bottom;
+  return {
+    ["--dw" as string]: `max(calc(100cqw / ${cw}), calc(100cqh * ${aspect} / ${ch}))`,
+    position: "absolute",
+    width: "var(--dw)",
+    height: `calc(var(--dw) / ${aspect})`,
+    maxWidth: "none",
+    objectFit: "fill",
+    left: `calc(50cqw - var(--dw) * ${bars.left + cw / 2})`,
+    top: `calc(50cqh - var(--dw) / ${aspect} * ${bars.top + ch / 2})`,
+  };
 }

@@ -1,7 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import type React from "react";
 import { Play, Volume2, VolumeX } from "lucide-react";
 import type { PostMediaItem } from "../../types";
 import { enterNativeVideoFullscreen } from "../../lib/video";
+import { barsCoverStyle, safeFindBars, useBlurredBackdrop, type BarInsets } from "../../lib/blurredBackdrop";
 
 interface MediaCarouselProps {
   media: PostMediaItem[];
@@ -163,15 +165,11 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
         {media.map((item, i) =>
           item.type === "video" ? (
             variant === "card" ? (
-              // eslint-disable-next-line jsx-a11y/media-has-caption
-              <video
+              <CardVideo
                 key={item.id}
                 src={item.url}
                 poster={item.thumbnailUrl}
-                controls
-                playsInline
-                preload="metadata"
-                className={`${itemClass} bg-black`}
+                className={itemClass}
                 onClick={(e) => {
                   // Only a plain tap on the video body (not the native
                   // controls bar) triggers this — otherwise tapping
@@ -271,14 +269,7 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
               </div>
             )
           ) : variant === "card" ? (
-            <img
-              key={item.id}
-              src={item.url}
-              alt=""
-              loading="lazy"
-              className={`${itemClass} cursor-pointer bg-slate-100`}
-              onClick={() => onItemClick?.(i)}
-            />
+            <CardImage key={item.id} src={item.url} className={itemClass} onClick={() => onItemClick?.(i)} />
           ) : (
             <div key={item.id} className="h-full w-full shrink-0 snap-center overflow-hidden bg-black">
               <img src={item.url} alt="" loading="lazy" className="h-full w-full object-contain" />
@@ -306,5 +297,81 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
         </span>
       )}
     </div>
+  );
+}
+
+// Card-variant media fill a fixed box with object-cover, which already hides
+// any letterbox from a mismatched shape. Black bars baked into the picture
+// itself (an editing or social app's square/4:5 export) would still show, so
+// they're found (see blurredBackdrop) and zoomed out of the box.
+function BarCropBox({ className, bars, aspect, children }: {
+  className: string;
+  bars: BarInsets | null;
+  aspect: number | null;
+  children: (style: React.CSSProperties | undefined, className: string) => React.ReactNode;
+}) {
+  if (!bars || !aspect) return <>{children(undefined, className)}</>;
+  return (
+    <div className={`${className} relative overflow-hidden bg-slate-100 [container-type:size]`}>
+      {children(barsCoverStyle(bars, aspect), "")}
+    </div>
+  );
+}
+
+function CardImage({ src, className, onClick }: { src: string; className: string; onClick: () => void }) {
+  const [found, setFound] = useState<{ bars: BarInsets | null; aspect: number } | null>(null);
+  return (
+    <BarCropBox className={className} bars={found?.bars ?? null} aspect={found?.aspect ?? null}>
+      {(style, cls) => (
+        <img
+          src={src}
+          alt=""
+          loading="lazy"
+          // CORS so the picture can be read for the bar scan; GolfMe's
+          // Storage buckets send the header.
+          crossOrigin="anonymous"
+          style={style}
+          className={`${cls} cursor-pointer bg-slate-100`}
+          onLoad={(e) => {
+            const img = e.currentTarget;
+            if (found) return;
+            setFound({ bars: safeFindBars(img), aspect: img.naturalWidth / Math.max(img.naturalHeight, 1) });
+          }}
+          onClick={onClick}
+        />
+      )}
+    </BarCropBox>
+  );
+}
+
+function CardVideo({ src, poster, className, onClick }: {
+  src: string;
+  poster?: string;
+  className: string;
+  onClick: (e: React.MouseEvent<HTMLVideoElement>) => void;
+}) {
+  const scan = useBlurredBackdrop(poster);
+  return (
+    <BarCropBox className={className} bars={scan?.bars ?? null} aspect={scan?.aspect ?? null}>
+      {(style, cls) =>
+        style ? (
+          // Zoomed past its own edges, the native controls bar would sit
+          // outside the box, so a cropped video shows a play badge instead;
+          // a tap opens the native fullscreen player either way.
+          <>
+            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+            <video src={src} poster={poster} playsInline preload="metadata" style={style} className="cursor-pointer bg-black" onClick={onClick} />
+            <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/40 text-white">
+                <Play size={20} fill="currentColor" />
+              </span>
+            </span>
+          </>
+        ) : (
+          // eslint-disable-next-line jsx-a11y/media-has-caption
+          <video src={src} poster={poster} controls playsInline preload="metadata" className={`${cls} bg-black`} onClick={onClick} />
+        )
+      }
+    </BarCropBox>
   );
 }
