@@ -334,25 +334,97 @@ type Phase = "idle" | "uploading" | "pose" | "scoring" | "done";
 
 const FEEDBACK = ["Strong tempo through transition.", "Hips open slightly early at the top.", "Try: hold the turn one beat longer."];
 
-// Face-on golfer at the top of the backswing, in a 200x260 box. Limbs are
-// thick round-capped strokes over a torso path — clean at any size, no
-// photo needed, and the pose landmarks below sit exactly on the joints.
-const J = {
-  head: [104, 40],
-  neck: [104, 62],
-  shL: [82, 70],
-  shR: [126, 70],
-  elL: [114, 58],
-  elR: [146, 76],
-  hands: [150, 44],
-  hipL: [88, 134],
-  hipR: [120, 134],
-  kneeL: [80, 182],
-  kneeR: [128, 182],
-  ankL: [70, 232],
-  ankR: [140, 232],
-} as const;
-type Joint = keyof typeof J;
+// Face-on golfer in a 200x260 box, as four key poses of one swing. Limbs
+// are thick round-capped strokes between joints, so the same joint table
+// drives both the drawn figure and Caddie's pose overlay — the skeleton
+// tracks the moving body exactly. The scene tweens between poses with an
+// ease on each segment (useSwingPose below).
+type Pose = Record<Joint, readonly [number, number]> & { club: readonly [number, number] };
+type JointName =
+  | "head" | "neck" | "shL" | "shR" | "elL" | "elR" | "hands"
+  | "hipL" | "hipR" | "kneeL" | "kneeR" | "ankL" | "ankR";
+type Joint = JointName;
+
+const POSE_ADDRESS: Pose = {
+  head: [100, 46], neck: [100, 66], shL: [78, 76], shR: [122, 76],
+  elL: [84, 108], elR: [116, 108], hands: [100, 142],
+  hipL: [84, 134], hipR: [116, 134], kneeL: [76, 182], kneeR: [124, 182], ankL: [66, 232], ankR: [134, 232],
+  club: [62, 238],
+};
+const POSE_TOP: Pose = {
+  head: [104, 40], neck: [104, 62], shL: [82, 70], shR: [126, 70],
+  elL: [114, 58], elR: [146, 76], hands: [150, 44],
+  hipL: [88, 134], hipR: [120, 134], kneeL: [80, 182], kneeR: [128, 182], ankL: [70, 232], ankR: [140, 232],
+  club: [60, 14],
+};
+const POSE_IMPACT: Pose = {
+  head: [100, 44], neck: [100, 64], shL: [80, 74], shR: [122, 70],
+  elL: [92, 106], elR: [122, 102], hands: [102, 142],
+  hipL: [90, 132], hipR: [118, 128], kneeL: [80, 182], kneeR: [124, 182], ankL: [66, 232], ankR: [134, 232],
+  club: [60, 238],
+};
+const POSE_FINISH: Pose = {
+  head: [96, 40], neck: [98, 62], shL: [84, 74], shR: [118, 70],
+  elL: [72, 52], elR: [86, 40], hands: [60, 36],
+  hipL: [92, 132], hipR: [116, 130], kneeL: [82, 182], kneeR: [116, 180], ankL: [68, 232], ankR: [128, 226],
+  club: [116, -6],
+};
+// (pose, time in the cycle 0..1). Address -> top is the slow part,
+// top -> impact the fast part, then the finish holds before resetting.
+const SWING: [Pose, number][] = [
+  [POSE_ADDRESS, 0],
+  [POSE_TOP, 0.38],
+  [POSE_IMPACT, 0.56],
+  [POSE_FINISH, 0.72],
+  [POSE_FINISH, 0.86],
+  [POSE_ADDRESS, 1],
+];
+const SWING_MS = 3200;
+const JOINTS = Object.keys(POSE_TOP).filter((k) => k !== "club") as Joint[];
+
+function easeInOut(t: number): number {
+  return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+}
+function tweenPose(t: number): Pose {
+  for (let i = 0; i < SWING.length - 1; i++) {
+    const [a, ta] = SWING[i];
+    const [b, tb] = SWING[i + 1];
+    if (t >= ta && t <= tb) {
+      const k = tb === ta ? 0 : easeInOut((t - ta) / (tb - ta));
+      const out = {} as Record<string, readonly [number, number]>;
+      for (const key of [...JOINTS, "club"] as (Joint | "club")[]) {
+        out[key] = [a[key][0] + (b[key][0] - a[key][0]) * k, a[key][1] + (b[key][1] - a[key][1]) * k];
+      }
+      return out as Pose;
+    }
+  }
+  return POSE_ADDRESS;
+}
+
+// Drives the swing loop with requestAnimationFrame while `playing`; when
+// paused it rests at the top of the backswing (where the angle callouts
+// are measured). First render is the top pose too, so the prerender shows
+// a finished-looking frame. Reduced-motion users get the still frame.
+function useSwingPose(playing: boolean): { pose: Pose; progress: number } {
+  const [state, setState] = useState<{ pose: Pose; progress: number }>({ pose: POSE_TOP, progress: 0.38 });
+  useEffect(() => {
+    if (!playing || prefersReducedMotion()) {
+      setState({ pose: POSE_TOP, progress: 0.38 });
+      return;
+    }
+    let raf = 0;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const t = ((now - start) % SWING_MS) / SWING_MS;
+      setState({ pose: tweenPose(t), progress: t });
+      raf = window.requestAnimationFrame(tick);
+    };
+    raf = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(raf);
+  }, [playing]);
+  return state;
+}
+
 const BONES: [Joint, Joint][] = [
   ["head", "neck"],
   ["neck", "shL"],
@@ -371,12 +443,20 @@ const BONES: [Joint, Joint][] = [
 ];
 const PHASES = ["Address", "Top", "Impact", "Finish"];
 
-function SwingScene({ phase }: { phase: Phase }) {
+function SwingScene({ phase, pose, progress }: { phase: Phase; pose: Pose; progress: number }) {
+  const J = pose;
   const showPose = phase === "pose" || phase === "scoring" || phase === "done";
   const showAngles = phase === "scoring" || phase === "done";
+  const ballStruck = phase !== "done" && progress > 0.56 && progress < 0.98;
   const limb = (a: Joint, b: Joint, w: number) => (
     <line key={`${a}${b}`} x1={J[a][0]} y1={J[a][1]} x2={J[b][0]} y2={J[b][1]} stroke="url(#gm-body)" strokeWidth={w} strokeLinecap="round" />
   );
+  // Club: shaft from the hands toward the pose's club point, head at the end.
+  const [cx, cy] = J.club;
+  const ang = Math.atan2(cy - J.hands[1], cx - J.hands[0]);
+  const len = Math.hypot(cx - J.hands[0], cy - J.hands[1]);
+  const hx = J.hands[0] + Math.cos(ang) * (len - 6);
+  const hy = J.hands[1] + Math.sin(ang) * (len - 6);
   return (
     <svg viewBox="0 0 400 300" className="h-full w-full" role="img" aria-label="Illustration of a golfer at the top of the backswing with Caddie's pose analysis overlay">
       <defs>
@@ -451,20 +531,27 @@ function SwingScene({ phase }: { phase: Phase }) {
         {/* tee box glow + shadow */}
         <ellipse cx="105" cy="250" rx="54" ry="9" fill="#031208" opacity="0.5" filter="url(#gm-soft)" />
 
-        {/* golfer: club first so the shaft sits behind the head */}
+        {/* ball on the tee (gone after impact until the next address) */}
+        {!ballStruck && <circle cx="62" cy="241" r="3.2" fill="#f8faf8" />}
+        {ballStruck && <circle cx={62 + (progress - 0.56) * 420} cy={241 - (progress - 0.56) * 520} r="2.6" fill="#f8faf8" opacity="0.9" />}
+
+        {/* golfer: club first so the shaft sits behind the body */}
         <g transform="translate(0 6)">
-          <line x1={J.hands[0]} y1={J.hands[1]} x2="60" y2="14" stroke="#cbd5e1" strokeWidth="3" strokeLinecap="round" />
-          <path d="M56 10 l-14 -6 c-5 -2 -9 3 -5 7 l12 8 z" fill="#1f2937" stroke="#9ca3af" strokeWidth="1" />
+          <line x1={J.hands[0]} y1={J.hands[1]} x2={hx} y2={hy} stroke="#cbd5e1" strokeWidth="3" strokeLinecap="round" />
+          <ellipse cx={hx} cy={hy} rx="7" ry="4" fill="#1f2937" stroke="#9ca3af" strokeWidth="1" transform={`rotate(${(ang * 180) / Math.PI + 90} ${hx} ${hy})`} />
           {/* torso */}
-          <path d="M82 66 C78 92 80 118 88 138 L120 138 C128 118 130 92 126 66 Z" fill="url(#gm-body)" />
+          <path
+            d={`M${J.shL[0]} ${J.shL[1] - 4} C${J.shL[0] - 4} ${(J.shL[1] + J.hipL[1]) / 2} ${J.hipL[0] - 6} ${J.hipL[1] - 18} ${J.hipL[0]} ${J.hipL[1] + 4} L${J.hipR[0]} ${J.hipR[1] + 4} C${J.hipR[0] + 6} ${J.hipR[1] - 18} ${J.shR[0] + 4} ${(J.shR[1] + J.hipR[1]) / 2} ${J.shR[0]} ${J.shR[1] - 4} Z`}
+            fill="url(#gm-body)"
+          />
           {/* legs */}
           {limb("hipL", "kneeL", 17)}
           {limb("kneeL", "ankL", 15)}
           {limb("hipR", "kneeR", 17)}
           {limb("kneeR", "ankR", 15)}
           {/* shoes */}
-          <ellipse cx="68" cy="238" rx="15" ry="6" fill="#0a1510" />
-          <ellipse cx="144" cy="238" rx="15" ry="6" fill="#0a1510" />
+          <ellipse cx={J.ankL[0] - 2} cy={J.ankL[1] + 6} rx="15" ry="6" fill="#0a1510" />
+          <ellipse cx={J.ankR[0] + 4} cy={J.ankR[1] + 6} rx="15" ry="6" fill="#0a1510" />
           {/* arms */}
           {limb("shL", "elL", 13)}
           {limb("elL", "hands", 12)}
@@ -473,11 +560,11 @@ function SwingScene({ phase }: { phase: Phase }) {
           <circle cx={J.hands[0]} cy={J.hands[1]} r="8" fill="#0d1a12" />
           {/* head + cap */}
           <circle cx={J.head[0]} cy={J.head[1]} r="15" fill="url(#gm-body)" />
-          <path d="M87 36 C92 22 118 22 122 36 Z" fill="#0b1a10" />
-          <path d="M86 37 L126 37 L130 41 L84 41 Z" fill="#0b1a10" />
+          <path d={`M${J.head[0] - 17} ${J.head[1] - 4} C${J.head[0] - 12} ${J.head[1] - 18} ${J.head[0] + 14} ${J.head[1] - 18} ${J.head[0] + 18} ${J.head[1] - 4} Z`} fill="#0b1a10" />
+          <path d={`M${J.head[0] - 18} ${J.head[1] - 3} L${J.head[0] + 22} ${J.head[1] - 3} L${J.head[0] + 26} ${J.head[1] + 1} L${J.head[0] - 20} ${J.head[1] + 1} Z`} fill="#0b1a10" />
           {/* rim light from the sun */}
-          <path d="M126 70 C130 92 128 118 120 138" stroke="#f6c96f" strokeWidth="2" strokeOpacity="0.35" fill="none" strokeLinecap="round" />
-          <path d="M128 182 L140 232" stroke="#f6c96f" strokeWidth="2" strokeOpacity="0.3" strokeLinecap="round" />
+          <path d={`M${J.shR[0]} ${J.shR[1]} C${J.shR[0] + 4} ${J.shR[1] + 22} ${J.hipR[0] + 8} ${J.hipR[1] - 16} ${J.hipR[0]} ${J.hipR[1] + 4}`} stroke="#f6c96f" strokeWidth="2" strokeOpacity="0.35" fill="none" strokeLinecap="round" />
+          <line x1={J.kneeR[0]} y1={J.kneeR[1]} x2={J.ankR[0]} y2={J.ankR[1]} stroke="#f6c96f" strokeWidth="2" strokeOpacity="0.3" strokeLinecap="round" />
         </g>
 
         {/* pose overlay */}
@@ -486,16 +573,16 @@ function SwingScene({ phase }: { phase: Phase }) {
             {BONES.map(([a, b]) => (
               <line key={`${a}-${b}`} x1={J[a][0]} y1={J[a][1]} x2={J[b][0]} y2={J[b][1]} stroke="url(#gm-bone)" strokeWidth="2.4" strokeLinecap="round" opacity="0.95" />
             ))}
-            {(Object.keys(J) as Joint[]).map((k, i) => (
+            {JOINTS.map((k, i) => (
               <g key={k} filter="url(#gm-glow)">
                 <circle cx={J[k][0]} cy={J[k][1]} r="4.6" fill="#f4b942" className="animate-pose-pulse" style={{ animationDelay: `${i * 70}ms`, transformBox: "fill-box", transformOrigin: "center" }} />
                 <circle cx={J[k][0]} cy={J[k][1]} r="1.8" fill="#fff7e0" />
               </g>
             ))}
-            {/* spine + shoulder line */}
-            <line x1="104" y1="62" x2="104" y2="134" stroke="#ffffff" strokeWidth="1" strokeDasharray="3 3" opacity="0.6" />
-            <line x1="82" y1="70" x2="126" y2="70" stroke="#ffffff" strokeWidth="1" strokeDasharray="3 3" opacity="0.6" />
-            <line x1="88" y1="134" x2="120" y2="134" stroke="#ffffff" strokeWidth="1" strokeDasharray="3 3" opacity="0.6" />
+            {/* spine + shoulder + hip guides */}
+            <line x1={J.neck[0]} y1={J.neck[1]} x2={(J.hipL[0] + J.hipR[0]) / 2} y2={(J.hipL[1] + J.hipR[1]) / 2} stroke="#ffffff" strokeWidth="1" strokeDasharray="3 3" opacity="0.6" />
+            <line x1={J.shL[0]} y1={J.shL[1]} x2={J.shR[0]} y2={J.shR[1]} stroke="#ffffff" strokeWidth="1" strokeDasharray="3 3" opacity="0.6" />
+            <line x1={J.hipL[0]} y1={J.hipL[1]} x2={J.hipR[0]} y2={J.hipR[1]} stroke="#ffffff" strokeWidth="1" strokeDasharray="3 3" opacity="0.6" />
           </g>
         )}
 
@@ -554,7 +641,12 @@ export function CaddieDemo() {
     done: "Analysis saved to your history",
   };
   const stepIndex = ["uploading", "pose", "scoring", "done"].indexOf(phase);
-  const playhead = phase === "idle" ? 0 : phase === "uploading" ? 8 : phase === "pose" ? 34 : phase === "scoring" ? 62 : 100;
+  // The figure swings continuously until the analysis lands, then rests at
+  // the top of the backswing so the angle callouts match what's drawn.
+  const { pose, progress } = useSwingPose(phase !== "done");
+  // Scrubber: follows the swing while it plays (address -> finish spans
+  // the first 72% of the cycle), parks on "Top" once the result is in.
+  const playhead = phase === "done" ? 38 : Math.min(100, (progress / 0.72) * 100);
 
   const metrics = [
     { label: "Tempo", value: "3.1 : 1", pct: 86, ok: true },
@@ -568,7 +660,7 @@ export function CaddieDemo() {
       <div className="overflow-hidden rounded-3xl border border-white/10 bg-[#0b1a10] shadow-2xl shadow-black/40 ring-1 ring-white/5">
         {/* video frame */}
         <div className="relative aspect-[4/3]">
-          <SwingScene phase={phase} />
+          <SwingScene phase={phase} pose={pose} progress={progress} />
           {phase === "uploading" && <div aria-hidden="true" className="absolute inset-x-0 h-px bg-sun-300/90 shadow-[0_0_14px_3px_rgba(246,201,111,0.6)] animate-scan" />}
           {(phase === "uploading" || phase === "pose") && (
             <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:24px_24px]" />
@@ -596,7 +688,7 @@ export function CaddieDemo() {
             </div>
             <div className="mt-1.5 flex justify-between text-[9.5px] font-semibold uppercase tracking-wider text-white/70">
               {PHASES.map((p, i) => (
-                <span key={p} className={playhead >= (i / (PHASES.length - 1)) * 100 && phase !== "idle" ? "text-sun-300" : ""}>
+                <span key={p} className={Math.abs(playhead - (i / (PHASES.length - 1)) * 100) < 17 ? "text-sun-300" : ""}>
                   {p}
                 </span>
               ))}
