@@ -331,30 +331,199 @@ export function FoursomeDemo() {
 // ── Caddie: run an analysis ─────────────────────────────────────────────
 
 type Phase = "idle" | "uploading" | "pose" | "scoring" | "done";
+
 const FEEDBACK = ["Strong tempo through transition.", "Hips open slightly early at the top.", "Try: hold the turn one beat longer."];
 
-// Pose landmarks over a simple side-on silhouette, in a 100x160 box.
-const POSE: [number, number][] = [
-  [52, 22], // head
-  [50, 46], // shoulder
-  [36, 70], // lead hand
-  [60, 68], // trail elbow
-  [48, 86], // hip
-  [40, 120], // knee
-  [44, 150], // ankle
-  [62, 118], // trail knee
-  [66, 150], // trail ankle
+// Face-on golfer at the top of the backswing, in a 200x260 box. Limbs are
+// thick round-capped strokes over a torso path — clean at any size, no
+// photo needed, and the pose landmarks below sit exactly on the joints.
+const J = {
+  head: [104, 40],
+  neck: [104, 62],
+  shL: [82, 70],
+  shR: [126, 70],
+  elL: [114, 58],
+  elR: [146, 76],
+  hands: [150, 44],
+  hipL: [88, 134],
+  hipR: [120, 134],
+  kneeL: [80, 182],
+  kneeR: [128, 182],
+  ankL: [70, 232],
+  ankR: [140, 232],
+} as const;
+type Joint = keyof typeof J;
+const BONES: [Joint, Joint][] = [
+  ["head", "neck"],
+  ["neck", "shL"],
+  ["neck", "shR"],
+  ["shL", "elL"],
+  ["elL", "hands"],
+  ["shR", "elR"],
+  ["elR", "hands"],
+  ["shL", "hipL"],
+  ["shR", "hipR"],
+  ["hipL", "hipR"],
+  ["hipL", "kneeL"],
+  ["kneeL", "ankL"],
+  ["hipR", "kneeR"],
+  ["kneeR", "ankR"],
 ];
-const BONES: [number, number][] = [
-  [0, 1],
-  [1, 2],
-  [1, 3],
-  [1, 4],
-  [4, 5],
-  [5, 6],
-  [4, 7],
-  [7, 8],
-];
+const PHASES = ["Address", "Top", "Impact", "Finish"];
+
+function SwingScene({ phase }: { phase: Phase }) {
+  const showPose = phase === "pose" || phase === "scoring" || phase === "done";
+  const showAngles = phase === "scoring" || phase === "done";
+  const limb = (a: Joint, b: Joint, w: number) => (
+    <line key={`${a}${b}`} x1={J[a][0]} y1={J[a][1]} x2={J[b][0]} y2={J[b][1]} stroke="url(#gm-body)" strokeWidth={w} strokeLinecap="round" />
+  );
+  return (
+    <svg viewBox="0 0 400 300" className="h-full w-full" role="img" aria-label="Illustration of a golfer at the top of the backswing with Caddie's pose analysis overlay">
+      <defs>
+        <linearGradient id="gm-sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#0b2a18" />
+          <stop offset="0.55" stopColor="#1b4a2d" />
+          <stop offset="1" stopColor="#3f8a4a" />
+        </linearGradient>
+        <radialGradient id="gm-sun" cx="0.78" cy="0.42" r="0.45">
+          <stop offset="0" stopColor="#f6c96f" stopOpacity="0.55" />
+          <stop offset="0.5" stopColor="#f4b942" stopOpacity="0.12" />
+          <stop offset="1" stopColor="#f4b942" stopOpacity="0" />
+        </radialGradient>
+        <linearGradient id="gm-grass" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#2e8f45" />
+          <stop offset="1" stopColor="#176a30" />
+        </linearGradient>
+        <linearGradient id="gm-body" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#1c2e24" />
+          <stop offset="1" stopColor="#060f0a" />
+        </linearGradient>
+        <linearGradient id="gm-bone" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#bbf7d0" />
+          <stop offset="1" stopColor="#4ade80" />
+        </linearGradient>
+        <filter id="gm-glow" x="-80%" y="-80%" width="260%" height="260%">
+          <feGaussianBlur stdDeviation="2.2" result="b" />
+          <feMerge>
+            <feMergeNode in="b" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+        <filter id="gm-soft" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="6" />
+        </filter>
+        <clipPath id="gm-clip">
+          <rect width="400" height="300" rx="0" />
+        </clipPath>
+      </defs>
+
+      <g clipPath="url(#gm-clip)">
+        {/* sky + low sun */}
+        <rect width="400" height="300" fill="url(#gm-sky)" />
+        <rect width="400" height="300" fill="url(#gm-sun)" />
+        <circle cx="312" cy="126" r="26" fill="#f6c96f" opacity="0.9" />
+        <circle cx="312" cy="126" r="44" fill="#f6c96f" opacity="0.12" filter="url(#gm-soft)" />
+        {/* distant treeline */}
+        <g fill="#0d2d1a" opacity="0.9">
+          <ellipse cx="40" cy="182" rx="60" ry="26" />
+          <ellipse cx="110" cy="176" rx="48" ry="30" />
+          <ellipse cx="330" cy="184" rx="70" ry="24" />
+          <ellipse cx="390" cy="178" rx="50" ry="30" />
+        </g>
+        <g fill="#123b22">
+          <ellipse cx="70" cy="190" rx="54" ry="18" />
+          <ellipse cx="350" cy="192" rx="62" ry="16" />
+        </g>
+        {/* fairway with mown stripes, in perspective */}
+        <rect x="0" y="196" width="400" height="104" fill="url(#gm-grass)" />
+        <g fill="#ffffff" opacity="0.07">
+          <path d="M-20 300 L60 196 L92 196 L40 300 Z" />
+          <path d="M100 300 L150 196 L182 196 L160 300 Z" />
+          <path d="M220 300 L240 196 L272 196 L280 300 Z" />
+          <path d="M340 300 L330 196 L362 196 L400 300 Z" />
+        </g>
+        {/* flag on the far green */}
+        <g>
+          <ellipse cx="250" cy="206" rx="34" ry="5" fill="#4fc169" opacity="0.6" />
+          <line x1="250" y1="206" x2="250" y2="168" stroke="#f8faf8" strokeWidth="1.5" />
+          <path d="M250 168 L268 174 L250 180 Z" fill="#f4b942" />
+        </g>
+        {/* tee box glow + shadow */}
+        <ellipse cx="105" cy="250" rx="54" ry="9" fill="#031208" opacity="0.5" filter="url(#gm-soft)" />
+
+        {/* golfer: club first so the shaft sits behind the head */}
+        <g transform="translate(0 6)">
+          <line x1={J.hands[0]} y1={J.hands[1]} x2="60" y2="14" stroke="#cbd5e1" strokeWidth="3" strokeLinecap="round" />
+          <path d="M56 10 l-14 -6 c-5 -2 -9 3 -5 7 l12 8 z" fill="#1f2937" stroke="#9ca3af" strokeWidth="1" />
+          {/* torso */}
+          <path d="M82 66 C78 92 80 118 88 138 L120 138 C128 118 130 92 126 66 Z" fill="url(#gm-body)" />
+          {/* legs */}
+          {limb("hipL", "kneeL", 17)}
+          {limb("kneeL", "ankL", 15)}
+          {limb("hipR", "kneeR", 17)}
+          {limb("kneeR", "ankR", 15)}
+          {/* shoes */}
+          <ellipse cx="68" cy="238" rx="15" ry="6" fill="#0a1510" />
+          <ellipse cx="144" cy="238" rx="15" ry="6" fill="#0a1510" />
+          {/* arms */}
+          {limb("shL", "elL", 13)}
+          {limb("elL", "hands", 12)}
+          {limb("shR", "elR", 13)}
+          {limb("elR", "hands", 12)}
+          <circle cx={J.hands[0]} cy={J.hands[1]} r="8" fill="#0d1a12" />
+          {/* head + cap */}
+          <circle cx={J.head[0]} cy={J.head[1]} r="15" fill="url(#gm-body)" />
+          <path d="M87 36 C92 22 118 22 122 36 Z" fill="#0b1a10" />
+          <path d="M86 37 L126 37 L130 41 L84 41 Z" fill="#0b1a10" />
+          {/* rim light from the sun */}
+          <path d="M126 70 C130 92 128 118 120 138" stroke="#f6c96f" strokeWidth="2" strokeOpacity="0.35" fill="none" strokeLinecap="round" />
+          <path d="M128 182 L140 232" stroke="#f6c96f" strokeWidth="2" strokeOpacity="0.3" strokeLinecap="round" />
+        </g>
+
+        {/* pose overlay */}
+        {showPose && (
+          <g transform="translate(0 6)" className="animate-pop">
+            {BONES.map(([a, b]) => (
+              <line key={`${a}-${b}`} x1={J[a][0]} y1={J[a][1]} x2={J[b][0]} y2={J[b][1]} stroke="url(#gm-bone)" strokeWidth="2.4" strokeLinecap="round" opacity="0.95" />
+            ))}
+            {(Object.keys(J) as Joint[]).map((k, i) => (
+              <g key={k} filter="url(#gm-glow)">
+                <circle cx={J[k][0]} cy={J[k][1]} r="4.6" fill="#f4b942" className="animate-pose-pulse" style={{ animationDelay: `${i * 70}ms`, transformBox: "fill-box", transformOrigin: "center" }} />
+                <circle cx={J[k][0]} cy={J[k][1]} r="1.8" fill="#fff7e0" />
+              </g>
+            ))}
+            {/* spine + shoulder line */}
+            <line x1="104" y1="62" x2="104" y2="134" stroke="#ffffff" strokeWidth="1" strokeDasharray="3 3" opacity="0.6" />
+            <line x1="82" y1="70" x2="126" y2="70" stroke="#ffffff" strokeWidth="1" strokeDasharray="3 3" opacity="0.6" />
+            <line x1="88" y1="134" x2="120" y2="134" stroke="#ffffff" strokeWidth="1" strokeDasharray="3 3" opacity="0.6" />
+          </g>
+        )}
+
+        {/* angle callouts */}
+        {showAngles && (
+          <g className="animate-slide-up" fontFamily="Inter, system-ui, sans-serif" fontWeight="700">
+            {[
+              { x: 178, y: 58, label: "Shoulder turn", value: "94°", ok: true },
+              { x: 178, y: 128, label: "Hip turn", value: "46°", ok: true },
+              { x: 178, y: 198, label: "Knee flex", value: "22°", ok: false },
+            ].map((c) => (
+              <g key={c.label}>
+                <line x1={c.x - 14} y1={c.y + 10} x2={c.x - 44} y2={c.y + 10} stroke="#ffffff" strokeOpacity="0.5" strokeWidth="1" />
+                <rect x={c.x - 10} y={c.y - 2} width="112" height="26" rx="13" fill="#0b1a10" fillOpacity="0.85" stroke={c.ok ? "#4ade80" : "#f4b942"} strokeOpacity="0.6" />
+                <text x={c.x} y={c.y + 15} fontSize="10" fill="#dcfce7" fontWeight="500">
+                  {c.label}
+                </text>
+                <text x={c.x + 98} y={c.y + 15} fontSize="11" fill={c.ok ? "#86efac" : "#f6c96f"} textAnchor="end">
+                  {c.value}
+                </text>
+              </g>
+            ))}
+          </g>
+        )}
+      </g>
+    </svg>
+  );
+}
 
 export function CaddieDemo() {
   const { t } = useLocale();
@@ -366,9 +535,9 @@ export function CaddieDemo() {
     timers.current.forEach((id) => window.clearTimeout(id));
     setPhase("uploading");
     const steps: [Phase, number][] = [
-      ["pose", 900],
+      ["pose", 1000],
       ["scoring", 2600],
-      ["done", 3900],
+      ["done", 4000],
     ];
     steps.forEach(([p, ms]) => timers.current.push(window.setTimeout(() => setPhase(p), ms)));
   };
@@ -378,54 +547,64 @@ export function CaddieDemo() {
   };
 
   const stepLabel: Record<Phase, string> = {
-    idle: "Ready",
+    idle: "Ready to analyze",
     uploading: "Uploading 7-iron swing…",
     pose: "Detecting body positions",
     scoring: "Scoring the swing",
     done: "Analysis saved to your history",
   };
-  const showPose = phase === "pose" || phase === "scoring" || phase === "done";
+  const stepIndex = ["uploading", "pose", "scoring", "done"].indexOf(phase);
+  const playhead = phase === "idle" ? 0 : phase === "uploading" ? 8 : phase === "pose" ? 34 : phase === "scoring" ? 62 : 100;
+
+  const metrics = [
+    { label: "Tempo", value: "3.1 : 1", pct: 86, ok: true },
+    { label: "Shoulder turn", value: "94°", pct: 90, ok: true },
+    { label: "Hip timing", value: "early", pct: 58, ok: false },
+  ];
 
   return (
     <div className="mx-auto w-full max-w-md">
       <p className="mb-3 text-xs font-bold text-sun-300">{t("landing.demo.tryIt")}</p>
-      <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/5 shadow-2xl shadow-black/30 backdrop-blur-sm">
-        {/* "video" area */}
-        <div className="relative aspect-[4/3] overflow-hidden bg-gradient-to-b from-fairway-800 via-fairway-900 to-fairway-950">
-          <div aria-hidden="true" className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-fairway-500/30 to-transparent" />
-          <svg viewBox="0 0 100 160" className="absolute left-1/2 top-1/2 h-[88%] -translate-x-1/2 -translate-y-1/2" aria-hidden="true">
-            {/* silhouette */}
-            <path
-              d="M52 14a8 8 0 1 1 0 16a8 8 0 0 1 0-16zM44 32h16l6 20-4 22 6 40-4 34h-8l-2-34-6-16-4 16-4 34h-8l2-36 6-38-4-20z"
-              fill="#0f3a22"
-              stroke="#4fc169"
-              strokeOpacity="0.35"
-            />
-            {/* club */}
-            <path d="M36 70 L18 128" stroke="#e4e9e1" strokeWidth="1.6" strokeLinecap="round" opacity="0.7" />
-            {showPose && (
-              <g className="animate-pop">
-                {BONES.map(([a, b]) => (
-                  <line key={`${a}-${b}`} x1={POSE[a][0]} y1={POSE[a][1]} x2={POSE[b][0]} y2={POSE[b][1]} stroke="#86efac" strokeWidth="1.4" strokeLinecap="round" />
-                ))}
-                {POSE.map(([x, y], i) => (
-                  <circle key={i} cx={x} cy={y} r="2.6" fill="#f4b942" className="animate-pose-pulse" style={{ animationDelay: `${i * 90}ms`, transformBox: "fill-box", transformOrigin: "center" }} />
-                ))}
-              </g>
-            )}
-          </svg>
-          {phase === "uploading" && <div aria-hidden="true" className="absolute inset-x-6 h-px bg-sun-300/80 shadow-[0_0_12px_2px_rgba(246,201,111,0.6)] animate-scan" />}
+      <div className="overflow-hidden rounded-3xl border border-white/10 bg-[#0b1a10] shadow-2xl shadow-black/40 ring-1 ring-white/5">
+        {/* video frame */}
+        <div className="relative aspect-[4/3]">
+          <SwingScene phase={phase} />
+          {phase === "uploading" && <div aria-hidden="true" className="absolute inset-x-0 h-px bg-sun-300/90 shadow-[0_0_14px_3px_rgba(246,201,111,0.6)] animate-scan" />}
+          {(phase === "uploading" || phase === "pose") && (
+            <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:24px_24px]" />
+          )}
           {phase === "done" && (
             <div className="absolute right-3 top-3 rounded-2xl bg-white/95 p-2 text-slate-900 shadow-lg animate-pop">
               <ScoreRing score={81} size={72} />
             </div>
           )}
-          <div className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-black/40 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur">
+          <div className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-black/45 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur">
             <Video size={12} /> 7 Iron · 0:04
+          </div>
+          {phase !== "idle" && phase !== "done" && (
+            <div className="absolute left-3 top-10 flex items-center gap-1.5 rounded-full bg-black/45 px-2.5 py-1 text-[10px] font-semibold text-fairway-200 backdrop-blur">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-400" /> {phase === "pose" ? "POSE DETECTION" : "LIVE"}
+            </div>
+          )}
+          {/* scrubber with swing phases */}
+          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-4 pb-3 pt-8">
+            <div className="relative h-1.5 rounded-full bg-white/20">
+              <div className="h-full rounded-full bg-sun-300 transition-[width] duration-700 ease-out" style={{ width: `${playhead}%` }} />
+              {PHASES.map((p, i) => (
+                <span key={p} aria-hidden="true" className="absolute top-1/2 h-3 w-0.5 -translate-y-1/2 bg-white/50" style={{ left: `${(i / (PHASES.length - 1)) * 100}%` }} />
+              ))}
+            </div>
+            <div className="mt-1.5 flex justify-between text-[9.5px] font-semibold uppercase tracking-wider text-white/70">
+              {PHASES.map((p, i) => (
+                <span key={p} className={playhead >= (i / (PHASES.length - 1)) * 100 && phase !== "idle" ? "text-sun-300" : ""}>
+                  {p}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* status + feedback */}
+        {/* status, metrics, feedback */}
         <div className="p-4">
           <div className="flex items-center justify-between gap-3">
             <p className="flex items-center gap-2 text-sm font-semibold text-white" aria-live="polite">
@@ -433,22 +612,36 @@ export function CaddieDemo() {
               {stepLabel[phase]}
             </p>
             <div className="flex gap-1" aria-hidden="true">
-              {(["uploading", "pose", "scoring"] as Phase[]).map((p, i) => {
-                const idx = ["uploading", "pose", "scoring", "done"].indexOf(phase);
-                const on = idx > i || phase === "done";
-                return <span key={p} className={`h-1.5 w-6 rounded-full transition ${on ? "bg-fairway-400" : "bg-white/15"}`} />;
-              })}
+              {[0, 1, 2].map((i) => (
+                <span key={i} className={`h-1.5 w-6 rounded-full transition ${stepIndex > i ? "bg-fairway-400" : "bg-white/15"}`} />
+              ))}
             </div>
           </div>
-          <ul className="mt-3 min-h-[4.5rem] space-y-1.5 text-sm text-fairway-100">
+
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            {metrics.map((m, i) => {
+              const live = phase === "done";
+              return (
+                <div key={m.label} className={`rounded-2xl border p-2.5 transition ${live ? "border-white/10 bg-white/5" : "border-white/5 bg-white/[0.03]"}`}>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-fairway-200/70">{m.label}</p>
+                  <p className={`mt-1 text-base font-extrabold tabular-nums ${live ? (m.ok ? "text-white" : "text-sun-300") : "text-white/25"}`}>{live ? m.value : "—"}</p>
+                  <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/10">
+                    <div className={`h-full rounded-full transition-[width] duration-700 ease-out ${m.ok ? "bg-fairway-400" : "bg-sun-400"}`} style={{ width: live ? `${m.pct}%` : "0%", transitionDelay: `${i * 120}ms` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <ul className="mt-4 min-h-[4.5rem] space-y-1.5 text-sm text-fairway-100">
             {phase === "done" ? (
               FEEDBACK.map((line, i) => (
                 <li key={line} className="flex items-start gap-2 animate-slide-up" style={{ animationDelay: `${i * 220}ms`, animationFillMode: "backwards" }}>
-                  <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-sun-300" /> {line}
+                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-sun-300" /> {line}
                 </li>
               ))
             ) : (
-              <li className="text-fairway-200/70">{phase === "idle" ? "Caddie scores your swing out of 100 and tells you what to work on." : "Working…"}</li>
+              <li className="text-fairway-200/70">{phase === "idle" ? "Caddie tracks your body positions through the swing, scores it out of 100 and tells you what to work on." : "Working…"}</li>
             )}
           </ul>
           <div className="mt-4 flex gap-2">
