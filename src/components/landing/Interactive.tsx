@@ -446,7 +446,7 @@ function SwingScene({ phase, pose, progress }: { phase: Phase; pose: Pose; progr
   const J = pose;
   const showPose = phase === "pose" || phase === "scoring" || phase === "done";
   const showAngles = phase === "scoring" || phase === "done";
-  const ballStruck = phase !== "done" && progress > IMPACT_T && progress < 0.98;
+  const ballStruck = progress > IMPACT_T && progress < 0.98;
   const limb = (a: Joint, b: Joint, w: number) => (
     <line key={`${a}${b}`} x1={J[a][0]} y1={J[a][1]} x2={J[b][0]} y2={J[b][1]} stroke="url(#gm-body)" strokeWidth={w} strokeLinecap="round" />
   );
@@ -640,9 +640,9 @@ export function CaddieDemo() {
     done: "Analysis saved to your history",
   };
   const stepIndex = ["uploading", "pose", "scoring", "done"].indexOf(phase);
-  // The figure swings continuously until the analysis lands, then rests at
-  // the top of the backswing so the angle callouts match what's drawn.
-  const { pose, progress } = useSwingPose(phase !== "done");
+  // The figure keeps swinging in every state; the pose overlay tracks it
+  // frame by frame and the callouts sit alongside.
+  const { pose, progress } = useSwingPose(true);
   // Scrubber: follows the swing while it plays (address -> finish spans
   // the first 72% of the cycle), parks on "Top" once the result is in.
   // Scrubber: piecewise map of the cycle onto the four evenly spaced phase
@@ -662,7 +662,7 @@ export function CaddieDemo() {
     }
     return 100;
   };
-  const playhead = phase === "done" ? 100 / 3 : mapPlayhead(progress);
+  const playhead = mapPlayhead(progress);
 
   const metrics = [
     { label: "Tempo", value: "3.1 : 1", pct: 86, ok: true },
