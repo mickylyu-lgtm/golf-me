@@ -6,6 +6,8 @@ import { AppStoreButton } from "./AppStoreButton";
 import { DEFAULT_MOCK_GOLFERS, GolfersScreen, PhoneFrame, RoundsScreen, CaddieScreen, ScoreRing } from "./PhoneMock";
 import type { MockGolfer } from "./PhoneMock";
 import { useLocale } from "../../i18n/LocaleContext";
+import { samplePose, swingOpacity, SWING_MS, TOP_T, IMPACT_T, FINISH_T, BALL, TOP_POSE, JOINT_NAMES, RETURN_MID } from "./swingMotion";
+import type { JointName, Pose } from "./swingMotion";
 
 // Interactive demos for the public landing page. Each one is a small,
 // self-contained toy that explains one part of the product by letting the
@@ -334,71 +336,11 @@ type Phase = "idle" | "uploading" | "pose" | "scoring" | "done";
 
 const FEEDBACK = ["Strong tempo through transition.", "Hips open slightly early at the top.", "Try: hold the turn one beat longer."];
 
-// Face-on golfer in a 200x260 box, as four key poses of one swing. Limbs
-// are thick round-capped strokes between joints, so the same joint table
-// drives both the drawn figure and Caddie's pose overlay — the skeleton
-// tracks the moving body exactly. The scene tweens between poses with an
-// ease on each segment (useSwingPose below).
-type Pose = Record<Joint, readonly [number, number]> & { club: readonly [number, number] };
-type JointName =
-  | "head" | "neck" | "shL" | "shR" | "elL" | "elR" | "hands"
-  | "hipL" | "hipR" | "kneeL" | "kneeR" | "ankL" | "ankR";
+// The golfer's motion lives in ./swingMotion (pure math: key poses traced
+// from a real swing, each limb rotated about its parent joint along a
+// smooth spline). This file only draws it.
 type Joint = JointName;
-
-// Right-handed-looking face-on swing, joints read frame by frame off a
-// real 12 fps clip (sprite-tile pixels scaled into this 200 x 260 box).
-// Every pose below is one actual video frame; the loop tweens between
-// them at the clip's own timing, so the motion is a real swing, not a
-// guess. Keyed by source frame index.
-const KEY_POSES: [number, Pose][] = [
-  [0, { head: [102, 54], neck: [102, 77], shL: [77, 85], shR: [123, 87], elL: [80, 116], elR: [116, 116], hands: [84, 143], hipL: [77, 133], hipR: [123, 133], kneeL: [69, 179], kneeR: [131, 182], ankL: [55, 230], ankR: [137, 232], club: [55, 241] }],
-  [4, { head: [100, 54], neck: [102, 76], shL: [75, 85], shR: [123, 87], elL: [61, 108], elR: [98, 110], hands: [55, 138], hipL: [77, 133], hipR: [123, 133], kneeL: [69, 179], kneeR: [131, 182], ankL: [55, 230], ankR: [137, 232], club: [6, 166] }],
-  [7, { head: [98, 56], neck: [100, 77], shL: [73, 83], shR: [120, 87], elL: [67, 90], elR: [94, 76], hands: [59, 70], hipL: [77, 133], hipR: [123, 133], kneeL: [70, 179], kneeR: [131, 182], ankL: [55, 230], ankR: [137, 232], club: [14, 0] }],
-  [9, { head: [98, 59], neck: [100, 79], shL: [78, 77], shR: [125, 85], elL: [73, 62], elR: [108, 54], hands: [92, 40], hipL: [77, 133], hipR: [123, 131], kneeL: [70, 179], kneeR: [131, 182], ankL: [55, 230], ankR: [137, 232], club: [143, -8] }],
-  [11, { head: [98, 60], neck: [100, 80], shL: [78, 77], shR: [125, 83], elL: [70, 54], elR: [112, 48], hands: [94, 32], hipL: [78, 131], hipR: [123, 130], kneeL: [72, 179], kneeR: [131, 182], ankL: [55, 230], ankR: [137, 232], club: [194, 17] }],
-  [13, { head: [98, 60], neck: [100, 80], shL: [77, 81], shR: [123, 85], elL: [63, 91], elR: [100, 71], hands: [75, 70], hipL: [80, 133], hipR: [125, 130], kneeL: [75, 179], kneeR: [130, 182], ankL: [55, 230], ankR: [137, 232], club: [170, 0] }],
-  [15, { head: [100, 62], neck: [102, 80], shL: [81, 83], shR: [127, 87], elL: [78, 108], elR: [116, 108], hands: [94, 128], hipL: [83, 133], hipR: [125, 128], kneeL: [78, 179], kneeR: [130, 179], ankL: [55, 232], ankR: [137, 232], club: [194, 178] }],
-  [16, { head: [100, 63], neck: [103, 82], shL: [84, 83], shR: [125, 82], elL: [111, 87], elR: [133, 74], hands: [141, 77], hipL: [84, 131], hipR: [123, 128], kneeL: [81, 178], kneeR: [128, 179], ankL: [61, 230], ankR: [137, 232], club: [194, 15] }],
-  [18, { head: [106, 63], neck: [108, 82], shL: [91, 82], shR: [128, 80], elL: [123, 62], elR: [144, 57], hands: [155, 35], hipL: [88, 130], hipR: [123, 127], kneeL: [83, 176], kneeR: [125, 178], ankL: [63, 229], ankR: [136, 232], club: [53, 54] }],
-  [20, { head: [105, 63], neck: [106, 82], shL: [88, 83], shR: [127, 80], elL: [84, 62], elR: [108, 51], hands: [63, 46], hipL: [88, 131], hipR: [123, 128], kneeL: [81, 176], kneeR: [127, 179], ankL: [66, 226], ankR: [136, 232], club: [123, 117] }],
-  [23, { head: [102, 60], neck: [105, 80], shL: [86, 83], shR: [125, 80], elL: [78, 60], elR: [103, 51], hands: [55, 48], hipL: [84, 130], hipR: [123, 128], kneeL: [78, 176], kneeR: [127, 179], ankL: [67, 224], ankR: [136, 232], club: [125, 116] }],
-  [27, { head: [102, 59], neck: [105, 80], shL: [86, 83], shR: [125, 80], elL: [78, 60], elR: [103, 51], hands: [56, 49], hipL: [84, 130], hipR: [123, 128], kneeL: [78, 176], kneeR: [127, 179], ankL: [67, 224], ankR: [136, 232], club: [125, 116] }],
-];
-const CLIP_FPS = 12;
-const CLIP_FRAMES = 27;
-// Cycle: the clip (frames 0-27 at 12 fps = 2.25 s), a held finish, then a
-// 0.4 s return to address.
-const HOLD_S = 0.9;
-const RETURN_S = 0.4;
-const SWING_MS = Math.round((CLIP_FRAMES / CLIP_FPS + HOLD_S + RETURN_S) * 1000);
-const SWING: [Pose, number][] = [
-  ...KEY_POSES.map(([f, p]): [Pose, number] => [p, (f / CLIP_FPS) / (SWING_MS / 1000)]),
-  [KEY_POSES[KEY_POSES.length - 1][1], (CLIP_FRAMES / CLIP_FPS + HOLD_S) / (SWING_MS / 1000)],
-  [KEY_POSES[0][1], 1],
-];
-const TOP_T = (11 / CLIP_FPS) / (SWING_MS / 1000);
-const IMPACT_T = (15 / CLIP_FPS) / (SWING_MS / 1000);
-const FINISH_T = (23 / CLIP_FPS) / (SWING_MS / 1000);
-const JOINTS = Object.keys(KEY_POSES[0][1]).filter((k) => k !== "club") as Joint[];
-
-function easeInOut(t: number): number {
-  return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-}
-function tweenPose(t: number): Pose {
-  for (let i = 0; i < SWING.length - 1; i++) {
-    const [a, ta] = SWING[i];
-    const [b, tb] = SWING[i + 1];
-    if (t >= ta && t <= tb) {
-      const k = tb === ta ? 0 : easeInOut((t - ta) / (tb - ta));
-      const out = {} as Record<string, readonly [number, number]>;
-      for (const key of [...JOINTS, "club"] as (Joint | "club")[]) {
-        out[key] = [a[key][0] + (b[key][0] - a[key][0]) * k, a[key][1] + (b[key][1] - a[key][1]) * k];
-      }
-      return out as Pose;
-    }
-  }
-  return KEY_POSES[0][1];
-}
+const JOINTS = JOINT_NAMES;
 
 // Drives the swing loop with requestAnimationFrame while `playing`; when
 // paused it rests at the top of the backswing (where the angle callouts
@@ -407,17 +349,17 @@ function tweenPose(t: number): Pose {
 // prefers-reduced-motion: the swing is the content of this demo, not
 // decoration, and it is small and slow (one swing every ~3.5 s).
 function useSwingPose(playing: boolean): { pose: Pose; progress: number } {
-  const [state, setState] = useState<{ pose: Pose; progress: number }>({ pose: KEY_POSES[4][1], progress: TOP_T });
+  const [state, setState] = useState<{ pose: Pose; progress: number }>({ pose: TOP_POSE, progress: TOP_T });
   useEffect(() => {
     if (!playing) {
-      setState({ pose: KEY_POSES[4][1], progress: TOP_T });
+      setState({ pose: TOP_POSE, progress: TOP_T });
       return;
     }
     let raf = 0;
     const start = performance.now();
     const tick = (now: number) => {
       const t = ((now - start) % SWING_MS) / SWING_MS;
-      setState({ pose: tweenPose(t), progress: t });
+      setState({ pose: samplePose(t), progress: t });
       raf = window.requestAnimationFrame(tick);
     };
     raf = window.requestAnimationFrame(tick);
@@ -448,7 +390,10 @@ function SwingScene({ phase, pose, progress }: { phase: Phase; pose: Pose; progr
   const J = pose;
   const showPose = phase === "pose" || phase === "scoring" || phase === "done";
   const showAngles = phase === "scoring" || phase === "done";
-  const ballStruck = progress > IMPACT_T && progress < 0.98;
+  // Ball: on the tee until impact, in flight briefly, then gone until the
+  // loop fades back in at address.
+  const ballOnTee = progress < IMPACT_T || progress >= RETURN_MID;
+  const ballStruck = progress > IMPACT_T && progress < IMPACT_T + 0.18;
   const limb = (a: Joint, b: Joint, w: number) => (
     <line key={`${a}${b}`} x1={J[a][0]} y1={J[a][1]} x2={J[b][0]} y2={J[b][1]} stroke="url(#gm-body)" strokeWidth={w} strokeLinecap="round" />
   );
@@ -530,14 +475,14 @@ function SwingScene({ phase, pose, progress }: { phase: Phase; pose: Pose; progr
           <path d="M250 168 L268 174 L250 180 Z" fill="#f4b942" />
         </g>
         {/* tee box glow + shadow */}
-        <ellipse cx="100" cy="250" rx="56" ry="9" fill="#031208" opacity="0.5" filter="url(#gm-soft)" />
+        <ellipse cx="130" cy="250" rx="56" ry="9" fill="#031208" opacity="0.5" filter="url(#gm-soft)" />
 
         {/* ball on the tee (gone after impact until the next address) */}
-        {!ballStruck && <circle cx="55" cy="241" r="3.2" fill="#f8faf8" />}
-        {ballStruck && <circle cx={55 - (progress - IMPACT_T) * 520} cy={241 - (progress - IMPACT_T) * 700} r="2.6" fill="#f8faf8" opacity="0.9" />}
+        {ballOnTee && <circle cx={BALL[0] + 30} cy={BALL[1] + 6} r="3.2" fill="#f8faf8" />}
+        {ballStruck && <circle cx={BALL[0] + 30 + (progress - IMPACT_T) * 900} cy={BALL[1] + 6 - (progress - IMPACT_T) * 1100} r="2.6" fill="#f8faf8" opacity="0.9" />}
 
         {/* golfer: club first so the shaft sits behind the body */}
-        <g transform="translate(0 6)">
+        <g transform="translate(30 6)" opacity={swingOpacity(progress)}>
           <line x1={J.hands[0]} y1={J.hands[1]} x2={hx} y2={hy} stroke="#cbd5e1" strokeWidth="3" strokeLinecap="round" />
           <ellipse cx={hx} cy={hy} rx="7" ry="4" fill="#1f2937" stroke="#9ca3af" strokeWidth="1" transform={`rotate(${(ang * 180) / Math.PI + 90} ${hx} ${hy})`} />
           {/* torso */}
@@ -570,7 +515,7 @@ function SwingScene({ phase, pose, progress }: { phase: Phase; pose: Pose; progr
 
         {/* pose overlay */}
         {showPose && (
-          <g transform="translate(0 6)" className="animate-pop">
+          <g transform="translate(30 6)" className="animate-pop" opacity={swingOpacity(progress)}>
             {BONES.map(([a, b]) => (
               <line key={`${a}-${b}`} x1={J[a][0]} y1={J[a][1]} x2={J[b][0]} y2={J[b][1]} stroke="url(#gm-bone)" strokeWidth="2.4" strokeLinecap="round" opacity="0.95" />
             ))}
