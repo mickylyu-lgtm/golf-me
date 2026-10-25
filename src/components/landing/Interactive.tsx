@@ -533,8 +533,13 @@ function SwingScene({ phase, pose, progress }: { phase: Phase; pose: Pose; progr
               <line key={`${a}-${b}`} x1={J[a][0]} y1={J[a][1]} x2={J[b][0]} y2={J[b][1]} stroke="url(#gm-bone)" strokeWidth="2.4" strokeLinecap="round" opacity="0.95" />
             ))}
             {JOINTS.map((k, i) => (
-              <g key={k} transform={`translate(${J[k][0]} ${J[k][1]})`} filter="url(#gm-glow)">
-                <circle cx="0" cy="0" r="7" fill="#f4b942" className="animate-halo-pulse" style={{ animationDelay: `${i * 70}ms` }} />
+              // No SVG filter here: Chrome caches a filter's output, and on an
+              // element that moves every frame it kept painting stale blurred
+              // copies of the dots around the body. The glow is two plain,
+              // semi-transparent circles instead.
+              <g key={k} transform={`translate(${J[k][0]} ${J[k][1]})`}>
+                <circle cx="0" cy="0" r="8.5" fill="#f4b942" opacity="0.12" />
+                <circle cx="0" cy="0" r="6.2" fill="#f4b942" className="animate-halo-pulse" style={{ animationDelay: `${i * 70}ms` }} />
                 <circle cx="0" cy="0" r="4.2" fill="#f4b942" />
                 <circle cx="0" cy="0" r="1.8" fill="#fff7e0" />
               </g>
