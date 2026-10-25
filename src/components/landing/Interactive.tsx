@@ -6,7 +6,7 @@ import { AppStoreButton } from "./AppStoreButton";
 import { DEFAULT_MOCK_GOLFERS, GolfersScreen, PhoneFrame, RoundsScreen, CaddieScreen, ScoreRing } from "./PhoneMock";
 import type { MockGolfer } from "./PhoneMock";
 import { useLocale } from "../../i18n/LocaleContext";
-import { samplePose, swingOpacity, SWING_MS, TOP_T, IMPACT_T, FINISH_T, BALL, TOP_POSE, JOINT_NAMES, RETURN_MID } from "./swingMotion";
+import { samplePose, swingOpacity, SWING_MS, TOP_T, IMPACT_T, FINISH_T, BALL, TOP_POSE, JOINT_NAMES, RETURN_MID, TRACE_END_T } from "./swingMotion";
 import type { JointName, Pose, Pt } from "./swingMotion";
 
 // Interactive demos for the public landing page. Each one is a small,
@@ -411,7 +411,7 @@ const FAN_STEP = 0.0015; // fine enough that the traced arc is a smooth curve, n
 const FAN: { t: number; hands: Pt; club: Pt; speed: number }[] = (() => {
   const out: { t: number; hands: Pt; club: Pt; speed: number }[] = [];
   let prev: Pt | null = null;
-  for (let t = 0; t <= RETURN_MID; t += FAN_STEP) {
+  for (let t = 0; t <= TRACE_END_T; t += FAN_STEP) {
     const p = samplePose(t);
     const speed = prev ? Math.hypot(p.club[0] - prev[0], p.club[1] - prev[1]) : 0;
     out.push({ t, hands: p.hands, club: p.club, speed });
