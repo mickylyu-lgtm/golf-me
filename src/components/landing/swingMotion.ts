@@ -367,17 +367,30 @@ const ADDRESS = (() => {
   const psi = ang(CENTRE, BALL_AT); // screen angle of the ball from the centre
   return { phi: psi - alpha - Math.PI / 2, beta };
 })();
-const PHI_TOP = 130 * RAD;
-const PHI_FIN = -130 * RAD;
-// Hinge keys (arm angle -> hinge): full set at the top and the finish;
-// shaft parallel to the ground at hip height on both sides; the release
-// happens between impact and the lead-side hip.
+// A full swing, after a tour pro's (Tiger Woods' face-on positions):
+//   top — hands high over the trail shoulder, shaft parallel to the ground
+//         pointing at the target;
+//   finish — hands up by the lead ear, the shaft wrapped behind the neck,
+//         resting across the shoulders and sloping down to the trail side.
+const PHI_TOP = 150 * RAD;
+// Finish: hands beside the lead ear (the arms fold in, so they sit closer to
+// the swing centre than at impact).
+const FIN_HANDS: Pt = [140, 70];
+const PHI_FIN = ang(CENTRE, FIN_HANDS) - Math.PI / 2;
+const FIN_R = dist(CENTRE, FIN_HANDS);
+const FIN_SHAFT = 170 * RAD; // behind the neck, sloping a touch down to the trail side
+// Hinge keys (arm angle -> hinge), mirrored either side of the ball:
+//   hip height     — shaft parallel to the ground (takeaway / release);
+//   lead arm level — shaft vertical, the "L" (set / re-hinge);
+//   top / finish   — as above.
 const HINGE: [number, number][] = [
-  [PHI_FIN, -50 * RAD],
+  [PHI_FIN, FIN_SHAFT - (Math.PI / 2 + PHI_FIN) - 2 * Math.PI],
+  [-95 * RAD, -85 * RAD],
   [-50 * RAD, -40 * RAD],
   [ADDRESS.phi, ADDRESS.beta],
   [50 * RAD, 40 * RAD],
-  [PHI_TOP, 50 * RAD],
+  [95 * RAD, 85 * RAD],
+  [PHI_TOP, 120 * RAD],
 ];
 // Monotone cubic (Fritsch–Carlson) through the hinge keys, flat at both ends.
 const HINGE_M = (() => {
@@ -410,7 +423,7 @@ function hinge(phi: number): number {
 // Arm angle over the loop.
 const T_START = frameT(FIRST_FRAME);
 const T_IMP = frameT(22.2);
-const T_ARM_FIN = frameT(26.4);
+const T_ARM_FIN = frameT(26.2);
 // Downswing: constant angular acceleration from rest at the top, so it is
 // fastest at the ball (slope = 2 x average). The follow-through starts at
 // that same speed and decelerates to rest at the finish.
@@ -427,7 +440,9 @@ function armAngle(u: number): number {
 }
 function armsAndClub(u: number): { hands: Pt; club: Pt } {
   const phi = armAngle(u);
-  const hands = fromPolar(CENTRE, Math.PI / 2 + phi, ARM_R);
+  // Arms fold in through the follow-through, past lead-arm-level.
+  const r = ARM_R + (FIN_R - ARM_R) * smoothstep(-60 * RAD, PHI_FIN, phi);
+  const hands = fromPolar(CENTRE, Math.PI / 2 + phi, r);
   return { hands, club: fromPolar(hands, Math.PI / 2 + phi + hinge(phi), CLUB_L) };
 }
 
