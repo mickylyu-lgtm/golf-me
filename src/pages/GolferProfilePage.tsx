@@ -301,9 +301,12 @@ export function GolferProfilePage() {
         </div>
       )}
 
-      <div className="rounded-2xl border border-slate-100 bg-white p-4">
-        <p className="text-sm leading-relaxed text-slate-600">{golfer.bio}</p>
-      </div>
+      {/* No bio yet (a new golfer) means no empty card. */}
+      {golfer.bio?.trim() && (
+        <div className="rounded-2xl border border-slate-100 bg-white p-4">
+          <p className="text-sm leading-relaxed text-slate-600">{golfer.bio}</p>
+        </div>
+      )}
 
       <div className="rounded-2xl border border-slate-100 bg-white p-4">
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">GolfMe Reputation</p>
