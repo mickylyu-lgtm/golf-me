@@ -335,96 +335,100 @@ function rigPose(u: number): Pose & { clubA: number } {
   return { head, neck, shL, shR, elL, elR, hands, hipL, hipR, kneeL, kneeR, ankL, ankR, club: fromPolar(hands, clubA, LEN.club), clubA };
 }
 
-// Club path through the downswing: (time, unwrapped shaft angle) keys with
-// slopes, evaluated as a cubic Hermite. Built once from the rig so it
-// joins the traced club exactly at the top and at the follow-through.
-const DEG = Math.PI / 180;
-// largest angle ≡ target (mod 2π) that is still below `ref` — the club only
-// rotates one way (decreasing) through the downswing
-const below = (ref: number, target: number) => target + 2 * Math.PI * Math.floor((ref - target) / (2 * Math.PI) - 1e-9);
-const CLUB_PATH = (() => {
-  const dt = 0.002;
-  const top = rigPose(T_TOP);
-  const fol = rigPose(T_FOLLOW);
-  const slopeAt = (u: number) => (rigPose(u + dt).clubA - rigPose(u - dt).clubA) / (2 * dt);
-  const aTop = top.clubA;
-  const aFol = fol.clubA;
-  // Club keys follow the HANDS, not the clock: impact is where the hands
-  // bottom out; shaft-parallel when they reach hip height; lag-up halfway
-  // down from the top.
-  const samples: { u: number; y: number; hipY: number }[] = [];
-  for (let u = T_TOP; u <= T_FOLLOW; u += 0.0005) {
-    const q = rigPose(u);
-    samples.push({ u, y: q.hands[1], hipY: (q.hipL[1] + q.hipR[1]) / 2 });
-  }
-  // Impact: near the bottom of the hands' path, the moment the hands are
-  // exactly one club length from the ball (so the clubhead meets it).
-  const ballPos = rigPose(0).club;
-  const tLow = samples.reduce((a, b) => (b.y > a.y ? b : a)).u;
-  const tImp = samples
-    .filter((q) => Math.abs(q.u - tLow) < 0.03)
-    .reduce((a, b) => (Math.abs(dist(rigPose(b.u).hands, ballPos) - LEN.club) < Math.abs(dist(rigPose(a.u).hands, ballPos) - LEN.club) ? b : a)).u;
-  const yTop = samples[0].y;
-  const tHipHigh = (samples.find((q) => q.y >= q.hipY - 14) ?? samples[samples.length - 1]).u;
-  const tHalf = (samples.find((q) => q.y >= (yTop + samples[0].hipY) / 2) ?? samples[0]).u;
-  const handsImp = rigPose(tImp).hands;
-  // At impact the shaft points from the hands at the ball (the address
-  // clubhead position), so the club strikes where the ball sits.
-  const ball = rigPose(0).club;
-  const aUp = below(aTop, -90 * DEG); // shaft pointing straight up: lag
-  const aParallel = below(aUp, 180 * DEG); // shaft parallel, trail side
-  const aImp = below(aParallel, ang(handsImp, ball));
-  const keys: [number, number][] = [
-    [T_TOP, aTop],
-    [Math.max(T_TOP + 0.004, tHalf), aUp + 10 * DEG], // lag held as the hands come down
-    [Math.max(tHalf + 0.004, tHipHigh), aParallel], // hip-high, shaft parallel (trail side)
-    [Math.max(tHipHigh + 0.004, tImp), aImp], // release into impact
-    [T_FOLLOW, aFol < aImp ? aFol : below(aImp, aFol)],
-  ];
-  // Slopes: matched to the traced club at both ends; inside, Fritsch–Carlson
-  // monotone tangents (decreasing throughout), so the shaft never wobbles back.
-  const n = keys.length;
-  const d = keys.slice(1).map((k, i) => (k[1] - keys[i][1]) / (k[0] - keys[i][0]));
-  const m = keys.map((_, i) => {
-    if (i === 0) return Math.min(0, slopeAt(T_TOP));
-    if (i === n - 1) return Math.min(0, slopeAt(T_FOLLOW));
-    if (d[i - 1] * d[i] <= 0) return 0;
-    return (2 * d[i - 1] * d[i]) / (d[i - 1] + d[i]);
-  });
-  // Release is fastest just after impact, not before it: give the impact
-  // key the steeper of its two neighbouring slopes.
-  m[3] = Math.min(d[2], d[3]);
-  // Fritsch–Carlson limit: keep every segment monotone. Without it the steep
-  // impact slope made the cubic bulge the wrong way first — the club rotated
-  // back UP between shaft-parallel and impact (seen in slow motion).
-  for (let i = 0; i < n - 1; i++) {
-    if (d[i] === 0) {
-      m[i] = 0;
-      m[i + 1] = 0;
-      continue;
-    }
-    const al = m[i] / d[i];
-    const be = m[i + 1] / d[i];
-    const r = al * al + be * be;
-    if (r > 9) {
-      const tau = 3 / Math.sqrt(r);
-      m[i] = tau * al * d[i];
-      m[i + 1] = tau * be * d[i];
-    }
-  }
-  return { keys, m };
+// ── the arms and club: an ideal swing ────────────────────────────────────
+// The traced video drove the arms and club too, and its club path
+// scribbled: a hook at the top, a different route down than up, and loops
+// over the head at the finish. A model swing traces two clean Cs instead —
+// one up the trail side (the club comes back down the same line), one up
+// the lead side to the finish, mirror images of each other — so the arms
+// and club are built from geometry, not the trace:
+//   * the hands turn on a circle round a fixed swing centre in the chest
+//     (arm angle φ, measured from straight down, + toward the trail side);
+//   * the shaft's angle to that arm line — the wrist hinge β — is one smooth,
+//     monotone function of φ, so the clubhead's position depends only on φ:
+//     back and down share one arc, and the two sides are mirrored past
+//     hip height;
+//   * φ itself is timed like a pro swing: an even takeaway that settles at
+//     the top, a downswing that accelerates all the way to the ball, and a
+//     follow-through that bleeds the speed off into the finish.
+// The body (hips, legs, torso) still comes from the trace, sequenced from
+// the ground up.
+const RAD = Math.PI / 180;
+const CENTRE: Pt = [108, 92]; // swing centre: upper chest at address
+const ARM_R = 54; // hands' distance from the centre
+const CLUB_L = 88; // shaft length (hands to clubhead)
+const BALL_AT: Pt = [106, 231]; // just forward of centre stance, under the chest
+// Address (and impact): the arm angle and hinge that put the clubhead on
+// the ball with the hands a little ahead of it (forward shaft lean).
+const ADDRESS = (() => {
+  const R = dist(CENTRE, BALL_AT);
+  const beta = Math.acos((R * R - ARM_R * ARM_R - CLUB_L * CLUB_L) / (2 * ARM_R * CLUB_L));
+  const alpha = Math.asin((CLUB_L * Math.sin(beta)) / R);
+  const psi = ang(CENTRE, BALL_AT); // screen angle of the ball from the centre
+  return { phi: psi - alpha - Math.PI / 2, beta };
 })();
-function clubPathAngle(u: number): number {
-  const { keys, m } = CLUB_PATH;
-  let i = 0;
-  while (i < keys.length - 2 && u > keys[i + 1][0]) i++;
-  const [t0, a0] = keys[i];
-  const [t1, a1] = keys[i + 1];
-  const h = t1 - t0;
-  const v = Math.min(1, Math.max(0, (u - t0) / h));
+const PHI_TOP = 130 * RAD;
+const PHI_FIN = -130 * RAD;
+// Hinge keys (arm angle -> hinge): full set at the top and the finish;
+// shaft parallel to the ground at hip height on both sides; the release
+// happens between impact and the lead-side hip.
+const HINGE: [number, number][] = [
+  [PHI_FIN, -50 * RAD],
+  [-50 * RAD, -40 * RAD],
+  [ADDRESS.phi, ADDRESS.beta],
+  [50 * RAD, 40 * RAD],
+  [PHI_TOP, 50 * RAD],
+];
+// Monotone cubic (Fritsch–Carlson) through the hinge keys, flat at both ends.
+const HINGE_M = (() => {
+  const n = HINGE.length;
+  const d = HINGE.slice(1).map((k, i) => (k[1] - HINGE[i][1]) / (k[0] - HINGE[i][0]));
+  const m = HINGE.map((_, i) => (i === 0 || i === n - 1 ? 0 : d[i - 1] * d[i] <= 0 ? 0 : (2 * d[i - 1] * d[i]) / (d[i - 1] + d[i])));
+  for (let i = 0; i < n - 1; i++) {
+    const a = m[i] / d[i];
+    const b = m[i + 1] / d[i];
+    const r = a * a + b * b;
+    if (r > 9) {
+      m[i] = (3 / Math.sqrt(r)) * a * d[i];
+      m[i + 1] = (3 / Math.sqrt(r)) * b * d[i];
+    }
+  }
+  return m;
+})();
+function hermite(x0: number, x1: number, y0: number, y1: number, m0: number, m1: number, x: number) {
+  const h = x1 - x0;
+  const v = Math.min(1, Math.max(0, (x - x0) / h));
   const v2 = v * v;
   const v3 = v2 * v;
-  return (2 * v3 - 3 * v2 + 1) * a0 + (v3 - 2 * v2 + v) * h * m[i] + (-2 * v3 + 3 * v2) * a1 + (v3 - v2) * h * m[i + 1];
+  return (2 * v3 - 3 * v2 + 1) * y0 + (v3 - 2 * v2 + v) * h * m0 + (-2 * v3 + 3 * v2) * y1 + (v3 - v2) * h * m1;
+}
+function hinge(phi: number): number {
+  let i = 0;
+  while (i < HINGE.length - 2 && phi > HINGE[i + 1][0]) i++;
+  return hermite(HINGE[i][0], HINGE[i + 1][0], HINGE[i][1], HINGE[i + 1][1], HINGE_M[i], HINGE_M[i + 1], phi);
+}
+// Arm angle over the loop.
+const T_START = frameT(FIRST_FRAME);
+const T_IMP = frameT(22.2);
+const T_ARM_FIN = frameT(26.4);
+// Downswing: constant angular acceleration from rest at the top, so it is
+// fastest at the ball (slope = 2 x average). The follow-through starts at
+// that same speed and decelerates to rest at the finish.
+const DOWN_V = (2 * (ADDRESS.phi - PHI_TOP)) / (T_IMP - T_TOP);
+function armAngle(u: number): number {
+  if (u <= T_START) return ADDRESS.phi;
+  if (u <= T_TOP) {
+    const k = (u - T_START) / (T_TOP - T_START);
+    return ADDRESS.phi + (PHI_TOP - ADDRESS.phi) * (0.5 - 0.5 * Math.cos(Math.PI * k));
+  }
+  if (u <= T_IMP) return hermite(T_TOP, T_IMP, PHI_TOP, ADDRESS.phi, 0, DOWN_V, u);
+  if (u <= T_ARM_FIN) return hermite(T_IMP, T_ARM_FIN, ADDRESS.phi, PHI_FIN, DOWN_V, 0, u);
+  return PHI_FIN;
+}
+function armsAndClub(u: number): { hands: Pt; club: Pt } {
+  const phi = armAngle(u);
+  const hands = fromPolar(CENTRE, Math.PI / 2 + phi, ARM_R);
+  return { hands, club: fromPolar(hands, Math.PI / 2 + phi + hinge(phi), CLUB_L) };
 }
 
 export function samplePose(t: number): Pose {
@@ -433,20 +437,16 @@ export function samplePose(t: number): Pose {
   // (fading in) — never the in-between.
   const u = u0 < RETURN_START ? u0 : u0 < RETURN_MID ? RETURN_START : 0;
   const p = rigPose(u);
-  const inDownswing = u > T_TOP && u < T_FOLLOW;
-  const clubA = inDownswing ? clubPathAngle(u) : p.clubA;
-  const { clubA: _unused, ...pose } = p;
+  const { hands, club } = armsAndClub(u);
+  const elL = limbJoint(p.shL, hands, limbParams(p.shL, p.hands, p.elL).t, limbParams(p.shL, p.hands, p.elL).o);
+  const elR = limbJoint(p.shR, hands, limbParams(p.shR, p.hands, p.elR).t, limbParams(p.shR, p.hands, p.elR).o);
+  const { clubA: _unused, ...body } = p;
   void _unused;
-  return { ...pose, club: fromPolar(p.hands, clubA, LEN.club) };
+  return { ...body, hands, elL, elR, club };
 }
 
-// Impact: the moment the designed club path points the shaft at the ball
-// (the release key) — the ball is struck there.
-const IMPACT = { t: CLUB_PATH.keys[3][0] };
-export const IMPACT_T = IMPACT.t;
-// The ball sits under the clubhead at address (it is struck at IMPACT_T,
-// when the clubhead bottoms out on its way through).
-const ADDRESS_CLUB = samplePose(0).club;
-export const BALL: Pt = [ADDRESS_CLUB[0], ADDRESS_CLUB[1] + 1];
+// Impact: the clubhead reaches the ball (the arms are back at address).
+export const IMPACT_T = T_IMP;
+export const BALL: Pt = [BALL_AT[0], BALL_AT[1] + 1];
 export const TOP_POSE = samplePose(TOP_T);
 export const JOINT_NAMES = Object.keys(KEYS[0][1]).filter((k) => k !== "club") as JointName[];
