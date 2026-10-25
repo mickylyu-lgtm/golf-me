@@ -615,18 +615,16 @@ function SwingScene({ phase, pose, progress }: { phase: Phase; pose: Pose; progr
         {ballStruck && <circle cx={BALL[0] + FIG_DX + (progress - IMPACT_T) * 900} cy={BALL[1] + FIG_DY - (progress - IMPACT_T) * 1100} r="2.6" fill="#f8faf8" opacity="0.9" />}
 
         <g transform={`translate(${FIG_DX} ${FIG_DY})`} opacity={op}>
-          {/* club fan: every position so far this swing, coloured by speed */}
-          {fan.map((f, i) => (
-            <line
-              key={i}
-              x1={f.hands[0]}
-              y1={f.hands[1]}
-              x2={f.club[0]}
-              y2={f.club[1]}
-              stroke={speedColour(f.speed)}
-              strokeWidth="1"
-              opacity={0.1 + 0.32 * (i / Math.max(1, fan.length - 1))}
-            />
+          {/* club fan: faint shaft positions so far this swing (every other
+              sample), and the arc the clubhead has traced, coloured by its
+              speed — green slow, gold fast, coral fastest */}
+          {fan.map((f, i) =>
+            i % 2 ? null : (
+              <line key={`s${i}`} x1={f.hands[0]} y1={f.hands[1]} x2={f.club[0]} y2={f.club[1]} stroke={speedColour(f.speed)} strokeWidth="0.8" opacity={0.05 + 0.17 * (i / Math.max(1, fan.length - 1))} />
+            ),
+          )}
+          {fan.slice(1).map((f, i) => (
+            <line key={`a${i}`} x1={fan[i].club[0]} y1={fan[i].club[1]} x2={f.club[0]} y2={f.club[1]} stroke={speedColour(f.speed)} strokeWidth="1.8" strokeLinecap="round" opacity="0.85" />
           ))}
           <Mannequin J={J} prefix="m" clubInFront={clubInFront} />
         </g>
