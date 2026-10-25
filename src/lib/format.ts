@@ -80,13 +80,12 @@ export function monthsSince(iso: string): number {
   );
 }
 
-export function memberSinceLabel(iso: string, t: TFn): string {
-  const months = monthsSince(iso);
-  if (months < 1) return t("member.new");
-  if (months === 1) return t("member.month", { months });
-  if (months < 12) return t("member.months", { months });
-  const years = Math.floor(months / 12);
-  return years > 1 ? t("member.years", { years }) : t("member.year", { years });
+// "Since Aug 2026" (Micky, 2026-10-25: shorter than "2 months on GolfMe",
+// and it never jumps from "11 months" to "1 year").
+export function memberSinceLabel(iso: string, t: TFn, locale?: string): string {
+  if (monthsSince(iso) < 1) return t("member.new");
+  const date = new Intl.DateTimeFormat(locale, { month: "short", year: "numeric" }).format(new Date(iso));
+  return t("member.since", { date });
 }
 
 export function isNewAccount(completedRounds: number): boolean {

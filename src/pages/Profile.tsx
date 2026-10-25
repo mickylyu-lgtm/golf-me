@@ -66,7 +66,7 @@ export function Profile() {
   const { currentUser, updateCurrentUserProfile, circleGolfers, followingGolfers, posts } = useData();
   const { isDemo, saveProfile } = useAuth();
   const { showToast } = useToast();
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const navigate = useNavigate();
   const { isCoachReviewer, isAdmin } = useRoles();
   const myPostCount = posts.filter((p) => p.authorId === currentUser.id).length;
@@ -180,7 +180,7 @@ export function Profile() {
               emphasis, this line shouldn't compete with the name/rounds/
               reputation above and beside it. */}
           <Badge tone="slate" icon={<Clock size={11} />} className="mt-1">
-            {memberSinceLabel(currentUser.memberSince, t)}
+            {memberSinceLabel(currentUser.memberSince, t, locale)}
           </Badge>
         </div>
         <Button size="sm" variant="outline" onClick={startEditing}>
