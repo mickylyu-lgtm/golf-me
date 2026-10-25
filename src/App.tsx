@@ -44,6 +44,7 @@ import { Profile } from "./pages/Profile";
 import { GolferProfilePage } from "./pages/GolferProfilePage";
 import { Inbox } from "./pages/Inbox";
 import { DirectMessageThread } from "./pages/DirectMessageThread";
+import { SwipeBackToInbox } from "./components/chat/SwipeBackToInbox";
 import { Community } from "./pages/Community";
 import { PostDetail } from "./pages/PostDetail";
 import { usePendingReviewerInviteRedemption } from "./lib/usePendingReviewerInviteRedemption";
@@ -443,7 +444,7 @@ export default function App() {
                   <Route path="/about" element={<About />} />
                   <Route path="/golfer/:id" element={<GolferProfilePage />} />
                   <Route path="/messages" element={<Inbox />} />
-                  <Route path="/messages/:id" element={<DirectMessageThread />} />
+                  <Route path="/messages/:id" element={<SwipeBackToInbox><DirectMessageThread /></SwipeBackToInbox>} />
                   <Route path="/community" element={<Community />} />
                   <Route path="/community/new" element={<CreatePost />} />
                   <Route path="/community/guidelines" element={<CommunityGuidelines />} />

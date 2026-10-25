@@ -62,7 +62,7 @@ export function Inbox() {
           {filtered.map((c) => (
             <button
               key={c.conversationId}
-              onClick={() => navigate(`/messages/${c.otherGolfer.id}`)}
+              onClick={() => navigate(`/messages/${c.otherGolfer.id}`, { state: { fromInbox: true } })}
               className={`flex w-full items-center gap-3 p-3 text-left ${CLICKABLE_CARD_CLASS}`}
             >
               <Avatar golfer={c.otherGolfer} size="md" />
