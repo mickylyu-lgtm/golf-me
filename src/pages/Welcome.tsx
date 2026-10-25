@@ -77,6 +77,11 @@ export function Welcome() {
   useEffect(() => {
     document.getElementById("prerender")?.remove();
     document.documentElement.classList.remove("gm-static-landing");
+    // Swapping the static copy for the live page loses the browser's own
+    // jump to a #section on load (e.g. a refresh of /welcome#caddie), so
+    // redo it once the live page is in place.
+    const id = window.location.hash.slice(1);
+    if (id) requestAnimationFrame(() => document.getElementById(decodeURIComponent(id))?.scrollIntoView({ block: "start" }));
   }, []);
 
   const faq: { q: string; a: string }[] = [

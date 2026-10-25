@@ -2,17 +2,26 @@
 // it can be sampled outside the browser (scripts/ checks render it to a
 // contact sheet).
 //
-// Key poses are joint positions read frame by frame off a real face-on
-// driver swing filmed at 12 fps (target to the viewer's right). Earlier
-// versions slid every joint in a straight line between keys, which made
-// limbs stretch, the club change length and the hands cut through the
-// body. Here every segment is interpolated as a ROTATION about its parent
-// joint (angle + length in polar form) along a smooth cubic spline through
-// the keys, so arms, legs and the club sweep in arcs the way a body does:
-//   hip centre -> hips -> knees -> ankles
-//   hip centre -> neck -> head, shoulders -> elbows
-//   neck -> hands (the hands travel on an arc round the chest)
-//   hands -> club (unwrapped in the swing's real direction of rotation)
+// The figure is a RIG, not a set of traced points. Hand-tracing a video
+// gives joints that wobble a few pixels frame to frame, limbs that change
+// length and feet that slide; pulling every joint toward those points made
+// the figure look like it was moving everywhere. Instead, the traced swing
+// only drives the big, meaningful motions —
+//   hip centre (slide/squat), hip line (width = turn, tilt), spine angle,
+//   head angle, shoulder line (width = turn, tilt), the hands' path around
+//   the chest, the club angle, and the trail foot's pivot —
+// and the rest is solved so it can't drift:
+//   * the spine, neck->head and club have fixed lengths;
+//   * the lead foot is planted; the trail foot only pivots onto its toe;
+//   * knees and elbows are described RELATIVE TO THEIR LIMB — how far
+//     along hip->ankle / shoulder->hands they sit, plus a small sideways
+//     offset (smoothed and capped). This is a face-on view of a 3D swing:
+//     a flexing knee or folding arm mostly bends toward the camera, so in
+//     2D the limb looks shorter rather than bent sideways. (Fixed 2D bone
+//     lengths with IK pushed knees into an X and splayed the elbows.)
+//     The offsets are continuous numbers, so a joint can never flip sides.
+// All channels share one timeline (see warp/spline), so the body moves
+// as one piece.
 
 export type JointName =
   | "head" | "neck" | "shL" | "shR" | "elL" | "elR" | "hands"
@@ -77,60 +86,104 @@ const LOOP: { t: number; pose: Pose }[] = [
 // Direction rule per LOOP gap (address hold, keys…, finish hold, return).
 const DIRS = [0, ...CLUB_DIR, 0, 0];
 
-// ── polar decomposition ─────────────────────────────────────────────────
+// ── rig ─────────────────────────────────────────────────────────────────
 
-type Polar = { a: number; r: number };
-const polar = (from: Pt, to: Pt): Polar => ({ a: Math.atan2(to[1] - from[1], to[0] - from[0]), r: Math.hypot(to[0] - from[0], to[1] - from[1]) });
+const dist = (a: Pt, b: Pt) => Math.hypot(b[0] - a[0], b[1] - a[1]);
+const ang = (a: Pt, b: Pt) => Math.atan2(b[1] - a[1], b[0] - a[0]);
 const hipC = (p: Pose): Pt => [(p.hipL[0] + p.hipR[0]) / 2, (p.hipL[1] + p.hipR[1]) / 2];
+const median = (v: number[]) => [...v].sort((x, y) => x - y)[Math.floor(v.length / 2)];
+const KP = KEYS.map((k) => k[1]);
+const ADDR = KP[0];
 
-// Segment = [child, parent getter]. Order matters: parents first.
-type Seg = { key: JointName | "club"; parent: (p: Pose) => Pt };
-const SEGS: Seg[] = [
-  { key: "hipL", parent: hipC },
-  { key: "hipR", parent: hipC },
-  { key: "kneeL", parent: (p) => p.hipL },
-  { key: "kneeR", parent: (p) => p.hipR },
-  { key: "ankL", parent: (p) => p.kneeL },
-  { key: "ankR", parent: (p) => p.kneeR },
-  { key: "neck", parent: hipC },
-  { key: "head", parent: (p) => p.neck },
-  { key: "shL", parent: (p) => p.neck },
-  { key: "shR", parent: (p) => p.neck },
-  { key: "elL", parent: (p) => p.shL },
-  { key: "elR", parent: (p) => p.shR },
-  { key: "hands", parent: (p) => p.neck },
-  { key: "club", parent: (p) => p.hands },
-];
+// Fixed lengths for the parts that really are rigid in this view, plus the
+// longest traced shoulder->hands reach (the hands are kept within it).
+const ARM = 1.02 * Math.max(...KP.flatMap((p) => [dist(p.shL, p.hands), dist(p.shR, p.hands)]));
+const LEN = {
+  spine: median(KP.map((p) => dist(hipC(p), p.neck))),
+  head: median(KP.map((p) => dist(p.neck, p.head))),
+  club: dist(ADDR.hands, ADDR.club),
+  hipW: dist(ADDR.hipL, ADDR.hipR),
+  shW: dist(ADDR.shL, ADDR.shR),
+};
 
-// Pre-compute, per segment, the unwrapped angle and length at each LOOP key.
-type Track = { a: number[]; r: number[] };
-const TRACKS: Record<string, Track> = {};
-const ROOT: { x: number[]; y: number[] } = { x: [], y: [] };
-for (const { pose } of LOOP) {
-  const c = hipC(pose);
-  ROOT.x.push(c[0]);
-  ROOT.y.push(c[1]);
+// A middle joint J (knee, elbow) described relative to its limb A->B:
+// t = how far along A->B it projects (0..1), o = signed sideways offset
+// as a fraction of |A->B|. Rebuilt from the same two numbers, so the
+// joint always sits sensibly between its ends.
+function limbParams(A: Pt, B: Pt, J: Pt): { t: number; o: number } {
+  const L = dist(A, B) || 1;
+  const ux = (B[0] - A[0]) / L;
+  const uy = (B[1] - A[1]) / L;
+  const jx = J[0] - A[0];
+  const jy = J[1] - A[1];
+  return { t: (jx * ux + jy * uy) / L, o: (-jx * uy + jy * ux) / L };
 }
-for (const seg of SEGS) {
-  const a: number[] = [];
-  const r: number[] = [];
-  LOOP.forEach(({ pose }, i) => {
-    const pol = polar(seg.parent(pose), pose[seg.key]);
-    r.push(pol.r);
-    if (i === 0) {
-      a.push(pol.a);
-      return;
-    }
-    const prev = a[i - 1];
-    let d = pol.a - prev;
-    d = ((d % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI; // shortest, in (-π, π]
-    const dir = seg.key === "club" ? DIRS[i - 1] : 0;
+const MAX_OFFSET = 0.22; // sideways bend cap, as a fraction of limb length
+function limbJoint(A: Pt, B: Pt, t: number, o: number): Pt {
+  const L = dist(A, B);
+  const ux = (B[0] - A[0]) / (L || 1);
+  const uy = (B[1] - A[1]) / (L || 1);
+  const tt = Math.min(0.7, Math.max(0.3, t));
+  const oo = Math.min(MAX_OFFSET, Math.max(-MAX_OFFSET, o));
+  return [A[0] + (ux * tt - uy * oo) * L, A[1] + (uy * tt + ux * oo) * L];
+}
+
+// Per-key channels, unwrapped where they are angles.
+type Channels = Record<string, number[]>;
+const CH: Channels = {};
+const push = (k: string, v: number) => (CH[k] ??= []).push(v);
+const unwrap = (vals: number[], dirs?: number[]) => {
+  const out = [vals[0]];
+  for (let i = 1; i < vals.length; i++) {
+    let d = vals[i] - out[i - 1];
+    d = ((d % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI; // shortest
+    const dir = dirs ? dirs[i - 1] : 0;
     if (dir > 0 && d < 0) d += 2 * Math.PI;
     if (dir < 0 && d > 0) d -= 2 * Math.PI;
-    a.push(prev + d);
-  });
-  TRACKS[seg.key] = { a, r };
+    out.push(out[i - 1] + d);
+  }
+  return out;
+};
+for (const { pose: p } of LOOP) {
+  const hc = hipC(p);
+  push("hcx", hc[0]);
+  push("hcy", hc[1]);
+  // A turned pelvis/torso looks narrower face-on; clamp so it never collapses.
+  push("hipW", Math.min(1.05, Math.max(0.55, dist(p.hipL, p.hipR) / LEN.hipW)) * LEN.hipW);
+  push("hipTilt", ang(p.hipL, p.hipR));
+  push("spineA", ang(hc, p.neck));
+  push("headA", ang(p.neck, p.head));
+  push("shW", Math.min(1.05, Math.max(0.55, dist(p.shL, p.shR) / LEN.shW)) * LEN.shW);
+  push("shTilt", ang(p.shL, p.shR));
+  // The hands travel on their traced arc round the chest (polar about the
+  // neck); both arms then reach for them with IK.
+  push("handsA", ang(p.neck, p.hands));
+  push("handsR", dist(p.neck, p.hands));
+  push("clubA", ang(p.hands, p.club));
+  push("ankLx", p.ankL[0]);
+  push("ankLy", p.ankL[1]);
+  for (const [name, A, B, J] of [
+    ["kL", p.hipL, p.ankL, p.kneeL],
+    ["kR", p.hipR, p.ankR, p.kneeR],
+    ["eL", p.shL, p.hands, p.elL],
+    ["eR", p.shR, p.hands, p.elR],
+  ] as [string, Pt, Pt, Pt][]) {
+    const lp = limbParams(A, B, J);
+    push(name + "t", lp.t);
+    push(name + "o", lp.o);
+  }
 }
+for (const k of ["hipTilt", "spineA", "headA", "shTilt", "handsA"]) CH[k] = unwrap(CH[k]);
+CH.clubA = unwrap(CH.clubA, DIRS);
+
+// Stabilise the trunk: a light symmetric 1-2-1 filter on the body-carriage
+// channels removes hand-tracing wobble (symmetric, so it adds no lag). The
+// holds at either end are left exact.
+const smooth = (v: number[]) => v.map((x, i) => (i <= 1 || i >= v.length - 2 ? x : 0.25 * v[i - 1] + 0.5 * x + 0.25 * v[i + 1]));
+for (const k of ["hcx", "hcy", "hipW", "hipTilt", "spineA", "headA", "shW", "shTilt", "ankLx", "ankLy", "kLt", "kLo", "kRt", "kRo", "eLt", "eLo", "eRt", "eRo"]) CH[k] = smooth(CH[k]);
+
+const fromPolar = (o: Pt, a: number, r: number): Pt => [o[0] + Math.cos(a) * r, o[1] + Math.sin(a) * r];
+
 
 
 // ── one shared timeline ─────────────────────────────────────────────────
@@ -196,34 +249,40 @@ export function samplePose(t: number): Pose {
   // During the return window show the finish (fading out), then address
   // (fading in) — never the in-between.
   const u = u0 < RETURN_START ? u0 : u0 < RETURN_MID ? RETURN_START : 0;
-  const out: Record<string, Pt> = {};
-  const sKey = warp(u);
-  const root: Pt = [spline(ROOT.x, sKey), spline(ROOT.y, sKey)];
-  const get = (k: string): Pt => out[k];
-  const parentOf: Record<string, () => Pt> = {
-    hipL: () => root,
-    hipR: () => root,
-    kneeL: () => get("hipL"),
-    kneeR: () => get("hipR"),
-    ankL: () => get("kneeL"),
-    ankR: () => get("kneeR"),
-    neck: () => root,
-    head: () => get("neck"),
-    shL: () => get("neck"),
-    shR: () => get("neck"),
-    elL: () => get("shL"),
-    elR: () => get("shR"),
-    hands: () => get("neck"),
-    club: () => get("hands"),
-  };
-  for (const seg of SEGS) {
-    const tr = TRACKS[seg.key];
-    const a = spline(tr.a, sKey);
-    const r = spline(tr.r, sKey);
-    const [px, py] = parentOf[seg.key]();
-    out[seg.key] = [px + Math.cos(a) * r, py + Math.sin(a) * r];
+  const s = warp(u);
+  const c = (k: string) => spline(CH[k], s);
+
+  const hc: Pt = [c("hcx"), c("hcy")];
+  const hw = c("hipW") / 2;
+  const ht = c("hipTilt");
+  const hipL: Pt = [hc[0] - Math.cos(ht) * hw, hc[1] - Math.sin(ht) * hw];
+  const hipR: Pt = [hc[0] + Math.cos(ht) * hw, hc[1] + Math.sin(ht) * hw];
+
+  const neck = fromPolar(hc, c("spineA"), LEN.spine);
+  const head = fromPolar(neck, c("headA"), LEN.head);
+  const sw = c("shW") / 2;
+  const st = c("shTilt");
+  const shL: Pt = [neck[0] - Math.cos(st) * sw, neck[1] - Math.sin(st) * sw];
+  const shR: Pt = [neck[0] + Math.cos(st) * sw, neck[1] + Math.sin(st) * sw];
+
+  // Hands on their arc round the chest, kept within both arms' reach.
+  let hands = fromPolar(neck, c("handsA"), c("handsR"));
+  for (let pass = 0; pass < 2; pass++) {
+    for (const sh of [shL, shR]) {
+      if (dist(sh, hands) > ARM * 0.995) hands = fromPolar(sh, ang(sh, hands), ARM * 0.995);
+    }
   }
-  return out as unknown as Pose;
+  const elL = limbJoint(shL, hands, c("eLt"), c("eLo"));
+  const elR = limbJoint(shR, hands, c("eRt"), c("eRo"));
+
+  // Lead foot planted; trail foot pivots (rises onto its toe) only.
+  const ankR: Pt = ADDR.ankR;
+  const ankL: Pt = [c("ankLx"), Math.min(ADDR.ankL[1], c("ankLy"))];
+  const kneeL = limbJoint(hipL, ankL, c("kLt"), c("kLo"));
+  const kneeR = limbJoint(hipR, ankR, c("kRt"), c("kRo"));
+
+  const club = fromPolar(hands, c("clubA"), LEN.club);
+  return { head, neck, shL, shR, elL, elR, hands, hipL, hipR, kneeL, kneeR, ankL, ankR, club };
 }
 
 // Impact: the lowest point of the clubhead during the downswing. Found by
