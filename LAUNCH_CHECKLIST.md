@@ -2,7 +2,7 @@
 
 **Target:** App Store launch → real NYC usage. golfme.app is live with open signup.
 **Launched:** **1.0 live on the App Store** ("Ready for Distribution", build 2, seen 2026-10-17). **1.1 approved and live on the App Store 2026-10-18** (native launch screen + entry animation, Sign in with Apple + Google, email code sign-in); on-device check of the App Store build pending.
-**Last updated:** 2026-10-25 (Founding Golfer: migrations found NOT applied; revised for Kiyyah #1). Phase is now **post-launch**: ship 1.1 cleanly, then seed the marketplace (real rounds, Founding Golfer, outreach).
+**Last updated:** 2026-10-25 (Founding Golfer applied on production: Kiyyah #1, next signup #2). Phase is now **post-launch**: ship 1.1 cleanly, then seed the marketplace (real rounds, Founding Golfer, outreach).
 
 Statuses: `[ ]` NOT STARTED · `[~]` IN PROGRESS · `[?]` NEEDS VERIFICATION · `[!]` BLOCKED · `[x]` COMPLETE (only with evidence it works).
 Classify every request: **A** blocks the launch going well (now: 1.1 release + marketplace) · **B** improves launch quality · **C** nonessential, later.
@@ -10,7 +10,7 @@ Classify every request: **A** blocks the launch going well (now: 1.1 release + m
 ### CURRENT BLOCKERS
 1. **1.1 live (2026-10-18) but not yet checked on the App Store build.** On the App Store build check: launch screen + entry animation (no cream flash), Sign in with Apple, Google, 6-digit email code (existing account, brand-new email, iOS autofill), and Sign in with Apple on a throwaway Apple ID → delete the account → confirm the `delete-account` logs show no "Apple token revocation not completed" (revocation never exercised for real). (A)
 2. **No real upcoming rounds.** Production has 0 upcoming rounds; a new App Store user finds nothing to join. Host 3–5 real NYC rounds. (A — marketplace)
-3. **Founding Golfer database NOT live.** Correction 2026-10-25: the 2026-10-18 apply rolled back; production has no founding objects. Revised migrations (Kiyyah #1, 11 pre-launch accounts excluded, next signup #2) on branch `fix/founding-backfill-kiyyah`; Micky applies them in the SQL editor after the pre-checks (section 11). (A for launch marketing)
+3. **Founding Golfer database live (2026-10-25).** The 2026-10-18 apply had rolled back; the revised migrations (Kiyyah #1, 11 pre-launch accounts excluded, next signup #2) were applied by Micky on 2026-10-25 with all post-checks passing. Remaining: see the #1 badge and "249 spots" on device. (A for launch marketing)
 4. **No user acquisition yet.** 26 accounts, ~1 new per week; creator/community outreach not started (sections 11–12). (A)
 
 ### RESOLVED PRE-LAUNCH BLOCKERS (history)
@@ -24,7 +24,7 @@ On the 1.1 App Store build: blocker 1 items. Still-open device checks from earli
 
 ### NEXT 3 ACTIONS
 1. **Micky: run the blocker 1 checks** on the live 1.1 App Store build; Claude then checks the `delete-account` logs. (A)
-2. **Founding Golfer:** Micky re-runs precheck_1/precheck_2, then applies apply_1 → apply_2 and runs the post-checks (production SQL editor, on his OK); then check Kiyyah's #1 badge and "249 spots" live. (A)
+2. **Founding Golfer:** applied 2026-10-25 (post-checks 15/15 + role check ok); check Kiyyah's #1 badge and "249 spots" live on golfme.app and iOS. (A)
 3. **Seed the marketplace:** Micky hosts 3–5 real NYC rounds, then founder outreach to existing accounts + waitlist (`LAUNCH_MARKETING.md`). (A)
 
 ---
@@ -225,7 +225,7 @@ Record results here with date, device and build number.
 | [ ] | Simulator communities | |
 | [ ] | Local golf pages | |
 | [ ] | Founder-led outreach | |
-| [~] | **Founding Golfer launch hook** — **database NOT applied** (B, Micky chose it for launch marketing 2026-10-07) | The first 250 NYC golfers get a permanent numbered badge. Migrations `20261006120000` (cohort, created closed) and `20261006120100` (exclusions, opening, backfill). **Correction 2026-10-25:** this row said "Applied 2026-10-18, #1–#7 awarded"; the 2026-10-24/25 read-only pre-checks found no founding objects and nothing recorded since 20261006, so that run rolled back. **Decision 2026-10-25 (Micky, replaces 2026-10-12):** Kiyyah (`93c351a5`) is #1; the 11 accounts eligible before her are excluded with the new `pre_launch` role (real people, Founding-only meaning); reviewer `24c3c140` + 2 test accounts stay excluded (3 original test ids no longer exist); future signups continue from #2, automatically. Safety: any unknown/deleted id aborts; the backfill rolls back unless exactly the expected list is awarded (a new eligible signup before apply aborts it, re-run pre-check and edit the list). PGlite 31/31. Branch `fix/founding-backfill-kiyyah`. `20261022120000` (global-hosting) needs the `pre_launch` one-line patch before it is applied. Remaining: pre-checks → apply_1 → apply_2 → post-checks (Micky, SQL editor) → check badge + counter live. Plan: `LAUNCH_MARKETING.md`. |
+| [~] | **Founding Golfer launch hook** — **database APPLIED 2026-10-25** (B, Micky chose it for launch marketing 2026-10-07) | The first 250 NYC golfers get a permanent numbered badge. Migrations `20261006120000` (cohort, created closed) and `20261006120100` (exclusions, opening, backfill). **Correction 2026-10-25:** this row said "Applied 2026-10-18, #1–#7 awarded"; the 2026-10-24/25 read-only pre-checks found no founding objects and nothing recorded since 20261006, so that run rolled back. **Decision 2026-10-25 (Micky, replaces 2026-10-12):** Kiyyah (`93c351a5`) is #1; the 11 accounts eligible before them are excluded with the new `pre_launch` role (real people, Founding-only meaning); reviewer `24c3c140` + 2 test accounts stay excluded (3 original test ids no longer exist); future signups continue from #2, automatically. Safety: any unknown/deleted id aborts; the backfill rolls back unless exactly the expected list is awarded (a new eligible signup before apply aborts it, re-run pre-check and edit the list). PGlite 31/31. Branch `fix/founding-backfill-kiyyah`. `20261022120000` (global-hosting) needs the `pre_launch` one-line patch before it is applied. Evidence 2026-10-25 (production): precheck_1 23/23, precheck_2 only Kiyyah numbered, both versions in `schema_migrations`, postcheck_1 15/15 (#1 93c351a5, next 2, remaining 249, pre_launch=11), postcheck_2 role check as expected. Remaining: check badge + counter live on device. Plan: `LAUNCH_MARKETING.md`. |
 
 ## 12. CREATOR PROGRAM (small test: creators host real rounds on GolfMe)
 | Creator | Audience / location | Proposed round | Outreach status | Compensation | Attributed signups/joins | Actual participation |
