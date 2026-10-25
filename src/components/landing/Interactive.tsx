@@ -7,7 +7,7 @@ import { DEFAULT_MOCK_GOLFERS, GolfersScreen, PhoneFrame, RoundsScreen, CaddieSc
 import type { MockGolfer } from "./PhoneMock";
 import { useLocale } from "../../i18n/LocaleContext";
 import { samplePose, swingOpacity, SWING_MS, TOP_T, IMPACT_T, FINISH_T, BALL, TOP_POSE, JOINT_NAMES, RETURN_MID } from "./swingMotion";
-import type { JointName, Pose } from "./swingMotion";
+import type { JointName, Pose, Pt } from "./swingMotion";
 
 // Interactive demos for the public landing page. Each one is a small,
 // self-contained toy that explains one part of the product by letting the
@@ -386,186 +386,286 @@ const BONES: [Joint, Joint][] = [
 ];
 const PHASES = ["Address", "Top", "Impact", "Finish"];
 
+// ── mannequin rendering ─────────────────────────────────────────────────
+// A glossy studio mannequin on a dark stage (after the "swing decoded"
+// style): every limb is a shaded capsule lit from the upper left, joints
+// are ball joints, the floor reflects the figure, and the club leaves a
+// fan of positions coloured by clubhead speed. Everything is drawn from
+// the rig in ./swingMotion. No SVG filters, masks or CSS transform
+// animations on anything that moves (they caused lag/ghosting before).
+
+const FLOOR_Y = 246; // scene y of the stage floor
+const FIG_DX = 34; // the rig's figure box -> scene offset
+const FIG_DY = 6;
+const LIGHT = [-0.6, -0.8]; // direction the light comes FROM (unit-ish)
+
+// Club fan: every club position over one swing, precomputed once, with the
+// clubhead speed between samples (for colour).
+const FAN_STEP = 0.006;
+const FAN: { t: number; hands: Pt; club: Pt; speed: number }[] = (() => {
+  const out: { t: number; hands: Pt; club: Pt; speed: number }[] = [];
+  let prev: Pt | null = null;
+  for (let t = 0; t <= RETURN_MID; t += FAN_STEP) {
+    const p = samplePose(t);
+    const speed = prev ? Math.hypot(p.club[0] - prev[0], p.club[1] - prev[1]) : 0;
+    out.push({ t, hands: p.hands, club: p.club, speed });
+    prev = p.club;
+  }
+  return out;
+})();
+const FAN_MAX = Math.max(...FAN.map((f) => f.speed)) || 1;
+function speedColour(v: number): string {
+  // green (slow) -> gold -> coral (fastest)
+  const k = Math.min(1, v / FAN_MAX);
+  const lerp = (a: number[], b: number[], u: number) => a.map((x, i) => Math.round(x + (b[i] - x) * u));
+  const c = k < 0.5 ? lerp([74, 222, 128], [244, 185, 66], k / 0.5) : lerp([244, 185, 66], [248, 113, 113], (k - 0.5) / 0.5);
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+
+
+// A capsule (rounded limb) from a to b with radius r, plus a gradient across
+// it so the side facing the light is bright and the far side falls off.
+function Capsule({ id, a, b, r }: { id: string; a: Pt; b: Pt; r: number }) {
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+  const L = Math.hypot(dx, dy) || 1;
+  let nx = -dy / L;
+  let ny = dx / L;
+  if (nx * LIGHT[0] + ny * LIGHT[1] < 0) {
+    nx = -nx;
+    ny = -ny;
+  }
+  const mx = (a[0] + b[0]) / 2;
+  const my = (a[1] + b[1]) / 2;
+  const P = (q: Pt, s: number) => `${q[0] + nx * r * s} ${q[1] + ny * r * s}`;
+  // Sweep flag: the end caps must bulge outward (checked by rendering both
+  // options in Chromium — the other flag bites a notch out of every limb).
+  const sweep = nx * dy - ny * dx > 0 ? 1 : 0;
+  const d = `M${P(a, 1)} L${P(b, 1)} A${r} ${r} 0 0 ${sweep} ${P(b, -1)} L${P(a, -1)} A${r} ${r} 0 0 ${sweep} ${P(a, 1)} Z`;
+  return (
+    <>
+      <linearGradient id={id} gradientUnits="userSpaceOnUse" x1={mx + nx * r} y1={my + ny * r} x2={mx - nx * r} y2={my - ny * r}>
+        <stop offset="0" stopColor="#ffffff" />
+        <stop offset="0.3" stopColor="#eef1ec" />
+        <stop offset="0.75" stopColor="#a9b3ad" />
+        <stop offset="1" stopColor="#6f7a74" />
+      </linearGradient>
+      <path d={d} fill={`url(#${id})`} />
+    </>
+  );
+}
+const Ball = ({ c, r }: { c: Pt; r: number }) => <circle cx={c[0]} cy={c[1]} r={r} fill="url(#mq-ball)" />;
+
+function Mannequin({ J, prefix, clubInFront }: { J: Pose; prefix: string; clubInFront: boolean }) {
+  const mid = (a: Pt, b: Pt): Pt => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  const hipC = mid(J.hipL, J.hipR);
+  const chest = mid(J.shL, J.shR);
+  const headAng = (Math.atan2(J.head[1] - J.neck[1], J.head[0] - J.neck[0]) * 180) / Math.PI + 90;
+  const club = (
+    <g>
+      <line x1={J.hands[0]} y1={J.hands[1]} x2={J.club[0]} y2={J.club[1]} stroke="#d7dcd8" strokeWidth="2.2" strokeLinecap="round" />
+      <circle cx={J.club[0]} cy={J.club[1]} r="4.5" fill="#2a2f2c" stroke="#9aa39c" strokeWidth="1" />
+    </g>
+  );
+  return (
+    <g>
+      {!clubInFront && club}
+      {/* legs (trail leg behind) */}
+      <Capsule id={`${prefix}tl1`} a={J.hipL} b={J.kneeL} r={8.5} />
+      <Capsule id={`${prefix}tl2`} a={J.kneeL} b={J.ankL} r={6.8} />
+      <Ball c={J.kneeL} r={7.2} />
+      <ellipse cx={J.ankL[0] - 3} cy={J.ankL[1] + 5} rx="10" ry="4.5" fill="url(#mq-ball)" />
+      <Capsule id={`${prefix}ll1`} a={J.hipR} b={J.kneeR} r={8.5} />
+      <Capsule id={`${prefix}ll2`} a={J.kneeR} b={J.ankR} r={6.8} />
+      <Ball c={J.kneeR} r={7.2} />
+      <ellipse cx={J.ankR[0] + 3} cy={J.ankR[1] + 5} rx="10" ry="4.5" fill="url(#mq-ball)" />
+      {/* pelvis + torso */}
+      <Capsule id={`${prefix}pv`} a={J.hipL} b={J.hipR} r={10} />
+      <Capsule id={`${prefix}ab`} a={hipC} b={[(hipC[0] + chest[0]) / 2, (hipC[1] + chest[1]) / 2]} r={10} />
+      <path
+        d={`M${J.shL[0]} ${J.shL[1]} Q${chest[0]} ${chest[1] - 6} ${J.shR[0]} ${J.shR[1]} Q${J.shR[0] + 2} ${(J.shR[1] + hipC[1]) / 2} ${(chest[0] + hipC[0]) / 2 + 10} ${(chest[1] + hipC[1]) / 2 + 6} L${(chest[0] + hipC[0]) / 2 - 10} ${(chest[1] + hipC[1]) / 2 + 6} Q${J.shL[0] - 2} ${(J.shL[1] + hipC[1]) / 2} ${J.shL[0]} ${J.shL[1]} Z`}
+        fill={`url(#${prefix}chest)`}
+      />
+      <radialGradient id={`${prefix}chest`} gradientUnits="userSpaceOnUse" cx={chest[0] - 8} cy={chest[1] + 4} r="40">
+        <stop offset="0" stopColor="#ffffff" />
+        <stop offset="0.55" stopColor="#dfe4df" />
+        <stop offset="1" stopColor="#8d9791" />
+      </radialGradient>
+      <Ball c={J.hipL} r={8} />
+      <Ball c={J.hipR} r={8} />
+      {/* neck + head */}
+      <Capsule id={`${prefix}nk`} a={J.neck} b={mid(J.neck, J.head)} r={4.5} />
+      <ellipse cx={J.head[0]} cy={J.head[1]} rx="10.5" ry="13" fill="url(#mq-ball)" transform={`rotate(${headAng} ${J.head[0]} ${J.head[1]})`} />
+      {/* arms (trail arm behind the lead arm) */}
+      <Ball c={J.shL} r={7.5} />
+      <Capsule id={`${prefix}ta1`} a={J.shL} b={J.elL} r={5.8} />
+      <Capsule id={`${prefix}ta2`} a={J.elL} b={J.hands} r={4.8} />
+      <Ball c={J.elL} r={5.2} />
+      <Ball c={J.shR} r={7.5} />
+      <Capsule id={`${prefix}la1`} a={J.shR} b={J.elR} r={5.8} />
+      <Capsule id={`${prefix}la2`} a={J.elR} b={J.hands} r={4.8} />
+      <Ball c={J.elR} r={5.2} />
+      <Ball c={J.hands} r={5.6} />
+      {clubInFront && club}
+    </g>
+  );
+}
+
+const CAPTIONS: Record<Phase, { text: string; accent: boolean }> = {
+  idle: { text: "YOUR SWING, DECODED.", accent: false },
+  uploading: { text: "READING YOUR SWING", accent: false },
+  pose: { text: "TRACKING YOUR BODY", accent: false },
+  scoring: { text: "MEASURING EVERY POSITION", accent: false },
+  done: { text: "HIPS OPEN EARLY AT THE TOP.", accent: true },
+};
+
+// Typewriter caption: retypes whenever the phase changes.
+function useTyped(text: string): string {
+  const [n, setN] = useState(text.length);
+  useEffect(() => {
+    setN(0);
+    const id = window.setInterval(() => setN((k) => (k >= text.length ? k : k + 1)), 38);
+    return () => window.clearInterval(id);
+  }, [text]);
+  return text.slice(0, n);
+}
+
 function SwingScene({ phase, pose, progress }: { phase: Phase; pose: Pose; progress: number }) {
   const J = pose;
   const showPose = phase === "pose" || phase === "scoring" || phase === "done";
   const showAngles = phase === "scoring" || phase === "done";
+  const op = swingOpacity(progress);
+  const caption = CAPTIONS[phase];
+  const typed = useTyped(caption.text);
   // Ball: on the tee until impact, in flight briefly, then gone until the
   // loop fades back in at address.
   const ballOnTee = progress < IMPACT_T || progress >= RETURN_MID;
   const ballStruck = progress > IMPACT_T && progress < IMPACT_T + 0.18;
-  const limb = (a: Joint, b: Joint, w: number) => (
-    <line key={`${a}${b}`} x1={J[a][0]} y1={J[a][1]} x2={J[b][0]} y2={J[b][1]} stroke="url(#gm-body)" strokeWidth={w} strokeLinecap="round" />
-  );
-  // Club: shaft from the hands toward the pose's club point, head at the end.
-  const [cx, cy] = J.club;
-  const ang = Math.atan2(cy - J.hands[1], cx - J.hands[0]);
-  const len = Math.hypot(cx - J.hands[0], cy - J.hands[1]);
-  const hx = J.hands[0] + Math.cos(ang) * (len - 6);
-  const hy = J.hands[1] + Math.sin(ang) * (len - 6);
+  // Club in front of the body while the hands are low (address through the
+  // follow-through), behind it at the top and the finish.
+  const clubInFront = J.hands[1] > J.neck[1] + 28;
+  const fan = progress < RETURN_MID ? FAN.filter((f) => f.t <= progress) : [];
+  const hipC: Pt = [(J.hipL[0] + J.hipR[0]) / 2 + FIG_DX, (J.hipL[1] + J.hipR[1]) / 2 + FIG_DY];
   return (
-    <svg viewBox="0 0 400 300" className="h-full w-full" role="img" aria-label="Illustration of a golfer at the top of the backswing with Caddie's pose analysis overlay">
+    <svg viewBox="0 0 400 300" className="h-full w-full" role="img" aria-label="A mannequin golfer swinging on a dark stage, with Caddie's pose analysis overlay">
       <defs>
-        <linearGradient id="gm-sky" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#0b2a18" />
-          <stop offset="0.55" stopColor="#1b4a2d" />
-          <stop offset="1" stopColor="#3f8a4a" />
+        <radialGradient id="mq-stage" cx="0.38" cy="0.05" r="0.95">
+          <stop offset="0" stopColor="#24432f" />
+          <stop offset="0.45" stopColor="#0e1d15" />
+          <stop offset="1" stopColor="#050a07" />
+        </radialGradient>
+        <linearGradient id="mq-cone" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#ffffff" stopOpacity="0.10" />
+          <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
         </linearGradient>
-        <radialGradient id="gm-sun" cx="0.78" cy="0.42" r="0.45">
-          <stop offset="0" stopColor="#f6c96f" stopOpacity="0.55" />
-          <stop offset="0.5" stopColor="#f4b942" stopOpacity="0.12" />
+        <linearGradient id="mq-floor" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#09130e" stopOpacity="0.55" />
+          <stop offset="0.45" stopColor="#060c09" stopOpacity="0.92" />
+          <stop offset="1" stopColor="#040806" stopOpacity="1" />
+        </linearGradient>
+        <radialGradient id="mq-pool" cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0" stopColor="#ffffff" stopOpacity="0.13" />
+          <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id="mq-ball" cx="0.35" cy="0.3" r="0.75">
+          <stop offset="0" stopColor="#ffffff" />
+          <stop offset="0.5" stopColor="#e3e7e2" />
+          <stop offset="1" stopColor="#7c8781" />
+        </radialGradient>
+        <radialGradient id="mq-heat" cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0" stopColor="#f87171" stopOpacity="0.75" />
+          <stop offset="0.55" stopColor="#f4b942" stopOpacity="0.25" />
           <stop offset="1" stopColor="#f4b942" stopOpacity="0" />
         </radialGradient>
-        <linearGradient id="gm-grass" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#2e8f45" />
-          <stop offset="1" stopColor="#176a30" />
-        </linearGradient>
-        <linearGradient id="gm-body" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#1c2e24" />
-          <stop offset="1" stopColor="#060f0a" />
-        </linearGradient>
         <linearGradient id="gm-bone" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" stopColor="#bbf7d0" />
           <stop offset="1" stopColor="#4ade80" />
         </linearGradient>
-        <filter id="gm-glow" x="-80%" y="-80%" width="260%" height="260%">
-          <feGaussianBlur stdDeviation="2.2" result="b" />
-          <feMerge>
-            <feMergeNode in="b" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
-        <filter id="gm-soft" x="-20%" y="-20%" width="140%" height="140%">
-          <feGaussianBlur stdDeviation="6" />
-        </filter>
         <clipPath id="gm-clip">
-          <rect width="400" height="300" rx="0" />
+          <rect width="400" height="300" />
         </clipPath>
       </defs>
 
       <g clipPath="url(#gm-clip)">
-        {/* sky + low sun */}
-        <rect width="400" height="300" fill="url(#gm-sky)" />
-        <rect width="400" height="300" fill="url(#gm-sun)" />
-        <circle cx="312" cy="126" r="26" fill="#f6c96f" opacity="0.9" />
-        <circle cx="312" cy="126" r="44" fill="#f6c96f" opacity="0.12" filter="url(#gm-soft)" />
-        {/* distant treeline */}
-        <g fill="#0d2d1a" opacity="0.9">
-          <ellipse cx="40" cy="182" rx="60" ry="26" />
-          <ellipse cx="110" cy="176" rx="48" ry="30" />
-          <ellipse cx="330" cy="184" rx="70" ry="24" />
-          <ellipse cx="390" cy="178" rx="50" ry="30" />
+        {/* stage: spotlight from above, floor, light pool */}
+        <rect width="400" height="300" fill="url(#mq-stage)" />
+        <path d="M120 -10 L205 -10 L285 250 L40 250 Z" fill="url(#mq-cone)" />
+        <ellipse cx="150" cy={FLOOR_Y + 4} rx="120" ry="16" fill="url(#mq-pool)" />
+        <line x1="0" y1={FLOOR_Y} x2="400" y2={FLOOR_Y} stroke="#ffffff" strokeOpacity="0.06" />
+
+        {/* reflection: the figure mirrored in the floor, then the floor
+            gradient painted over it so it fades out with depth */}
+        <g transform={`translate(0 ${2 * FLOOR_Y}) scale(1 -1)`} opacity={0.22 * op}>
+          <g transform={`translate(${FIG_DX} ${FIG_DY})`}>
+            <Mannequin J={J} prefix="r" clubInFront={clubInFront} />
+          </g>
         </g>
-        <g fill="#123b22">
-          <ellipse cx="70" cy="190" rx="54" ry="18" />
-          <ellipse cx="350" cy="192" rx="62" ry="16" />
-        </g>
-        {/* fairway with mown stripes, in perspective */}
-        <rect x="0" y="196" width="400" height="104" fill="url(#gm-grass)" />
-        <g fill="#ffffff" opacity="0.07">
-          <path d="M-20 300 L60 196 L92 196 L40 300 Z" />
-          <path d="M100 300 L150 196 L182 196 L160 300 Z" />
-          <path d="M220 300 L240 196 L272 196 L280 300 Z" />
-          <path d="M340 300 L330 196 L362 196 L400 300 Z" />
-        </g>
-        {/* flag on the far green */}
-        <g>
-          <ellipse cx="250" cy="206" rx="34" ry="5" fill="#4fc169" opacity="0.6" />
-          <line x1="250" y1="206" x2="250" y2="168" stroke="#f8faf8" strokeWidth="1.5" />
-          <path d="M250 168 L268 174 L250 180 Z" fill="#f4b942" />
-        </g>
-        {/* tee box glow + shadow */}
-        <ellipse cx="130" cy="250" rx="56" ry="9" fill="#031208" opacity="0.5" filter="url(#gm-soft)" />
+        <rect x="0" y={FLOOR_Y} width="400" height={300 - FLOOR_Y} fill="url(#mq-floor)" />
+
+        {/* typewriter caption */}
+        <text x="200" y="26" textAnchor="middle" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10.5" fontWeight="700" letterSpacing="1.2" fill={caption.accent ? "#f87171" : "#e8ece9"}>
+          {typed}
+          <tspan fill={caption.accent ? "#f87171" : "#e8ece9"} opacity={typed.length < caption.text.length ? 1 : 0.6}>
+            ▍
+          </tspan>
+        </text>
 
         {/* ball on the tee (gone after impact until the next address) */}
-        {ballOnTee && <circle cx={BALL[0] + 30} cy={BALL[1] + 6} r="3.2" fill="#f8faf8" />}
-        {ballStruck && <circle cx={BALL[0] + 30 + (progress - IMPACT_T) * 900} cy={BALL[1] + 6 - (progress - IMPACT_T) * 1100} r="2.6" fill="#f8faf8" opacity="0.9" />}
+        {ballOnTee && <circle cx={BALL[0] + FIG_DX} cy={BALL[1] + FIG_DY} r="3.2" fill="#f8faf8" />}
+        {ballStruck && <circle cx={BALL[0] + FIG_DX + (progress - IMPACT_T) * 900} cy={BALL[1] + FIG_DY - (progress - IMPACT_T) * 1100} r="2.6" fill="#f8faf8" opacity="0.9" />}
 
-        {/* golfer: club first so the shaft sits behind the body */}
-        <g transform="translate(30 6)" opacity={swingOpacity(progress)}>
-          {/* motion trail: faint copies of the club a few ms back. When the
-              club is slow they sit under it; through the fast downswing
-              they fan out into one smooth sweep instead of visible jumps. */}
-          {[1, 2, 3, 4, 5].map((k) => {
-            const g = samplePose(progress - k * 0.0045);
-            return <line key={k} x1={g.hands[0]} y1={g.hands[1]} x2={g.club[0]} y2={g.club[1]} stroke="#e2e8f0" strokeWidth={3 - k * 0.35} strokeLinecap="round" opacity={0.22 - k * 0.035} />;
-          })}
-          <line x1={J.hands[0]} y1={J.hands[1]} x2={hx} y2={hy} stroke="#cbd5e1" strokeWidth="3" strokeLinecap="round" />
-          <ellipse cx={hx} cy={hy} rx="7" ry="4" fill="#1f2937" stroke="#9ca3af" strokeWidth="1" transform={`rotate(${(ang * 180) / Math.PI + 90} ${hx} ${hy})`} />
-          {/* torso */}
-          <path
-            d={`M${J.shL[0]} ${J.shL[1] - 4} C${J.shL[0] - 4} ${(J.shL[1] + J.hipL[1]) / 2} ${J.hipL[0] - 6} ${J.hipL[1] - 18} ${J.hipL[0]} ${J.hipL[1] + 4} L${J.hipR[0]} ${J.hipR[1] + 4} C${J.hipR[0] + 6} ${J.hipR[1] - 18} ${J.shR[0] + 4} ${(J.shR[1] + J.hipR[1]) / 2} ${J.shR[0]} ${J.shR[1] - 4} Z`}
-            fill="url(#gm-body)"
-          />
-          {/* legs */}
-          {limb("hipL", "kneeL", 17)}
-          {limb("kneeL", "ankL", 15)}
-          {limb("hipR", "kneeR", 17)}
-          {limb("kneeR", "ankR", 15)}
-          {/* shoes */}
-          <ellipse cx={J.ankL[0] - 2} cy={J.ankL[1] + 6} rx="15" ry="6" fill="#0a1510" />
-          <ellipse cx={J.ankR[0] + 4} cy={J.ankR[1] + 6} rx="15" ry="6" fill="#0a1510" />
-          {/* arms */}
-          {limb("shL", "elL", 13)}
-          {limb("elL", "hands", 12)}
-          {limb("shR", "elR", 13)}
-          {limb("elR", "hands", 12)}
-          <circle cx={J.hands[0]} cy={J.hands[1]} r="8" fill="#0d1a12" />
-          {/* head + cap */}
-          <circle cx={J.head[0]} cy={J.head[1]} r="15" fill="url(#gm-body)" />
-          <path d={`M${J.head[0] - 17} ${J.head[1] - 4} C${J.head[0] - 12} ${J.head[1] - 18} ${J.head[0] + 14} ${J.head[1] - 18} ${J.head[0] + 18} ${J.head[1] - 4} Z`} fill="#0b1a10" />
-          <path d={`M${J.head[0] - 18} ${J.head[1] - 3} L${J.head[0] + 22} ${J.head[1] - 3} L${J.head[0] + 26} ${J.head[1] + 1} L${J.head[0] - 20} ${J.head[1] + 1} Z`} fill="#0b1a10" />
-          {/* rim light from the sun */}
-          <path d={`M${J.shR[0]} ${J.shR[1]} C${J.shR[0] + 4} ${J.shR[1] + 22} ${J.hipR[0] + 8} ${J.hipR[1] - 16} ${J.hipR[0]} ${J.hipR[1] + 4}`} stroke="#f6c96f" strokeWidth="2" strokeOpacity="0.35" fill="none" strokeLinecap="round" />
-          <line x1={J.kneeR[0]} y1={J.kneeR[1]} x2={J.ankR[0]} y2={J.ankR[1]} stroke="#f6c96f" strokeWidth="2" strokeOpacity="0.3" strokeLinecap="round" />
+        <g transform={`translate(${FIG_DX} ${FIG_DY})`} opacity={op}>
+          {/* club fan: every position so far this swing, coloured by speed */}
+          {fan.map((f, i) => (
+            <line
+              key={i}
+              x1={f.hands[0]}
+              y1={f.hands[1]}
+              x2={f.club[0]}
+              y2={f.club[1]}
+              stroke={speedColour(f.speed)}
+              strokeWidth="1"
+              opacity={0.1 + 0.32 * (i / Math.max(1, fan.length - 1))}
+            />
+          ))}
+          <Mannequin J={J} prefix="m" clubInFront={clubInFront} />
         </g>
+
+        {/* coaching glow on the hips once the analysis lands */}
+        {phase === "done" && <circle cx={hipC[0]} cy={hipC[1] - 4} r="30" fill="url(#mq-heat)" className="animate-halo-pulse" opacity={op} />}
 
         {/* pose overlay */}
         {showPose && (
-          // No CSS transform animations anywhere in this overlay. Chrome on
-          // macOS ran the old scale pulse on the compositor with a transform
-          // origin from an earlier frame, so on a moving joint the dots
-          // trailed behind the body. Each dot is now placed exactly on its
-          // joint every frame with a plain translate, and the pulse is an
-          // opacity-only halo, which cannot move anything.
-          <g transform="translate(30 6)" className="animate-fade-in" opacity={swingOpacity(progress)}>
+          // No CSS transform animations or SVG filters anywhere in this
+          // overlay (they lagged / ghosted on moving joints in Chrome).
+          <g transform={`translate(${FIG_DX} ${FIG_DY})`} className="animate-fade-in" opacity={op}>
             {BONES.map(([a, b]) => (
-              <line key={`${a}-${b}`} x1={J[a][0]} y1={J[a][1]} x2={J[b][0]} y2={J[b][1]} stroke="url(#gm-bone)" strokeWidth="2.4" strokeLinecap="round" opacity="0.95" />
+              <line key={`${a}-${b}`} x1={J[a][0]} y1={J[a][1]} x2={J[b][0]} y2={J[b][1]} stroke="url(#gm-bone)" strokeWidth="2" strokeLinecap="round" opacity="0.9" />
             ))}
-            {JOINTS.map((k, i) => (
-              // No SVG filter here: Chrome caches a filter's output, and on an
-              // element that moves every frame it kept painting stale blurred
-              // copies of the dots around the body. The glow is two plain,
-              // semi-transparent circles instead.
+            {JOINTS.map((k) => (
               <g key={k} transform={`translate(${J[k][0]} ${J[k][1]})`}>
-                <circle cx="0" cy="0" r="8.5" fill="#f4b942" opacity="0.12" />
-                <circle cx="0" cy="0" r="6.2" fill="#f4b942" className="animate-halo-pulse" style={{ animationDelay: `${i * 70}ms` }} />
-                <circle cx="0" cy="0" r="4.2" fill="#f4b942" />
-                <circle cx="0" cy="0" r="1.8" fill="#fff7e0" />
+                <circle cx="0" cy="0" r="5.5" fill="#f4b942" opacity="0.18" />
+                <circle cx="0" cy="0" r="3.4" fill="#f4b942" />
+                <circle cx="0" cy="0" r="1.4" fill="#fff7e0" />
               </g>
             ))}
-            {/* spine + shoulder + hip guides */}
-            <line x1={J.neck[0]} y1={J.neck[1]} x2={(J.hipL[0] + J.hipR[0]) / 2} y2={(J.hipL[1] + J.hipR[1]) / 2} stroke="#ffffff" strokeWidth="1" strokeDasharray="3 3" opacity="0.6" />
-            <line x1={J.shL[0]} y1={J.shL[1]} x2={J.shR[0]} y2={J.shR[1]} stroke="#ffffff" strokeWidth="1" strokeDasharray="3 3" opacity="0.6" />
-            <line x1={J.hipL[0]} y1={J.hipL[1]} x2={J.hipR[0]} y2={J.hipR[1]} stroke="#ffffff" strokeWidth="1" strokeDasharray="3 3" opacity="0.6" />
           </g>
         )}
 
         {/* angle callouts */}
         {showAngles && (
-          <g className="animate-slide-up" fontFamily="Inter, system-ui, sans-serif" fontWeight="700">
+          <g className="animate-fade-in" fontFamily="Inter, system-ui, sans-serif" fontWeight="700">
             {[
-              { x: 178, y: 58, label: "Shoulder turn", value: "94°", ok: true },
-              { x: 178, y: 128, label: "Hip turn", value: "46°", ok: true },
-              { x: 178, y: 198, label: "Knee flex", value: "22°", ok: false },
+              { x: 252, y: 58, label: "Shoulder turn", value: "94°", ok: true },
+              { x: 252, y: 128, label: "Hip turn", value: "46°", ok: false },
+              { x: 252, y: 198, label: "Knee flex", value: "22°", ok: true },
             ].map((c) => (
               <g key={c.label}>
-                <line x1={c.x - 14} y1={c.y + 10} x2={c.x - 44} y2={c.y + 10} stroke="#ffffff" strokeOpacity="0.5" strokeWidth="1" />
-                <rect x={c.x - 10} y={c.y - 2} width="112" height="26" rx="13" fill="#0b1a10" fillOpacity="0.85" stroke={c.ok ? "#4ade80" : "#f4b942"} strokeOpacity="0.6" />
+                <rect x={c.x - 10} y={c.y - 2} width="140" height="26" rx="13" fill="#0b1a10" fillOpacity="0.85" stroke={c.ok ? "#4ade80" : "#f87171"} strokeOpacity="0.7" />
                 <text x={c.x} y={c.y + 15} fontSize="10" fill="#dcfce7" fontWeight="500">
                   {c.label}
                 </text>
-                <text x={c.x + 98} y={c.y + 15} fontSize="11" fill={c.ok ? "#86efac" : "#f6c96f"} textAnchor="end">
+                <text x={c.x + 122} y={c.y + 15} fontSize="11" fill={c.ok ? "#86efac" : "#fca5a5"} textAnchor="end">
                   {c.value}
                 </text>
               </g>
