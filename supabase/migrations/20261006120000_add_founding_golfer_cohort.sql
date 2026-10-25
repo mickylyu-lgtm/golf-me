@@ -13,7 +13,7 @@
 --     location label text is never used, and
 --   * auth.users.email_confirmed_at is not null, and
 --   * the account has no active admin or exclusion role in user_roles
---     ('test', 'app_reviewer', 'seeded', 'bot'), and
+--     ('test', 'app_reviewer', 'seeded', 'bot', 'pre_launch'), and
 --   * the account has never held a ledger row before (a revoked award is
 --     not silently re-awarded on the next profile save).
 --
@@ -41,9 +41,15 @@
 -- ---------------------------------------------------------------------------
 -- 1. user_roles: exclusion roles (reuses the existing role table/concept).
 -- ---------------------------------------------------------------------------
+-- 'pre_launch' (added 2026-10-25, before this file was ever applied): real
+-- golfers from the pre-launch friends/testers list whom Micky chose to leave
+-- out of the cohort (Founding #1 is the first signup after them). It means
+-- "real account, no Founding number" and nothing else: unlike 'test' /
+-- 'seeded' / 'bot' it must never be used to hide an account from stats,
+-- search, suggestions or any other feature.
 alter table public.user_roles drop constraint user_roles_role_check;
 alter table public.user_roles add constraint user_roles_role_check
-  check (role in ('coach_reviewer', 'admin', 'test', 'app_reviewer', 'seeded', 'bot'));
+  check (role in ('coach_reviewer', 'admin', 'test', 'app_reviewer', 'seeded', 'bot', 'pre_launch'));
 
 -- ---------------------------------------------------------------------------
 -- 2. Cohort state (row-locked counter).
@@ -284,7 +290,7 @@ begin
   if exists (
     select 1 from public.user_roles r
     where r.user_id = p_user_id and r.active
-      and r.role in ('admin', 'test', 'app_reviewer', 'seeded', 'bot')
+      and r.role in ('admin', 'test', 'app_reviewer', 'seeded', 'bot', 'pre_launch')
   ) then
     return null;
   end if;
@@ -391,7 +397,7 @@ begin
   if not private.has_role((select auth.uid()), 'admin') then
     raise exception 'Not authorized.' using errcode = '42501';
   end if;
-  if p_role is null or p_role not in ('test', 'app_reviewer', 'seeded', 'bot') then
+  if p_role is null or p_role not in ('test', 'app_reviewer', 'seeded', 'bot', 'pre_launch') then
     raise exception 'Invalid exclusion role.' using errcode = '22023';
   end if;
   if p_user_id is null or not exists (select 1 from auth.users u where u.id = p_user_id) then
