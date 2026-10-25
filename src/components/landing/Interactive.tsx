@@ -3,7 +3,7 @@ import type { CSSProperties, PointerEvent, ReactNode } from "react";
 import { Check, Play, RotateCcw, Sparkles, Target, Users, Video } from "lucide-react";
 import { CaddieNavIcon } from "../icons/CaddieNavIcon";
 import { AppStoreButton } from "./AppStoreButton";
-import { DEFAULT_MOCK_GOLFERS, GolfersScreen, PhoneFrame, RoundsScreen, CaddieScreen, ScoreRing } from "./PhoneMock";
+import { DEFAULT_MOCK_GOLFERS, GolfersScreen, PhoneFrame, RoundsScreen, CaddieScreen } from "./PhoneMock";
 import type { MockGolfer } from "./PhoneMock";
 import { useLocale } from "../../i18n/LocaleContext";
 import { samplePose, swingOpacity, SWING_MS, TOP_T, IMPACT_T, FINISH_T, BALL, TOP_POSE, JOINT_NAMES, RETURN_MID, TRACE_END_T } from "./swingMotion";
@@ -482,7 +482,7 @@ const Ball = ({ c, r }: { c: Pt; r: number }) => <circle cx={c[0]} cy={c[1]} r={
 // upper arm > forearm), joints the same width as the limbs they join so
 // they blend instead of showing as separate balls, a tapered chest, a
 // rounded pelvis and a larger head.
-function Mannequin({ J, clubInFront, armsBehind }: { J: Pose; clubInFront: boolean; armsBehind: boolean }) {
+function Mannequin({ J, clubInFront }: { J: Pose; clubInFront: boolean }) {
   const mid = (a: Pt, b: Pt): Pt => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
   const lerp = (a: Pt, b: Pt, k: number): Pt => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k];
   const hipC = mid(J.hipL, J.hipR);
@@ -515,7 +515,6 @@ function Mannequin({ J, clubInFront, armsBehind }: { J: Pose; clubInFront: boole
   return (
     <g>
       {!clubInFront && club}
-      {armsBehind && arms}
       {/* legs (trail leg behind) */}
       <Capsule a={J.hipL} b={J.kneeL} r={9.2} />
       <Capsule a={J.kneeL} b={J.ankL} r={7} />
@@ -532,12 +531,34 @@ function Mannequin({ J, clubInFront, armsBehind }: { J: Pose; clubInFront: boole
       {/* neck + head */}
       <Capsule a={J.neck} b={mid(J.neck, J.head)} r={5} />
       <ellipse cx={J.head[0]} cy={J.head[1]} rx="12" ry="14.5" fill="url(#mq-ball)" transform={`rotate(${headAng} ${J.head[0]} ${J.head[1]})`} />
-      {/* shoulders, then the arms in front unless they are up behind the head */}
+      {/* shoulders, then the arms (in front of the chest throughout) */}
       <Ball c={J.shL} r={7.2} />
       <Ball c={J.shR} r={7.2} />
-      {!armsBehind && arms}
+      {arms}
       {clubInFront && club}
     </g>
+  );
+}
+
+const ANGLES = [
+  { label: "Shoulder turn", value: "94°", ok: true },
+  { label: "Hip turn", value: "46°", ok: false },
+  { label: "Knee flex", value: "22°", ok: true },
+];
+
+// Compact score badge for the demo's header row (the large ScoreRing is
+// too tall to sit beside the clip chips on a phone).
+function ScoreBadge({ score, shown }: { score: number; shown: boolean }) {
+  const c = 2 * Math.PI * 15;
+  return (
+    <div className={`flex shrink-0 items-center gap-1.5 rounded-full bg-white/95 py-1 pl-1 pr-2.5 text-slate-900 shadow-lg ${shown ? "animate-pop" : "invisible"}`} aria-hidden={!shown}>
+      <svg viewBox="0 0 36 36" width="26" height="26" className="-rotate-90" aria-hidden="true">
+        <circle cx="18" cy="18" r="15" fill="none" stroke="#e2e8f0" strokeWidth="4" />
+        <circle cx="18" cy="18" r="15" fill="none" stroke="#16a34a" strokeWidth="4" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - score / 100)} />
+      </svg>
+      <span className="text-base font-extrabold leading-none tabular-nums">{score}</span>
+      <span className="text-[10px] font-semibold leading-none text-slate-400">/100</span>
+    </div>
   );
 }
 
@@ -560,13 +581,14 @@ function useTyped(text: string): string {
   return text.slice(0, n);
 }
 
-function SwingScene({ phase, pose, progress }: { phase: Phase; pose: Pose; progress: number }) {
+// The stage only: figure, trail, ball and pose overlay. All text (phase
+// heading, clip info, score, measurements) lives in HTML rows around it in
+// CaddieDemo, so nothing can overlap the figure or each other at any width.
+// leftHanded mirrors the whole stage about its centre.
+function SwingScene({ phase, pose, progress, leftHanded }: { phase: Phase; pose: Pose; progress: number; leftHanded: boolean }) {
   const J = pose;
   const showPose = phase === "pose" || phase === "scoring" || phase === "done";
-  const showAngles = phase === "scoring" || phase === "done";
   const op = swingOpacity(progress);
-  const caption = CAPTIONS[phase];
-  const typed = useTyped(caption.text);
   // Ball: on the tee until impact, in flight briefly, then gone until the
   // loop fades back in at address.
   const ballOnTee = progress < IMPACT_T || progress >= RETURN_MID;
@@ -574,9 +596,6 @@ function SwingScene({ phase, pose, progress }: { phase: Phase; pose: Pose; progr
   // Club in front of the body while the hands are low (address through the
   // follow-through), behind it at the top and the finish.
   const clubInFront = J.hands[1] > J.neck[1] + 28;
-  // In the finish the hands end up behind the head (after Tiger Woods'),
-  // so the arms are drawn behind the head and chest there.
-  const armsBehind = progress > IMPACT_T && progress < RETURN_MID && J.hands[1] < J.neck[1] - 4;
   const trail = progress < RETURN_MID ? trailPieces(progress) : [];
   const hipC: Pt = toScene([(J.hipL[0] + J.hipR[0]) / 2, (J.hipL[1] + J.hipR[1]) / 2]);
   return (
@@ -637,22 +656,15 @@ function SwingScene({ phase, pose, progress }: { phase: Phase; pose: Pose; progr
         <ellipse cx="158" cy={FLOOR_Y + 4} rx="110" ry="14" fill="url(#mq-pool)" />
         <line x1="0" y1={FLOOR_Y} x2="400" y2={FLOOR_Y} stroke="#ffffff" strokeOpacity="0.06" />
 
+        <g transform={leftHanded ? "translate(400 0) scale(-1 1)" : undefined}>
         {/* reflection: the figure mirrored in the floor, then the floor
             gradient painted over it so it fades out with depth */}
         <g transform={`translate(0 ${2 * FLOOR_Y}) scale(1 -1)`} opacity={0.22 * op}>
           <g transform={FIG_T}>
-            <Mannequin J={J} clubInFront={clubInFront} armsBehind={armsBehind} />
+            <Mannequin J={J} clubInFront={clubInFront} />
           </g>
         </g>
         <rect x="0" y={FLOOR_Y} width="400" height={300 - FLOOR_Y} fill="url(#mq-floor)" />
-
-        {/* typewriter caption */}
-        <text x="200" y="26" textAnchor="middle" fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="10.5" fontWeight="700" letterSpacing="1.2" fill={caption.accent ? "#f87171" : "#e8ece9"}>
-          {typed}
-          <tspan fill={caption.accent ? "#f87171" : "#e8ece9"} opacity={typed.length < caption.text.length ? 1 : 0.6}>
-            ▍
-          </tspan>
-        </text>
 
         {/* ball on the tee (gone after impact until the next address) */}
         {ballOnTee && <circle cx={toScene(BALL)[0]} cy={toScene(BALL)[1]} r="3" fill="#f8faf8" />}
@@ -664,7 +676,7 @@ function SwingScene({ phase, pose, progress }: { phase: Phase; pose: Pose; progr
           {trail.map((p, i) => (
             <path key={i} d={p.d} stroke={p.colour} strokeWidth={p.width} strokeOpacity={p.opacity} strokeLinecap="round" strokeLinejoin="round" fill="none" />
           ))}
-          <Mannequin J={J} clubInFront={clubInFront} armsBehind={armsBehind} />
+          <Mannequin J={J} clubInFront={clubInFront} />
         </g>
 
         {/* coaching glow on the hips once the analysis lands */}
@@ -687,35 +699,18 @@ function SwingScene({ phase, pose, progress }: { phase: Phase; pose: Pose; progr
             ))}
           </g>
         )}
-
-        {/* angle callouts */}
-        {showAngles && (
-          <g className="animate-fade-in" fontFamily="Inter, system-ui, sans-serif" fontWeight="700">
-            {[
-              { x: 252, y: 58, label: "Shoulder turn", value: "94°", ok: true },
-              { x: 252, y: 128, label: "Hip turn", value: "46°", ok: false },
-              { x: 252, y: 198, label: "Knee flex", value: "22°", ok: true },
-            ].map((c) => (
-              <g key={c.label}>
-                <rect x={c.x - 10} y={c.y - 2} width="140" height="26" rx="13" fill="#0b1a10" fillOpacity="0.85" stroke={c.ok ? "#4ade80" : "#f87171"} strokeOpacity="0.7" />
-                <text x={c.x} y={c.y + 15} fontSize="10" fill="#dcfce7" fontWeight="500">
-                  {c.label}
-                </text>
-                <text x={c.x + 122} y={c.y + 15} fontSize="11" fill={c.ok ? "#86efac" : "#fca5a5"} textAnchor="end">
-                  {c.value}
-                </text>
-              </g>
-            ))}
-          </g>
-        )}
+        </g>
       </g>
     </svg>
   );
 }
 
-export function CaddieDemo() {
+export function CaddieDemo({ leftHanded = false }: { leftHanded?: boolean }) {
   const { t } = useLocale();
   const [phase, setPhase] = useState<Phase>("idle");
+  const caption = CAPTIONS[phase];
+  const typed = useTyped(caption.text);
+  const showAngles = phase === "scoring" || phase === "done";
   const timers = useRef<number[]>([]);
   useEffect(() => () => timers.current.forEach((id) => window.clearTimeout(id)), []);
 
@@ -765,6 +760,8 @@ export function CaddieDemo() {
     return 100;
   };
   const playhead = mapPlayhead(progress);
+  // The phase the figure is nearest to, for the highlighted scrubber label.
+  const activePhase = Math.min(PHASES.length - 1, Math.round((playhead / 100) * (PHASES.length - 1)));
 
   const metrics = [
     { label: "Tempo", value: "3.1 : 1", pct: 86, ok: true },
@@ -776,41 +773,71 @@ export function CaddieDemo() {
     <div className="mx-auto w-full max-w-md">
       <p className="mb-3 text-xs font-bold text-sun-300">{t("landing.demo.tryIt")}</p>
       <div className="overflow-hidden rounded-3xl border border-white/10 bg-[#0b1a10] shadow-2xl shadow-black/40 ring-1 ring-white/5">
-        {/* video frame */}
+        {/* Header row: clip info + live status (left), score (right). The
+            score slot is always reserved, so nothing shifts when it lands. */}
+        <div className="flex items-center justify-between gap-2 px-3 pt-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-white/[0.07] px-2.5 py-1 text-[11px] font-semibold text-white">
+              <Video size={12} /> 7 Iron · 0:04
+            </span>
+            {phase !== "idle" && phase !== "done" && (
+              <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-white/[0.07] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-fairway-200">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-400" /> {phase === "pose" ? "Pose detection" : "Live"}
+              </span>
+            )}
+          </div>
+          <ScoreBadge score={81} shown={phase === "done"} />
+        </div>
+
+        {/* Phase heading (typewriter), its own line */}
+        <p className={`flex min-h-[2.25rem] items-center justify-center px-4 text-center font-mono text-[11px] font-bold uppercase leading-tight tracking-[0.14em] ${caption.accent ? "text-[#f87171]" : "text-[#e8ece9]"}`} aria-live="polite">
+          <span>
+            {typed}
+            <span className={typed.length < caption.text.length ? "" : "opacity-60"} aria-hidden="true">
+              ▍
+            </span>
+          </span>
+        </p>
+
+        {/* stage */}
         <div className="relative aspect-[4/3]">
-          <SwingScene phase={phase} pose={pose} progress={progress} />
+          <SwingScene phase={phase} pose={pose} progress={progress} leftHanded={leftHanded} />
           {phase === "uploading" && <div aria-hidden="true" className="absolute inset-x-0 h-px bg-sun-300/90 shadow-[0_0_14px_3px_rgba(246,201,111,0.6)] animate-scan" />}
           {(phase === "uploading" || phase === "pose") && (
             <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:24px_24px]" />
           )}
-          {phase === "done" && (
-            <div className="absolute right-3 top-3 rounded-2xl bg-white/95 p-2 text-slate-900 shadow-lg animate-pop">
-              <ScoreRing score={81} size={72} />
+        </div>
+
+        {/* Measurements: their own row under the stage (space reserved, so
+            the card doesn't jump when they appear) */}
+        <div className={`grid grid-cols-3 gap-1.5 px-3 pt-3 transition-opacity duration-500 ${showAngles ? "opacity-100" : "opacity-0"}`} aria-hidden={!showAngles}>
+          {ANGLES.map((c) => (
+            <div key={c.label} className={`flex min-w-0 flex-col justify-between rounded-xl border bg-white/[0.04] px-2 py-1.5 ${c.ok ? "border-fairway-400/40" : "border-red-400/50"}`}>
+              <p className="text-[9.5px] font-semibold uppercase leading-tight tracking-wide text-fairway-200/80">{c.label}</p>
+              <p className={`text-sm font-extrabold tabular-nums ${c.ok ? "text-fairway-300" : "text-red-300"}`}>{c.value}</p>
             </div>
-          )}
-          <div className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-black/45 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur">
-            <Video size={12} /> 7 Iron · 0:04
+          ))}
+        </div>
+
+        {/* scrubber with swing phases */}
+        <div className="px-4 pb-1 pt-3">
+          <div className="relative h-1.5 rounded-full bg-white/20">
+            <div className="h-full rounded-full bg-sun-300" style={{ width: `${playhead}%` }} />
+            {PHASES.map((p, i) => (
+              <span key={p} aria-hidden="true" className="absolute top-1/2 h-3 w-0.5 -translate-y-1/2 bg-white/50" style={{ left: `${(i / (PHASES.length - 1)) * 100}%` }} />
+            ))}
           </div>
-          {phase !== "idle" && phase !== "done" && (
-            <div className="absolute left-3 top-10 flex items-center gap-1.5 rounded-full bg-black/45 px-2.5 py-1 text-[10px] font-semibold text-fairway-200 backdrop-blur">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-400" /> {phase === "pose" ? "POSE DETECTION" : "LIVE"}
-            </div>
-          )}
-          {/* scrubber with swing phases */}
-          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-4 pb-3 pt-8">
-            <div className="relative h-1.5 rounded-full bg-white/20">
-              <div className="h-full rounded-full bg-sun-300 transition-[width] duration-700 ease-out" style={{ width: `${playhead}%` }} />
-              {PHASES.map((p, i) => (
-                <span key={p} aria-hidden="true" className="absolute top-1/2 h-3 w-0.5 -translate-y-1/2 bg-white/50" style={{ left: `${(i / (PHASES.length - 1)) * 100}%` }} />
-              ))}
-            </div>
-            <div className="mt-1.5 flex justify-between text-[9.5px] font-semibold uppercase tracking-wider text-white/70">
-              {PHASES.map((p, i) => (
-                <span key={p} className={Math.abs(playhead - (i / (PHASES.length - 1)) * 100) < 17 ? "text-sun-300" : ""}>
-                  {p}
-                </span>
-              ))}
-            </div>
+          {/* each label sits under its tick (the ends are aligned to the edges) */}
+          <div className="relative mt-1.5 h-3.5 text-[9.5px] font-semibold uppercase tracking-wider text-white/70">
+            {PHASES.map((p, i) => (
+              <span
+                key={p}
+                className={`absolute top-0 whitespace-nowrap ${i === 0 ? "" : i === PHASES.length - 1 ? "-translate-x-full" : "-translate-x-1/2"} ${i === activePhase ? "text-sun-300" : ""}`}
+                style={{ left: `${(i / (PHASES.length - 1)) * 100}%` }}
+              >
+                {p}
+              </span>
+            ))}
           </div>
         </div>
 

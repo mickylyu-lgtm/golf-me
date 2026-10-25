@@ -35,11 +35,12 @@ export type Pose = Record<JointName, Pt> & { club: Pt };
 // (target to the viewer's right), sampled every 1/8 s of the clip, in that
 // clip's pixels; M() maps them into the figure's 200 x 260 box with the
 // ankles on the ground at y 232. Key 4 is address; 13.6 is impact (clubhead
-// on the ball, hands a touch ahead). The top (9-10) and the finish (19-22)
-// follow Tiger Woods' face-on driver swing instead: hands high with the
-// shaft parallel at the top; through the finish the hands carry high over
-// the head to the trail side and the club drops across the back toward the
-// target.
+// on the ball, hands a touch ahead). The top (9-10) is taken a little
+// higher, to parallel, after a tour pro's face-on driver swing. The finish
+// (19-22) is the classic balanced one for a right-handed golfer: chest and
+// hips turned to the target, weight on a straight lead leg, trail heel up,
+// hands high over the lead shoulder with the trail arm folded across the
+// chest, and the club wrapped behind the neck.
 const M = (x: number, y: number): [number, number] => [95 + (x - 295) * 0.426, 232 + (y - 605) * 0.426];
 type Raw = Record<JointName | "club", [number, number]>;
 const R = (o: Raw) => {
@@ -63,12 +64,11 @@ const KEYS: [number, Pose][] = [
   [16, R({ head: [283, 210], neck: [295, 245], shL: [285, 270], shR: [370, 225], elL: [375, 315], elR: [400, 272], hands: [440, 340], hipL: [315, 355], hipR: [380, 350], kneeL: [275, 470], kneeR: [375, 470], ankL: [215, 595], ankR: [355, 602], club: [520, 315] })],
   [17, R({ head: [283, 205], neck: [300, 240], shL: [295, 270], shR: [370, 225], elL: [380, 275], elR: [400, 250], hands: [465, 255], hipL: [320, 360], hipR: [375, 365], kneeL: [285, 470], kneeR: [370, 470], ankL: [215, 592], ankR: [355, 602], club: [495, 150] })],
   [18, R({ head: [290, 198], neck: [305, 235], shL: [305, 255], shR: [375, 230], elL: [400, 235], elR: [405, 212], hands: [460, 190], hipL: [330, 362], hipR: [375, 365], kneeL: [290, 460], kneeR: [370, 465], ankL: [215, 588], ankR: [355, 602], club: [410, 5] })],
-  [18.5, R({ head: [300, 190], neck: [315, 228], shL: [300, 240], shR: [370, 230], elL: [390, 220], elR: [405, 195], hands: [420, 150], hipL: [335, 356], hipR: [371, 360], kneeL: [285, 455], kneeR: [365, 466], ankL: [212, 582], ankR: [355, 602], club: [274, 4] })],
-  [19, R({ head: [308, 183], neck: [322, 222], shL: [302, 230], shR: [372, 224], elL: [370, 200], elR: [385, 165], hands: [360, 115], hipL: [337, 350], hipR: [368, 352], kneeL: [285, 450], kneeR: [360, 468], ankL: [211, 578], ankR: [355, 602], club: [154, 97] })],
-  [19.5, R({ head: [315, 178], neck: [328, 218], shL: [304, 222], shR: [371, 222], elL: [345, 160], elR: [360, 135], hands: [300, 105], hipL: [338, 347], hipR: [368, 348], kneeL: [285, 447], kneeR: [358, 470], ankL: [210, 576], ankR: [355, 602], club: [131, 223] })],
-  [20, R({ head: [318, 175], neck: [330, 215], shL: [305, 218], shR: [370, 220], elL: [320, 160], elR: [345, 140], hands: [280, 118], hipL: [338, 345], hipR: [368, 345], kneeL: [285, 445], kneeR: [358, 470], ankL: [210, 575], ankR: [355, 602], club: [351, 312] })],
-  [21, R({ head: [318, 175], neck: [330, 215], shL: [305, 218], shR: [370, 220], elL: [305, 165], elR: [335, 148], hands: [268, 132], hipL: [338, 345], hipR: [368, 345], kneeL: [285, 445], kneeR: [358, 470], ankL: [210, 575], ankR: [355, 602], club: [422, 270] })],
-  [22, R({ head: [320, 168], neck: [332, 210], shL: [307, 214], shR: [372, 216], elL: [300, 168], elR: [330, 152], hands: [262, 140], hipL: [340, 345], hipR: [370, 345], kneeL: [285, 445], kneeR: [358, 470], ankL: [210, 575], ankR: [355, 602], club: [444, 237] })],
+  [18.5, R({ head: [300, 190], neck: [315, 228], shL: [300, 240], shR: [370, 230], elL: [395, 250], elR: [413, 222], hands: [445, 190], hipL: [335, 356], hipR: [371, 360], kneeL: [285, 455], kneeR: [365, 466], ankL: [212, 582], ankR: [355, 602], club: [315, 60] })],
+  [19, R({ head: [308, 183], neck: [322, 222], shL: [302, 230], shR: [372, 224], elL: [404, 250], elR: [424, 196], hands: [430, 180], hipL: [337, 350], hipR: [368, 352], kneeL: [285, 450], kneeR: [360, 468], ankL: [211, 578], ankR: [355, 602], club: [230, 130] })],
+  [19.5, R({ head: [315, 178], neck: [328, 218], shL: [304, 222], shR: [371, 222], elL: [402, 248], elR: [420, 188], hands: [420, 170], hipL: [338, 347], hipR: [368, 348], kneeL: [285, 447], kneeR: [358, 470], ankL: [210, 576], ankR: [355, 602], club: [210, 232] })],
+  [20, R({ head: [318, 175], neck: [330, 215], shL: [305, 218], shR: [370, 220], elL: [400, 245], elR: [418, 185], hands: [410, 165], hipL: [338, 345], hipR: [368, 345], kneeL: [285, 445], kneeR: [358, 470], ankL: [210, 575], ankR: [355, 602], club: [210, 255] })],
+  [22, R({ head: [320, 168], neck: [332, 210], shL: [307, 214], shR: [372, 216], elL: [402, 240], elR: [420, 178], hands: [415, 157], hipL: [340, 345], hipR: [370, 345], kneeL: [285, 445], kneeR: [358, 470], ankL: [210, 575], ankR: [355, 602], club: [215, 265] })],
 ];
 
 // Timing, in seconds within one loop.
@@ -112,7 +112,7 @@ const keySec = (f: number) => {
   return t0 + ((t1 - t0) * (f - f0)) / (f1 - f0);
 };
 const SWING_S = keySec(LAST_FRAME);
-const FINISH_HOLD = 1.0;
+const FINISH_HOLD = 1.2; // long enough to recognise the finish before it fades
 const RETURN = 0.5;
 export const SWING_MS = Math.round((ADDRESS_HOLD + SWING_S + FINISH_HOLD + RETURN) * 1000);
 const DUR = SWING_MS / 1000;
@@ -394,7 +394,41 @@ function buildPose(v: number[]): Pose {
 const RATE = 240;
 const BAKE_N = Math.ceil(RETURN_START * DUR * RATE) + 1;
 const BAKED: number[][] = (() => {
-  const raw = Array.from({ length: BAKE_N }, (_, i) => rawChannels(Math.min(RETURN_START, i / (DUR * RATE))));
+  const keyed = Array.from({ length: BAKE_N }, (_, i) => rawChannels(Math.min(RETURN_START, i / (DUR * RATE))));
+  // Re-time each phase by distance travelled, so the hands and club speed
+  // up and slow down along one smooth curve instead of key to key. Travel
+  // is measured as hands path + 0.3 x clubhead path (the hands alone barely
+  // move while the club wraps round the neck in the finish). Every channel
+  // is re-sampled on the same new clock, so the body stays coordinated.
+  const poses = keyed.map(buildPose);
+  const step = (i: number) => (i ? dist(poses[i].hands, poses[i - 1].hands) + 0.3 * dist(poses[i].club, poses[i - 1].club) : 0);
+  const raw = keyed.map((row) => row.slice());
+  const idx = (u: number) => Math.round(u * DUR * RATE);
+  const travel = (i0: number, i1: number) => {
+    const cum = [0];
+    for (let i = i0 + 1; i <= i1; i++) cum.push(cum[cum.length - 1] + step(i));
+    return cum;
+  };
+  const retime = (i0: number, i1: number, ease: (x: number) => number) => {
+    const cum = travel(i0, i1);
+    const total = cum[cum.length - 1];
+    let j = 0;
+    for (let i = i0; i <= i1; i++) {
+      const target = ease((i - i0) / (i1 - i0)) * total;
+      while (j < cum.length - 2 && cum[j + 1] < target) j++;
+      const f = cum[j + 1] > cum[j] ? Math.min(1, Math.max(0, (target - cum[j]) / (cum[j + 1] - cum[j]))) : 0;
+      raw[i] = keyed[i0 + j].map((a, c) => a + (keyed[i0 + j + 1][c] - a) * f);
+    }
+    return total;
+  };
+  const [iStart, iTop, iImp, iEnd] = [idx(frameT(4)), idx(TOP_T), idx(frameT(13.6)), idx(frameT(LAST_FRAME))];
+  retime(iStart, iTop, (x) => 0.5 - 0.5 * Math.cos(Math.PI * x)); // even backswing, settling at the top
+  const down = retime(iTop, iImp, (x) => x * x); // constant acceleration, fastest at the ball
+  // Follow-through: start at the downswing's speed at the ball, then slow
+  // into the finish — the exponent makes the two speeds match at impact.
+  const thru = travel(iImp, iEnd);
+  const k = Math.min(4, Math.max(1.5, (2 * down * (iEnd - iImp)) / ((iImp - iTop) * thru[thru.length - 1])));
+  retime(iImp, iEnd, (x) => 1 - (1 - x) ** k);
   const tImp = frameT(13.6) * DUR;
   // Knees and elbows (their bend parameters) are secondary: smoothed twice
   // as much, so they follow the limbs instead of jittering on their own.
