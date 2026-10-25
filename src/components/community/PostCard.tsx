@@ -36,7 +36,7 @@ import { postCategoryLabel } from "../../lib/enumLabels";
 import { areaForCourse } from "../../lib/courses";
 import { enterNativeVideoFullscreen, isVideoInNativeFullscreen } from "../../lib/video";
 import { isStaleProcessing, usePeriodicRerender } from "../../lib/caddieAnalysis";
-import { barsClipPath, useBlurredBackdrop } from "../../lib/blurredBackdrop";
+import { backdropFromVideo, barsClipPath, useBlurredBackdrop, type BlurredBackdrop } from "../../lib/blurredBackdrop";
 import { useLocale } from "../../i18n/LocaleContext";
 
 // A touch that moves further than this between press and release is a
@@ -95,7 +95,19 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
   const [feedMuted, setFeedMuted] = useState(true);
   const [askingCaddie, setAskingCaddie] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const videoBackdrop = useBlurredBackdrop(post.type === "swing" ? post.videoThumbnailUrl : undefined);
+  const thumbBackdrop = useBlurredBackdrop(post.type === "swing" ? post.videoThumbnailUrl : undefined);
+  // Read from the video's own frames when the thumbnail is missing or shows
+  // no bars, so black bars baked into the video are still caught.
+  const [frameBackdrop, setFrameBackdrop] = useState<BlurredBackdrop | null>(null);
+  const frameScansRef = useRef(0);
+  const videoBackdrop = thumbBackdrop?.bars ? thumbBackdrop : (frameBackdrop ?? thumbBackdrop);
+  function scanVideoFrame(e: React.SyntheticEvent<HTMLVideoElement>) {
+    if (thumbBackdrop?.bars || frameBackdrop?.bars || frameScansRef.current >= 3) return;
+    const scanned = backdropFromVideo(e.currentTarget);
+    if (!scanned) return;
+    frameScansRef.current++;
+    if (scanned.bars || (!thumbBackdrop && !frameBackdrop)) setFrameBackdrop(scanned);
+  }
   const fallbackTimerRef = useRef<number | null>(null);
   const fallbackCleanupRef = useRef<(() => void) | null>(null);
   const pressRef = useRef<{ x: number; y: number; moved: boolean } | null>(null);
@@ -431,6 +443,14 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
               src={post.videoUrl}
               poster={post.videoThumbnailUrl}
               preload="metadata"
+              // CORS so a frame can be read for the bar scan (Storage sends
+              // the header); the poster is a plain image load either way.
+              crossOrigin="anonymous"
+              onLoadedData={scanVideoFrame}
+              onTimeUpdate={(e) => {
+                // A second look a moment in, in case the first frame was a fade from black.
+                if (e.currentTarget.currentTime >= 1 && frameScansRef.current < 2) scanVideoFrame(e);
+              }}
               muted={feedMuted}
               loop
               playsInline

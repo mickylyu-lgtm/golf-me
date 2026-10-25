@@ -38,16 +38,24 @@ export interface BlurredBackdrop {
 
 const cache = new Map<string, BlurredBackdrop | null>();
 
+type Frame = { source: CanvasImageSource; width: number; height: number };
+
+const imageFrame = (img: HTMLImageElement): Frame => ({ source: img, width: img.naturalWidth, height: img.naturalHeight });
+
 export function findBars(img: HTMLImageElement): BarInsets | null {
-  const scale = SCAN / Math.max(img.naturalWidth, img.naturalHeight, 1);
-  const w = Math.max(1, Math.round(img.naturalWidth * scale));
-  const h = Math.max(1, Math.round(img.naturalHeight * scale));
+  return findFrameBars(imageFrame(img));
+}
+
+function findFrameBars({ source, width, height }: Frame): BarInsets | null {
+  const scale = SCAN / Math.max(width, height, 1);
+  const w = Math.max(1, Math.round(width * scale));
+  const h = Math.max(1, Math.round(height * scale));
   const canvas = document.createElement("canvas");
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (!ctx) return null;
-  ctx.drawImage(img, 0, 0, w, h);
+  ctx.drawImage(source, 0, 0, w, h);
   const px = ctx.getImageData(0, 0, w, h).data;
   const dark = (x: number, y: number) => {
     const i = (y * w + x) * 4;
@@ -79,38 +87,51 @@ export function findBars(img: HTMLImageElement): BarInsets | null {
   return bars.top || bars.right || bars.bottom || bars.left ? bars : null;
 }
 
+function backdropFromFrame(frame: Frame): BlurredBackdrop | null {
+  try {
+    const { source, width, height } = frame;
+    const bars = findFrameBars(frame);
+    const sx = (bars?.left ?? 0) * width;
+    const sy = (bars?.top ?? 0) * height;
+    const sw = Math.max(1, width * (1 - (bars?.left ?? 0) - (bars?.right ?? 0)));
+    const sh = Math.max(1, height * (1 - (bars?.top ?? 0) - (bars?.bottom ?? 0)));
+    const scale = SMALL / Math.max(sw, sh, 1);
+    const w = Math.max(1, Math.round(sw * scale));
+    const h = Math.max(1, Math.round(sh * scale));
+    const small = document.createElement("canvas");
+    small.width = w;
+    small.height = h;
+    small.getContext("2d")?.drawImage(source, sx, sy, sw, sh, 0, 0, w, h);
+    const out = document.createElement("canvas");
+    out.width = Math.round((OUT * w) / Math.max(w, h));
+    out.height = Math.round((OUT * h) / Math.max(w, h));
+    const ctx = out.getContext("2d");
+    if (!ctx) return null;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(small, 0, 0, out.width, out.height);
+    return { src: out.toDataURL("image/jpeg", 0.7), bars, aspect: width / Math.max(height, 1) };
+  } catch {
+    return null; // tainted canvas (no CORS): caller falls back to a flat colour
+  }
+}
+
+/**
+ * The same backdrop and bar scan from a playing video's current frame, for
+ * posts whose thumbnail is missing or unreadable. The <video> must be loaded
+ * with crossOrigin="anonymous" or the frame can't be read.
+ */
+export function backdropFromVideo(video: HTMLVideoElement): BlurredBackdrop | null {
+  if (!video.videoWidth || !video.videoHeight) return null;
+  return backdropFromFrame({ source: video, width: video.videoWidth, height: video.videoHeight });
+}
+
 export function buildBlurredBackdrop(url: string): Promise<BlurredBackdrop | null> {
   return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.decoding = "async";
-    img.onload = () => {
-      try {
-        const bars = findBars(img);
-        const sx = (bars?.left ?? 0) * img.naturalWidth;
-        const sy = (bars?.top ?? 0) * img.naturalHeight;
-        const sw = Math.max(1, img.naturalWidth * (1 - (bars?.left ?? 0) - (bars?.right ?? 0)));
-        const sh = Math.max(1, img.naturalHeight * (1 - (bars?.top ?? 0) - (bars?.bottom ?? 0)));
-        const scale = SMALL / Math.max(sw, sh, 1);
-        const w = Math.max(1, Math.round(sw * scale));
-        const h = Math.max(1, Math.round(sh * scale));
-        const small = document.createElement("canvas");
-        small.width = w;
-        small.height = h;
-        small.getContext("2d")?.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
-        const out = document.createElement("canvas");
-        out.width = Math.round((OUT * w) / Math.max(w, h));
-        out.height = Math.round((OUT * h) / Math.max(w, h));
-        const ctx = out.getContext("2d");
-        if (!ctx) return resolve(null);
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = "high";
-        ctx.drawImage(small, 0, 0, out.width, out.height);
-        resolve({ src: out.toDataURL("image/jpeg", 0.7), bars, aspect: img.naturalWidth / Math.max(img.naturalHeight, 1) });
-      } catch {
-        resolve(null); // tainted canvas (no CORS): caller falls back to a flat colour
-      }
-    };
+    img.onload = () => resolve(backdropFromFrame(imageFrame(img)));
     img.onerror = () => resolve(null);
     // Separate cache entry from the <video poster> load, which isn't a CORS
     // request; reusing that cached response would taint the canvas.
