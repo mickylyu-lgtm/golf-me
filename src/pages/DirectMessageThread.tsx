@@ -16,6 +16,8 @@ import { TypingBubble } from "../components/chat/TypingBubble";
 import { handicapLabel } from "../lib/format";
 import { isFounder } from "../lib/founder";
 import { useLocale } from "../i18n/LocaleContext";
+import { formatMessageTime } from "../lib/messageTime";
+import { useSwipeToRevealTimes } from "../lib/useSwipeToRevealTimes";
 
 export function DirectMessageThread() {
   const { id } = useParams<{ id: string }>();
@@ -36,7 +38,7 @@ export function DirectMessageThread() {
     sendTypingSignal,
   } = useData();
   const { showToast } = useToast();
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
 
   const [text, setText] = useState(() => (id ? loadChatDraft(dmDraftKey(id)) : ""));
   const [menuOpen, setMenuOpen] = useState(false);
@@ -45,6 +47,10 @@ export function DirectMessageThread() {
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
+  // Wraps the message rows only (inside listRef) so the swipe-to-reveal-
+  // times gesture can move them all with one transform. See
+  // useSwipeToRevealTimes; it never touches listRef's scroll or size.
+  const rowsRef = useRef<HTMLDivElement>(null);
   // Whether the user was scrolled at (or very near) the newest message the
   // last time they touched the list themselves -- captured continuously on
   // scroll, not re-derived after the fact, so it reflects their intent
@@ -90,6 +96,7 @@ export function DirectMessageThread() {
   const blocked = id ? isBlocked(id) : false;
   const eligible = id ? canMessage(id) : false;
   const otherTyping = other ? isOtherTyping(other.id) : false;
+  useSwipeToRevealTimes(listRef, rowsRef, Boolean(other));
 
   // Ephemeral only -- never a persisted message, never touches unread
   // counts/notifications. useTypingIndicator reads this via a ref (see its
@@ -398,28 +405,48 @@ export function DirectMessageThread() {
             container's own justify-content, so real overflow scrolling
             (and everything built on it above -- near-bottom detection,
             scrollTop math) actually works. */}
-        <div ref={listRef} className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4">
+        {/* overflow-x-hidden + touch-action:pan-y + data-no-swipe are for the
+            swipe-to-reveal-times gesture only (useSwipeToRevealTimes): the
+            rows wrapper below slides left and each row's time label sits
+            just past this list's right clip edge. Vertical scrolling stays
+            fully native; nothing here changes scrollTop or the list's size. */}
+        <div
+          ref={listRef}
+          data-no-swipe
+          className="flex min-h-0 flex-1 touch-pan-y flex-col gap-3 overflow-x-hidden overflow-y-auto px-4 py-4"
+        >
           <div className="mt-auto" />
           {messages.length === 0 && (
             <p className="my-auto text-center text-sm text-slate-400">
               {eligible ? "No messages yet — say hello." : "You can't message this golfer."}
             </p>
           )}
-          {messages.map((m) => {
-            const isMe = m.senderId === currentUser.id;
-            return (
-              <div key={m.id} className={`flex items-end gap-2 ${isMe ? "flex-row-reverse" : ""}`}>
-                <Avatar golfer={isMe ? currentUser : other} size="xs" showVerified={false} />
-                <div
-                  className={`max-w-[75%] rounded-2xl px-3.5 py-2 text-sm ${
-                    isMe ? "rounded-br-sm bg-fairway-600 text-white" : "rounded-bl-sm bg-slate-100 text-slate-800"
-                  }`}
-                >
-                  {m.text}
+          <div ref={rowsRef} className="flex flex-col gap-3">
+            {messages.map((m) => {
+              const isMe = m.senderId === currentUser.id;
+              const sent = formatMessageTime(m.createdAt, locale, t);
+              return (
+                <div key={m.id} className={`relative flex items-end gap-2 ${isMe ? "flex-row-reverse" : ""}`}>
+                  <Avatar golfer={isMe ? currentUser : other} size="xs" showVerified={false} />
+                  <div
+                    className={`max-w-[75%] rounded-2xl px-3.5 py-2 text-sm [overflow-wrap:anywhere] ${
+                      isMe ? "rounded-br-sm bg-fairway-600 text-white" : "rounded-bl-sm bg-slate-100 text-slate-800"
+                    }`}
+                  >
+                    {m.text}
+                  </div>
+                  {sent && (
+                    <time
+                      dateTime={m.createdAt}
+                      className="pointer-events-none absolute top-1/2 left-[calc(100%+1rem)] flex w-[4.25rem] -translate-y-1/2 flex-col items-center text-center text-[10px] leading-tight whitespace-nowrap text-slate-400 tabular-nums"
+                    >
+                      {sent.day && <span>{sent.day}</span>}
+                      <span className="text-[11px] font-medium text-slate-500">{sent.time}</span>
+                    </time>
+                  )}
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
           {/* Just another item at the end of the same list the messages
               themselves render in -- no separate positioning, no new scroll
               code. The existing ResizeObserver on this list (see above)
@@ -427,12 +454,13 @@ export function DirectMessageThread() {
               bubble appearing/disappearing, but only when nearBottomRef was
               already true -- someone reading older messages never gets
               snapped down just because the other person started typing. */}
-          {otherTyping && (
-            <div className="flex items-end gap-2">
-              <Avatar golfer={other} size="xs" showVerified={false} />
-              <TypingBubble />
-            </div>
-          )}
+            {otherTyping && (
+              <div className="flex items-end gap-2">
+                <Avatar golfer={other} size="xs" showVerified={false} />
+                <TypingBubble />
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="shrink-0 rounded-b-2xl bg-white">
