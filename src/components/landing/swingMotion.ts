@@ -29,7 +29,6 @@ export type JointName =
 export type Pt = readonly [number, number];
 export type Pose = Record<JointName, Pt> & { club: Pt };
 
-const P = (o: Record<string, [number, number]>) => o as unknown as Pose;
 
 // [key index, pose]: joints read off a reference face-on swing animation
 // (target to the viewer's right), sampled every 1/8 s of the clip, in that
@@ -85,7 +84,6 @@ const ADDRESS_HOLD = 0.5;
 // Key index -> seconds after the takeaway starts: the reference clip's own
 // spacing (1/8 s per key), stretched slightly in the backswing and played
 // a little faster from the top, so the tempo is a tour pro's ~3:1.
-const FIRST_FRAME = 4;
 const LAST_FRAME = 22;
 const keySec = (f: number) => (f <= 10 ? ((f - 4) / 8) * 1.2 : 0.9 + ((f - 10) / 8) * 0.71);
 const SWING_S = keySec(LAST_FRAME);
