@@ -101,7 +101,9 @@ const ARM = 1.02 * Math.max(...KP.flatMap((p) => [dist(p.shL, p.hands), dist(p.s
 const LEN = {
   spine: median(KP.map((p) => dist(hipC(p), p.neck))),
   head: median(KP.map((p) => dist(p.neck, p.head))),
-  club: dist(ADDR.hands, ADDR.club),
+  // A 7-iron is about half the golfer's height; the traced shaft (taken
+  // from a driver swing, and foreshortened) read too long on the figure.
+  club: 0.8 * dist(ADDR.hands, ADDR.club),
   hipW: dist(ADDR.hipL, ADDR.hipR),
   shW: dist(ADDR.shL, ADDR.shR),
 };
@@ -182,6 +184,7 @@ CH.clubA = unwrap(CH.clubA, DIRS);
 const smooth = (v: number[]) => v.map((x, i) => (i <= 1 || i >= v.length - 2 ? x : 0.25 * v[i - 1] + 0.5 * x + 0.25 * v[i + 1]));
 for (const k of ["hcx", "hcy", "hipW", "hipTilt", "spineA", "headA", "shW", "shTilt", "ankLx", "ankLy", "kLt", "kLo", "kRt", "kRo", "eLt", "eLo", "eRt", "eRo"]) CH[k] = smooth(CH[k]);
 
+const HIP_SCALE = 0.7;
 const fromPolar = (o: Pt, a: number, r: number): Pt => [o[0] + Math.cos(a) * r, o[1] + Math.sin(a) * r];
 
 
@@ -253,7 +256,9 @@ export function samplePose(t: number): Pose {
   const c = (k: string) => spline(CH[k], s);
 
   const hc: Pt = [c("hcx"), c("hcy")];
-  const hw = c("hipW") / 2;
+  // Narrower than traced: shorts made the source hips look wide, and a
+  // mannequin's pelvis should sit inside its shoulders.
+  const hw = (c("hipW") / 2) * HIP_SCALE;
   const ht = c("hipTilt");
   const hipL: Pt = [hc[0] - Math.cos(ht) * hw, hc[1] - Math.sin(ht) * hw];
   const hipR: Pt = [hc[0] + Math.cos(ht) * hw, hc[1] + Math.sin(ht) * hw];

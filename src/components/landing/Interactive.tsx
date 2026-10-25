@@ -395,13 +395,19 @@ const PHASES = ["Address", "Top", "Impact", "Finish"];
 // animations on anything that moves (they caused lag/ghosting before).
 
 const FLOOR_Y = 246; // scene y of the stage floor
-const FIG_DX = 34; // the rig's figure box -> scene offset
-const FIG_DY = 6;
+// The rig's figure box -> scene: scaled and placed so the whole club arc
+// (backswing up past the head, follow-through out to the right) stays on
+// the stage with the feet on the floor.
+const FIG_S = 0.86;
+const FIG_DX = 62;
+const FIG_DY = 41;
+const FIG_T = `translate(${FIG_DX} ${FIG_DY}) scale(${FIG_S})`;
+const toScene = (q: Pt): Pt => [q[0] * FIG_S + FIG_DX, q[1] * FIG_S + FIG_DY];
 const LIGHT = [-0.6, -0.8]; // direction the light comes FROM (unit-ish)
 
 // Club fan: every club position over one swing, precomputed once, with the
 // clubhead speed between samples (for colour).
-const FAN_STEP = 0.006;
+const FAN_STEP = 0.0015; // fine enough that the traced arc is a smooth curve, not a polygon
 const FAN: { t: number; hands: Pt; club: Pt; speed: number }[] = (() => {
   const out: { t: number; hands: Pt; club: Pt; speed: number }[] = [];
   let prev: Pt | null = null;
@@ -460,36 +466,36 @@ function Mannequin({ J, clubInFront }: { J: Pose; clubInFront: boolean }) {
     <g>
       {!clubInFront && club}
       {/* legs (trail leg behind) */}
-      <Capsule a={J.hipL} b={J.kneeL} r={8.5} />
-      <Capsule a={J.kneeL} b={J.ankL} r={6.8} />
-      <Ball c={J.kneeL} r={7.2} />
+      <Capsule a={J.hipL} b={J.kneeL} r={7.4} />
+      <Capsule a={J.kneeL} b={J.ankL} r={5.8} />
+      <Ball c={J.kneeL} r={6.2} />
       <ellipse cx={J.ankL[0] - 3} cy={J.ankL[1] + 5} rx="10" ry="4.5" fill="url(#mq-ball)" />
-      <Capsule a={J.hipR} b={J.kneeR} r={8.5} />
-      <Capsule a={J.kneeR} b={J.ankR} r={6.8} />
-      <Ball c={J.kneeR} r={7.2} />
+      <Capsule a={J.hipR} b={J.kneeR} r={7.4} />
+      <Capsule a={J.kneeR} b={J.ankR} r={5.8} />
+      <Ball c={J.kneeR} r={6.2} />
       <ellipse cx={J.ankR[0] + 3} cy={J.ankR[1] + 5} rx="10" ry="4.5" fill="url(#mq-ball)" />
       {/* pelvis + torso */}
-      <Capsule a={J.hipL} b={J.hipR} r={10} />
-      <Capsule a={hipC} b={[(hipC[0] + chest[0]) / 2, (hipC[1] + chest[1]) / 2]} r={10} />
+      <Capsule a={J.hipL} b={J.hipR} r={7.5} />
+      <Capsule a={hipC} b={[(hipC[0] + chest[0]) / 2, (hipC[1] + chest[1]) / 2]} r={7.5} />
       <path
         d={`M${J.shL[0]} ${J.shL[1]} Q${chest[0]} ${chest[1] - 6} ${J.shR[0]} ${J.shR[1]} Q${J.shR[0] + 2} ${(J.shR[1] + hipC[1]) / 2} ${(chest[0] + hipC[0]) / 2 + 10} ${(chest[1] + hipC[1]) / 2 + 6} L${(chest[0] + hipC[0]) / 2 - 10} ${(chest[1] + hipC[1]) / 2 + 6} Q${J.shL[0] - 2} ${(J.shL[1] + hipC[1]) / 2} ${J.shL[0]} ${J.shL[1]} Z`}
         fill="url(#mq-chest)"
       />
-      <Ball c={J.hipL} r={8} />
-      <Ball c={J.hipR} r={8} />
+      <Ball c={J.hipL} r={6.5} />
+      <Ball c={J.hipR} r={6.5} />
       {/* neck + head */}
       <Capsule a={J.neck} b={mid(J.neck, J.head)} r={4.5} />
       <ellipse cx={J.head[0]} cy={J.head[1]} rx="10.5" ry="13" fill="url(#mq-ball)" transform={`rotate(${headAng} ${J.head[0]} ${J.head[1]})`} />
       {/* arms (trail arm behind the lead arm) */}
-      <Ball c={J.shL} r={7.5} />
-      <Capsule a={J.shL} b={J.elL} r={5.8} />
-      <Capsule a={J.elL} b={J.hands} r={4.8} />
-      <Ball c={J.elL} r={5.2} />
-      <Ball c={J.shR} r={7.5} />
-      <Capsule a={J.shR} b={J.elR} r={5.8} />
-      <Capsule a={J.elR} b={J.hands} r={4.8} />
-      <Ball c={J.elR} r={5.2} />
-      <Ball c={J.hands} r={5.6} />
+      <Ball c={J.shL} r={6.6} />
+      <Capsule a={J.shL} b={J.elL} r={5} />
+      <Capsule a={J.elL} b={J.hands} r={4.2} />
+      <Ball c={J.elL} r={4.6} />
+      <Ball c={J.shR} r={6.6} />
+      <Capsule a={J.shR} b={J.elR} r={5} />
+      <Capsule a={J.elR} b={J.hands} r={4.2} />
+      <Ball c={J.elR} r={4.6} />
+      <Ball c={J.hands} r={4.8} />
       {clubInFront && club}
     </g>
   );
@@ -530,18 +536,16 @@ function SwingScene({ phase, pose, progress }: { phase: Phase; pose: Pose; progr
   const clubInFront = J.hands[1] > J.neck[1] + 28;
   const fanPaths = useMemo(() => {
     const fan = progress < RETURN_MID ? FAN.filter((f) => f.t <= progress) : [];
-    let shafts = "";
     const arcs: string[] = BAND_COLOURS.map(() => "");
     fan.forEach((f, i) => {
-      if (i % 2 === 0) shafts += `M${f.hands[0].toFixed(1)} ${f.hands[1].toFixed(1)}L${f.club[0].toFixed(1)} ${f.club[1].toFixed(1)}`;
       if (i > 0) {
         const p = fan[i - 1].club;
         arcs[speedBand(f.speed)] += `M${p[0].toFixed(1)} ${p[1].toFixed(1)}L${f.club[0].toFixed(1)} ${f.club[1].toFixed(1)}`;
       }
     });
-    return { shafts, arcs };
+    return { arcs };
   }, [progress]);
-  const hipC: Pt = [(J.hipL[0] + J.hipR[0]) / 2 + FIG_DX, (J.hipL[1] + J.hipR[1]) / 2 + FIG_DY];
+  const hipC: Pt = toScene([(J.hipL[0] + J.hipR[0]) / 2, (J.hipL[1] + J.hipR[1]) / 2]);
   return (
     <svg viewBox="0 0 400 300" className="h-full w-full" role="img" aria-label="A mannequin golfer swinging on a dark stage, with Caddie's pose analysis overlay">
       <defs>
@@ -596,14 +600,14 @@ function SwingScene({ phase, pose, progress }: { phase: Phase; pose: Pose; progr
       <g clipPath="url(#gm-clip)">
         {/* stage: spotlight from above, floor, light pool */}
         <rect width="400" height="300" fill="url(#mq-stage)" />
-        <path d="M120 -10 L205 -10 L285 250 L40 250 Z" fill="url(#mq-cone)" />
-        <ellipse cx="150" cy={FLOOR_Y + 4} rx="120" ry="16" fill="url(#mq-pool)" />
+        <path d="M128 -10 L213 -10 L293 250 L48 250 Z" fill="url(#mq-cone)" />
+        <ellipse cx="158" cy={FLOOR_Y + 4} rx="110" ry="14" fill="url(#mq-pool)" />
         <line x1="0" y1={FLOOR_Y} x2="400" y2={FLOOR_Y} stroke="#ffffff" strokeOpacity="0.06" />
 
         {/* reflection: the figure mirrored in the floor, then the floor
             gradient painted over it so it fades out with depth */}
         <g transform={`translate(0 ${2 * FLOOR_Y}) scale(1 -1)`} opacity={0.22 * op}>
-          <g transform={`translate(${FIG_DX} ${FIG_DY})`}>
+          <g transform={FIG_T}>
             <Mannequin J={J} clubInFront={clubInFront} />
           </g>
         </g>
@@ -618,16 +622,13 @@ function SwingScene({ phase, pose, progress }: { phase: Phase; pose: Pose; progr
         </text>
 
         {/* ball on the tee (gone after impact until the next address) */}
-        {ballOnTee && <circle cx={BALL[0] + FIG_DX} cy={BALL[1] + FIG_DY} r="3.2" fill="#f8faf8" />}
-        {ballStruck && <circle cx={BALL[0] + FIG_DX + (progress - IMPACT_T) * 900} cy={BALL[1] + FIG_DY - (progress - IMPACT_T) * 1100} r="2.6" fill="#f8faf8" opacity="0.9" />}
+        {ballOnTee && <circle cx={toScene(BALL)[0]} cy={toScene(BALL)[1]} r="3" fill="#f8faf8" />}
+        {ballStruck && <circle cx={toScene(BALL)[0] + (progress - IMPACT_T) * 900} cy={toScene(BALL)[1] - (progress - IMPACT_T) * 1100} r="2.4" fill="#f8faf8" opacity="0.9" />}
 
-        <g transform={`translate(${FIG_DX} ${FIG_DY})`} opacity={op}>
-          {/* club fan: faint shaft positions so far this swing (one path)
-              and the arc the clubhead has traced, coloured by speed (a few
-              paths, one per colour band) — batched so the fan costs a
-              handful of elements instead of ~200 */}
-          {fanPaths.shafts && <path d={fanPaths.shafts} stroke="#e8ece9" strokeWidth="0.7" opacity="0.13" fill="none" />}
-          {fanPaths.arcs.map((d, band) => (d ? <path key={band} d={d} stroke={BAND_COLOURS[band]} strokeWidth="1.8" strokeLinecap="round" fill="none" opacity="0.9" /> : null))}
+        <g transform={FIG_T} opacity={op}>
+          {/* the arc the clubhead has traced so far this swing, coloured by
+              speed (one path per colour band, so it stays cheap) */}
+          {fanPaths.arcs.map((d, band) => (d ? <path key={band} d={d} stroke={BAND_COLOURS[band]} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" fill="none" opacity="0.75" /> : null))}
           <Mannequin J={J} clubInFront={clubInFront} />
         </g>
 
@@ -638,7 +639,7 @@ function SwingScene({ phase, pose, progress }: { phase: Phase; pose: Pose; progr
         {showPose && (
           // No CSS transform animations or SVG filters anywhere in this
           // overlay (they lagged / ghosted on moving joints in Chrome).
-          <g transform={`translate(${FIG_DX} ${FIG_DY})`} className="animate-fade-in" opacity={op}>
+          <g transform={FIG_T} className="animate-fade-in" opacity={op}>
             {BONES.map(([a, b]) => (
               <line key={`${a}-${b}`} x1={J[a][0]} y1={J[a][1]} x2={J[b][0]} y2={J[b][1]} stroke="url(#gm-bone)" strokeWidth="2" strokeLinecap="round" opacity="0.9" />
             ))}
