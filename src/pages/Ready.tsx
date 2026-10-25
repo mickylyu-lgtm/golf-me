@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Bell, Check } from "lucide-react";
 import { Button } from "../components/ui/Button";
 import { FoundingGolferReveal } from "../components/golfer/FoundingGolfer";
+import { markFoundingRevealSeen } from "../components/golfer/FoundingRevealHost";
 import { useAuth } from "../context/AuthContext";
 import { useLocale } from "../i18n/LocaleContext";
 import { track } from "../lib/analytics";
@@ -35,7 +36,7 @@ export function Ready() {
   const { t } = useLocale();
   const [intents, setIntents] = useState<OnboardingIntent[]>([]);
   const [showingNotifAsk, setShowingNotifAsk] = useState(false);
-  const { isDemo, profile } = useAuth();
+  const { isDemo, profile, authUser } = useAuth();
   const [revealDone, setRevealDone] = useState(false);
   // Dev-server only: /ready?previewFounding=8 replays the reveal with that
   // number (stripped from production builds by import.meta.env.DEV).
@@ -73,7 +74,16 @@ export function Ready() {
   }
 
   if (foundingNumber != null && !revealDone) {
-    return <FoundingGolferReveal number={foundingNumber} onContinue={() => setRevealDone(true)} />;
+    return (
+      <FoundingGolferReveal
+        number={foundingNumber}
+        onContinue={() => {
+          // Seen here, so FoundingRevealHost doesn't replay it on Home.
+          if (authUser && previewNumber == null) markFoundingRevealSeen(authUser.id, foundingNumber);
+          setRevealDone(true);
+        }}
+      />
+    );
   }
 
   if (showingNotifAsk) {
