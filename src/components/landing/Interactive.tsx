@@ -403,11 +403,13 @@ function tweenPose(t: number): Pose {
 // Drives the swing loop with requestAnimationFrame while `playing`; when
 // paused it rests at the top of the backswing (where the angle callouts
 // are measured). First render is the top pose too, so the prerender shows
-// a finished-looking frame. Reduced-motion users get the still frame.
+// a finished-looking frame. This deliberately does NOT stop under
+// prefers-reduced-motion: the swing is the content of this demo, not
+// decoration, and it is small and slow (one swing every ~3.5 s).
 function useSwingPose(playing: boolean): { pose: Pose; progress: number } {
   const [state, setState] = useState<{ pose: Pose; progress: number }>({ pose: KEY_POSES[4][1], progress: TOP_T });
   useEffect(() => {
-    if (!playing || prefersReducedMotion()) {
+    if (!playing) {
       setState({ pose: KEY_POSES[4][1], progress: TOP_T });
       return;
     }
