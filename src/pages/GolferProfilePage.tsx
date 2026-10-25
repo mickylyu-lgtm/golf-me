@@ -184,7 +184,7 @@ export function GolferProfilePage() {
       </div>
 
       <div className="flex flex-col items-center gap-2 text-center">
-        <Avatar golfer={golfer} size="lg" />
+        <Avatar golfer={golfer} size="lg" magnifyOnTap />
         <div>
           <h1 className="flex items-center justify-center gap-1 text-xl font-bold text-slate-900">
             {golfer.name}
