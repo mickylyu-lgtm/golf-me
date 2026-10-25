@@ -131,46 +131,53 @@ for (const seg of SEGS) {
   });
   TRACKS[seg.key] = { a, r };
 }
-// Hand-traced keys wobble by a pixel or two frame to frame; on the body
-// that reads as jitter. Smooth the swing keys of every body segment with a
-// light 1-2-1 filter (holds and the club/hands path left untouched).
-const SMOOTH_SKIP = new Set(["hands", "club"]);
-const smooth = (v: number[]) => v.map((x, i) => (i <= 1 || i >= v.length - 3 ? x : 0.25 * v[i - 1] + 0.5 * x + 0.25 * v[i + 1]));
-for (const seg of SEGS) {
-  if (SMOOTH_SKIP.has(seg.key)) continue;
-  const tr = TRACKS[seg.key];
-  TRACKS[seg.key] = { a: smooth(tr.a), r: smooth(tr.r) };
-}
-ROOT.x.splice(0, ROOT.x.length, ...smooth(ROOT.x));
-ROOT.y.splice(0, ROOT.y.length, ...smooth(ROOT.y));
 
-// ── cubic Hermite (Catmull-Rom with non-uniform knots) ──────────────────
+
+// ── one shared timeline ─────────────────────────────────────────────────
+// Every joint must pass through each key pose at the same instant, or the
+// lower and upper body drift out of step. So time is mapped to a single
+// "key index" s (a smooth, monotone curve through (keyTime, keyIndex)),
+// and every channel — hips, legs, torso, arms, club — is interpolated in
+// that same s with the same basis. Nothing is eased per joint.
 
 const TS = LOOP.map((k) => k.t);
-function spline(vals: number[], t: number): number {
+const IDX = TS.map((_, i) => i);
+
+// Monotone cubic (Fritsch-Butland) through (TS, IDX): t -> s. Monotone, so
+// the swing never runs backwards; zero slope at holds so they ease.
+function warp(t: number): number {
   let i = 0;
   while (i < TS.length - 2 && t > TS[i + 1]) i++;
-  const t0 = TS[i];
-  const t1 = TS[i + 1];
-  const p0 = vals[i];
-  const p1 = vals[i + 1];
-  // Tangents: centred finite differences; zero at holds (equal neighbours)
-  // and at the loop ends, so every hold eases in and out.
-  // Monotone (Fritsch-Butland) tangents: the curve never overshoots a
-  // key, so limbs don't wobble past a position and come back; zero at
-  // holds, direction changes and the loop ends, so those ease in and out.
-  const tan = (j: number) => {
+  const h = TS[i + 1] - TS[i] || 1;
+  const sl = (j: number) => {
     if (j <= 0 || j >= TS.length - 1) return 0;
-    const d0 = (vals[j] - vals[j - 1]) / (TS[j] - TS[j - 1] || 1);
-    const d1 = (vals[j + 1] - vals[j]) / (TS[j + 1] - TS[j] || 1);
-    if (d0 * d1 <= 0) return 0;
+    const d0 = 1 / (TS[j] - TS[j - 1] || 1);
+    const d1 = 1 / (TS[j + 1] - TS[j] || 1);
     return (2 * d0 * d1) / (d0 + d1);
   };
-  const h = t1 - t0 || 1;
-  const s = Math.min(1, Math.max(0, (t - t0) / h));
-  const s2 = s * s;
-  const s3 = s2 * s;
-  return (2 * s3 - 3 * s2 + 1) * p0 + (s3 - 2 * s2 + s) * h * tan(i) + (-2 * s3 + 3 * s2) * p1 + (s3 - s2) * h * tan(i + 1);
+  const u = Math.min(1, Math.max(0, (t - TS[i]) / h));
+  const u2 = u * u;
+  const u3 = u2 * u;
+  return (2 * u3 - 3 * u2 + 1) * i + (u3 - 2 * u2 + u) * h * sl(i) + (-2 * u3 + 3 * u2) * (i + 1) + (u3 - u2) * h * sl(i + 1);
+}
+
+// Catmull-Rom in key-index space, identical for every channel. Tangent is
+// zero at a key that repeats its neighbour (the address and finish holds)
+// so those ends settle instead of drifting.
+function spline(vals: number[], s: number): number {
+  const n = vals.length;
+  const i = Math.min(n - 2, Math.max(0, Math.floor(s)));
+  const u = Math.min(1, Math.max(0, s - i));
+  const tan = (j: number) => {
+    if (j <= 0 || j >= n - 1) return 0;
+    if (vals[j] === vals[j - 1] || vals[j] === vals[j + 1]) return 0;
+    return (vals[j + 1] - vals[j - 1]) / 2;
+  };
+  const p0 = vals[i];
+  const p1 = vals[i + 1];
+  const u2 = u * u;
+  const u3 = u2 * u;
+  return (2 * u3 - 3 * u2 + 1) * p0 + (u3 - 2 * u2 + u) * tan(i) + (-2 * u3 + 3 * u2) * p1 + (u3 - u2) * tan(i + 1);
 }
 
 // The loop ends like a video clip: hold the finish, fade the figure out,
@@ -191,7 +198,8 @@ export function samplePose(t: number): Pose {
   // (fading in) — never the in-between.
   const u = u0 < RETURN_START ? u0 : u0 < RETURN_MID ? RETURN_START : 0;
   const out: Record<string, Pt> = {};
-  const root: Pt = [spline(ROOT.x, u), spline(ROOT.y, u)];
+  const sKey = warp(u);
+  const root: Pt = [spline(ROOT.x, sKey), spline(ROOT.y, sKey)];
   const get = (k: string): Pt => out[k];
   const parentOf: Record<string, () => Pt> = {
     hipL: () => root,
@@ -211,8 +219,8 @@ export function samplePose(t: number): Pose {
   };
   for (const seg of SEGS) {
     const tr = TRACKS[seg.key];
-    const a = spline(tr.a, u);
-    const r = spline(tr.r, u);
+    const a = spline(tr.a, sKey);
+    const r = spline(tr.r, sKey);
     const [px, py] = parentOf[seg.key]();
     out[seg.key] = [px + Math.cos(a) * r, py + Math.sin(a) * r];
   }
