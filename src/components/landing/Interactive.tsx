@@ -522,14 +522,21 @@ function SwingScene({ phase, pose, progress }: { phase: Phase; pose: Pose; progr
 
         {/* pose overlay */}
         {showPose && (
-          <g transform="translate(30 6)" className="animate-pop" opacity={swingOpacity(progress)}>
+          // No CSS transform animations anywhere in this overlay. Chrome on
+          // macOS ran the old scale pulse on the compositor with a transform
+          // origin from an earlier frame, so on a moving joint the dots
+          // trailed behind the body. Each dot is now placed exactly on its
+          // joint every frame with a plain translate, and the pulse is an
+          // opacity-only halo, which cannot move anything.
+          <g transform="translate(30 6)" className="animate-fade-in" opacity={swingOpacity(progress)}>
             {BONES.map(([a, b]) => (
               <line key={`${a}-${b}`} x1={J[a][0]} y1={J[a][1]} x2={J[b][0]} y2={J[b][1]} stroke="url(#gm-bone)" strokeWidth="2.4" strokeLinecap="round" opacity="0.95" />
             ))}
             {JOINTS.map((k, i) => (
-              <g key={k} filter="url(#gm-glow)">
-                <circle cx={J[k][0]} cy={J[k][1]} r="4.6" fill="#f4b942" className="animate-pose-pulse" style={{ animationDelay: `${i * 70}ms`, transformBox: "fill-box", transformOrigin: "center" }} />
-                <circle cx={J[k][0]} cy={J[k][1]} r="1.8" fill="#fff7e0" />
+              <g key={k} transform={`translate(${J[k][0]} ${J[k][1]})`} filter="url(#gm-glow)">
+                <circle cx="0" cy="0" r="7" fill="#f4b942" className="animate-halo-pulse" style={{ animationDelay: `${i * 70}ms` }} />
+                <circle cx="0" cy="0" r="4.2" fill="#f4b942" />
+                <circle cx="0" cy="0" r="1.8" fill="#fff7e0" />
               </g>
             ))}
             {/* spine + shoulder + hip guides */}
