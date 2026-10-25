@@ -427,7 +427,16 @@ export function DirectMessageThread() {
               const sent = formatMessageTime(m.createdAt, locale, t);
               return (
                 <div key={m.id} className={`relative flex items-end gap-2 ${isMe ? "flex-row-reverse" : ""}`}>
-                  <Avatar golfer={isMe ? currentUser : other} size="xs" showVerified={false} />
+                  {/* Tap goes to that golfer's profile; a long press magnifies
+                      the photo (Avatar swallows the click after it). */}
+                  <button
+                    type="button"
+                    aria-label="View Profile"
+                    onClick={() => navigate(isMe ? "/profile" : `/golfer/${other.id}`)}
+                    className="shrink-0 rounded-full"
+                  >
+                    <Avatar golfer={isMe ? currentUser : other} size="xs" showVerified={false} />
+                  </button>
                   <div
                     className={`max-w-[75%] rounded-2xl px-3.5 py-2 text-sm [overflow-wrap:anywhere] ${
                       isMe ? "rounded-br-sm bg-fairway-600 text-white" : "rounded-bl-sm bg-slate-100 text-slate-800"
@@ -456,7 +465,9 @@ export function DirectMessageThread() {
               snapped down just because the other person started typing. */}
             {otherTyping && (
               <div className="flex items-end gap-2">
-                <Avatar golfer={other} size="xs" showVerified={false} />
+                <button type="button" aria-label="View Profile" onClick={() => navigate(`/golfer/${other.id}`)} className="shrink-0 rounded-full">
+                  <Avatar golfer={other} size="xs" showVerified={false} />
+                </button>
                 <TypingBubble />
               </div>
             )}
