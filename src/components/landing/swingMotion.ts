@@ -22,19 +22,23 @@ export type Pose = Record<JointName, Pt> & { club: Pt };
 
 const P = (o: Record<string, [number, number]>) => o as unknown as Pose;
 
-// [source frame at 12 fps, pose], in the figure's 200 x 260 box.
+// [source frame at 20 fps, pose], in the figure's 200 x 260 box: joints read
+// frame by frame off a face-on driver swing (target to the viewer's right),
+// scaled x1.25 about the address hip centre, ankles on the ground at y 232.
 const KEYS: [number, Pose][] = [
-  [0, P({ head: [102, 54], neck: [102, 77], shL: [77, 85], shR: [123, 87], elL: [80, 116], elR: [116, 116], hands: [96, 143], hipL: [77, 133], hipR: [123, 133], kneeL: [69, 179], kneeR: [131, 182], ankL: [55, 230], ankR: [137, 232], club: [108, 240] })],
-  [4, P({ head: [100, 54], neck: [102, 76], shL: [75, 85], shR: [123, 87], elL: [64, 110], elR: [100, 112], hands: [62, 136], hipL: [77, 133], hipR: [123, 133], kneeL: [69, 179], kneeR: [131, 182], ankL: [55, 230], ankR: [137, 232], club: [-20, 188] })],
-  [7, P({ head: [98, 56], neck: [100, 77], shL: [73, 83], shR: [120, 87], elL: [62, 92], elR: [94, 80], hands: [58, 72], hipL: [77, 133], hipR: [123, 133], kneeL: [70, 179], kneeR: [131, 182], ankL: [55, 230], ankR: [137, 232], club: [12, -6] })],
-  [9, P({ head: [98, 59], neck: [100, 79], shL: [78, 77], shR: [125, 85], elL: [73, 62], elR: [108, 56], hands: [88, 40], hipL: [77, 133], hipR: [123, 131], kneeL: [70, 179], kneeR: [131, 182], ankL: [55, 230], ankR: [137, 232], club: [146, -12] })],
-  [11, P({ head: [98, 60], neck: [100, 80], shL: [78, 77], shR: [125, 83], elL: [70, 54], elR: [112, 50], hands: [92, 32], hipL: [78, 131], hipR: [123, 130], kneeL: [72, 179], kneeR: [131, 182], ankL: [55, 230], ankR: [137, 232], club: [192, 18] })],
-  [13, P({ head: [98, 60], neck: [100, 80], shL: [77, 81], shR: [123, 85], elL: [63, 92], elR: [100, 74], hands: [72, 74], hipL: [80, 133], hipR: [125, 130], kneeL: [75, 179], kneeR: [130, 182], ankL: [55, 230], ankR: [137, 232], club: [160, 6] })],
-  [15, P({ head: [100, 62], neck: [102, 80], shL: [81, 83], shR: [127, 87], elL: [86, 112], elR: [118, 110], hands: [106, 138], hipL: [83, 133], hipR: [125, 128], kneeL: [78, 179], kneeR: [130, 179], ankL: [55, 232], ankR: [137, 232], club: [196, 186] })],
-  [16, P({ head: [100, 63], neck: [103, 82], shL: [84, 83], shR: [125, 82], elL: [111, 90], elR: [133, 76], hands: [141, 77], hipL: [84, 131], hipR: [123, 128], kneeL: [81, 178], kneeR: [128, 179], ankL: [61, 230], ankR: [137, 232], club: [196, 13] })],
-  [18, P({ head: [106, 63], neck: [108, 82], shL: [91, 82], shR: [128, 80], elL: [123, 62], elR: [144, 57], hands: [150, 36], hipL: [92, 130], hipR: [122, 127], kneeL: [92, 176], kneeR: [125, 178], ankL: [68, 226], ankR: [136, 232], club: [52, 52] })],
-  [20, P({ head: [108, 62], neck: [109, 82], shL: [96, 84], shR: [124, 80], elL: [88, 62], elR: [110, 52], hands: [68, 46], hipL: [96, 131], hipR: [121, 128], kneeL: [100, 176], kneeR: [126, 179], ankL: [74, 220], ankR: [136, 232], club: [128, 120] })],
-  [23, P({ head: [110, 60], neck: [111, 80], shL: [99, 83], shR: [125, 79], elL: [90, 60], elR: [110, 52], hands: [64, 46], hipL: [98, 130], hipR: [121, 128], kneeL: [104, 176], kneeR: [126, 179], ankL: [78, 218], ankR: [136, 232], club: [124, 118] })],
+  [3, P({ head: [116, 64], neck: [111, 77], shL: [89, 78], shR: [131, 81], elL: [100, 116], elR: [129, 113], hands: [121, 146], hipL: [79, 124], hipR: [121, 124], kneeL: [74, 177], kneeR: [121, 177], ankL: [65, 232], ankR: [124, 232], club: [164, 254] })],
+  [8, P({ head: [114, 64], neck: [110, 76], shL: [80, 78], shR: [121, 80], elL: [56, 106], elR: [76, 102], hands: [31, 128], hipL: [72, 127], hipR: [119, 127], kneeL: [70, 177], kneeR: [121, 177], ankL: [61, 232], ankR: [126, 232], club: [-20, 140] })],
+  [10, P({ head: [114, 64], neck: [110, 74], shL: [71, 73], shR: [121, 74], elL: [55, 102], elR: [80, 82], hands: [36, 87], hipL: [69, 127], hipR: [121, 127], kneeL: [64, 178], kneeR: [120, 177], ankL: [60, 232], ankR: [128, 232], club: [-48, 4] })],
+  [12, P({ head: [116, 61], neck: [110, 74], shL: [84, 73], shR: [121, 78], elL: [65, 82], elR: [90, 64], hands: [52, 51], hipL: [72, 127], hipR: [112, 127], kneeL: [66, 178], kneeR: [121, 181], ankL: [62, 232], ankR: [125, 232], club: [58, -63] })],
+  [14, P({ head: [116, 64], neck: [111, 76], shL: [84, 74], shR: [121, 80], elL: [68, 62], elR: [98, 56], hands: [74, 36], hipL: [75, 127], hipR: [119, 128], kneeL: [66, 176], kneeR: [121, 178], ankL: [64, 232], ankR: [129, 232], club: [182, 2] })],
+  [18, P({ head: [110, 61], neck: [110, 76], shL: [81, 74], shR: [121, 80], elL: [80, 60], elR: [104, 64], hands: [96, 40], hipL: [75, 128], hipR: [121, 128], kneeL: [66, 176], kneeR: [119, 181], ankL: [64, 232], ankR: [125, 232], club: [202, 88] })],
+  [20, P({ head: [126, 77], neck: [121, 88], shL: [89, 84], shR: [134, 96], elL: [82, 102], elR: [101, 78], hands: [68, 71], hipL: [85, 137], hipR: [129, 137], kneeL: [78, 186], kneeR: [132, 186], ankL: [68, 232], ankR: [132, 232], club: [178, 24] })],
+  [21, P({ head: [130, 81], neck: [125, 92], shL: [98, 84], shR: [142, 96], elL: [86, 116], elR: [108, 98], hands: [72, 98], hipL: [94, 143], hipR: [135, 141], kneeL: [80, 186], kneeR: [132, 186], ankL: [62, 230], ankR: [135, 232], club: [11, 18] })],
+  [23, P({ head: [130, 78], neck: [129, 92], shL: [101, 92], shR: [132, 98], elL: [132, 117], elR: [146, 124], hands: [155, 147], hipL: [104, 147], hipR: [129, 147], kneeL: [85, 190], kneeR: [125, 192], ankL: [62, 224], ankR: [129, 232], club: [224, 177] })],
+  [24, P({ head: [124, 78], neck: [119, 88], shL: [99, 82], shR: [129, 87], elL: [140, 107], elR: [149, 112], hands: [170, 127], hipL: [102, 143], hipR: [129, 141], kneeL: [94, 192], kneeR: [125, 192], ankL: [66, 224], ankR: [129, 232], club: [211, 18] })],
+  [26, P({ head: [128, 64], neck: [121, 78], shL: [101, 78], shR: [142, 82], elL: [115, 62], elR: [140, 60], hands: [125, 47], hipL: [108, 137], hipR: [135, 137], kneeL: [88, 186], kneeR: [132, 191], ankL: [66, 224], ankR: [135, 232], club: [49, -26] })],
+  [28, P({ head: [124, 61], neck: [121, 74], shL: [101, 74], shR: [142, 82], elL: [95, 52], elR: [130, 52], hands: [96, 40], hipL: [110, 141], hipR: [141, 138], kneeL: [90, 190], kneeR: [132, 192], ankL: [70, 224], ankR: [139, 232], club: [30, 124] })],
+  [33, P({ head: [125, 57], neck: [121, 73], shL: [98, 80], shR: [146, 78], elL: [78, 82], elR: [111, 64], hands: [94, 64], hipL: [111, 141], hipR: [146, 141], kneeL: [98, 192], kneeR: [132, 196], ankL: [76, 224], ankR: [135, 232], club: [215, 120] })],
 ];
 
 // Club shaft angle (radians, screen coords, y down) between consecutive
@@ -44,29 +48,30 @@ const KEYS: [number, Pose][] = [
 // up toward the target, then wrapping behind the back). Shortest-path
 // interpolation would send the club the wrong way round at the bottom.
 // One entry per gap between KEYS: +1 / -1 forces the direction, 0 = shortest.
-const CLUB_DIR = [1, 1, 1, 1, -1, -1, -1, -1, -1, 0];
+const CLUB_DIR = [1, 1, 1, 1, 1, -1, -1, -1, -1, -1, -1, -1];
 
 // Timing, in seconds within one loop.
 const ADDRESS_HOLD = 0.5;
-// The clip was filmed at 12 fps; play it at 0.75x (a touch of slow
+// The clip was filmed at 20 fps samples; play it at 0.75x (a touch of slow
 // motion, the way swing analysis is usually shown) so the fast downswing
 // doesn't jump between screen frames.
-const FPS = 12 * 0.75;
-const LAST_FRAME = 23;
+const FPS = 20 * 0.75;
+const FIRST_FRAME = 3;
+const LAST_FRAME = 33;
 const FINISH_HOLD = 1.0;
 const RETURN = 0.5;
-export const SWING_MS = Math.round((ADDRESS_HOLD + LAST_FRAME / FPS + FINISH_HOLD + RETURN) * 1000);
+export const SWING_MS = Math.round((ADDRESS_HOLD + (LAST_FRAME - FIRST_FRAME) / FPS + FINISH_HOLD + RETURN) * 1000);
 const DUR = SWING_MS / 1000;
 
-const frameT = (f: number) => (ADDRESS_HOLD + f / FPS) / DUR;
-export const TOP_T = frameT(11);
-export const FINISH_T = frameT(20);
+const frameT = (f: number) => (ADDRESS_HOLD + (f - FIRST_FRAME) / FPS) / DUR;
+export const TOP_T = frameT(18);
+export const FINISH_T = frameT(28);
 
 // Full key list over one normalised loop, including the holds.
 const LOOP: { t: number; pose: Pose }[] = [
   { t: 0, pose: KEYS[0][1] },
   ...KEYS.map(([f, pose]) => ({ t: frameT(f), pose })),
-  { t: (ADDRESS_HOLD + LAST_FRAME / FPS + FINISH_HOLD) / DUR, pose: KEYS[KEYS.length - 1][1] },
+  { t: (ADDRESS_HOLD + (LAST_FRAME - FIRST_FRAME) / FPS + FINISH_HOLD) / DUR, pose: KEYS[KEYS.length - 1][1] },
   { t: 1, pose: KEYS[0][1] },
 ];
 // Direction rule per LOOP gap (address hold, keys…, finish hold, return).
@@ -171,7 +176,7 @@ function spline(vals: number[], t: number): number {
 // The loop ends like a video clip: hold the finish, fade the figure out,
 // snap to address, fade back in. Animating the body back from the finish
 // to address reads as a strange reverse swing, so it is never shown.
-const RETURN_START = (ADDRESS_HOLD + LAST_FRAME / FPS + FINISH_HOLD) / DUR;
+const RETURN_START = (ADDRESS_HOLD + (LAST_FRAME - FIRST_FRAME) / FPS + FINISH_HOLD) / DUR;
 export const RETURN_MID = RETURN_START + (1 - RETURN_START) / 2;
 export function swingOpacity(t: number): number {
   const u = ((t % 1) + 1) % 1;
@@ -217,8 +222,8 @@ export function samplePose(t: number): Pose {
 // Impact: the lowest point of the clubhead during the downswing. Found by
 // sampling once at load; the ball sits exactly there until it's struck.
 function findImpact(): { t: number; x: number; y: number } {
-  let best = { t: frameT(14), x: 100, y: 0 };
-  for (let t = frameT(13); t <= frameT(15); t += 0.0005) {
+  let best = { t: frameT(22), x: 100, y: 0 };
+  for (let t = frameT(21); t <= frameT(23); t += 0.0005) {
     const c = samplePose(t).club;
     if (c[1] > best.y) best = { t, x: c[0], y: c[1] };
   }
