@@ -483,6 +483,13 @@ function SwingScene({ phase, pose, progress }: { phase: Phase; pose: Pose; progr
 
         {/* golfer: club first so the shaft sits behind the body */}
         <g transform="translate(30 6)" opacity={swingOpacity(progress)}>
+          {/* motion trail: faint copies of the club a few ms back. When the
+              club is slow they sit under it; through the fast downswing
+              they fan out into one smooth sweep instead of visible jumps. */}
+          {[1, 2, 3, 4, 5].map((k) => {
+            const g = samplePose(progress - k * 0.0045);
+            return <line key={k} x1={g.hands[0]} y1={g.hands[1]} x2={g.club[0]} y2={g.club[1]} stroke="#e2e8f0" strokeWidth={3 - k * 0.35} strokeLinecap="round" opacity={0.22 - k * 0.035} />;
+          })}
           <line x1={J.hands[0]} y1={J.hands[1]} x2={hx} y2={hy} stroke="#cbd5e1" strokeWidth="3" strokeLinecap="round" />
           <ellipse cx={hx} cy={hy} rx="7" ry="4" fill="#1f2937" stroke="#9ca3af" strokeWidth="1" transform={`rotate(${(ang * 180) / Math.PI + 90} ${hx} ${hy})`} />
           {/* torso */}

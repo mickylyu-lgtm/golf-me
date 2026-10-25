@@ -47,8 +47,11 @@ const KEYS: [number, Pose][] = [
 const CLUB_DIR = [1, 1, 1, 1, -1, -1, -1, -1, -1, 0];
 
 // Timing, in seconds within one loop.
-const ADDRESS_HOLD = 0.45;
-const FPS = 12;
+const ADDRESS_HOLD = 0.5;
+// The clip was filmed at 12 fps; play it at 0.75x (a touch of slow
+// motion, the way swing analysis is usually shown) so the fast downswing
+// doesn't jump between screen frames.
+const FPS = 12 * 0.75;
 const LAST_FRAME = 23;
 const FINISH_HOLD = 1.0;
 const RETURN = 0.5;
@@ -123,6 +126,18 @@ for (const seg of SEGS) {
   });
   TRACKS[seg.key] = { a, r };
 }
+// Hand-traced keys wobble by a pixel or two frame to frame; on the body
+// that reads as jitter. Smooth the swing keys of every body segment with a
+// light 1-2-1 filter (holds and the club/hands path left untouched).
+const SMOOTH_SKIP = new Set(["hands", "club"]);
+const smooth = (v: number[]) => v.map((x, i) => (i <= 1 || i >= v.length - 3 ? x : 0.25 * v[i - 1] + 0.5 * x + 0.25 * v[i + 1]));
+for (const seg of SEGS) {
+  if (SMOOTH_SKIP.has(seg.key)) continue;
+  const tr = TRACKS[seg.key];
+  TRACKS[seg.key] = { a: smooth(tr.a), r: smooth(tr.r) };
+}
+ROOT.x.splice(0, ROOT.x.length, ...smooth(ROOT.x));
+ROOT.y.splice(0, ROOT.y.length, ...smooth(ROOT.y));
 
 // ── cubic Hermite (Catmull-Rom with non-uniform knots) ──────────────────
 
@@ -136,10 +151,15 @@ function spline(vals: number[], t: number): number {
   const p1 = vals[i + 1];
   // Tangents: centred finite differences; zero at holds (equal neighbours)
   // and at the loop ends, so every hold eases in and out.
+  // Monotone (Fritsch-Butland) tangents: the curve never overshoots a
+  // key, so limbs don't wobble past a position and come back; zero at
+  // holds, direction changes and the loop ends, so those ease in and out.
   const tan = (j: number) => {
     if (j <= 0 || j >= TS.length - 1) return 0;
-    if (vals[j - 1] === vals[j] || vals[j + 1] === vals[j]) return 0;
-    return (vals[j + 1] - vals[j - 1]) / (TS[j + 1] - TS[j - 1]);
+    const d0 = (vals[j] - vals[j - 1]) / (TS[j] - TS[j - 1] || 1);
+    const d1 = (vals[j + 1] - vals[j]) / (TS[j + 1] - TS[j] || 1);
+    if (d0 * d1 <= 0) return 0;
+    return (2 * d0 * d1) / (d0 + d1);
   };
   const h = t1 - t0 || 1;
   const s = Math.min(1, Math.max(0, (t - t0) / h));
