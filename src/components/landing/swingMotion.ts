@@ -9,7 +9,7 @@
 // only drives the big, meaningful motions —
 //   hip centre (slide/squat), hip line (width = turn, tilt), spine angle,
 //   head angle, shoulder line (width = turn, tilt), the hands' path around
-//   the chest, the club angle, and the trail foot's pivot —
+//   a swing centre in the chest, the shaft angle, and the trail foot's pivot —
 // and the rest is solved so it can't drift:
 //   * the spine, neck->head and club have fixed lengths;
 //   * the lead foot is planted; the trail foot only pivots onto its toe;
@@ -21,7 +21,8 @@
 //     lengths with IK pushed knees into an X and splayed the elbows.)
 //     The offsets are continuous numbers, so a joint can never flip sides.
 // All channels share one timeline (see warp/spline), so the body moves
-// as one piece.
+// as one piece, and the whole motion is then smoothed over time (see
+// "smoothing") so speeds change gradually instead of key to key.
 
 export type JointName =
   | "head" | "neck" | "shL" | "shR" | "elL" | "elR" | "hands"
@@ -48,15 +49,15 @@ const R = (o: Raw) => {
 };
 const KEYS: [number, Pose][] = [
   [4, R({ head: [275, 207], neck: [278, 245], shL: [240, 255], shR: [325, 255], elL: [248, 330], elR: [318, 330], hands: [290, 405], hipL: [260, 360], hipR: [325, 360], kneeL: [245, 465], kneeR: [340, 465], ankL: [235, 600], ankR: [355, 600], club: [290, 612] })],
-  [5, R({ head: [273, 210], neck: [278, 247], shL: [237, 258], shR: [328, 252], elL: [240, 335], elR: [295, 330], hands: [258, 410], hipL: [258, 360], hipR: [327, 360], kneeL: [245, 465], kneeR: [342, 465], ankL: [235, 600], ankR: [355, 600], club: [95, 545] })],
-  [6, R({ head: [273, 213], neck: [275, 248], shL: [225, 242], shR: [325, 262], elL: [212, 318], elR: [260, 325], hands: [190, 385], hipL: [255, 360], hipR: [330, 360], kneeL: [245, 465], kneeR: [352, 462], ankL: [235, 600], ankR: [355, 600], club: [0, 372] })],
-  [7, R({ head: [275, 213], neck: [275, 250], shL: [235, 247], shR: [310, 265], elL: [188, 292], elR: [222, 300], hands: [140, 320], hipL: [255, 362], hipR: [328, 362], kneeL: [245, 465], kneeR: [345, 470], ankL: [235, 600], ankR: [355, 600], club: [30, 130] })],
-  [8, R({ head: [270, 212], neck: [272, 250], shL: [230, 248], shR: [305, 263], elL: [195, 280], elR: [220, 272], hands: [140, 265], hipL: [255, 364], hipR: [327, 364], kneeL: [240, 465], kneeR: [337, 480], ankL: [235, 601], ankR: [355, 601], club: [150, 55] })],
-  [9, R({ head: [270, 212], neck: [270, 250], shL: [225, 250], shR: [300, 262], elL: [215, 235], elR: [240, 215], hands: [180, 160], hipL: [255, 365], hipR: [325, 365], kneeL: [240, 465], kneeR: [330, 488], ankL: [235, 602], ankR: [355, 602], club: [359, 57] })],
+  [5, R({ head: [273, 210], neck: [278, 247], shL: [237, 258], shR: [328, 252], elL: [240, 335], elR: [295, 330], hands: [258, 410], hipL: [258, 360], hipR: [327, 360], kneeL: [245, 465], kneeR: [342, 465], ankL: [235, 600], ankR: [355, 600], club: [157, 590] })],
+  [6, R({ head: [273, 213], neck: [275, 248], shL: [225, 242], shR: [325, 262], elL: [212, 318], elR: [260, 325], hands: [190, 385], hipL: [255, 360], hipR: [330, 360], kneeL: [245, 465], kneeR: [352, 462], ankL: [235, 600], ankR: [355, 600], club: [-17, 385] })],
+  [7, R({ head: [275, 213], neck: [275, 250], shL: [235, 247], shR: [310, 265], elL: [188, 292], elR: [222, 300], hands: [140, 320], hipL: [255, 362], hipR: [328, 362], kneeL: [245, 465], kneeR: [345, 470], ankL: [235, 600], ankR: [355, 600], club: [39, 140] })],
+  [8, R({ head: [270, 212], neck: [272, 250], shL: [230, 248], shR: [305, 263], elL: [195, 280], elR: [220, 272], hands: [140, 265], hipL: [255, 364], hipR: [327, 364], kneeL: [240, 465], kneeR: [337, 480], ankL: [235, 601], ankR: [355, 601], club: [172, 61] })],
+  [9, R({ head: [270, 212], neck: [270, 250], shL: [225, 250], shR: [300, 262], elL: [215, 235], elR: [240, 215], hands: [180, 160], hipL: [255, 365], hipR: [325, 365], kneeL: [240, 465], kneeR: [330, 488], ankL: [235, 602], ankR: [355, 602], club: [384, 125] })],
   [10, R({ head: [275, 213], neck: [275, 252], shL: [230, 255], shR: [305, 265], elL: [225, 230], elR: [250, 205], hands: [195, 145], hipL: [255, 365], hipR: [325, 365], kneeL: [245, 465], kneeR: [327, 488], ankL: [235, 602], ankR: [355, 602], club: [401, 152] })],
-  [11, R({ head: [280, 215], neck: [285, 255], shL: [245, 260], shR: [330, 255], elL: [215, 265], elR: [240, 245], hands: [160, 215], hipL: [265, 355], hipR: [340, 355], kneeL: [250, 455], kneeR: [362, 465], ankL: [235, 602], ankR: [355, 602], club: [0, 115] })],
-  [12, R({ head: [280, 215], neck: [285, 255], shL: [250, 265], shR: [355, 270], elL: [240, 300], elR: [270, 290], hands: [165, 305], hipL: [270, 360], hipR: [345, 360], kneeL: [250, 470], kneeR: [362, 470], ankL: [235, 602], ankR: [355, 602], club: [0, 350] })],
-  [13, R({ head: [288, 210], neck: [290, 250], shL: [265, 260], shR: [370, 255], elL: [290, 330], elR: [315, 320], hands: [265, 385], hipL: [275, 360], hipR: [350, 360], kneeL: [260, 470], kneeR: [355, 470], ankL: [235, 602], ankR: [355, 602], club: [140, 580] })],
+  [11, R({ head: [280, 215], neck: [285, 255], shL: [245, 260], shR: [330, 255], elL: [215, 265], elR: [240, 245], hands: [160, 215], hipL: [265, 355], hipR: [340, 355], kneeL: [250, 455], kneeR: [362, 465], ankL: [235, 602], ankR: [355, 602], club: [345, 122] })],
+  [12, R({ head: [280, 215], neck: [285, 255], shL: [250, 265], shR: [355, 270], elL: [240, 300], elR: [270, 290], hands: [165, 305], hipL: [270, 360], hipR: [345, 360], kneeL: [250, 470], kneeR: [362, 470], ankL: [235, 602], ankR: [355, 602], club: [227, 108] })],
+  [13, R({ head: [288, 210], neck: [290, 250], shL: [265, 260], shR: [370, 255], elL: [290, 330], elR: [315, 320], hands: [265, 385], hipL: [275, 360], hipR: [350, 360], kneeL: [260, 470], kneeR: [355, 470], ankL: [235, 602], ankR: [355, 602], club: [69, 451] })],
   [13.6, R({ head: [287, 207], neck: [290, 248], shL: [265, 262], shR: [360, 250], elL: [300, 335], elR: [335, 325], hands: [312, 402], hipL: [285, 358], hipR: [355, 355], kneeL: [265, 470], kneeR: [355, 470], ankL: [233, 602], ankR: [355, 602], club: [290, 612] })],
   [15, R({ head: [280, 210], neck: [290, 245], shL: [270, 275], shR: [355, 228], elL: [335, 330], elR: [375, 300], hands: [395, 375], hipL: [305, 355], hipR: [375, 350], kneeL: [270, 470], kneeR: [375, 470], ankL: [225, 598], ankR: [355, 602], club: [500, 395] })],
   [16, R({ head: [283, 210], neck: [295, 245], shL: [285, 270], shR: [370, 225], elL: [375, 315], elR: [400, 272], hands: [440, 340], hipL: [315, 355], hipR: [380, 350], kneeL: [275, 470], kneeR: [375, 470], ankL: [215, 595], ankR: [355, 602], club: [520, 315] })],
@@ -70,22 +71,46 @@ const KEYS: [number, Pose][] = [
   [22, R({ head: [320, 168], neck: [332, 210], shL: [307, 214], shR: [372, 216], elL: [300, 168], elR: [330, 152], hands: [262, 140], hipL: [340, 345], hipR: [370, 345], kneeL: [285, 445], kneeR: [358, 470], ankL: [210, 575], ankR: [355, 602], club: [444, 237] })],
 ];
 
-// Club shaft angle (radians, screen coords, y down) between consecutive
-// keys rotates the way a real swing does: increasing through the backswing
-// (head sweeps down-left then up and over), DEcreasing through the
-// downswing and follow-through (round the trail side, through the ball,
-// up toward the target, then wrapping behind the back). Shortest-path
-// interpolation would send the club the wrong way round at the bottom.
-// One entry per gap between KEYS: +1 / -1 forces the direction, 0 = shortest.
-const CLUB_DIR = KEYS.slice(1).map(() => 0); // the club angle channel is unused now (see armsAndClub)
-
 // Timing, in seconds within one loop.
 const ADDRESS_HOLD = 0.5;
-// Key index -> seconds after the takeaway starts: the reference clip's own
-// spacing (1/8 s per key), stretched slightly in the backswing and played
-// a little faster from the top, so the tempo is a tour pro's ~3:1.
+// Key index -> seconds after the takeaway starts. The reference keys are
+// 1/8 s apart, but the hands don't travel evenly between them, and evenly
+// spaced keys made the motion speed up and slow down from key to key. So
+// each key is re-timed from how far the hands have turned round the chest
+// (their angle about the swing centre) along an ideal tempo curve:
+//   backswing    — an even ease out of address and into the top (0.9 s);
+//   downswing    — constant acceleration from rest at the top, fastest at
+//                  the ball (0.32 s, so ~3:1 with the backswing);
+//   follow-through — starts at that same speed and bleeds it off into the
+//                  finish (0.53 s).
 const LAST_FRAME = 22;
-const keySec = (f: number) => (f <= 10 ? ((f - 4) / 8) * 1.2 : 0.9 + ((f - 10) / 8) * 0.71);
+const BACK_S = 0.9;
+const DOWN_S = 0.32;
+const THRU_S = 0.53;
+const KEY_SEC: [number, number][] = (() => {
+  const c = M(285, 285);
+  const a: number[] = [];
+  for (const [, p] of KEYS) {
+    let v = Math.atan2(p.hands[1] - c[1], p.hands[0] - c[0]);
+    if (a.length) while (Math.abs(v - a[a.length - 1]) > Math.PI) v -= Math.sign(v - a[a.length - 1]) * 2 * Math.PI;
+    a.push(v);
+  }
+  const top = a.indexOf(Math.max(...a));
+  const imp = KEYS.findIndex(([f]) => f === 13.6);
+  const [a0, aTop, aImp, aFin] = [a[0], a[top], a[imp], a[a.length - 1]];
+  return KEYS.map(([f], i) => {
+    if (i <= top) return [f, (BACK_S * Math.acos(1 - 2 * ((a[i] - a0) / (aTop - a0)))) / Math.PI];
+    if (i <= imp) return [f, BACK_S + DOWN_S * Math.sqrt((aTop - a[i]) / (aTop - aImp))];
+    return [f, BACK_S + DOWN_S + THRU_S * (1 - Math.cbrt(1 - (aImp - a[i]) / (aImp - aFin)))];
+  });
+})();
+const keySec = (f: number) => {
+  let i = 0;
+  while (i < KEY_SEC.length - 2 && f > KEY_SEC[i + 1][0]) i++;
+  const [f0, t0] = KEY_SEC[i];
+  const [f1, t1] = KEY_SEC[i + 1];
+  return t0 + ((t1 - t0) * (f - f0)) / (f1 - f0);
+};
 const SWING_S = keySec(LAST_FRAME);
 const FINISH_HOLD = 1.0;
 const RETURN = 0.5;
@@ -103,9 +128,6 @@ const LOOP: { t: number; pose: Pose }[] = [
   { t: (ADDRESS_HOLD + SWING_S + FINISH_HOLD) / DUR, pose: KEYS[KEYS.length - 1][1] },
   { t: 1, pose: KEYS[0][1] },
 ];
-// Direction rule per LOOP gap (address hold, keys…, finish hold, return).
-const DIRS = [0, ...CLUB_DIR, 0, 0];
-
 // ── rig ─────────────────────────────────────────────────────────────────
 
 const dist = (a: Pt, b: Pt) => Math.hypot(b[0] - a[0], b[1] - a[1]);
@@ -115,15 +137,10 @@ const median = (v: number[]) => [...v].sort((x, y) => x - y)[Math.floor(v.length
 const KP = KEYS.map((k) => k[1]);
 const ADDR = KP[0];
 
-// Fixed lengths for the parts that really are rigid in this view, plus the
-// longest traced shoulder->hands reach (the hands are kept within it).
-const ARM = 1.02 * Math.max(...KP.flatMap((p) => [dist(p.shL, p.hands), dist(p.shR, p.hands)]));
+// Fixed lengths for the parts that really are rigid in this view.
 const LEN = {
   spine: median(KP.map((p) => dist(hipC(p), p.neck))),
   head: median(KP.map((p) => dist(p.neck, p.head))),
-  // A 7-iron is about half the golfer's height; the traced shaft (taken
-  // from a driver swing, and foreshortened) read too long on the figure.
-  club: 0.8 * dist(ADDR.hands, ADDR.club),
   hipW: dist(ADDR.hipL, ADDR.hipR),
   shW: dist(ADDR.shL, ADDR.shR),
 };
@@ -154,15 +171,11 @@ function limbJoint(A: Pt, B: Pt, t: number, o: number): Pt {
 type Channels = Record<string, number[]>;
 const CH: Channels = {};
 const push = (k: string, v: number) => (CH[k] ??= []).push(v);
-const unwrap = (vals: number[], dirs?: number[]) => {
+const unwrap = (vals: number[]) => {
   const out = [vals[0]];
   for (let i = 1; i < vals.length; i++) {
-    let d = vals[i] - out[i - 1];
-    d = ((d % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI; // shortest
-    const dir = dirs ? dirs[i - 1] : 0;
-    if (dir > 0 && d < 0) d += 2 * Math.PI;
-    if (dir < 0 && d > 0) d -= 2 * Math.PI;
-    out.push(out[i - 1] + d);
+    const d = vals[i] - out[i - 1];
+    out.push(out[i - 1] + (((d % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI)); // shortest way round
   }
   return out;
 };
@@ -177,11 +190,6 @@ for (const { pose: p } of LOOP) {
   push("headA", ang(p.neck, p.head));
   push("shW", Math.min(1.05, Math.max(0.55, dist(p.shL, p.shR) / LEN.shW)) * LEN.shW);
   push("shTilt", ang(p.shL, p.shR));
-  // The hands travel on their traced arc round the chest (polar about the
-  // neck); both arms then reach for them with IK.
-  push("handsA", ang(p.neck, p.hands));
-  push("handsR", dist(p.neck, p.hands));
-  push("clubA", ang(p.hands, p.club));
   push("ankLx", p.ankL[0]);
   push("ankLy", p.ankL[1]);
   for (const [name, A, B, J] of [
@@ -195,8 +203,7 @@ for (const { pose: p } of LOOP) {
     push(name + "o", lp.o);
   }
 }
-for (const k of ["hipTilt", "spineA", "headA", "shTilt", "handsA"]) CH[k] = unwrap(CH[k]);
-CH.clubA = unwrap(CH.clubA, DIRS);
+for (const k of ["hipTilt", "spineA", "headA", "shTilt"]) CH[k] = unwrap(CH[k]);
 
 // Stabilise the trunk: a light symmetric 1-2-1 filter on the body-carriage
 // channels removes hand-tracing wobble (symmetric, so it adds no lag). The
@@ -267,92 +274,18 @@ export function swingOpacity(t: number): number {
   return Math.abs(1 - 2 * k); // 1 -> 0 at the midpoint -> 1
 }
 
-// ── downswing biomechanics ──────────────────────────────────────────────
-// The traced keys are sparse through the downswing (20 fps of a ~0.25 s
-// move), and with every channel on one clock two things went wrong:
-//   1. no kinematic sequence — the hands started down first (casting),
-//      hips ~60 ms later;
-//   2. the club angle swung ~100° between two keys, so the club spun round
-//      the body and bottomed out well behind the ball.
-// So the downswing is shaped on top of the traced swing:
-//   * kinematic sequence: during the transition and downswing the lower
-//     body samples the traced swing LEAD ahead of the arms and the torso
-//     LEAD/2 ahead; the offsets ramp in at the top and back out through
-//     the follow-through, so the backswing and finish stay locked together;
-//   * club: a designed lag-and-release path (world angle of the shaft)
-//     from the top to the follow-through key — holds the set while the
-//     hands start down, stays up (lag) as they drop, reaches shaft-parallel
-//     on the trail side at hip height, releases fastest into impact aimed
-//     at the ball, then decelerates into the traced follow-through.
-//     Ends and slopes match the traced club, so nothing snaps.
-
 const smoothstep = (e0: number, e1: number, x: number) => {
   const k = Math.min(1, Math.max(0, (x - e0) / (e1 - e0)));
   return k * k * (3 - 2 * k);
 };
-const T_TOP = frameT(10); // club fully set at the top
-const T_TRANSITION = frameT(9); // lower body begins to unwind here
-const T_FOLLOW = frameT(15); // arms extended toward the target
-const LEAD = 0.024; // fraction of the loop the lower body runs ahead (~105 ms)
-const TORSO_LEAD = 0.016; // torso ahead of the arms, behind the hips
-const ARM_HOLD = 0.018; // arms wait at the top (~80 ms) while the hips start
 
-// 0 outside the downswing, 1 through it; ramps in during the transition
-// and out slowly after the follow-through (slowly enough that no group's
-// clock ever runs backwards).
-function seqWeight(u: number): number {
-  const on = smoothstep(T_TRANSITION, T_TOP, u);
-  const off = 1 - smoothstep(T_FOLLOW - 0.01, T_FOLLOW + 0.14, u);
-  return on * off;
-}
-
-// The traced rig, with each body group sampled on its own (sequenced) clock.
-function rigPose(u: number): Pose & { clubA: number } {
-  const w = seqWeight(u);
-  const sLow = warp(Math.min(1, u + LEAD * w));
-  const sTor = warp(Math.min(1, u + TORSO_LEAD * w));
-  // The arms' hold is released during the downswing (they catch up and
-  // then slow into impact, which is what whips the club through), not
-  // after it — otherwise the hands peak after impact.
-  const armW = smoothstep(T_TRANSITION, T_TOP, u) * (1 - smoothstep(T_TOP + 0.01, frameT(12), u));
-  const sArm = warp(Math.max(0, u - ARM_HOLD * armW));
-  const low = (k: string) => spline(CH[k], sLow);
-  const tor = (k: string) => spline(CH[k], sTor);
-  const arm = (k: string) => spline(CH[k], sArm);
-
-  const hc: Pt = [low("hcx"), low("hcy")];
-  // Narrower than traced: shorts made the source hips look wide, and a
-  // mannequin's pelvis should sit inside its shoulders.
-  const hw = (low("hipW") / 2) * HIP_SCALE;
-  const ht = low("hipTilt");
-  const hipL: Pt = [hc[0] - Math.cos(ht) * hw, hc[1] - Math.sin(ht) * hw];
-  const hipR: Pt = [hc[0] + Math.cos(ht) * hw, hc[1] + Math.sin(ht) * hw];
-
-  const neck = fromPolar(hc, tor("spineA"), LEN.spine);
-  const head = fromPolar(neck, tor("headA"), LEN.head);
-  const sw = tor("shW") / 2;
-  const st = tor("shTilt");
-  const shL: Pt = [neck[0] - Math.cos(st) * sw, neck[1] - Math.sin(st) * sw];
-  const shR: Pt = [neck[0] + Math.cos(st) * sw, neck[1] + Math.sin(st) * sw];
-
-  // Hands on their arc round the chest, kept within both arms' reach.
-  let hands = fromPolar(neck, arm("handsA"), arm("handsR"));
-  for (let pass = 0; pass < 2; pass++) {
-    for (const sh of [shL, shR]) {
-      if (dist(sh, hands) > ARM * 0.995) hands = fromPolar(sh, ang(sh, hands), ARM * 0.995);
-    }
-  }
-  const elL = limbJoint(shL, hands, arm("eLt"), arm("eLo"));
-  const elR = limbJoint(shR, hands, arm("eRt"), arm("eRo"));
-
-  // Lead foot planted; trail foot pivots (rises onto its toe) only.
-  const ankR: Pt = ADDR.ankR;
-  const ankL: Pt = [low("ankLx"), Math.min(ADDR.ankL[1], low("ankLy"))];
-  const kneeL = limbJoint(hipL, ankL, low("kLt"), low("kLo"));
-  const kneeR = limbJoint(hipR, ankR, low("kRt"), low("kRo"));
-
-  const clubA = arm("clubA");
-  return { head, neck, shL, shR, elL, elR, hands, hipL, hipR, kneeL, kneeR, ankL, ankR, club: fromPolar(hands, clubA, LEN.club), clubA };
+// Body channels at time u, all on one clock: the reference is an animated
+// swing that is already sequenced (hips lead, arms follow), so nothing is
+// offset on top of it.
+const BODY_CH = ["hcx", "hcy", "hipW", "hipTilt", "spineA", "headA", "shW", "shTilt", "ankLx", "ankLy", "kLt", "kLo", "kRt", "kRo", "eLt", "eLo", "eRt", "eRo"] as const;
+function bodyChannels(u: number): number[] {
+  const s = warp(u);
+  return BODY_CH.map((k) => spline(CH[k], s));
 }
 
 // ── the arms and club ───────────────────────────────────────────────────
@@ -418,9 +351,75 @@ function channel(name: "phi" | "r" | "sh", u: number): number {
   const v3 = v2 * v;
   return (2 * v3 - 3 * v2 + 1) * y[i] + (v3 - 2 * v2 + v) * h * m[i] + (-2 * v3 + 3 * v2) * y[i + 1] + (v3 - v2) * h * m[i + 1];
 }
-function armsAndClub(u: number): { hands: Pt; club: Pt } {
-  const hands = fromPolar(CENTRE, channel("phi", u), channel("r", u));
-  return { hands, club: fromPolar(hands, channel("sh", u), CLUB_L) };
+
+
+// Every channel (body and arms) at time u, before smoothing.
+function rawChannels(u: number): number[] {
+  return [...bodyChannels(u), channel("phi", u), channel("r", u), channel("sh", u)];
+}
+const NB = BODY_CH.length;
+function buildPose(v: number[]): Pose {
+  const c = (k: (typeof BODY_CH)[number]) => v[BODY_CH.indexOf(k)];
+  const hc: Pt = [c("hcx"), c("hcy")];
+  // Narrower than traced: a mannequin's pelvis sits inside its shoulders.
+  const hw = (c("hipW") / 2) * HIP_SCALE;
+  const ht = c("hipTilt");
+  const hipL: Pt = [hc[0] - Math.cos(ht) * hw, hc[1] - Math.sin(ht) * hw];
+  const hipR: Pt = [hc[0] + Math.cos(ht) * hw, hc[1] + Math.sin(ht) * hw];
+  const neck = fromPolar(hc, c("spineA"), LEN.spine);
+  const head = fromPolar(neck, c("headA"), LEN.head);
+  const sw = c("shW") / 2;
+  const st = c("shTilt");
+  const shL: Pt = [neck[0] - Math.cos(st) * sw, neck[1] - Math.sin(st) * sw];
+  const shR: Pt = [neck[0] + Math.cos(st) * sw, neck[1] + Math.sin(st) * sw];
+  const hands = fromPolar(CENTRE, v[NB], v[NB + 1]);
+  const club = fromPolar(hands, v[NB + 2], CLUB_L);
+  const elL = limbJoint(shL, hands, c("eLt"), c("eLo"));
+  const elR = limbJoint(shR, hands, c("eRt"), c("eRo"));
+  // Lead foot planted; trail foot pivots (rises onto its toe) only.
+  const ankR: Pt = ADDR.ankR;
+  const ankL: Pt = [c("ankLx"), Math.min(ADDR.ankL[1], c("ankLy"))];
+  const kneeL = limbJoint(hipL, ankL, c("kLt"), c("kLo"));
+  const kneeR = limbJoint(hipR, ankR, c("kRt"), c("kRo"));
+  return { head, neck, shL, shR, elL, elR, hands, hipL, hipR, kneeL, kneeR, ankL, ankR, club };
+}
+
+// ── smoothing ───────────────────────────────────────────────────────────
+// The keys are hand-measured, 1/8 s apart, so between them speeds change in
+// small steps — on screen that reads as jerky. The whole motion is baked
+// once at 240 samples per second and every channel is smoothed over time
+// with a Gaussian: wide (52 ms) through the slow parts, narrow (12 ms)
+// around impact so the strike keeps its snap. The holds at either end are
+// constant, so they are untouched.
+const RATE = 240;
+const BAKE_N = Math.ceil(RETURN_START * DUR * RATE) + 1;
+const BAKED: number[][] = (() => {
+  const raw = Array.from({ length: BAKE_N }, (_, i) => rawChannels(Math.min(RETURN_START, i / (DUR * RATE))));
+  const tImp = frameT(13.6) * DUR;
+  // Knees and elbows (their bend parameters) are secondary: smoothed twice
+  // as much, so they follow the limbs instead of jittering on their own.
+  const soft = BODY_CH.map((k) => /^[ke][LR][to]$/.test(k)).concat([false, false, false]);
+  const smoothAt = (i: number, sigma: number, c: number) => {
+    const span = Math.ceil(3 * sigma * RATE);
+    let acc = 0;
+    let wSum = 0;
+    for (let k = -span; k <= span; k++) {
+      const w = Math.exp(-0.5 * (k / (sigma * RATE)) ** 2);
+      acc += w * raw[Math.min(BAKE_N - 1, Math.max(0, i + k))][c];
+      wSum += w;
+    }
+    return acc / wSum;
+  };
+  return raw.map((row, i) => {
+    const sigma = 0.012 + 0.04 * smoothstep(0.03, 0.14, Math.abs(i / RATE - tImp));
+    return row.map((_, c) => smoothAt(i, soft[c] ? 2 * sigma : sigma, c));
+  });
+})();
+function bakedPose(u: number): Pose {
+  const x = Math.min(BAKE_N - 1, Math.max(0, u * DUR * RATE));
+  const i = Math.min(BAKE_N - 2, Math.floor(x));
+  const f = x - i;
+  return buildPose(BAKED[i].map((a, c) => a + (BAKED[i + 1][c] - a) * f));
 }
 
 export function samplePose(t: number): Pose {
@@ -428,20 +427,21 @@ export function samplePose(t: number): Pose {
   // During the return window show the finish (fading out), then address
   // (fading in) — never the in-between.
   const u = u0 < RETURN_START ? u0 : u0 < RETURN_MID ? RETURN_START : 0;
-  const p = rigPose(u);
-  const { hands, club } = armsAndClub(u);
-  const elL = limbJoint(p.shL, hands, limbParams(p.shL, p.hands, p.elL).t, limbParams(p.shL, p.hands, p.elL).o);
-  const elR = limbJoint(p.shR, hands, limbParams(p.shR, p.hands, p.elR).t, limbParams(p.shR, p.hands, p.elR).o);
-  const { clubA: _unused, ...body } = p;
-  void _unused;
-  return { ...body, hands, elL, elR, club };
+  return bakedPose(u);
 }
 
-// Impact: the clubhead reaches the ball (the arms are back at address).
-export const IMPACT_T = frameT(13.6);
-// The swing trace stops once the club is over the head in the finish: the
-// club dropping behind the back afterwards would loop back over the arc.
-export const TRACE_END_T = frameT(19);
+// Impact: the moment the (smoothed) clubhead passes closest to the ball.
+export const IMPACT_T = (() => {
+  let best = frameT(13.6);
+  let bestD = Infinity;
+  for (let u = frameT(13.6) - 0.03; u <= frameT(13.6) + 0.03; u += 0.0002) {
+    const d = dist(bakedPose(u).club, BALL_AT);
+    if (d < bestD) [best, bestD] = [u, d];
+  }
+  return best;
+})();
+// The clubhead trail is recorded through to the end of the swing.
+export const TRACE_END_T = frameT(LAST_FRAME);
 export const BALL: Pt = [BALL_AT[0], BALL_AT[1] + 1];
 export const TOP_POSE = samplePose(TOP_T);
 export const JOINT_NAMES = Object.keys(KEYS[0][1]).filter((k) => k !== "club") as JointName[];

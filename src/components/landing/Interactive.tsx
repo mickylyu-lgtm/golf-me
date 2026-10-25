@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent, ReactNode } from "react";
 import { Check, Play, RotateCcw, Sparkles, Target, Users, Video } from "lucide-react";
 import { CaddieNavIcon } from "../icons/CaddieNavIcon";
@@ -398,31 +398,58 @@ const FLOOR_Y = 246; // scene y of the stage floor
 // The rig's figure box -> scene: scaled and placed so the whole club arc
 // (backswing up past the head, follow-through out to the right) stays on
 // the stage with the feet on the floor.
-const FIG_S = 0.86;
-const FIG_DX = 62;
-const FIG_DY = 41;
+const FIG_S = 0.92;
+const FIG_DX = 50;
+const FIG_DY = 29;
 const FIG_T = `translate(${FIG_DX} ${FIG_DY}) scale(${FIG_S})`;
 const toScene = (q: Pt): Pt => [q[0] * FIG_S + FIG_DX, q[1] * FIG_S + FIG_DY];
 const LIGHT = [-0.6, -0.8]; // direction the light comes FROM (unit-ish)
 
-// Club fan: every club position over one swing, precomputed once, with the
-// clubhead speed between samples (for colour).
-const FAN_STEP = 0.0015; // fine enough that the traced arc is a smooth curve, not a polygon
-const FAN: { t: number; hands: Pt; club: Pt; speed: number }[] = (() => {
-  const out: { t: number; hands: Pt; club: Pt; speed: number }[] = [];
+// Clubhead trail: every clubhead position over one swing, precomputed once
+// with its speed. Only the last TRAIL_MS of it is drawn — a tapered streak
+// that follows the clubhead and fades out behind it (one full-swing trace
+// overlapped itself into a tangle of arcs).
+const FAN_STEP = 0.0015; // ~6 ms between samples: a smooth curve, not a polygon
+const FAN: { t: number; club: Pt; speed: number }[] = (() => {
+  const out: { t: number; club: Pt; speed: number }[] = [];
   let prev: Pt | null = null;
   for (let t = 0; t <= TRACE_END_T; t += FAN_STEP) {
     const p = samplePose(t);
     const speed = prev ? Math.hypot(p.club[0] - prev[0], p.club[1] - prev[1]) : 0;
-    out.push({ t, hands: p.hands, club: p.club, speed });
+    out.push({ t, club: p.club, speed });
     prev = p.club;
   }
   return out;
 })();
 const FAN_MAX = Math.max(...FAN.map((f) => f.speed)) || 1;
-// Clubhead speed -> one of a few colour bands: green (slow) -> gold -> coral.
+// Clubhead speed -> colour: green (slow) -> gold -> coral (fastest, at the ball).
 const BAND_COLOURS = ["#4ade80", "#86d36a", "#c4c454", "#f4b942", "#f6935a", "#f87171"];
 const speedBand = (v: number) => Math.min(BAND_COLOURS.length - 1, Math.floor((v / FAN_MAX) * BAND_COLOURS.length));
+const TRAIL_MS = 340;
+const TRAIL_PIECES = 10; // drawn as a few pieces, each a bit brighter and wider toward the clubhead
+function trailPieces(progress: number): { d: string; colour: string; width: number; opacity: number }[] {
+  const from = progress - TRAIL_MS / SWING_MS;
+  const pts = FAN.filter((f) => f.t > from && f.t <= progress);
+  if (pts.length < 2) return [];
+  const out: { d: string; colour: string; width: number; opacity: number }[] = [];
+  for (let k = 0; k < TRAIL_PIECES; k++) {
+    const a = Math.floor((k * (pts.length - 1)) / TRAIL_PIECES);
+    const b = Math.floor(((k + 1) * (pts.length - 1)) / TRAIL_PIECES);
+    if (b <= a) continue;
+    const seg = pts.slice(a, b + 1);
+    // fade by age (time), not by position, so a slow club leaves a short trail
+    const age = (progress - seg[seg.length - 1].t) / (TRAIL_MS / SWING_MS);
+    const fresh = Math.max(0, 1 - age);
+    const v = Math.max(...seg.map((f) => f.speed));
+    out.push({
+      d: seg.map((f, i) => `${i ? "L" : "M"}${f.club[0].toFixed(1)} ${f.club[1].toFixed(1)}`).join(""),
+      colour: BAND_COLOURS[speedBand(v)],
+      width: 0.6 + 2.4 * fresh * fresh,
+      opacity: 0.9 * fresh * fresh,
+    });
+  }
+  return out;
+}
 
 // A capsule (rounded limb) from a to b with radius r: a rounded bar drawn
 // along +x in its own frame and rotated into place, filled with ONE shared
@@ -451,51 +478,64 @@ function Capsule({ a, b, r }: { a: Pt; b: Pt; r: number }) {
 }
 const Ball = ({ c, r }: { c: Pt; r: number }) => <circle cx={c[0]} cy={c[1]} r={r} fill="url(#mq-ball)" />;
 
-function Mannequin({ J, clubInFront }: { J: Pose; clubInFront: boolean }) {
+// Sculpted mannequin: limbs thick enough to read as a body (thigh > calf,
+// upper arm > forearm), joints the same width as the limbs they join so
+// they blend instead of showing as separate balls, a tapered chest, a
+// rounded pelvis and a larger head.
+function Mannequin({ J, clubInFront, armsBehind }: { J: Pose; clubInFront: boolean; armsBehind: boolean }) {
   const mid = (a: Pt, b: Pt): Pt => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  const lerp = (a: Pt, b: Pt, k: number): Pt => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k];
   const hipC = mid(J.hipL, J.hipR);
   const chest = mid(J.shL, J.shR);
+  const waist = lerp(hipC, chest, 0.38);
   const headAng = (Math.atan2(J.head[1] - J.neck[1], J.head[0] - J.neck[0]) * 180) / Math.PI + 90;
+  const hipAng = (Math.atan2(J.hipR[1] - J.hipL[1], J.hipR[0] - J.hipL[0]) * 180) / Math.PI;
+  const hipW = Math.hypot(J.hipR[0] - J.hipL[0], J.hipR[1] - J.hipL[1]);
+  // chest outline: shoulders -> tapered sides -> waist (bulges slightly at the ribs)
+  const wl: Pt = [waist[0] - 8.5, waist[1]];
+  const wr: Pt = [waist[0] + 8.5, waist[1]];
+  const torso = `M${J.shL[0]} ${J.shL[1] - 2} Q${chest[0]} ${chest[1] - 9} ${J.shR[0]} ${J.shR[1] - 2} Q${J.shR[0] + 6} ${(J.shR[1] + wr[1]) / 2 - 4} ${wr[0]} ${wr[1]} Q${waist[0]} ${waist[1] + 4} ${wl[0]} ${wl[1]} Q${J.shL[0] - 6} ${(J.shL[1] + wl[1]) / 2 - 4} ${J.shL[0]} ${J.shL[1] - 2} Z`;
   const club = (
     <g>
       <line x1={J.hands[0]} y1={J.hands[1]} x2={J.club[0]} y2={J.club[1]} stroke="#d7dcd8" strokeWidth="2.2" strokeLinecap="round" />
       <circle cx={J.club[0]} cy={J.club[1]} r="4.5" fill="#2a2f2c" stroke="#9aa39c" strokeWidth="1" />
     </g>
   );
+  const arms = (
+    <g>
+      <Capsule a={J.shL} b={J.elL} r={6.2} />
+      <Capsule a={J.elL} b={J.hands} r={5.2} />
+      <Ball c={J.elL} r={5.4} />
+      <Capsule a={J.shR} b={J.elR} r={6.2} />
+      <Capsule a={J.elR} b={J.hands} r={5.2} />
+      <Ball c={J.elR} r={5.4} />
+      <Ball c={J.hands} r={5.6} />
+    </g>
+  );
   return (
     <g>
       {!clubInFront && club}
+      {armsBehind && arms}
       {/* legs (trail leg behind) */}
-      <Capsule a={J.hipL} b={J.kneeL} r={7.4} />
-      <Capsule a={J.kneeL} b={J.ankL} r={5.8} />
-      <Ball c={J.kneeL} r={6.2} />
-      <ellipse cx={J.ankL[0] - 3} cy={J.ankL[1] + 5} rx="10" ry="4.5" fill="url(#mq-ball)" />
-      <Capsule a={J.hipR} b={J.kneeR} r={7.4} />
-      <Capsule a={J.kneeR} b={J.ankR} r={5.8} />
-      <Ball c={J.kneeR} r={6.2} />
-      <ellipse cx={J.ankR[0] + 3} cy={J.ankR[1] + 5} rx="10" ry="4.5" fill="url(#mq-ball)" />
-      {/* pelvis + torso */}
-      <Capsule a={J.hipL} b={J.hipR} r={7.5} />
-      <Capsule a={hipC} b={[(hipC[0] + chest[0]) / 2, (hipC[1] + chest[1]) / 2]} r={7.5} />
-      <path
-        d={`M${J.shL[0]} ${J.shL[1]} Q${chest[0]} ${chest[1] - 6} ${J.shR[0]} ${J.shR[1]} Q${J.shR[0] + 2} ${(J.shR[1] + hipC[1]) / 2} ${(chest[0] + hipC[0]) / 2 + 10} ${(chest[1] + hipC[1]) / 2 + 6} L${(chest[0] + hipC[0]) / 2 - 10} ${(chest[1] + hipC[1]) / 2 + 6} Q${J.shL[0] - 2} ${(J.shL[1] + hipC[1]) / 2} ${J.shL[0]} ${J.shL[1]} Z`}
-        fill="url(#mq-chest)"
-      />
-      <Ball c={J.hipL} r={6.5} />
-      <Ball c={J.hipR} r={6.5} />
+      <Capsule a={J.hipL} b={J.kneeL} r={9.2} />
+      <Capsule a={J.kneeL} b={J.ankL} r={7} />
+      <Ball c={J.kneeL} r={7.6} />
+      <ellipse cx={J.ankL[0] - 3} cy={J.ankL[1] + 5} rx="11" ry="5" fill="url(#mq-ball)" />
+      <Capsule a={J.hipR} b={J.kneeR} r={9.2} />
+      <Capsule a={J.kneeR} b={J.ankR} r={7} />
+      <Ball c={J.kneeR} r={7.6} />
+      <ellipse cx={J.ankR[0] + 3} cy={J.ankR[1] + 5} rx="11" ry="5" fill="url(#mq-ball)" />
+      {/* pelvis, abdomen, chest */}
+      <ellipse cx={hipC[0]} cy={hipC[1] - 1} rx={hipW / 2 + 9} ry="11" fill="url(#mq-chest)" transform={`rotate(${hipAng} ${hipC[0]} ${hipC[1] - 1})`} />
+      <Capsule a={hipC} b={waist} r={9} />
+      <path d={torso} fill="url(#mq-chest)" />
       {/* neck + head */}
-      <Capsule a={J.neck} b={mid(J.neck, J.head)} r={4.5} />
-      <ellipse cx={J.head[0]} cy={J.head[1]} rx="10.5" ry="13" fill="url(#mq-ball)" transform={`rotate(${headAng} ${J.head[0]} ${J.head[1]})`} />
-      {/* arms (trail arm behind the lead arm) */}
-      <Ball c={J.shL} r={6.6} />
-      <Capsule a={J.shL} b={J.elL} r={5} />
-      <Capsule a={J.elL} b={J.hands} r={4.2} />
-      <Ball c={J.elL} r={4.6} />
-      <Ball c={J.shR} r={6.6} />
-      <Capsule a={J.shR} b={J.elR} r={5} />
-      <Capsule a={J.elR} b={J.hands} r={4.2} />
-      <Ball c={J.elR} r={4.6} />
-      <Ball c={J.hands} r={4.8} />
+      <Capsule a={J.neck} b={mid(J.neck, J.head)} r={5} />
+      <ellipse cx={J.head[0]} cy={J.head[1]} rx="12" ry="14.5" fill="url(#mq-ball)" transform={`rotate(${headAng} ${J.head[0]} ${J.head[1]})`} />
+      {/* shoulders, then the arms in front unless they are up behind the head */}
+      <Ball c={J.shL} r={7.2} />
+      <Ball c={J.shR} r={7.2} />
+      {!armsBehind && arms}
       {clubInFront && club}
     </g>
   );
@@ -534,17 +574,10 @@ function SwingScene({ phase, pose, progress }: { phase: Phase; pose: Pose; progr
   // Club in front of the body while the hands are low (address through the
   // follow-through), behind it at the top and the finish.
   const clubInFront = J.hands[1] > J.neck[1] + 28;
-  const fanPaths = useMemo(() => {
-    const fan = progress < RETURN_MID ? FAN.filter((f) => f.t <= progress) : [];
-    const arcs: string[] = BAND_COLOURS.map(() => "");
-    fan.forEach((f, i) => {
-      if (i > 0) {
-        const p = fan[i - 1].club;
-        arcs[speedBand(f.speed)] += `M${p[0].toFixed(1)} ${p[1].toFixed(1)}L${f.club[0].toFixed(1)} ${f.club[1].toFixed(1)}`;
-      }
-    });
-    return { arcs };
-  }, [progress]);
+  // In the finish the hands end up behind the head (after Tiger Woods'),
+  // so the arms are drawn behind the head and chest there.
+  const armsBehind = progress > IMPACT_T && progress < RETURN_MID && J.hands[1] < J.neck[1] - 4;
+  const trail = progress < RETURN_MID ? trailPieces(progress) : [];
   const hipC: Pt = toScene([(J.hipL[0] + J.hipR[0]) / 2, (J.hipL[1] + J.hipR[1]) / 2]);
   return (
     <svg viewBox="0 0 400 300" className="h-full w-full" role="img" aria-label="A mannequin golfer swinging on a dark stage, with Caddie's pose analysis overlay">
@@ -608,7 +641,7 @@ function SwingScene({ phase, pose, progress }: { phase: Phase; pose: Pose; progr
             gradient painted over it so it fades out with depth */}
         <g transform={`translate(0 ${2 * FLOOR_Y}) scale(1 -1)`} opacity={0.22 * op}>
           <g transform={FIG_T}>
-            <Mannequin J={J} clubInFront={clubInFront} />
+            <Mannequin J={J} clubInFront={clubInFront} armsBehind={armsBehind} />
           </g>
         </g>
         <rect x="0" y={FLOOR_Y} width="400" height={300 - FLOOR_Y} fill="url(#mq-floor)" />
@@ -626,10 +659,12 @@ function SwingScene({ phase, pose, progress }: { phase: Phase; pose: Pose; progr
         {ballStruck && <circle cx={toScene(BALL)[0] + (progress - IMPACT_T) * 900} cy={toScene(BALL)[1] - (progress - IMPACT_T) * 1100} r="2.4" fill="#f8faf8" opacity="0.9" />}
 
         <g transform={FIG_T} opacity={op}>
-          {/* the arc the clubhead has traced so far this swing, coloured by
-              speed (one path per colour band, so it stays cheap) */}
-          {fanPaths.arcs.map((d, band) => (d ? <path key={band} d={d} stroke={BAND_COLOURS[band]} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" fill="none" opacity="0.75" /> : null))}
-          <Mannequin J={J} clubInFront={clubInFront} />
+          {/* the clubhead's trail: a short streak that fades out behind it,
+              coloured by clubhead speed */}
+          {trail.map((p, i) => (
+            <path key={i} d={p.d} stroke={p.colour} strokeWidth={p.width} strokeOpacity={p.opacity} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+          ))}
+          <Mannequin J={J} clubInFront={clubInFront} armsBehind={armsBehind} />
         </g>
 
         {/* coaching glow on the hips once the analysis lands */}
