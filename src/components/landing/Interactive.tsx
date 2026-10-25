@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent, ReactNode } from "react";
 import { Check, Play, RotateCcw, Sparkles, Target, Users, Video } from "lucide-react";
 import { CaddieNavIcon } from "../icons/CaddieNavIcon";
@@ -414,49 +414,38 @@ const FAN: { t: number; hands: Pt; club: Pt; speed: number }[] = (() => {
   return out;
 })();
 const FAN_MAX = Math.max(...FAN.map((f) => f.speed)) || 1;
-function speedColour(v: number): string {
-  // green (slow) -> gold -> coral (fastest)
-  const k = Math.min(1, v / FAN_MAX);
-  const lerp = (a: number[], b: number[], u: number) => a.map((x, i) => Math.round(x + (b[i] - x) * u));
-  const c = k < 0.5 ? lerp([74, 222, 128], [244, 185, 66], k / 0.5) : lerp([244, 185, 66], [248, 113, 113], (k - 0.5) / 0.5);
-  return `rgb(${c[0]},${c[1]},${c[2]})`;
-}
+// Clubhead speed -> one of a few colour bands: green (slow) -> gold -> coral.
+const BAND_COLOURS = ["#4ade80", "#86d36a", "#c4c454", "#f4b942", "#f6935a", "#f87171"];
+const speedBand = (v: number) => Math.min(BAND_COLOURS.length - 1, Math.floor((v / FAN_MAX) * BAND_COLOURS.length));
 
-
-// A capsule (rounded limb) from a to b with radius r, plus a gradient across
-// it so the side facing the light is bright and the far side falls off.
-function Capsule({ id, a, b, r }: { id: string; a: Pt; b: Pt; r: number }) {
+// A capsule (rounded limb) from a to b with radius r: a rounded bar drawn
+// along +x in its own frame and rotated into place, filled with ONE shared
+// gradient (#mq-limb, light edge at the top of the bar). If the bar's top
+// would face away from the light it is mirrored, so every limb is lit from
+// the upper left. No per-frame gradient definitions — creating ~30 new
+// gradients every frame dropped the page to ~27 fps.
+function Capsule({ a, b, r }: { a: Pt; b: Pt; r: number }) {
   const dx = b[0] - a[0];
   const dy = b[1] - a[1];
-  const L = Math.hypot(dx, dy) || 1;
-  let nx = -dy / L;
-  let ny = dx / L;
-  if (nx * LIGHT[0] + ny * LIGHT[1] < 0) {
-    nx = -nx;
-    ny = -ny;
-  }
-  const mx = (a[0] + b[0]) / 2;
-  const my = (a[1] + b[1]) / 2;
-  const P = (q: Pt, s: number) => `${q[0] + nx * r * s} ${q[1] + ny * r * s}`;
-  // Sweep flag: the end caps must bulge outward (checked by rendering both
-  // options in Chromium — the other flag bites a notch out of every limb).
-  const sweep = nx * dy - ny * dx > 0 ? 1 : 0;
-  const d = `M${P(a, 1)} L${P(b, 1)} A${r} ${r} 0 0 ${sweep} ${P(b, -1)} L${P(a, -1)} A${r} ${r} 0 0 ${sweep} ${P(a, 1)} Z`;
+  const L = Math.hypot(dx, dy);
+  const th = Math.atan2(dy, dx);
+  // the bar's local "up" (0,-1) in world space is (sin th, -cos th)
+  const flip = Math.sin(th) * LIGHT[0] - Math.cos(th) * LIGHT[1] < 0 ? -1 : 1;
   return (
-    <>
-      <linearGradient id={id} gradientUnits="userSpaceOnUse" x1={mx + nx * r} y1={my + ny * r} x2={mx - nx * r} y2={my - ny * r}>
-        <stop offset="0" stopColor="#ffffff" />
-        <stop offset="0.3" stopColor="#eef1ec" />
-        <stop offset="0.75" stopColor="#a9b3ad" />
-        <stop offset="1" stopColor="#6f7a74" />
-      </linearGradient>
-      <path d={d} fill={`url(#${id})`} />
-    </>
+    <rect
+      x={-r}
+      y={-r}
+      width={L + 2 * r}
+      height={2 * r}
+      rx={r}
+      fill="url(#mq-limb)"
+      transform={`translate(${a[0]} ${a[1]}) rotate(${(th * 180) / Math.PI}) scale(1 ${flip})`}
+    />
   );
 }
 const Ball = ({ c, r }: { c: Pt; r: number }) => <circle cx={c[0]} cy={c[1]} r={r} fill="url(#mq-ball)" />;
 
-function Mannequin({ J, prefix, clubInFront }: { J: Pose; prefix: string; clubInFront: boolean }) {
+function Mannequin({ J, clubInFront }: { J: Pose; clubInFront: boolean }) {
   const mid = (a: Pt, b: Pt): Pt => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
   const hipC = mid(J.hipL, J.hipR);
   const chest = mid(J.shL, J.shR);
@@ -471,39 +460,34 @@ function Mannequin({ J, prefix, clubInFront }: { J: Pose; prefix: string; clubIn
     <g>
       {!clubInFront && club}
       {/* legs (trail leg behind) */}
-      <Capsule id={`${prefix}tl1`} a={J.hipL} b={J.kneeL} r={8.5} />
-      <Capsule id={`${prefix}tl2`} a={J.kneeL} b={J.ankL} r={6.8} />
+      <Capsule a={J.hipL} b={J.kneeL} r={8.5} />
+      <Capsule a={J.kneeL} b={J.ankL} r={6.8} />
       <Ball c={J.kneeL} r={7.2} />
       <ellipse cx={J.ankL[0] - 3} cy={J.ankL[1] + 5} rx="10" ry="4.5" fill="url(#mq-ball)" />
-      <Capsule id={`${prefix}ll1`} a={J.hipR} b={J.kneeR} r={8.5} />
-      <Capsule id={`${prefix}ll2`} a={J.kneeR} b={J.ankR} r={6.8} />
+      <Capsule a={J.hipR} b={J.kneeR} r={8.5} />
+      <Capsule a={J.kneeR} b={J.ankR} r={6.8} />
       <Ball c={J.kneeR} r={7.2} />
       <ellipse cx={J.ankR[0] + 3} cy={J.ankR[1] + 5} rx="10" ry="4.5" fill="url(#mq-ball)" />
       {/* pelvis + torso */}
-      <Capsule id={`${prefix}pv`} a={J.hipL} b={J.hipR} r={10} />
-      <Capsule id={`${prefix}ab`} a={hipC} b={[(hipC[0] + chest[0]) / 2, (hipC[1] + chest[1]) / 2]} r={10} />
+      <Capsule a={J.hipL} b={J.hipR} r={10} />
+      <Capsule a={hipC} b={[(hipC[0] + chest[0]) / 2, (hipC[1] + chest[1]) / 2]} r={10} />
       <path
         d={`M${J.shL[0]} ${J.shL[1]} Q${chest[0]} ${chest[1] - 6} ${J.shR[0]} ${J.shR[1]} Q${J.shR[0] + 2} ${(J.shR[1] + hipC[1]) / 2} ${(chest[0] + hipC[0]) / 2 + 10} ${(chest[1] + hipC[1]) / 2 + 6} L${(chest[0] + hipC[0]) / 2 - 10} ${(chest[1] + hipC[1]) / 2 + 6} Q${J.shL[0] - 2} ${(J.shL[1] + hipC[1]) / 2} ${J.shL[0]} ${J.shL[1]} Z`}
-        fill={`url(#${prefix}chest)`}
+        fill="url(#mq-chest)"
       />
-      <radialGradient id={`${prefix}chest`} gradientUnits="userSpaceOnUse" cx={chest[0] - 8} cy={chest[1] + 4} r="40">
-        <stop offset="0" stopColor="#ffffff" />
-        <stop offset="0.55" stopColor="#dfe4df" />
-        <stop offset="1" stopColor="#8d9791" />
-      </radialGradient>
       <Ball c={J.hipL} r={8} />
       <Ball c={J.hipR} r={8} />
       {/* neck + head */}
-      <Capsule id={`${prefix}nk`} a={J.neck} b={mid(J.neck, J.head)} r={4.5} />
+      <Capsule a={J.neck} b={mid(J.neck, J.head)} r={4.5} />
       <ellipse cx={J.head[0]} cy={J.head[1]} rx="10.5" ry="13" fill="url(#mq-ball)" transform={`rotate(${headAng} ${J.head[0]} ${J.head[1]})`} />
       {/* arms (trail arm behind the lead arm) */}
       <Ball c={J.shL} r={7.5} />
-      <Capsule id={`${prefix}ta1`} a={J.shL} b={J.elL} r={5.8} />
-      <Capsule id={`${prefix}ta2`} a={J.elL} b={J.hands} r={4.8} />
+      <Capsule a={J.shL} b={J.elL} r={5.8} />
+      <Capsule a={J.elL} b={J.hands} r={4.8} />
       <Ball c={J.elL} r={5.2} />
       <Ball c={J.shR} r={7.5} />
-      <Capsule id={`${prefix}la1`} a={J.shR} b={J.elR} r={5.8} />
-      <Capsule id={`${prefix}la2`} a={J.elR} b={J.hands} r={4.8} />
+      <Capsule a={J.shR} b={J.elR} r={5.8} />
+      <Capsule a={J.elR} b={J.hands} r={4.8} />
       <Ball c={J.elR} r={5.2} />
       <Ball c={J.hands} r={5.6} />
       {clubInFront && club}
@@ -544,7 +528,19 @@ function SwingScene({ phase, pose, progress }: { phase: Phase; pose: Pose; progr
   // Club in front of the body while the hands are low (address through the
   // follow-through), behind it at the top and the finish.
   const clubInFront = J.hands[1] > J.neck[1] + 28;
-  const fan = progress < RETURN_MID ? FAN.filter((f) => f.t <= progress) : [];
+  const fanPaths = useMemo(() => {
+    const fan = progress < RETURN_MID ? FAN.filter((f) => f.t <= progress) : [];
+    let shafts = "";
+    const arcs: string[] = BAND_COLOURS.map(() => "");
+    fan.forEach((f, i) => {
+      if (i % 2 === 0) shafts += `M${f.hands[0].toFixed(1)} ${f.hands[1].toFixed(1)}L${f.club[0].toFixed(1)} ${f.club[1].toFixed(1)}`;
+      if (i > 0) {
+        const p = fan[i - 1].club;
+        arcs[speedBand(f.speed)] += `M${p[0].toFixed(1)} ${p[1].toFixed(1)}L${f.club[0].toFixed(1)} ${f.club[1].toFixed(1)}`;
+      }
+    });
+    return { shafts, arcs };
+  }, [progress]);
   const hipC: Pt = [(J.hipL[0] + J.hipR[0]) / 2 + FIG_DX, (J.hipL[1] + J.hipR[1]) / 2 + FIG_DY];
   return (
     <svg viewBox="0 0 400 300" className="h-full w-full" role="img" aria-label="A mannequin golfer swinging on a dark stage, with Caddie's pose analysis overlay">
@@ -566,6 +562,17 @@ function SwingScene({ phase, pose, progress }: { phase: Phase; pose: Pose; progr
         <radialGradient id="mq-pool" cx="0.5" cy="0.5" r="0.5">
           <stop offset="0" stopColor="#ffffff" stopOpacity="0.13" />
           <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
+        </radialGradient>
+        <linearGradient id="mq-limb" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#ffffff" />
+          <stop offset="0.3" stopColor="#eef1ec" />
+          <stop offset="0.75" stopColor="#a9b3ad" />
+          <stop offset="1" stopColor="#6f7a74" />
+        </linearGradient>
+        <radialGradient id="mq-chest" cx="0.38" cy="0.32" r="0.8">
+          <stop offset="0" stopColor="#ffffff" />
+          <stop offset="0.55" stopColor="#dfe4df" />
+          <stop offset="1" stopColor="#8d9791" />
         </radialGradient>
         <radialGradient id="mq-ball" cx="0.35" cy="0.3" r="0.75">
           <stop offset="0" stopColor="#ffffff" />
@@ -597,7 +604,7 @@ function SwingScene({ phase, pose, progress }: { phase: Phase; pose: Pose; progr
             gradient painted over it so it fades out with depth */}
         <g transform={`translate(0 ${2 * FLOOR_Y}) scale(1 -1)`} opacity={0.22 * op}>
           <g transform={`translate(${FIG_DX} ${FIG_DY})`}>
-            <Mannequin J={J} prefix="r" clubInFront={clubInFront} />
+            <Mannequin J={J} clubInFront={clubInFront} />
           </g>
         </g>
         <rect x="0" y={FLOOR_Y} width="400" height={300 - FLOOR_Y} fill="url(#mq-floor)" />
@@ -615,18 +622,13 @@ function SwingScene({ phase, pose, progress }: { phase: Phase; pose: Pose; progr
         {ballStruck && <circle cx={BALL[0] + FIG_DX + (progress - IMPACT_T) * 900} cy={BALL[1] + FIG_DY - (progress - IMPACT_T) * 1100} r="2.6" fill="#f8faf8" opacity="0.9" />}
 
         <g transform={`translate(${FIG_DX} ${FIG_DY})`} opacity={op}>
-          {/* club fan: faint shaft positions so far this swing (every other
-              sample), and the arc the clubhead has traced, coloured by its
-              speed — green slow, gold fast, coral fastest */}
-          {fan.map((f, i) =>
-            i % 2 ? null : (
-              <line key={`s${i}`} x1={f.hands[0]} y1={f.hands[1]} x2={f.club[0]} y2={f.club[1]} stroke={speedColour(f.speed)} strokeWidth="0.8" opacity={0.05 + 0.17 * (i / Math.max(1, fan.length - 1))} />
-            ),
-          )}
-          {fan.slice(1).map((f, i) => (
-            <line key={`a${i}`} x1={fan[i].club[0]} y1={fan[i].club[1]} x2={f.club[0]} y2={f.club[1]} stroke={speedColour(f.speed)} strokeWidth="1.8" strokeLinecap="round" opacity="0.85" />
-          ))}
-          <Mannequin J={J} prefix="m" clubInFront={clubInFront} />
+          {/* club fan: faint shaft positions so far this swing (one path)
+              and the arc the clubhead has traced, coloured by speed (a few
+              paths, one per colour band) — batched so the fan costs a
+              handful of elements instead of ~200 */}
+          {fanPaths.shafts && <path d={fanPaths.shafts} stroke="#e8ece9" strokeWidth="0.7" opacity="0.13" fill="none" />}
+          {fanPaths.arcs.map((d, band) => (d ? <path key={band} d={d} stroke={BAND_COLOURS[band]} strokeWidth="1.8" strokeLinecap="round" fill="none" opacity="0.9" /> : null))}
+          <Mannequin J={J} clubInFront={clubInFront} />
         </g>
 
         {/* coaching glow on the hips once the analysis lands */}
