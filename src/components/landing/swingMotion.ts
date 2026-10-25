@@ -141,9 +141,8 @@ for (const seg of SEGS) {
 // that same s with the same basis. Nothing is eased per joint.
 
 const TS = LOOP.map((k) => k.t);
-const IDX = TS.map((_, i) => i);
 
-// Monotone cubic (Fritsch-Butland) through (TS, IDX): t -> s. Monotone, so
+// Monotone cubic (Fritsch-Butland) through (keyTime, keyIndex): t -> s. Monotone, so
 // the swing never runs backwards; zero slope at holds so they ease.
 function warp(t: number): number {
   let i = 0;
