@@ -208,6 +208,65 @@ for (const k of ["hipTilt", "spineA", "headA", "shTilt"]) CH[k] = unwrap(CH[k]);
 // Stabilise the trunk: a light symmetric 1-2-1 filter on the body-carriage
 // channels removes hand-tracing wobble (symmetric, so it adds no lag). The
 // holds at either end are left exact.
+// ── body motion through the swing ───────────────────────────────────────
+// The reference animation barely moves its body until after impact (only
+// the arms and club swing), so the figure stood still through the
+// backswing and downswing and then lurched into the finish. The body is
+// therefore authored here, as offsets from address at the top and at
+// impact, and blended through the keys in step with the hands' progress:
+//   top    — hips turned (~45°, narrower face-on) and shoulders turned
+//            (~90°, narrower, lead shoulder down), weight loaded into the
+//            trail side, lead knee folded in, spine leaning slightly back;
+//   impact — weight shifted onto the lead side, hips open to the target,
+//            trail shoulder down, trail knee driving toward the target,
+//            spine tilted behind the ball.
+// Through the follow-through the impact offsets fade into the traced
+// finish (which does turn the body fully to the target).
+{
+  const DEG = Math.PI / 180;
+  const c = M(285, 285);
+  const arm = KEYS.map(([, p]) => Math.atan2(p.hands[1] - c[1], p.hands[0] - c[0]));
+  for (let i = 1; i < arm.length; i++) while (Math.abs(arm[i] - arm[i - 1]) > Math.PI) arm[i] -= Math.sign(arm[i] - arm[i - 1]) * 2 * Math.PI;
+  const top = arm.indexOf(Math.max(...arm));
+  const imp = KEYS.findIndex(([f]) => f === 13.6);
+  const last = KEYS.length - 1;
+  // [channel, top offset, impact offset, multiplicative?]
+  const PLAN: [string, number, number, boolean][] = [
+    ["hcx", -3, 3, false],
+    ["hcy", 0, 1.5, false],
+    ["hipW", 0.72, 0.8, true],
+    ["hipTilt", 4 * DEG, -6 * DEG, false],
+    ["spineA", -3 * DEG, -7 * DEG, false],
+    ["shW", 0.62, 0.86, true],
+    ["shTilt", 12 * DEG, -16 * DEG, false],
+    ["kRo", 0.13, -0.02, false],
+    ["kLo", -0.02, -0.1, false],
+  ];
+  const ease = (x: number) => x * x * (3 - 2 * x);
+  for (const [k, dTop, dImp, mul] of PLAN) {
+    const v = CH[k]; // LOOP index = key index + 1
+    const a = v[1];
+    const at = (d: number) => (mul ? a * d : a + d);
+    const tracedImp = v[imp + 1];
+    const tracedFin = v[last + 1];
+    const T = at(dTop);
+    const I = at(dImp);
+    for (let i = 1; i <= last; i++) {
+      let x: number;
+      if (i <= top) x = a + (T - a) * ease((arm[i] - arm[0]) / (arm[top] - arm[0]));
+      else if (i <= imp) x = T + (I - T) * ease((arm[top] - arm[i]) / (arm[top] - arm[imp]));
+      else {
+        // traced follow-through, with the impact offset fading out by the finish
+        const r = (arm[imp] - arm[i]) / (arm[imp] - arm[last]);
+        x = v[i + 1] + (I - tracedImp) * (1 - ease(r));
+      }
+      v[i + 1] = x;
+    }
+    v[last + 2] = tracedFin; // finish hold unchanged
+    v[0] = a; // address hold
+  }
+}
+
 const smooth = (v: number[]) => v.map((x, i) => (i <= 1 || i >= v.length - 2 ? x : 0.25 * v[i - 1] + 0.5 * x + 0.25 * v[i + 1]));
 for (const k of ["hcx", "hcy", "hipW", "hipTilt", "spineA", "headA", "shW", "shTilt", "ankLx", "ankLy", "kLt", "kLo", "kRt", "kRo", "eLt", "eLo", "eRt", "eRo"]) CH[k] = smooth(CH[k]);
 
@@ -283,9 +342,15 @@ const smoothstep = (e0: number, e1: number, x: number) => {
 // swing that is already sequenced (hips lead, arms follow), so nothing is
 // offset on top of it.
 const BODY_CH = ["hcx", "hcy", "hipW", "hipTilt", "spineA", "headA", "shW", "shTilt", "ankLx", "ankLy", "kLt", "kLo", "kRt", "kRo", "eLt", "eLo", "eRt", "eRo"] as const;
+// Kinematic sequence: from the top into impact the lower body (pelvis,
+// legs) runs ~45 ms ahead of the torso and arms — the hips start down first.
+const LOWER = new Set(["hcx", "hcy", "hipW", "hipTilt", "ankLx", "ankLy", "kLt", "kLo", "kRt", "kRo"]);
+const T_IMP0 = frameT(13.6);
 function bodyChannels(u: number): number[] {
+  const lead = (0.045 / DUR) * smoothstep(TOP_T - 0.05, TOP_T + 0.01, u) * (1 - smoothstep(T_IMP0, T_IMP0 + 0.06, u));
   const s = warp(u);
-  return BODY_CH.map((k) => spline(CH[k], s));
+  const sLow = warp(Math.min(1, u + lead));
+  return BODY_CH.map((k) => spline(CH[k], LOWER.has(k) ? sLow : s));
 }
 
 // ── the arms and club ───────────────────────────────────────────────────
