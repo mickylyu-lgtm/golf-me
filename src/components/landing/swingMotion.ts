@@ -39,8 +39,10 @@ export type Pose = Record<JointName, Pt> & { club: Pt };
 // higher, to parallel, after a tour pro's face-on driver swing. The finish
 // (19-22) is the classic balanced one for a right-handed golfer: chest and
 // hips turned to the target, weight on a straight lead leg, trail heel up,
-// hands high over the lead shoulder with the trail arm folded across the
-// chest, and the club wrapped behind the neck.
+// hands high above the lead shoulder, the trail arm crossing up under the
+// chin with its elbow toward the target, the lead elbow folded up beside
+// the head (the arms make a V up to the hands, not two bars across the
+// chest), and the club wrapped behind the neck.
 const M = (x: number, y: number): [number, number] => [95 + (x - 295) * 0.426, 232 + (y - 605) * 0.426];
 type Raw = Record<JointName | "club", [number, number]>;
 const R = (o: Raw) => {
@@ -64,11 +66,11 @@ const KEYS: [number, Pose][] = [
   [16, R({ head: [283, 210], neck: [295, 245], shL: [285, 270], shR: [370, 225], elL: [375, 315], elR: [400, 272], hands: [440, 340], hipL: [315, 355], hipR: [380, 350], kneeL: [275, 470], kneeR: [375, 470], ankL: [215, 595], ankR: [355, 602], club: [520, 315] })],
   [17, R({ head: [283, 205], neck: [300, 240], shL: [295, 270], shR: [370, 225], elL: [380, 275], elR: [400, 250], hands: [465, 255], hipL: [320, 360], hipR: [375, 365], kneeL: [285, 470], kneeR: [370, 470], ankL: [215, 592], ankR: [355, 602], club: [495, 150] })],
   [18, R({ head: [290, 198], neck: [305, 235], shL: [305, 255], shR: [375, 230], elL: [400, 235], elR: [405, 212], hands: [460, 190], hipL: [330, 362], hipR: [375, 365], kneeL: [290, 460], kneeR: [370, 465], ankL: [215, 588], ankR: [355, 602], club: [410, 5] })],
-  [18.5, R({ head: [300, 190], neck: [315, 228], shL: [300, 240], shR: [370, 230], elL: [395, 250], elR: [413, 222], hands: [445, 190], hipL: [335, 356], hipR: [371, 360], kneeL: [285, 455], kneeR: [365, 466], ankL: [212, 582], ankR: [355, 602], club: [315, 60] })],
-  [19, R({ head: [308, 183], neck: [322, 222], shL: [302, 230], shR: [372, 224], elL: [404, 250], elR: [424, 196], hands: [430, 180], hipL: [337, 350], hipR: [368, 352], kneeL: [285, 450], kneeR: [360, 468], ankL: [211, 578], ankR: [355, 602], club: [230, 130] })],
-  [19.5, R({ head: [315, 178], neck: [328, 218], shL: [304, 222], shR: [371, 222], elL: [402, 248], elR: [420, 188], hands: [420, 170], hipL: [338, 347], hipR: [368, 348], kneeL: [285, 447], kneeR: [358, 470], ankL: [210, 576], ankR: [355, 602], club: [210, 232] })],
-  [20, R({ head: [318, 175], neck: [330, 215], shL: [305, 218], shR: [370, 220], elL: [400, 245], elR: [418, 185], hands: [410, 165], hipL: [338, 345], hipR: [368, 345], kneeL: [285, 445], kneeR: [358, 470], ankL: [210, 575], ankR: [355, 602], club: [210, 255] })],
-  [22, R({ head: [320, 168], neck: [332, 210], shL: [307, 214], shR: [372, 216], elL: [402, 240], elR: [420, 178], hands: [415, 157], hipL: [340, 345], hipR: [370, 345], kneeL: [285, 445], kneeR: [358, 470], ankL: [210, 575], ankR: [355, 602], club: [215, 265] })],
+  [18.5, R({ head: [300, 190], neck: [315, 228], shL: [300, 240], shR: [370, 230], elL: [392, 225], elR: [430, 200], hands: [440, 160], hipL: [335, 356], hipR: [371, 360], kneeL: [285, 455], kneeR: [365, 466], ankL: [212, 582], ankR: [355, 602], club: [294, 14] })],
+  [19, R({ head: [308, 183], neck: [322, 222], shL: [302, 230], shR: [372, 224], elL: [385, 205], elR: [428, 180], hands: [420, 135], hipL: [337, 350], hipR: [368, 352], kneeL: [285, 450], kneeR: [360, 468], ankL: [211, 578], ankR: [355, 602], club: [217, 99] })],
+  [19.5, R({ head: [315, 178], neck: [328, 218], shL: [304, 222], shR: [371, 222], elL: [382, 205], elR: [424, 162], hands: [400, 120], hipL: [338, 347], hipR: [368, 348], kneeL: [285, 447], kneeR: [358, 470], ankL: [210, 576], ankR: [355, 602], club: [200, 173] })],
+  [20, R({ head: [318, 175], neck: [330, 215], shL: [305, 218], shR: [370, 220], elL: [380, 198], elR: [422, 155], hands: [390, 113], hipL: [338, 345], hipR: [368, 345], kneeL: [285, 445], kneeR: [358, 470], ankL: [210, 575], ankR: [355, 602], club: [196, 184] })],
+  [22, R({ head: [320, 168], neck: [332, 210], shL: [307, 214], shR: [372, 216], elL: [378, 196], elR: [420, 150], hands: [385, 110], hipL: [340, 345], hipR: [370, 345], kneeL: [285, 445], kneeR: [358, 470], ankL: [210, 575], ankR: [355, 602], club: [195, 191] })],
 ];
 
 // Timing, in seconds within one loop.
