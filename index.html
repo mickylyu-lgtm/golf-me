@@ -152,6 +152,13 @@
             var k = localStorage.key(i) || "";
             if (k.indexOf("sb-") === 0 && k.indexOf("-auth-token") > 0) signedIn = true;
           }
+          // Coming back from Google / a sign-in link: the tokens (or an
+          // error) are still in the URL and not yet in localStorage. That's a
+          // sign-in, not a landing visit; treating it as one hid the app for
+          // up to 8 s after Google sign-in (2026-10-26).
+          if (/(^|[#&])(access_token|refresh_token|error_description|error_code)=/.test(location.hash) || /[?&]code=/.test(location.search)) {
+            signedIn = true;
+          }
           var landingPath = location.pathname === "/" || location.pathname === "/welcome" || location.pathname === "/welcome/";
           var cls = document.documentElement.classList;
           if (native || standalone || signedIn || !landingPath) {
