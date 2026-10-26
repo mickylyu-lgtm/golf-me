@@ -8,6 +8,8 @@ interface CourseHeroProps {
   state: string;
   imageUrl?: string;
   imageCredit?: string;
+  /** Where the credit links to (e.g. the photo's Wikimedia Commons page). */
+  imageCreditUrl?: string;
   /** AI-generated flyover; always shown with an "AI-generated preview" tag. */
   videoUrl?: string;
   /** The image carries its own provider logo/attribution along the bottom
@@ -28,7 +30,7 @@ function prefersReducedMotion(): boolean {
 // (rolling fairway + flag, no specific course details) so it can't be
 // mistaken for photography of any particular place. An AI flyover video
 // (videoUrl) plays over the photo when one is set, always tagged as AI.
-export function CourseHero({ courseName, city, state, imageUrl, imageCredit, videoUrl, attributionInImage = false }: CourseHeroProps) {
+export function CourseHero({ courseName, city, state, imageUrl, imageCredit, imageCreditUrl, videoUrl, attributionInImage = false }: CourseHeroProps) {
   const { t } = useLocale();
   const [imageFailed, setImageFailed] = useState(false);
   const [videoFailed, setVideoFailed] = useState(false);
@@ -80,7 +82,17 @@ export function CourseHero({ courseName, city, state, imageUrl, imageCredit, vid
           </span>
         )}
       </div>
-      {showImage && imageCredit && <p className="mt-1 text-right text-[10px] text-slate-400">{imageCredit}</p>}
+      {showImage && imageCredit && (
+        <p className="mt-1 text-right text-[10px] text-slate-400">
+          {imageCreditUrl ? (
+            <a href={imageCreditUrl} target="_blank" rel="noopener noreferrer" className="hover:underline">
+              {imageCredit}
+            </a>
+          ) : (
+            imageCredit
+          )}
+        </p>
+      )}
     </div>
   );
 }

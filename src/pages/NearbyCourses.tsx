@@ -13,7 +13,8 @@ import { resolveTravelRadiusMiles } from "../lib/matchPreferences";
 import { formatDistanceMiles } from "../lib/geo";
 import type { PlayingArea } from "../lib/geo";
 import { matchSupportedTeeTimeCourse } from "../services/teeTimes/types";
-import { CourseThumb, SatelliteAttribution } from "../components/courses/CourseThumb";
+import { CourseImageModeToggle, CourseThumb, PhotoAttribution, SatelliteAttribution } from "../components/courses/CourseThumb";
+import { useCourseImageMode } from "../lib/coursePhotos";
 import { satelliteImageryEnabled } from "../lib/courseImagery";
 import { openCourse } from "../lib/openCourse";
 
@@ -42,6 +43,7 @@ export function NearbyCourses() {
   // outside it wouldn't appear.
   const radiusMiles = resolveTravelRadiusMiles(currentUser);
   const { results, loading, error, retry } = useNearbyCourses(area, radiusMiles);
+  const imageMode = useCourseImageMode();
 
   function handleLocationSelected(picked: PlayingArea) {
     setArea(picked);
@@ -57,9 +59,12 @@ export function NearbyCourses() {
         <ArrowLeft size={16} /> {t("common.back")}
       </button>
 
-      <div>
-        <h1 className="text-xl font-bold text-slate-900">{t("nearbyCourses.title")}</h1>
-        <p className="text-sm text-slate-500">{t("nearbyCourses.subtitle")}</p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold text-slate-900">{t("nearbyCourses.title")}</h1>
+          <p className="text-sm text-slate-500">{t("nearbyCourses.subtitle")}</p>
+        </div>
+        {area && <CourseImageModeToggle />}
       </div>
 
       {!area ? (
@@ -99,7 +104,7 @@ export function NearbyCourses() {
                 const supported = matchSupportedTeeTimeCourse(r.name);
                 const content = (
                   <>
-                    <CourseThumb imageUrl={supported?.heroImageUrl} lat={r.lat} lng={r.lng} className="h-14 w-14" />
+                    <CourseThumb name={r.name} imageUrl={supported?.heroImageUrl} lat={r.lat} lng={r.lng} className="h-14 w-14" />
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-1.5">
                         <span className="truncate text-sm font-bold text-slate-900">{r.name}</span>
@@ -129,6 +134,7 @@ export function NearbyCourses() {
                   </button>
                 );
               })}
+              {imageMode === "photo" && <PhotoAttribution />}
               {satelliteImageryEnabled() && <SatelliteAttribution />}
             </div>
           )}

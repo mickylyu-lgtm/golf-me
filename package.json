@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build && node scripts/prerender-landing.mjs",
     "prerender": "node scripts/prerender-landing.mjs",
     "lint": "oxlint",
-    "test:courses": "node --test supabase/functions/_shared/courseFilter.test.ts",
+    "test:courses": "node --test supabase/functions/_shared/courseFilter.test.ts tests/coursePhotoMatch.test.ts",
     "test:onboarding": "node --test tests/firstRoundPrompt.test.ts tests/shareLinks.test.ts",
     "test:chat": "node --test tests/messageTime.test.ts",
     "preview": "vite preview",

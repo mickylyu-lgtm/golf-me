@@ -9,6 +9,8 @@ import { formatDistanceMiles } from "../lib/geo";
 import { courseSatelliteImageUrl } from "../lib/courseImagery";
 import type { DisplayCourseResult } from "../lib/useCourseSearch";
 import { CourseHero } from "../components/courses/CourseHero";
+import { CourseImageModeToggle } from "../components/courses/CourseThumb";
+import { useCourseImageMode, useCoursePhoto } from "../lib/coursePhotos";
 import { Button } from "../components/ui/Button";
 import { GolfMeLoader } from "../components/loading/GolfMeLoader";
 
@@ -34,6 +36,8 @@ export function CourseDetail() {
   const navigate = useNavigate();
   const [course, setCourse] = useState<DisplayCourseResult | null>(state?.course ?? null);
   const [missing, setMissing] = useState(false);
+  const imageMode = useCourseImageMode();
+  const photo = useCoursePhoto(course?.name, course?.lat, course?.lng, imageMode === "photo");
 
   useEffect(() => {
     if (course || isDemo || !courseId) {
@@ -66,7 +70,10 @@ export function CourseDetail() {
   if (!course) return <GolfMeLoader size="sm" />;
 
   const hasCoords = course.lat != null && course.lng != null;
-  const imageUrl = courseSatelliteImageUrl(course.lat, course.lng) ?? undefined;
+  const satelliteUrl = courseSatelliteImageUrl(course.lat, course.lng) ?? undefined;
+  // Photo mode shows the course's Wikimedia photo when it has one (credited
+  // under the image), else the satellite view, same as the list rows.
+  const shownPhoto = imageMode === "photo" ? photo : null;
 
   function openDirections() {
     if (!course) return;
@@ -114,7 +121,24 @@ export function CourseDetail() {
         )}
       </div>
 
-      <CourseHero courseName={course.name} city={course.area ?? ""} state="" imageUrl={imageUrl} attributionInImage />
+      <div className="flex flex-col gap-2">
+        <div className="flex justify-end">
+          <CourseImageModeToggle />
+        </div>
+        {shownPhoto ? (
+          <CourseHero
+            key={shownPhoto.url}
+            courseName={course.name}
+            city={course.area ?? ""}
+            state=""
+            imageUrl={shownPhoto.url}
+            imageCredit={shownPhoto.credit}
+            imageCreditUrl={shownPhoto.pageUrl}
+          />
+        ) : (
+          <CourseHero key="satellite" courseName={course.name} city={course.area ?? ""} state="" imageUrl={satelliteUrl} attributionInImage />
+        )}
+      </div>
 
       <div className="flex flex-col gap-2.5">
         <Button fullWidth icon={<Flag size={15} />} onClick={hostHere}>

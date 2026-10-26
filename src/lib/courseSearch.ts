@@ -22,12 +22,16 @@ export interface CourseResult {
   name: string;
   area?: string;
   distanceMiles?: number; // only set when both the location and the course have known coordinates
+  // The course's own coordinates when known, so demo rows get the same
+  // course photo / satellite image as real ones.
+  lat?: number;
+  lng?: number;
 }
 
 function toResult(name: string, location?: PlayingArea): CourseResult {
   const coords = coordsForCourse(name);
   const distanceMiles = location?.coords && coords ? haversineMiles(location.coords, coords) : undefined;
-  return { name, area: areaForCourse(name), distanceMiles };
+  return { name, area: areaForCourse(name), distanceMiles, lat: coords?.lat, lng: coords?.lng };
 }
 
 // The shared course-lookup surface used everywhere a golfer searches for or
