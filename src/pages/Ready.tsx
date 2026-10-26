@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { setOnboardingFinishing } from "../lib/onboardingHandoff";
 import { Bell, Check } from "lucide-react";
 import { Button } from "../components/ui/Button";
 import { FoundingGolferReveal } from "../components/golfer/FoundingGolfer";
@@ -38,6 +39,7 @@ export function Ready() {
   const [showingNotifAsk, setShowingNotifAsk] = useState(false);
   const { isDemo, profile, authUser } = useAuth();
   const [revealDone, setRevealDone] = useState(false);
+  useEffect(() => setOnboardingFinishing(false), []);
   // Dev-server only: /ready?previewFounding=8 replays the reveal with that
   // number (stripped from production builds by import.meta.env.DEV).
   const previewNumber = import.meta.env.DEV ? Number(new URLSearchParams(window.location.search).get("previewFounding")) || undefined : undefined;

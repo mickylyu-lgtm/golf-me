@@ -51,6 +51,7 @@ import { useDisableKeyboardAccessoryBar } from "./lib/useDisableKeyboardAccessor
 import { useDismissKeyboardOnDrag } from "./lib/useDismissKeyboardOnDrag";
 import { useRevealFocusedFieldAboveKeyboard } from "./lib/useRevealFocusedFieldAboveKeyboard";
 import { lazyPage } from "./lib/lazyPage";
+import { isOnboardingFinishing } from "./lib/onboardingHandoff";
 
 // Code-split routes (Health Audit P3-4): pages not needed on first open load
 // on demand. Main tabs, detail pages reached from push/deep links that are
@@ -187,7 +188,9 @@ function CaddieHistoryReset() {
 function GuestOnly() {
   const { session } = useData();
   const location = useLocation();
-  if (session.isLoggedIn && session.hasOnboarded) return <Navigate to="/" replace />;
+  if (session.isLoggedIn && session.hasOnboarded) {
+    return <Navigate to={location.pathname === "/profile-setup" && isOnboardingFinishing() ? "/ready" : "/"} replace />;
+  }
   if (session.isLoggedIn && !session.hasOnboarded && location.pathname !== "/profile-setup") {
     return <Navigate to="/profile-setup" replace />;
   }

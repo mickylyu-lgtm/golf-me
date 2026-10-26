@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { setOnboardingFinishing } from "../lib/onboardingHandoff";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, LocateFixed, MapPin } from "lucide-react";
 import { useData } from "../context/DataContext";
@@ -90,6 +91,7 @@ export function ProfileSetup() {
     if (!formValid || submitting) return;
     const finalHandicap = handicap === "" ? 15 : handicap;
 
+    setOnboardingFinishing(true);
     if (isDemo) {
       signUpNewGolfer({
         name: name.trim(),
@@ -153,6 +155,7 @@ export function ProfileSetup() {
           has_onboarded: true,
         });
       } catch (err) {
+        setOnboardingFinishing(false);
         setSubmitting(false);
         showToast(
           isObjectionableContentError(err) ? t("moderation.objectionableContent") : err instanceof Error ? err.message : t("auth.authError"),
@@ -175,7 +178,11 @@ export function ProfileSetup() {
     // /ready. Pushing this navigate to a macrotask lets that stale render
     // (and GuestOnly's redirect) fully settle first, so this call is
     // guaranteed to be the last history write.
-    setTimeout(() => navigate("/ready"), 0);
+    // GuestOnly now redirects that render to /ready itself (see
+    // onboardingHandoff), so only push it here when that didn't happen.
+    setTimeout(() => {
+      if (window.location.pathname !== "/ready") navigate("/ready");
+    }, 0);
   }
 
   function handleLocationSelected(area: { label: string; coords?: GeoPoint }) {
