@@ -657,14 +657,13 @@ function SwingScene({ phase, pose, progress, leftHanded }: { phase: Phase; pose:
         <line x1="0" y1={FLOOR_Y} x2="400" y2={FLOOR_Y} stroke="#ffffff" strokeOpacity="0.06" />
 
         <g transform={leftHanded ? "translate(400 0) scale(-1 1)" : undefined}>
-        {/* reflection: the figure mirrored in the floor, then the floor
-            gradient painted over it so it fades out with depth */}
-        <g transform={`translate(0 ${2 * FLOOR_Y}) scale(1 -1)`} opacity={0.22 * op}>
-          <g transform={FIG_T}>
-            <Mannequin J={J} clubInFront={clubInFront} />
-          </g>
-        </g>
         <rect x="0" y={FLOOR_Y} width="400" height={300 - FLOOR_Y} fill="url(#mq-floor)" />
+        {/* soft contact shadows under the feet. (A mirrored reflection of the
+            whole figure, drawn through a translucent layer, doubled the cost
+            of every frame and dropped phones to ~30 fps.) */}
+        {[J.ankL, J.ankR].map((a, i) => (
+          <ellipse key={i} cx={toScene(a)[0]} cy={FLOOR_Y + 1} rx="15" ry="2.6" fill="#000000" opacity={0.5 * op} />
+        ))}
 
         {/* ball on the tee (gone after impact until the next address) */}
         {ballOnTee && <circle cx={toScene(BALL)[0]} cy={toScene(BALL)[1]} r="3" fill="#f8faf8" />}
@@ -705,6 +704,72 @@ function SwingScene({ phase, pose, progress, leftHanded }: { phase: Phase; pose:
   );
 }
 
+// Scrubber: piecewise map of the cycle onto the four evenly spaced phase
+// ticks (Address 0, Top 1/3, Impact 2/3, Finish 1), so the playhead sits on
+// "Top" exactly when the figure is at the top, etc.
+const PLAYHEAD_MARKS: [number, number][] = [
+  [0, 0],
+  [TOP_T, 100 / 3],
+  [IMPACT_T, 200 / 3],
+  [FINISH_T, 100],
+];
+function playheadAt(t: number): number {
+  for (let i = 0; i < PLAYHEAD_MARKS.length - 1; i++) {
+    const [ta, pa] = PLAYHEAD_MARKS[i];
+    const [tb, pb] = PLAYHEAD_MARKS[i + 1];
+    if (t <= tb) return pa + ((Math.max(t, ta) - ta) / (tb - ta)) * (pb - pa);
+  }
+  return 100;
+}
+
+// The swing stage and its scrubber: the only part of the Caddie card that
+// re-renders on every animation frame (the header, heading, measurements
+// and feedback re-render only when the analysis phase changes). `between`
+// is rendered between the two and reused as-is from frame to frame.
+function SwingPlayer({ phase, leftHanded, between }: { phase: Phase; leftHanded: boolean; between: ReactNode }) {
+  // The figure keeps swinging in every state; the pose overlay tracks it.
+  const { pose, progress } = useSwingPose(true);
+  const playhead = playheadAt(progress);
+  // The phase the figure is nearest to, for the highlighted scrubber label.
+  const activePhase = Math.min(PHASES.length - 1, Math.round((playhead / 100) * (PHASES.length - 1)));
+  return (
+    <>
+      {/* stage */}
+      <div className="relative aspect-[4/3]">
+        <SwingScene phase={phase} pose={pose} progress={progress} leftHanded={leftHanded} />
+        {phase === "uploading" && <div aria-hidden="true" className="absolute inset-x-0 h-px bg-sun-300/90 shadow-[0_0_14px_3px_rgba(246,201,111,0.6)] animate-scan" />}
+        {(phase === "uploading" || phase === "pose") && (
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:24px_24px]" />
+        )}
+      </div>
+
+      {between}
+
+      {/* scrubber with swing phases */}
+      <div className="px-4 pb-1 pt-3">
+        <div className="relative h-1.5 rounded-full bg-white/20">
+          <div className="h-full rounded-full bg-sun-300" style={{ width: `${playhead}%` }} />
+          {PHASES.map((p, i) => (
+            <span key={p} aria-hidden="true" className="absolute top-1/2 h-3 w-0.5 -translate-y-1/2 bg-white/50" style={{ left: `${(i / (PHASES.length - 1)) * 100}%` }} />
+          ))}
+        </div>
+        {/* each label sits under its tick (the ends are aligned to the edges) */}
+        <div className="relative mt-1.5 h-3.5 text-[9.5px] font-semibold uppercase tracking-wider text-white/70">
+          {PHASES.map((p, i) => (
+            <span
+              key={p}
+              className={`absolute top-0 whitespace-nowrap ${i === 0 ? "" : i === PHASES.length - 1 ? "-translate-x-full" : "-translate-x-1/2"} ${i === activePhase ? "text-sun-300" : ""}`}
+              style={{ left: `${(i / (PHASES.length - 1)) * 100}%` }}
+            >
+              {p}
+            </span>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
 export function CaddieDemo({ leftHanded = false }: { leftHanded?: boolean }) {
   const { t } = useLocale();
   const [phase, setPhase] = useState<Phase>("idle");
@@ -737,31 +802,19 @@ export function CaddieDemo({ leftHanded = false }: { leftHanded?: boolean }) {
     done: "Analysis saved to your history",
   };
   const stepIndex = ["uploading", "pose", "scoring", "done"].indexOf(phase);
-  // The figure keeps swinging in every state; the pose overlay tracks it
-  // frame by frame and the callouts sit alongside.
-  const { pose, progress } = useSwingPose(true);
-  // Scrubber: follows the swing while it plays (address -> finish spans
-  // the first 72% of the cycle), parks on "Top" once the result is in.
-  // Scrubber: piecewise map of the cycle onto the four evenly spaced phase
-  // ticks (Address 0, Top 1/3, Impact 2/3, Finish 1), so the playhead sits
-  // on "Top" exactly when the figure is at the top, etc.
-  const marks: [number, number][] = [
-    [0, 0],
-    [TOP_T, 100 / 3],
-    [IMPACT_T, 200 / 3],
-    [FINISH_T, 100],
-  ];
-  const mapPlayhead = (t: number) => {
-    for (let i = 0; i < marks.length - 1; i++) {
-      const [ta, pa] = marks[i];
-      const [tb, pb] = marks[i + 1];
-      if (t <= tb) return pa + ((Math.max(t, ta) - ta) / (tb - ta)) * (pb - pa);
-    }
-    return 100;
-  };
-  const playhead = mapPlayhead(progress);
-  // The phase the figure is nearest to, for the highlighted scrubber label.
-  const activePhase = Math.min(PHASES.length - 1, Math.round((playhead / 100) * (PHASES.length - 1)));
+  // Measurements: their own row under the stage (space reserved, so the
+  // card doesn't jump when they appear). Built here — it only changes with
+  // the phase — and handed to SwingPlayer to place between stage and scrubber.
+  const measurements = (
+    <div className={`grid grid-cols-3 gap-1.5 px-3 pt-3 transition-opacity duration-500 ${showAngles ? "opacity-100" : "opacity-0"}`} aria-hidden={!showAngles}>
+      {ANGLES.map((c) => (
+        <div key={c.label} className={`flex min-w-0 flex-col justify-between rounded-xl border bg-white/[0.04] px-2 py-1.5 ${c.ok ? "border-fairway-400/40" : "border-red-400/50"}`}>
+          <p className="text-[9.5px] font-semibold uppercase leading-tight tracking-wide text-fairway-200/80">{c.label}</p>
+          <p className={`text-sm font-extrabold tabular-nums ${c.ok ? "text-fairway-300" : "text-red-300"}`}>{c.value}</p>
+        </div>
+      ))}
+    </div>
+  );
 
   const metrics = [
     { label: "Tempo", value: "3.1 : 1", pct: 86, ok: true },
@@ -799,47 +852,7 @@ export function CaddieDemo({ leftHanded = false }: { leftHanded?: boolean }) {
           </span>
         </p>
 
-        {/* stage */}
-        <div className="relative aspect-[4/3]">
-          <SwingScene phase={phase} pose={pose} progress={progress} leftHanded={leftHanded} />
-          {phase === "uploading" && <div aria-hidden="true" className="absolute inset-x-0 h-px bg-sun-300/90 shadow-[0_0_14px_3px_rgba(246,201,111,0.6)] animate-scan" />}
-          {(phase === "uploading" || phase === "pose") && (
-            <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:24px_24px]" />
-          )}
-        </div>
-
-        {/* Measurements: their own row under the stage (space reserved, so
-            the card doesn't jump when they appear) */}
-        <div className={`grid grid-cols-3 gap-1.5 px-3 pt-3 transition-opacity duration-500 ${showAngles ? "opacity-100" : "opacity-0"}`} aria-hidden={!showAngles}>
-          {ANGLES.map((c) => (
-            <div key={c.label} className={`flex min-w-0 flex-col justify-between rounded-xl border bg-white/[0.04] px-2 py-1.5 ${c.ok ? "border-fairway-400/40" : "border-red-400/50"}`}>
-              <p className="text-[9.5px] font-semibold uppercase leading-tight tracking-wide text-fairway-200/80">{c.label}</p>
-              <p className={`text-sm font-extrabold tabular-nums ${c.ok ? "text-fairway-300" : "text-red-300"}`}>{c.value}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* scrubber with swing phases */}
-        <div className="px-4 pb-1 pt-3">
-          <div className="relative h-1.5 rounded-full bg-white/20">
-            <div className="h-full rounded-full bg-sun-300" style={{ width: `${playhead}%` }} />
-            {PHASES.map((p, i) => (
-              <span key={p} aria-hidden="true" className="absolute top-1/2 h-3 w-0.5 -translate-y-1/2 bg-white/50" style={{ left: `${(i / (PHASES.length - 1)) * 100}%` }} />
-            ))}
-          </div>
-          {/* each label sits under its tick (the ends are aligned to the edges) */}
-          <div className="relative mt-1.5 h-3.5 text-[9.5px] font-semibold uppercase tracking-wider text-white/70">
-            {PHASES.map((p, i) => (
-              <span
-                key={p}
-                className={`absolute top-0 whitespace-nowrap ${i === 0 ? "" : i === PHASES.length - 1 ? "-translate-x-full" : "-translate-x-1/2"} ${i === activePhase ? "text-sun-300" : ""}`}
-                style={{ left: `${(i / (PHASES.length - 1)) * 100}%` }}
-              >
-                {p}
-              </span>
-            ))}
-          </div>
-        </div>
+        <SwingPlayer phase={phase} leftHanded={leftHanded} between={measurements} />
 
         {/* status, metrics, feedback */}
         <div className="p-4">

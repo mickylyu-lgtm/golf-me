@@ -344,15 +344,11 @@ const smoothstep = (e0: number, e1: number, x: number) => {
 // swing that is already sequenced (hips lead, arms follow), so nothing is
 // offset on top of it.
 const BODY_CH = ["hcx", "hcy", "hipW", "hipTilt", "spineA", "headA", "shW", "shTilt", "ankLx", "ankLy", "kLt", "kLo", "kRt", "kRo", "eLt", "eLo", "eRt", "eRo"] as const;
-// Kinematic sequence: from the top into impact the lower body (pelvis,
-// legs) runs ~45 ms ahead of the torso and arms — the hips start down first.
-const LOWER = new Set(["hcx", "hcy", "hipW", "hipTilt", "ankLx", "ankLy", "kLt", "kLo", "kRt", "kRo"]);
-const T_IMP0 = frameT(13.6);
+// Every body part on one clock, in step with the arms (a time offset
+// between the hips and the upper body read on screen as the body lagging).
 function bodyChannels(u: number): number[] {
-  const lead = (0.045 / DUR) * smoothstep(TOP_T - 0.05, TOP_T + 0.01, u) * (1 - smoothstep(T_IMP0, T_IMP0 + 0.06, u));
   const s = warp(u);
-  const sLow = warp(Math.min(1, u + lead));
-  return BODY_CH.map((k) => spline(CH[k], LOWER.has(k) ? sLow : s));
+  return BODY_CH.map((k) => spline(CH[k], s));
 }
 
 // ── the arms and club ───────────────────────────────────────────────────
