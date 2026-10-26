@@ -36,7 +36,8 @@ import { postCategoryLabel } from "../../lib/enumLabels";
 import { areaForCourse } from "../../lib/courses";
 import { enterNativeVideoFullscreen, isVideoInNativeFullscreen } from "../../lib/video";
 import { isStaleProcessing, usePeriodicRerender } from "../../lib/caddieAnalysis";
-import { backdropFromVideo, barsClipPath, useBlurredBackdrop, type BlurredBackdrop } from "../../lib/blurredBackdrop";
+import { barsClipPath, readVideoFrame, thumbResults, useBlurredBackdrop, type BlurredBackdrop, type FrameReadResult } from "../../lib/blurredBackdrop";
+import { barsDebugEnabled, buildTag } from "../../lib/barsDebug";
 import { useLocale } from "../../i18n/LocaleContext";
 
 // A touch that moves further than this between press and release is a
@@ -100,13 +101,25 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
   // no bars, so black bars baked into the video are still caught.
   const [frameBackdrop, setFrameBackdrop] = useState<BlurredBackdrop | null>(null);
   const frameScansRef = useRef(0);
+  const nextScanAtRef = useRef(0);
+  const [frameResults, setFrameResults] = useState<FrameReadResult[]>([]);
   const videoBackdrop = thumbBackdrop?.bars ? thumbBackdrop : (frameBackdrop ?? thumbBackdrop);
+  // Looks at real decoded frames: on load, when playback starts, and every
+  // half second of playback after that, until bars are found or a few good
+  // frames agree there are none. A frame that isn't decoded yet or is black
+  // (a fade-in) doesn't count, so the scan never gives up on a frame that
+  // couldn't show bars. A video whose pixels can't be read (no CORS) stops.
   function scanVideoFrame(e: React.SyntheticEvent<HTMLVideoElement>) {
-    if (thumbBackdrop?.bars || frameBackdrop?.bars || frameScansRef.current >= 3) return;
-    const scanned = backdropFromVideo(e.currentTarget);
-    if (!scanned) return;
+    const video = e.currentTarget;
+    if (thumbBackdrop?.bars || frameBackdrop?.bars || frameScansRef.current >= MAX_FRAME_SCANS) return;
+    if (e.type === "timeupdate" && video.currentTime < nextScanAtRef.current) return;
+    nextScanAtRef.current = video.currentTime + 0.5;
+    const { backdrop, result } = readVideoFrame(video);
+    if (barsDebugEnabled) setFrameResults((r) => [...r.slice(-5), result]);
+    if (result === "tainted") frameScansRef.current = MAX_FRAME_SCANS;
+    if (!backdrop) return;
     frameScansRef.current++;
-    if (scanned.bars || (!thumbBackdrop && !frameBackdrop)) setFrameBackdrop(scanned);
+    if (backdrop.bars || (!thumbBackdrop && !frameBackdrop)) setFrameBackdrop(backdrop);
   }
   const fallbackTimerRef = useRef<number | null>(null);
   const fallbackCleanupRef = useRef<(() => void) | null>(null);
@@ -447,10 +460,8 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
               // the header); the poster is a plain image load either way.
               crossOrigin="anonymous"
               onLoadedData={scanVideoFrame}
-              onTimeUpdate={(e) => {
-                // A second look a moment in, in case the first frame was a fade from black.
-                if (e.currentTarget.currentTime >= 1 && frameScansRef.current < 2) scanVideoFrame(e);
-              }}
+              onPlaying={scanVideoFrame}
+              onTimeUpdate={scanVideoFrame}
               muted={feedMuted}
               loop
               playsInline
@@ -458,6 +469,14 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
               style={{ clipPath: barsClipPath(videoBackdrop?.bars) }}
               className="relative block h-auto max-h-96 w-auto max-w-full cursor-pointer"
             />
+            {barsDebugEnabled && (
+              <BarsDebugReadout
+                thumb={post.videoThumbnailUrl ? (thumbResults.get(post.videoThumbnailUrl) ?? "pending") : "no thumbnail"}
+                frames={frameResults}
+                video={videoRef.current}
+                bars={videoBackdrop?.bars ?? null}
+              />
+            )}
             {/* A real button, not a decorative overlay — it sits above the
                 video in stacking order and stops its own click from
                 bubbling, so tapping it toggles feed sound in place instead
@@ -619,6 +638,22 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
           />
         </div>
       )}
+    </div>
+  );
+}
+
+const MAX_FRAME_SCANS = 3;
+
+// ?barsdebug=1 only: what the black-bar scan saw on this card.
+function BarsDebugReadout({ thumb, frames, video, bars }: { thumb: string; frames: FrameReadResult[]; video: HTMLVideoElement | null; bars: BlurredBackdrop["bars"] }) {
+  const pct = (n: number) => Math.round(n * 100);
+  return (
+    <div className="pointer-events-none absolute left-1.5 top-1.5 max-w-[90%] rounded bg-black/75 px-1.5 py-1 font-mono text-[9px] leading-tight text-lime-300">
+      <div>build {buildTag()}</div>
+      <div>video {video ? `${video.videoWidth}x${video.videoHeight} rs${video.readyState}` : "-"}</div>
+      <div>thumb {thumb}</div>
+      <div>frames {frames.length ? frames.join(",") : "none yet"}</div>
+      <div>bars {bars ? `L${pct(bars.left)} R${pct(bars.right)} T${pct(bars.top)} B${pct(bars.bottom)}` : "none"}</div>
     </div>
   );
 }

@@ -37,6 +37,8 @@ export interface BlurredBackdrop {
 }
 
 const cache = new Map<string, BlurredBackdrop | null>();
+// How each thumbnail scan went, for the ?barsdebug=1 readout only.
+export const thumbResults = new Map<string, "bars" | "no-bars" | "tainted" | "load-error">();
 
 type Frame = { source: CanvasImageSource; width: number; height: number };
 
@@ -46,7 +48,13 @@ export function findBars(img: HTMLImageElement): BarInsets | null {
   return findFrameBars(imageFrame(img));
 }
 
-function findFrameBars({ source, width, height }: Frame): BarInsets | null {
+function findFrameBars(frame: Frame): BarInsets | null {
+  return scanFrame(frame).bars;
+}
+
+// `dark`: (nearly) the whole frame is black -- a fade-in, or a frame WebKit
+// hasn't decoded yet -- so it says nothing about bars either way.
+function scanFrame({ source, width, height }: Frame): { bars: BarInsets | null; dark: boolean } {
   const scale = SCAN / Math.max(width, height, 1);
   const w = Math.max(1, Math.round(width * scale));
   const h = Math.max(1, Math.round(height * scale));
@@ -54,7 +62,7 @@ function findFrameBars({ source, width, height }: Frame): BarInsets | null {
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  if (!ctx) return null;
+  if (!ctx) return { bars: null, dark: false };
   ctx.drawImage(source, 0, 0, w, h);
   const px = ctx.getImageData(0, 0, w, h).data;
   const dark = (x: number, y: number) => {
@@ -83,8 +91,8 @@ function findFrameBars({ source, width, height }: Frame): BarInsets | null {
   // leaves where a bar meets the picture.
   const side = (n: number, size: number) => (n / size >= MIN_BAR ? Math.min(1, (n + 1) / size) : 0);
   const bars = { top: side(top, h), right: side(right, w), bottom: side(bottom, h), left: side(left, w) };
-  if (1 - bars.left - bars.right < MIN_CONTENT || 1 - bars.top - bars.bottom < MIN_CONTENT) return null; // a dark shot, not bars
-  return bars.top || bars.right || bars.bottom || bars.left ? bars : null;
+  if (1 - bars.left - bars.right < MIN_CONTENT || 1 - bars.top - bars.bottom < MIN_CONTENT) return { bars: null, dark: true }; // a dark shot, not bars
+  return { bars: bars.top || bars.right || bars.bottom || bars.left ? bars : null, dark: false };
 }
 
 function backdropFromFrame(frame: Frame): BlurredBackdrop | null {
@@ -122,8 +130,28 @@ function backdropFromFrame(frame: Frame): BlurredBackdrop | null {
  * with crossOrigin="anonymous" or the frame can't be read.
  */
 export function backdropFromVideo(video: HTMLVideoElement): BlurredBackdrop | null {
-  if (!video.videoWidth || !video.videoHeight) return null;
-  return backdropFromFrame({ source: video, width: video.videoWidth, height: video.videoHeight });
+  return readVideoFrame(video).backdrop;
+}
+
+/** Why a frame read did or didn't give bars (shown by the ?barsdebug=1 readout). */
+export type FrameReadResult = "no-frame" | "tainted" | "dark" | "no-bars" | "bars";
+
+/**
+ * backdropFromVideo plus the reason. "no-frame" (nothing decoded yet) and
+ * "dark" (a black frame) say nothing about bars, so callers try again later;
+ * "tainted" means the browser won't let the page read the video's pixels.
+ */
+export function readVideoFrame(video: HTMLVideoElement): { backdrop: BlurredBackdrop | null; result: FrameReadResult } {
+  if (!video.videoWidth || !video.videoHeight || video.readyState < 2) return { backdrop: null, result: "no-frame" };
+  const frame = { source: video, width: video.videoWidth, height: video.videoHeight };
+  try {
+    if (scanFrame(frame).dark) return { backdrop: null, result: "dark" };
+  } catch {
+    return { backdrop: null, result: "tainted" };
+  }
+  const backdrop = backdropFromFrame(frame);
+  if (!backdrop) return { backdrop: null, result: "tainted" };
+  return { backdrop, result: backdrop.bars ? "bars" : "no-bars" };
 }
 
 export function buildBlurredBackdrop(url: string): Promise<BlurredBackdrop | null> {
@@ -131,8 +159,15 @@ export function buildBlurredBackdrop(url: string): Promise<BlurredBackdrop | nul
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.decoding = "async";
-    img.onload = () => resolve(backdropFromFrame(imageFrame(img)));
-    img.onerror = () => resolve(null);
+    img.onload = () => {
+      const result = backdropFromFrame(imageFrame(img));
+      thumbResults.set(url, result ? (result.bars ? "bars" : "no-bars") : "tainted");
+      resolve(result);
+    };
+    img.onerror = () => {
+      thumbResults.set(url, "load-error");
+      resolve(null);
+    };
     // Separate cache entry from the <video poster> load, which isn't a CORS
     // request; reusing that cached response would taint the canvas.
     img.src = `${url}${url.includes("?") ? "&" : "?"}backdrop=1`;
