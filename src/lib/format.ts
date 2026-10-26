@@ -82,9 +82,14 @@ export function monthsSince(iso: string): number {
 
 // "Since Aug 2026" (Micky, 2026-10-25: shorter than "2 months on GolfMe",
 // and it never jumps from "11 months" to "1 year").
-export function memberSinceLabel(iso: string, t: TFn, locale?: string): string {
-  if (monthsSince(iso) < 1) return t("member.new");
-  const date = new Intl.DateTimeFormat(locale, { month: "short", year: "numeric" }).format(new Date(iso));
+export function memberSinceLabel(iso: string | null | undefined, t: TFn, locale?: string): string {
+  // A missing or unparseable date (null member_since reads as 1970) shows
+  // nothing: Intl throws on an invalid Date, and that took down every
+  // screen it rendered on.
+  const since = iso ? new Date(iso) : null;
+  if (!since || Number.isNaN(since.getTime()) || since.getFullYear() < 2025) return "";
+  if (monthsSince(iso!) < 1) return t("member.new");
+  const date = new Intl.DateTimeFormat(locale, { month: "short", year: "numeric" }).format(since);
   return t("member.since", { date });
 }
 
