@@ -42,20 +42,42 @@ export interface HostRoundDraft {
 }
 
 const DRAFT_KEY = "golfme:hostRoundDraft";
+// A draft untouched this long is a round nobody is still planning.
+const DRAFT_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
 
-export function loadHostRoundDraft(): HostRoundDraft | null {
+// Stored with the account it belongs to (2026-10-26: a draft started on one
+// account, e.g. at Liberty National in NYC, refilled Host a Round on another
+// account on the same phone). `owner` is the auth user id, or "demo".
+interface StoredDraft extends HostRoundDraft {
+  owner?: string;
+  savedAt?: number;
+}
+
+export function loadHostRoundDraft(owner: string): HostRoundDraft | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(DRAFT_KEY);
-    return raw ? (JSON.parse(raw) as HostRoundDraft) : null;
+    if (!raw) return null;
+    const { owner: draftOwner, savedAt, ...draft } = JSON.parse(raw) as StoredDraft;
+    // Drafts saved before owners were recorded can't be told apart: drop them.
+    if (draftOwner !== owner || !savedAt || Date.now() - savedAt > DRAFT_MAX_AGE_MS) {
+      window.localStorage.removeItem(DRAFT_KEY);
+      return null;
+    }
+    return draft;
   } catch {
     return null;
   }
 }
 
-export function saveHostRoundDraft(draft: HostRoundDraft): void {
+export function saveHostRoundDraft(owner: string, draft: HostRoundDraft): void {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+  try {
+    const stored: StoredDraft = { ...draft, owner, savedAt: Date.now() };
+    window.localStorage.setItem(DRAFT_KEY, JSON.stringify(stored));
+  } catch {
+    // Full or blocked storage: the draft just isn't kept.
+  }
 }
 
 export function clearHostRoundDraft(): void {

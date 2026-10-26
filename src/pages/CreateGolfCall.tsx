@@ -98,7 +98,8 @@ export function CreateGolfCall() {
   // app mid-wizard — reported live as every typed field vanishing in
   // exactly those cases. Only consulted once per mount; a deep link's own
   // params (below) still win when there's no draft to resume.
-  const initial = loadHostRoundDraft();
+  const draftOwner = isDemo ? "demo" : (authUser?.id ?? currentUser.id);
+  const initial = loadHostRoundDraft(draftOwner);
 
   const [step, setStep] = useState(initial?.step ?? 1);
   // Fill My Foursome (pre-inviting specific players at creation time) needs
@@ -166,7 +167,7 @@ export function CreateGolfCall() {
   // chat composer's draft. Cleared only once the round is actually posted
   // (see handleSubmit).
   useEffect(() => {
-    saveHostRoundDraft({
+    saveHostRoundDraft(draftOwner, {
       step,
       fillMode,
       course,
@@ -194,6 +195,7 @@ export function CreateGolfCall() {
       proofReference,
     });
   }, [
+    draftOwner,
     step,
     fillMode,
     course,
