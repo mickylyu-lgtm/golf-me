@@ -130,14 +130,15 @@ export const KEYS: Key[] = [
   // both arms extended: shaft parallel to the ground pointing at the target
   { t: 1.33, pel: [11, 91, -7], pYaw: -62, bend: 28, side: 12, sYaw: -48, grip: [35, 101, 33], shaft: [0.97, 0.12, 0.2], eL: [0.4, -1, 0.3], eR: [0.4, -0.5, -0.8], kL: [0.9, 0, 0.6], kR: [0.1, 0, 1], heel: 0.4 },
   // three-quarter: shaft vertical, trail arm crossing over
-  { t: 1.45, pel: [13, 92, -7], pYaw: -80, bend: 18, side: 9, sYaw: -78, grip: [34, 140, 24], shaft: [0.08, 0.99, -0.15], eL: [0.5, -0.6, 0.6], eR: [0.4, -0.5, -0.8], kL: [1, 0, 0.5], kR: [0.1, 0, 1], heel: 0.7 },
+  { t: 1.45, pel: [13, 92, -7], pYaw: -80, bend: 18, side: 9, sYaw: -78, grip: [34, 140, 24], shaft: [0.08, 0.99, -0.15], eL: [0.3, -0.9, 0.4], eR: [0.1, -0.9, -0.4], kL: [1, 0, 0.5], kR: [0.1, 0, 1], heel: 0.7 },
   // wrapping: hands rising over the lead shoulder, club falling behind
-  { t: 1.58, pel: [14, 93, -7], pYaw: -90, bend: 10, side: 8, sYaw: -98, grip: [27, 155, 4], shaft: [-0.55, 0.62, -0.56], eL: [0.6, -0.2, 0.8], eR: [0.4, -0.6, -0.7], kL: [1, 0, 0.4], kR: [0.1, 0, 1], heel: 0.9 },
+  { t: 1.58, pel: [14, 93, -7], pYaw: -90, bend: 10, side: 8, sYaw: -98, grip: [27, 155, 4], shaft: [-0.55, 0.62, -0.56], eL: [0.3, -0.85, 0.45], eR: [-0.1, -0.9, -0.4], kL: [1, 0, 0.4], kR: [0.1, 0, 1], heel: 0.9 },
   // finish: chest past the target, standing tall over a straight lead leg,
   // trail foot up on its toe, hands high beside the head over the lead
-  // shoulder, trail arm folded across the chest, lead elbow folded down,
+  // shoulder, trail arm folded across the chest, both elbows tucked down toward
+  // the body (not flared up beside the head),
   // club wrapped behind the neck and lead shoulder, pointing down and back
-  { t: 1.72, rest: true, pel: [14, 94, -7], pYaw: -95, bend: 6, side: 7, sYaw: -110, grip: [22, 158, -12], shaft: [-0.72, -0.45, -0.53], eL: [0.6, 0.1, 0.8], eR: [0.4, -0.7, -0.6], kL: [1, 0, 0.4], kR: [0.1, 0, 1], heel: 1 },
+  { t: 1.72, rest: true, pel: [14, 94, -7], pYaw: -95, bend: 6, side: 7, sYaw: -110, grip: [22, 158, -12], shaft: [-0.72, -0.45, -0.53], eL: [0.25, -0.85, 0.45], eR: [-0.2, -0.9, -0.35], kL: [1, 0, 0.4], kR: [0.1, 0, 1], heel: 1 },
 ];
 // Address and impact shafts point exactly at the ball.
 for (const k of KEYS) if (k.t === 0 || k.t === 1.22) k.shaft = norm(sub(BALL3, k.grip));
