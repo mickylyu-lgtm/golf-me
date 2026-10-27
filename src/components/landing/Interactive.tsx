@@ -6,8 +6,8 @@ import { AppStoreButton } from "./AppStoreButton";
 import { DEFAULT_MOCK_GOLFERS, GolfersScreen, PhoneFrame, RoundsScreen, CaddieScreen } from "./PhoneMock";
 import type { MockGolfer } from "./PhoneMock";
 import { useLocale } from "../../i18n/LocaleContext";
-import { samplePose, swingOpacity, SWING_MS, TOP_T, IMPACT_T, FINISH_T, BALL, TOP_POSE, JOINT_NAMES, RETURN_MID, TRACE_END_T } from "./swingMotion";
-import type { JointName, Pose, Pt } from "./swingMotion";
+import { TOP_T, IMPACT_T, FINISH_T } from "./swingMotion";
+import { FLOOR_Y, mountSwing } from "./swingRenderer";
 
 // Interactive demos for the public landing page. Each one is a small,
 // self-contained toy that explains one part of the product by letting the
@@ -336,201 +336,10 @@ type Phase = "idle" | "uploading" | "pose" | "scoring" | "done";
 
 const FEEDBACK = ["Strong tempo through transition.", "Hips open slightly early at the top.", "Try: hold the turn one beat longer."];
 
-// The golfer's motion lives in ./swingMotion (pure math: key poses traced
-// from a real swing, each limb rotated about its parent joint along a
-// smooth spline). This file only draws it.
-type Joint = JointName;
-const JOINTS = JOINT_NAMES;
-
-// Drives the swing loop with requestAnimationFrame while `playing`; when
-// paused it rests at the top of the backswing (where the angle callouts
-// are measured). First render is the top pose too, so the prerender shows
-// a finished-looking frame. This deliberately does NOT stop under
-// prefers-reduced-motion: the swing is the content of this demo, not
-// decoration, and it is small and slow (one swing every ~3.5 s).
-function useSwingPose(playing: boolean): { pose: Pose; progress: number } {
-  const [state, setState] = useState<{ pose: Pose; progress: number }>({ pose: TOP_POSE, progress: TOP_T });
-  useEffect(() => {
-    if (!playing) {
-      setState({ pose: TOP_POSE, progress: TOP_T });
-      return;
-    }
-    let raf = 0;
-    const start = performance.now();
-    const tick = (now: number) => {
-      const t = ((now - start) % SWING_MS) / SWING_MS;
-      setState({ pose: samplePose(t), progress: t });
-      raf = window.requestAnimationFrame(tick);
-    };
-    raf = window.requestAnimationFrame(tick);
-    return () => window.cancelAnimationFrame(raf);
-  }, [playing]);
-  return state;
-}
-
-const BONES: [Joint, Joint][] = [
-  ["head", "neck"],
-  ["neck", "shL"],
-  ["neck", "shR"],
-  ["shL", "elL"],
-  ["elL", "hands"],
-  ["shR", "elR"],
-  ["elR", "hands"],
-  ["shL", "hipL"],
-  ["shR", "hipR"],
-  ["hipL", "hipR"],
-  ["hipL", "kneeL"],
-  ["kneeL", "ankL"],
-  ["hipR", "kneeR"],
-  ["kneeR", "ankR"],
-];
+// The golfer's motion lives in ./swingMotion (a 3D skeleton keyed in joint
+// terms) and is drawn by ./swingRenderer, which animates the SVG directly
+// rather than through React state (see the note there).
 const PHASES = ["Address", "Top", "Impact", "Finish"];
-
-// ── mannequin rendering ─────────────────────────────────────────────────
-// A glossy studio mannequin on a dark stage (after the "swing decoded"
-// style): every limb is a shaded capsule lit from the upper left, joints
-// are ball joints, the floor reflects the figure, and the club leaves a
-// fan of positions coloured by clubhead speed. Everything is drawn from
-// the rig in ./swingMotion. No SVG filters, masks or CSS transform
-// animations on anything that moves (they caused lag/ghosting before).
-
-const FLOOR_Y = 246; // scene y of the stage floor
-// The rig's figure box -> scene: scaled and placed so the whole club arc
-// (backswing up past the head, follow-through out to the right) stays on
-// the stage with the feet on the floor.
-const FIG_S = 1.02;
-const FIG_DX = 40;
-const FIG_DY = 7;
-const FIG_T = `translate(${FIG_DX} ${FIG_DY}) scale(${FIG_S})`;
-const toScene = (q: Pt): Pt => [q[0] * FIG_S + FIG_DX, q[1] * FIG_S + FIG_DY];
-const LIGHT = [-0.6, -0.8]; // direction the light comes FROM (unit-ish)
-
-// Clubhead trail: every clubhead position over one swing, precomputed once
-// with its speed. Only the last TRAIL_MS of it is drawn — a tapered streak
-// that follows the clubhead and fades out behind it (one full-swing trace
-// overlapped itself into a tangle of arcs).
-const FAN_STEP = 0.0015; // ~6 ms between samples: a smooth curve, not a polygon
-const FAN: { t: number; club: Pt; speed: number }[] = (() => {
-  const out: { t: number; club: Pt; speed: number }[] = [];
-  let prev: Pt | null = null;
-  for (let t = 0; t <= TRACE_END_T; t += FAN_STEP) {
-    const p = samplePose(t);
-    const speed = prev ? Math.hypot(p.club[0] - prev[0], p.club[1] - prev[1]) : 0;
-    out.push({ t, club: p.club, speed });
-    prev = p.club;
-  }
-  return out;
-})();
-const FAN_MAX = Math.max(...FAN.map((f) => f.speed)) || 1;
-// Clubhead speed -> colour: green (slow) -> gold -> coral (fastest, at the ball).
-const BAND_COLOURS = ["#4ade80", "#86d36a", "#c4c454", "#f4b942", "#f6935a", "#f87171"];
-const speedBand = (v: number) => Math.min(BAND_COLOURS.length - 1, Math.floor((v / FAN_MAX) * BAND_COLOURS.length));
-const TRAIL_MS = 340;
-const TRAIL_PIECES = 10; // drawn as a few pieces, each a bit brighter and wider toward the clubhead
-function trailPieces(progress: number): { d: string; colour: string; width: number; opacity: number }[] {
-  const from = progress - TRAIL_MS / SWING_MS;
-  const pts = FAN.filter((f) => f.t > from && f.t <= progress);
-  if (pts.length < 2) return [];
-  const out: { d: string; colour: string; width: number; opacity: number }[] = [];
-  for (let k = 0; k < TRAIL_PIECES; k++) {
-    const a = Math.floor((k * (pts.length - 1)) / TRAIL_PIECES);
-    const b = Math.floor(((k + 1) * (pts.length - 1)) / TRAIL_PIECES);
-    if (b <= a) continue;
-    const seg = pts.slice(a, b + 1);
-    // fade by age (time), not by position, so a slow club leaves a short trail
-    const age = (progress - seg[seg.length - 1].t) / (TRAIL_MS / SWING_MS);
-    const fresh = Math.max(0, 1 - age);
-    const v = Math.max(...seg.map((f) => f.speed));
-    out.push({
-      d: seg.map((f, i) => `${i ? "L" : "M"}${f.club[0].toFixed(1)} ${f.club[1].toFixed(1)}`).join(""),
-      colour: BAND_COLOURS[speedBand(v)],
-      width: 0.6 + 2.4 * fresh * fresh,
-      opacity: 0.9 * fresh * fresh,
-    });
-  }
-  return out;
-}
-
-// A capsule (rounded limb) from a to b with radius r: a rounded bar drawn
-// along +x in its own frame and rotated into place, filled with ONE shared
-// gradient (#mq-limb, light edge at the top of the bar). If the bar's top
-// would face away from the light it is mirrored, so every limb is lit from
-// the upper left. No per-frame gradient definitions — creating ~30 new
-// gradients every frame dropped the page to ~27 fps.
-function Capsule({ a, b, r }: { a: Pt; b: Pt; r: number }) {
-  const dx = b[0] - a[0];
-  const dy = b[1] - a[1];
-  const L = Math.hypot(dx, dy);
-  const th = Math.atan2(dy, dx);
-  // the bar's local "up" (0,-1) in world space is (sin th, -cos th)
-  const flip = Math.sin(th) * LIGHT[0] - Math.cos(th) * LIGHT[1] < 0 ? -1 : 1;
-  return (
-    <rect
-      x={-r}
-      y={-r}
-      width={L + 2 * r}
-      height={2 * r}
-      rx={r}
-      fill="url(#mq-limb)"
-      transform={`translate(${a[0]} ${a[1]}) rotate(${(th * 180) / Math.PI}) scale(1 ${flip})`}
-    />
-  );
-}
-const Ball = ({ c, r }: { c: Pt; r: number }) => <circle cx={c[0]} cy={c[1]} r={r} fill="url(#mq-ball)" />;
-
-// Sculpted mannequin drawn from the 3D rig: every part is a shaded capsule
-// or ball placed at its projected position, and the parts are painted back
-// to front by their depth toward the camera. That is what makes the club
-// pass behind the neck in the finish, the trail arm cross in front of the
-// chest, and the far leg sit behind the near one — no hand-made draw order.
-function Mannequin({ J }: { J: Pose }) {
-  const z = J.z;
-  const mid = (a: Pt, b: Pt): Pt => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-  const parts: { z: number; el: ReactNode }[] = [];
-  const cap = (a: keyof Pose & string, b: keyof Pose & string, r: number, bias = 0) =>
-    parts.push({ z: (z[a] + z[b]) / 2 + bias, el: <Capsule key={`${a}-${b}`} a={J[a] as Pt} b={J[b] as Pt} r={r} /> });
-  const ball = (a: keyof Pose & string, r: number, bias = 0) => parts.push({ z: z[a] + bias, el: <Ball key={`b-${a}`} c={J[a] as Pt} r={r} /> });
-  // legs and feet
-  for (const side of ["L", "R"] as const) {
-    cap(`hip${side}`, `knee${side}`, 9.2);
-    cap(`knee${side}`, `ank${side}`, 7);
-    ball(`knee${side}`, 7.6, 0.1);
-    cap(`ank${side}`, `toe${side}`, 5, 0.2);
-  }
-  // pelvis, torso (thick enough to read as a body side-on), shoulders
-  const chestZ = (z.shL + z.shR) / 2;
-  const chest = mid(J.shL, J.shR);
-  parts.push({ z: (z.hipL + z.hipR) / 2, el: <Capsule key="pelvis" a={J.hipL} b={J.hipR} r={10} /> });
-  parts.push({ z: (z.pelvis + chestZ) / 2, el: <Capsule key="torso" a={J.pelvis} b={[(chest[0] * 3 + J.neck[0]) / 4, (chest[1] * 3 + J.neck[1]) / 4]} r={13} /> });
-  cap("shL", "shR", 7.5, 0.5);
-  ball("shL", 7.2, 0.6);
-  ball("shR", 7.2, 0.6);
-  // neck and head
-  cap("neck", "head", 5);
-  const headAng = (Math.atan2(J.head[1] - J.neck[1], J.head[0] - J.neck[0]) * 180) / Math.PI + 90;
-  parts.push({ z: z.head + 1, el: <ellipse key="head" cx={J.head[0]} cy={J.head[1]} rx="12" ry="14.5" fill="url(#mq-ball)" transform={`rotate(${headAng} ${J.head[0]} ${J.head[1]})`} /> });
-  // arms (lead hand on the grip, trail hand just below it)
-  cap("shR", "elR", 6.2);
-  cap("elR", "hands", 5.2);
-  ball("elR", 5.4, 0.1);
-  cap("shL", "elL", 6.2);
-  cap("elL", "handT", 5.2);
-  ball("elL", 5.4, 0.1);
-  ball("hands", 5.4, 0.3);
-  ball("handT", 5.4, 0.3);
-  // club: the shaft in three pieces so each sorts at its own depth as it
-  // wraps round the body, then the clubhead
-  for (let i = 0; i < 3; i++) {
-    const f0 = i / 3;
-    const f1 = (i + 1) / 3;
-    const p0: Pt = [J.hands[0] + (J.club[0] - J.hands[0]) * f0, J.hands[1] + (J.club[1] - J.hands[1]) * f0];
-    const p1: Pt = [J.hands[0] + (J.club[0] - J.hands[0]) * f1, J.hands[1] + (J.club[1] - J.hands[1]) * f1];
-    parts.push({ z: z.hands + (z.club - z.hands) * ((f0 + f1) / 2), el: <line key={`shaft${i}`} x1={p0[0]} y1={p0[1]} x2={p1[0]} y2={p1[1]} stroke="#d7dcd8" strokeWidth="2.2" strokeLinecap="round" /> });
-  }
-  parts.push({ z: z.club, el: <circle key="clubhead" cx={J.club[0]} cy={J.club[1]} r="4.5" fill="#2a2f2c" stroke="#9aa39c" strokeWidth="1" /> });
-  parts.sort((p, q) => p.z - q.z);
-  return <g>{parts.map((p) => p.el)}</g>;
-}
 
 const ANGLES = [
   { label: "Shoulder turn", value: "94°", ok: true },
@@ -573,22 +382,29 @@ function useTyped(text: string): string {
   return text.slice(0, n);
 }
 
-// The stage only: figure, trail, ball and pose overlay. All text (phase
-// heading, clip info, score, measurements) lives in HTML rows around it in
-// CaddieDemo, so nothing can overlap the figure or each other at any width.
-// leftHanded mirrors the whole stage about its centre.
-function SwingScene({ phase, pose, progress, leftHanded }: { phase: Phase; pose: Pose; progress: number; leftHanded: boolean }) {
-  const J = pose;
-  const showPose = phase === "pose" || phase === "scoring" || phase === "done";
-  const op = swingOpacity(progress);
-  // Ball: on the tee until impact, in flight briefly, then gone until the
-  // loop fades back in at address.
-  const ballOnTee = progress < IMPACT_T || progress >= RETURN_MID;
-  const ballStruck = progress > IMPACT_T && progress < IMPACT_T + 0.18;
-  const trail = progress < RETURN_MID ? trailPieces(progress) : [];
-  const hipC: Pt = toScene([(J.hipL[0] + J.hipR[0]) / 2, (J.hipL[1] + J.hipR[1]) / 2]);
+// Scrubber: piecewise map of the cycle onto the four evenly spaced phase
+// ticks (Address 0, Top 1/3, Impact 2/3, Finish 1), so the playhead sits on
+// "Top" exactly when the figure is at the top, etc.
+const PLAYHEAD_MARKS: [number, number][] = [
+  [0, 0],
+  [TOP_T, 100 / 3],
+  [IMPACT_T, 200 / 3],
+  [FINISH_T, 100],
+];
+function playheadAt(t: number): number {
+  for (let i = 0; i < PLAYHEAD_MARKS.length - 1; i++) {
+    const [ta, pa] = PLAYHEAD_MARKS[i];
+    const [tb, pb] = PLAYHEAD_MARKS[i + 1];
+    if (t <= tb) return pa + ((Math.max(t, ta) - ta) / (tb - ta)) * (pb - pa);
+  }
+  return 100;
+}
+
+// The stage's static backdrop (spotlight, floor, light pool) — its own SVG
+// layer under the animated one, so it is painted once, not every frame.
+function StageBackdrop() {
   return (
-    <svg viewBox="0 0 400 300" className="h-full w-full" role="img" aria-label="A mannequin golfer swinging on a dark stage, with Caddie's pose analysis overlay">
+    <svg viewBox="0 0 400 300" className="absolute inset-0 h-full w-full" aria-hidden="true">
       <defs>
         <radialGradient id="mq-stage" cx="0.38" cy="0.05" r="0.95">
           <stop offset="0" stopColor="#24432f" />
@@ -608,124 +424,78 @@ function SwingScene({ phase, pose, progress, leftHanded }: { phase: Phase; pose:
           <stop offset="0" stopColor="#ffffff" stopOpacity="0.13" />
           <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
         </radialGradient>
-        <linearGradient id="mq-limb" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#ffffff" />
-          <stop offset="0.3" stopColor="#eef1ec" />
-          <stop offset="0.75" stopColor="#a9b3ad" />
-          <stop offset="1" stopColor="#6f7a74" />
-        </linearGradient>
-        <radialGradient id="mq-chest" cx="0.38" cy="0.32" r="0.8">
-          <stop offset="0" stopColor="#ffffff" />
-          <stop offset="0.55" stopColor="#dfe4df" />
-          <stop offset="1" stopColor="#8d9791" />
-        </radialGradient>
-        <radialGradient id="mq-ball" cx="0.35" cy="0.3" r="0.75">
-          <stop offset="0" stopColor="#ffffff" />
-          <stop offset="0.5" stopColor="#e3e7e2" />
-          <stop offset="1" stopColor="#7c8781" />
-        </radialGradient>
-        <radialGradient id="mq-heat" cx="0.5" cy="0.5" r="0.5">
-          <stop offset="0" stopColor="#f87171" stopOpacity="0.75" />
-          <stop offset="0.55" stopColor="#f4b942" stopOpacity="0.25" />
-          <stop offset="1" stopColor="#f4b942" stopOpacity="0" />
-        </radialGradient>
-        <linearGradient id="gm-bone" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#bbf7d0" />
-          <stop offset="1" stopColor="#4ade80" />
-        </linearGradient>
-        <clipPath id="gm-clip">
-          <rect width="400" height="300" />
-        </clipPath>
       </defs>
-
-      <g clipPath="url(#gm-clip)">
-        {/* stage: spotlight from above, floor, light pool */}
-        <rect width="400" height="300" fill="url(#mq-stage)" />
-        <path d="M128 -10 L213 -10 L293 250 L48 250 Z" fill="url(#mq-cone)" />
-        <ellipse cx="158" cy={FLOOR_Y + 4} rx="110" ry="14" fill="url(#mq-pool)" />
-        <line x1="0" y1={FLOOR_Y} x2="400" y2={FLOOR_Y} stroke="#ffffff" strokeOpacity="0.06" />
-
-        <g transform={leftHanded ? "translate(400 0) scale(-1 1)" : undefined}>
-        <rect x="0" y={FLOOR_Y} width="400" height={300 - FLOOR_Y} fill="url(#mq-floor)" />
-        {/* soft contact shadows under the feet. (A mirrored reflection of the
-            whole figure, drawn through a translucent layer, doubled the cost
-            of every frame and dropped phones to ~30 fps.) */}
-        {[J.ankL, J.ankR].map((a, i) => (
-          <ellipse key={i} cx={toScene(a)[0]} cy={FLOOR_Y + 1} rx="15" ry="2.6" fill="#000000" opacity={0.5 * op} />
-        ))}
-
-        {/* ball on the tee (gone after impact until the next address) */}
-        {ballOnTee && <circle cx={toScene(BALL)[0]} cy={toScene(BALL)[1]} r="3" fill="#f8faf8" />}
-        {ballStruck && <circle cx={toScene(BALL)[0] + (progress - IMPACT_T) * 900} cy={toScene(BALL)[1] - (progress - IMPACT_T) * 1100} r="2.4" fill="#f8faf8" opacity="0.9" />}
-
-        <g transform={FIG_T} opacity={op}>
-          {/* the clubhead's trail: a short streak that fades out behind it,
-              coloured by clubhead speed */}
-          {trail.map((p, i) => (
-            <path key={i} d={p.d} stroke={p.colour} strokeWidth={p.width} strokeOpacity={p.opacity} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-          ))}
-          <Mannequin J={J} />
-        </g>
-
-        {/* coaching glow on the hips once the analysis lands */}
-        {phase === "done" && <circle cx={hipC[0]} cy={hipC[1] - 4} r="30" fill="url(#mq-heat)" className="animate-halo-pulse" opacity={op} />}
-
-        {/* pose overlay */}
-        {showPose && (
-          // No CSS transform animations or SVG filters anywhere in this
-          // overlay (they lagged / ghosted on moving joints in Chrome).
-          <g transform={FIG_T} className="animate-fade-in" opacity={op}>
-            {BONES.map(([a, b]) => (
-              <line key={`${a}-${b}`} x1={J[a][0]} y1={J[a][1]} x2={J[b][0]} y2={J[b][1]} stroke="url(#gm-bone)" strokeWidth="2" strokeLinecap="round" opacity="0.9" />
-            ))}
-            {JOINTS.map((k) => (
-              <g key={k} transform={`translate(${J[k][0]} ${J[k][1]})`}>
-                <circle cx="0" cy="0" r="5.5" fill="#f4b942" opacity="0.18" />
-                <circle cx="0" cy="0" r="3.4" fill="#f4b942" />
-                <circle cx="0" cy="0" r="1.4" fill="#fff7e0" />
-              </g>
-            ))}
-          </g>
-        )}
-        </g>
-      </g>
+      <rect width="400" height="300" fill="url(#mq-stage)" />
+      <path d="M128 -10 L213 -10 L293 250 L48 250 Z" fill="url(#mq-cone)" />
+      <ellipse cx="158" cy={FLOOR_Y + 4} rx="110" ry="14" fill="url(#mq-pool)" />
+      <rect x="0" y={FLOOR_Y} width="400" height={300 - FLOOR_Y} fill="url(#mq-floor)" />
+      <line x1="0" y1={FLOOR_Y} x2="400" y2={FLOOR_Y} stroke="#ffffff" strokeOpacity="0.06" />
     </svg>
   );
 }
 
-// Scrubber: piecewise map of the cycle onto the four evenly spaced phase
-// ticks (Address 0, Top 1/3, Impact 2/3, Finish 1), so the playhead sits on
-// "Top" exactly when the figure is at the top, etc.
-const PLAYHEAD_MARKS: [number, number][] = [
-  [0, 0],
-  [TOP_T, 100 / 3],
-  [IMPACT_T, 200 / 3],
-  [FINISH_T, 100],
-];
-function playheadAt(t: number): number {
-  for (let i = 0; i < PLAYHEAD_MARKS.length - 1; i++) {
-    const [ta, pa] = PLAYHEAD_MARKS[i];
-    const [tb, pb] = PLAYHEAD_MARKS[i + 1];
-    if (t <= tb) return pa + ((Math.max(t, ta) - ta) / (tb - ta)) * (pb - pa);
-  }
-  return 100;
-}
-
-// The swing stage and its scrubber: the only part of the Caddie card that
-// re-renders on every animation frame (the header, heading, measurements
-// and feedback re-render only when the analysis phase changes). `between`
-// is rendered between the two and reused as-is from frame to frame.
+// The swing stage and its scrubber. React renders these once; the swing
+// itself (figure, trail, ball, pose overlay) and the playhead are animated
+// by mountSwing directly. React only re-renders here when the analysis
+// phase changes or the highlighted phase label changes (4 times a loop).
+// `between` is rendered between the stage and the scrubber.
 function SwingPlayer({ phase, leftHanded, between }: { phase: Phase; leftHanded: boolean; between: ReactNode }) {
-  // The figure keeps swinging in every state; the pose overlay tracks it.
-  const { pose, progress } = useSwingPose(true);
-  const playhead = playheadAt(progress);
-  // The phase the figure is nearest to, for the highlighted scrubber label.
-  const activePhase = Math.min(PHASES.length - 1, Math.round((playhead / 100) * (PHASES.length - 1)));
+  const sceneRef = useRef<SVGGElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
+  const phaseRef = useRef(phase);
+  phaseRef.current = phase;
+  const [activePhase, setActivePhase] = useState(0);
+  useEffect(() => {
+    const root = sceneRef.current;
+    if (!root) return;
+    let shown = -1;
+    return mountSwing(root, {
+      overlay: () => {
+        const p = phaseRef.current;
+        return { pose: p === "pose" || p === "scoring" || p === "done", heat: p === "done" };
+      },
+      onProgress: (t) => {
+        const playhead = playheadAt(t);
+        if (barRef.current) barRef.current.style.width = `${playhead}%`;
+        const nearest = Math.min(PHASES.length - 1, Math.round((playhead / 100) * (PHASES.length - 1)));
+        if (nearest !== shown) {
+          shown = nearest;
+          setActivePhase(nearest);
+        }
+      },
+    });
+  }, []);
   return (
     <>
-      {/* stage */}
-      <div className="relative aspect-[4/3]">
-        <SwingScene phase={phase} pose={pose} progress={progress} leftHanded={leftHanded} />
+      {/* stage: static backdrop + the animated layer */}
+      <div className="relative aspect-[4/3] overflow-hidden">
+        <StageBackdrop />
+        <svg viewBox="0 0 400 300" className="absolute inset-0 h-full w-full" role="img" aria-label="A mannequin golfer swinging on a dark stage, with Caddie's pose analysis overlay">
+          <defs>
+            <linearGradient id="mq-limb" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#ffffff" />
+              <stop offset="0.3" stopColor="#eef1ec" />
+              <stop offset="0.75" stopColor="#a9b3ad" />
+              <stop offset="1" stopColor="#6f7a74" />
+            </linearGradient>
+            <radialGradient id="mq-ball" cx="0.35" cy="0.3" r="0.75">
+              <stop offset="0" stopColor="#ffffff" />
+              <stop offset="0.5" stopColor="#e3e7e2" />
+              <stop offset="1" stopColor="#7c8781" />
+            </radialGradient>
+            <radialGradient id="mq-heat" cx="0.5" cy="0.5" r="0.5">
+              <stop offset="0" stopColor="#f87171" stopOpacity="0.75" />
+              <stop offset="0.55" stopColor="#f4b942" stopOpacity="0.25" />
+              <stop offset="1" stopColor="#f4b942" stopOpacity="0" />
+            </radialGradient>
+            <linearGradient id="gm-bone" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stopColor="#bbf7d0" />
+              <stop offset="1" stopColor="#4ade80" />
+            </linearGradient>
+          </defs>
+          {/* leftHanded mirrors the swing about the stage's centre */}
+          <g ref={sceneRef} transform={leftHanded ? "translate(400 0) scale(-1 1)" : undefined} />
+        </svg>
         {phase === "uploading" && <div aria-hidden="true" className="absolute inset-x-0 h-px bg-sun-300/90 shadow-[0_0_14px_3px_rgba(246,201,111,0.6)] animate-scan" />}
         {(phase === "uploading" || phase === "pose") && (
           <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:24px_24px]" />
@@ -737,7 +507,7 @@ function SwingPlayer({ phase, leftHanded, between }: { phase: Phase; leftHanded:
       {/* scrubber with swing phases */}
       <div className="px-4 pb-1 pt-3">
         <div className="relative h-1.5 rounded-full bg-white/20">
-          <div className="h-full rounded-full bg-sun-300" style={{ width: `${playhead}%` }} />
+          <div ref={barRef} className="h-full rounded-full bg-sun-300" style={{ width: "0%" }} />
           {PHASES.map((p, i) => (
             <span key={p} aria-hidden="true" className="absolute top-1/2 h-3 w-0.5 -translate-y-1/2 bg-white/50" style={{ left: `${(i / (PHASES.length - 1)) * 100}%` }} />
           ))}

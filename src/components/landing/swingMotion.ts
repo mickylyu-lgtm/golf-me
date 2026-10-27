@@ -317,10 +317,32 @@ const BAKED: number[][] = (() => {
     return total;
   };
   const [iTop, iImp, iEnd] = [Math.round(TOP_KEY * RATE), Math.round(IMPACT_KEY * RATE), BAKE_N - 1];
-  retime(0, iTop, (x) => 0.5 - 0.5 * Math.cos(Math.PI * x));
-  const down = retime(iTop, iImp, (x) => x * x);
+  // Speed shapes (as velocity profiles, integrated into easing curves):
+  //   backswing  — sin(πx)^0.6: a smooth start, a long steady middle, and
+  //                it only slows right at the top;
+  //   downswing  — x^0.7: picks up speed straight away and keeps
+  //                accelerating to the ball (x^1 or x^2 hung at the top:
+  //                with a full stop on both sides the hands sat almost
+  //                still for ~450 ms, which read as lag);
+  //   through    — leaves the ball at the downswing's speed and bleeds it
+  //                off into the finish.
+  const easeFrom = (v: (x: number) => number) => {
+    const n = 2000;
+    const cum = [0];
+    for (let i = 1; i <= n; i++) cum.push(cum[i - 1] + v((i - 0.5) / n));
+    return (x: number) => {
+      const f = Math.min(n, Math.max(0, x * n));
+      const i = Math.min(n - 1, Math.floor(f));
+      return (cum[i] + (cum[i + 1] - cum[i]) * (f - i)) / cum[n];
+    };
+  };
+  retime(0, iTop, easeFrom((x) => Math.sin(Math.PI * x) ** 0.6));
+  const DOWN_POW = 0.7;
+  const down = retime(iTop, iImp, easeFrom((x) => x ** DOWN_POW));
   const thru = travel(iImp, iEnd);
-  const k = Math.min(4, Math.max(1.5, (2 * down * (iEnd - iImp)) / ((iImp - iTop) * thru[thru.length - 1])));
+  // speed at the ball = (1 + DOWN_POW) x average downswing speed; the
+  // follow-through 1 - (1 - x)^k starts at k x its average speed
+  const k = Math.min(4, Math.max(1.5, ((1 + DOWN_POW) * down * (iEnd - iImp)) / ((iImp - iTop) * thru[thru.length - 1])));
   retime(iImp, iEnd, (x) => 1 - (1 - x) ** k);
   return raw.map((row, i) => {
     const sigma = 0.01 + 0.035 * Math.min(1, Math.max(0, (Math.abs(i / RATE - IMPACT_KEY) - 0.03) / 0.12));
