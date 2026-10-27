@@ -398,9 +398,9 @@ const FLOOR_Y = 246; // scene y of the stage floor
 // The rig's figure box -> scene: scaled and placed so the whole club arc
 // (backswing up past the head, follow-through out to the right) stays on
 // the stage with the feet on the floor.
-const FIG_S = 0.92;
-const FIG_DX = 50;
-const FIG_DY = 29;
+const FIG_S = 1.02;
+const FIG_DX = 40;
+const FIG_DY = 7;
 const FIG_T = `translate(${FIG_DX} ${FIG_DY}) scale(${FIG_S})`;
 const toScene = (q: Pt): Pt => [q[0] * FIG_S + FIG_DX, q[1] * FIG_S + FIG_DY];
 const LIGHT = [-0.6, -0.8]; // direction the light comes FROM (unit-ish)
@@ -478,66 +478,58 @@ function Capsule({ a, b, r }: { a: Pt; b: Pt; r: number }) {
 }
 const Ball = ({ c, r }: { c: Pt; r: number }) => <circle cx={c[0]} cy={c[1]} r={r} fill="url(#mq-ball)" />;
 
-// Sculpted mannequin: limbs thick enough to read as a body (thigh > calf,
-// upper arm > forearm), joints the same width as the limbs they join so
-// they blend instead of showing as separate balls, a tapered chest, a
-// rounded pelvis and a larger head.
-function Mannequin({ J, clubInFront }: { J: Pose; clubInFront: boolean }) {
+// Sculpted mannequin drawn from the 3D rig: every part is a shaded capsule
+// or ball placed at its projected position, and the parts are painted back
+// to front by their depth toward the camera. That is what makes the club
+// pass behind the neck in the finish, the trail arm cross in front of the
+// chest, and the far leg sit behind the near one — no hand-made draw order.
+function Mannequin({ J }: { J: Pose }) {
+  const z = J.z;
   const mid = (a: Pt, b: Pt): Pt => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-  const lerp = (a: Pt, b: Pt, k: number): Pt => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k];
-  const hipC = mid(J.hipL, J.hipR);
+  const parts: { z: number; el: ReactNode }[] = [];
+  const cap = (a: keyof Pose & string, b: keyof Pose & string, r: number, bias = 0) =>
+    parts.push({ z: (z[a] + z[b]) / 2 + bias, el: <Capsule key={`${a}-${b}`} a={J[a] as Pt} b={J[b] as Pt} r={r} /> });
+  const ball = (a: keyof Pose & string, r: number, bias = 0) => parts.push({ z: z[a] + bias, el: <Ball key={`b-${a}`} c={J[a] as Pt} r={r} /> });
+  // legs and feet
+  for (const side of ["L", "R"] as const) {
+    cap(`hip${side}`, `knee${side}`, 9.2);
+    cap(`knee${side}`, `ank${side}`, 7);
+    ball(`knee${side}`, 7.6, 0.1);
+    cap(`ank${side}`, `toe${side}`, 5, 0.2);
+  }
+  // pelvis, torso (thick enough to read as a body side-on), shoulders
+  const chestZ = (z.shL + z.shR) / 2;
   const chest = mid(J.shL, J.shR);
-  const waist = lerp(hipC, chest, 0.38);
+  parts.push({ z: (z.hipL + z.hipR) / 2, el: <Capsule key="pelvis" a={J.hipL} b={J.hipR} r={10} /> });
+  parts.push({ z: (z.pelvis + chestZ) / 2, el: <Capsule key="torso" a={J.pelvis} b={[(chest[0] * 3 + J.neck[0]) / 4, (chest[1] * 3 + J.neck[1]) / 4]} r={13} /> });
+  cap("shL", "shR", 7.5, 0.5);
+  ball("shL", 7.2, 0.6);
+  ball("shR", 7.2, 0.6);
+  // neck and head
+  cap("neck", "head", 5);
   const headAng = (Math.atan2(J.head[1] - J.neck[1], J.head[0] - J.neck[0]) * 180) / Math.PI + 90;
-  const hipAng = (Math.atan2(J.hipR[1] - J.hipL[1], J.hipR[0] - J.hipL[0]) * 180) / Math.PI;
-  const hipW = Math.hypot(J.hipR[0] - J.hipL[0], J.hipR[1] - J.hipL[1]);
-  // chest outline: shoulders -> tapered sides -> waist (bulges slightly at the ribs)
-  const wl: Pt = [waist[0] - 8.5, waist[1]];
-  const wr: Pt = [waist[0] + 8.5, waist[1]];
-  const torso = `M${J.shL[0]} ${J.shL[1] - 2} Q${chest[0]} ${chest[1] - 9} ${J.shR[0]} ${J.shR[1] - 2} Q${J.shR[0] + 6} ${(J.shR[1] + wr[1]) / 2 - 4} ${wr[0]} ${wr[1]} Q${waist[0]} ${waist[1] + 4} ${wl[0]} ${wl[1]} Q${J.shL[0] - 6} ${(J.shL[1] + wl[1]) / 2 - 4} ${J.shL[0]} ${J.shL[1] - 2} Z`;
-  const club = (
-    <g>
-      <line x1={J.hands[0]} y1={J.hands[1]} x2={J.club[0]} y2={J.club[1]} stroke="#d7dcd8" strokeWidth="2.2" strokeLinecap="round" />
-      <circle cx={J.club[0]} cy={J.club[1]} r="4.5" fill="#2a2f2c" stroke="#9aa39c" strokeWidth="1" />
-    </g>
-  );
-  const arms = (
-    <g>
-      <Capsule a={J.shL} b={J.elL} r={6.2} />
-      <Capsule a={J.elL} b={J.hands} r={5.2} />
-      <Ball c={J.elL} r={5.4} />
-      <Capsule a={J.shR} b={J.elR} r={6.2} />
-      <Capsule a={J.elR} b={J.hands} r={5.2} />
-      <Ball c={J.elR} r={5.4} />
-      <Ball c={J.hands} r={5.6} />
-    </g>
-  );
-  return (
-    <g>
-      {!clubInFront && club}
-      {/* legs (trail leg behind) */}
-      <Capsule a={J.hipL} b={J.kneeL} r={9.2} />
-      <Capsule a={J.kneeL} b={J.ankL} r={7} />
-      <Ball c={J.kneeL} r={7.6} />
-      <ellipse cx={J.ankL[0] - 3} cy={J.ankL[1] + 5} rx="11" ry="5" fill="url(#mq-ball)" />
-      <Capsule a={J.hipR} b={J.kneeR} r={9.2} />
-      <Capsule a={J.kneeR} b={J.ankR} r={7} />
-      <Ball c={J.kneeR} r={7.6} />
-      <ellipse cx={J.ankR[0] + 3} cy={J.ankR[1] + 5} rx="11" ry="5" fill="url(#mq-ball)" />
-      {/* pelvis, abdomen, chest */}
-      <ellipse cx={hipC[0]} cy={hipC[1] - 1} rx={hipW / 2 + 9} ry="11" fill="url(#mq-chest)" transform={`rotate(${hipAng} ${hipC[0]} ${hipC[1] - 1})`} />
-      <Capsule a={hipC} b={waist} r={9} />
-      <path d={torso} fill="url(#mq-chest)" />
-      {/* neck + head */}
-      <Capsule a={J.neck} b={mid(J.neck, J.head)} r={5} />
-      <ellipse cx={J.head[0]} cy={J.head[1]} rx="12" ry="14.5" fill="url(#mq-ball)" transform={`rotate(${headAng} ${J.head[0]} ${J.head[1]})`} />
-      {/* shoulders, then the arms (in front of the chest throughout) */}
-      <Ball c={J.shL} r={7.2} />
-      <Ball c={J.shR} r={7.2} />
-      {arms}
-      {clubInFront && club}
-    </g>
-  );
+  parts.push({ z: z.head + 1, el: <ellipse key="head" cx={J.head[0]} cy={J.head[1]} rx="12" ry="14.5" fill="url(#mq-ball)" transform={`rotate(${headAng} ${J.head[0]} ${J.head[1]})`} /> });
+  // arms (lead hand on the grip, trail hand just below it)
+  cap("shR", "elR", 6.2);
+  cap("elR", "hands", 5.2);
+  ball("elR", 5.4, 0.1);
+  cap("shL", "elL", 6.2);
+  cap("elL", "handT", 5.2);
+  ball("elL", 5.4, 0.1);
+  ball("hands", 5.4, 0.3);
+  ball("handT", 5.4, 0.3);
+  // club: the shaft in three pieces so each sorts at its own depth as it
+  // wraps round the body, then the clubhead
+  for (let i = 0; i < 3; i++) {
+    const f0 = i / 3;
+    const f1 = (i + 1) / 3;
+    const p0: Pt = [J.hands[0] + (J.club[0] - J.hands[0]) * f0, J.hands[1] + (J.club[1] - J.hands[1]) * f0];
+    const p1: Pt = [J.hands[0] + (J.club[0] - J.hands[0]) * f1, J.hands[1] + (J.club[1] - J.hands[1]) * f1];
+    parts.push({ z: z.hands + (z.club - z.hands) * ((f0 + f1) / 2), el: <line key={`shaft${i}`} x1={p0[0]} y1={p0[1]} x2={p1[0]} y2={p1[1]} stroke="#d7dcd8" strokeWidth="2.2" strokeLinecap="round" /> });
+  }
+  parts.push({ z: z.club, el: <circle key="clubhead" cx={J.club[0]} cy={J.club[1]} r="4.5" fill="#2a2f2c" stroke="#9aa39c" strokeWidth="1" /> });
+  parts.sort((p, q) => p.z - q.z);
+  return <g>{parts.map((p) => p.el)}</g>;
 }
 
 const ANGLES = [
@@ -593,9 +585,6 @@ function SwingScene({ phase, pose, progress, leftHanded }: { phase: Phase; pose:
   // loop fades back in at address.
   const ballOnTee = progress < IMPACT_T || progress >= RETURN_MID;
   const ballStruck = progress > IMPACT_T && progress < IMPACT_T + 0.18;
-  // Club in front of the body while the hands are low (address through the
-  // follow-through), behind it at the top and the finish.
-  const clubInFront = J.hands[1] > J.neck[1] + 28;
   const trail = progress < RETURN_MID ? trailPieces(progress) : [];
   const hipC: Pt = toScene([(J.hipL[0] + J.hipR[0]) / 2, (J.hipL[1] + J.hipR[1]) / 2]);
   return (
@@ -675,7 +664,7 @@ function SwingScene({ phase, pose, progress, leftHanded }: { phase: Phase; pose:
           {trail.map((p, i) => (
             <path key={i} d={p.d} stroke={p.colour} strokeWidth={p.width} strokeOpacity={p.opacity} strokeLinecap="round" strokeLinejoin="round" fill="none" />
           ))}
-          <Mannequin J={J} clubInFront={clubInFront} />
+          <Mannequin J={J} />
         </g>
 
         {/* coaching glow on the hips once the analysis lands */}
