@@ -104,12 +104,15 @@ export function DirectMessageThread() {
   const eligible = id ? canMessage(id) : false;
   const otherTyping = other ? isOtherTyping(other.id) : false;
   useSwipeToRevealTimes(listRef, rowsRef, Boolean(other));
-  // Swipe right on a bubble to reply. Called synchronously inside the
+  // Swipe left on a bubble to reply. Called synchronously inside the
   // gesture's pointerup (a user gesture), so focusing the composer here is
   // the same kind of focus ChatComposer's own send button makes; the
   // keyboard (if it opens) is then handled by the unchanged
   // keyboardHeight/boxHeight code exactly as for a tap on the textarea.
-  useSwipeToReply(listRef, Boolean(other) && eligible && !blocked && canReplyToMessages, (messageId) => {
+  // Bubbles carry data-reply-bubble only while this is true, so with
+  // replying off a left swipe on a bubble is just the times swipe.
+  const replyEnabled = Boolean(other) && eligible && !blocked && canReplyToMessages;
+  useSwipeToReply(listRef, replyEnabled, (messageId) => {
     setReplyToId(messageId);
     const textarea = boxRef.current?.querySelector("textarea");
     if (textarea && document.activeElement !== textarea) textarea.focus({ preventScroll: true });
@@ -474,10 +477,11 @@ export function DirectMessageThread() {
               const sent = formatMessageTime(m.createdAt, locale, t);
               const quoted = m.replyToId ? messagesById.get(m.replyToId) : undefined;
               return (
-                // data-reply-row/-arrow/-content/-bubble: the DOM contract
-                // useSwipeToReply drives. The row itself never moves; the
-                // content inside it (the old row, unchanged) does.
-                <div key={m.id} data-reply-row={m.id} className="relative">
+                // data-reply-row/-arrow/-bubble: the DOM contract
+                // useSwipeToReply drives (only the bubble moves).
+                <div key={m.id} data-reply-row={m.id} className={`relative flex items-end gap-2 ${isMe ? "flex-row-reverse" : ""}`}>
+                  {/* Swipe-to-reply arrow (useSwipeToReply positions it
+                      just right of the bubble as the bubble slides left). */}
                   <span
                     data-reply-arrow
                     aria-hidden="true"
@@ -485,60 +489,60 @@ export function DirectMessageThread() {
                   >
                     <Reply size={14} />
                   </span>
-                  <div data-reply-content className={`relative flex items-end gap-2 ${isMe ? "flex-row-reverse" : ""}`}>
-                    {/* Tap goes to that golfer's profile; a long press magnifies
-                        the photo (Avatar swallows the click after it). */}
-                    <button
-                      type="button"
-                      aria-label="View Profile"
-                      onClick={() => navigate(isMe ? "/profile" : `/golfer/${other.id}`)}
-                      className="shrink-0 rounded-full"
-                    >
-                      <Avatar golfer={isMe ? currentUser : other} size="xs" showVerified={false} />
-                    </button>
-                    <div
-                      data-reply-bubble={m.id}
-                      className={`max-w-[75%] rounded-2xl px-3.5 py-2 text-sm transition-shadow duration-300 [overflow-wrap:anywhere] ${
-                        isMe ? "rounded-br-sm bg-fairway-600 text-white" : "rounded-bl-sm bg-slate-100 text-slate-800"
-                      } ${highlightId === m.id ? "ring-2 ring-amber-300 ring-offset-2" : ""}`}
-                    >
-                      {/* Quote of the replied-to message, taken only from
-                          messages this reader already has loaded (RLS-visible
-                          to them); anything else is "unavailable". */}
-                      {m.replyToId &&
-                        (quoted ? (
-                          <button
-                            type="button"
-                            onClick={() => jumpToMessage(quoted.id)}
-                            aria-label={t("chat.showOriginal")}
-                            className={`mb-1.5 block w-full rounded-lg border-l-2 px-2 py-1 text-left text-xs ${
-                              isMe ? "border-white/70 bg-white/15 text-white/90" : "border-fairway-500 bg-white/80 text-slate-600"
-                            }`}
-                          >
-                            <span className={`block font-semibold ${isMe ? "text-white" : "text-slate-700"}`}>{senderLabel(quoted.senderId)}</span>
-                            <span className="line-clamp-2">{quoted.text}</span>
-                          </button>
-                        ) : (
-                          <div
-                            className={`mb-1.5 rounded-lg border-l-2 px-2 py-1 text-xs italic ${
-                              isMe ? "border-white/50 bg-white/10 text-white/80" : "border-slate-300 bg-white/70 text-slate-500"
-                            }`}
-                          >
-                            {t("chat.originalUnavailable")}
-                          </div>
-                        ))}
-                      {m.text}
-                    </div>
-                    {sent && (
-                      <time
-                        dateTime={m.createdAt}
-                        className="pointer-events-none absolute top-1/2 left-[calc(100%+1rem)] flex w-[4.25rem] -translate-y-1/2 flex-col items-center text-center text-[10px] leading-tight whitespace-nowrap text-slate-400 tabular-nums"
-                      >
-                        {sent.day && <span>{sent.day}</span>}
-                        <span className="text-[11px] font-medium text-slate-500">{sent.time}</span>
-                      </time>
-                    )}
+                  {/* Tap goes to that golfer's profile; a long press magnifies
+                      the photo (Avatar swallows the click after it). */}
+                  <button
+                    type="button"
+                    aria-label="View Profile"
+                    onClick={() => navigate(isMe ? "/profile" : `/golfer/${other.id}`)}
+                    // Drawn above the bubble, which slides under it during a
+                    // reply swipe instead of covering it.
+                    className="relative z-[1] shrink-0 rounded-full"
+                  >
+                    <Avatar golfer={isMe ? currentUser : other} size="xs" showVerified={false} />
+                  </button>
+                  <div
+                    data-reply-bubble={replyEnabled ? m.id : undefined}
+                    className={`max-w-[75%] rounded-2xl px-3.5 py-2 text-sm transition-shadow duration-300 [overflow-wrap:anywhere] ${
+                      isMe ? "rounded-br-sm bg-fairway-600 text-white" : "rounded-bl-sm bg-slate-100 text-slate-800"
+                    } ${highlightId === m.id ? "ring-2 ring-amber-300 ring-offset-2" : ""}`}
+                  >
+                    {/* Quote of the replied-to message, taken only from
+                        messages this reader already has loaded (RLS-visible
+                        to them); anything else is "unavailable". */}
+                    {m.replyToId &&
+                      (quoted ? (
+                        <button
+                          type="button"
+                          onClick={() => jumpToMessage(quoted.id)}
+                          aria-label={t("chat.showOriginal")}
+                          className={`mb-1.5 block w-full rounded-lg border-l-2 px-2 py-1 text-left text-xs ${
+                            isMe ? "border-white/70 bg-white/15 text-white/90" : "border-fairway-500 bg-white/80 text-slate-600"
+                          }`}
+                        >
+                          <span className={`block font-semibold ${isMe ? "text-white" : "text-slate-700"}`}>{senderLabel(quoted.senderId)}</span>
+                          <span className="line-clamp-2">{quoted.text}</span>
+                        </button>
+                      ) : (
+                        <div
+                          className={`mb-1.5 rounded-lg border-l-2 px-2 py-1 text-xs italic ${
+                            isMe ? "border-white/50 bg-white/10 text-white/80" : "border-slate-300 bg-white/70 text-slate-500"
+                          }`}
+                        >
+                          {t("chat.originalUnavailable")}
+                        </div>
+                      ))}
+                    {m.text}
                   </div>
+                  {sent && (
+                    <time
+                      dateTime={m.createdAt}
+                      className="pointer-events-none absolute top-1/2 left-[calc(100%+1rem)] flex w-[4.25rem] -translate-y-1/2 flex-col items-center text-center text-[10px] leading-tight whitespace-nowrap text-slate-400 tabular-nums"
+                    >
+                      {sent.day && <span>{sent.day}</span>}
+                      <span className="text-[11px] font-medium text-slate-500">{sent.time}</span>
+                    </time>
+                  )}
                 </div>
               );
             })}
