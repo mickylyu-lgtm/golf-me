@@ -222,7 +222,11 @@ interface DataContextValue {
   dmConversations: DmConversation[];
   hasUnreadMessages: boolean;
   messagesWithGolfer: (golferId: string) => DirectMessage[];
-  sendDirectMessage: (golferId: string, text: string) => Promise<SendMessageResult>;
+  sendDirectMessage: (golferId: string, text: string, replyToId?: string) => Promise<SendMessageResult>;
+  // Whether swipe-to-reply can be offered: always in demo; for real accounts
+  // only once the database has messages.reply_to_message_id (see
+  // RealSocialContext.repliesSupported).
+  canReplyToMessages: boolean;
   markConversationRead: (golferId: string) => Promise<void>;
   clearChatHistory: (golferId: string) => Promise<void>;
   deleteConversation: (golferId: string) => Promise<void>;
@@ -1053,8 +1057,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
   // Returns whether the message actually sent, so the UI can tell a
   // rate-limited/blocked send apart from a normal successful one.
   const sendDirectMessage = useCallback(
-    async (golferId: string, text: string): Promise<SendMessageResult> => {
-      if (!auth.isDemo) return realSocial.sendDirectMessage(golferId, text);
+    async (golferId: string, text: string, replyToId?: string): Promise<SendMessageResult> => {
+      if (!auth.isDemo) return realSocial.sendDirectMessage(golferId, text, replyToId);
       const trimmed = text.trim();
       if (!trimmed || !canMessage(golferId) || !canSendMessageNow()) return "failed";
       const convId = dmConversationId(currentUser.id, golferId);
@@ -1062,13 +1066,24 @@ export function DataProvider({ children }: { children: ReactNode }) {
         ...prev,
         directMessages: [
           ...prev.directMessages,
-          { id: generateId("dm"), conversationId: convId, senderId: prev.currentUserId, text: trimmed, createdAt: new Date().toISOString() },
+          {
+            id: generateId("dm"),
+            conversationId: convId,
+            senderId: prev.currentUserId,
+            text: trimmed,
+            createdAt: new Date().toISOString(),
+            // Same rule the database enforces for real accounts: only a
+            // message in this same conversation can be quoted.
+            replyToId: replyToId && prev.directMessages.some((m) => m.id === replyToId && m.conversationId === convId) ? replyToId : null,
+          },
         ],
       }));
       return "sent";
     },
     [auth.isDemo, realSocial, canMessage, canSendMessageNow, currentUser.id],
   );
+
+  const canReplyToMessages = auth.isDemo || realSocial.repliesSupported;
 
   // Demo accounts have no real second person who could be typing -- always
   // false/no-op rather than simulating a fake typing partner.
@@ -1697,6 +1712,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       hasUnreadMessages,
       messagesWithGolfer,
       sendDirectMessage,
+      canReplyToMessages,
       markConversationRead,
       clearChatHistory,
       deleteConversation,
@@ -1788,6 +1804,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       hasUnreadMessages,
       messagesWithGolfer,
       sendDirectMessage,
+      canReplyToMessages,
       markConversationRead,
       clearChatHistory,
       deleteConversation,

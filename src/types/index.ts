@@ -350,6 +350,10 @@ export interface DirectMessage {
   senderId: string;
   text: string;
   createdAt: string;
+  // Swipe-to-reply: the message this one quotes (same conversation, enforced
+  // by the database). Absent/null for a normal message, and set back to null
+  // by the database if the quoted message is ever deleted.
+  replyToId?: string | null;
 }
 
 // Per-user "last read" marker for a conversation, used only to compute

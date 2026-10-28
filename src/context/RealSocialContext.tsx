@@ -23,6 +23,10 @@ interface MessageRow {
   sender_id: string;
   text: string;
   created_at: string;
+  // Only present once migration 20261026120000_add_message_replies is
+  // applied (select("*") then returns it, null or not). Its presence on
+  // fetched rows is how repliesSupported below detects the column.
+  reply_to_message_id?: string | null;
 }
 
 // A message this client just sent, rendered before the server round trip
@@ -36,6 +40,7 @@ interface PendingMessage {
   sender_id: string;
   text: string;
   created_at: string;
+  reply_to_message_id: string | null;
 }
 
 interface BlockRow {
@@ -86,7 +91,11 @@ interface RealSocialContextValue {
   dmConversations: DmConversation[];
   hasUnreadMessages: boolean;
   messagesWithGolfer: (otherId: string) => DirectMessage[];
-  sendDirectMessage: (otherId: string, text: string) => Promise<SendMessageResult>;
+  sendDirectMessage: (otherId: string, text: string, replyToId?: string) => Promise<SendMessageResult>;
+  // Whether this database has messages.reply_to_message_id yet. False until
+  // the reply migration is applied (and until any message row has loaded to
+  // prove it), so swipe-to-reply is simply not offered on an older schema.
+  repliesSupported: boolean;
   markConversationRead: (otherId: string) => Promise<void>;
   clearChatHistory: (otherId: string) => Promise<void>;
   deleteConversation: (otherId: string) => Promise<void>;
@@ -115,7 +124,21 @@ interface RealSocialContextValue {
 const RealSocialContext = createContext<RealSocialContextValue | null>(null);
 
 function messageRowToDirectMessage(row: MessageRow): DirectMessage {
-  return { id: row.id, conversationId: row.conversation_id, senderId: row.sender_id, text: row.text, createdAt: row.created_at };
+  return {
+    id: row.id,
+    conversationId: row.conversation_id,
+    senderId: row.sender_id,
+    text: row.text,
+    createdAt: row.created_at,
+    replyToId: row.reply_to_message_id ?? null,
+  };
+}
+
+// PostgREST PGRST204: the column isn't in its schema cache; Postgres 42703:
+// undefined column. Either way the reply column isn't usable yet.
+function isMissingReplyColumnError(error: { code?: string; message?: string }): boolean {
+  if (error.code === "PGRST204" || error.code === "42703") return true;
+  return typeof error.message === "string" && error.message.includes("reply_to_message_id");
 }
 
 function notificationRowToAppNotification(row: NotificationRow): AppNotification {
@@ -660,7 +683,16 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       // can't resolve it yet. Matching on otherId works regardless.
       const pending = pendingMessages
         .filter((p) => p.otherId === otherId)
-        .map((p): MessageRow => ({ id: p.tempId, conversation_id: p.conversation_id, sender_id: p.sender_id, text: p.text, created_at: p.created_at }));
+        .map(
+          (p): MessageRow => ({
+            id: p.tempId,
+            conversation_id: p.conversation_id,
+            sender_id: p.sender_id,
+            text: p.text,
+            created_at: p.created_at,
+            reply_to_message_id: p.reply_to_message_id,
+          }),
+        );
       return [...canonical, ...pending].sort((a, b) => a.created_at.localeCompare(b.created_at)).map(messageRowToDirectMessage);
     },
     [conversationIdWith, messages, pendingMessages],
@@ -692,8 +724,21 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     [selfId, conversationIdWith],
   );
 
+  // Rollout safety for swipe-to-reply: production gets the column only when
+  // the migration is applied by hand, possibly after this client ships.
+  // select("*") returns every column, so any loaded row carrying the
+  // reply_to_message_id key proves the column exists. replyColumnMissing
+  // latches if an insert is ever refused for an unknown column anyway (a
+  // stale PostgREST schema cache, or the migration rolled back), so the app
+  // falls back to plain messages instead of failing sends.
+  const [replyColumnMissing, setReplyColumnMissing] = useState(false);
+  const repliesSupported = useMemo(
+    () => !replyColumnMissing && messages.some((m) => Object.prototype.hasOwnProperty.call(m, "reply_to_message_id")),
+    [messages, replyColumnMissing],
+  );
+
   const sendDirectMessage = useCallback(
-    async (otherId: string, text: string): Promise<SendMessageResult> => {
+    async (otherId: string, text: string, replyToId?: string): Promise<SendMessageResult> => {
       const trimmed = text.trim();
       if (!trimmed || !selfId || !canMessage(otherId)) return "failed";
       const { data: convId, error: convErr } = await supabase.rpc("get_or_create_dm_conversation", { p_other_user_id: otherId });
@@ -710,9 +755,24 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       // full reload racing the one realtime is about to trigger anyway.
       const tempId = `temp-${crypto.randomUUID()}`;
       const optimisticCreatedAt = new Date().toISOString();
-      setPendingMessages((prev) => [...prev, { tempId, conversation_id: convId, otherId, sender_id: selfId, text: trimmed, created_at: optimisticCreatedAt }]);
+      const replyTo = replyToId && repliesSupported ? replyToId : null;
+      setPendingMessages((prev) => [
+        ...prev,
+        { tempId, conversation_id: convId, otherId, sender_id: selfId, text: trimmed, created_at: optimisticCreatedAt, reply_to_message_id: replyTo },
+      ]);
 
-      const { error } = await supabase.from("messages").insert({ conversation_id: convId, sender_id: selfId, text: trimmed });
+      const row: { conversation_id: string; sender_id: string; text: string; reply_to_message_id?: string } = {
+        conversation_id: convId,
+        sender_id: selfId,
+        text: trimmed,
+      };
+      let { error } = await supabase.from("messages").insert(replyTo ? { ...row, reply_to_message_id: replyTo } : row);
+      if (error && replyTo && isMissingReplyColumnError(error)) {
+        // The column isn't there after all: send it as a plain message.
+        setReplyColumnMissing(true);
+        setPendingMessages((prev) => prev.map((p) => (p.tempId === tempId ? { ...p, reply_to_message_id: null } : p)));
+        ({ error } = await supabase.from("messages").insert(row));
+      }
       if (error) {
         setPendingMessages((prev) => prev.filter((p) => p.tempId !== tempId));
         if (isObjectionableContentError(error)) return "objectionable";
@@ -721,7 +781,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       }
       return "sent";
     },
-    [selfId, canMessage],
+    [selfId, canMessage, repliesSupported],
   );
 
   const markConversationRead = useCallback(
@@ -807,7 +867,14 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     // DmConversation row from until the next refetch.
     for (const p of pendingMessages) {
       if (!myConvIds.has(p.conversation_id)) continue;
-      const row: MessageRow = { id: p.tempId, conversation_id: p.conversation_id, sender_id: p.sender_id, text: p.text, created_at: p.created_at };
+      const row: MessageRow = {
+        id: p.tempId,
+        conversation_id: p.conversation_id,
+        sender_id: p.sender_id,
+        text: p.text,
+        created_at: p.created_at,
+        reply_to_message_id: p.reply_to_message_id,
+      };
       const list = byConv.get(p.conversation_id);
       if (list) list.push(row);
       else byConv.set(p.conversation_id, [row]);
@@ -900,6 +967,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       hasUnreadMessages,
       messagesWithGolfer,
       sendDirectMessage,
+      repliesSupported,
       markConversationRead,
       clearChatHistory,
       deleteConversation,
@@ -932,6 +1000,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       hasUnreadMessages,
       messagesWithGolfer,
       sendDirectMessage,
+      repliesSupported,
       markConversationRead,
       clearChatHistory,
       deleteConversation,
