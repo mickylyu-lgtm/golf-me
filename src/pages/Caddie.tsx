@@ -138,7 +138,7 @@ export function Caddie() {
                     a.score !== undefined ? (
                       <span className="shrink-0 text-sm font-bold text-brand-forest">{t("caddie.scoreOutOf100", { score: a.score })}</span>
                     ) : (
-                      <span className="shrink-0 text-xs font-semibold text-slate-500">{t("caddie.thingsToWorkOn", { count: issueCount })}</span>
+                      <span className="shrink-0 text-xs font-semibold text-slate-500">{issueCount === 1 ? t("caddie.thingsToWorkOnSingular") : t("caddie.thingsToWorkOn", { count: issueCount })}</span>
                     )
                   ) : a.status === "failed" || isStaleProcessing(a) ? (
                     <span className="shrink-0 text-xs font-semibold text-red-500">{t("caddie.askCaddieError")}</span>

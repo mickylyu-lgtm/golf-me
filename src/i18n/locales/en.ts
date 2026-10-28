@@ -215,6 +215,7 @@ export const en = {
   "caddie.homeCardTitle": "Your latest swing",
   "caddie.continueInCaddie": "Continue in Caddie",
   "caddie.thingsToWorkOn": "{count} things to work on",
+  "caddie.thingsToWorkOnSingular": "1 thing to work on",
   "caddie.scoreOutOf100": "{score}/100",
   "caddie.scoreBreakdown": "Score Breakdown",
   "caddie.scoreSetupAndPosture": "Setup & Posture",

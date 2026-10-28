@@ -205,6 +205,7 @@ export const ja: Record<TranslationKey, string> = {
   "caddie.homeCardTitle": "最新のスイング",
   "caddie.continueInCaddie": "キャディで続きを見る",
   "caddie.thingsToWorkOn": "改善点 {count} 件",
+  "caddie.thingsToWorkOnSingular": "改善点 1 件",
   "caddie.scoreOutOf100": "{score}点／100点",
   "caddie.scoreBreakdown": "スコアの内訳",
   "caddie.scoreSetupAndPosture": "セットアップと姿勢",

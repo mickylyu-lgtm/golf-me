@@ -297,7 +297,7 @@ export function Home() {
                 <span className="block text-xs font-bold text-brand-forest">{t("caddie.scoreOutOf100", { score: latestCaddieAnalysis.score })}</span>
               ) : (
                 latestCaddieAnalysis.issues.length > 0 && (
-                  <span className="block text-xs text-slate-500">{t("caddie.thingsToWorkOn", { count: latestCaddieAnalysis.issues.length })}</span>
+                  <span className="block text-xs text-slate-500">{latestCaddieAnalysis.issues.length === 1 ? t("caddie.thingsToWorkOnSingular") : t("caddie.thingsToWorkOn", { count: latestCaddieAnalysis.issues.length })}</span>
                 )
               ))}
           </span>

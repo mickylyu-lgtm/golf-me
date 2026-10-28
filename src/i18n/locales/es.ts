@@ -205,6 +205,7 @@ export const es: Record<TranslationKey, string> = {
   "caddie.homeCardTitle": "Tu último swing",
   "caddie.continueInCaddie": "Continuar en Caddie",
   "caddie.thingsToWorkOn": "{count} cosas por mejorar",
+  "caddie.thingsToWorkOnSingular": "1 cosa por mejorar",
   "caddie.scoreOutOf100": "{score}/100",
   "caddie.scoreBreakdown": "Desglose de la puntuación",
   "caddie.scoreSetupAndPosture": "Postura y colocación",

@@ -205,6 +205,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "caddie.homeCardTitle": "你最近的挥杆",
   "caddie.continueInCaddie": "在球童中查看",
   "caddie.thingsToWorkOn": "{count} 项待改进",
+  "caddie.thingsToWorkOnSingular": "1 项待改进",
   "caddie.scoreOutOf100": "{score}/100 分",
   "caddie.scoreBreakdown": "分数细项",
   "caddie.scoreSetupAndPosture": "站位与姿势",

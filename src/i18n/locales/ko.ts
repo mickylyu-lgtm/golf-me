@@ -205,6 +205,7 @@ export const ko: Record<TranslationKey, string> = {
   "caddie.homeCardTitle": "최근 스윙",
   "caddie.continueInCaddie": "캐디에서 계속 보기",
   "caddie.thingsToWorkOn": "개선할 점 {count}가지",
+  "caddie.thingsToWorkOnSingular": "개선할 점 1가지",
   "caddie.scoreOutOf100": "{score}/100점",
   "caddie.scoreBreakdown": "점수 세부 항목",
   "caddie.scoreSetupAndPosture": "셋업 & 자세",
