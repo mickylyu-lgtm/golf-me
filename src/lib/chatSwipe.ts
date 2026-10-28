@@ -1,9 +1,14 @@
-// Pure decision rules shared by the DM thread's two in-list horizontal
-// gestures: swipe LEFT to reveal times (useSwipeToRevealTimes) and swipe
-// RIGHT on a bubble to reply (useSwipeToReply). Both lock the gesture's
-// direction once, from the first few pixels of movement, so they can never
-// both act on the same drag. Free of DOM/React so `npm run test:chat`
-// covers them with plain node.
+// Pure decision rules for the DM thread's horizontal gestures (Micky,
+// 2026-10-27: "swipe left anywhere is time and swipe left on a message is
+// reply to that message"):
+//   - LEFT, starting on a message bubble  -> reply (useSwipeToReply)
+//   - LEFT, starting anywhere else        -> reveal times (useSwipeToRevealTimes)
+//   - RIGHT, starting in the edge strip   -> back (useEdgeSwipeBack)
+//   - RIGHT, anywhere else                -> nothing
+//   - mostly vertical                     -> native scroll
+// Each hook locks the direction once, from the first few pixels of
+// movement, and acts only on its own class, so no two can ever act on the
+// same drag. Free of DOM/React so `npm run test:chat` covers it with node.
 
 // Movement below this, in both axes, doesn't decide anything yet.
 export const AXIS_SLOP_PX = 8;
@@ -16,6 +21,7 @@ const REPLY_OVERDRAG_RESISTANCE = 0.3;
 export const REPLY_MAX_OVERDRAG_PX = 30;
 
 export type SwipeDirection = "pending" | "left" | "right" | "vertical";
+export type SwipeAction = "pending" | "reply" | "times" | "back" | "scroll" | "none";
 
 // "pending" until the finger has moved past the slop; then whichever axis
 // moved more wins (a tie goes to vertical, so native scroll keeps priority).
@@ -25,12 +31,31 @@ export function lockDirection(dx: number, dy: number): SwipeDirection {
   return dx < 0 ? "left" : "right";
 }
 
-// How far the bubble moves for a rightward finger travel of dx. Never left
-// of rest; 1:1 up to the threshold, then resisted and capped.
-export function replyDragOffset(dx: number): number {
-  if (dx <= 0) return 0;
-  if (dx <= REPLY_THRESHOLD_PX) return dx;
-  return REPLY_THRESHOLD_PX + Math.min(REPLY_MAX_OVERDRAG_PX, (dx - REPLY_THRESHOLD_PX) * REPLY_OVERDRAG_RESISTANCE);
+// What a locked gesture means, from where it started. `onBubble` is true
+// only when the start was on a reply-enabled message bubble (the thread
+// marks bubbles only while replying is possible), `inEdge` when it was in
+// the edge-swipe-back strip (isEdgeStart).
+export function classifySwipe(direction: SwipeDirection, start: { onBubble: boolean; inEdge: boolean }): SwipeAction {
+  switch (direction) {
+    case "pending":
+      return "pending";
+    case "vertical":
+      return "scroll";
+    case "left":
+      return start.onBubble ? "reply" : "times";
+    case "right":
+      return start.inEdge ? "back" : "none";
+  }
+}
+
+// How far the bubble moves for a finger pull of `pull` px in the reply
+// direction (a positive number; the caller negates it for the leftward
+// transform). Never past rest; 1:1 up to the threshold, then resisted and
+// capped.
+export function replyDragOffset(pull: number): number {
+  if (pull <= 0) return 0;
+  if (pull <= REPLY_THRESHOLD_PX) return pull;
+  return REPLY_THRESHOLD_PX + Math.min(REPLY_MAX_OVERDRAG_PX, (pull - REPLY_THRESHOLD_PX) * REPLY_OVERDRAG_RESISTANCE);
 }
 
 export function replyProgress(offset: number): number {
@@ -43,7 +68,7 @@ export function isPastReplyThreshold(offset: number): boolean {
 
 // One haptic per crossing: fires when the drag goes from below to at/over
 // the threshold, never while it stays past it. Dragging back under and over
-// again fires again (the same as Messages/WhatsApp).
+// again fires again.
 export function crossedReplyThreshold(previousOffset: number, offset: number): boolean {
   return !isPastReplyThreshold(previousOffset) && isPastReplyThreshold(offset);
 }

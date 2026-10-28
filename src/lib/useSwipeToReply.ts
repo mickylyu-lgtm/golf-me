@@ -1,19 +1,24 @@
 import { useEffect, useRef, type RefObject } from "react";
 import { Capacitor } from "@capacitor/core";
 import { Haptics, ImpactStyle } from "@capacitor/haptics";
-import { crossedReplyThreshold, isPastReplyThreshold, lockDirection, replyDragOffset, replyProgress } from "./chatSwipe";
-import { isEdgeStart } from "./edgeSwipeBack";
+import { classifySwipe, crossedReplyThreshold, isPastReplyThreshold, lockDirection, replyDragOffset, replyProgress } from "./chatSwipe";
 
-// Swipe RIGHT on a message bubble to reply (Micky, 2026-10-26), like
-// Instagram/WhatsApp. The bubble's row follows the finger with a reply
-// arrow fading in behind it; crossing REPLY_THRESHOLD_PX fires one light
-// haptic; letting go past it calls onReply(messageId). Always springs back.
+// Swipe LEFT on a message bubble to reply (Micky, 2026-10-27: "swipe left
+// anywhere is time and swipe left on a message is reply to that message").
+// The bubble follows the finger left with a reply arrow fading in on the
+// right, where the bubble came from; crossing REPLY_THRESHOLD_PX fires one
+// light haptic; letting go past it calls onReply(messageId). Always springs
+// back. A leftward drag that starts anywhere else in the list is
+// useSwipeToRevealTimes; a rightward drag on a bubble does nothing.
 //
 // DOM contract (DirectMessageThread renders it):
-//   [data-reply-row]                    static row, position: relative
-//     [data-reply-arrow]                the arrow, absolutely positioned
-//     [data-reply-content]              what moves (avatar + bubble + time)
-//       [data-reply-bubble="<msg id>"]  a drag must START on this
+//   [data-reply-row]                  the message row, position: relative
+//     [data-reply-arrow]              the arrow, absolutely positioned
+//     [data-reply-bubble="<msg id>"]  the bubble: a drag must START on it,
+//                                     and only it moves (the avatar stays
+//                                     put and drawn above it)
+// The thread sets data-reply-bubble only while replying is possible, so
+// with replying off a bubble is just "anywhere else" (times).
 //
 // Coexists with the thread's other gestures the same way
 // useSwipeToRevealTimes does, and never touches the frozen keyboard/
@@ -21,13 +26,12 @@ import { isEdgeStart } from "./edgeSwipeBack";
 // - Passive pointer listeners on the list (touch-action: pan-y there), so
 //   native vertical scroll wins and sends pointercancel; no non-passive
 //   touchmove anywhere.
-// - Direction lock via the shared lockDirection(): only "right" is ours;
-//   "left" is swipe-to-reveal-times, "vertical" is scroll.
-// - Starts inside the edge-swipe-back strip (EDGE_PX from the left of
-//   [data-swipe-back-root]) are ignored, so that strip always means "back".
+// - Direction lock via the shared lockDirection()/classifySwipe(): only
+//   "reply" (left, started on a bubble) is ours; useSwipeToRevealTimes
+//   makes the same call and skips it, so the times never move with it.
 // - Touch/pen only; mouse drags stay text selection. A start while text is
 //   selected is ignored (long-press selection).
-// - Only one row's content and arrow get inline styles, during the gesture
+// - Only one bubble and its arrow get inline styles, during the gesture
 //   and its spring back; nothing reads/writes scrollTop or sizes.
 // - The click that ends a real drag is swallowed (capture phase), so a drag
 //   ending on the avatar button never navigates. Taps/long-presses never
@@ -73,7 +77,6 @@ export function useSwipeToReply(listRef: RefObject<HTMLElement | null>, enabled:
     let startY = 0;
     let messageId = "";
     let bubble: HTMLElement | null = null;
-    let content: HTMLElement | null = null;
     let arrow: HTMLElement | null = null;
     let arrowBaseX = 0;
     let offset = 0;
@@ -83,12 +86,13 @@ export function useSwipeToReply(listRef: RefObject<HTMLElement | null>, enabled:
 
     const paint = () => {
       frame = 0;
-      if (!content || !arrow) return;
+      if (!bubble || !arrow) return;
       const progress = replyProgress(offset);
-      content.style.transform = `translate3d(${offset}px, 0, 0)`;
+      bubble.style.transform = `translate3d(${-offset}px, 0, 0)`;
       arrow.style.opacity = String(progress);
-      // Centred in the strip the moving content uncovers, growing in.
-      const x = arrowBaseX + Math.max(0, Math.min(offset, 60) - ARROW_SIZE_PX) / 2;
+      // Centred in the strip the bubble uncovers on its right, growing in.
+      const strip = Math.min(offset, 60);
+      const x = arrowBaseX - strip + Math.max(0, strip - ARROW_SIZE_PX) / 2;
       arrow.style.transform = `translate3d(${x}px, 0, 0) scale(${0.6 + 0.4 * progress})`;
     };
     const schedulePaint = () => {
@@ -101,9 +105,8 @@ export function useSwipeToReply(listRef: RefObject<HTMLElement | null>, enabled:
 
     const springBack = () => {
       cancelFrame();
-      const c = content;
+      const c = bubble;
       const a = arrow;
-      content = null;
       arrow = null;
       bubble = null;
       offset = 0;
@@ -133,31 +136,24 @@ export function useSwipeToReply(listRef: RefObject<HTMLElement | null>, enabled:
 
     const begin = () => {
       const row = bubble?.closest<HTMLElement>("[data-reply-row]");
-      content = row?.querySelector<HTMLElement>("[data-reply-content]") ?? null;
       arrow = row?.querySelector<HTMLElement>("[data-reply-arrow]") ?? null;
-      if (!row || !content || !arrow) {
+      if (!row || !bubble || !arrow) {
         phase = "idle";
         pointerId = null;
-        content = null;
+        bubble = null;
         arrow = null;
         return false;
       }
-      // Where the moving content's leftmost child starts (the avatar for
-      // their messages, the bubble for mine): the arrow appears there.
-      const rowLeft = row.getBoundingClientRect().left;
-      let left = Infinity;
-      for (const child of Array.from(content.children)) {
-        const r = child.getBoundingClientRect();
-        if (r.width > 0 && getComputedStyle(child).position !== "absolute") left = Math.min(left, r.left);
-      }
-      arrowBaseX = Number.isFinite(left) ? Math.max(0, left - rowLeft) : 0;
+      // The bubble's resting right edge, relative to the row: the strip it
+      // uncovers (and the arrow) grows leftward from there.
+      arrowBaseX = bubble.getBoundingClientRect().right - row.getBoundingClientRect().left;
       // A new drag during the previous one's spring back: that row is
       // already at rest values, so just drop its pending cleanup instead of
       // letting it wipe this drag's styles if it's the same row.
       for (const t of settling) window.clearTimeout(t);
       settling.clear();
-      content.style.transition = "";
-      content.style.willChange = "transform";
+      bubble.style.transition = "";
+      bubble.style.willChange = "transform";
       arrow.style.transition = "";
       phase = "dragging";
       return true;
@@ -171,9 +167,6 @@ export function useSwipeToReply(listRef: RefObject<HTMLElement | null>, enabled:
       if (hasTextSelection()) return;
       const target = e.target instanceof Element ? e.target.closest<HTMLElement>("[data-reply-bubble]") : null;
       if (!target || !list.contains(target)) return;
-      const root = list.closest("[data-swipe-back-root]");
-      const rootLeft = root ? root.getBoundingClientRect().left : 0;
-      if (isEdgeStart(e.clientX - rootLeft)) return;
       const id = target.dataset.replyBubble;
       if (!id) return;
       pointerId = e.pointerId;
@@ -188,9 +181,9 @@ export function useSwipeToReply(listRef: RefObject<HTMLElement | null>, enabled:
       if (e.pointerId !== pointerId) return;
       const dx = e.clientX - startX;
       if (phase === "pending") {
-        const direction = lockDirection(dx, e.clientY - startY);
-        if (direction === "pending") return;
-        if (direction !== "right") {
+        const action = classifySwipe(lockDirection(dx, e.clientY - startY), { onBubble: true, inEdge: false });
+        if (action === "pending") return;
+        if (action !== "reply") {
           phase = "idle";
           pointerId = null;
           bubble = null;
@@ -199,7 +192,7 @@ export function useSwipeToReply(listRef: RefObject<HTMLElement | null>, enabled:
         if (!begin()) return;
       }
       if (phase !== "dragging") return;
-      const next = replyDragOffset(dx);
+      const next = replyDragOffset(-dx);
       if (crossedReplyThreshold(offset, next)) lightHaptic();
       offset = next;
       schedulePaint();
@@ -245,10 +238,10 @@ export function useSwipeToReply(listRef: RefObject<HTMLElement | null>, enabled:
       for (const t of settling) window.clearTimeout(t);
       settling.clear();
       cancelFrame();
-      if (content) {
-        content.style.transform = "";
-        content.style.transition = "";
-        content.style.willChange = "";
+      if (bubble) {
+        bubble.style.transform = "";
+        bubble.style.transition = "";
+        bubble.style.willChange = "";
       }
       if (arrow) {
         arrow.style.transform = "";
