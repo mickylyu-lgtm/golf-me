@@ -172,21 +172,24 @@ function weekCounts(dates: (string | null | undefined)[]): WeekCounts {
   return { last, prev };
 }
 
-// Overview cards: how many were added in the last 7 days, and the percent
-// change against the 7 days before (Micky, 2026-10-28). No percent when the
-// previous week had none (a "+∞%" says nothing).
-function WeekChange({ last, prev }: WeekCounts) {
+// Overview cards: percent change of what was added in the last 7 days
+// against the 7 days before, as a small badge beside the number (Micky,
+// 2026-10-28). "New" when the week before had none (a "+∞%" says nothing);
+// nothing at all when neither week had any.
+function WeekBadge({ last, prev }: WeekCounts) {
+  if (last === 0 && prev === 0) return null;
   const pct = prev > 0 ? Math.round(((last - prev) / prev) * 100) : null;
-  const tone = pct === null ? (last > 0 ? "text-fairway-600" : "text-slate-400") : pct > 0 ? "text-fairway-600" : pct < 0 ? "text-rose-600" : "text-slate-400";
+  const tone =
+    pct === null || pct > 0 ? "bg-fairway-50 text-fairway-700" : pct < 0 ? "bg-rose-50 text-rose-600" : "bg-slate-100 text-slate-500";
   const Icon = pct !== null && pct < 0 ? TrendingDown : TrendingUp;
   return (
-    <div className="mt-1.5 text-[11px] leading-tight">
-      <p className={`flex items-center gap-1 font-semibold ${tone}`}>
-        {(pct === null ? last > 0 : pct !== 0) && <Icon size={12} className="shrink-0" />}
-        {pct === null ? (last > 0 ? "New this week" : "No change") : `${pct > 0 ? "+" : ""}${pct}% vs week before`}
-      </p>
-      <p className="text-slate-400">+{last} in the last 7 days</p>
-    </div>
+    <span
+      title={`${last} in the last 7 days, ${prev} the week before`}
+      className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${tone}`}
+    >
+      {pct !== 0 && <Icon size={11} className="shrink-0" />}
+      {pct === null ? "New" : `${Math.abs(pct)}%`}
+    </span>
   );
 }
 
@@ -375,9 +378,12 @@ export function AdminDashboard() {
 
       {overview && (
         <section className="flex flex-col gap-3">
-          <h2 className="flex items-center gap-1.5 text-sm font-bold text-slate-800">
-            <LayoutGrid size={15} className="text-fairway-600" /> Overview
-          </h2>
+          <div className="flex items-baseline justify-between gap-2">
+            <h2 className="flex items-center gap-1.5 text-sm font-bold text-slate-800">
+              <LayoutGrid size={15} className="text-fairway-600" /> Overview
+            </h2>
+            <span className="text-xs text-slate-400">Trends: last 7 days vs the week before</span>
+          </div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {(
               [
@@ -392,9 +398,11 @@ export function AdminDashboard() {
               ] satisfies { label: string; value: number; week: WeekCounts | null }[]
             ).map((stat) => (
               <div key={stat.label} className="rounded-2xl border border-slate-100 bg-white p-3">
-                <p className="text-lg font-bold text-slate-800">{stat.value}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-lg font-bold text-slate-800">{stat.value}</p>
+                  {stat.week && <WeekBadge {...stat.week} />}
+                </div>
                 <p className="text-xs text-slate-500">{stat.label}</p>
-                {stat.week && <WeekChange {...stat.week} />}
               </div>
             ))}
           </div>
