@@ -9,6 +9,7 @@ import { computeSwingAssessment, segmentStatusAtTime } from "../../lib/swingAsse
 import type { SwingSegmentId, SwingSegmentStatus } from "../../lib/swingAssessment";
 import type { TranslationKey } from "../../i18n/locales/en";
 import { SwingCallout } from "./SwingCallout";
+import { separateCallouts } from "./calloutLayout";
 
 // Standard COCO-17 joint pairs — only drawn when BOTH ends are present in
 // that frame's keypoints. Roboflow's output already had unreliable joints
@@ -542,6 +543,8 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
         const dockY = Math.min(Math.max(c.y, rect.top + CALLOUT_VERTICAL_MARGIN), rect.top + rect.height - CALLOUT_VERTICAL_MARGIN);
         return { key: c.segment, x: dockX, y: dockY, side, anchorX: c.x, anchorY: c.y, status: c.status, textKey: CALLOUT_KEYS[c.segment][c.status] };
       });
+
+      separateCallouts(newCallouts, rect.top + CALLOUT_VERTICAL_MARGIN, rect.top + rect.height - CALLOUT_VERTICAL_MARGIN, video.paused);
 
       // Thin leader line from each dock point back to the real validated
       // joint — drawn every frame (not gated behind the signature check
