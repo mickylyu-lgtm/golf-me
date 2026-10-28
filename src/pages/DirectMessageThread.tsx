@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Eraser, MoreHorizontal, ShieldAlert, ShieldCheck, ShieldOff, Trash2 } from "lucide-react";
+import { ArrowLeft, Eraser, MoreHorizontal, Reply, ShieldAlert, ShieldCheck, ShieldOff, Trash2, X } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useToast } from "../context/ToastContext";
 import { Avatar } from "../components/ui/Avatar";
@@ -18,6 +18,7 @@ import { isFounder } from "../lib/founder";
 import { useLocale } from "../i18n/LocaleContext";
 import { formatMessageTime } from "../lib/messageTime";
 import { useSwipeToRevealTimes } from "../lib/useSwipeToRevealTimes";
+import { useSwipeToReply } from "../lib/useSwipeToReply";
 
 export function DirectMessageThread() {
   const { id } = useParams<{ id: string }>();
@@ -31,6 +32,7 @@ export function DirectMessageThread() {
     canMessage,
     messagesWithGolfer,
     sendDirectMessage,
+    canReplyToMessages,
     markConversationRead,
     clearChatHistory,
     deleteConversation,
@@ -46,6 +48,11 @@ export function DirectMessageThread() {
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  // Swipe-to-reply (useSwipeToReply): the message the next send quotes, and
+  // the original briefly highlighted after tapping a quote.
+  const [replyToId, setReplyToId] = useState<string | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const highlightTimerRef = useRef(0);
   const listRef = useRef<HTMLDivElement>(null);
   // Wraps the message rows only (inside listRef) so the swipe-to-reveal-
   // times gesture can move them all with one transform. See
@@ -97,6 +104,20 @@ export function DirectMessageThread() {
   const eligible = id ? canMessage(id) : false;
   const otherTyping = other ? isOtherTyping(other.id) : false;
   useSwipeToRevealTimes(listRef, rowsRef, Boolean(other));
+  // Swipe right on a bubble to reply. Called synchronously inside the
+  // gesture's pointerup (a user gesture), so focusing the composer here is
+  // the same kind of focus ChatComposer's own send button makes; the
+  // keyboard (if it opens) is then handled by the unchanged
+  // keyboardHeight/boxHeight code exactly as for a tap on the textarea.
+  useSwipeToReply(listRef, Boolean(other) && eligible && !blocked && canReplyToMessages, (messageId) => {
+    setReplyToId(messageId);
+    const textarea = boxRef.current?.querySelector("textarea");
+    if (textarea && document.activeElement !== textarea) textarea.focus({ preventScroll: true });
+  });
+  // A reply target belongs to one thread; a highlight timer never outlives
+  // the page.
+  useEffect(() => setReplyToId(null), [id]);
+  useEffect(() => () => window.clearTimeout(highlightTimerRef.current), []);
 
   // Ephemeral only -- never a persisted message, never touches unread
   // counts/notifications. useTypingIndicator reads this via a ref (see its
@@ -280,14 +301,40 @@ export function DirectMessageThread() {
     );
   }
 
+  const messagesById = new Map(messages.map((m) => [m.id, m]));
+  const replyTarget = replyToId ? messagesById.get(replyToId) : undefined;
+
+  function senderLabel(senderId: string) {
+    return senderId === currentUser.id ? t("chat.you") : (other?.name ?? "");
+  }
+
+  // Tap a quote: scroll the list (only its own scrollTop, like a user
+  // scroll) to the original and flash it.
+  function jumpToMessage(messageId: string) {
+    const list = listRef.current;
+    const row = list?.querySelector<HTMLElement>(`[data-reply-row="${CSS.escape(messageId)}"]`);
+    if (!list || !row) return;
+    const listRect = list.getBoundingClientRect();
+    const rowRect = row.getBoundingClientRect();
+    const top = list.scrollTop + (rowRect.top - listRect.top) - Math.max(0, (listRect.height - rowRect.height) / 2);
+    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+    list.scrollTo({ top: Math.max(0, top), behavior: reduced ? "auto" : "smooth" });
+    setHighlightId(messageId);
+    window.clearTimeout(highlightTimerRef.current);
+    highlightTimerRef.current = window.setTimeout(() => setHighlightId(null), 1400);
+  }
+
   async function handleSend() {
     if (!text.trim() || !other) return;
     const pendingText = text;
+    const pendingReplyTo = replyTarget?.id;
     updateText("");
+    setReplyToId(null);
     stopTyping();
-    const result = await sendDirectMessage(other.id, pendingText);
+    const result = await sendDirectMessage(other.id, pendingText, pendingReplyTo);
     if (result !== "sent") {
       updateText(pendingText);
+      if (pendingReplyTo) setReplyToId(pendingReplyTo);
       if (result === "objectionable") showToast(t("moderation.objectionableContent"), "warning");
       else showToast("Message didn't send — try again in a moment.", "info");
     }
@@ -425,34 +472,73 @@ export function DirectMessageThread() {
             {messages.map((m) => {
               const isMe = m.senderId === currentUser.id;
               const sent = formatMessageTime(m.createdAt, locale, t);
+              const quoted = m.replyToId ? messagesById.get(m.replyToId) : undefined;
               return (
-                <div key={m.id} className={`relative flex items-end gap-2 ${isMe ? "flex-row-reverse" : ""}`}>
-                  {/* Tap goes to that golfer's profile; a long press magnifies
-                      the photo (Avatar swallows the click after it). */}
-                  <button
-                    type="button"
-                    aria-label="View Profile"
-                    onClick={() => navigate(isMe ? "/profile" : `/golfer/${other.id}`)}
-                    className="shrink-0 rounded-full"
+                // data-reply-row/-arrow/-content/-bubble: the DOM contract
+                // useSwipeToReply drives. The row itself never moves; the
+                // content inside it (the old row, unchanged) does.
+                <div key={m.id} data-reply-row={m.id} className="relative">
+                  <span
+                    data-reply-arrow
+                    aria-hidden="true"
+                    className="pointer-events-none absolute top-1/2 left-0 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-slate-100 text-slate-500 opacity-0"
                   >
-                    <Avatar golfer={isMe ? currentUser : other} size="xs" showVerified={false} />
-                  </button>
-                  <div
-                    className={`max-w-[75%] rounded-2xl px-3.5 py-2 text-sm [overflow-wrap:anywhere] ${
-                      isMe ? "rounded-br-sm bg-fairway-600 text-white" : "rounded-bl-sm bg-slate-100 text-slate-800"
-                    }`}
-                  >
-                    {m.text}
-                  </div>
-                  {sent && (
-                    <time
-                      dateTime={m.createdAt}
-                      className="pointer-events-none absolute top-1/2 left-[calc(100%+1rem)] flex w-[4.25rem] -translate-y-1/2 flex-col items-center text-center text-[10px] leading-tight whitespace-nowrap text-slate-400 tabular-nums"
+                    <Reply size={14} />
+                  </span>
+                  <div data-reply-content className={`relative flex items-end gap-2 ${isMe ? "flex-row-reverse" : ""}`}>
+                    {/* Tap goes to that golfer's profile; a long press magnifies
+                        the photo (Avatar swallows the click after it). */}
+                    <button
+                      type="button"
+                      aria-label="View Profile"
+                      onClick={() => navigate(isMe ? "/profile" : `/golfer/${other.id}`)}
+                      className="shrink-0 rounded-full"
                     >
-                      {sent.day && <span>{sent.day}</span>}
-                      <span className="text-[11px] font-medium text-slate-500">{sent.time}</span>
-                    </time>
-                  )}
+                      <Avatar golfer={isMe ? currentUser : other} size="xs" showVerified={false} />
+                    </button>
+                    <div
+                      data-reply-bubble={m.id}
+                      className={`max-w-[75%] rounded-2xl px-3.5 py-2 text-sm transition-shadow duration-300 [overflow-wrap:anywhere] ${
+                        isMe ? "rounded-br-sm bg-fairway-600 text-white" : "rounded-bl-sm bg-slate-100 text-slate-800"
+                      } ${highlightId === m.id ? "ring-2 ring-amber-300 ring-offset-2" : ""}`}
+                    >
+                      {/* Quote of the replied-to message, taken only from
+                          messages this reader already has loaded (RLS-visible
+                          to them); anything else is "unavailable". */}
+                      {m.replyToId &&
+                        (quoted ? (
+                          <button
+                            type="button"
+                            onClick={() => jumpToMessage(quoted.id)}
+                            aria-label={t("chat.showOriginal")}
+                            className={`mb-1.5 block w-full rounded-lg border-l-2 px-2 py-1 text-left text-xs ${
+                              isMe ? "border-white/70 bg-white/15 text-white/90" : "border-fairway-500 bg-white/80 text-slate-600"
+                            }`}
+                          >
+                            <span className={`block font-semibold ${isMe ? "text-white" : "text-slate-700"}`}>{senderLabel(quoted.senderId)}</span>
+                            <span className="line-clamp-2">{quoted.text}</span>
+                          </button>
+                        ) : (
+                          <div
+                            className={`mb-1.5 rounded-lg border-l-2 px-2 py-1 text-xs italic ${
+                              isMe ? "border-white/50 bg-white/10 text-white/80" : "border-slate-300 bg-white/70 text-slate-500"
+                            }`}
+                          >
+                            {t("chat.originalUnavailable")}
+                          </div>
+                        ))}
+                      {m.text}
+                    </div>
+                    {sent && (
+                      <time
+                        dateTime={m.createdAt}
+                        className="pointer-events-none absolute top-1/2 left-[calc(100%+1rem)] flex w-[4.25rem] -translate-y-1/2 flex-col items-center text-center text-[10px] leading-tight whitespace-nowrap text-slate-400 tabular-nums"
+                      >
+                        {sent.day && <span>{sent.day}</span>}
+                        <span className="text-[11px] font-medium text-slate-500">{sent.time}</span>
+                      </time>
+                    )}
+                  </div>
                 </div>
               );
             })}
@@ -484,7 +570,34 @@ export function DirectMessageThread() {
               You can't message this golfer right now.
             </p>
           ) : (
-            <ChatComposer value={text} onChange={handleComposerChange} onSend={handleSend} onBlur={stopTyping} />
+            <>
+              {/* Rendered inside this same composer container, so the
+                  list's existing ResizeObserver sees it exactly like the
+                  composer growing a line (re-pins only if near bottom). */}
+              {replyTarget && (
+                <div className="flex items-center gap-2 border-t border-slate-100 py-2 pr-2 pl-3">
+                  <Reply size={14} className="shrink-0 text-fairway-600" aria-hidden="true" />
+                  <div className="min-w-0 flex-1 border-l-2 border-fairway-500 pl-2 text-xs leading-snug">
+                    <p className="truncate font-semibold text-slate-700">
+                      {replyTarget.senderId === currentUser.id ? t("chat.replyingToSelf") : t("chat.replyingTo", { name: other.name })}
+                    </p>
+                    <p className="truncate text-slate-500">{replyTarget.text}</p>
+                  </div>
+                  <button
+                    type="button"
+                    aria-label={t("chat.cancelReply")}
+                    // Same as the send button: don't take focus off the
+                    // textarea, so cancelling never closes the keyboard.
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => setReplyToId(null)}
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-400 transition-colors duration-150 hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              )}
+              <ChatComposer value={text} onChange={handleComposerChange} onSend={handleSend} onBlur={stopTyping} />
+            </>
           )}
         </div>
       </div>
