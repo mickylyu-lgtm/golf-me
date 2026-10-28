@@ -32,7 +32,7 @@ export function SwipeBackToInbox({ children }: { children: ReactNode }) {
   });
 
   return (
-    <div ref={wrapperRef} className="relative -mx-4 sm:-mx-6">
+    <div ref={wrapperRef} data-swipe-back-root className="relative -mx-4 sm:-mx-6">
       <div ref={backdropRef} aria-hidden="true" className="pointer-events-none absolute inset-0 bg-slate-900" style={{ display: "none", opacity: 0 }} />
       <div ref={sliderRef} className="relative px-4 sm:px-6">
         {children}

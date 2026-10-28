@@ -1,4 +1,5 @@
 import { useEffect, type RefObject } from "react";
+import { lockDirection } from "./chatSwipe";
 
 // Instagram-DM-style "drag the thread sideways to see when each message was
 // sent" (Micky, 2026-10-25). Dragging LEFT slides every row left by up to
@@ -12,8 +13,9 @@ import { useEffect, type RefObject } from "react";
 //   takes a gesture as a scroll, so this never fights a vertical scroll and
 //   never needs a non-passive touchmove listener (which would make every
 //   scroll wait on the main thread).
-// - Axis lock after AXIS_SLOP_PX: a gesture that starts mostly vertical is
-//   ignored for its whole lifetime.
+// - Direction lock after AXIS_SLOP_PX (lockDirection): a gesture that starts
+//   mostly vertical, or rightward (swipe-to-reply's direction, see
+//   useSwipeToReply), is ignored for its whole lifetime.
 // - Touch/pen only. A mouse drag stays a text selection on desktop.
 // - Only the rows wrapper moves, via one transform written at most once per
 //   animation frame. Nothing touches scrollTop, the list's size, or the
@@ -24,7 +26,6 @@ import { useEffect, type RefObject } from "react";
 // - prefers-reduced-motion: the rows still follow the finger (direct
 //   manipulation), but snap back with no spring animation.
 
-const AXIS_SLOP_PX = 8;
 export const REVEAL_PX = 76;
 // Past REVEAL_PX the drag keeps moving at a fraction of the finger, then stops.
 const OVERDRAG_RESISTANCE = 0.25;
@@ -101,11 +102,14 @@ export function useSwipeToRevealTimes(
       const dx = e.clientX - startX;
       const dy = e.clientY - startY;
       if (axis === "none") {
-        if (Math.abs(dx) < AXIS_SLOP_PX && Math.abs(dy) < AXIS_SLOP_PX) return;
-        if (Math.abs(dx) > Math.abs(dy)) {
+        const direction = lockDirection(dx, dy);
+        if (direction === "pending") return;
+        if (direction === "left") {
           axis = "x";
           rows.style.transition = "";
         } else {
+          // Vertical (native scroll) or rightward (swipe-to-reply / edge
+          // swipe back): not this gesture.
           axis = "y";
         }
       }
