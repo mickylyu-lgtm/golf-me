@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { Bell, Calendar, Flag, LayoutGrid, MessageSquare, ShieldCheck, Smartphone, TrendingDown, TrendingUp, Trophy, Users, Wand2 } from "lucide-react";
+import { Bell, Calendar, Flag, LayoutGrid, MessageSquare, Smartphone, TrendingDown, TrendingUp, Trophy, Users, Wand2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useRoles } from "../lib/useRoles";
 import { supabase } from "../lib/supabase";
@@ -13,15 +13,6 @@ import { EmptyState } from "../components/ui/EmptyState";
 // (hidden from nav, gated on isAdmin client-side, re-verified server-side
 // by every RPC), and same reasoning for staying plain English rather than
 // routed through the i18n system.
-interface WaitlistRow {
-  id: string;
-  email: string;
-  home_region: string;
-  referral_source: string | null;
-  status: string;
-  created_at: string;
-}
-
 interface UserRow {
   id: string;
   name: string | null;
@@ -160,6 +151,45 @@ function TrendIndicator({ current, previous }: { current: number; previous: numb
   );
 }
 
+interface WeekCounts {
+  last: number; // added in the last 7 days
+  prev: number; // added in the 7 days before that
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function weekCounts(dates: (string | null | undefined)[]): WeekCounts {
+  const now = Date.now();
+  let last = 0;
+  let prev = 0;
+  for (const d of dates) {
+    const t = d ? Date.parse(d) : NaN;
+    if (!Number.isFinite(t)) continue;
+    const age = now - t;
+    if (age < 7 * DAY_MS) last++;
+    else if (age < 14 * DAY_MS) prev++;
+  }
+  return { last, prev };
+}
+
+// Overview cards: how many were added in the last 7 days, and the percent
+// change against the 7 days before (Micky, 2026-10-28). No percent when the
+// previous week had none (a "+∞%" says nothing).
+function WeekChange({ last, prev }: WeekCounts) {
+  const pct = prev > 0 ? Math.round(((last - prev) / prev) * 100) : null;
+  const tone = pct === null ? (last > 0 ? "text-fairway-600" : "text-slate-400") : pct > 0 ? "text-fairway-600" : pct < 0 ? "text-rose-600" : "text-slate-400";
+  const Icon = pct !== null && pct < 0 ? TrendingDown : TrendingUp;
+  return (
+    <div className="mt-1.5 text-[11px] leading-tight">
+      <p className={`flex items-center gap-1 font-semibold ${tone}`}>
+        {(pct === null ? last > 0 : pct !== 0) && <Icon size={12} className="shrink-0" />}
+        {pct === null ? (last > 0 ? "New this week" : "No change") : `${pct > 0 ? "+" : ""}${pct}% vs week before`}
+      </p>
+      <p className="text-slate-400">+{last} in the last 7 days</p>
+    </div>
+  );
+}
+
 interface CaddieAnalysisRow {
   id: string;
   owner_name: string | null;
@@ -222,18 +252,10 @@ function personLabel(name: string | null, username: string | null) {
   return `${name ?? "Unknown"}${username ? ` (@${username})` : ""}`;
 }
 
-const STATUS_STYLES: Record<string, string> = {
-  waiting: "bg-fairway-50 text-fairway-700",
-  invited: "bg-sky-50 text-sky-700",
-  beta: "bg-sun-100 text-sun-700",
-  declined: "bg-slate-100 text-slate-500",
-};
-
 export function AdminDashboard() {
   const { isDemo } = useAuth();
   const { isAdmin, loading: rolesLoading } = useRoles();
 
-  const [waitlist, setWaitlist] = useState<WaitlistRow[]>([]);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [caddieStats, setCaddieStats] = useState<CaddieStats | null>(null);
   const [caddieAnalyses, setCaddieAnalyses] = useState<CaddieAnalysisRow[]>([]);
@@ -253,7 +275,6 @@ export function AdminDashboard() {
   const load = useCallback(async () => {
     setLoading(true);
     const [
-      { data: w, error: wErr },
       { data: u, error: uErr },
       { data: cs, error: csErr },
       { data: ca, error: caErr },
@@ -265,7 +286,6 @@ export function AdminDashboard() {
       { data: ps, error: psErr },
       { data: rp, error: rpErr },
     ] = await Promise.all([
-      supabase.rpc("admin_list_waitlist_signups"),
       supabase.rpc("admin_list_users"),
       supabase.rpc("admin_caddie_stats"),
       supabase.rpc("admin_list_caddie_analyses", { p_limit: 50 }),
@@ -277,7 +297,6 @@ export function AdminDashboard() {
       supabase.rpc("admin_push_stats"),
       supabase.rpc("admin_list_reports", { p_limit: 100 }),
     ]);
-    if (wErr) console.error("GolfMe: admin_list_waitlist_signups failed.", wErr);
     if (uErr) console.error("GolfMe: admin_list_users failed.", uErr);
     if (csErr) console.error("GolfMe: admin_caddie_stats failed.", csErr);
     if (caErr) console.error("GolfMe: admin_list_caddie_analyses failed.", caErr);
@@ -288,7 +307,6 @@ export function AdminDashboard() {
     if (msErr) console.error("GolfMe: admin_messaging_stats failed.", msErr);
     if (psErr) console.error("GolfMe: admin_push_stats failed.", psErr);
     if (rpErr) console.error("GolfMe: admin_list_reports failed.", rpErr);
-    setWaitlist((w ?? []) as WaitlistRow[]);
     setUsers((u ?? []) as UserRow[]);
     setCaddieStats(((cs as CaddieStats[]) ?? [])[0] ?? null);
     setCaddieAnalyses((ca ?? []) as CaddieAnalysisRow[]);
@@ -341,27 +359,18 @@ export function AdminDashboard() {
   if (!rolesLoading && !isAdmin) return <Navigate to="/" replace />;
   if (rolesLoading || loading) return null;
 
-  const statusCounts = waitlist.reduce<Record<string, number>>((acc, w) => {
-    acc[w.status] = (acc[w.status] ?? 0) + 1;
-    return acc;
-  }, {});
-  const regionCounts = waitlist
-    .reduce<{ region: string; count: number }[]>((acc, w) => {
-      const existing = acc.find((r) => r.region === w.home_region);
-      if (existing) existing.count += 1;
-      else acc.push({ region: w.home_region, count: 1 });
-      return acc;
-    }, [])
-    .sort((a, b) => b.count - a.count);
-
   const onboardedCount = users.filter((u) => u.has_onboarded).length;
+  // Signups by member_since. Onboarded uses the same date (when they joined,
+  // not when they finished onboarding, which isn't stored per user).
+  const usersWeek = weekCounts(users.map((u) => u.member_since));
+  const onboardedWeek = weekCounts(users.filter((u) => u.has_onboarded).map((u) => u.member_since));
   const openReportCount = reports.filter((r) => r.status === "open").length;
 
   return (
     <div className="flex flex-col gap-8 pb-10">
       <div>
         <h1 className="text-xl font-bold text-slate-900">Platform Dashboard</h1>
-        <p className="text-sm text-slate-500">Waitlist, users, and every real-usage stat, at a glance.</p>
+        <p className="text-sm text-slate-500">Users and every real-usage stat, at a glance.</p>
       </div>
 
       {overview && (
@@ -372,19 +381,20 @@ export function AdminDashboard() {
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {(
               [
-                { label: "Real users", value: overview.total_users },
-                { label: "Onboarded", value: overview.onboarded_users },
-                { label: "Golf Calls", value: overview.golf_calls_total },
-                { label: "Rounds completed", value: overview.rounds_completed },
-                { label: "Community posts", value: overview.community_posts_total },
-                { label: "Messages sent", value: overview.messages_total },
-                { label: "Caddie analyses", value: overview.caddie_analyses_total },
-                { label: "Push tokens", value: overview.push_tokens_registered },
-              ] satisfies { label: string; value: number }[]
+                { label: "Real users", value: overview.total_users, week: usersWeek },
+                { label: "Onboarded", value: overview.onboarded_users, week: onboardedWeek },
+                { label: "Golf Calls", value: overview.golf_calls_total, week: golfCallStats && { last: golfCallStats.hosted_last_7d, prev: golfCallStats.hosted_prev_7d } },
+                { label: "Rounds completed", value: overview.rounds_completed, week: null },
+                { label: "Community posts", value: overview.community_posts_total, week: communityStats && { last: communityStats.posts_last_7d, prev: communityStats.posts_prev_7d } },
+                { label: "Messages sent", value: overview.messages_total, week: messagingStats && { last: messagingStats.messages_last_7d, prev: messagingStats.messages_prev_7d } },
+                { label: "Caddie analyses", value: overview.caddie_analyses_total, week: caddieStats && { last: caddieStats.analyses_last_7d, prev: caddieStats.analyses_prev_7d } },
+                { label: "Push tokens", value: overview.push_tokens_registered, week: null },
+              ] satisfies { label: string; value: number; week: WeekCounts | null }[]
             ).map((stat) => (
               <div key={stat.label} className="rounded-2xl border border-slate-100 bg-white p-3">
                 <p className="text-lg font-bold text-slate-800">{stat.value}</p>
                 <p className="text-xs text-slate-500">{stat.label}</p>
+                {stat.week && <WeekChange {...stat.week} />}
               </div>
             ))}
           </div>
@@ -471,62 +481,6 @@ export function AdminDashboard() {
                 </div>
               );
             })}
-          </div>
-        )}
-      </section>
-
-      <section className="flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <h2 className="flex items-center gap-1.5 text-sm font-bold text-slate-800">
-            <ShieldCheck size={15} className="text-fairway-600" /> Waitlist
-          </h2>
-          <span className="text-sm font-semibold text-slate-500">{waitlist.length} total</span>
-        </div>
-
-        <div className="flex flex-wrap gap-1.5">
-          {Object.entries(statusCounts).map(([status, count]) => (
-            <span
-              key={status}
-              className={`rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${STATUS_STYLES[status] ?? "bg-slate-100 text-slate-500"}`}
-            >
-              {status}: {count}
-            </span>
-          ))}
-        </div>
-
-        {regionCounts.length > 0 && (
-          <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white">
-            {regionCounts.map((r, i) => (
-              <div
-                key={r.region}
-                className={`flex items-center justify-between px-3.5 py-2 text-sm ${i > 0 ? "border-t border-slate-100" : ""}`}
-              >
-                <span className="text-slate-700">{r.region}</span>
-                <span className="font-semibold text-slate-500">{r.count}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {waitlist.length === 0 ? (
-          <EmptyState icon={<ShieldCheck size={20} />} title="No waitlist signups yet." />
-        ) : (
-          <div className="flex flex-col gap-2">
-            {waitlist.slice(0, 100).map((w) => (
-              <div key={w.id} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white p-3">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-slate-800">{w.email}</p>
-                  <p className="truncate text-xs text-slate-500">
-                    {w.home_region}
-                    {w.referral_source && <> · ref: {w.referral_source}</>} · {fmtDate(w.created_at)}
-                  </p>
-                </div>
-                <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${STATUS_STYLES[w.status] ?? "bg-slate-100 text-slate-500"}`}>
-                  {w.status}
-                </span>
-              </div>
-            ))}
-            {waitlist.length > 100 && <p className="text-center text-xs text-slate-400">+{waitlist.length - 100} more</p>}
           </div>
         )}
       </section>
