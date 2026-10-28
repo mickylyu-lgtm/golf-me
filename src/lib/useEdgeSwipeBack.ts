@@ -89,9 +89,30 @@ export function useEdgeSwipeBack(
       frame = 0;
     };
 
+    // The clip comes off two frames after the transform is cleared, not in
+    // the same task: index.css's reduced-motion rule gives every element a
+    // 0.01ms transition, so for one frame the page still renders at its
+    // dragged offset, and without the clip that frame widened the document
+    // (headless check: scrollWidth 438 on a 390 viewport).
+    let clipFrame = 0;
+    const cancelClipRelease = () => {
+      if (clipFrame) cancelAnimationFrame(clipFrame);
+      clipFrame = 0;
+    };
+    const releaseClipSoon = () => {
+      cancelClipRelease();
+      clipFrame = requestAnimationFrame(() => {
+        clipFrame = requestAnimationFrame(() => {
+          clipFrame = 0;
+          if (phase === "idle") wrapper.style.overflowX = "";
+        });
+      });
+    };
+
     const beginDrag = () => {
       phase = "dragging";
       width = wrapper.getBoundingClientRect().width || window.innerWidth || 1;
+      cancelClipRelease();
       wrapper.style.overflowX = "clip";
       backdrop.style.display = "block";
       slider.style.transition = "";
@@ -110,9 +131,9 @@ export function useEdgeSwipeBack(
       backdrop.style.display = "none";
       backdrop.style.opacity = "0";
       backdrop.style.transition = "";
-      wrapper.style.overflowX = "";
       offset = 0;
       phase = "idle";
+      releaseClipSoon();
     };
 
     const springBack = () => {
@@ -232,6 +253,8 @@ export function useEdgeSwipeBack(
       wrapper.removeEventListener("touchcancel", onTouchEnd);
       window.clearTimeout(timer);
       resetStyles();
+      cancelClipRelease();
+      wrapper.style.overflowX = "";
     };
   }, [wrapperRef, sliderRef, backdropRef]);
 }
