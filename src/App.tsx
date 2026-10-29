@@ -280,28 +280,36 @@ function useAnalyticsGate() {
 // appUrlOpen. Route it in-app. The auth callback scheme
 // (com.golfme.ios://) is handled by AuthContext and ignored here.
 // A cold launch from a link is also checked via getLaunchUrl, in case the
-// event fired before this listener existed; the same URL is never routed
-// twice.
+// event fired before this listener existed -- once per app run only.
+// BrowserRouter's navigate changes on every route change, so the effect
+// must not depend on it: re-running it re-read the launch URL and pushed the
+// round again whenever the golfer pressed Back (Micky, 2026-10-29). A link
+// for the page already showing is ignored (launch check + event for the
+// same tap), but tapping the same link again later still routes.
+let launchUrlChecked = false;
+
 function AppUrlOpenRouting() {
   const navigate = useNavigate();
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
-    let lastUrl: string | null = null;
     const route = (url: string | undefined) => {
-      if (!url || url === lastUrl) return;
-      const path = routeForAppUrl(url);
-      if (!path) return;
-      lastUrl = url;
-      navigate(path);
+      const path = url ? routeForAppUrl(url) : null;
+      if (!path || path === window.location.pathname.replace(/\/+$/, "")) return;
+      navigateRef.current(path);
     };
-    CapacitorApp.getLaunchUrl()
-      .then((launch) => route(launch?.url))
-      .catch(() => {});
+    if (!launchUrlChecked) {
+      launchUrlChecked = true;
+      CapacitorApp.getLaunchUrl()
+        .then((launch) => route(launch?.url))
+        .catch(() => {});
+    }
     const listener = CapacitorApp.addListener("appUrlOpen", ({ url }) => route(url));
     return () => {
       listener.then((l) => l.remove());
     };
-  }, [navigate]);
+  }, []);
   return null;
 }
 
