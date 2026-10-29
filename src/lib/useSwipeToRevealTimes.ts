@@ -13,12 +13,11 @@ import { classifySwipe, lockDirection } from "./chatSwipe";
 //   takes a gesture as a scroll, so this never fights a vertical scroll and
 //   never needs a non-passive touchmove listener (which would make every
 //   scroll wait on the main thread).
-// - Direction lock after AXIS_SLOP_PX (lockDirection + classifySwipe): only
-//   a leftward drag that did NOT start on a reply-enabled message bubble is
-//   ours. A leftward drag starting on a bubble is swipe-to-reply
-//   (useSwipeToReply); vertical is scroll; rightward is nothing here (edge
-//   swipe back lives in useEdgeSwipeBack). Each is ignored for its whole
-//   lifetime.
+// - Direction lock after AXIS_SLOP_PX (lockDirection + classifySwipe): a
+//   leftward drag, wherever it starts (on a bubble or not), is ours.
+//   Vertical is scroll; rightward is swipe-to-reply on a bubble
+//   (useSwipeToReply) or edge swipe back (useEdgeSwipeBack). Anything not
+//   ours is ignored for its whole lifetime.
 // - Touch/pen only. A mouse drag stays a text selection on desktop.
 // - Only the rows wrapper moves, via one transform written at most once per
 //   animation frame. Nothing touches scrollTop, the list's size, or the
@@ -66,7 +65,6 @@ export function useSwipeToRevealTimes(
     let startX = 0;
     let startY = 0;
     let axis: "none" | "x" | "y" = "none";
-    let startedOnBubble = false;
     let offset = 0;
     let frame = 0;
     let suppressClickUntil = 0;
@@ -96,8 +94,6 @@ export function useSwipeToRevealTimes(
       if (e.pointerType === "mouse" || !e.isPrimary) return;
       if (hasTextSelection()) return;
       pointerId = e.pointerId;
-      // Bubbles carry data-reply-bubble only while replying is possible.
-      startedOnBubble = e.target instanceof Element && e.target.closest("[data-reply-bubble]") !== null;
       startX = e.clientX;
       startY = e.clientY;
       axis = "none";
@@ -108,14 +104,13 @@ export function useSwipeToRevealTimes(
       const dx = e.clientX - startX;
       const dy = e.clientY - startY;
       if (axis === "none") {
-        const action = classifySwipe(lockDirection(dx, dy), { onBubble: startedOnBubble, inEdge: false });
+        const action = classifySwipe(lockDirection(dx, dy), { onBubble: false, inEdge: false });
         if (action === "pending") return;
         if (action === "times") {
           axis = "x";
           rows.style.transition = "";
         } else {
-          // Scroll, a reply swipe on a bubble, or a rightward drag: not
-          // this gesture.
+          // Scroll, or a rightward drag (reply / back): not this gesture.
           axis = "y";
         }
       }

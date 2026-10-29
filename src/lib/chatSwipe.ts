@@ -1,10 +1,9 @@
 // Pure decision rules for the DM thread's horizontal gestures (Micky,
-// 2026-10-27: "swipe left anywhere is time and swipe left on a message is
-// reply to that message"):
-//   - LEFT, starting on a message bubble  -> reply (useSwipeToReply)
-//   - LEFT, starting anywhere else        -> reveal times (useSwipeToRevealTimes)
-//   - RIGHT, starting in the edge strip   -> back (useEdgeSwipeBack)
-//   - RIGHT, anywhere else                -> nothing
+// 2026-10-28, final: "it should be swipe right on message"):
+//   - RIGHT, starting in the edge strip       -> back (useEdgeSwipeBack; wins)
+//   - RIGHT, starting on a message bubble     -> reply (useSwipeToReply)
+//   - RIGHT, anywhere else                    -> nothing
+//   - LEFT, anywhere (on or off a bubble)     -> reveal times (useSwipeToRevealTimes)
 //   - mostly vertical                     -> native scroll
 // Each hook locks the direction once, from the first few pixels of
 // movement, and acts only on its own class, so no two can ever act on the
@@ -42,15 +41,15 @@ export function classifySwipe(direction: SwipeDirection, start: { onBubble: bool
     case "vertical":
       return "scroll";
     case "left":
-      return start.onBubble ? "reply" : "times";
+      return "times";
     case "right":
-      return start.inEdge ? "back" : "none";
+      if (start.inEdge) return "back";
+      return start.onBubble ? "reply" : "none";
   }
 }
 
 // How far the bubble moves for a finger pull of `pull` px in the reply
-// direction (a positive number; the caller negates it for the leftward
-// transform). Never past rest; 1:1 up to the threshold, then resisted and
+// direction (a positive number: the rightward dx). Never past rest; 1:1 up to the threshold, then resisted and
 // capped.
 export function replyDragOffset(pull: number): number {
   if (pull <= 0) return 0;

@@ -36,24 +36,27 @@ const ON_BUBBLE = { onBubble: true, inEdge: false };
 const OFF_BUBBLE = { onBubble: false, inEdge: false };
 const EDGE = { onBubble: false, inEdge: true };
 
-test("bubble + left = reply", () => {
-  assert.equal(classifySwipe(lockDirection(-30, 3), ON_BUBBLE), "reply");
+const EDGE_ON_BUBBLE = { onBubble: true, inEdge: true };
+
+test("bubble + right = reply", () => {
+  assert.equal(classifySwipe(lockDirection(30, 3), ON_BUBBLE), "reply");
 });
 
-test("off-bubble + left = times", () => {
-  assert.equal(classifySwipe(lockDirection(-30, 3), OFF_BUBBLE), "times");
-  assert.equal(classifySwipe(lockDirection(-30, 3), EDGE), "times");
-});
-
-test("bubble + right = nothing (no reply, no back)", () => {
-  assert.equal(classifySwipe(lockDirection(30, 3), ON_BUBBLE), "none");
+test("off-bubble + right = nothing", () => {
   assert.equal(classifySwipe(lockDirection(30, 3), OFF_BUBBLE), "none");
 });
 
-test("edge + right = back, matching useEdgeSwipeBack's own rules", () => {
+test("edge + right = back, and the edge strip wins over a bubble", () => {
   assert.equal(isEdgeStart(10), true);
   assert.equal(classifySwipe(lockDirection(30, 3), EDGE), "back");
+  assert.equal(classifySwipe(lockDirection(30, 3), EDGE_ON_BUBBLE), "back");
   assert.equal(classifyMove(30, 3), "back");
+});
+
+test("left anywhere = times (on a bubble, off it, from the edge)", () => {
+  for (const start of [ON_BUBBLE, OFF_BUBBLE, EDGE, EDGE_ON_BUBBLE]) {
+    assert.equal(classifySwipe(lockDirection(-30, 3), start), "times");
+  }
 });
 
 test("vertical = scroll wherever it starts; pending until the slop", () => {
@@ -69,9 +72,10 @@ test("reply and times can never both claim one drag", () => {
       const d = lockDirection(dx, dy);
       const a = classifySwipe(d, ON_BUBBLE);
       const b = classifySwipe(d, OFF_BUBBLE);
-      assert.notEqual(a, "times"); // a bubble start never moves the times
+      // One drag, one action: reply only ever rightward, times only leftward.
+      if (a === "reply") assert.ok(dx > 0 && d === "right");
+      if (a === "times" || b === "times") assert.ok(dx < 0 && d === "left");
       assert.notEqual(b, "reply"); // an off-bubble start never replies
-      if (a === "reply") assert.ok(dx < 0);
     }
   }
 });
@@ -100,11 +104,11 @@ test("haptic fires once per crossing", () => {
   assert.equal(crossedReplyThreshold(61, 70), false);
   assert.equal(crossedReplyThreshold(70, 50), false);
   assert.equal(crossedReplyThreshold(50, 60), true);
-  // A leftward drag sampled frame by frame: exactly one fire.
+  // A rightward drag sampled frame by frame: exactly one fire.
   let prev = 0;
   let fires = 0;
-  for (let dx = 0; dx >= -200; dx -= 7) {
-    const off = replyDragOffset(-dx);
+  for (let dx = 0; dx <= 200; dx += 7) {
+    const off = replyDragOffset(dx);
     if (crossedReplyThreshold(prev, off)) fires++;
     prev = off;
   }
