@@ -77,7 +77,7 @@ const ANKLE_H = 4;
 const LEAD_ANKLE: V = [18, ANKLE_H, 0];
 const LEAD_TOE: V = [23, 0, 12];
 const TRAIL_TOE: V = [-18, 0, 12];
-const BALL3: V = [2, 2, 64];
+const BALL3: V = [2, 2, 60];
 
 // ── keyframes ───────────────────────────────────────────────────────────
 // t: seconds from the start of the takeaway. Angles in degrees.
@@ -104,41 +104,42 @@ type Key = {
   rest?: boolean; // momentarily still here (velocity 0)
 };
 export const KEYS: Key[] = [
-  // address: hands just ahead of the ball, spine bent ~35° to the ball,
-  // trail shoulder a touch lower (side tilt), knees flexed forward
-  { t: 0, rest: true, pel: [-1, 91, -7], pYaw: 0, bend: 38, side: 16, sYaw: -8, grip: [3, 86, 38], shaft: [0, -1, 0], eL: [-0.6, -0.5, -0.6], eR: [0.6, -0.5, -0.4], kL: [0, 0, 1], kR: [0, 0, 1], heel: 0 },
+  // address (after a real face-on address): standing tall and square,
+  // shoulders level, spine bent ~30° toward the ball but straight in the
+  // front view (3° side tilt — more read as the whole body leaning), hands
+  // on the body's centreline, shaft hanging straight down to the ball
+  { t: 0, rest: true, pel: [0, 91, -7], pYaw: 0, bend: 30, side: 3, sYaw: -4, grip: [0, 86, 35], shaft: [0, -1, 0], eL: [-0.6, -0.5, -0.6], eR: [0.6, -0.5, -0.4], kL: [0, 0, 1], kR: [0, 0, 1], heel: 0 },
   // takeaway: club low and wide, toward the trail side
-  { t: 0.24, pel: [-2, 91, -7], pYaw: 10, bend: 37, side: 15, sYaw: 24, grip: [-14, 82, 40], shaft: [-0.72, -0.6, 0.35], eL: [-0.4, -0.7, -0.6], eR: [0.4, -0.7, -0.6], kL: [0, 0, 1], kR: [-0.2, 0, 1], heel: 0 },
+  { t: 0.24, pel: [-1, 91, -7], pYaw: 10, bend: 31, side: 5, sYaw: 24, grip: [-13, 87, 37], shaft: [-0.72, -0.6, 0.35], eL: [-0.4, -0.7, -0.6], eR: [0.4, -0.7, -0.6], kL: [0, 0, 1], kR: [-0.2, 0, 1], heel: 0 },
   // hip high: shaft parallel to the ground, pointing away from the target
-  { t: 0.45, pel: [-3, 91, -7], pYaw: 22, bend: 35, side: 13, sYaw: 52, grip: [-36, 84, 32], shaft: [-0.95, 0.12, 0.28], eL: [-0.2, -0.8, -0.6], eR: [0.2, -0.8, 0.5], kL: [0, 0, 1], kR: [-0.35, 0, 1], heel: 0 },
+  { t: 0.45, pel: [-2, 91, -7], pYaw: 22, bend: 31, side: 7, sYaw: 52, grip: [-32, 90, 31], shaft: [-0.95, 0.12, 0.28], eL: [-0.2, -0.8, -0.6], eR: [0.2, -0.8, 0.5], kL: [0, 0, 1], kR: [-0.35, 0, 1], heel: 0 },
   // lead arm parallel: wrists set, shaft pointing up
-  { t: 0.66, pel: [-3, 91, -7], pYaw: 36, bend: 34, side: 11, sYaw: 75, grip: [-57, 125, 19], shaft: [-0.25, 0.96, 0.1], eL: [-0.1, -1, -0.3], eR: [0.3, -0.6, 0.7], kL: [0, 0, 1], kR: [-0.5, 0, 1], heel: 0 },
+  { t: 0.66, pel: [-3, 91, -7], pYaw: 36, bend: 32, side: 10, sYaw: 75, grip: [-57, 125, 19], shaft: [-0.25, 0.96, 0.1], eL: [-0.1, -1, -0.3], eR: [0.3, -0.6, 0.7], kL: [0, 0, 1], kR: [-0.5, 0, 1], heel: 0 },
   // top: hips ~45°, shoulders ~90°, hands high over the trail shoulder,
   // shaft parallel to the ground pointing at the target
   { t: 0.9, rest: true, pel: [-4, 91, -7], pYaw: 45, bend: 32, side: 9, sYaw: 92, grip: [-38, 162, 11], shaft: [0.92, 0.05, -0.38], eL: [0, -1, 0.1], eR: [0.2, -0.5, 0.8], kL: [0, 0, 1], kR: [-0.6, 0, 1], heel: 0 },
   // transition: hips start to the target first, arms drop, lag held
-  { t: 1.02, pel: [0, 90, -7], pYaw: 22, bend: 33, side: 12, sYaw: 72, grip: [-53, 135, 21], shaft: [0.25, 0.95, -0.2], eL: [0.1, -1, 0.3], eR: [0.2, -0.6, 0.8], kL: [0.2, 0, 1], kR: [-0.3, 0, 1], heel: 0 },
+  { t: 1.02, pel: [0, 90, -7], pYaw: 22, bend: 31, side: 10, sYaw: 72, grip: [-53, 135, 21], shaft: [0.25, 0.95, -0.2], eL: [0.1, -1, 0.3], eR: [0.2, -0.6, 0.8], kL: [0.2, 0, 1], kR: [-0.3, 0, 1], heel: 0 },
   // hip high in the downswing: lag, shaft still pointing up behind the hands
-  { t: 1.13, pel: [4, 90, -7], pYaw: -12, bend: 35, side: 16, sYaw: 34, grip: [-27, 85, 41], shaft: [-0.55, 0.78, 0.3], eL: [0.2, -1, 0.3], eR: [0.3, -0.7, 0.6], kL: [0.5, 0, 1], kR: [0, 0, 1], heel: 0.05 },
+  { t: 1.13, pel: [4, 90, -7], pYaw: -12, bend: 32, side: 11, sYaw: 34, grip: [-27, 85, 41], shaft: [-0.55, 0.78, 0.3], eL: [0.2, -1, 0.3], eR: [0.3, -0.7, 0.6], kL: [0.5, 0, 1], kR: [0, 0, 1], heel: 0.05 },
   // release
-  { t: 1.185, pel: [6, 90, -7], pYaw: -26, bend: 36, side: 19, sYaw: 8, grip: [-3, 80, 43], shaft: [-0.72, -0.4, 0.57], eL: [0.2, -1, 0.3], eR: [0.4, -0.8, 0.4], kL: [0.6, 0, 1], kR: [0, 0, 1], heel: 0.1 },
+  { t: 1.185, pel: [6, 90, -7], pYaw: -26, bend: 31, side: 11, sYaw: 8, grip: [-1, 85, 41], shaft: [-0.72, -0.4, 0.57], eL: [0.2, -1, 0.3], eR: [0.4, -0.8, 0.4], kL: [0.6, 0, 1], kR: [0, 0, 1], heel: 0.1 },
   // impact: hands ahead of the ball, hips open ~35°, shoulders square,
   // trail shoulder down, weight moving onto the lead side
-  { t: 1.22, pel: [7, 90, -7], pYaw: -35, bend: 36, side: 20, sYaw: -8, grip: [9, 86, 40], shaft: [0, -1, 0], eL: [0.3, -1, 0.2], eR: [0.6, -0.6, 0.3], kL: [0.7, 0, 1], kR: [0.1, 0, 1], heel: 0.15 },
+  { t: 1.22, pel: [7, 90, -7], pYaw: -35, bend: 31, side: 11, sYaw: -10, grip: [9, 82, 25], shaft: [0, -1, 0], eL: [0.3, -1, 0.2], eR: [0.6, -0.6, 0.3], kL: [0.7, 0, 1], kR: [0.1, 0, 1], heel: 0.15 },
   // just after the ball: club chasing low toward the target
-  { t: 1.27, pel: [9, 90, -7], pYaw: -48, bend: 33, side: 17, sYaw: -22, grip: [19, 94, 38], shaft: [0.62, -0.6, 0.5], eL: [0.4, -1, 0.2], eR: [0.6, -0.6, -0.2], kL: [0.8, 0, 0.8], kR: [0.1, 0, 1], heel: 0.25 },
+  { t: 1.27, pel: [9, 90, -7], pYaw: -48, bend: 30, side: 12, sYaw: -22, grip: [19, 94, 38], shaft: [0.62, -0.6, 0.5], eL: [0.4, -1, 0.2], eR: [0.6, -0.6, -0.2], kL: [0.8, 0, 0.8], kR: [0.1, 0, 1], heel: 0.25 },
   // both arms extended: shaft parallel to the ground pointing at the target
   { t: 1.33, pel: [11, 91, -7], pYaw: -62, bend: 28, side: 12, sYaw: -48, grip: [35, 101, 33], shaft: [0.97, 0.12, 0.2], eL: [0.4, -1, 0.3], eR: [0.4, -0.5, -0.8], kL: [0.9, 0, 0.6], kR: [0.1, 0, 1], heel: 0.4 },
   // three-quarter: shaft vertical, trail arm crossing over
   { t: 1.45, pel: [13, 92, -7], pYaw: -80, bend: 18, side: 9, sYaw: -78, grip: [34, 140, 24], shaft: [0.08, 0.99, -0.15], eL: [0.3, -0.9, 0.4], eR: [0.1, -0.9, -0.4], kL: [1, 0, 0.5], kR: [0.1, 0, 1], heel: 0.7 },
   // wrapping: hands rising over the lead shoulder, club falling behind
-  { t: 1.58, pel: [14, 93, -7], pYaw: -90, bend: 10, side: 8, sYaw: -98, grip: [27, 155, 4], shaft: [-0.55, 0.62, -0.56], eL: [0.3, -0.85, 0.45], eR: [-0.1, -0.9, -0.4], kL: [1, 0, 0.4], kR: [0.1, 0, 1], heel: 0.9 },
-  // finish: chest past the target, standing tall over a straight lead leg,
-  // trail foot up on its toe, hands high beside the head over the lead
-  // shoulder, trail arm folded across the chest, both elbows tucked down toward
-  // the body (not flared up beside the head),
-  // club wrapped behind the neck and lead shoulder, pointing down and back
-  { t: 1.72, rest: true, pel: [14, 94, -7], pYaw: -95, bend: 6, side: 7, sYaw: -110, grip: [22, 158, -12], shaft: [-0.72, -0.45, -0.53], eL: [0.25, -0.85, 0.45], eR: [-0.2, -0.9, -0.35], kL: [1, 0, 0.4], kR: [0.1, 0, 1], heel: 1 },
+  { t: 1.58, pel: [14, 93, -7], pYaw: -90, bend: 10, side: 4, sYaw: -98, grip: [27, 155, 4], shaft: [-0.55, 0.62, -0.56], eL: [0.3, -0.85, 0.45], eR: [-0.1, -0.9, -0.4], kL: [1, 0, 0.4], kR: [0.1, 0, 1], heel: 0.9 },
+  // finish (after a real face-on finish): chest past the target, standing
+  // tall and upright over a straight lead leg, trail foot up on its toe,
+  // hands at shoulder height just to the lead side of the head, elbows
+  // tucked, club pointing up and back behind the head
+  { t: 1.72, rest: true, pel: [14, 94, -7], pYaw: -95, bend: 6, side: 3, sYaw: -110, grip: [22, 158, -12], shaft: [-0.5, 0.78, -0.38], eL: [0.25, -0.85, 0.45], eR: [-0.2, -0.9, -0.35], kL: [1, 0, 0.4], kR: [0.1, 0, 1], heel: 1 },
 ];
 // Address and impact shafts point exactly at the ball.
 for (const k of KEYS) if (k.t === 0 || k.t === 1.22) k.shaft = norm(sub(BALL3, k.grip));
