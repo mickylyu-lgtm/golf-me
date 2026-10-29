@@ -104,13 +104,13 @@ export function DirectMessageThread() {
   const eligible = id ? canMessage(id) : false;
   const otherTyping = other ? isOtherTyping(other.id) : false;
   useSwipeToRevealTimes(listRef, rowsRef, Boolean(other));
-  // Swipe left on a bubble to reply. Called synchronously inside the
+  // Swipe right on a bubble to reply. Called synchronously inside the
   // gesture's pointerup (a user gesture), so focusing the composer here is
   // the same kind of focus ChatComposer's own send button makes; the
   // keyboard (if it opens) is then handled by the unchanged
   // keyboardHeight/boxHeight code exactly as for a tap on the textarea.
   // Bubbles carry data-reply-bubble only while this is true, so with
-  // replying off a left swipe on a bubble is just the times swipe.
+  // replying off a right swipe on a bubble does nothing.
   const replyEnabled = Boolean(other) && eligible && !blocked && canReplyToMessages;
   useSwipeToReply(listRef, replyEnabled, (messageId) => {
     setReplyToId(messageId);
@@ -481,7 +481,7 @@ export function DirectMessageThread() {
                 // useSwipeToReply drives (only the bubble moves).
                 <div key={m.id} data-reply-row={m.id} className={`relative flex items-end gap-2 ${isMe ? "flex-row-reverse" : ""}`}>
                   {/* Swipe-to-reply arrow (useSwipeToReply positions it
-                      just right of the bubble as the bubble slides left). */}
+                      just left of the bubble as the bubble slides right). */}
                   <span
                     data-reply-arrow
                     aria-hidden="true"
@@ -495,9 +495,8 @@ export function DirectMessageThread() {
                     type="button"
                     aria-label="View Profile"
                     onClick={() => navigate(isMe ? "/profile" : `/golfer/${other.id}`)}
-                    // Drawn above the bubble, which slides under it during a
-                    // reply swipe instead of covering it.
-                    className="relative z-[1] shrink-0 rounded-full"
+                    data-reply-avatar
+                    className="shrink-0 rounded-full"
                   >
                     <Avatar golfer={isMe ? currentUser : other} size="xs" showVerified={false} />
                   </button>
