@@ -10,6 +10,7 @@ import { GolferSearchResultRow } from "../components/golfer/GolferSearchResultRo
 import { useFriendSearch } from "../lib/useFriendSearch";
 import { useSuggestedGolfers } from "../lib/useSuggestedGolfers";
 import type { FriendSearchResult } from "../lib/useFriendSearch";
+import { goBack } from "../lib/goBack";
 
 // Real-users-only by construction: search_golfer_profiles() (the RPC this
 // queries via useFriendSearch) is a real Supabase RPC requiring a real auth
@@ -44,7 +45,7 @@ export function FindFriends() {
   return (
     <div className="flex flex-col gap-6 pb-6">
       <button
-        onClick={() => navigate(-1)}
+        onClick={() => goBack(navigate)}
         className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
       >
         <ArrowLeft size={16} /> {t("common.back")}

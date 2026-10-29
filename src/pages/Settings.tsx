@@ -17,6 +17,7 @@ import { Toggle } from "../components/ui/Toggle";
 import { ProfileSwitcher } from "../components/layout/ProfileSwitcher";
 import { AddToHomeScreenPrompt } from "../components/layout/AddToHomeScreenPrompt";
 import { clearOnboardingDraft } from "../lib/onboardingDraft";
+import { goBack } from "../lib/goBack";
 
 // Plain-language push status for THIS phone, from what it knows locally:
 // iOS permission, whether Apple issued a device token, and whether GolfMe
@@ -165,7 +166,7 @@ export function Settings() {
   return (
     <div className="flex flex-col gap-6 pb-6">
       <button
-        onClick={() => navigate(-1)}
+        onClick={() => goBack(navigate)}
         className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
       >
         <ArrowLeft size={16} /> {t("common.back")}

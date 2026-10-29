@@ -47,6 +47,7 @@ import { isFounder } from "../lib/founder";
 import { vibeLabel, walkOrCartLabel } from "../lib/enumLabels";
 import { VIBE_TONE } from "../lib/theme";
 import { useIsCoachReviewer } from "../lib/useIsCoachReviewer";
+import { goBack } from "../lib/goBack";
 
 // Stable (module-level, not re-created per render) zeroed fallback for the
 // brief window before the route's golfer id resolves — useCredibilityStats
@@ -110,7 +111,7 @@ export function GolferProfilePage() {
       <div className="py-12 text-center text-slate-500">
         Golfer not found.
         <div className="mt-4">
-          <Button variant="outline" onClick={() => navigate(-1)}>
+          <Button variant="outline" onClick={() => goBack(navigate, "/find")}>
             Go back
           </Button>
         </div>
@@ -140,7 +141,7 @@ export function GolferProfilePage() {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => goBack(navigate, "/find")}
           className="flex items-center gap-1.5 rounded-full px-1 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2"
         >
           <ArrowLeft size={16} /> Back

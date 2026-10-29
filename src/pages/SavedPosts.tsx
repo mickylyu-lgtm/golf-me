@@ -3,6 +3,7 @@ import { ArrowLeft, Bookmark } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { EmptyState } from "../components/ui/EmptyState";
 import { PostCard } from "../components/community/PostCard";
+import { goBack } from "../lib/goBack";
 
 export function SavedPosts() {
   const { savedPostsList } = useData();
@@ -11,7 +12,7 @@ export function SavedPosts() {
   return (
     <div className="flex flex-col gap-5 pb-6">
       <button
-        onClick={() => navigate(-1)}
+        onClick={() => goBack(navigate)}
         className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
       >
         <ArrowLeft size={16} /> Back

@@ -17,6 +17,7 @@ import { CourseImageModeToggle, CourseThumb, PhotoAttribution, SatelliteAttribut
 import { useCourseImageMode } from "../lib/coursePhotos";
 import { satelliteImageryEnabled } from "../lib/courseImagery";
 import { openCourse } from "../lib/openCourse";
+import { goBack } from "../lib/goBack";
 
 // Standalone "Golf Courses Near You" results screen — reuses the existing
 // nearby-course source end to end (Geoapify via useNearbyCourses, the same
@@ -53,7 +54,7 @@ export function NearbyCourses() {
   return (
     <div className="flex flex-col gap-5 pb-6">
       <button
-        onClick={() => navigate(-1)}
+        onClick={() => goBack(navigate, "/")}
         className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
       >
         <ArrowLeft size={16} /> {t("common.back")}

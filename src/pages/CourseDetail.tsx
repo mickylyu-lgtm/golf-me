@@ -13,6 +13,7 @@ import { CourseImageModeToggle } from "../components/courses/CourseThumb";
 import { useCourseImageMode, useCoursePhoto } from "../lib/coursePhotos";
 import { Button } from "../components/ui/Button";
 import { GolfMeLoader } from "../components/loading/GolfMeLoader";
+import { goBack } from "../lib/goBack";
 
 export interface CourseDetailState {
   course: DisplayCourseResult;
@@ -105,7 +106,7 @@ export function CourseDetail() {
   return (
     <div className="flex flex-col gap-5 pb-6">
       <button
-        onClick={() => navigate(-1)}
+        onClick={() => goBack(navigate, "/courses/nearby")}
         className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
       >
         <ArrowLeft size={16} /> {t("common.back")}

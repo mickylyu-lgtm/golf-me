@@ -5,6 +5,7 @@ import { useLocale } from "../i18n/LocaleContext";
 import { EmptyState } from "../components/ui/EmptyState";
 import { Button } from "../components/ui/Button";
 import { PostCard } from "../components/community/PostCard";
+import { goBack } from "../lib/goBack";
 
 export function MyPosts() {
   const { currentUser, posts } = useData();
@@ -15,7 +16,7 @@ export function MyPosts() {
   return (
     <div className="flex flex-col gap-6 pb-6">
       <button
-        onClick={() => navigate(-1)}
+        onClick={() => goBack(navigate)}
         className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
       >
         <ArrowLeft size={16} /> {t("common.back")}

@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, FileText } from "lucide-react";
 import { CONTACT_EMAIL } from "./PrivacyPolicy";
+import { goBack } from "../lib/goBack";
 
 // Text approved by Micky on 2026-09-29 (review task T-20260929-74342), with
 // New York as governing law. Plain-English terms, not legal advice; have a
@@ -34,7 +35,7 @@ export function TermsOfService() {
       style={{ paddingTop: "max(1.5rem, env(safe-area-inset-top))" }}
     >
       <button
-        onClick={() => navigate(-1)}
+        onClick={() => goBack(navigate)}
         className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
       >
         <ArrowLeft size={16} /> Back

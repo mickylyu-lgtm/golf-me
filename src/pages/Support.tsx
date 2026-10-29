@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, LifeBuoy } from "lucide-react";
 import { CONTACT_EMAIL } from "./PrivacyPolicy";
+import { goBack } from "../lib/goBack";
 
 // Public support page — the App Store Connect "Support URL". Standalone,
 // outside GuestOnly and AuthedLayout (see App.tsx) like /privacy and /terms,
@@ -28,7 +29,7 @@ export function Support() {
       style={{ paddingTop: "max(1.5rem, env(safe-area-inset-top))" }}
     >
       <button
-        onClick={() => navigate(-1)}
+        onClick={() => goBack(navigate)}
         className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
       >
         <ArrowLeft size={16} /> Back

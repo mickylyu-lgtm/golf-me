@@ -8,6 +8,7 @@ import { useAuth } from "../context/AuthContext";
 import { isFounder } from "../lib/founder";
 import { isEntryTestEnabled, setEntryTestEnabled } from "../components/loading/entryFlag";
 import { isNativeAppleSignInAvailable, isSocialSignInTestEnabled, setSocialSignInTestEnabled } from "../lib/socialSignIn";
+import { goBack } from "../lib/goBack";
 
 // Private per-device test switch for the branded launch entry (entryFlag.ts):
 // 7 taps on the version line within a few seconds, and only while signed in
@@ -57,7 +58,7 @@ export function About() {
   return (
     <div className="flex flex-col gap-6 pb-6">
       <button
-        onClick={() => navigate(-1)}
+        onClick={() => goBack(navigate)}
         className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
       >
         <ArrowLeft size={16} /> {t("common.back")}

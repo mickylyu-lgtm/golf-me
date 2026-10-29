@@ -13,6 +13,7 @@ import type { AvailabilitySlot } from "../types";
 import type { PlayingArea } from "../lib/geo";
 import { matchPreferencesFromGolfer } from "../lib/matchPreferences";
 import type { MatchPreferencesValue } from "../lib/matchPreferences";
+import { goBack } from "../lib/goBack";
 
 // Everything on this page is a local draft until "Save Changes" is tapped —
 // no per-field auto-save. Rebuilt this way after live per-field saving
@@ -90,7 +91,7 @@ export function MatchPreferencesDetail() {
   return (
     <div className="flex flex-col gap-6 pb-6">
       <button
-        onClick={() => navigate(-1)}
+        onClick={() => goBack(navigate)}
         className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
       >
         <ArrowLeft size={16} /> {t("common.back")}

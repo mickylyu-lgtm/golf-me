@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, MapPin } from "lucide-react";
 import { useLocale } from "../i18n/LocaleContext";
 import { SUPPORTED_TEE_TIME_COURSES } from "../services/teeTimes/types";
 import { CLICKABLE_CARD_CLASS } from "../components/ui/cardStyles";
+import { goBack } from "../lib/goBack";
 
 // Deliberately restricted to SUPPORTED_TEE_TIME_COURSES (2 courses today,
 // each hand-verified — see src/services/teeTimes) rather than the general
@@ -15,7 +16,7 @@ export function TeeTimes() {
   return (
     <div className="flex flex-col gap-5 pb-6">
       <button
-        onClick={() => navigate(-1)}
+        onClick={() => goBack(navigate)}
         className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
       >
         <ArrowLeft size={16} /> {t("common.back")}

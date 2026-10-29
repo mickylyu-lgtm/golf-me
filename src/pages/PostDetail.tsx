@@ -14,6 +14,7 @@ import { CoachReviewSection } from "../components/community/CoachReviewSection";
 import { loadChatDraft, postCommentDraftKey, saveChatDraft } from "../lib/chatDraft";
 import { isObjectionableContentError } from "../lib/objectionableContent";
 import { useKeyboardHeight } from "../lib/useKeyboardHeight";
+import { goBack } from "../lib/goBack";
 
 export function PostDetail() {
   const { id } = useParams<{ id: string }>();
@@ -116,7 +117,7 @@ export function PostDetail() {
       <div className="py-12 text-center text-slate-500">
         Post not found.
         <div className="mt-4">
-          <Button variant="outline" onClick={() => navigate(-1)}>
+          <Button variant="outline" onClick={() => goBack(navigate, "/")}>
             Go back
           </Button>
         </div>
@@ -153,7 +154,7 @@ export function PostDetail() {
   return (
     <div className="flex flex-col gap-5 pb-6">
       <button
-        onClick={() => navigate(-1)}
+        onClick={() => goBack(navigate, "/")}
         className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
       >
         <ArrowLeft size={16} /> Back

@@ -8,6 +8,7 @@ import { EmptyState } from "../components/ui/EmptyState";
 import { PostCard } from "../components/community/PostCard";
 import { rankForYou, rankFollowing, rankNearby } from "../lib/communityFeed";
 import type { FeedContext } from "../lib/communityFeed";
+import { goBack } from "../lib/goBack";
 
 type FeedTab = "forYou" | "following" | "nearby";
 const TABS: { value: FeedTab; labelKey: "community.tabForYou" | "community.tabFollowing" | "community.tabNearby" }[] = [
@@ -57,7 +58,7 @@ export function Community() {
   return (
     <div className="flex flex-col gap-5 pb-6">
       <button
-        onClick={() => navigate(-1)}
+        onClick={() => goBack(navigate)}
         className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
       >
         <ArrowLeft size={16} /> {t("common.back")}

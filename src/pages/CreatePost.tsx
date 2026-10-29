@@ -22,6 +22,7 @@ import { clearCommunityPostDraft, loadCommunityPostDraft, saveCommunityPostDraft
 import { copyCaddieMediaToCommunity, signCaddieMediaPath } from "../lib/caddieMedia";
 import type { DraftMediaItem } from "../lib/communityPostDraft";
 import { isObjectionableContentError } from "../lib/objectionableContent";
+import { goBack } from "../lib/goBack";
 
 type Attachment = "none" | "photo" | "course" | "round" | "swing";
 
@@ -475,7 +476,7 @@ export function CreatePost() {
     <div className="flex flex-col gap-5 pb-6">
       <div className="flex items-center justify-between">
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => goBack(navigate)}
           className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
         >
           <ArrowLeft size={16} /> Back

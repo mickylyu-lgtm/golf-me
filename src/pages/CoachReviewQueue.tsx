@@ -7,6 +7,7 @@ import { useRoles } from "../lib/useRoles";
 import { supabase } from "../lib/supabase";
 import { EmptyState } from "../components/ui/EmptyState";
 import { PostCard } from "../components/community/PostCard";
+import { goBack } from "../lib/goBack";
 
 // Coach Reviewer-only — every swing post that requested feedback, split into
 // what's still waiting on this reviewer vs. what they've already answered.
@@ -56,7 +57,7 @@ export function CoachReviewQueue() {
   return (
     <div className="flex flex-col gap-6 pb-6">
       <button
-        onClick={() => navigate(-1)}
+        onClick={() => goBack(navigate)}
         className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
       >
         <ArrowLeft size={16} /> Back

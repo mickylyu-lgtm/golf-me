@@ -19,6 +19,7 @@ import { MIN_PREFERENCES_FOR_AUTO_MATCH, preferenceTierLabel, selectedPreference
 import type { PreferenceMatchContext } from "../lib/preferenceMatch";
 import type { GolferProfile, GolfVibe, SkillFilter, WalkOrCart } from "../types";
 import type { TranslationKey } from "../i18n/locales/en";
+import { goBack } from "../lib/goBack";
 
 // One suggested, single-tap value per not-yet-set Match Preference — lets a
 // first-time golfer (onboarding only sets Round Length) reach the 3-of-5
@@ -199,7 +200,7 @@ export function AutoMatch() {
   return (
     <div className="flex flex-col gap-5 pb-6">
       <button
-        onClick={() => navigate(-1)}
+        onClick={() => goBack(navigate)}
         className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
       >
         <ArrowLeft size={16} /> {t("common.back")}

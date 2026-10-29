@@ -15,6 +15,7 @@ import { useCredibilityStats } from "../lib/useCredibility";
 import { useReputationState } from "../lib/useReputationState";
 import { TIER_DEFS, tierDisplayName } from "../lib/reputationTiers";
 import { supabase } from "../lib/supabase";
+import { goBack } from "../lib/goBack";
 
 export function ReputationDetail() {
   const { currentUser, reviewsAbout, setPhoneVerified, setEmailVerified, requestVerifiedGolfer } = useData();
@@ -65,7 +66,7 @@ export function ReputationDetail() {
   return (
     <div className="flex flex-col gap-6 pb-6">
       <button
-        onClick={() => navigate(-1)}
+        onClick={() => goBack(navigate)}
         className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
       >
         <ArrowLeft size={16} /> {t("common.back")}

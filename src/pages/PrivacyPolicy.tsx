@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Lock } from "lucide-react";
+import { goBack } from "../lib/goBack";
 
 // Standalone, outside both GuestOnly and AuthedLayout (see App.tsx) — this
 // has to be viewable by someone who doesn't have an account yet, and by
@@ -42,7 +43,7 @@ export function PrivacyPolicy() {
       style={{ paddingTop: "max(1.5rem, env(safe-area-inset-top))" }}
     >
       <button
-        onClick={() => navigate(-1)}
+        onClick={() => goBack(navigate)}
         className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
       >
         <ArrowLeft size={16} /> Back

@@ -9,6 +9,7 @@ import { EmptyState } from "../components/ui/EmptyState";
 import { CourseHero } from "../components/courses/CourseHero";
 import { ExternalBookingCard } from "../components/courses/ExternalBookingCard";
 import { inputClass, labelClass } from "../components/ui/FormControls";
+import { goBack } from "../lib/goBack";
 
 function todayISO(): string {
   const d = new Date();
@@ -41,7 +42,7 @@ export function TeeTimeCourseDetail() {
           back button — one tap here lands on that list, one more tap from
           there lands on Play, matching how the user actually arrived. */}
       <button
-        onClick={() => navigate(-1)}
+        onClick={() => goBack(navigate, "/tee-times")}
         className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
       >
         <ArrowLeft size={16} /> {t("common.back")}
