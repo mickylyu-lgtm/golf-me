@@ -65,6 +65,18 @@
     <meta name="robots" content="index, follow, max-image-preview:large" />
     <!-- Shows the native App Store banner at the top of Safari on iOS -->
     <meta name="apple-itunes-app" content="app-id=6806917441" />
+    <script>
+      // On a shared round link, the banner's "Open" hands the same round to
+      // the app (appUrlOpen -> routeForAppUrl) instead of just launching it.
+      // Set before the banner is drawn; same paths as the AASA allowlist.
+      (function () {
+        var p = location.pathname.replace(/\/+$/, "");
+        if (/^\/golf-calls\/[0-9a-f-]{36}$/i.test(p)) {
+          var m = document.querySelector('meta[name="apple-itunes-app"]');
+          if (m) m.setAttribute("content", "app-id=6806917441, app-argument=https://golfme.app" + p);
+        }
+      })();
+    </script>
 
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="GolfMe" />
