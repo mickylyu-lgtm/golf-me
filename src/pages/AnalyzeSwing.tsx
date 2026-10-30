@@ -28,8 +28,8 @@ const MAX_SWING_VIDEO_SECONDS = 10; // max length of the WINDOW actually analyze
 // again" instead of silence that reads as data loss.
 const UPLOAD_IN_PROGRESS_KEY = "golfme:caddieUploadInProgress";
 
-// A fixed dropdown instead of free typing — standard bag, driver through
-// putter. English club names throughout (not per-locale) matches how
+// A fixed dropdown instead of free typing — full-swing clubs, driver
+// through wedges. English club names throughout (not per-locale) matches how
 // real users already entered this field before ("3 wood", "4 hybrid")
 // even on non-English locales, and keeps the stored swing_type value a
 // stable, simple string rather than something locale-dependent.
@@ -58,7 +58,9 @@ const CLUB_OPTIONS = [
   "56° Wedge",
   "58° Wedge",
   "60° Wedge",
-  "Putter",
+  // No "Putter": Caddie's pose checks and scoring (backswing top, hip
+  // sway, weight transfer, finish) only describe a full swing, so a putting
+  // stroke would get confident-looking but meaningless feedback.
 ] as const;
 
 // Direct-upload Caddie flow: pick a swing video, optionally label the club,
@@ -84,7 +86,11 @@ export function AnalyzeSwing() {
   // before a video has even been picked to attach it to.
   const videoFile = draftSwingVideo?.file;
   const videoPreviewUrl = draftSwingVideo?.previewUrl;
-  const [swingType, setSwingTypeState] = useState(draftSwingVideo?.swingType ?? "");
+  // A draft saved before Putter was removed from CLUB_OPTIONS falls back to "".
+  const [swingType, setSwingTypeState] = useState(() => {
+    const saved = draftSwingVideo?.swingType ?? "";
+    return (CLUB_OPTIONS as readonly string[]).includes(saved) ? saved : "";
+  });
   function setSwingType(next: string) {
     setSwingTypeState(next);
     if (videoFile && videoPreviewUrl) {
