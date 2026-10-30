@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Check, Info, Minus, TriangleAlert } from "lucide-react";
 import { X } from "lucide-react";
-import type { CaddiePoseData, CaddieSwingPhases } from "../../types";
+import type { CaddieCameraAngle, CaddiePoseData, CaddieSwingPhases } from "../../types";
 import { enterNativeVideoFullscreen, getVideoContentRect } from "../../lib/video";
 import { useLocale } from "../../i18n/LocaleContext";
 import { computeSwingAssessment, segmentStatusAtTime } from "../../lib/swingAssessment";
@@ -242,6 +242,8 @@ export interface CaddieSwingReplayProps {
   onMediaError?: () => void;
   poseData?: CaddiePoseData;
   phases?: CaddieSwingPhases;
+  // Gemini's camera_angle; gates checks the view can't see (swingAssessment.ts).
+  cameraAngle?: CaddieCameraAngle;
 }
 
 // Two views of the same one video, not two separate rendered/stored files
@@ -259,7 +261,7 @@ const REPLAY_MODES = [
   { speed: 0.25, labelKey: "caddie.replaySlowAnalysis", showOverlay: true },
 ] as const;
 
-export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, poseData, phases }: CaddieSwingReplayProps) {
+export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, poseData, phases, cameraAngle }: CaddieSwingReplayProps) {
   const { t } = useLocale();
   const videoRef = useRef<HTMLVideoElement>(null);
   const resumeAtRef = useRef<number | null>(null);
@@ -273,7 +275,7 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
   const showOverlay = mode.showOverlay && !!poseData && poseData.frames.length > 0;
   // Pure function of already-fetched poseData/phases (see swingAssessment.ts)
   // — computed once per analysis, not per frame.
-  const assessment = useMemo(() => computeSwingAssessment(poseData, phases), [poseData, phases]);
+  const assessment = useMemo(() => computeSwingAssessment(poseData, phases, { cameraAngle }), [poseData, phases, cameraAngle]);
 
   // Which phase's breakdown the Swing Check card below shows — driven by
   // an explicit tap on one of the phase buttons, not by continuous video
@@ -799,7 +801,10 @@ function SwingCheckCard({
   if (!assessment) return null;
 
   const anchorGroup = selectedPhaseKey ? anchorGroupForLabelKey(selectedPhaseKey) : "none";
-  const relevantSegments = anchorGroup === "none" ? [] : assessment.segments.filter((s) => s.anchorPhase === anchorGroup);
+  // "not_applicable" segments (trail arm, checks this camera angle can't
+  // see) were deliberately not judged — hidden, not listed as unmeasurable.
+  const relevantSegments =
+    anchorGroup === "none" ? [] : assessment.segments.filter((s) => s.anchorPhase === anchorGroup && s.reliabilityReason !== "not_applicable");
   // Grouped by status (Needs Improvement, then Good) rather than the old
   // fixed anatomical order, so scanning goes straight to what needs
   // attention first — matches the same red-before-green priority used for
@@ -850,7 +855,7 @@ function SwingCheckCard({
         </div>
       )}
 
-      {anchorGroup === "none" ? (
+      {relevantSegments.length === 0 ? (
         <InfoCard icon={<Info size={14} />} title={t("swingAssessment.noAnchorTitle")} body={t("swingAssessment.noAnchorBody")} />
       ) : (
         <>

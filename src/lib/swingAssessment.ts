@@ -1,4 +1,4 @@
-import type { CaddieConfidence, CaddiePoseData, CaddiePoseFrame, CaddiePoseKeypoint, CaddieSwingPhases } from "../types";
+import type { CaddieCameraAngle, CaddieConfidence, CaddiePoseData, CaddiePoseFrame, CaddiePoseKeypoint, CaddieSwingPhases } from "../types";
 
 // Colors Caddie's replay skeleton by evaluating a small, deliberately narrow
 // set of geometric metrics against fixed thresholds -- NOT by asking Gemini
@@ -36,7 +36,22 @@ export type SwingAnchorPhase = "address" | "top" | "impact";
 // UI eventually explain itself ("Limited visibility — camera lost the
 // wrist here" vs "— not enough contrast to call it either way") instead of
 // just showing the same neutral badge for every different real cause.
-export type SwingReliabilityReason = "no_keypoint" | "low_confidence" | "phase_not_identified" | "inconclusive";
+// "not_applicable" = deliberately not judged (the trail arm, which is
+// SUPPOSED to fold at the top; or a check the camera angle can't see, e.g.
+// knee flex from face-on). The UI hides these rather than listing them as
+// "couldn't be measured", since nothing went wrong.
+export type SwingReliabilityReason = "no_keypoint" | "low_confidence" | "phase_not_identified" | "inconclusive" | "not_applicable";
+
+export type SwingHandedness = "right" | "left";
+
+export interface SwingAssessmentOptions {
+  // Not captured anywhere in the app yet; when absent the lead arm is
+  // inferred as the straighter arm (see assessArms).
+  handedness?: SwingHandedness;
+  // Gemini's camera_angle for this analysis. Absent/"uncertain"/"other"
+  // means the view is unknown, so angle-specific checks are skipped.
+  cameraAngle?: CaddieCameraAngle;
+}
 
 export interface SwingSegmentAssessment {
   segment: SwingSegmentId;
@@ -169,33 +184,82 @@ function lineAngleFromHorizontal(a: CaddiePoseKeypoint, b: CaddiePoseKeypoint): 
   return (Math.atan2(Math.abs(b.y - a.y), Math.abs(b.x - a.x)) * 180) / Math.PI;
 }
 
-// Lead/trail can't be determined without knowing the golfer's handedness,
-// which nothing in this app captures today (signup, profile, and analysis
-// all omit it) -- rather than guess right-handed (the common but not
-// universal default) and risk mislabeling a lefty's swing, both arms are
-// assessed the same way and shown as plain "left"/"right", never "lead"/
-// "trail". A near-straight arm at the top of the backswing is one of the
-// most common, broadly-applicable coaching cues regardless of which arm is
-// leading.
+// Only the LEAD arm is judged. At the top of a normal backswing the trail
+// arm is folded (often ~90 degrees) -- that is correct technique, so
+// judging both arms against the same "should be straight" threshold told
+// every right-handed golfer "Right elbow bent" (the 2026-10 review bug).
+//
+// Handedness isn't captured anywhere in the app today. With it, lead =
+// left for a right-handed golfer, right for a left-handed one. Without it,
+// the lead arm is inferred as the STRAIGHTER of the two arms: the trail arm
+// is always the more bent one at the top, so whichever arm is straighter is
+// the lead arm for either handedness. If only one arm is measurable, it can
+// only be credited as "good" (a straight arm at the top can't be the trail
+// arm); a bent lone arm can't be attributed, so it stays unknown. The
+// segment id/label stays plain "left"/"right" -- the side that was judged.
 const ARM_STRAIGHT_DEGREES = 155; // >= this: "good"
 const ARM_BENT_DEGREES = 130; // <= this: "needs_improvement"; between the two: "unknown"
 
-function assessArm(topFrame: CaddiePoseFrame | undefined, side: "left" | "right"): SwingSegmentAssessment {
-  const segment: SwingSegmentId = side === "left" ? "left_arm" : "right_arm";
-  const anchorPhase: SwingAnchorPhase = "top";
-  const anchorKeypoint = `${side}_elbow`;
-  if (!topFrame) return { segment, anchorPhase, status: "unknown", confidence: 0, anchorKeypoint, reliabilityReason: "phase_not_identified" };
+type Side = "left" | "right";
+
+interface ArmMeasure {
+  side: Side;
+  angle?: number;
+  confidence: number;
+  reason?: SwingReliabilityReason;
+}
+
+function measureArm(topFrame: CaddiePoseFrame, side: Side): ArmMeasure {
   const names = [`${side}_shoulder`, `${side}_elbow`, `${side}_wrist`];
   const shoulder = getKp(topFrame, names[0]);
   const elbow = getKp(topFrame, names[1]);
   const wrist = getKp(topFrame, names[2]);
-  if (!shoulder || !elbow || !wrist) {
-    return { segment, anchorPhase, status: "unknown", confidence: 0, anchorKeypoint, reliabilityReason: missingKeypointReason(topFrame, names) };
+  if (!shoulder || !elbow || !wrist) return { side, confidence: 0, reason: missingKeypointReason(topFrame, names) };
+  return { side, angle: angleAtVertex(shoulder, elbow, wrist), confidence: Math.min(shoulder.confidence, elbow.confidence, wrist.confidence) };
+}
+
+function armResult(m: ArmMeasure, status: SwingSegmentStatus, reason?: SwingReliabilityReason): SwingSegmentAssessment {
+  return {
+    segment: m.side === "left" ? "left_arm" : "right_arm",
+    anchorPhase: "top",
+    status,
+    confidence: status === "unknown" ? 0 : m.confidence,
+    anchorKeypoint: `${m.side}_elbow`,
+    reliabilityReason: status === "unknown" ? (reason ?? "inconclusive") : undefined,
+  };
+}
+
+function judgeLeadArm(m: ArmMeasure): SwingSegmentAssessment {
+  if (m.angle === undefined) return armResult(m, "unknown", m.reason);
+  const status: SwingSegmentStatus = m.angle >= ARM_STRAIGHT_DEGREES ? "good" : m.angle <= ARM_BENT_DEGREES ? "needs_improvement" : "unknown";
+  return armResult(m, status);
+}
+
+const otherSide = (side: Side): Side => (side === "left" ? "right" : "left");
+const notApplicableArm = (side: Side): SwingSegmentAssessment => armResult({ side, confidence: 0 }, "unknown", "not_applicable");
+
+// Returns [left_arm, right_arm]; at most one of them carries a verdict.
+function assessArms(topFrame: CaddiePoseFrame | undefined, handedness: SwingHandedness | undefined): [SwingSegmentAssessment, SwingSegmentAssessment] {
+  if (!topFrame) {
+    const none = (side: Side) => armResult({ side, confidence: 0 }, "unknown", "phase_not_identified");
+    return [none("left"), none("right")];
   }
-  const angle = angleAtVertex(shoulder, elbow, wrist);
-  const confidence = Math.min(shoulder.confidence, elbow.confidence, wrist.confidence);
-  const status: SwingSegmentStatus = angle >= ARM_STRAIGHT_DEGREES ? "good" : angle <= ARM_BENT_DEGREES ? "needs_improvement" : "unknown";
-  return { segment, anchorPhase, status, confidence, anchorKeypoint, reliabilityReason: status === "unknown" ? "inconclusive" : undefined };
+  const left = measureArm(topFrame, "left");
+  const right = measureArm(topFrame, "right");
+  const pair = (lead: SwingSegmentAssessment, trail: SwingSegmentAssessment): [SwingSegmentAssessment, SwingSegmentAssessment] =>
+    lead.segment === "left_arm" ? [lead, trail] : [trail, lead];
+
+  let lead: ArmMeasure | undefined;
+  if (handedness) lead = handedness === "right" ? left : right;
+  else if (left.angle !== undefined && right.angle !== undefined) lead = left.angle >= right.angle ? left : right;
+  if (lead) return pair(judgeLeadArm(lead), notApplicableArm(otherSide(lead.side)));
+
+  // Handedness unknown and at most one arm measurable.
+  const lone = left.angle !== undefined ? left : right.angle !== undefined ? right : undefined;
+  if (!lone) return [armResult(left, "unknown", left.reason), armResult(right, "unknown", right.reason)];
+  const other = lone.side === "left" ? right : left;
+  const loneResult = (lone.angle ?? 0) >= ARM_STRAIGHT_DEGREES ? armResult(lone, "good") : armResult(lone, "unknown", "inconclusive");
+  return pair(loneResult, armResult(other, "unknown", other.reason));
 }
 
 function torsoTiltDegrees(frame: CaddiePoseFrame | undefined): number | undefined {
@@ -242,14 +306,23 @@ function assessTorso(addressFrame: CaddiePoseFrame | undefined, topFrame: Caddie
 
 // Normalized by shoulder width (a body-relative scale, not an absolute
 // pixel distance) so this stays meaningful regardless of how close/zoomed
-// the camera is.
+// the camera is. Only meaningful face-on: lateral sway is a left-right
+// movement in the picture only when the camera faces the golfer. Down the
+// line it is movement toward/away from the lens, the shoulders are
+// foreshortened (tiny width, inflated ratio) and any x shift is really
+// early extension -- so the check only runs when camera_angle is face_on.
 const HIP_SWAY_GOOD_RATIO = 0.15;
 const HIP_SWAY_ISSUE_RATIO = 0.35;
 
-function assessHipSway(addressFrame: CaddiePoseFrame | undefined, impactFrame: CaddiePoseFrame | undefined): SwingSegmentAssessment {
+function assessHipSway(
+  addressFrame: CaddiePoseFrame | undefined,
+  impactFrame: CaddiePoseFrame | undefined,
+  cameraAngle: CaddieCameraAngle | undefined,
+): SwingSegmentAssessment {
   const segment: SwingSegmentId = "hip_sway";
   const anchorPhase: SwingAnchorPhase = "impact";
   const anchorKeypoint = "left_hip";
+  if (cameraAngle !== "face_on") return { segment, anchorPhase, status: "unknown", confidence: 0, anchorKeypoint, reliabilityReason: "not_applicable" };
   if (!addressFrame || !impactFrame) {
     return { segment, anchorPhase, status: "unknown", confidence: 0, anchorKeypoint, reliabilityReason: "phase_not_identified" };
   }
@@ -280,14 +353,17 @@ function assessHipSway(addressFrame: CaddiePoseFrame | undefined, impactFrame: C
 // Shoulder-line-vs-hip-line parallelism at address — a standard,
 // handedness-agnostic setup cue (shoulders and hips roughly aligned to each
 // other), rather than guessing at a single "correct" absolute tilt angle
-// this app has no validated reference for.
+// this app has no validated reference for. Skipped down the line, where
+// left and right joints overlap so both lines collapse toward a point and
+// their angle from horizontal is noise.
 const SHOULDER_HIP_ALIGN_GOOD_DEGREES = 8; // <= this misalignment: "good"
 const SHOULDER_HIP_ALIGN_ISSUE_DEGREES = 18; // >= this: "needs_improvement"; between: "unknown"
 
-function assessShoulderLine(addressFrame: CaddiePoseFrame | undefined): SwingSegmentAssessment {
+function assessShoulderLine(addressFrame: CaddiePoseFrame | undefined, cameraAngle: CaddieCameraAngle | undefined): SwingSegmentAssessment {
   const segment: SwingSegmentId = "shoulder_line";
   const anchorPhase: SwingAnchorPhase = "address";
   const anchorKeypoint = "right_shoulder";
+  if (cameraAngle === "down_the_line") return { segment, anchorPhase, status: "unknown", confidence: 0, anchorKeypoint, reliabilityReason: "not_applicable" };
   if (!addressFrame) return { segment, anchorPhase, status: "unknown", confidence: 0, anchorKeypoint, reliabilityReason: "phase_not_identified" };
   const names = ["left_shoulder", "right_shoulder", "left_hip", "right_hip"];
   const ls = getKp(addressFrame, "left_shoulder");
@@ -308,7 +384,9 @@ function assessShoulderLine(addressFrame: CaddiePoseFrame | undefined): SwingSeg
 // Knee flex at address — a single combined segment (not left/right, same
 // reasoning as arms not being "lead"/"trail"): driven by whichever knee is
 // STRAIGHTER, since one locked knee at address is the flaw worth flagging
-// even if the other leg shows healthy flex.
+// even if the other leg shows healthy flex. Only run down the line: filmed
+// face-on, knee flex bends the leg toward the camera, so a well-flexed knee
+// still projects as a nearly straight line and would be called "locked".
 const KNEE_FLEXED_MAX_DEGREES = 170; // <= this (visible bend in the straighter knee): "good"
 const KNEE_LOCKED_MIN_DEGREES = 178; // >= this (essentially straight): "needs_improvement"
 
@@ -320,10 +398,11 @@ function kneeAngle(frame: CaddiePoseFrame, side: "left" | "right"): number | und
   return angleAtVertex(hip, knee, ankle);
 }
 
-function assessKnees(addressFrame: CaddiePoseFrame | undefined): SwingSegmentAssessment {
+function assessKnees(addressFrame: CaddiePoseFrame | undefined, cameraAngle: CaddieCameraAngle | undefined): SwingSegmentAssessment {
   const segment: SwingSegmentId = "knees";
   const anchorPhase: SwingAnchorPhase = "address";
   const anchorKeypoint = "left_knee";
+  if (cameraAngle !== "down_the_line") return { segment, anchorPhase, status: "unknown", confidence: 0, anchorKeypoint, reliabilityReason: "not_applicable" };
   if (!addressFrame) return { segment, anchorPhase, status: "unknown", confidence: 0, anchorKeypoint, reliabilityReason: "phase_not_identified" };
   const leftAngle = kneeAngle(addressFrame, "left");
   const rightAngle = kneeAngle(addressFrame, "right");
@@ -380,7 +459,11 @@ function assessWrists(topFrame: CaddiePoseFrame | undefined): SwingSegmentAssess
 // Computes all segment assessments once for an analysis. Cheap (a handful
 // of trig ops on ~3 pose frames) -- safe to call from a useMemo keyed on the
 // analysis id, no debouncing/caching infrastructure needed.
-export function computeSwingAssessment(poseData: CaddiePoseData | undefined, phases: CaddieSwingPhases | undefined): SwingAssessment | undefined {
+export function computeSwingAssessment(
+  poseData: CaddiePoseData | undefined,
+  phases: CaddieSwingPhases | undefined,
+  options: SwingAssessmentOptions = {},
+): SwingAssessment | undefined {
   if (!poseData || poseData.frames.length === 0 || !phases) return undefined;
   const frameFor = (phase: SwingAnchorPhase): CaddiePoseFrame | undefined => {
     const anchor = phaseAnchor(phases, phase, poseData.analysisFps);
@@ -389,15 +472,16 @@ export function computeSwingAssessment(poseData: CaddiePoseData | undefined, pha
   const addressFrame = frameFor("address");
   const topFrame = frameFor("top");
   const impactFrame = frameFor("impact");
+  const [leftArm, rightArm] = assessArms(topFrame, options.handedness);
 
   return {
     segments: [
       assessTorso(addressFrame, topFrame),
-      assessArm(topFrame, "left"),
-      assessArm(topFrame, "right"),
-      assessHipSway(addressFrame, impactFrame),
-      assessShoulderLine(addressFrame),
-      assessKnees(addressFrame),
+      leftArm,
+      rightArm,
+      assessHipSway(addressFrame, impactFrame, options.cameraAngle),
+      assessShoulderLine(addressFrame, options.cameraAngle),
+      assessKnees(addressFrame, options.cameraAngle),
       assessWrists(topFrame),
     ],
   };

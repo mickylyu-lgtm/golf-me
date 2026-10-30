@@ -243,6 +243,7 @@ export function CaddieAnalysisDetail() {
           onMediaError={analysis.sourceMediaPath ? () => refreshMediaUrls([analysis.sourceMediaPath, analysis.thumbnailPath]) : undefined}
           poseData={analysis.poseData}
           phases={details?.phases}
+          cameraAngle={details?.cameraAngle}
         />
       )}
 
