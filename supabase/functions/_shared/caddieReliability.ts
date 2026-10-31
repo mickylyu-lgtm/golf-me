@@ -44,11 +44,15 @@ export function backoffMs(attempt: number, baseMs: number, capMs: number, retryA
 }
 
 // ---- Pose-presence gate ----
-// PLACEHOLDER threshold, not tuned against labelled data: fail the run with
-// code:pose_not_found (before spending a Gemini call) when fewer than this
-// fraction of the frames Roboflow answered show a usable body. Revisit once
-// the eval set has real "body found / not found" labels.
-export const POSE_PRESENCE_MIN_RATIO = 0.5;
+// Fail the run with code:pose_not_found (before spending a Gemini call)
+// when fewer than this fraction of the frames Roboflow answered show a
+// usable body. Only meant to stop clips with no golfer in them: checked
+// against the 50 latest completed production analyses (2026-10-31, read-only
+// SQL Micky ran), real swings often have many empty frames before and after
+// the swing -- 0.5 would have refused 21 of 50, while every analysis since
+// 2026-09-08 is above 0.1 (the 12 with no body at all were all on
+// 2026-09-06/07). Revisit once the eval set has "body found" labels.
+export const POSE_PRESENCE_MIN_RATIO = 0.1;
 
 // "Usable body" = both shoulders, both hips, and at least one wrist
 // reliably detected. One wrist is enough because at address/impact the

@@ -98,14 +98,15 @@ test("usable body = both shoulders, both hips, at least one wrist", () => {
 
 test("pose coverage gate: frames Roboflow answered but with no body don't count", () => {
   const frames = [
-    ...Array.from({ length: 4 }, () => ({ keypoints: fullBody })),
-    ...Array.from({ length: 6 }, () => ({ keypoints: {} })),
+    ...Array.from({ length: 1 }, () => ({ keypoints: fullBody })),
+    ...Array.from({ length: 19 }, () => ({ keypoints: {} })),
   ];
   const c = poseCoverage(frames);
-  assert.deepEqual([c.usable, c.total], [4, 10]);
+  assert.deepEqual([c.usable, c.total], [1, 20]);
   assert.ok(c.ratio < POSE_PRESENCE_MIN_RATIO);
   assert.equal(poseCoverage([]).ratio, 0);
-  assert.ok(poseCoverage(frames.slice(0, 8)).ratio >= POSE_PRESENCE_MIN_RATIO);
+  // A real swing with most frames empty around it still passes.
+  assert.ok(poseCoverage(frames.slice(0, 5)).ratio >= POSE_PRESENCE_MIN_RATIO);
 });
 
 test("keypoints scale back to source pixels; missing/invalid scale is a no-op", () => {
