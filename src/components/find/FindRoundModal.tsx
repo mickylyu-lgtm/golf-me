@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Sparkles, SlidersHorizontal } from "lucide-react";
+import { ArrowLeft, ArrowRight, Users, SlidersHorizontal } from "lucide-react";
 import { useData } from "../../context/DataContext";
 import { useToast } from "../../context/ToastContext";
 import { useLocale } from "../../i18n/LocaleContext";
@@ -209,7 +209,7 @@ export function FindRoundModal({ onClose }: { onClose: () => void }) {
       onClose={onClose}
       footer={
         <div className="flex flex-col gap-2">
-          <Button size="lg" fullWidth disabled={!canSubmit} onClick={handleAutoMatch} icon={<Sparkles size={18} />}>
+          <Button size="lg" fullWidth disabled={!canSubmit} onClick={handleAutoMatch} icon={<Users size={18} />}>
             {t("filters.autoMatchMe")}
           </Button>
           <Button

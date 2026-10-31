@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Bell, Sparkles } from "lucide-react";
+import { ArrowLeft, Bell, Users } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useToast } from "../context/ToastContext";
 import { useLocale } from "../i18n/LocaleContext";
@@ -216,7 +216,7 @@ export function AutoMatch() {
 
       <div>
         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
-          <Sparkles size={20} className="text-fairway-600" /> {t("autoMatch.title")}
+          <Users size={20} className="text-fairway-600" /> {t("autoMatch.title")}
         </h1>
         <p className="text-sm text-slate-500">{when ? t("autoMatch.subtitle", { when: whenLabel }) : t("autoMatch.subtitleAnyDay")}</p>
       </div>
@@ -272,7 +272,7 @@ export function AutoMatch() {
               </div>
             </div>
 
-            <Button size="lg" fullWidth icon={<Sparkles size={18} />} onClick={runAutoMatch}>
+            <Button size="lg" fullWidth icon={<Users size={18} />} onClick={runAutoMatch}>
               {t("filters.autoMatchMe")}
             </Button>
           </div>
@@ -280,7 +280,7 @@ export function AutoMatch() {
       ) : results.length === 0 ? (
         !showClosest ? (
           <EmptyState
-            icon={<Sparkles size={20} />}
+            icon={<Users size={20} />}
             title={t("autoMatch.noStrongMatches")}
             description={t("autoMatch.noStrongMatchesDesc")}
             action={
@@ -301,7 +301,7 @@ export function AutoMatch() {
           />
         ) : (
           <EmptyState
-            icon={<Sparkles size={20} />}
+            icon={<Users size={20} />}
             title={t("autoMatch.nothingNearby")}
             description={t("find.emptyNoMatchesDesc")}
             action={
