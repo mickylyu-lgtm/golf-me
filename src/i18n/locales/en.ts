@@ -938,7 +938,7 @@ export const en = {
 
   // Match Preferences detail
   "preferences.title": "Match Preferences",
-  "preferences.subtitle": "Used by Auto-Match and background compatibility — a great round can still match you even if one of these is off. Saved instantly.",
+  "preferences.subtitle": "Used by Auto-Match and background compatibility — a great round can still match you even if one of these is off.",
   "preferences.whenCanYouPlay": "When can you play?",
   "preferences.availableThisWeekend": "I'm available this weekend",
   "preferences.savedToast": "Preferences saved.",

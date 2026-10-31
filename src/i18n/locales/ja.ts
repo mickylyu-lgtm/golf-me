@@ -1031,7 +1031,7 @@ export const ja: Record<TranslationKey, string> = {
   "myPosts.createPost": "投稿を作成",
 
   "preferences.title": "マッチング設定",
-  "preferences.subtitle": "オートマッチや相性計算に使われます — どれか1つ合わなくても、良いラウンドはマッチすることがあります。変更は即座に保存されます。",
+  "preferences.subtitle": "オートマッチや相性計算に使われます — どれか1つ合わなくても、良いラウンドはマッチすることがあります。",
   "preferences.whenCanYouPlay": "いつプレーできますか？",
   "preferences.availableThisWeekend": "今週末プレー可能",
   "preferences.savedToast": "設定を保存しました。",

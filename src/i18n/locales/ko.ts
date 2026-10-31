@@ -1031,7 +1031,7 @@ export const ko: Record<TranslationKey, string> = {
   "myPosts.createPost": "게시물 작성",
 
   "preferences.title": "매칭 선호도",
-  "preferences.subtitle": "자동 매칭과 백그라운드 호환성 계산에 사용돼요 — 이 중 하나가 맞지 않아도 좋은 라운드는 매칭될 수 있어요. 변경 즉시 저장돼요.",
+  "preferences.subtitle": "자동 매칭과 백그라운드 호환성 계산에 사용돼요 — 이 중 하나가 맞지 않아도 좋은 라운드는 매칭될 수 있어요.",
   "preferences.whenCanYouPlay": "언제 라운드 가능하세요?",
   "preferences.availableThisWeekend": "이번 주말 가능해요",
   "preferences.savedToast": "환경설정이 저장되었습니다.",

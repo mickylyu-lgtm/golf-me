@@ -1031,7 +1031,7 @@ export const es: Record<TranslationKey, string> = {
   "myPosts.createPost": "Crear Publicación",
 
   "preferences.title": "Preferencias de Coincidencia",
-  "preferences.subtitle": "Usadas por el Emparejamiento Automático y la compatibilidad en segundo plano — una buena ronda aún puede coincidir contigo aunque una de estas no encaje. Se guardan al instante.",
+  "preferences.subtitle": "Usadas por el Emparejamiento Automático y la compatibilidad en segundo plano — una buena ronda aún puede coincidir contigo aunque una de estas no encaje.",
   "preferences.whenCanYouPlay": "¿Cuándo puedes jugar?",
   "preferences.availableThisWeekend": "Disponible este fin de semana",
   "preferences.savedToast": "Preferencias guardadas.",

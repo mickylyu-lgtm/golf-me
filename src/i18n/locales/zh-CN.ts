@@ -1031,7 +1031,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "myPosts.createPost": "发布帖子",
 
   "preferences.title": "匹配偏好",
-  "preferences.subtitle": "用于自动匹配和后台兼容度计算——即使其中某一项不完全符合，好的球局依然可能匹配到你。修改后立即保存。",
+  "preferences.subtitle": "用于自动匹配和后台兼容度计算——即使其中某一项不完全符合，好的球局依然可能匹配到你。",
   "preferences.whenCanYouPlay": "什么时候有空？",
   "preferences.availableThisWeekend": "本周末有空",
   "preferences.savedToast": "偏好设置已保存。",
