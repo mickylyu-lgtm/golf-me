@@ -1221,6 +1221,21 @@ export const en = {
   "filters.defaultAreaSet": "Default playing area set to {area}.",
   "filters.preferencesSaved": "Saved as your new Match Preferences.",
   "find.clearSearch": "Clear search",
+  "matchReason.preferredCourse": "One of your preferred courses",
+  "matchReason.notPreferredCourse": "Not one of your preferred courses",
+  "matchReason.milesAway": "{miles} miles away",
+  "matchReason.similarSkill": "Similar skill level",
+  "matchReason.differentSkill": "Different skill level than you",
+  "matchReason.withinBudget": "Within your budget",
+  "matchReason.outsideBudget": "Outside your usual budget",
+  "matchReason.differentVibe": "Different vibe than you prefer",
+  "matchReason.availableOn": "Available {day}",
+  "matchReason.outsideFreeTime": "Outside your usual free time",
+  "matchReason.vibeCasual": "Casual players",
+  "matchReason.vibeCompetitive": "Competitive players",
+  "matchReason.vibeBeginner": "Beginner-friendly group",
+  "matchReason.vibeNetworking": "Networking-focused group",
+  "matchReason.vibeJustGolf": "Low-key, just here to golf",
 } as const;
 
 export type TranslationKey = keyof typeof en;

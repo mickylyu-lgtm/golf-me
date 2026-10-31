@@ -51,12 +51,12 @@ function pickReasons(factors: MatchFactor[]): MatchFactor[] {
   return shown.slice(0, 4);
 }
 
-const VIBE_DESCRIPTOR: Record<string, string> = {
-  "Casual & Social": "Casual players",
-  Competitive: "Competitive players",
-  "Beginner-Friendly": "Beginner-friendly group",
-  Networking: "Networking-focused group",
-  "Just Here to Golf": "Low-key, just here to golf",
+const VIBE_DESCRIPTOR: Record<string, TranslationKey> = {
+  "Casual & Social": "matchReason.vibeCasual",
+  Competitive: "matchReason.vibeCompetitive",
+  "Beginner-Friendly": "matchReason.vibeBeginner",
+  Networking: "matchReason.vibeNetworking",
+  "Just Here to Golf": "matchReason.vibeJustGolf",
 };
 
 export function callMatchReasons(call: GolfCall, breakdown: CompatibilityBreakdown, locale: Locale, t: TFn): MatchFactor[] {
@@ -71,7 +71,7 @@ export function callMatchReasons(call: GolfCall, breakdown: CompatibilityBreakdo
       key: "coursePreference",
       score: breakdown.coursePreference,
       positive: breakdown.coursePreference >= 70,
-      text: breakdown.coursePreference >= 70 ? "One of your preferred courses" : "Not one of your preferred courses",
+      text: breakdown.coursePreference >= 70 ? t("matchReason.preferredCourse") : t("matchReason.notPreferredCourse"),
     });
   }
 
@@ -82,7 +82,7 @@ export function callMatchReasons(call: GolfCall, breakdown: CompatibilityBreakdo
       key: "distance",
       score: breakdown.distance,
       positive: breakdown.distance >= 70,
-      text: `${call.distanceMiles.toFixed(0)} miles away`,
+      text: t("matchReason.milesAway", { miles: call.distanceMiles.toFixed(0) }),
     });
   }
 
@@ -91,25 +91,25 @@ export function callMatchReasons(call: GolfCall, breakdown: CompatibilityBreakdo
       key: "skill",
       score: breakdown.skill,
       positive: breakdown.skill >= 70,
-      text: breakdown.skill >= 70 ? "Similar skill level" : "Different skill level than you",
+      text: breakdown.skill >= 70 ? t("matchReason.similarSkill") : t("matchReason.differentSkill"),
     },
     {
       key: "budget",
       score: breakdown.budget,
       positive: breakdown.budget >= 70,
-      text: breakdown.budget >= 70 ? "Within your budget" : "Outside your usual budget",
+      text: breakdown.budget >= 70 ? t("matchReason.withinBudget") : t("matchReason.outsideBudget"),
     },
     {
       key: "vibe",
       score: breakdown.vibe,
       positive: breakdown.vibe >= 70,
-      text: breakdown.vibe >= 70 ? (VIBE_DESCRIPTOR[call.vibe] ?? call.vibe) : "Different vibe than you prefer",
+      text: breakdown.vibe >= 70 ? (VIBE_DESCRIPTOR[call.vibe] ? t(VIBE_DESCRIPTOR[call.vibe]) : call.vibe) : t("matchReason.differentVibe"),
     },
     {
       key: "schedule",
       score: breakdown.schedule,
       positive: breakdown.schedule >= 70,
-      text: breakdown.schedule >= 70 ? `Available ${dayLabel}` : "Outside your usual free time",
+      text: breakdown.schedule >= 70 ? t("matchReason.availableOn", { day: dayLabel }) : t("matchReason.outsideFreeTime"),
     },
   );
   return pickReasons(factors);
