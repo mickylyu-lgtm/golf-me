@@ -381,8 +381,8 @@ function assessShoulderLine(addressFrame: CaddiePoseFrame | undefined, cameraAng
   return { segment, anchorPhase, status, confidence, anchorKeypoint, reliabilityReason: status === "unknown" ? "inconclusive" : undefined };
 }
 
-// Knee flex at address — a single combined segment (not left/right, same
-// reasoning as arms not being "lead"/"trail"): driven by whichever knee is
+// Knee flex at address — a single combined segment (not left/right, since
+// handedness is unknown): driven by whichever knee is
 // STRAIGHTER, since one locked knee at address is the flaw worth flagging
 // even if the other leg shows healthy flex. Only run down the line: filmed
 // face-on, knee flex bends the leg toward the camera, so a well-flexed knee
