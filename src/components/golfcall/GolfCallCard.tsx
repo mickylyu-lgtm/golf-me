@@ -15,7 +15,7 @@ import { formatCompactDay, formatDate, formatMoney } from "../../lib/format";
 import { vibeLabel } from "../../lib/enumLabels";
 import { VIBE_TONE } from "../../lib/theme";
 import { computeCallCompatibility } from "../../lib/compatibility";
-import { matchTier, callMatchReasons } from "../../lib/matchReasons";
+import { matchTier, callMatchReasons, TIER_FOR_YOU_KEYS } from "../../lib/matchReasons";
 import { evaluatePreferenceMatch } from "../../lib/preferenceMatch";
 import { track } from "../../lib/analytics";
 import { isPastRound } from "../../lib/golfCall";
@@ -191,7 +191,7 @@ export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
       {tier && (
         <div className="hidden rounded-xl bg-fairway-50/70 p-2.5 sm:block">
           <p className="flex items-center gap-1.5 text-sm font-bold text-fairway-800">
-            <span aria-hidden>{tier.emoji}</span> {tier.label} for you
+            <span aria-hidden>{tier.emoji}</span> {t(TIER_FOR_YOU_KEYS[tier.tier])}
           </p>
           <MatchReasons reasons={reasons} className="mt-1" />
           {call.teeTimeSource === "user_verified" && (

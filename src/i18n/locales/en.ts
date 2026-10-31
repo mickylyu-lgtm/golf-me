@@ -1192,6 +1192,23 @@ export const en = {
   "host.circleBadge": "Circle",
   "host.handicapShort": "{handicap} HCP",
   "host.postError": "Couldn't post this round. Please try again.",
+  "matchTier.greatForYou": "Great Match for you",
+  "matchTier.decentForYou": "Decent Match for you",
+  "matchTier.possibleForYou": "Possible Match for you",
+  "matchTier.lowForYou": "Limited Match for you",
+  "golfCallDetail.approveRequest": "Approve {name}",
+  "golfCallDetail.declineRequest": "Decline {name}",
+  "joinConfirm.title": "You're joining",
+  "joinConfirm.confirmJoin": "Confirm Join",
+  "joinConfirm.confirmRequest": "Confirm Request",
+  "joinConfirm.joining": "Joining...",
+  "joinConfirm.verifiedGolfers": "{count} Verified Golfers",
+  "joinConfirm.verifiedGolfer": "1 Verified Golfer",
+  "joinConfirm.combinedRounds": "{count} Combined GolfMe Rounds",
+  "joinConfirm.wouldPlayAgain": "{pct}% Average Would Play Again",
+  "joinConfirm.noNoShows": "No Recent No-Shows",
+  "joinConfirm.playingWith": "Playing with",
+  "common.confirm": "Confirm",
 } as const;
 
 export type TranslationKey = keyof typeof en;

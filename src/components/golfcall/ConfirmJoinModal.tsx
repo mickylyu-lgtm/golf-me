@@ -50,11 +50,11 @@ export function ConfirmJoinModal({ call, onClose, onConfirm }: ConfirmJoinModalP
 
   return (
     <Modal
-      title="You're joining"
+      title={t("joinConfirm.title")}
       onClose={onClose}
       footer={
         <Button size="lg" fullWidth onClick={onConfirm}>
-          {call.joinMode === "instant" ? "Confirm Join" : "Confirm Request"} →
+          {call.joinMode === "instant" ? t("joinConfirm.confirmJoin") : t("joinConfirm.confirmRequest")} →
         </Button>
       }
     >
@@ -63,16 +63,16 @@ export function ConfirmJoinModal({ call, onClose, onConfirm }: ConfirmJoinModalP
           <ul className="flex flex-col gap-2 text-sm text-fairway-800">
             <li className="flex items-center gap-2 font-semibold">
               <ShieldCheck size={15} className="text-fairway-500" />
-              {verifiedCount} Verified Golfer{verifiedCount === 1 ? "" : "s"}
+              {verifiedCount === 1 ? t("joinConfirm.verifiedGolfer") : t("joinConfirm.verifiedGolfers", { count: verifiedCount })}
             </li>
-            <li className="font-semibold">{combinedRounds} Combined GolfMe Rounds</li>
-            <li className="font-semibold">{avgWouldPlayAgain}% Average Would Play Again</li>
-            {noRecentNoShows && <li className="font-semibold">No Recent No-Shows</li>}
+            <li className="font-semibold">{t("joinConfirm.combinedRounds", { count: combinedRounds })}</li>
+            <li className="font-semibold">{t("joinConfirm.wouldPlayAgain", { pct: avgWouldPlayAgain })}</li>
+            {noRecentNoShows && <li className="font-semibold">{t("joinConfirm.noNoShows")}</li>}
           </ul>
         </div>
 
         <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Playing with</p>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{t("joinConfirm.playingWith")}</p>
           <div className="flex flex-col gap-2">
             {roster.map((g) => (
               <RosterMember key={g.id} golfer={g} />

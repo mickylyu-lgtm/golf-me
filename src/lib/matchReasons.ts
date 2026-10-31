@@ -21,6 +21,14 @@ export function matchTier(score: number): TierInfo {
   return { tier: "low", emoji: "⚪", label: "Limited Match" };
 }
 
+// "<tier> for you" as one translated phrase, so each language can order it.
+export const TIER_FOR_YOU_KEYS: Record<MatchTier, TranslationKey> = {
+  great: "matchTier.greatForYou",
+  decent: "matchTier.decentForYou",
+  possible: "matchTier.possibleForYou",
+  low: "matchTier.lowForYou",
+};
+
 export interface MatchFactor {
   key: "schedule" | "distance" | "skill" | "budget" | "vibe" | "coursePreference" | "credibility";
   score: number;

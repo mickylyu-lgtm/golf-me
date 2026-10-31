@@ -44,7 +44,7 @@ import { formatDate, formatMoney } from "../lib/format";
 import { skillLabel, vibeLabel, walkOrCartLabel } from "../lib/enumLabels";
 import { VIBE_TONE } from "../lib/theme";
 import { computeCallCompatibility } from "../lib/compatibility";
-import { matchTier, callMatchReasons } from "../lib/matchReasons";
+import { matchTier, callMatchReasons, TIER_FOR_YOU_KEYS } from "../lib/matchReasons";
 import { track } from "../lib/analytics";
 import { enrichRealCourse } from "../lib/realCourseSearch";
 import { isPastRound } from "../lib/golfCall";
@@ -218,7 +218,7 @@ export function GolfCallDetail() {
       {tier && (
         <div className="rounded-2xl bg-fairway-50/70 p-4">
           <p className="flex items-center gap-1.5 text-sm font-bold text-fairway-800">
-            <span aria-hidden>{tier.emoji}</span> {tier.label} for you
+            <span aria-hidden>{tier.emoji}</span> {t(TIER_FOR_YOU_KEYS[tier.tier])}
           </p>
           <MatchReasons reasons={reasons} className="mt-1.5" />
           {/* A trust signal, never one of the compatibility factors above —
@@ -355,14 +355,14 @@ export function GolfCallDetail() {
                   </div>
                   <button
                     onClick={() => approveRequest(call.id, gid)}
-                    aria-label={`Approve ${g.name}`}
+                    aria-label={t("golfCallDetail.approveRequest", { name: g.name })}
                     className="rounded-full bg-fairway-600 p-1.5 text-white transition-all duration-200 ease-out hover:-translate-y-px hover:bg-fairway-700 active:translate-y-0 active:bg-fairway-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
                   >
                     <Check size={14} />
                   </button>
                   <button
                     onClick={() => declineRequest(call.id, gid)}
-                    aria-label={`Decline ${g.name}`}
+                    aria-label={t("golfCallDetail.declineRequest", { name: g.name })}
                     className="rounded-full bg-slate-100 p-1.5 text-slate-500 transition-all duration-200 ease-out hover:-translate-y-px hover:bg-slate-200 active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
                   >
                     <X size={14} />
@@ -401,8 +401,8 @@ export function GolfCallDetail() {
               {t("golfCallDetail.foursomeFull")}
             </Button>
           ) : (
-            <Button size="lg" fullWidth onClick={() => setJoinConfirmOpen(true)}>
-              {call.joinMode === "instant" ? t("golfCallDetail.joinRound") : t("golfCallDetail.requestToJoinButton")}
+            <Button size="lg" fullWidth disabled={joining} onClick={() => setJoinConfirmOpen(true)}>
+              {joining ? t("joinConfirm.joining") : call.joinMode === "instant" ? t("golfCallDetail.joinRound") : t("golfCallDetail.requestToJoinButton")}
             </Button>
           )}
         </div>
