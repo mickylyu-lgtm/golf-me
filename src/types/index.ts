@@ -209,6 +209,11 @@ export interface GolfCall {
   hostId: string;
   course: string;
   courseId?: string; // real accounts only — courses.id, used to trigger on-demand enrichment and future tee-time-provider lookups. Undefined for demo/mock rounds, which have no real courses row.
+  // Real accounts only — the course's stored coordinates. Kept so a tee-time
+  // edit can send them back unchanged and distance can be measured from any
+  // searched location, not just the viewer's saved one.
+  courseLat?: number;
+  courseLng?: number;
   areaLabel: string;
   distanceMiles?: number; // undefined when the course's coordinates aren't known -- never fabricate a value
   dateISO: string; // date of the round

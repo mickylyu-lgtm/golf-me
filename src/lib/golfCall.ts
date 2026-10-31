@@ -120,7 +120,7 @@ export function realRoundToGolfCall(round: RoundRow, participants: ParticipantRo
   const joinedGolferIds = participants
     .filter((p) => p.round_id === round.id && p.participant_status === "joined")
     .map((p) => p.user_id)
-    .sort((a) => (a === round.host_user_id ? -1 : 0));
+    .sort((a, b) => Number(b === round.host_user_id) - Number(a === round.host_user_id));
 
   // undefined (never 0) when coordinates aren't known -- a round with no
   // course coordinates is unknown-distance, not "right next to the user."
@@ -134,6 +134,8 @@ export function realRoundToGolfCall(round: RoundRow, participants: ParticipantRo
     hostId: round.host_user_id,
     course: round.course_name,
     courseId: round.course_id ?? undefined,
+    courseLat: round.course_lat ?? undefined,
+    courseLng: round.course_lng ?? undefined,
     areaLabel: round.course_area_label,
     distanceMiles,
     dateISO: round.date_iso,

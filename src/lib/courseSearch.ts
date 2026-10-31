@@ -13,7 +13,11 @@ import { COURSES, areaForCourse, coordsForCourse } from "./courses";
 // never a fabricated distance — callers filtering by radius must treat it
 // as not matching, not as 0 mi.
 export function resolveCallDistanceMiles(call: GolfCall, location: PlayingArea): number | undefined {
-  const courseCoords = coordsForCourse(call.course);
+  // A real round's own stored coordinates first, so "Playing Somewhere
+  // Else?" measures from the searched area -- call.distanceMiles is from the
+  // viewer's saved area and would quietly ignore the travel location.
+  const courseCoords =
+    call.courseLat != null && call.courseLng != null ? { lat: call.courseLat, lng: call.courseLng } : coordsForCourse(call.course);
   if (location.coords && courseCoords) return haversineMiles(location.coords, courseCoords);
   return call.distanceMiles;
 }

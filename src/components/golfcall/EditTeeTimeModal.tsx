@@ -29,8 +29,11 @@ export function EditTeeTimeModal({ call, onClose }: EditTeeTimeModalProps) {
   const { t } = useLocale();
   const [course, setCourse] = useState(call.course);
   const [courseId, setCourseId] = useState<string | null>(call.courseId ?? null);
-  const [courseLat, setCourseLat] = useState<number | null>(null);
-  const [courseLng, setCourseLng] = useState<number | null>(null);
+  // Start from the round's stored coordinates: the RPC writes whatever is
+  // sent, so starting at null wiped them on a time-only edit and the round
+  // dropped out of every radius search.
+  const [courseLat, setCourseLat] = useState<number | null>(call.courseLat ?? null);
+  const [courseLng, setCourseLng] = useState<number | null>(call.courseLng ?? null);
   const [areaLabel, setAreaLabel] = useState(call.areaLabel);
   const [date, setDate] = useState(() => toDateInputValue(call.dateISO));
   const [timeLabel, setTimeLabel] = useState(call.timeLabel);
@@ -39,7 +42,7 @@ export function EditTeeTimeModal({ call, onClose }: EditTeeTimeModalProps) {
   const hasProof = call.teeTimeSource === "user_verified";
   // Moving a round into the past would make it instantly unjoinable.
   const startsInPast = isPastRoundStart(date, timeLabel);
-  const canSave = Boolean(course.trim() && date && timeLabel.trim()) && !startsInPast;
+  const canSave = Boolean(course.trim() && areaLabel.trim() && date && timeLabel.trim()) && !startsInPast;
 
   async function handleSave() {
     if (!canSave || saving) return;
@@ -103,7 +106,15 @@ export function EditTeeTimeModal({ call, onClose }: EditTeeTimeModalProps) {
         </div>
         <div>
           <label className={labelClass}>{t("host.generalArea")}</label>
-          <input className={inputClass} value={areaLabel} onChange={(e) => setAreaLabel(e.target.value)} />
+          <input
+            className={inputClass}
+            value={areaLabel}
+            onChange={(e) => setAreaLabel(e.target.value)}
+            maxLength={80}
+            autoCapitalize="words"
+            autoComplete="off"
+            enterKeyHint="done"
+          />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -112,7 +123,17 @@ export function EditTeeTimeModal({ call, onClose }: EditTeeTimeModalProps) {
           </div>
           <div>
             <label className={labelClass}>{t("host.tellUsWhenTeeTime")}</label>
-            <input className={inputClass} value={timeLabel} onChange={(e) => setTimeLabel(e.target.value)} placeholder="e.g. 10:00 AM" />
+            <input
+              className={inputClass}
+              value={timeLabel}
+              onChange={(e) => setTimeLabel(e.target.value)}
+              placeholder={t("host.teeTimePlaceholder")}
+              maxLength={40}
+              autoCapitalize="characters"
+              autoComplete="off"
+              autoCorrect="off"
+              enterKeyHint="done"
+            />
           </div>
         </div>
         {startsInPast && <p className="-mt-2 text-xs font-medium text-red-600">{t("host.pastStartError")}</p>}
