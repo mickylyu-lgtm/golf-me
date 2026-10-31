@@ -14,6 +14,7 @@ import { matchesWhen } from "../lib/roundFilters";
 import { isPastRound } from "../lib/golfCall";
 import { effectiveLocation } from "../lib/travelLocation";
 import { resolveCallDistanceMiles } from "../lib/courseSearch";
+import { useSessionState } from "../lib/useSessionState";
 
 interface GolfCallsProps {
   embedded?: boolean;
@@ -24,7 +25,7 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
   const { showToast } = useToast();
   const { t } = useLocale();
   const navigate = useNavigate();
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useSessionState<string>("golfme:roundSearch", "");
   const [wizardOpen, setWizardOpen] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const [notified, setNotified] = useState(false);
@@ -155,6 +156,16 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t("find.searchPlaceholder")}
+            type="search"
+            maxLength={80}
+            autoCapitalize="none"
+            autoComplete="off"
+            autoCorrect="off"
+            enterKeyHint="search"
+            onKeyDown={(e) => {
+              // Search is live as you type; Return just closes the keyboard.
+              if (e.key === "Enter") e.currentTarget.blur();
+            }}
             className="w-full rounded-full border border-slate-200 bg-white py-2.5 pl-9 pr-4 text-sm outline-none transition focus:border-fairway-400"
           />
         </div>
@@ -179,7 +190,7 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
             <button onClick={() => setWizardOpen(true)} className="text-xs font-semibold text-fairway-700 hover:underline">
               {t("find.editSearch")}
             </button>
-            <button onClick={clearSearch} aria-label="Clear search" className="rounded-full p-1 text-fairway-600 hover:bg-fairway-100">
+            <button onClick={clearSearch} aria-label={t("find.clearSearch")} className="rounded-full p-1 text-fairway-600 hover:bg-fairway-100">
               <X size={14} />
             </button>
           </div>

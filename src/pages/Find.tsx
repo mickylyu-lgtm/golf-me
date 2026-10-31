@@ -1,14 +1,14 @@
-import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CalendarClock, ChevronRight } from "lucide-react";
 import { GolfCalls } from "./GolfCalls";
 import { Discover } from "./Discover";
 import { useLocale } from "../i18n/LocaleContext";
+import { useSessionState } from "../lib/useSessionState";
 
 type Tab = "rounds" | "golfers";
 
 export function Find() {
-  const [tab, setTab] = useState<Tab>("rounds");
+  const [tab, setTab] = useSessionState<Tab>("golfme:findTab", "rounds", (v): v is Tab => v === "rounds" || v === "golfers");
   const { t } = useLocale();
   const navigate = useNavigate();
 
