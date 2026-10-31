@@ -20,6 +20,7 @@ import type { PreferenceMatchContext } from "../lib/preferenceMatch";
 import type { GolferProfile, GolfVibe, SkillFilter, WalkOrCart } from "../types";
 import type { TranslationKey } from "../i18n/locales/en";
 import { goBack } from "../lib/goBack";
+import { isPastRound } from "../lib/golfCall";
 
 // One suggested, single-tap value per not-yet-set Match Preference — lets a
 // first-time golfer (onboarding only sets Round Length) reach the 3-of-5
@@ -78,7 +79,10 @@ export function AutoMatch() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  const [started, setStarted] = useState(false);
+  // quick=1: the one-tap button on Find > Rounds. Results show straight
+  // away, with the closest matches when nothing clears the 3-of-5 bar.
+  const quick = searchParams.get("quick") === "1";
+  const [started, setStarted] = useState(quick);
   const [loading, setLoading] = useState(false);
   const [resultIndex, setResultIndex] = useState(0);
   const [notified, setNotified] = useState(false);
@@ -125,6 +129,7 @@ export function AutoMatch() {
       golfCalls.filter(
         (c) =>
           c.status === "open" &&
+          !isPastRound(c) &&
           c.totalSpots - c.joinedGolferIds.length > 0 &&
           !c.joinedGolferIds.includes(currentUser.id) &&
           !c.pendingRequestIds.includes(currentUser.id),
@@ -174,8 +179,11 @@ export function AutoMatch() {
   );
 
   const hasStrongMatch = strongMatches.length > 0;
-  const results = hasStrongMatch ? strongMatches : showClosest ? closestMatches : [];
+  // Quick mode keeps going past the strong matches into the closest ones, so
+  // "Show Another" never runs dry after one or two rounds.
+  const results = quick ? [...strongMatches, ...closestMatches] : hasStrongMatch ? strongMatches : showClosest ? closestMatches : [];
   const current = results[Math.min(resultIndex, Math.max(results.length - 1, 0))];
+  const currentIsStrong = Boolean(current) && current.preferenceMatchedCount >= MIN_PREFERENCES_FOR_AUTO_MATCH;
 
   function runAutoMatch() {
     if (!enoughPreferences) return;
@@ -210,12 +218,12 @@ export function AutoMatch() {
         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
           <Sparkles size={20} className="text-fairway-600" /> {t("autoMatch.title")}
         </h1>
-        <p className="text-sm text-slate-500">{t("autoMatch.subtitle", { when: whenLabel })}</p>
+        <p className="text-sm text-slate-500">{when ? t("autoMatch.subtitle", { when: whenLabel }) : t("autoMatch.subtitleAnyDay")}</p>
       </div>
 
       {loading ? (
         <GolfMeLoader fullScreen message={t("autoMatch.finding")} />
-      ) : !started ? (
+      ) : !started || !enoughPreferences ? (
         !enoughPreferences ? (
           <div className="flex flex-col gap-4">
             <div className="rounded-2xl border border-slate-100 bg-white p-4">
@@ -312,13 +320,18 @@ export function AutoMatch() {
         <div className="flex flex-col gap-4">
           <div>
             <p className="text-xs font-bold tracking-wide text-fairway-700 uppercase">
-              {hasStrongMatch ? preferenceTierLabel(current.preferenceTier) : t("autoMatch.closestAvailable")}
+              {currentIsStrong ? preferenceTierLabel(current.preferenceTier) : t("autoMatch.closestAvailable")}
             </p>
             {!hasStrongMatch && <p className="mt-1 text-sm text-slate-500">{t("autoMatch.outsideNormalCriteria")}</p>}
           </div>
 
           {current && (
             <>
+              {results.length > 1 && (
+                <p className="-mb-2 text-xs font-semibold text-slate-400">
+                  {t("autoMatch.position", { n: Math.min(resultIndex, results.length - 1) + 1, total: results.length })}
+                </p>
+              )}
               <GolfCallCard call={current.call} />
               {current.preferenceChecks.length > 0 && (
                 <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-white px-4 py-3">

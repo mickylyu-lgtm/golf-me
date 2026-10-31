@@ -763,6 +763,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "discover.subtitle": "根據日程、程度、預算和氛圍配對——而非外貌。",
   "find.golfCallsTitle": "全部球局",
   "find.golfCallsSubtitle": "正在招募球友的空缺球局。",
+  "find.autoMatchQuickSubtitle": "為你挑選的球局，想看多少看多少。",
   "find.matchesFor": "{when}的配對結果",
   "find.matches": "配對結果",
   "find.withinRadius": "{radius} 英里內",
@@ -819,6 +820,7 @@ export const zhTW: Record<TranslationKey, string> = {
 
   "autoMatch.title": "自動配對",
   "autoMatch.subtitle": "我們會根據你的匹配偏好，為{when}推薦最合適的球局。",
+  "autoMatch.subtitleAnyDay": "我們會根據你的匹配偏好，推薦最合適的近期球局。",
   "autoMatch.notEnoughPrefs": "請至少選擇 3 項偏好以使用自動配對。",
   "autoMatch.notEnoughPrefsDesc": "洞數、性別、組隊類型、比賽方式和社交——至少選擇 3 項，自動配對才有足夠依據。",
   "autoMatch.usingPreferences": "使用你的配對偏好",
@@ -832,6 +834,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "autoMatch.showClosest": "查看最接近的配對",
   "autoMatch.nothingNearby": "附近暫時沒有球局。",
   "autoMatch.showAnother": "換一個看看",
+  "autoMatch.position": "{n} / {total}",
   "autoMatch.browseAll": "瀏覽全部球局",
   "autoMatch.closestAvailable": "最接近的球局",
 

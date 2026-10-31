@@ -763,6 +763,7 @@ export const ko: Record<TranslationKey, string> = {
   "discover.subtitle": "외모가 아닌 일정, 실력, 예산, 분위기로 매칭돼요.",
   "find.golfCallsTitle": "전체 라운드",
   "find.golfCallsSubtitle": "지금 플레이어를 찾고 있는 열린 라운드.",
+  "find.autoMatchQuickSubtitle": "나에게 맞는 라운드를 계속 넘겨보세요.",
   "find.matchesFor": "{when} 매칭 결과",
   "find.matches": "매칭 결과",
   "find.withinRadius": "{radius}마일 이내",
@@ -819,6 +820,7 @@ export const ko: Record<TranslationKey, string> = {
 
   "autoMatch.title": "자동 매칭",
   "autoMatch.subtitle": "매칭 선호도를 바탕으로 {when} 가장 알맞은 라운드를 추천해드릴게요.",
+  "autoMatch.subtitleAnyDay": "매칭 선호도를 바탕으로 다가오는 라운드 중 가장 알맞은 라운드를 추천해드릴게요.",
   "autoMatch.notEnoughPrefs": "자동 매칭을 사용하려면 최소 3개의 선호도를 선택하세요.",
   "autoMatch.notEnoughPrefsDesc": "라운드 길이, 성별, 그룹 유형, 경기 방식, 네트워킹 중 최소 3개를 선택하면 자동 매칭이 가능해요.",
   "autoMatch.usingPreferences": "매칭 선호도 사용 중",
@@ -832,6 +834,7 @@ export const ko: Record<TranslationKey, string> = {
   "autoMatch.showClosest": "가장 가까운 매칭 보기",
   "autoMatch.nothingNearby": "근처에 라운드가 없어요.",
   "autoMatch.showAnother": "다른 매칭 보기",
+  "autoMatch.position": "{total}개 중 {n}번째",
   "autoMatch.browseAll": "전체 라운드 보기",
   "autoMatch.closestAvailable": "가장 가까운 라운드",
 

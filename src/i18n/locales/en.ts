@@ -658,6 +658,7 @@ export const en = {
   "discover.subtitle": "Matched on schedule, skill, budget, and vibe — not looks.",
   "find.golfCallsTitle": "Golf Calls",
   "find.golfCallsSubtitle": "Open rounds looking for players, right now.",
+  "find.autoMatchQuickSubtitle": "Rounds picked for you. Tap through as many as you like.",
   "find.matchesFor": "Matches for {when}",
   "find.matches": "Matches",
   "find.withinRadius": "within {radius} mi",
@@ -717,6 +718,7 @@ export const en = {
   // Auto-Match
   "autoMatch.title": "Auto-Match",
   "autoMatch.subtitle": "We'll recommend the best available round for {when}, using your Match Preferences.",
+  "autoMatch.subtitleAnyDay": "We'll recommend the best upcoming rounds, using your Match Preferences.",
   "autoMatch.notEnoughPrefs": "Choose at least 3 preferences for Auto-Match.",
   "autoMatch.notEnoughPrefsDesc": "Round Length, Gender, Group Type, Game Format, and Networking — pick at least 3 so Auto-Match has enough to go on.",
   "autoMatch.usingPreferences": "Using Your Match Preferences",
@@ -730,6 +732,7 @@ export const en = {
   "autoMatch.showClosest": "Show Closest Matches",
   "autoMatch.nothingNearby": "Nothing nearby right now.",
   "autoMatch.showAnother": "Show Another Match",
+  "autoMatch.position": "{n} of {total}",
   "autoMatch.browseAll": "Browse All Rounds",
   "autoMatch.closestAvailable": "Closest Available Round",
 

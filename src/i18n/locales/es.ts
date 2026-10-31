@@ -763,6 +763,7 @@ export const es: Record<TranslationKey, string> = {
   "discover.subtitle": "Emparejados por horario, nivel, presupuesto y ambiente — no por apariencia.",
   "find.golfCallsTitle": "Rondas",
   "find.golfCallsSubtitle": "Rondas abiertas que buscan jugadores, ahora mismo.",
+  "find.autoMatchQuickSubtitle": "Rondas elegidas para ti. Pasa por todas las que quieras.",
   "find.matchesFor": "Coincidencias para {when}",
   "find.matches": "Coincidencias",
   "find.withinRadius": "a menos de {radius} mi",
@@ -819,6 +820,7 @@ export const es: Record<TranslationKey, string> = {
 
   "autoMatch.title": "Emparejamiento Automático",
   "autoMatch.subtitle": "Te recomendaremos la mejor ronda disponible para {when}, usando tus Preferencias de Coincidencia.",
+  "autoMatch.subtitleAnyDay": "Te recomendaremos las mejores rondas próximas, usando tus Preferencias de Coincidencia.",
   "autoMatch.notEnoughPrefs": "Elige al menos 3 preferencias para el Emparejamiento Automático.",
   "autoMatch.notEnoughPrefsDesc": "Duración, Género, Tipo de Grupo, Formato de Juego y Contactos — elige al menos 3 para que el Emparejamiento Automático tenga suficiente con qué trabajar.",
   "autoMatch.usingPreferences": "Usando Tus Preferencias de Coincidencia",
@@ -832,6 +834,7 @@ export const es: Record<TranslationKey, string> = {
   "autoMatch.showClosest": "Mostrar Coincidencias Más Cercanas",
   "autoMatch.nothingNearby": "No hay nada cerca ahora mismo.",
   "autoMatch.showAnother": "Mostrar Otra Coincidencia",
+  "autoMatch.position": "{n} de {total}",
   "autoMatch.browseAll": "Explorar Todas las Rondas",
   "autoMatch.closestAvailable": "Ronda Disponible Más Cercana",
 

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Bell, Plus, Search, SlidersHorizontal, X } from "lucide-react";
+import { Bell, ChevronRight, Plus, Search, SlidersHorizontal, Sparkles, X } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useToast } from "../context/ToastContext";
 import { useLocale } from "../i18n/LocaleContext";
@@ -130,6 +130,23 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
           {t("common.host")}
         </Button>
       </div>
+
+      {/* One tap straight into Auto-Match with the golfer's saved
+          preferences and travel radius, any upcoming day -- the filter
+          sheet is still there for a specific day or area. */}
+      <button
+        onClick={() => navigate(`/auto-match?quick=1&radius=${currentUser.travelRadiusMiles || 25}`)}
+        className="flex items-center gap-3 rounded-2xl bg-gradient-to-br from-brand-forest to-brand-forest-deep px-4 py-3.5 text-left text-white shadow-sm transition active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2"
+      >
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15">
+          <Sparkles size={18} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-base font-bold">{t("filters.autoMatchMe")}</span>
+          <span className="block text-sm text-fairway-50">{t("find.autoMatchQuickSubtitle")}</span>
+        </span>
+        <ChevronRight size={18} className="shrink-0" />
+      </button>
 
       <div className="flex items-center gap-2">
         <div className="relative flex-1">

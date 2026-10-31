@@ -763,6 +763,7 @@ export const ja: Record<TranslationKey, string> = {
   "discover.subtitle": "外見ではなく、予定・レベル・予算・雰囲気でマッチング。",
   "find.golfCallsTitle": "全てのラウンド",
   "find.golfCallsSubtitle": "現在メンバーを募集中のラウンド。",
+  "find.autoMatchQuickSubtitle": "あなたに合うラウンドを次々にチェック。",
   "find.matchesFor": "{when}のマッチ結果",
   "find.matches": "マッチ結果",
   "find.withinRadius": "{radius}マイル以内",
@@ -819,6 +820,7 @@ export const ja: Record<TranslationKey, string> = {
 
   "autoMatch.title": "オートマッチ",
   "autoMatch.subtitle": "あなたのマッチング設定をもとに、{when}に最適なラウンドをおすすめします。",
+  "autoMatch.subtitleAnyDay": "あなたのマッチング設定をもとに、これからのラウンドから最適なものをおすすめします。",
   "autoMatch.notEnoughPrefs": "オートマッチを使うには3項目以上の設定を選んでください。",
   "autoMatch.notEnoughPrefsDesc": "ラウンドの長さ、性別、グループタイプ、ゲーム形式、ネットワーキングのうち3項目以上を選んでください。",
   "autoMatch.usingPreferences": "マッチング設定を使用中",
@@ -832,6 +834,7 @@ export const ja: Record<TranslationKey, string> = {
   "autoMatch.showClosest": "近いマッチを表示",
   "autoMatch.nothingNearby": "近くにラウンドがありません。",
   "autoMatch.showAnother": "別のマッチを見る",
+  "autoMatch.position": "{n} / {total}",
   "autoMatch.browseAll": "全てのラウンドを見る",
   "autoMatch.closestAvailable": "最も近いラウンド",
 
