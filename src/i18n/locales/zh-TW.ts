@@ -1144,4 +1144,8 @@ export const zhTW: Record<TranslationKey, string> = {
   "share.justHostedBody": "分享給朋友，讓他們一起加入。",
   "share.shareRoundButton": "分享球局",
   "share.dismiss": "關閉",
+  "host.teeTimePlaceholder": "例如 10:00 AM",
+  "host.circleBadge": "圈子",
+  "host.handicapShort": "差點 {handicap}",
+  "host.postError": "無法發布這場球局，請再試一次。",
 };

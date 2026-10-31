@@ -17,7 +17,7 @@ import type { GameFormat, GolfVibe, Holes, JoinMode, SkillFilter, WalkOrCart } f
 import { CourseAutocomplete } from "../components/golfcall/CourseAutocomplete";
 import { inputClass, labelClass } from "../components/ui/FormControls";
 import { formatDate, formatMoney } from "../lib/format";
-import { skillLabel, vibeLabel } from "../lib/enumLabels";
+import { skillLabel, vibeLabel, walkOrCartLabel } from "../lib/enumLabels";
 import { getWeekendRange } from "../lib/greeting";
 import { isPastRoundStart, localDateInputValue } from "../lib/golfCall";
 import { skillTierFromHandicap } from "../lib/format";
@@ -64,6 +64,18 @@ const STEP_TITLE_KEYS: Record<number, TranslationKey> = {
   4: "host.step4Title",
   5: "host.step5Title",
 };
+
+// Number fields keep "" as a valid mid-edit state; anything negative,
+// non-numeric or absurd is ignored (null) instead of stored, so a stray "-"
+// or "1e9" can never reach the review step.
+const MAX_PRICE = 10000;
+const MAX_DISTANCE_MILES = 500;
+function parseNonNegative(raw: string, max: number, integer = false): number | "" | null {
+  if (raw === "") return "";
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return Math.min(integer ? Math.round(n) : n, max);
+}
 
 function prefillDateFromWhen(when: string | null, dateParam: string | null): string {
   if (when === "date" && dateParam) return dateParam;
@@ -133,7 +145,12 @@ export function CreateGolfCall() {
   // Derived from the resolved `when` above (not the raw URL param) so the
   // default "Today" pill and the actual date value always agree — the URL
   // param is absent on a plain visit, but `when` still resolves to "today".
-  const [date, setDate] = useState(() => initial?.date ?? prefillDateFromWhen(when, searchParams.get("date")));
+  // A resumed draft's "Today"/"Tomorrow"/"This Weekend" is re-read against
+  // today's date -- a draft saved yesterday as "Today" would otherwise come
+  // back as yesterday's (already past) date under a "Today" pill.
+  const [date, setDate] = useState(() =>
+    initial && initial.when !== "date" ? prefillDateFromWhen(initial.when, null) : (initial?.date ?? prefillDateFromWhen(when, searchParams.get("date"))),
+  );
   const [timeLabel, setTimeLabel] = useState(initial?.timeLabel ?? "");
   const [price, setPrice] = useState<number | "">(initial?.price ?? 50);
   const [totalSpots, setTotalSpots] = useState(initial?.totalSpots ?? 4);
@@ -315,6 +332,8 @@ export function CreateGolfCall() {
 
   async function handleSubmit() {
     if (!canSubmit || submitting) return;
+    // Set for demo too: a fast double tap must never post the round twice.
+    setSubmitting(true);
     const dateISO = new Date(`${date}T12:00:00`).toISOString();
 
     if (isDemo) {
@@ -343,7 +362,6 @@ export function CreateGolfCall() {
       return;
     }
 
-    setSubmitting(true);
     // Read before hosting: after it, the refetched round list says "hosted".
     const isFirstRound = hasHosted === false;
     try {
@@ -389,7 +407,7 @@ export function CreateGolfCall() {
           ? t("moderation.objectionableContent")
           : err instanceof Error
             ? err.message
-            : "Couldn't post this round. Please try again.",
+            : t("host.postError"),
         "warning",
       );
     }
@@ -439,16 +457,32 @@ export function CreateGolfCall() {
                 <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
                     <label className={labelClass}>{t("host.generalArea")}</label>
-                    <input className={inputClass} value={areaLabel} onChange={(e) => setAreaLabel(e.target.value)} placeholder={t("host.areaPlaceholder")} />
+                    <input
+                      className={inputClass}
+                      value={areaLabel}
+                      onChange={(e) => setAreaLabel(e.target.value)}
+                      placeholder={t("host.areaPlaceholder")}
+                      maxLength={80}
+                      autoCapitalize="words"
+                      autoComplete="off"
+                      enterKeyHint="done"
+                    />
                   </div>
                   <div>
                     <label className={labelClass}>{t("host.distanceFromYou")}</label>
                     <input
                       type="number"
+                      inputMode="numeric"
                       min={0}
+                      max={MAX_DISTANCE_MILES}
+                      step={1}
                       className={inputClass}
                       value={distanceMiles}
-                      onChange={(e) => setDistanceMiles(e.target.value === "" ? "" : Number(e.target.value))}
+                      enterKeyHint="done"
+                      onChange={(e) => {
+                        const next = parseNonNegative(e.target.value, MAX_DISTANCE_MILES, true);
+                        if (next !== null) setDistanceMiles(next);
+                      }}
                     />
                   </div>
                 </div>
@@ -475,7 +509,17 @@ export function CreateGolfCall() {
           </div>
           <div>
             <label className={labelClass}>{t("host.tellUsWhenTeeTime")}</label>
-            <input className={inputClass} value={timeLabel} onChange={(e) => setTimeLabel(e.target.value)} placeholder="e.g. 10:00 AM" />
+            <input
+              className={inputClass}
+              value={timeLabel}
+              onChange={(e) => setTimeLabel(e.target.value)}
+              placeholder={t("host.teeTimePlaceholder")}
+              maxLength={40}
+              autoCapitalize="characters"
+              autoComplete="off"
+              autoCorrect="off"
+              enterKeyHint="done"
+            />
             {startsInPast && <p className="mt-1.5 text-xs font-medium text-red-600">{t("host.pastStartError")}</p>}
           </div>
 
@@ -530,7 +574,17 @@ export function CreateGolfCall() {
                   </div>
                   <div>
                     <label className={labelClass}>{t("golfCallDetail.bookingReferenceLabel")}</label>
-                    <input value={proofReference} onChange={(e) => setProofReference(e.target.value)} className={inputClass} />
+                    <input
+                      value={proofReference}
+                      onChange={(e) => setProofReference(e.target.value)}
+                      className={inputClass}
+                      maxLength={60}
+                      autoCapitalize="characters"
+                      autoComplete="off"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      enterKeyHint="done"
+                    />
                   </div>
                   <button
                     type="button"
@@ -610,6 +664,8 @@ export function CreateGolfCall() {
                             onToggle={toggleFriend}
                             circle
                             newGolferLabel={t("host.newGolfer")}
+                            handicapLabel={g.handicap !== null ? t("host.handicapShort", { handicap: g.handicap }) : ""}
+                            circleLabel={t("host.circleBadge")}
                           />
                         ))}
                       </div>
@@ -629,6 +685,8 @@ export function CreateGolfCall() {
                           disabled={!friendIds.includes(g.id) && friendIds.length >= maxFriends}
                           onToggle={toggleFriend}
                           newGolferLabel={t("host.newGolfer")}
+                          handicapLabel={g.handicap !== null ? t("host.handicapShort", { handicap: g.handicap }) : ""}
+                          circleLabel={t("host.circleBadge")}
                         />
                       ))}
                     </div>
@@ -705,10 +763,16 @@ export function CreateGolfCall() {
             <label className={labelClass}>{t("host.estimatedPrice")}</label>
             <input
               type="number"
+              inputMode="decimal"
               min={0}
+              max={MAX_PRICE}
               className={inputClass}
               value={price}
-              onChange={(e) => setPrice(e.target.value === "" ? "" : Number(e.target.value))}
+              enterKeyHint="done"
+              onChange={(e) => {
+                const next = parseNonNegative(e.target.value, MAX_PRICE);
+                if (next !== null) setPrice(next);
+              }}
             />
           </div>
 
@@ -739,7 +803,7 @@ export function CreateGolfCall() {
                     <select className={inputClass} value={skillLevel} onChange={(e) => setSkillLevel(e.target.value as SkillFilter)}>
                       {SKILL_OPTIONS.map((s) => (
                         <option key={s} value={s}>
-                          {s}
+                          {skillLabel(s, t)}
                         </option>
                       ))}
                     </select>
@@ -750,7 +814,7 @@ export function CreateGolfCall() {
                   <div className="flex gap-2">
                     {WALK_OPTIONS.map((w) => (
                       <Pill key={w} active={walkOrCart === w} onClick={() => setWalkOrCart(w)} className="flex-1 py-2 text-center">
-                        {w}
+                        {walkOrCartLabel(w, t)}
                       </Pill>
                     ))}
                   </div>
@@ -773,6 +837,7 @@ export function CreateGolfCall() {
                   <textarea
                     className={inputClass}
                     rows={3}
+                    maxLength={500}
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                     placeholder={fillMode ? t("host.notesPlaceholderFill") : t("host.notesPlaceholderFresh")}
@@ -861,6 +926,8 @@ function FriendRow({
   onToggle,
   circle,
   newGolferLabel,
+  handicapLabel,
+  circleLabel,
 }: {
   golferId: string;
   name: string;
@@ -871,6 +938,8 @@ function FriendRow({
   onToggle: (id: string) => void;
   circle?: boolean;
   newGolferLabel: string;
+  handicapLabel: string;
+  circleLabel: string;
 }) {
   return (
     <label
@@ -881,8 +950,8 @@ function FriendRow({
       <input type="checkbox" checked={checked} disabled={disabled && !checked} onChange={() => onToggle(golferId)} className="h-4 w-4 accent-fairway-600" />
       <Avatar golfer={avatar} size="xs" showVerified={false} />
       <span className="flex-1 font-medium text-slate-800">{name}</span>
-      <span className="text-xs text-slate-500">{handicap !== null ? `${handicap} HCP` : newGolferLabel}</span>
-      {circle && <Badge tone="fairway">Circle</Badge>}
+      <span className="text-xs text-slate-500">{handicap !== null ? handicapLabel : newGolferLabel}</span>
+      {circle && <Badge tone="fairway">{circleLabel}</Badge>}
     </label>
   );
 }

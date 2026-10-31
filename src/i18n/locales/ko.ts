@@ -1144,4 +1144,8 @@ export const ko: Record<TranslationKey, string> = {
   "share.justHostedBody": "친구들에게 공유해서 함께하세요.",
   "share.shareRoundButton": "라운드 공유",
   "share.dismiss": "닫기",
+  "host.teeTimePlaceholder": "예: 10:00 AM",
+  "host.circleBadge": "서클",
+  "host.handicapShort": "HCP {handicap}",
+  "host.postError": "라운드를 게시하지 못했어요. 다시 시도해 주세요.",
 };

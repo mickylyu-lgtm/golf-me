@@ -1188,6 +1188,10 @@ export const en = {
   "share.justHostedBody": "Share it with friends so they can join.",
   "share.shareRoundButton": "Share round",
   "share.dismiss": "Dismiss",
+  "host.teeTimePlaceholder": "e.g. 10:00 AM",
+  "host.circleBadge": "Circle",
+  "host.handicapShort": "{handicap} HCP",
+  "host.postError": "Couldn't post this round. Please try again.",
 } as const;
 
 export type TranslationKey = keyof typeof en;

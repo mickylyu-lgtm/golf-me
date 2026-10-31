@@ -1144,4 +1144,8 @@ export const es: Record<TranslationKey, string> = {
   "share.justHostedBody": "Compártela con tus amigos para que puedan unirse.",
   "share.shareRoundButton": "Compartir ronda",
   "share.dismiss": "Descartar",
+  "host.teeTimePlaceholder": "p. ej. 10:00 AM",
+  "host.circleBadge": "Círculo",
+  "host.handicapShort": "HCP {handicap}",
+  "host.postError": "No se pudo publicar esta ronda. Inténtalo de nuevo.",
 };

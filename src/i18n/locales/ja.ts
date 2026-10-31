@@ -1144,4 +1144,8 @@ export const ja: Record<TranslationKey, string> = {
   "share.justHostedBody": "友達に共有して参加してもらいましょう。",
   "share.shareRoundButton": "ラウンドを共有",
   "share.dismiss": "閉じる",
+  "host.teeTimePlaceholder": "例：10:00 AM",
+  "host.circleBadge": "サークル",
+  "host.handicapShort": "HCP {handicap}",
+  "host.postError": "ラウンドを投稿できませんでした。もう一度お試しください。",
 };

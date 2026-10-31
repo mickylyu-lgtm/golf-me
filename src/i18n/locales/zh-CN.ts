@@ -1144,4 +1144,8 @@ export const zhCN: Record<TranslationKey, string> = {
   "share.justHostedBody": "分享给朋友，让他们一起加入。",
   "share.shareRoundButton": "分享球局",
   "share.dismiss": "关闭",
+  "host.teeTimePlaceholder": "例如 10:00 AM",
+  "host.circleBadge": "圈子",
+  "host.handicapShort": "差点 {handicap}",
+  "host.postError": "无法发布这场球局，请重试。",
 };
