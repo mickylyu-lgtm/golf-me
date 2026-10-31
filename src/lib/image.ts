@@ -45,6 +45,19 @@ function withTimeout<T>(promise: Promise<T>, message: string): Promise<T> {
   return Promise.race([promise, new Promise<T>((_, reject) => setTimeout(() => reject(new Error(message)), VIDEO_METADATA_TIMEOUT_MS))]);
 }
 
+// Nearly every pixel is black: a frame that wasn't decoded yet, or a fade-in.
+function isMostlyBlack(ctx: CanvasRenderingContext2D, w: number, h: number): boolean {
+  try {
+    const px = ctx.getImageData(0, 0, w, h).data;
+    let dark = 0;
+    const total = px.length / 4;
+    for (let i = 0; i < px.length; i += 4) if (Math.max(px[i], px[i + 1], px[i + 2]) <= 22) dark++;
+    return dark >= total * 0.97;
+  } catch {
+    return false;
+  }
+}
+
 // Captures a real frame from an actual uploaded video file as a JPEG blob —
 // never a placeholder/fake image. Seeks a touch past frame 0 (some
 // encoders leave the very first frame black), same idea as Instagram's own
@@ -64,26 +77,45 @@ export function captureVideoThumbnail(file: File, maxDimension = 640, seekSecond
       URL.revokeObjectURL(url);
     }
 
+    // Candidate times, tried in order until one gives a frame that isn't
+    // black: WebKit can fire `seeked` before the frame is decoded (preload
+    // "metadata"), which drew a black thumbnail on iPhone and left the feed
+    // card black with black blurred sides (reported live).
+    let candidates: number[] = [];
+    let attempt = 0;
+
+    function seekNext() {
+      const end = Math.max(0, (video.duration || 0) - 0.05);
+      video.currentTime = Math.min(candidates[attempt], end || candidates[attempt]);
+    }
+
     video.onloadedmetadata = () => {
       // A caller that trimmed a longer source video (VideoTrimSelector)
       // passes the trim's own start instead — grabbing a frame near 0
       // would otherwise show whatever preceded the actual analyzed swing.
-      const seekTime = seekSeconds ?? Math.min(0.3, (video.duration || 0.6) / 2);
-      video.currentTime = Math.min(seekTime, Math.max(0, (video.duration || seekTime) - 0.05));
+      const first = seekSeconds ?? Math.min(0.3, (video.duration || 0.6) / 2);
+      const d = video.duration || 0;
+      candidates = [first, first + 0.7, d > 0 ? d / 2 : first + 1.5];
+      seekNext();
     };
 
-    video.onseeked = () => {
+    function draw() {
       const scale = Math.min(1, maxDimension / Math.max(video.videoWidth, video.videoHeight));
       const canvas = document.createElement("canvas");
       canvas.width = Math.round(video.videoWidth * scale);
       canvas.height = Math.round(video.videoHeight * scale);
-      const ctx = canvas.getContext("2d");
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
       if (!ctx) {
         cleanup();
         reject(new Error("Canvas not supported"));
         return;
       }
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      if (isMostlyBlack(ctx, canvas.width, canvas.height) && attempt < candidates.length - 1) {
+        attempt++;
+        seekNext();
+        return;
+      }
       canvas.toBlob(
         (blob) => {
           cleanup();
@@ -93,6 +125,21 @@ export function captureVideoThumbnail(file: File, maxDimension = 640, seekSecond
         "image/jpeg",
         0.8,
       );
+    }
+
+    video.onseeked = () => {
+      // Wait until the seeked frame is actually presented where the browser
+      // can say so; a short timer otherwise (and as a backstop, since the
+      // callback may never fire for a hidden, paused video).
+      let done = false;
+      const once = () => {
+        if (done) return;
+        done = true;
+        draw();
+      };
+      const v = video as HTMLVideoElement & { requestVideoFrameCallback?: (cb: () => void) => number };
+      v.requestVideoFrameCallback?.(once);
+      setTimeout(once, 250);
     };
 
     video.onerror = () => {
