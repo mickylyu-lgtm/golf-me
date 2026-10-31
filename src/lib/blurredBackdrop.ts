@@ -38,7 +38,7 @@ export interface BlurredBackdrop {
 
 const cache = new Map<string, BlurredBackdrop | null>();
 // How each thumbnail scan went, for the ?barsdebug=1 readout only.
-export const thumbResults = new Map<string, "bars" | "no-bars" | "tainted" | "load-error">();
+export const thumbResults = new Map<string, "bars" | "no-bars" | "dark" | "tainted" | "load-error">();
 
 type Frame = { source: CanvasImageSource; width: number; height: number };
 
@@ -160,6 +160,19 @@ export function buildBlurredBackdrop(url: string): Promise<BlurredBackdrop | nul
     img.crossOrigin = "anonymous";
     img.decoding = "async";
     img.onload = () => {
+      // A thumbnail captured on a black frame (fade-in, or a frame that
+      // wasn't decoded yet at upload) would blur into plain black sides;
+      // return nothing so the card builds it from the playing video instead.
+      let dark = false;
+      try {
+        dark = scanFrame(imageFrame(img)).dark;
+      } catch {
+        // Unreadable (no CORS): backdropFromFrame reports it as tainted.
+      }
+      if (dark) {
+        thumbResults.set(url, "dark");
+        return resolve(null);
+      }
       const result = backdropFromFrame(imageFrame(img));
       thumbResults.set(url, result ? (result.bars ? "bars" : "no-bars") : "tainted");
       resolve(result);
