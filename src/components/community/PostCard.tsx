@@ -586,6 +586,8 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
         <div onClick={stop}>{call ? <GolfCallCard call={call} showMatch={false} /> : <p className="text-xs text-slate-400">This round is no longer available.</p>}</div>
       )}
 
+      {/* The like/comment/save pills stay visually compact; an invisible
+          ::after extends each one's hit area vertically to ~40px. */}
       <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-2.5" onClick={stop}>
         <div className="flex items-center gap-1.5">
           <Badge tone="outline">{postCategoryLabel(post.category, t)}</Badge>
@@ -595,7 +597,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
             onClick={() => togglePostUpvote(post.id)}
             aria-pressed={upvoted}
             aria-label={upvoted ? t("community.liked") : t("community.like")}
-            className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold transition-all duration-200 ease-out active:scale-95 ${
+            className={`relative flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold after:absolute after:inset-x-0 after:-inset-y-2 transition-all duration-200 ease-out active:scale-95 ${
               upvoted ? "border-transparent bg-fairway-500 text-white" : "border-slate-200 text-slate-600 hover:border-fairway-300"
             }`}
           >
@@ -604,7 +606,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
           <button
             onClick={goToComments}
             aria-label={t("community.comment")}
-            className="flex items-center gap-1 rounded-full border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 transition-colors duration-150 hover:border-fairway-300"
+            className="relative flex items-center gap-1 rounded-full border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 after:absolute after:inset-x-0 after:-inset-y-2 transition-colors duration-150 hover:border-fairway-300"
           >
             <MessageCircle size={13} /> {commentCount}
           </button>
@@ -619,7 +621,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
               }
             }}
             aria-pressed={saved}
-            className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold transition-all duration-200 ease-out ${
+            className={`relative flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold after:absolute after:inset-x-0 after:-inset-y-2 transition-all duration-200 ease-out ${
               saved ? "border-transparent bg-sun-400 text-fairway-950" : "border-slate-200 text-slate-600 hover:border-sun-300"
             }`}
           >

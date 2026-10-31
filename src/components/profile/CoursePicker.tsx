@@ -70,7 +70,7 @@ export function CoursePicker({ selected, onChange, location }: CoursePickerProps
                 type="button"
                 onClick={() => removeCourse(c)}
                 aria-label={`Remove ${c}`}
-                className="rounded-full p-0.5 text-fairway-500 transition-colors duration-150 hover:bg-fairway-100 hover:text-fairway-800"
+                className="-my-2 -mr-1.5 rounded-full p-2 text-fairway-500 transition-colors duration-150 hover:bg-fairway-100 hover:text-fairway-800"
               >
                 <X size={12} />
               </button>

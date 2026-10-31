@@ -70,7 +70,7 @@ export function CommentItem({ comment, postId, replies }: CommentItemProps) {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex gap-2.5">
-        <button onClick={() => navigate(`/golfer/${author.id}`)} className="shrink-0">
+        <button onClick={() => navigate(`/golfer/${author.id}`)} className="shrink-0 self-start">
           <Avatar golfer={author} size="xs" showVerified={false} />
         </button>
         <div className="min-w-0 flex-1">
@@ -88,17 +88,17 @@ export function CommentItem({ comment, postId, replies }: CommentItemProps) {
             <span>{formatRelativeTime(comment.createdAt, locale, t)}</span>
             <button
               onClick={() => toggleCommentUpvote(comment.id)}
-              className={`flex items-center gap-0.5 font-semibold transition-colors duration-150 ${upvoted ? "text-fairway-700" : "hover:text-slate-600"}`}
+              className={`-mx-1 -my-2 flex items-center gap-0.5 px-1 py-2 font-semibold transition-colors duration-150 ${upvoted ? "text-fairway-700" : "hover:text-slate-600"}`}
             >
               <ThumbsUp size={11} fill={upvoted ? "currentColor" : "none"} /> {commentUpvoteCount(comment.id)}
             </button>
             {!isReply && (
-              <button onClick={() => setReplyOpen((v) => !v)} className="font-semibold hover:text-slate-600">
+              <button onClick={() => setReplyOpen((v) => !v)} className="-mx-1 -my-2 px-1 py-2 font-semibold hover:text-slate-600">
                 Reply
               </button>
             )}
             <div className="relative">
-              <button onClick={() => setMenuOpen((v) => !v)} aria-label="More options" className="hover:text-slate-600">
+              <button onClick={() => setMenuOpen((v) => !v)} aria-label="More options" className="-m-2 flex p-2 hover:text-slate-600">
                 <MoreHorizontal size={13} />
               </button>
               {menuOpen && (
@@ -149,12 +149,12 @@ export function CommentItem({ comment, postId, replies }: CommentItemProps) {
                 onChange={(e) => updateReplyText(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && submitReply()}
                 placeholder={`Reply to ${author.name.split(" ")[0]}...`}
-                className="flex-1 rounded-full border border-slate-200 bg-white px-3.5 py-1.5 text-sm outline-none focus:border-fairway-400"
+                className="min-w-0 flex-1 rounded-full border border-slate-200 bg-white px-3.5 py-1.5 text-sm outline-none focus:border-fairway-400"
               />
               <button
                 onClick={submitReply}
                 disabled={!replyText.trim()}
-                className="text-xs font-semibold text-fairway-700 disabled:opacity-40"
+                className="shrink-0 px-1 py-2 text-xs font-semibold text-fairway-700 disabled:opacity-40"
               >
                 Send
               </button>

@@ -73,7 +73,7 @@ export function FollowingDetail() {
                     showToast(err instanceof Error ? err.message : t("following.unfollowError"), "warning");
                   }
                 }}
-                className="shrink-0 text-xs font-semibold text-slate-400 transition-colors duration-200 hover:text-slate-700"
+                className="-mr-2 shrink-0 px-2 py-3 text-xs font-semibold text-slate-400 transition-colors duration-200 hover:text-slate-700"
               >
                 {t("following.unfollow")}
               </button>
