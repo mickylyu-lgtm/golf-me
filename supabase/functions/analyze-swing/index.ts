@@ -41,6 +41,15 @@
 // client.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import {
+  POSE_PRESENCE_MIN_RATIO,
+  backoffMs,
+  formatFailure,
+  isRetryableStatus,
+  poseCoverage,
+  scaleKeypoints,
+} from "../_shared/caddieReliability.ts";
+import type { CaddieFailureCode } from "../_shared/caddieReliability.ts";
 
 // ---- Centralized config — change these, nothing else, to retune Caddie. ----
 const GEMINI_MODEL = "gemini-3.6-flash"; // gemini-2.5-flash was retired for new API keys/projects (Gemini API started 404ing it with "no longer available to new users" on 2026-08-21); 3.6-flash is Google's named replacement, same video-understanding + structured-JSON-output support
@@ -48,7 +57,7 @@ const GEMINI_API_BASE = "https://generativelanguage.googleapis.com";
 const COOLDOWN_SECONDS = 30; // blocks accidental double-taps/rapid re-asks
 const DAILY_LIMIT_PER_USER = 30; // ALSO hard-coded in enforce_caddie_daily_limit() (migration 20260924140000), the authoritative in-DB check — change both together. Caps worst-case per-user Gemini+Roboflow spend for the beta — covers both providers together, not separately; raised from 10 for active beta testing (2026-08-22)
 const MAX_VIDEO_BYTES = 200 * 1024 * 1024; // matches the community-media Storage bucket's own file_size_limit
-const STALE_PROCESSING_MINUTES = 5; // a 'processing' row older than this is treated as abandoned, not an active duplicate
+const STALE_PROCESSING_MINUTES = 6; // a 'processing' row older than this is treated as abandoned, not an active duplicate — kept above PIPELINE_DEADLINE_MS (5.5 min) so a run still inside its deadline is never duplicated; must stay below the client's 10 min (src/lib/caddieAnalysis.ts)
 const FILE_ACTIVE_POLL_ATTEMPTS = 6;
 const FILE_ACTIVE_POLL_DELAY_MS = 2000;
 const MAX_TRIM_WINDOW_SECONDS = 10; // matches AnalyzeSwing.tsx's own MAX_SWING_VIDEO_SECONDS — a client-sent startSeconds/endSeconds window is validated against this, never trusted as-is
@@ -80,6 +89,23 @@ const ANALYSIS_FPS = 8; // beta tradeoff vs. validation's full ~60fps/every-fram
 const ROBOFLOW_CONCURRENCY = 8; // parallel frame calls — keeps total wall-clock well inside this project's 400s (Pro plan) Edge Function budget without raising per-swing cost (concurrency doesn't add calls, just shortens wall time)
 const ROBOFLOW_MIN_SUCCESS_RATIO = 0.5; // below this fraction of frames successfully analyzed, fail honestly rather than hand Gemini a too-sparse pose signal
 const ROBOFLOW_FRAME_RETRY_ATTEMPTS = 2; // total attempts per frame (1 retry) — a transient network/5xx blip on one frame shouldn't cost the whole analysis when a single retry would likely succeed
+// The whole background pipeline is raced against this; on expiry the row is
+// marked failed with code:timeout. Leaves ~70 s of the 400 s (Pro plan)
+// Edge Function wall-clock budget so the fail() write itself always lands
+// instead of the platform killing the run and leaving the row 'processing'.
+const PIPELINE_DEADLINE_MS = 330_000;
+// Back-off for transient provider errors (429/5xx): Roboflow per frame
+// (still ROBOFLOW_FRAME_RETRY_ATTEMPTS total) and Gemini generateContent.
+const ROBOFLOW_BACKOFF_BASE_MS = 1500;
+const ROBOFLOW_BACKOFF_CAP_MS = 6000;
+const GEMINI_GENERATE_ATTEMPTS = 3; // 1 call + 2 retries, only on 429/5xx
+const GEMINI_BACKOFF_BASE_MS = 3000;
+const GEMINI_BACKOFF_CAP_MS = 15000;
+// Asks extract-frames to downscale frames to this long side (smaller
+// Roboflow payloads; extract-frames returns coordinateScale so keypoints
+// are mapped back to source pixels for the replay overlay). An older
+// extract-frames ignores the field and sends full-size frames, scale 1.
+const FRAME_MAX_LONG_SIDE = 720;
 const MAX_ANALYSIS_FRAMES = 150; // hard ceiling, independent of the 10s upload-time limit — a defense against a misreported video duration slipping past that client-side check and generating an unexpectedly large, expensive frame set
 
 // --- Adaptive two-stage sampling (2026-08-22 credit-efficiency pass). ---
@@ -360,7 +386,7 @@ const KEEP_BODY_METRICS = new Set([
   "metrics_unavailable",
 ]);
 
-function filterRoboflowFrame(frameIndex: number, timestampSeconds: number, output: Record<string, unknown>): TrustedFrame {
+function filterRoboflowFrame(frameIndex: number, timestampSeconds: number, output: Record<string, unknown>, coordinateScale: unknown): TrustedFrame {
   const rawKeypoints = (output.body_keypoints as Record<string, Record<string, unknown>>) ?? {};
   const keypoints: TrustedFrame["keypoints"] = {};
   for (const [name, kp] of Object.entries(rawKeypoints)) {
@@ -377,9 +403,25 @@ function filterRoboflowFrame(frameIndex: number, timestampSeconds: number, outpu
     frame_index: frameIndex,
     timestamp_seconds: timestampSeconds,
     person_confidence: typeof rawMetrics.person_confidence === "number" ? (rawMetrics.person_confidence as number) : null,
-    keypoints,
+    // Back to the source video's pixel space when extract-frames sent a
+    // downscaled frame (body_metrics are angles/ratios: scale-free).
+    keypoints: scaleKeypoints(keypoints, coordinateScale),
     body_metrics: bodyMetrics,
   };
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Carries the provider's HTTP status so retry/back-off and failure codes
+// can tell "busy, try later" (429/5xx) from a hard error.
+class ProviderHttpError extends Error {
+  readonly status: number;
+  readonly retryAfter: string | null;
+  constructor(status: number, detail: string, retryAfter: string | null) {
+    super(`HTTP ${status}: ${detail}`);
+    this.status = status;
+    this.retryAfter = retryAfter;
+  }
 }
 
 async function mapWithConcurrency<T, R>(items: T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {
@@ -398,6 +440,16 @@ async function mapWithConcurrency<T, R>(items: T[], concurrency: number, fn: (it
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
   if (req.method !== "POST") return jsonResponse({ error: "Method not allowed" }, 405);
+
+  // Kill switch: set the CADDIE_DISABLED=1 Edge Function secret to stop all
+  // new analyses (provider outage, runaway cost) without a deploy. Returns
+  // before auth, any row insert, or any vendor call; `code` lets the client
+  // show "Caddie is busy" copy and clean up the files it just uploaded
+  // (no row exists to reference them).
+  const disabled = (Deno.env.get("CADDIE_DISABLED") ?? "").trim().toLowerCase();
+  if (disabled === "1" || disabled === "true") {
+    return jsonResponse({ error: "Caddie is busy right now. Please try again in a minute.", code: "provider_busy" }, 503);
+  }
 
   const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
   const roboflowApiKey = Deno.env.get("ROBOFLOW_API_KEY");
@@ -591,7 +643,21 @@ Deno.serve(async (req: Request) => {
   const row = inserted as CaddieAnalysisRow;
   const pipelineStart = Date.now(); // credit-budget/latency logging (dev only) — see devLog calls below
 
-  async function fail(errorMessage: string): Promise<void> {
+  // Set once the pipeline has reached a terminal state (complete, failed,
+  // or timed out) so a run that keeps going after the deadline can't write
+  // a second outcome. The DB writes are also conditional on
+  // status = 'processing', which is the real guard.
+  let settled = false;
+  // The trimmed private copy, once uploaded; removed again on failure.
+  let trimmedPath: string | null = null;
+
+  // error_message = `code:<code> [window:..] <detail>` (see
+  // _shared/caddieReliability.ts). The client maps the code to re-film /
+  // try-again copy; detail is diagnostic only and never shown.
+  async function fail(code: CaddieFailureCode, detail: string): Promise<void> {
+    if (settled) return;
+    settled = true;
+    const errorMessage = formatFailure(code, detail, trimWindow);
     console.error("[analyze-swing] analysis failed.", { rowId: row.id, reason: errorMessage, processingSeconds: (Date.now() - pipelineStart) / 1000 });
     // Marked failed, not deleted — see the header comment above. error_message
     // is already covered by the same owner-only RLS as every other column on
@@ -600,9 +666,17 @@ Deno.serve(async (req: Request) => {
     const { error: failUpdateError } = await supabase
       .from("caddie_analyses")
       .update({ status: "failed", error_message: errorMessage })
-      .eq("id", row.id);
+      .eq("id", row.id)
+      .eq("status", "processing");
     if (failUpdateError) {
       console.error("[analyze-swing] failed to mark row as failed.", { rowId: row.id, reason: failUpdateError.message });
+    }
+    // The failed row still points at the untrimmed original (Try again
+    // re-trims it from the window in error_message), so the trimmed copy is
+    // unreferenced. Best-effort.
+    if (trimmedPath) {
+      const { error: removeError } = await supabase.storage.from(CADDIE_MEDIA_BUCKET).remove([trimmedPath]);
+      if (removeError) console.error("[analyze-swing] couldn't remove the trimmed copy of a failed run.", { rowId: row.id, reason: removeError.message });
     }
   }
 
@@ -617,14 +691,14 @@ Deno.serve(async (req: Request) => {
     let videoContentType: string;
     try {
       const videoRes = await fetch(pipelineVideoUrl!);
-      if (!videoRes.ok) return await fail(`video fetch ${videoRes.status}`);
+      if (!videoRes.ok) return await fail("upload", `video fetch ${videoRes.status}`);
       videoContentType = videoRes.headers.get("content-type") ?? "video/mp4";
       videoBytes = await videoRes.arrayBuffer();
     } catch (err) {
-      return await fail(`video fetch threw: ${err instanceof Error ? err.message : String(err)}`);
+      return await fail("upload", `video fetch threw: ${err instanceof Error ? err.message : String(err)}`);
     }
-    if (videoBytes.byteLength === 0) return await fail("video fetch returned 0 bytes");
-    if (videoBytes.byteLength > MAX_VIDEO_BYTES) return await fail("video too large");
+    if (videoBytes.byteLength === 0) return await fail("upload", "video fetch returned 0 bytes");
+    if (videoBytes.byteLength > MAX_VIDEO_BYTES) return await fail("upload", "video too large");
     devLog("video fetched", { bytes: videoBytes.byteLength, contentType: videoContentType });
 
     // If the golfer picked a window (VideoTrimSelector), actually trim the
@@ -637,9 +711,9 @@ Deno.serve(async (req: Request) => {
     // every later step (frame extraction, Gemini) actually uses, and
     // trimmedPath becomes the row's saved source_media_path.
     let effectiveVideoUrl = pipelineVideoUrl!;
-    // Set once the trimmed copy is uploaded to private caddie-media; it then
-    // becomes the row's source_media_path at completion.
-    let trimmedPath: string | null = null;
+    // trimmedPath (declared above, next to fail()) is set once the trimmed
+    // copy is uploaded to private caddie-media; it then becomes the row's
+    // source_media_path at completion.
     if (trimWindow) {
       try {
         const trimRes = await fetch(TRIM_VIDEO_URL, {
@@ -649,33 +723,36 @@ Deno.serve(async (req: Request) => {
         });
         if (!trimRes.ok) {
           const errBody = await trimRes.text().catch(() => "");
-          return await fail(`video trim ${trimRes.status}: ${errBody.slice(0, 500)}`);
+          return await fail(isRetryableStatus(trimRes.status) && trimRes.status !== 500 ? "provider_busy" : "upload", `video trim ${trimRes.status}: ${errBody.slice(0, 500)}`);
         }
         const trimmedBytes = await trimRes.arrayBuffer();
-        if (trimmedBytes.byteLength === 0) return await fail("video trim returned 0 bytes");
+        if (trimmedBytes.byteLength === 0) return await fail("upload", "video trim returned 0 bytes");
 
         const newTrimmedPath = `${row.owner_id}/caddie-trimmed-${row.id}.mp4`;
         const { error: trimUploadError } = await supabase.storage
           .from(CADDIE_MEDIA_BUCKET)
           .upload(newTrimmedPath, trimmedBytes, { contentType: "video/mp4" });
-        if (trimUploadError) return await fail(`trimmed video upload failed: ${trimUploadError.message}`);
+        if (trimUploadError) return await fail("unknown", `trimmed video upload failed: ${trimUploadError.message}`);
         const { data: trimmedSigned, error: trimmedSignError } = await supabase.storage
           .from(CADDIE_MEDIA_BUCKET)
           .createSignedUrl(newTrimmedPath, PIPELINE_SIGNED_URL_SECONDS);
-        if (trimmedSignError || !trimmedSigned?.signedUrl) return await fail("trimmed video sign failed");
-
         trimmedPath = newTrimmedPath;
+        if (trimmedSignError || !trimmedSigned?.signedUrl) return await fail("unknown", "trimmed video sign failed");
+
         effectiveVideoUrl = trimmedSigned.signedUrl;
         videoBytes = trimmedBytes;
         videoContentType = "video/mp4";
         devLog("video trimmed", { bytes: videoBytes.byteLength, window: trimWindow });
       } catch (err) {
-        return await fail(`video trim threw: ${err instanceof Error ? err.message : String(err)}`);
+        return await fail("upload", `video trim threw: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
 
     // --- Frame extraction (Vercel/Node — see api/extract-frames.ts). ---
     let frames: ExtractedFrame[];
+    // Multiply Roboflow keypoints by this to get source-video pixels; set
+    // from extract-frames' response (undefined = frames weren't downscaled).
+    let coordinateScale: unknown;
     try {
       const extractRes = await fetch(FRAME_EXTRACT_URL, {
         method: "POST",
@@ -685,25 +762,29 @@ Deno.serve(async (req: Request) => {
         // — extract-frames' own freezedetect-based auto-trim still runs for
         // an UNtrimmed video (nothing was picked, or duration was already
         // under the cap), same as before this feature existed.
-        body: JSON.stringify({ videoUrl: effectiveVideoUrl, fps: ANALYSIS_FPS }),
+        body: JSON.stringify({ videoUrl: effectiveVideoUrl, fps: ANALYSIS_FPS, maxLongSide: FRAME_MAX_LONG_SIDE }),
       });
       if (!extractRes.ok) {
         const errBody = await extractRes.text().catch(() => "");
-        return await fail(`frame extraction ${extractRes.status}: ${errBody.slice(0, 500)}`);
+        // 500 = ffmpeg couldn't decode it (bad/unsupported file); 429/503/504
+        // = the Vercel function itself was overloaded or timed out.
+        const code: CaddieFailureCode = isRetryableStatus(extractRes.status) && extractRes.status !== 500 ? "provider_busy" : "upload";
+        return await fail(code, `frame extraction ${extractRes.status}: ${errBody.slice(0, 500)}`);
       }
       const extractBody = await extractRes.json();
+      coordinateScale = extractBody.coordinateScale;
       frames = (extractBody.frames ?? []).map((f: { frameIndex: number; timestampSeconds: number; base64: string }) => ({
         frameIndex: f.frameIndex,
         timestampSeconds: f.timestampSeconds,
         base64: f.base64,
       }));
-      if (frames.length === 0) return await fail("frame extraction returned 0 frames");
+      if (frames.length === 0) return await fail("upload", "frame extraction returned 0 frames");
       if (frames.length > MAX_ANALYSIS_FRAMES) {
-        return await fail(`frame extraction returned ${frames.length} frames, exceeding the ${MAX_ANALYSIS_FRAMES} safety cap (misreported video duration?)`);
+        return await fail("upload", `frame extraction returned ${frames.length} frames, exceeding the ${MAX_ANALYSIS_FRAMES} safety cap (misreported video duration?)`);
       }
       devLog("frames extracted", { count: frames.length, fps: extractBody.analysisFps });
     } catch (err) {
-      return await fail(`frame extraction threw: ${err instanceof Error ? err.message : String(err)}`);
+      return await fail("provider_busy", `frame extraction threw: ${err instanceof Error ? err.message : String(err)}`);
     }
 
     // --- Roboflow: one call per frame, stateless, moderate concurrency,
@@ -727,26 +808,42 @@ Deno.serve(async (req: Request) => {
       });
       if (!res.ok) {
         const errBody = await res.text().catch(() => "");
-        throw new Error(`HTTP ${res.status}: ${errBody.slice(0, 300)}`);
+        throw new ProviderHttpError(res.status, errBody.slice(0, 300), res.headers.get("retry-after"));
       }
       const body = await res.json();
       const output = body?.outputs?.[0];
       if (!output) throw new Error(`no outputs[0] in response: ${JSON.stringify(body).slice(0, 300)}`);
-      return filterRoboflowFrame(frame.frameIndex, frame.timestampSeconds, output);
+      return filterRoboflowFrame(frame.frameIndex, frame.timestampSeconds, output, coordinateScale);
     }
-    const roboflowResults = await mapWithConcurrency(frames, ROBOFLOW_CONCURRENCY, async (frame) => {
+    // One frame, ROBOFLOW_FRAME_RETRY_ATTEMPTS total attempts. A 429 (rate
+    // limit) or 5xx backs off before retrying — retrying a 429 immediately
+    // from 8 parallel workers just gets rate-limited again.
+    async function callRoboflowWithRetry(frame: ExtractedFrame, onRetry: () => void): Promise<{ frame: TrustedFrame | null; error?: unknown }> {
       let lastErr: unknown;
       for (let attempt = 1; attempt <= ROBOFLOW_FRAME_RETRY_ATTEMPTS; attempt++) {
+        if (settled) return { frame: null, error: lastErr };
         try {
-          return await callRoboflowOnce(frame);
+          return { frame: await callRoboflowOnce(frame) };
         } catch (err) {
           lastErr = err;
-          if (attempt < ROBOFLOW_FRAME_RETRY_ATTEMPTS) roboflowRetryCount++;
+          if (attempt < ROBOFLOW_FRAME_RETRY_ATTEMPTS) {
+            onRetry();
+            if (err instanceof ProviderHttpError && isRetryableStatus(err.status)) {
+              await sleep(backoffMs(attempt, ROBOFLOW_BACKOFF_BASE_MS, ROBOFLOW_BACKOFF_CAP_MS, err.retryAfter));
+            }
+          }
         }
       }
-      if (!firstFailureDetail) firstFailureDetail = lastErr instanceof Error ? lastErr.message : String(lastErr);
-      return null;
+      return { frame: null, error: lastErr };
+    }
+    const roboflowResults = await mapWithConcurrency(frames, ROBOFLOW_CONCURRENCY, async (frame) => {
+      const result = await callRoboflowWithRetry(frame, () => roboflowRetryCount++);
+      if (!result.frame && !firstFailureDetail && result.error !== undefined) {
+        firstFailureDetail = result.error instanceof Error ? result.error.message : String(result.error);
+      }
+      return result.frame;
     });
+    if (settled) return;
     const trustedFrames = roboflowResults.filter((f): f is TrustedFrame => f !== null);
     const successRatio = trustedFrames.length / frames.length;
     devLog("roboflow pass complete", {
@@ -758,7 +855,18 @@ Deno.serve(async (req: Request) => {
       firstFailureDetail,
     });
     if (successRatio < ROBOFLOW_MIN_SUCCESS_RATIO) {
-      return await fail(`roboflow success ratio too low: ${trustedFrames.length}/${frames.length}${firstFailureDetail ? ` (${firstFailureDetail})` : ""}`);
+      return await fail("provider_busy", `roboflow success ratio too low: ${trustedFrames.length}/${frames.length}${firstFailureDetail ? ` (${firstFailureDetail})` : ""}`);
+    }
+
+    // Pose-presence gate: Roboflow answering a frame isn't the same as it
+    // finding a golfer in it (a frame with zero reliable keypoints still
+    // "succeeds" above). Too few frames with a usable body (shoulders, hips,
+    // a wrist) means the golfer wasn't fully in frame, so fail with a re-film
+    // message before spending a Gemini call on a swing nobody can see.
+    const coverage = poseCoverage(trustedFrames);
+    devLog("pose coverage", coverage);
+    if (coverage.ratio < POSE_PRESENCE_MIN_RATIO) {
+      return await fail("pose_not_found", `usable body in ${coverage.usable}/${coverage.total} analyzed frames (min ratio ${POSE_PRESENCE_MIN_RATIO})`);
     }
 
     // --- Stage 2: dense sampling around the fastest part of the swing.
@@ -811,10 +919,14 @@ Deno.serve(async (req: Request) => {
             const denseExtractRes = await fetch(FRAME_EXTRACT_URL, {
               method: "POST",
               headers: { "Content-Type": "application/json", Authorization: `Bearer ${frameExtractSecret}` },
-              body: JSON.stringify({ videoUrl: effectiveVideoUrl, fps: DENSE_IMPACT_FPS, startSeconds: denseStart, endSeconds: denseEnd }),
+              body: JSON.stringify({ videoUrl: effectiveVideoUrl, fps: DENSE_IMPACT_FPS, startSeconds: denseStart, endSeconds: denseEnd, maxLongSide: FRAME_MAX_LONG_SIDE }),
             });
             if (denseExtractRes.ok) {
               const denseExtractBody = await denseExtractRes.json();
+              // Same video and rule, so the same scale as the coarse pass;
+              // if this response disagrees, skip the dense refinement rather
+              // than mix coordinate spaces.
+              if (denseExtractBody.coordinateScale !== coordinateScale) throw new Error("dense pass coordinateScale mismatch");
               const denseFrames: ExtractedFrame[] = (denseExtractBody.frames ?? []).map(
                 (f: { frameIndex: number; timestampSeconds: number; base64: string }) => ({
                   frameIndex: frames.length + f.frameIndex,
@@ -823,17 +935,9 @@ Deno.serve(async (req: Request) => {
                 }),
               );
               const denseResults = await mapWithConcurrency(denseFrames, ROBOFLOW_CONCURRENCY, async (frame) => {
-                let lastErr: unknown;
-                for (let attempt = 1; attempt <= ROBOFLOW_FRAME_RETRY_ATTEMPTS; attempt++) {
-                  try {
-                    return await callRoboflowOnce(frame);
-                  } catch (err) {
-                    lastErr = err;
-                    if (attempt < ROBOFLOW_FRAME_RETRY_ATTEMPTS) denseRetryCount++;
-                  }
-                }
-                devLog("dense frame failed after retries", { error: lastErr instanceof Error ? lastErr.message : String(lastErr) });
-                return null;
+                const result = await callRoboflowWithRetry(frame, () => denseRetryCount++);
+                if (!result.frame) devLog("dense frame failed after retries", { error: result.error instanceof Error ? result.error.message : String(result.error) });
+                return result.frame;
               });
               denseTrustedFrames = denseResults.filter((f): f is TrustedFrame => f !== null);
               devLog("dense impact-window pass complete", {
@@ -852,6 +956,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    if (settled) return;
     const allTrustedFrames = [...trustedFrames, ...denseTrustedFrames].sort((a, b) => a.timestamp_seconds - b.timestamp_seconds);
     const trustedPoseData = {
       video: {
@@ -895,7 +1000,7 @@ Deno.serve(async (req: Request) => {
       });
       if (!startRes.ok || !startRes.headers.get("x-goog-upload-url")) {
         const errBody = await startRes.text().catch(() => "");
-        return await fail(`Gemini upload start ${startRes.status}: ${errBody.slice(0, 500)}`);
+        return await fail(isRetryableStatus(startRes.status) ? "provider_busy" : "unknown", `Gemini upload start ${startRes.status}: ${errBody.slice(0, 500)}`);
       }
       const uploadUrl = startRes.headers.get("x-goog-upload-url")!;
 
@@ -910,11 +1015,11 @@ Deno.serve(async (req: Request) => {
       });
       if (!uploadRes.ok) {
         const errBody = await uploadRes.text().catch(() => "");
-        return await fail(`Gemini upload finalize ${uploadRes.status}: ${errBody.slice(0, 500)}`);
+        return await fail(isRetryableStatus(uploadRes.status) ? "provider_busy" : "unknown", `Gemini upload finalize ${uploadRes.status}: ${errBody.slice(0, 500)}`);
       }
       const uploadBody = await uploadRes.json();
       const file = uploadBody.file;
-      if (!file?.uri || !file?.name) return await fail("Gemini upload response missing file.uri/name");
+      if (!file?.uri || !file?.name) return await fail("unknown", "Gemini upload response missing file.uri/name");
       geminiFile = { name: file.name, uri: file.uri, mimeType: file.mimeType ?? videoContentType };
 
       let state = file.state as string;
@@ -925,7 +1030,7 @@ Deno.serve(async (req: Request) => {
         const pollBody = await pollRes.json();
         state = pollBody.state;
       }
-      if (state !== "ACTIVE") return await fail(`Gemini file never reached ACTIVE (last state: ${state})`);
+      if (state !== "ACTIVE") return await fail("provider_busy", `Gemini file never reached ACTIVE (last state: ${state})`);
       devLog("gemini file active", { name: geminiFile.name });
 
       const localeName = LOCALE_NAMES[locale];
@@ -938,10 +1043,7 @@ Deno.serve(async (req: Request) => {
         .filter(Boolean)
         .join(" ");
 
-      const genRes = await fetch(`${GEMINI_API_BASE}/v1beta/models/${GEMINI_MODEL}:generateContent?key=${geminiApiKey}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const genRequestBody = JSON.stringify({
           systemInstruction: { parts: [{ text: buildSystemPrompt(localeName) }] },
           contents: [
             {
@@ -954,26 +1056,41 @@ Deno.serve(async (req: Request) => {
             responseMimeType: "application/json",
             responseSchema: buildResponseSchema(localeName),
           },
-        }),
-      });
-      if (!genRes.ok) {
-        const errBody = await genRes.text().catch(() => "");
-        return await fail(`Gemini generateContent ${genRes.status}: ${errBody.slice(0, 500)}`);
+        });
+      // 429/5xx from Gemini (quota or overload) is usually gone within
+      // seconds: retry with back-off before failing as provider_busy.
+      let genRes: Response | undefined;
+      for (let attempt = 1; attempt <= GEMINI_GENERATE_ATTEMPTS; attempt++) {
+        if (settled) return;
+        genRes = await fetch(`${GEMINI_API_BASE}/v1beta/models/${GEMINI_MODEL}:generateContent?key=${geminiApiKey}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: genRequestBody,
+        });
+        if (genRes.ok || !isRetryableStatus(genRes.status) || attempt === GEMINI_GENERATE_ATTEMPTS) break;
+        await genRes.body?.cancel().catch(() => {});
+        devLog("gemini generateContent retry", { status: genRes.status, attempt });
+        await sleep(backoffMs(attempt, GEMINI_BACKOFF_BASE_MS, GEMINI_BACKOFF_CAP_MS, genRes.headers.get("retry-after")));
+      }
+      if (!genRes || !genRes.ok) {
+        const status = genRes?.status ?? 0;
+        const errBody = genRes ? await genRes.text().catch(() => "") : "";
+        return await fail(isRetryableStatus(status) ? "provider_busy" : "unknown", `Gemini generateContent ${status}: ${errBody.slice(0, 500)}`);
       }
       const genBody = await genRes.json();
       const text = genBody?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!text) return await fail("Gemini response had no text part");
+      if (!text) return await fail("unknown", "Gemini response had no text part");
       parsed = JSON.parse(text);
       devLog("gemini responded", { latencyMs: Date.now() - genStart });
     } catch (err) {
-      return await fail(`Gemini call threw: ${err instanceof Error ? err.message : String(err)}`);
+      return await fail("unknown", `Gemini call threw: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       // Best-effort cleanup — never blocks either way.
       if (geminiFile) fetch(`${GEMINI_API_BASE}/v1beta/${geminiFile.name}?key=${geminiApiKey}`, { method: "DELETE" }).catch(() => {});
     }
 
     if (!parsed?.summary || !Array.isArray(parsed.work_on) || !parsed.focus || !parsed.drill || !parsed.phases || !parsed.score) {
-      return await fail("Gemini response failed shape validation");
+      return await fail("unknown", "Gemini response failed shape validation");
     }
 
     // The 0-100 total is computed here, not trusted from Gemini's own
@@ -984,7 +1101,8 @@ Deno.serve(async (req: Request) => {
     const scoreCriteria = Object.values(parsed.score ?? {});
     const totalScore = scoreCriteria.reduce((sum, c) => sum + Math.max(0, Math.min(20, Math.round(c.points ?? 0))), 0);
 
-    const { error: updateError } = await supabase
+    if (settled) return;
+    const { data: savedRows, error: updateError } = await supabase
       .from("caddie_analyses")
       .update({
         status: "complete",
@@ -1004,14 +1122,22 @@ Deno.serve(async (req: Request) => {
         score: totalScore,
         model: GEMINI_MODEL,
       })
-      .eq("id", row.id);
+      .eq("id", row.id)
+      // Never overwrite a row the deadline already marked failed.
+      .eq("status", "processing")
+      .select("id");
     if (updateError) {
-      // Roboflow+Gemini succeeded but the save failed — no fallback claim
-      // of success, and no point deleting a row whose analysis genuinely
-      // completed; leave it for a manual look rather than silently losing it.
+      // Roboflow+Gemini succeeded but the save failed (e.g. the caller's JWT
+      // expired). Mark it failed so it doesn't sit at 'processing' with a
+      // spinner forever; Try again re-runs it.
       console.error("[analyze-swing] save after successful analysis failed.", { rowId: row.id, reason: updateError.message });
+      return await fail("unknown", `save after successful analysis failed: ${updateError.message}`);
+    }
+    if (!savedRows || savedRows.length === 0) {
+      devLog("row no longer processing at save time (deadline hit?), result discarded", { id: row.id });
       return;
     }
+    settled = true;
     // The untrimmed private original is now unreferenced (this row points at
     // the trimmed copy) unless another of the caller's rows still uses it —
     // remove it rather than leave a private orphan. Best-effort; never a
@@ -1039,6 +1165,27 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  EdgeRuntime.waitUntil(runPipeline());
+  // Race the pipeline against PIPELINE_DEADLINE_MS so the row always
+  // reaches a terminal state before the platform's wall-clock limit kills
+  // the worker (which used to leave it 'processing' for the client's 10 min
+  // stale fallback). An unexpected throw is a failure too, not a hang.
+  async function runWithDeadline(): Promise<void> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<"timeout">((resolve) => {
+      timer = setTimeout(() => resolve("timeout"), PIPELINE_DEADLINE_MS);
+    });
+    const run = runPipeline().then(
+      () => "done" as const,
+      async (err) => {
+        await fail("unknown", `pipeline threw: ${err instanceof Error ? err.message : String(err)}`);
+        return "done" as const;
+      },
+    );
+    const outcome = await Promise.race([run, deadline]);
+    clearTimeout(timer);
+    if (outcome === "timeout") await fail("timeout", `pipeline exceeded ${PIPELINE_DEADLINE_MS / 1000}s`);
+  }
+
+  EdgeRuntime.waitUntil(runWithDeadline());
   return jsonResponse({ analysis: row }, 200);
 });
