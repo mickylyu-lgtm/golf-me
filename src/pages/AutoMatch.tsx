@@ -7,7 +7,6 @@ import { useLocale } from "../i18n/LocaleContext";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { EmptyState } from "../components/ui/EmptyState";
-import { GolfMeLoader } from "../components/loading/GolfMeLoader";
 import { GolfCallCard } from "../components/golfcall/GolfCallCard";
 import { SharedPreferencesBadge } from "../components/golfcall/SharedPreferencesBadge";
 import { rankCallsWithPreferences } from "../lib/autoMatch";
@@ -83,7 +82,6 @@ export function AutoMatch() {
   // away, with the closest matches when nothing clears the 3-of-5 bar.
   const quick = searchParams.get("quick") === "1";
   const [started, setStarted] = useState(quick);
-  const [loading, setLoading] = useState(false);
   const [resultIndex, setResultIndex] = useState(0);
   const [notified, setNotified] = useState(false);
   const [showClosest, setShowClosest] = useState(false);
@@ -185,15 +183,13 @@ export function AutoMatch() {
   const current = results[Math.min(resultIndex, Math.max(results.length - 1, 0))];
   const currentIsStrong = Boolean(current) && current.preferenceMatchedCount >= MIN_PREFERENCES_FOR_AUTO_MATCH;
 
+  // Ranking is local and instant, so results show straight away -- no
+  // staged "finding" pause (was a fixed 500 ms full-screen loader).
   function runAutoMatch() {
     if (!enoughPreferences) return;
-    setLoading(true);
     setResultIndex(0);
     setShowClosest(false);
-    window.setTimeout(() => {
-      setLoading(false);
-      setStarted(true);
-    }, 500);
+    setStarted(true);
   }
 
   function showAnother() {
@@ -221,9 +217,7 @@ export function AutoMatch() {
         <p className="text-sm text-slate-500">{when ? t("autoMatch.subtitle", { when: whenLabel }) : t("autoMatch.subtitleAnyDay")}</p>
       </div>
 
-      {loading ? (
-        <GolfMeLoader fullScreen message={t("autoMatch.finding")} />
-      ) : !started || !enoughPreferences ? (
+      {!started || !enoughPreferences ? (
         !enoughPreferences ? (
           <div className="flex flex-col gap-4">
             <div className="rounded-2xl border border-slate-100 bg-white p-4">
@@ -242,7 +236,7 @@ export function AutoMatch() {
                 {QUICK_PICK_SUGGESTIONS.filter((s) => !s.isSet(effectivePrefs)).map((s) => (
                   <button
                     key={s.id}
-                    onClick={() => updateCurrentUserProfile(s.patch)}
+                    onClick={() => updateCurrentUserProfile(s.patch).catch(() => showToast(t("preferences.saveError"), "warning"))}
                     className="rounded-full border border-fairway-200 bg-fairway-50/70 px-3 py-1.5 text-xs font-medium text-fairway-700 transition-colors duration-150 hover:bg-fairway-100"
                   >
                     {t(s.labelKey)}: {s.value}
@@ -259,7 +253,7 @@ export function AutoMatch() {
             <div className="rounded-2xl border border-slate-100 bg-white p-4">
               <div className="mb-3 flex items-center justify-between">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t("autoMatch.usingPreferences")}</p>
-                <button onClick={() => navigate("/profile")} className="text-xs font-semibold text-fairway-700 hover:underline">
+                <button onClick={() => navigate("/profile/preferences")} className="text-xs font-semibold text-fairway-700 hover:underline">
                   {t("autoMatch.editPreferences")}
                 </button>
               </div>
