@@ -21,6 +21,10 @@ export interface ProfileRow {
   skill_level: string | null;
   language: string | null;
   push_enabled: boolean;
+  // Per-category switches read by the server-side fan-out (migration
+  // 20261030120000). Optional: absent until that migration is applied.
+  notify_new_rounds?: boolean;
+  notify_circle_posts?: boolean;
   favorite_courses: string[];
   walk_or_cart: string | null;
   vibes: string[];

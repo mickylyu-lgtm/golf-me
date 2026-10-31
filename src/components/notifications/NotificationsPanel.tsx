@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Bell, UserPlus, UserMinus, Users, Ban, MessageCircle, ShieldCheck, ShieldOff, Sparkles, Trophy, Clock } from "lucide-react";
+import { Bell, UserPlus, UserMinus, Users, Ban, MessageCircle, ShieldCheck, ShieldOff, Sparkles, Trophy, Clock, MapPin, Newspaper } from "lucide-react";
 import type { AppNotification, NotificationType } from "../../types";
 import { useData } from "../../context/DataContext";
 import { Modal } from "../ui/Modal";
@@ -28,6 +28,8 @@ const ICONS: Record<NotificationType, NotificationIconComponent> = {
   tee_time_updated: Clock,
   booking_proof_removed: ShieldOff,
   caddie_analysis_complete: CaddieNavIcon,
+  new_round_nearby: MapPin,
+  circle_post: Newspaper,
 };
 
 export function NotificationsPanel({ onClose }: { onClose: () => void }) {

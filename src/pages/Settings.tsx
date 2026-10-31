@@ -87,7 +87,7 @@ function PushStatusLine({ userId, pushEnabled }: { userId: string; pushEnabled: 
 
 export function Settings() {
   const { currentUser, golfers, blockedIds, getGolfer, unblockUser, logOut, resetDemoData } = useData();
-  const { isDemo, authUser, pushEnabled: realPushEnabled, saveProfile } = useAuth();
+  const { isDemo, authUser, pushEnabled: realPushEnabled, notifyNewRounds: realNotifyNewRounds, notifyCirclePosts: realNotifyCirclePosts, saveProfile } = useAuth();
   const { showToast } = useToast();
   const { locale, t } = useLocale();
   const navigate = useNavigate();
@@ -118,6 +118,23 @@ export function Settings() {
       // "prompt", so this is a no-op UI-wise for an already-granted or
       // already-denied device, and never re-fires on toggling OFF.
       if (value) registerPushNotifications(currentUser.id);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : t("auth.authError"), "warning");
+    }
+  }
+  // Category switches, stored server-side (profiles.notify_new_rounds /
+  // notify_circle_posts) and enforced by the fan-out itself. Demo accounts
+  // never fan out, so theirs stay local-only like demoPushEnabled.
+  const [demoNotify, setDemoNotify] = useState({ notify_new_rounds: true, notify_circle_posts: true });
+  const notifyNewRounds = isDemo ? demoNotify.notify_new_rounds : realNotifyNewRounds;
+  const notifyCirclePosts = isDemo ? demoNotify.notify_circle_posts : realNotifyCirclePosts;
+  async function handleCategoryToggle(column: "notify_new_rounds" | "notify_circle_posts", value: boolean) {
+    if (isDemo) {
+      setDemoNotify((prev) => ({ ...prev, [column]: value }));
+      return;
+    }
+    try {
+      await saveProfile({ [column]: value });
     } catch (err) {
       showToast(err instanceof Error ? err.message : t("auth.authError"), "warning");
     }
@@ -203,6 +220,22 @@ export function Settings() {
               <Toggle checked={pushEnabled} onChange={handlePushToggle} label={t("settings.pushNotifications")} />
             </div>
             {!isDemo && <PushStatusLine userId={currentUser.id} pushEnabled={pushEnabled} />}
+            <div className="flex items-center gap-3">
+              <MapPin size={16} className="text-slate-400" />
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-slate-800">{t("settings.newRoundsNearMe")}</p>
+                <p className="text-xs text-slate-500">{t("settings.newRoundsNearMeDesc")}</p>
+              </div>
+              <Toggle checked={notifyNewRounds} onChange={(v) => handleCategoryToggle("notify_new_rounds", v)} label={t("settings.newRoundsNearMe")} />
+            </div>
+            <div className="flex items-center gap-3">
+              <Users size={16} className="text-slate-400" />
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-slate-800">{t("settings.circlePosts")}</p>
+                <p className="text-xs text-slate-500">{t("settings.circlePostsDesc")}</p>
+              </div>
+              <Toggle checked={notifyCirclePosts} onChange={(v) => handleCategoryToggle("notify_circle_posts", v)} label={t("settings.circlePosts")} />
+            </div>
             <div className="flex items-center gap-3">
               <Bell size={16} className="text-slate-400" />
               <div className="flex-1">

@@ -622,7 +622,11 @@ export type NotificationType =
   | "booking_proof_attached"
   | "tee_time_updated"
   | "booking_proof_removed"
-  | "caddie_analysis_complete";
+  | "caddie_analysis_complete"
+  // Server fan-out (migration 20261030120000): a new open round inside the
+  // recipient's travel radius, and a new post from someone they follow.
+  | "new_round_nearby"
+  | "circle_post";
 
 export interface AppNotification {
   id: string;

@@ -53,6 +53,11 @@ interface AuthContextValue {
   // account-level setting the UI type was never shaped to carry. Defaults
   // true so a not-yet-loaded/demo profile doesn't read as opted out.
   pushEnabled: boolean;
+  // Settings -> Notifications category switches (profiles.notify_new_rounds
+  // / notify_circle_posts), enforced by the server-side fan-out. Default
+  // true, same reasoning as pushEnabled.
+  notifyNewRounds: boolean;
+  notifyCirclePosts: boolean;
   isAuthenticated: boolean;
 
   signInWithGoogle: () => Promise<void>;
@@ -401,6 +406,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     onboardingTutorialCompleted: profileRow?.onboarding_tutorial_completed ?? false,
     profileLanguage: profileRow?.language ?? null,
     pushEnabled: profileRow?.push_enabled ?? true,
+    notifyNewRounds: profileRow?.notify_new_rounds ?? true,
+    notifyCirclePosts: profileRow?.notify_circle_posts ?? true,
     isAuthenticated: isDemo || Boolean(authUser),
     signInWithGoogle,
     signInWithApple,
