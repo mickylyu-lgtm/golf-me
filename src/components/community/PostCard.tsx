@@ -443,8 +443,15 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
               fullscreen player animates back. Tap still opens the whole,
               uncropped video full screen. */}
           <div
-            className="relative w-full overflow-hidden rounded-xl bg-slate-800"
-            style={{ aspectRatio: feedBoxAspect(videoSize, videoBackdrop?.bars ?? null), containerType: "size" }}
+            className="relative mx-auto w-full overflow-hidden rounded-xl bg-slate-800"
+            // Never taller than 70% of the window: full width on a phone,
+            // but on a desktop browser a 4:5 video at the column's full
+            // width ran past the bottom of the screen.
+            style={{
+              aspectRatio: feedBoxAspect(videoSize, videoBackdrop?.bars ?? null),
+              width: `min(100%, calc(70vh * ${feedBoxAspect(videoSize, videoBackdrop?.bars ?? null)}))`,
+              containerType: "size",
+            }}
           >
             {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
             <video
