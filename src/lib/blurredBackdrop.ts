@@ -189,19 +189,30 @@ export function buildBlurredBackdrop(url: string): Promise<BlurredBackdrop | nul
 
 export function useBlurredBackdrop(url: string | undefined): BlurredBackdrop | null {
   const [backdrop, setBackdrop] = useState<BlurredBackdrop | null>(() => (url ? (cache.get(url) ?? null) : null));
+  // Re-render once the scan finishes even when the result is null, so
+  // callers reading thumbResults (thumbIsDark) see the outcome.
+  const [, setScanned] = useState(0);
   useEffect(() => {
     if (!url) return setBackdrop(null);
     if (cache.has(url)) return setBackdrop(cache.get(url) ?? null);
     let live = true;
     void buildBlurredBackdrop(url).then((result) => {
       cache.set(url, result);
-      if (live) setBackdrop(result);
+      if (live) {
+        setBackdrop(result);
+        setScanned((n) => n + 1);
+      }
     });
     return () => {
       live = false;
     };
   }, [url]);
   return backdrop;
+}
+
+/** The thumbnail was captured on a black frame (see buildBlurredBackdrop). */
+export function thumbIsDark(url: string | undefined): boolean {
+  return Boolean(url) && thumbResults.get(url as string) === "dark";
 }
 
 /** CSS clip-path that hides baked-in bars, or undefined when there are none. */

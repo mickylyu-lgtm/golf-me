@@ -36,7 +36,7 @@ import { postCategoryLabel } from "../../lib/enumLabels";
 import { areaForCourse } from "../../lib/courses";
 import { enterNativeVideoFullscreen, isVideoInNativeFullscreen } from "../../lib/video";
 import { isStaleProcessing, usePeriodicRerender } from "../../lib/caddieAnalysis";
-import { barsCoverStyle, readVideoFrame, thumbResults, useBlurredBackdrop, type BlurredBackdrop, type FrameReadResult } from "../../lib/blurredBackdrop";
+import { barsCoverStyle, readVideoFrame, thumbIsDark, thumbResults, useBlurredBackdrop, type BlurredBackdrop, type FrameReadResult } from "../../lib/blurredBackdrop";
 import { barsDebugEnabled, buildTag } from "../../lib/barsDebug";
 import { useLocale } from "../../i18n/LocaleContext";
 
@@ -97,6 +97,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
   const [askingCaddie, setAskingCaddie] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const thumbBackdrop = useBlurredBackdrop(post.type === "swing" ? post.videoThumbnailUrl : undefined);
+  const blackThumb = thumbIsDark(post.videoThumbnailUrl);
   // Read from the video's own frames when the thumbnail is missing or shows
   // no bars, so black bars baked into the video are still caught.
   const [frameBackdrop, setFrameBackdrop] = useState<BlurredBackdrop | null>(null);
@@ -448,8 +449,11 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
             {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
             <video
               ref={videoRef}
-              src={post.videoUrl}
-              poster={post.videoThumbnailUrl}
+              // A thumbnail captured on a black frame (older iPhone uploads)
+              // is skipped: no poster, and a media fragment a second in so
+              // WebKit draws a real frame of the swing instead.
+              src={blackThumb ? `${post.videoUrl}#t=1` : post.videoUrl}
+              poster={blackThumb ? undefined : post.videoThumbnailUrl}
               preload="metadata"
               // CORS so a frame can be read for the bar scan (Storage sends
               // the header); the poster is a plain image load either way.
