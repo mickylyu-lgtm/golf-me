@@ -30,6 +30,7 @@ import type { NewPreferenceSelections } from "../../lib/preferenceMatch";
 import { locationParams } from "../../lib/travelLocation";
 import type { PlayingArea } from "../../lib/geo";
 import { coarsenOptionalGeoPoint } from "../../lib/coarseLocation";
+import { localDateInputValue } from "../../lib/golfCall";
 
 export type WhenChoice = "today" | "tomorrow" | "weekend" | "date";
 
@@ -84,7 +85,8 @@ export function FindRoundModal({ onClose }: { onClose: () => void }) {
   const [editingPrefs, setEditingPrefs] = useState(false);
   const [draftPrefs, setDraftPrefs] = useState<NewPreferenceSelections>(() => newPreferencesFromUser(currentUser));
 
-  const canSubmit = when !== "date" || Boolean(customDate);
+  // A past custom date can only ever match nothing (past rounds are hidden).
+  const canSubmit = when !== "date" || (Boolean(customDate) && customDate >= localDateInputValue());
   const preferenceLabels = selectedNewPreferenceLabels(draftPrefs);
 
   function buildParams() {
@@ -98,13 +100,17 @@ export function FindRoundModal({ onClose }: { onClose: () => void }) {
     return params;
   }
 
-  function setTravelLocationAsDefault() {
+  async function setTravelLocationAsDefault() {
     if (!travelLocation) return;
-    // Defensive: LocationPicker already coarsens, but never let a precise
-    // point reach the (broadly readable) profile row from here either.
-    updateCurrentUserProfile({ areaLabel: travelLocation.label, playingAreaCoords: coarsenOptionalGeoPoint(travelLocation.coords) });
-    showToast(`Default playing area set to ${travelLocation.label}.`, "success");
-    setTravelLocation(null);
+    try {
+      // Defensive: LocationPicker already coarsens, but never let a precise
+      // point reach the (broadly readable) profile row from here either.
+      await updateCurrentUserProfile({ areaLabel: travelLocation.label, playingAreaCoords: coarsenOptionalGeoPoint(travelLocation.coords) });
+      showToast(t("filters.defaultAreaSet", { area: travelLocation.label }), "success");
+      setTravelLocation(null);
+    } catch {
+      showToast(t("preferences.saveError"), "warning");
+    }
   }
 
   function handleBrowseRounds() {
@@ -119,9 +125,13 @@ export function FindRoundModal({ onClose }: { onClose: () => void }) {
     onClose();
   }
 
-  function saveAsNewPreference() {
-    updateCurrentUserProfile(draftPrefs);
-    showToast("Saved as your new Match Preferences.", "success");
+  async function saveAsNewPreference() {
+    try {
+      await updateCurrentUserProfile(draftPrefs);
+      showToast(t("filters.preferencesSaved"), "success");
+    } catch {
+      showToast(t("preferences.saveError"), "warning");
+    }
   }
 
   if (editingPrefs) {
@@ -237,7 +247,7 @@ export function FindRoundModal({ onClose }: { onClose: () => void }) {
             ))}
           </div>
           {when === "date" && (
-            <input type="date" className={`${inputClass} mt-2`} value={customDate} onChange={(e) => setCustomDate(e.target.value)} />
+            <input type="date" className={`${inputClass} mt-2`} value={customDate} min={localDateInputValue()} onChange={(e) => setCustomDate(e.target.value)} />
           )}
         </div>
 

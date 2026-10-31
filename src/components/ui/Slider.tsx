@@ -51,6 +51,9 @@ export function Slider({ label, min, max, step, value, onChange, formatValue, pr
           onChange={(e) => onChange(Number(e.target.value))}
           onPointerDown={() => setDragging(true)}
           onPointerUp={() => setDragging(false)}
+          // iOS cancels the pointer when a drag turns into a page scroll;
+          // without this the value bubble stayed stuck on screen.
+          onPointerCancel={() => setDragging(false)}
           aria-label={label}
         />
       </div>

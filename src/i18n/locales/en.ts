@@ -1209,6 +1209,18 @@ export const en = {
   "joinConfirm.noNoShows": "No Recent No-Shows",
   "joinConfirm.playingWith": "Playing with",
   "common.confirm": "Confirm",
+  "locationPicker.useCurrent": "Use My Current Location",
+  "locationPicker.gettingLocation": "Getting your location...",
+  "locationPicker.denied": "Location permission was denied — no problem, choose your area below instead. You can allow location later from your browser settings.",
+  "locationPicker.unsupported": "Location isn't available on this device — choose your area below.",
+  "locationPicker.orChooseManually": "or choose manually",
+  "locationPicker.searchPlaceholder": "Search city or region...",
+  "locationPicker.limitedData": "Limited course data",
+  "locationPicker.useAsArea": "Use \"{query}\" as my area",
+  "locationPicker.startTyping": "Start typing to search.",
+  "filters.defaultAreaSet": "Default playing area set to {area}.",
+  "filters.preferencesSaved": "Saved as your new Match Preferences.",
+  "find.clearSearch": "Clear search",
 } as const;
 
 export type TranslationKey = keyof typeof en;

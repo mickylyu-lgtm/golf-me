@@ -8,6 +8,7 @@ import type { Region } from "../../data/regions";
 import { haversineMiles } from "../../lib/geo";
 import type { PlayingArea } from "../../lib/geo";
 import { coarsenGeoPoint } from "../../lib/coarseLocation";
+import { useLocale } from "../../i18n/LocaleContext";
 
 // How close a real geolocation fix needs to be to one of our curated
 // region centroids before we're willing to label it with that city name —
@@ -48,6 +49,7 @@ function nearestRegion(lat: number, lng: number): Region | undefined {
 // the shared Modal, which is already a full-screen sheet on mobile and a
 // centered dialog on desktop.
 export function LocationPicker({ title = "Where do you usually play?", onSelect, onClose, autoRequestLocation = false }: LocationPickerProps) {
+  const { t } = useLocale();
   const [query, setQuery] = useState("");
   const [geoStatus, setGeoStatus] = useState<GeoStatus>("idle");
   const autoRequested = useRef(false);
@@ -97,17 +99,15 @@ export function LocationPicker({ title = "Where do you usually play?", onSelect,
     <Modal title={title} onClose={onClose} keyboardAware>
       <div className="flex flex-col gap-4">
         <Button variant="outline" fullWidth icon={<LocateFixed size={16} />} onClick={requestCurrentLocation} disabled={geoStatus === "requesting"}>
-          {geoStatus === "requesting" ? "Getting your location..." : "Use My Current Location"}
+          {geoStatus === "requesting" ? t("locationPicker.gettingLocation") : t("locationPicker.useCurrent")}
         </Button>
         {geoStatus === "denied" && (
-          <p className="text-xs text-slate-500">
-            Location permission was denied — no problem, choose your area below instead. You can allow location later from your browser settings.
-          </p>
+          <p className="text-xs text-slate-500">{t("locationPicker.denied")}</p>
         )}
-        {geoStatus === "unsupported" && <p className="text-xs text-slate-500">Location isn't available on this device — choose your area below.</p>}
+        {geoStatus === "unsupported" && <p className="text-xs text-slate-500">{t("locationPicker.unsupported")}</p>}
 
         <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-          <span className="h-px flex-1 bg-slate-100" /> or choose manually <span className="h-px flex-1 bg-slate-100" />
+          <span className="h-px flex-1 bg-slate-100" /> {t("locationPicker.orChooseManually")} <span className="h-px flex-1 bg-slate-100" />
         </div>
 
         <div className="relative">
@@ -116,8 +116,14 @@ export function LocationPicker({ title = "Where do you usually play?", onSelect,
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search city or region..."
+            placeholder={t("locationPicker.searchPlaceholder")}
             className={`${inputClass} pl-9`}
+            type="search"
+            maxLength={80}
+            autoCapitalize="words"
+            autoComplete="off"
+            autoCorrect="off"
+            enterKeyHint="search"
           />
         </div>
 
@@ -130,7 +136,7 @@ export function LocationPicker({ title = "Where do you usually play?", onSelect,
             >
               <MapPin size={15} className="shrink-0 text-fairway-600" />
               <span className="flex-1">{r.label}</span>
-              {!r.hasCourseCoverage && <span className="shrink-0 text-[11px] font-normal text-slate-400">Limited course data</span>}
+              {!r.hasCourseCoverage && <span className="shrink-0 text-[11px] font-normal text-slate-400">{t("locationPicker.limitedData")}</span>}
             </button>
           ))}
           {trimmedQuery && !exactMatch && (
@@ -139,10 +145,10 @@ export function LocationPicker({ title = "Where do you usually play?", onSelect,
               className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-fairway-700 transition-colors duration-150 hover:bg-fairway-50"
             >
               <MapPin size={15} className="shrink-0" />
-              Use "{trimmedQuery}" as my area
+              {t("locationPicker.useAsArea", { query: trimmedQuery })}
             </button>
           )}
-          {results.length === 0 && !trimmedQuery && <p className="px-3 py-2.5 text-sm text-slate-400">Start typing to search.</p>}
+          {results.length === 0 && !trimmedQuery && <p className="px-3 py-2.5 text-sm text-slate-400">{t("locationPicker.startTyping")}</p>}
         </div>
       </div>
     </Modal>
