@@ -12,6 +12,7 @@ import { Button } from "../components/ui/Button";
 import { Badge } from "../components/ui/Badge";
 import { formatShortDate } from "../lib/format";
 import { isStaleProcessing, usePeriodicRerender } from "../lib/caddieAnalysis";
+import { FAILURE_BODY_KEYS, FAILURE_TITLE_KEYS, analysisFailure } from "../lib/caddieFailure";
 import type { CaddieConfidence, CaddieCameraAngle, CaddieScoreCriterionKey } from "../types";
 import type { CreatePostSwingPrefill } from "./CreatePost";
 import type { TranslationKey } from "../i18n/locales/en";
@@ -112,6 +113,8 @@ export function CaddieAnalysisDetail() {
 
   const sourcePost = analysis.sourcePostId ? getPost(analysis.sourcePostId) : undefined;
   const details = analysis.details;
+  const failure = analysisFailure(analysis.errorMessage, isStaleProcessing(analysis));
+  const failureBodyKey = FAILURE_BODY_KEYS[failure.code];
 
   function shareToCommunity() {
     if (!analysis) return;
@@ -148,6 +151,11 @@ export function CaddieAnalysisDetail() {
           ? { sourceMediaPath: analysis.sourceMediaPath, thumbnailPath: analysis.thumbnailPath }
           : { sourceMediaUrl: analysis.sourceMediaUrl, thumbnailUrl: analysis.thumbnailUrl }),
         swingType: analysis.swingType,
+        // The failed row still points at the untrimmed original; resend the
+        // window that attempt analyzed (carried in error_message, see
+        // caddieFailure.ts) so Try again doesn't analyze the whole clip.
+        startSeconds: failure.window?.startSeconds,
+        endSeconds: failure.window?.endSeconds,
       });
       navigate(`/caddie/${created.id}`, { replace: true });
     } catch (err) {
@@ -347,7 +355,8 @@ export function CaddieAnalysisDetail() {
         </div>
       ) : analysis.status === "failed" || isStaleProcessing(analysis) ? (
         <div className="flex flex-col items-start gap-2.5 rounded-2xl border border-red-100 bg-red-50/60 px-4 py-3.5">
-          <p className="text-sm font-semibold text-red-700">{t("caddie.askCaddieError")}</p>
+          <p className="text-sm font-semibold text-red-700">{t(FAILURE_TITLE_KEYS[failure.code])}</p>
+          {failureBodyKey && <p className="text-sm text-red-700/90">{t(failureBodyKey)}</p>}
           <Button variant="outline" size="sm" onClick={retry} disabled={retrying} icon={retrying ? <Loader2 size={14} className="animate-spin" /> : undefined}>
             {t("caddie.tryAgain")}
           </Button>

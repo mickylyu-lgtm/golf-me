@@ -281,7 +281,9 @@ export function AnalyzeSwing() {
       // leaving private orphans (e.g. hitting the daily limit). Any other
       // failure (network drop, gateway timeout) is ambiguous: the row may
       // exist server-side, so the files are kept.
-      if (err instanceof CaddieRequestError && err.status !== undefined && [400, 401, 403, 429].includes(err.status) && uploadedPaths.length > 0) {
+      // A coded refusal (kill switch, 503) also returns before any insert.
+      const definitelyNoRow = err instanceof CaddieRequestError && ((err.status !== undefined && [400, 401, 403, 429].includes(err.status)) || !!err.code);
+      if (definitelyNoRow && uploadedPaths.length > 0) {
         void supabase.storage
           .from(CADDIE_MEDIA_BUCKET)
           .remove(uploadedPaths)

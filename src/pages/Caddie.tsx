@@ -9,6 +9,7 @@ import { Button } from "../components/ui/Button";
 import { CLICKABLE_CARD_CLASS } from "../components/ui/cardStyles";
 import { formatShortDate } from "../lib/format";
 import { isStaleProcessing, usePeriodicRerender } from "../lib/caddieAnalysis";
+import { FAILURE_SHORT_KEYS, analysisFailure } from "../lib/caddieFailure";
 
 // Caddie's own destination — kept deliberately uncrowded (per brief: the
 // most obvious action is always "Analyze a Swing"). Reuses the same
@@ -141,7 +142,9 @@ export function Caddie() {
                       <span className="shrink-0 text-xs font-semibold text-slate-500">{issueCount === 1 ? t("caddie.thingsToWorkOnSingular") : t("caddie.thingsToWorkOn", { count: issueCount })}</span>
                     )
                   ) : a.status === "failed" || isStaleProcessing(a) ? (
-                    <span className="shrink-0 text-xs font-semibold text-red-500">{t("caddie.askCaddieError")}</span>
+                    <span className="shrink-0 text-xs font-semibold text-red-500">
+                      {t(FAILURE_SHORT_KEYS[analysisFailure(a.errorMessage, isStaleProcessing(a)).code])}
+                    </span>
                   ) : (
                     <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-slate-400">
                       <Clock size={12} /> {t("caddie.analyzing")}

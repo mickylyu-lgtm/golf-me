@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase";
 import { SIGNED_URL_CHECK_INTERVAL_MS, SIGNED_URL_REFRESH_MARGIN_MS, signCaddieMediaPaths } from "../lib/caddieMedia";
 import type { SignedUrlEntry } from "../lib/caddieMedia";
 import { CaddieRequestError, isStaleProcessing } from "../lib/caddieAnalysis";
+import { FAILURE_BODY_KEYS, parseCaddieFailure } from "../lib/caddieFailure";
 import { useAuth } from "./AuthContext";
 import { useLocale } from "../i18n/LocaleContext";
 import type {
@@ -242,9 +243,25 @@ interface PoseCacheEntry {
 
 const RealCaddieContext = createContext<RealCaddieContextValue | null>(null);
 
+const SESSION_REFRESH_MARGIN_MS = 10 * 60 * 1000;
+
+// Best-effort: if the refresh fails the invoke still goes out with the
+// current token, exactly as before.
+async function ensureFreshSession(): Promise<void> {
+  try {
+    const { data } = await supabase.auth.getSession();
+    const expiresAt = data.session?.expires_at;
+    if (data.session && typeof expiresAt === "number" && expiresAt * 1000 - Date.now() < SESSION_REFRESH_MARGIN_MS) {
+      await supabase.auth.refreshSession();
+    }
+  } catch (err) {
+    console.error("GolfMe: couldn't refresh the session before Caddie analysis.", err);
+  }
+}
+
 export function RealCaddieProvider({ children }: { children: ReactNode }) {
   const { isDemo, authUser } = useAuth();
-  const { locale } = useLocale();
+  const { locale, t } = useLocale();
   const [rows, setRows] = useState<CaddieAnalysisRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   // Which account the first fetch has completed for — lets a deep-linked
@@ -518,6 +535,11 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
       // server-side only and validates ownership via existing RLS/triggers
       // using this same caller's JWT (supabase.functions.invoke forwards
       // the current session's Authorization header automatically).
+      //
+      // That same JWT is used for the pipeline's writes after the response
+      // (up to the function's 330 s deadline), so a token about to expire
+      // would make the final save fail. Refresh first when < 10 min remain.
+      await ensureFreshSession();
       const { data, error } = await supabase.functions.invoke("analyze-swing", {
         body: {
           sourceType: input.sourceType,
@@ -539,14 +561,19 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
         // never a raw provider error) instead of a generic "Edge Function
         // returned a non-2xx status code."
         let message = error.message;
+        let code: string | undefined;
         const status = typeof error.context?.status === "number" ? (error.context.status as number) : undefined;
         try {
           const body = await error.context?.json();
           if (body?.error) message = body.error;
+          if (typeof body?.code === "string") code = body.code;
         } catch {
           // Falls back to error.message below.
         }
-        throw new CaddieRequestError(message, status);
+        // A coded refusal (kill switch) gets the localized copy.
+        const bodyKey = code ? FAILURE_BODY_KEYS[parseCaddieFailure(`code:${code}`).code] : undefined;
+        if (bodyKey) message = t(bodyKey);
+        throw new CaddieRequestError(message, status, code);
       }
       const row = (data as { analysis: CaddieAnalysisRow }).analysis;
       cachePoseFromFullRow(row);
@@ -557,7 +584,7 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
       });
       return created;
     },
-    [selfId, locale, cachePoseFromFullRow],
+    [selfId, locale, t, cachePoseFromFullRow],
   );
 
   const markShared = useCallback(async (id: string) => {

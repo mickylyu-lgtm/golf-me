@@ -36,6 +36,7 @@ import { postCategoryLabel } from "../../lib/enumLabels";
 import { areaForCourse } from "../../lib/courses";
 import { enterNativeVideoFullscreen, isVideoInNativeFullscreen } from "../../lib/video";
 import { isStaleProcessing, usePeriodicRerender } from "../../lib/caddieAnalysis";
+import { FAILURE_SHORT_KEYS, analysisFailure } from "../../lib/caddieFailure";
 import { barsCoverStyle, readVideoFrame, thumbIsDark, thumbResults, useBlurredBackdrop, type BlurredBackdrop, type FrameReadResult } from "../../lib/blurredBackdrop";
 import { barsDebugEnabled, buildTag } from "../../lib/barsDebug";
 import { useLocale } from "../../i18n/LocaleContext";
@@ -544,7 +545,9 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
               </button>
             ) : caddieFailed && !askingCaddie ? (
               <div className="flex items-center justify-between gap-2 rounded-xl border border-red-100 bg-red-50/50 px-3.5 py-2.5" onClick={stop}>
-                <span className="text-xs font-semibold text-red-700">{t("caddie.askCaddieError")}</span>
+                <span className="text-xs font-semibold text-red-700">
+                  {t(FAILURE_SHORT_KEYS[analysisFailure(existingCaddieAnalysis?.errorMessage, !!existingCaddieAnalysis && isStaleProcessing(existingCaddieAnalysis)).code])}
+                </span>
                 <Button variant="outline" size="sm" onClick={askCaddie} disabled={askingCaddie}>
                   {t("caddie.tryAgain")}
                 </Button>

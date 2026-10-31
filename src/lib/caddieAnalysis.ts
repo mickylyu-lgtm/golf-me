@@ -48,12 +48,15 @@ export function usePeriodicRerender(active: boolean, intervalMs = 15000): void {
 // definite "no row was created" answer (400/401/403/429 -- every one of
 // those returns before or at the insert) from an ambiguous network/gateway
 // failure where the row may exist. AnalyzeSwing only cleans up its uploaded
-// private files for the definite case.
+// private files for the definite case. `code` is set only by analyze-swing's
+// kill switch (CADDIE_DISABLED), which also returns before any insert.
 export class CaddieRequestError extends Error {
   readonly status?: number;
-  constructor(message: string, status?: number) {
+  readonly code?: string;
+  constructor(message: string, status?: number, code?: string) {
     super(message);
     this.name = "CaddieRequestError";
     this.status = status;
+    this.code = code;
   }
 }

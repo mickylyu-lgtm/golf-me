@@ -56,3 +56,9 @@ export const FAILURE_BODY_KEYS: Record<CaddieFailureCode, TranslationKey | undef
   upload: "caddie.failure.upload.body",
   unknown: undefined,
 };
+
+// A 'processing' row past the client's stale threshold (isStaleProcessing)
+// was killed before it could write a code: show it as a timeout.
+export function analysisFailure(errorMessage: string | null | undefined, staleProcessing: boolean): ParsedCaddieFailure {
+  return staleProcessing ? { code: "timeout" } : parseCaddieFailure(errorMessage);
+}
