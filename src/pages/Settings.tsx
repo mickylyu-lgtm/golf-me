@@ -167,7 +167,7 @@ export function Settings() {
     <div className="flex flex-col gap-6 pb-6">
       <button
         onClick={() => goBack(navigate)}
-        className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
+        className="-my-2.5 flex items-center gap-1.5 self-start py-2.5 pr-3 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
       >
         <ArrowLeft size={16} /> {t("common.back")}
       </button>

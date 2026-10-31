@@ -142,7 +142,7 @@ export function GolferProfilePage() {
       <div className="flex items-center justify-between">
         <button
           onClick={() => goBack(navigate, "/find")}
-          className="flex items-center gap-1.5 rounded-full px-1 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2"
+          className="-my-2.5 flex items-center gap-1.5 rounded-full px-1 py-2.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2"
         >
           <ArrowLeft size={16} /> Back
         </button>

@@ -477,7 +477,7 @@ export function CreatePost() {
       <div className="flex items-center justify-between">
         <button
           onClick={() => goBack(navigate)}
-          className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
+          className="-my-2.5 flex items-center gap-1.5 py-2.5 pr-3 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
         >
           <ArrowLeft size={16} /> Back
         </button>
