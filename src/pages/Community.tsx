@@ -64,25 +64,27 @@ export function Community() {
         <ArrowLeft size={16} /> {t("common.back")}
       </button>
 
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">{t("community.title")}</h1>
-          <p className="text-sm text-slate-500">{t("community.subtitle")}</p>
+      {/* Subtitle sits under the title+actions row, full width — beside the
+          buttons it got squeezed into a narrow 5-line column (es/ja). */}
+      <div>
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="min-w-0 text-xl font-bold text-slate-900">{t("community.title")}</h1>
+          <div className="flex shrink-0 gap-2">
+            <button
+              onClick={() => setShowSearch((v) => !v)}
+              aria-label="Search Community"
+              className={`flex h-9 w-9 items-center justify-center rounded-full border transition-colors duration-150 ${
+                showSearch ? "border-fairway-300 bg-fairway-50 text-fairway-700" : "border-slate-200 text-slate-500 hover:border-slate-300"
+              }`}
+            >
+              <Search size={16} />
+            </button>
+            <Button size="sm" className="h-9" icon={<Plus size={15} />} onClick={() => navigate("/community/new")}>
+              {t("community.createPost")}
+            </Button>
+          </div>
         </div>
-        <div className="flex shrink-0 gap-2">
-          <button
-            onClick={() => setShowSearch((v) => !v)}
-            aria-label="Search Community"
-            className={`flex h-9 w-9 items-center justify-center rounded-full border transition-colors duration-150 ${
-              showSearch ? "border-fairway-300 bg-fairway-50 text-fairway-700" : "border-slate-200 text-slate-500 hover:border-slate-300"
-            }`}
-          >
-            <Search size={16} />
-          </button>
-          <Button size="sm" icon={<Plus size={15} />} onClick={() => navigate("/community/new")}>
-            {t("community.createPost")}
-          </Button>
-        </div>
+        <p className="mt-1 text-sm text-slate-500">{t("community.subtitle")}</p>
       </div>
 
       {showSearch && (
