@@ -36,7 +36,7 @@ import { postCategoryLabel } from "../../lib/enumLabels";
 import { areaForCourse } from "../../lib/courses";
 import { enterNativeVideoFullscreen, isVideoInNativeFullscreen } from "../../lib/video";
 import { isStaleProcessing, usePeriodicRerender } from "../../lib/caddieAnalysis";
-import { barsClipPath, readVideoFrame, thumbResults, useBlurredBackdrop, type BlurredBackdrop, type FrameReadResult } from "../../lib/blurredBackdrop";
+import { barsCoverStyle, readVideoFrame, thumbResults, useBlurredBackdrop, type BlurredBackdrop, type FrameReadResult } from "../../lib/blurredBackdrop";
 import { barsDebugEnabled, buildTag } from "../../lib/barsDebug";
 import { useLocale } from "../../i18n/LocaleContext";
 
@@ -101,6 +101,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
   // no bars, so black bars baked into the video are still caught.
   const [frameBackdrop, setFrameBackdrop] = useState<BlurredBackdrop | null>(null);
   const frameScansRef = useRef(0);
+  const [videoSize, setVideoSize] = useState<{ w: number; h: number } | null>(null);
   const nextScanAtRef = useRef(0);
   const [frameResults, setFrameResults] = useState<FrameReadResult[]>([]);
   const videoBackdrop = thumbBackdrop?.bars ? thumbBackdrop : (frameBackdrop ?? thumbBackdrop);
@@ -431,25 +432,19 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
 
       {isSwingPost && post.videoUrl && (
         <div onClick={stop} className="flex flex-col gap-2.5">
-          <div className="relative flex items-center justify-center overflow-hidden rounded-xl bg-slate-800">
-            {/* Phone swing videos are usually portrait, so the sides would
-                letterbox in black. Fill them with a blurred copy of the
-                video's own thumbnail instead, like the iOS Photos app.
-                The video's own box is sized to its picture (w-auto/h-auto
-                within the max bounds), so there is no letterbox inside the
-                element itself: WebKit paints the whole element box black
-                while the native fullscreen player animates back, which
-                showed as a black band across the card. Black bars baked
-                into the video's own frames are clipped off the same way
-                (see blurredBackdrop). */}
-            {videoBackdrop && (
-              <img
-                src={videoBackdrop.src}
-                alt=""
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-90"
-              />
-            )}
+          {/* Fills the card edge to edge like an Instagram feed: the box
+              takes the picture's own shape, clamped between 4:5 (tall phone
+              videos are cropped top and bottom, centred) and 1.91:1, and
+              the video covers it. No side bands, no blurred fill. Black
+              bars baked into the frames are zoomed out of the box
+              (barsCoverStyle). The video element always fills its box, so
+              WebKit has no letterbox to paint black when the native
+              fullscreen player animates back. Tap still opens the whole,
+              uncropped video full screen. */}
+          <div
+            className="relative w-full overflow-hidden rounded-xl bg-slate-800"
+            style={{ aspectRatio: feedBoxAspect(videoSize, videoBackdrop?.bars ?? null), containerType: "size" }}
+          >
             {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
             <video
               ref={videoRef}
@@ -459,6 +454,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
               // CORS so a frame can be read for the bar scan (Storage sends
               // the header); the poster is a plain image load either way.
               crossOrigin="anonymous"
+              onLoadedMetadata={(e) => setVideoSize({ w: e.currentTarget.videoWidth, h: e.currentTarget.videoHeight })}
               onLoadedData={scanVideoFrame}
               onPlaying={scanVideoFrame}
               onTimeUpdate={scanVideoFrame}
@@ -466,8 +462,8 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
               loop
               playsInline
               onClick={handleVideoTap}
-              style={{ clipPath: barsClipPath(videoBackdrop?.bars) }}
-              className="relative block h-auto max-h-96 w-auto max-w-full cursor-pointer"
+              style={videoBackdrop?.bars && videoSize ? barsCoverStyle(videoBackdrop.bars, videoSize.w / videoSize.h) : undefined}
+              className={`cursor-pointer ${videoBackdrop?.bars && videoSize ? "" : "absolute inset-0 h-full w-full object-cover"}`}
             />
             {barsDebugEnabled && (
               <BarsDebugReadout
@@ -643,6 +639,16 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
 }
 
 const MAX_FRAME_SCANS = 3;
+
+// The feed box's width / height for a swing video: the picture's own shape
+// (baked-in bars removed), clamped like Instagram's feed to 4:5 at the tall
+// end and 1.91:1 at the wide end. 4:5 until the video's size is known.
+function feedBoxAspect(size: { w: number; h: number } | null, bars: BlurredBackdrop["bars"]): number {
+  if (!size || !size.w || !size.h) return 4 / 5;
+  const w = size.w * (1 - (bars?.left ?? 0) - (bars?.right ?? 0));
+  const h = size.h * (1 - (bars?.top ?? 0) - (bars?.bottom ?? 0));
+  return Math.min(1.91, Math.max(4 / 5, w / Math.max(h, 1)));
+}
 
 // ?barsdebug=1 only: what the black-bar scan saw on this card.
 function BarsDebugReadout({ thumb, frames, video, bars }: { thumb: string; frames: FrameReadResult[]; video: HTMLVideoElement | null; bars: BlurredBackdrop["bars"] }) {
