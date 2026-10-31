@@ -22,6 +22,9 @@ const FIG_DY = 7;
 const FIG_T = `translate(${FIG_DX} ${FIG_DY}) scale(${FIG_S})`;
 const toScene = (q: Pt): Pt => [q[0] * FIG_S + FIG_DX, q[1] * FIG_S + FIG_DY];
 const LIGHT = [-0.6, -0.8]; // direction the light comes FROM
+const BALL_VX = 2000; // ball launch, stage units per second (~28° up): faster
+// than the clubhead, as a struck ball is, so it leads the club away
+const BALL_VY = 1060;
 
 // ── clubhead trail ──────────────────────────────────────────────────────
 // Every clubhead position over one swing, precomputed once with its speed.
@@ -110,7 +113,8 @@ export function mountSwing(root: SVGGElement, hooks: SwingHooks): () => void {
   root.replaceChildren();
   const shadows = [0, 1].map(() => el("ellipse", { cy: FLOOR_Y + 1, rx: 15, ry: 2.6, fill: "#000000" }, root));
   const teeBall = el("circle", { cx: f1(toScene(BALL)[0]), cy: f1(toScene(BALL)[1]), r: 3, fill: "#f8faf8" }, root);
-  const flight = el("circle", { r: 2.4, fill: "#f8faf8", opacity: 0.9 }, root);
+  const streak = el("line", { stroke: "#f8faf8", "stroke-width": 1.8, "stroke-linecap": "round", "stroke-opacity": 0.45 }, root);
+  const flight = el("circle", { r: 2.6, fill: "#f8faf8" }, root);
   const fig = el("g", { transform: FIG_T }, root);
   const trail = Array.from({ length: TRAIL_PIECES }, () => el("path", { fill: "none", "stroke-linecap": "round", "stroke-linejoin": "round" }, fig));
   const partsG = el("g", {}, fig);
@@ -158,11 +162,23 @@ export function mountSwing(root: SVGGElement, hooks: SwingHooks): () => void {
       shadows[i].setAttribute("opacity", f1(0.5 * op));
     });
     teeBall.style.display = t < IMPACT_T || t >= RETURN_MID ? "" : "none";
-    const struck = t > IMPACT_T && t < IMPACT_T + 0.18;
+    // Ball flight: launched off the clubface at ~2,260 stage units a second
+    // on a rising line (it leaves the stage in about a seventh of a second),
+    // with a short streak behind it so it reads as struck, not floating.
+    const since = ((t - IMPACT_T) * SWING_MS) / 1000;
+    const bx = toScene(BALL)[0] + BALL_VX * since;
+    const by = toScene(BALL)[1] - BALL_VY * since;
+    const struck = since > 0 && since < 0.4 && bx < 420 && by > -20;
     flight.style.display = struck ? "" : "none";
+    streak.style.display = struck ? "" : "none";
     if (struck) {
-      flight.setAttribute("cx", f1(toScene(BALL)[0] + (t - IMPACT_T) * 900));
-      flight.setAttribute("cy", f1(toScene(BALL)[1] - (t - IMPACT_T) * 1100));
+      const tail = Math.min(since, 0.025);
+      flight.setAttribute("cx", f1(bx));
+      flight.setAttribute("cy", f1(by));
+      streak.setAttribute("x1", f1(bx - BALL_VX * tail));
+      streak.setAttribute("y1", f1(by + BALL_VY * tail));
+      streak.setAttribute("x2", f1(bx));
+      streak.setAttribute("y2", f1(by));
     }
     fig.setAttribute("opacity", f1(op));
     // trail
