@@ -219,6 +219,11 @@ export function CourseAutocomplete({ value, onChange, onPickKnownCourse, recentC
           onFocus={handleFocus}
           onBlur={() => window.setTimeout(() => setFocused(false), 150)}
           placeholder={t("courseAutocomplete.placeholder")}
+          maxLength={120}
+          autoCapitalize="words"
+          autoComplete="off"
+          autoCorrect="off"
+          enterKeyHint="search"
         />
         {showDropdown && (
           <div
@@ -226,7 +231,10 @@ export function CourseAutocomplete({ value, onChange, onPickKnownCourse, recentC
               inlineSuggestions ? "relative" : "absolute z-10 w-full shadow-sm"
             }`}
           >
-            {searchState.loading || searchState.error ? (
+            {/* Real search refetches 300 ms after each keystroke: keep the
+                previous suggestions tappable meanwhile instead of blanking
+                the list to a spinner on every letter. */}
+            {searchState.error || (searchState.loading && filtered.length === 0) ? (
               <div className="p-2.5">
                 <CourseSearchStatus loading={searchState.loading} error={searchState.error} onRetry={searchState.retry} />
               </div>
