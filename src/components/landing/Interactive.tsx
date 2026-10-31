@@ -714,7 +714,7 @@ export function FloatingCta() {
       }`}
     >
       <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-fairway-950/95 p-2.5 pl-4 text-white shadow-2xl shadow-black/40 backdrop-blur">
-        <span className="text-sm font-bold">{t("landing.cta.floating")}</span>
+        <span className="min-w-0 text-sm font-bold leading-tight">{t("landing.cta.floating")}</span>
         <AppStoreButton size="sm" placement="floating" />
       </div>
     </div>

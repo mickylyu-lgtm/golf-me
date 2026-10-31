@@ -26,7 +26,7 @@ export function AppStoreButton({ size = "lg", placement, className = "" }: AppSt
       data-placement={placement}
       aria-label={t("landing.cta.appStoreAria")}
       className={`group inline-flex items-center justify-center gap-2.5 rounded-full bg-slate-950 text-white shadow-lg shadow-slate-950/25 ring-1 ring-white/10 transition hover:-translate-y-px hover:bg-slate-900 active:translate-y-0 ${
-        large ? "px-6 py-3" : "px-3.5 py-1.5"
+        large ? "px-6 py-3" : "min-h-10 shrink-0 px-3.5 py-1.5"
       } ${className}`}
     >
       <svg
@@ -46,7 +46,7 @@ export function AppStoreButton({ size = "lg", placement, className = "" }: AppSt
           <span className="mt-0.5 text-lg font-bold tracking-tight">{t("landing.cta.appStoreMain")}</span>
         </span>
       ) : (
-        <span className="text-xs font-bold sm:text-sm">{t("landing.cta.appStoreShort")}</span>
+        <span className="whitespace-nowrap text-xs font-bold sm:text-sm">{t("landing.cta.appStoreShort")}</span>
       )}
     </a>
   );

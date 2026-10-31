@@ -430,7 +430,7 @@ export const es: Record<TranslationKey, string> = {
   "landing.nav.community": "Comunidad",
   "landing.cta.appStoreTop": "Descárgalo en el",
   "landing.cta.appStoreMain": "App Store",
-  "landing.cta.appStoreShort": "Descargar la app",
+  "landing.cta.appStoreShort": "Descargar",
   "landing.cta.appStoreAria": "Descargar GolfMe en el App Store",
   "landing.hero.eyebrow": "Gratis en el App Store · Creado en Nueva York",
   "landing.hero.headline": "Encuentra tu foursome.",
