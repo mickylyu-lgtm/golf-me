@@ -98,6 +98,30 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const thumbBackdrop = useBlurredBackdrop(post.type === "swing" ? post.videoThumbnailUrl : undefined);
   const blackThumb = thumbIsDark(post.videoThumbnailUrl);
+  const [framePoster, setFramePoster] = useState<string | undefined>(undefined);
+  // For a black thumbnail: the first decoded frame that isn't black, as a
+  // JPEG, so the card shows the swing before anyone plays it.
+  function capturePoster(e: React.SyntheticEvent<HTMLVideoElement>) {
+    if (!blackThumb || framePoster) return;
+    const video = e.currentTarget;
+    if (!video.videoWidth || video.readyState < 2) return;
+    try {
+      const scale = Math.min(1, 720 / Math.max(video.videoWidth, video.videoHeight));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(video.videoWidth * scale);
+      canvas.height = Math.round(video.videoHeight * scale);
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) return;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const px = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      let lit = 0;
+      for (let i = 0; i < px.length; i += 16) if (Math.max(px[i], px[i + 1], px[i + 2]) > 22) lit++;
+      if (lit < px.length / 16 / 33) return; // still a black frame
+      setFramePoster(canvas.toDataURL("image/jpeg", 0.8));
+    } catch {
+      // Unreadable (no CORS): the video's own first frame is all we have.
+    }
+  }
   // Read from the video's own frames when the thumbnail is missing or shows
   // no bars, so black bars baked into the video are still caught.
   const [frameBackdrop, setFrameBackdrop] = useState<BlurredBackdrop | null>(null);
@@ -457,16 +481,22 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
             <video
               ref={videoRef}
               // A thumbnail captured on a black frame (older iPhone uploads)
-              // is skipped: no poster, and a media fragment a second in so
-              // WebKit draws a real frame of the swing instead.
+              // is skipped: the video loads a second in (preload "auto", or
+              // WebKit decodes nothing until play) and a real frame from it
+              // becomes the poster (capturePoster).
               src={blackThumb ? `${post.videoUrl}#t=1` : post.videoUrl}
-              poster={blackThumb ? undefined : post.videoThumbnailUrl}
-              preload="metadata"
+              poster={blackThumb ? framePoster : post.videoThumbnailUrl}
+              preload={blackThumb ? "auto" : "metadata"}
+              onSeeked={capturePoster}
+              onCanPlay={capturePoster}
               // CORS so a frame can be read for the bar scan (Storage sends
               // the header); the poster is a plain image load either way.
               crossOrigin="anonymous"
               onLoadedMetadata={(e) => setVideoSize({ w: e.currentTarget.videoWidth, h: e.currentTarget.videoHeight })}
-              onLoadedData={scanVideoFrame}
+              onLoadedData={(e) => {
+                capturePoster(e);
+                scanVideoFrame(e);
+              }}
               onPlaying={scanVideoFrame}
               onTimeUpdate={scanVideoFrame}
               muted={feedMuted}
