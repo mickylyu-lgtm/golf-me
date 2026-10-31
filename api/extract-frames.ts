@@ -30,6 +30,9 @@ export const config = {
   api: { bodyParser: { sizeLimit: "200mb" } },
 };
 
+// Upper bound on a caller-requested maxLongSide (analyze-swing asks for 720).
+const MAX_LONG_SIDE_LIMIT = 4096;
+const MIN_LONG_SIDE_LIMIT = 160;
 const MAX_DURATION_SECONDS = 11; // hard ceiling — analyze-swing's own 10s upload-time limit is the real gate, this is just a backstop with 1s of slack for metadata/rounding imprecision
 const DEFAULT_FPS = 8;
 
@@ -61,6 +64,47 @@ function runFfmpeg(args: string[]): Promise<string> {
       else reject(new Error(`ffmpeg exited ${code}: ${stderr.slice(-1500)}`));
     });
   });
+}
+
+// `ffmpeg -i <file>` with no output exits non-zero by design but prints the
+// stream info we want; resolve with stderr either way.
+function probeFfmpeg(inputPath: string): Promise<string> {
+  return new Promise((resolve) => {
+    if (!ffmpegPath) return resolve("");
+    const proc = spawn(ffmpegPath, ["-hide_banner", "-i", inputPath]);
+    let stderr = "";
+    proc.stderr?.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+    proc.on("error", () => resolve(stderr));
+    proc.on("close", () => resolve(stderr));
+  });
+}
+
+// Long side of the first video stream, in pixels. Only the LONG side is
+// used, so rotation metadata (portrait phone video stored landscape) doesn't
+// matter here.
+function parseVideoLongSide(ffmpegLog: string): number | undefined {
+  const m = ffmpegLog.match(/Stream #\d+:\d+[^\n]*?: Video: [^\n]*?, (\d{2,5})x(\d{2,5})/);
+  if (!m) return undefined;
+  const longSide = Math.max(Number(m[1]), Number(m[2]));
+  return Number.isFinite(longSide) && longSide > 0 ? longSide : undefined;
+}
+
+// Width/height from a baseline or progressive JPEG's SOF marker.
+function jpegSize(bytes: Buffer): { width: number; height: number } | undefined {
+  if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return undefined;
+  let i = 2;
+  while (i + 9 < bytes.length) {
+    if (bytes[i] !== 0xff) return undefined;
+    const marker = bytes[i + 1];
+    const length = bytes.readUInt16BE(i + 2);
+    if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+      return { height: bytes.readUInt16BE(i + 5), width: bytes.readUInt16BE(i + 7) };
+    }
+    i += 2 + length;
+  }
+  return undefined;
 }
 
 function parseDurationSeconds(ffmpegLog: string): number | undefined {
@@ -149,9 +193,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  const { videoUrl, fps, startSeconds, endSeconds } = (req.body ?? {}) as {
+  const { videoUrl, fps, startSeconds, endSeconds, maxLongSide } = (req.body ?? {}) as {
     videoUrl?: string;
     fps?: number;
+    // Optional: downscale frames so their long side is at most this many
+    // pixels (smaller Roboflow payloads). The response then carries
+    // coordinateScale, the factor that maps a frame pixel back to a source-
+    // video pixel — Caddie's replay overlay draws keypoints against the
+    // video's own videoWidth/videoHeight, so the caller MUST apply it.
+    // Omitted = full-size frames, exactly as before.
+    maxLongSide?: number;
     // When both are provided, extraction targets exactly this window (used
     // for analyze-swing's adaptive dense pass around the impact region) and
     // freezedetect-based active-window trimming is skipped entirely — the
@@ -165,6 +216,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const explicitWindow =
     typeof startSeconds === "number" && typeof endSeconds === "number" && endSeconds > startSeconds
       ? { startSeconds: Math.max(0, startSeconds), endSeconds }
+      : undefined;
+
+  const targetLongSide =
+    typeof maxLongSide === "number" && Number.isFinite(maxLongSide)
+      ? Math.round(Math.min(Math.max(maxLongSide, MIN_LONG_SIDE_LIMIT), MAX_LONG_SIDE_LIMIT))
       : undefined;
 
   let workDir: string | undefined;
@@ -199,11 +255,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // enforced — a hard backstop against an unexpectedly long file.
       extractArgs.push("-t", String(MAX_DURATION_SECONDS));
     }
-    extractArgs.push("-vf", `fps=${targetFps}`, "-q:v", "3", path.join(workDir, "frame_%05d.jpg"));
+    // Downscale only when asked and only when the source is actually larger
+    // (never upscale). The box fit keeps the aspect ratio, so one uniform
+    // factor maps frame pixels back to source pixels on both axes. If the
+    // source size can't be read, frames stay full size (scale 1).
+    let sourceLongSide: number | undefined;
+    if (targetLongSide) {
+      sourceLongSide = parseVideoLongSide(await probeFfmpeg(inputPath));
+    }
+    const downscale = !!targetLongSide && !!sourceLongSide && sourceLongSide > targetLongSide;
+    const videoFilter = downscale
+      ? `fps=${targetFps},scale=w=${targetLongSide}:h=${targetLongSide}:force_original_aspect_ratio=decrease:force_divisible_by=2`
+      : `fps=${targetFps}`;
+    extractArgs.push("-vf", videoFilter, "-q:v", "3", path.join(workDir, "frame_%05d.jpg"));
     await runFfmpeg(extractArgs);
 
     const frameStartOffset = activeWindow?.startSeconds ?? 0;
     const files = (await readdir(workDir)).filter((f) => f.startsWith("frame_")).sort();
+
+    // Measured from the actual output frame, not assumed from the filter.
+    let coordinateScale = 1;
+    if (downscale && sourceLongSide && files.length > 0) {
+      const size = jpegSize(await readFile(path.join(workDir, files[0])));
+      const outLongSide = size ? Math.max(size.width, size.height) : targetLongSide!;
+      coordinateScale = Number((sourceLongSide / outLongSide).toFixed(6));
+    }
     const frames = await Promise.all(
       files.map(async (name, i) => {
         const bytes = await readFile(path.join(workDir!, name));
@@ -218,6 +294,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
       analysisFps: targetFps,
       frameCount: frames.length,
+      // Multiply a keypoint's x/y by this to get source-video pixels. 1 when
+      // frames weren't downscaled.
+      coordinateScale,
       frames,
       activeWindowTrim: activeWindow ? { startSeconds: activeWindow.startSeconds, endSeconds: activeWindow.endSeconds } : null,
     });
