@@ -217,7 +217,7 @@ export function PostDetail() {
             onFocus={rememberScrollBeforeKeyboard}
             onKeyDown={(e) => e.key === "Enter" && submitComment()}
             placeholder={t("community.writeCommentPlaceholder")}
-            className="flex-1 bg-transparent px-1.5 text-sm outline-none"
+            className="min-w-0 flex-1 bg-transparent px-1.5 text-sm outline-none"
           />
           <button
             onClick={submitComment}
