@@ -330,8 +330,12 @@ export function AnalyzeSwing() {
             <video ref={previewVideoRef} src={videoPreviewUrl} controls className="max-h-72 w-full rounded-xl bg-black" />
           </div>
           <div className="flex items-center justify-between gap-2">
-            <span className="text-xs font-semibold text-fairway-700">{videoFile.name}</span>
-            <button onClick={removeVideo} className="flex items-center gap-1 text-xs font-semibold text-red-600 hover:underline">
+            <span className="min-w-0 truncate text-xs font-semibold text-fairway-700">{videoFile.name}</span>
+            <button
+              onClick={removeVideo}
+              disabled={submitting}
+              className="-my-1.5 flex min-h-9 shrink-0 items-center gap-1 px-2 text-xs font-semibold text-red-600 hover:underline disabled:opacity-40"
+            >
               <X size={12} /> {t("composer.remove")}
             </button>
           </div>

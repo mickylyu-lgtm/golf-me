@@ -261,11 +261,11 @@ export function CaddieAnalysisDetail() {
             <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-fairway-700">
               <CaddieNavIcon size={14} /> {t("caddie.title")}
             </p>
-            <div className="flex items-center gap-1.5">
+            <div className="flex flex-wrap items-center justify-end gap-1.5">
               <button
                 onClick={translateFeedback}
                 disabled={translating}
-                className="flex items-center gap-1 text-xs font-semibold text-fairway-700 hover:underline disabled:opacity-60"
+                className="flex min-h-8 items-center gap-1 text-xs font-semibold text-fairway-700 hover:underline disabled:opacity-60"
               >
                 {translating ? <Loader2 size={12} className="animate-spin" /> : <Languages size={12} />}
                 {translating
