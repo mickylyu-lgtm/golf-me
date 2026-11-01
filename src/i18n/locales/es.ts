@@ -149,6 +149,7 @@ export const es: Record<TranslationKey, string> = {
   "teeTimes.selectDate": "Selecciona una fecha",
   "teeTimes.loading": "Cargando horarios...",
   "teeTimes.retry": "Reintentar",
+  "teeTimes.loadFailed": "No se pudieron cargar los horarios. Revisa tu conexión e inténtalo de nuevo.",
   "teeTimes.liveInsideGolfMe": "Disponibilidad en vivo dentro de GolfMe",
   "teeTimes.lastUpdatedJustNow": "Actualizado justo ahora",
   "teeTimes.notFound": "Ese campo todavía no está disponible.",

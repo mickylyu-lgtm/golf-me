@@ -149,6 +149,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "teeTimes.selectDate": "選擇日期",
   "teeTimes.loading": "正在載入開球時間...",
   "teeTimes.retry": "重試",
+  "teeTimes.loadFailed": "無法載入開球時間。請檢查網路連線後再試一次。",
   "teeTimes.liveInsideGolfMe": "GolfMe 內的即時空位",
   "teeTimes.lastUpdatedJustNow": "剛剛更新",
   "teeTimes.notFound": "該球場暫不支援。",

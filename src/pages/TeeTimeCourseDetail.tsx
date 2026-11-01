@@ -75,11 +75,13 @@ export function TeeTimeCourseDetail() {
 
       {!loading && error && (
         <div className="flex items-center justify-between gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2.5">
-          <p className="text-xs text-red-700">{error}</p>
+          {/* The raw error is a transport message ("Failed to send a request
+              to the Edge Function"), meaningless to a golfer and English-only. */}
+          <p className="text-xs text-red-700">{t("teeTimes.loadFailed")}</p>
           <button
             type="button"
             onClick={retry}
-            className="flex shrink-0 items-center gap-1 rounded-full border border-red-200 bg-white px-2.5 py-1 text-xs font-semibold text-red-700 transition-colors duration-150 hover:bg-red-100"
+            className="flex min-h-9 shrink-0 items-center gap-1 rounded-full border border-red-200 bg-white px-3 py-1 text-xs font-semibold text-red-700 transition-colors duration-150 hover:bg-red-100"
           >
             <RotateCcw size={12} /> {t("teeTimes.retry")}
           </button>

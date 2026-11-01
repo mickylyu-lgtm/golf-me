@@ -159,6 +159,7 @@ export const en = {
   "teeTimes.selectDate": "Select a date",
   "teeTimes.loading": "Loading tee times...",
   "teeTimes.retry": "Retry",
+  "teeTimes.loadFailed": "Couldn't load tee times. Check your connection and try again.",
   "teeTimes.liveInsideGolfMe": "Live availability inside GolfMe",
   "teeTimes.lastUpdatedJustNow": "Updated just now",
   "teeTimes.notFound": "That course isn't supported yet.",

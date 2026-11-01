@@ -149,6 +149,7 @@ export const ko: Record<TranslationKey, string> = {
   "teeTimes.selectDate": "날짜 선택",
   "teeTimes.loading": "티타임 불러오는 중...",
   "teeTimes.retry": "다시 시도",
+  "teeTimes.loadFailed": "티타임을 불러오지 못했어요. 연결을 확인하고 다시 시도해 주세요.",
   "teeTimes.liveInsideGolfMe": "GolfMe 내 실시간 예약 가능 시간",
   "teeTimes.lastUpdatedJustNow": "방금 업데이트됨",
   "teeTimes.notFound": "아직 지원되지 않는 골프장입니다.",

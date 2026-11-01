@@ -149,6 +149,7 @@ export const ja: Record<TranslationKey, string> = {
   "teeTimes.selectDate": "日付を選択",
   "teeTimes.loading": "ティータイムを読み込み中...",
   "teeTimes.retry": "再試行",
+  "teeTimes.loadFailed": "ティータイムを読み込めませんでした。接続を確認して、もう一度お試しください。",
   "teeTimes.liveInsideGolfMe": "GolfMe内のライブ空き状況",
   "teeTimes.lastUpdatedJustNow": "たった今更新",
   "teeTimes.notFound": "このコースはまだ対応していません。",
