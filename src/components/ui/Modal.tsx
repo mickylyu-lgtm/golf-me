@@ -75,7 +75,7 @@ function ModalFrame({ title, onClose, children, footer, overlayStyle, sheetStyle
           <button
             onClick={onClose}
             aria-label="Close"
-            className="rounded-full p-1.5 text-slate-400 transition-all duration-200 ease-out hover:bg-slate-100 hover:text-slate-700 active:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none"
+            className="-m-1.5 rounded-full p-2.5 text-slate-400 transition-all duration-200 ease-out hover:bg-slate-100 hover:text-slate-700 active:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none"
           >
             <X size={18} />
           </button>
