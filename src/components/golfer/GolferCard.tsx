@@ -33,12 +33,12 @@ export function GolferCard({ golfer, compatibility, onClick }: GolferCardProps) 
   return (
     <button onClick={onClick} className={`flex w-full flex-col gap-3 p-4 text-left ${CLICKABLE_CARD_CLASS}`}>
       <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           <Avatar golfer={golfer} size="lg" />
-          <div>
+          <div className="min-w-0">
             <p className="font-bold text-slate-900">
               {golfer.name}{" "}<FoundingMark golfer={golfer} />
-              {golfer.ageRange && <span className="font-normal text-slate-400"> · {golfer.ageRange}</span>}
+              {golfer.ageRange && <span className="whitespace-nowrap font-normal text-slate-400"> · {golfer.ageRange}</span>}
             </p>
             <p className="flex items-center gap-1 text-xs text-slate-500">
               <MapPin size={12} /> {distance !== undefined && `${t("golfCallCard.miAway", { miles: distance.toFixed(1) })} · `}

@@ -1,4 +1,5 @@
 import { matchTier } from "../../lib/matchReasons";
+import { useLocale } from "../../i18n/LocaleContext";
 
 const TONE_CLASSES: Record<string, string> = {
   great: "bg-fairway-600 text-white",
@@ -12,13 +13,14 @@ const TONE_CLASSES: Record<string, string> = {
 // just the human-readable face of it. Pair with <MatchReasons> when there's
 // room to explain *why*.
 export function CompatibilityBadge({ score, size = "md" }: { score: number; size?: "sm" | "md" }) {
-  const { emoji, label, tier } = matchTier(score);
+  const { t } = useLocale();
+  const { emoji, tier } = matchTier(score);
   return (
     <div
-      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-semibold whitespace-nowrap ${TONE_CLASSES[tier]} ${size === "sm" ? "text-[11px]" : "text-xs"}`}
+      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 shrink-0 font-semibold whitespace-nowrap ${TONE_CLASSES[tier]} ${size === "sm" ? "text-[11px]" : "text-xs"}`}
     >
       <span aria-hidden>{emoji}</span>
-      {label}
+      {t(`matchTier.${tier}`)}
     </div>
   );
 }
