@@ -115,10 +115,10 @@ export function PostDetail() {
   if (!post) {
     return (
       <div className="py-12 text-center text-slate-500">
-        Post not found.
+        {t("community.postNotFound")}
         <div className="mt-4">
           <Button variant="outline" onClick={() => goBack(navigate, "/")}>
-            Go back
+            {t("golfCallDetail.goBack")}
           </Button>
         </div>
       </div>
@@ -157,7 +157,7 @@ export function PostDetail() {
         onClick={() => goBack(navigate, "/")}
         className="-my-2.5 flex items-center gap-1.5 self-start py-2.5 pr-3 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
       >
-        <ArrowLeft size={16} /> Back
+        <ArrowLeft size={16} /> {t("common.back")}
       </button>
 
       <PostCard post={post} linkToDetail={false} />
@@ -172,7 +172,7 @@ export function PostDetail() {
             navigate(`/golf-calls/new?fromPost=${post.id}${post.courseTag ? `&course=${encodeURIComponent(post.courseTag)}` : ""}`)
           }
         >
-          Create a Round From This Post
+          {t("community.createRoundFromPost")}
         </Button>
       )}
 

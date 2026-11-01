@@ -621,6 +621,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
               }
             }}
             aria-pressed={saved}
+            aria-label={t("community.savePost")}
             className={`relative flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold after:absolute after:inset-x-0 after:-inset-y-2 transition-all duration-200 ease-out ${
               saved ? "border-transparent bg-sun-400 text-fairway-950" : "border-slate-200 text-slate-600 hover:border-sun-300"
             }`}

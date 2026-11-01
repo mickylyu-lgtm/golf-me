@@ -94,7 +94,7 @@ export function CommentItem({ comment, postId, replies }: CommentItemProps) {
             </button>
             {!isReply && (
               <button onClick={() => setReplyOpen((v) => !v)} className="-mx-1 -my-2 px-1 py-2 font-semibold hover:text-slate-600">
-                Reply
+                {t("community.reply")}
               </button>
             )}
             <div className="relative">
@@ -148,7 +148,7 @@ export function CommentItem({ comment, postId, replies }: CommentItemProps) {
                 value={replyText}
                 onChange={(e) => updateReplyText(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && submitReply()}
-                placeholder={`Reply to ${author.name.split(" ")[0]}...`}
+                placeholder={t("community.replyToPlaceholder", { name: author.name.split(" ")[0] })}
                 className="min-w-0 flex-1 rounded-full border border-slate-200 bg-white px-3.5 py-1.5 text-sm outline-none focus:border-fairway-400"
               />
               <button
@@ -156,7 +156,7 @@ export function CommentItem({ comment, postId, replies }: CommentItemProps) {
                 disabled={!replyText.trim()}
                 className="shrink-0 px-1 py-2 text-xs font-semibold text-fairway-700 disabled:opacity-40"
               >
-                Send
+                {t("community.send")}
               </button>
             </div>
           )}

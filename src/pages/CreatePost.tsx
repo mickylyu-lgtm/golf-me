@@ -479,10 +479,10 @@ export function CreatePost() {
           onClick={() => goBack(navigate)}
           className="-my-2.5 flex items-center gap-1.5 py-2.5 pr-3 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
         >
-          <ArrowLeft size={16} /> Back
+          <ArrowLeft size={16} /> {t("common.back")}
         </button>
-        <button onClick={() => navigate("/community/guidelines")} className="text-xs font-semibold text-fairway-700 hover:underline">
-          Community Guidelines
+        <button onClick={() => navigate("/community/guidelines")} className="-my-2.5 py-2.5 text-xs font-semibold text-fairway-700 hover:underline">
+          {t("settings.communityGuidelines")}
         </button>
       </div>
 
@@ -495,7 +495,7 @@ export function CreatePost() {
         autoFocus
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder="What's happening?"
+        placeholder={t("composer.placeholder")}
         rows={5}
         className="w-full resize-none rounded-2xl border border-slate-200 px-4 py-3 text-base outline-none transition focus:border-fairway-400"
       />
@@ -586,7 +586,7 @@ export function CreatePost() {
         <div className="flex flex-col gap-2 rounded-2xl border border-slate-100 bg-slate-50/60 p-3.5">
           <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-fairway-50 py-1.5 pl-3 pr-2 text-xs font-semibold text-fairway-700">
             <MapPin size={12} /> {courseTag}
-            <button onClick={removeCourse} className="rounded-full p-0.5 hover:bg-fairway-100">
+            <button onClick={removeCourse} aria-label={t("composer.remove")} className="-my-2 -mr-1.5 rounded-full p-2 hover:bg-fairway-100">
               <X size={12} />
             </button>
           </span>
@@ -594,7 +594,7 @@ export function CreatePost() {
       )}
       {activeTool === "course" && !courseTag && (
         <div className="flex flex-col gap-2 rounded-2xl border border-slate-100 bg-slate-50/60 p-3.5">
-          <input value={courseQuery} onChange={(e) => setCourseQuery(e.target.value)} placeholder="Search courses..." className={inputClass} />
+          <input value={courseQuery} onChange={(e) => setCourseQuery(e.target.value)} placeholder={t("composer.searchCourses")} className={inputClass} />
           {filteredCourses.length > 0 && (
             <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
               {filteredCourses.map((c) => (
@@ -620,19 +620,19 @@ export function CreatePost() {
                 {formatDate(selectedCall.dateISO, locale, t)} · {selectedCall.timeLabel} · {formatMoney(selectedCall.estimatedPricePerPerson)}
               </p>
             </div>
-            <button onClick={removeRound} className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+            <button onClick={removeRound} aria-label={t("composer.remove")} className="-m-1.5 rounded-full p-2.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
               <X size={14} />
             </button>
           </div>
           <p className="flex items-center gap-1 text-xs text-fairway-700">
-            <Users size={12} /> Attached — this post will link to that round.
+            <Users size={12} /> {t("composer.roundAttached")}
           </p>
         </div>
       )}
       {activeTool === "round" && !golfCallId && (
         <div className="flex flex-col gap-2 rounded-2xl border border-slate-100 bg-slate-50/60 p-3.5">
           {myCalls.length === 0 ? (
-            <p className="text-xs text-slate-500">You're not hosting or playing in any Golf Calls yet.</p>
+            <p className="text-xs text-slate-500">{t("composer.noRoundsToAttach")}</p>
           ) : (
             <div className="flex flex-col gap-1.5">
               {myCalls.map((c) => (
@@ -656,25 +656,25 @@ export function CreatePost() {
 
       <div className="flex flex-wrap gap-2">
         <Pill active={kind === "photo"} onClick={handlePhotoPillClick}>
-          <ImagePlus size={13} className="mr-1 inline" /> Photo
+          <ImagePlus size={13} className="mr-1 inline" /> {t("composer.photo")}
         </Pill>
         {!isDemo && (
           <Pill active={kind === "swing"} onClick={handleSwingPillClick}>
-            <Video size={13} className="mr-1 inline" /> Swing Post
+            <Video size={13} className="mr-1 inline" /> {t("community.swingPostBadge")}
           </Pill>
         )}
         <Pill active={activeTool === "course" || kind === "course"} onClick={() => togglePanel("course")}>
-          <MapPin size={13} className="mr-1 inline" /> Course
+          <MapPin size={13} className="mr-1 inline" /> {t("composer.course")}
         </Pill>
         <Pill active={activeTool === "round" || kind === "round"} onClick={() => togglePanel("round")}>
-          <Users size={13} className="mr-1 inline" /> GolfMe Round
+          <Users size={13} className="mr-1 inline" /> {t("composer.golfMeRound")}
         </Pill>
       </div>
       <input ref={fileInputRef} type="file" accept="image/*,video/*" multiple className="hidden" onChange={handleFile} />
       <input ref={videoInputRef} type="file" accept="video/*" className="hidden" onChange={handleVideoFile} />
 
       <div>
-        <label className={labelClass}>Category</label>
+        <label className={labelClass}>{t("composer.category")}</label>
         <div className="flex flex-wrap gap-1.5">
           {POST_CATEGORIES.map((c) => (
             <Pill key={c} active={category === c} onClick={() => setCategory(c)}>
@@ -685,7 +685,7 @@ export function CreatePost() {
       </div>
 
       <Button size="lg" fullWidth disabled={!canPost || posting} onClick={handlePost} icon={posting ? <Loader2 size={16} className="animate-spin" /> : undefined}>
-        {posting ? (uploadProgress === "uploading" ? "Uploading video..." : "Posting...") : "Post"}
+        {posting ? (uploadProgress === "uploading" ? t("composer.uploadingVideo") : t("composer.posting")) : t("composer.post")}
       </Button>
 
       {pendingAttach && (

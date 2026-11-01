@@ -144,7 +144,7 @@ export function GolferProfilePage() {
           onClick={() => goBack(navigate, "/find")}
           className="-my-2.5 flex items-center gap-1.5 rounded-full px-1 py-2.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2"
         >
-          <ArrowLeft size={16} /> Back
+          <ArrowLeft size={16} /> {t("common.back")}
         </button>
         <div className="relative">
           <button
@@ -214,7 +214,7 @@ export function GolferProfilePage() {
           </p>
           {distance !== undefined && (
             <p className="flex items-center justify-center gap-1 text-xs text-slate-400">
-              <MapPin size={11} /> {distance.toFixed(1)} mi away
+              <MapPin size={11} /> {t("golfCallCard.miAway", { miles: distance.toFixed(1) })}
             </p>
           )}
         </div>
@@ -258,11 +258,11 @@ export function GolferProfilePage() {
                 icon={<MessageCircle size={14} />}
                 onClick={() => navigate(`/messages/${golfer.id}`)}
               >
-                Message
+                {t("golferProfile.message")}
               </Button>
             )}
             <Button size="sm" variant="outline" icon={<Scale size={14} />} onClick={() => setCompareOpen(true)}>
-              Compare
+              {t("golferProfile.compare")}
             </Button>
           </div>
         )}
