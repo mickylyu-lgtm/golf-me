@@ -723,7 +723,7 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
             <button
               key={m.labelKey}
               onClick={() => setMode(m)}
-              className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors duration-150 ${
+              className={`min-h-8 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors duration-150 ${
                 mode.labelKey === m.labelKey ? "bg-fairway-700 text-white" : "text-slate-500 hover:text-fairway-700"
               }`}
             >
@@ -759,7 +759,7 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
                   setSelectedPhaseKey(b.labelKey);
                 }}
                 aria-label={`${t(b.labelKey)} — ${t(analyzed ? "swingAssessment.analyzedBadge" : "swingAssessment.trackedBadge")}`}
-                className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors duration-150 ${
+                className={`flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors duration-150 ${
                   selectedPhaseKey === b.labelKey
                     ? "border-transparent bg-fairway-700 text-white"
                     : "border-slate-200 text-slate-600 hover:border-fairway-300 hover:text-fairway-700"
