@@ -234,7 +234,7 @@ export function ProfileSetup() {
     // stays a non-shrinking footer, always reachable without hunting for
     // it, however long the content gets on a small screen.
     <div className="flex h-[100dvh] flex-col bg-[#faf9f6]" style={keyboardHeight > 0 ? { height: `${window.innerHeight - keyboardHeight}px` } : undefined}>
-      <div className="flex items-center px-6" style={{ paddingTop: "max(2rem, env(safe-area-inset-top))" }}>
+      <div className="mx-auto flex w-full max-w-[31rem] items-center px-6" style={{ paddingTop: "max(2rem, env(safe-area-inset-top))" }}>
         {/* Deliberately signs out first, then navigates -- plain
             navigate(-1)/"/login" alone did nothing, because every
             guest-only route (Welcome/Login/Signup) redirects an
@@ -255,7 +255,7 @@ export function ProfileSetup() {
       </div>
 
       <div ref={scrollerRef} className="min-h-0 flex-1 overflow-y-auto px-6">
-        <div className="flex flex-col gap-5 py-6">
+        <div className="mx-auto flex w-full max-w-md flex-col gap-5 py-6">
           <div>
             <h1 className="text-xl font-bold text-slate-900">{t("profileSetup.quickProfileTitle")}</h1>
             <p className="mt-1 text-sm text-slate-500">{t("profileSetup.quickProfileSubtitle")}</p>
@@ -299,7 +299,7 @@ export function ProfileSetup() {
                   <MapPin size={16} className="shrink-0 text-fairway-600" />
                   <p className="text-sm font-semibold text-slate-800">{areaLabel}</p>
                 </div>
-                <button onClick={() => setLocationPickerMode("manual")} className="shrink-0 text-xs font-semibold text-fairway-700 hover:underline">
+                <button onClick={() => setLocationPickerMode("manual")} className="-my-2 min-h-10 shrink-0 px-1 text-xs font-semibold text-fairway-700 hover:underline">
                   {t("common.change")}
                 </button>
               </div>
@@ -341,7 +341,7 @@ export function ProfileSetup() {
         </div>
       </div>
 
-      <div className={`shrink-0 px-6 pt-3 ${keyboardHeight > 0 ? "pb-3" : "pb-8"}`}>
+      <div className={`mx-auto w-full max-w-[31rem] shrink-0 px-6 pt-3 ${keyboardHeight > 0 ? "pb-3" : "pb-8"}`}>
         <Button size="lg" fullWidth disabled={!formValid || submitting} onClick={submit}>
           {t("common.continue")}
         </Button>
