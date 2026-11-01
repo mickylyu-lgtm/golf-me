@@ -25,12 +25,17 @@ export function FindFriends() {
   const { t } = useLocale();
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
+  // Blocks a quick double-tap from following and then immediately
+  // unfollowing before the first request has come back.
+  const [pendingId, setPendingId] = useState<string | null>(null);
   const { results, loading, error } = useFriendSearch(query);
   const { suggestions, loading: suggestionsLoading } = useSuggestedGolfers();
 
   if (isDemo) return <Navigate to="/profile/following" replace />;
 
   async function handleFollowToggle(golfer: FriendSearchResult) {
+    if (pendingId) return;
+    setPendingId(golfer.id);
     try {
       if (isFollowing(golfer.id)) {
         await unfollowUser(golfer.id);
@@ -39,6 +44,8 @@ export function FindFriends() {
       }
     } catch (err) {
       showToast(err instanceof Error ? err.message : t("findFriends.followFailed"), "warning");
+    } finally {
+      setPendingId(null);
     }
   }
 
@@ -82,6 +89,7 @@ export function FindFriends() {
                     following={isFollowing(golfer.id)}
                     onOpenProfile={() => navigate(`/golfer/${golfer.id}`)}
                     onToggleFollow={() => handleFollowToggle(golfer)}
+                    pending={pendingId === golfer.id}
                   />
                 ))}
               </div>
@@ -103,6 +111,7 @@ export function FindFriends() {
               following={isFollowing(golfer.id)}
               onOpenProfile={() => navigate(`/golfer/${golfer.id}`)}
               onToggleFollow={() => handleFollowToggle(golfer)}
+              pending={pendingId === golfer.id}
             />
           ))}
         </div>

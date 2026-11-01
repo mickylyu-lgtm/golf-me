@@ -10,6 +10,8 @@ interface GolferSearchResultRowProps {
   following: boolean;
   onOpenProfile: () => void;
   onToggleFollow: () => void;
+  /** True while this row's follow/unfollow request is in flight. */
+  pending?: boolean;
 }
 
 // Shared between FindFriends' typed-search results and its "Suggested for
@@ -17,11 +19,11 @@ interface GolferSearchResultRowProps {
 // suggested_golfer_profiles() RPC mirrors search_golfer_profiles()'s field
 // list on purpose), so one row renderer covers both instead of the two
 // lists growing their own slightly-different markup.
-export function GolferSearchResultRow({ golfer, following, onOpenProfile, onToggleFollow }: GolferSearchResultRowProps) {
+export function GolferSearchResultRow({ golfer, following, onOpenProfile, onToggleFollow, pending = false }: GolferSearchResultRowProps) {
   const { t } = useLocale();
   return (
     <div className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white p-3">
-      <button onClick={onOpenProfile} className="flex flex-1 items-center gap-3 text-left">
+      <button onClick={onOpenProfile} className="flex min-w-0 flex-1 items-center gap-3 text-left">
         <Avatar
           golfer={{
             avatarColor: golfer.avatarColor,
@@ -32,11 +34,11 @@ export function GolferSearchResultRow({ golfer, following, onOpenProfile, onTogg
           size="sm"
           showVerified={false}
         />
-        <div className="flex-1">
-          <p className="text-sm font-semibold text-slate-800">
+        <div className="min-w-0 flex-1">
+          <p className="break-words text-sm font-semibold text-slate-800">
             {golfer.name}{" "}<FoundingMark golfer={golfer} />
           </p>
-          <p className="text-xs text-slate-500">
+          <p className="truncate text-xs text-slate-500">
             {golfer.username && <>@{golfer.username} · </>}
             {golfer.handicap !== null ? t("golfCallDetail.handicapValue", { handicap: golfer.handicap }) : t("golfCallDetail.noHandicapYet")}
             {golfer.areaLabel && <> · {golfer.areaLabel}</>}
@@ -48,6 +50,8 @@ export function GolferSearchResultRow({ golfer, following, onOpenProfile, onTogg
         variant={following ? "outline" : "primary"}
         icon={following ? <UserRoundCheck size={14} /> : <UserRoundPlus size={14} />}
         onClick={onToggleFollow}
+        disabled={pending}
+        className="shrink-0"
       >
         {following ? t("common.following") : t("common.follow")}
       </Button>
