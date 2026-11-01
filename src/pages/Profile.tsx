@@ -354,6 +354,7 @@ export function Profile() {
                 <label className={labelClass}>{t("profile.handicap")}</label>
                 <input
                   type="number"
+                  inputMode="decimal"
                   className={inputClass}
                   value={form.handicap ?? ""}
                   placeholder={t("profile.noHandicapYet")}
