@@ -102,7 +102,7 @@ export function Discover({ embedded = false }: DiscoverProps) {
 
       <button
         onClick={() => setShowFilters((v) => !v)}
-        className="flex items-center gap-1.5 self-start text-sm font-semibold text-fairway-700 transition-colors duration-200 hover:text-fairway-800"
+        className="-my-2 flex min-h-10 items-center gap-1.5 self-start text-sm font-semibold text-fairway-700 transition-colors duration-200 hover:text-fairway-800"
       >
         <SlidersHorizontal size={14} />
         {showFilters ? t("find.hideFilters") : t("find.filters")}

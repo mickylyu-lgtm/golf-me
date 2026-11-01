@@ -51,7 +51,7 @@ export function Onboarding() {
             <span key={i} className={`h-1.5 w-8 rounded-full transition-colors duration-300 ${i === step ? "bg-fairway-600" : "bg-slate-200"}`} />
           ))}
         </div>
-        <button onClick={goToSignup} className="text-sm font-semibold text-slate-400 transition-colors duration-200 hover:text-slate-600">
+        <button onClick={goToSignup} className="-my-2 -mr-2 min-h-10 px-2 text-sm font-semibold text-slate-400 transition-colors duration-200 hover:text-slate-600">
           {t("common.skip")}
         </button>
       </div>
