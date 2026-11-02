@@ -106,7 +106,7 @@ const MAX_IMPACT_WINDOW_SECONDS = 0.3;
 // Gemini tags each phase high/medium/low. Only high/medium phases anchor an
 // assessment or a colored callout; a low-confidence (or confidence-less)
 // phase is treated exactly like an unidentified one.
-function isTrustedPhaseConfidence(confidence: CaddieConfidence | null): boolean {
+export function isTrustedPhaseConfidence(confidence: CaddieConfidence | null): boolean {
   return confidence === "high" || confidence === "medium";
 }
 
@@ -135,6 +135,12 @@ function phaseAnchor(phases: CaddieSwingPhases, phase: SwingAnchorPhase, analysi
   const moment = phase === "address" ? phases.address : phases.top;
   if (moment.timestampSeconds === null || !isTrustedPhaseConfidence(moment.confidence)) return null;
   return { timeSeconds: moment.timestampSeconds, frameToleranceSeconds: Math.min(MAX_PHASE_FRAME_OFFSET_SECONDS, samplePeriod) };
+}
+
+// The same trust rule, exposed for Coach Replay (coachReplay.ts): where a
+// phase may be frozen on, or null when it can't be placed reliably.
+export function trustedPhaseTimeSeconds(phases: CaddieSwingPhases, phase: SwingAnchorPhase): number | null {
+  return phaseAnchor(phases, phase, 8)?.timeSeconds ?? null;
 }
 
 function getKp(frame: CaddiePoseFrame | undefined, name: string): CaddiePoseKeypoint | undefined {
