@@ -7,7 +7,8 @@ import { DEFAULT_MOCK_GOLFERS, GolfersScreen, PhoneFrame, RoundsScreen, CaddieSc
 import type { MockGolfer } from "./PhoneMock";
 import { useLocale } from "../../i18n/LocaleContext";
 import { TOP_T, IMPACT_T, FINISH_T } from "./swingMotion";
-import { FLOOR_Y, mountSwing } from "./swingRenderer";
+import { mountSwing } from "./swingRenderer";
+import { StageBackdrop, SwingFigureDefs } from "./swingStage";
 
 // Interactive demos for the public landing page. Each one is a small,
 // self-contained toy that explains one part of the product by letting the
@@ -400,40 +401,6 @@ function playheadAt(t: number): number {
   return 100;
 }
 
-// The stage's static backdrop (spotlight, floor, light pool) — its own SVG
-// layer under the animated one, so it is painted once, not every frame.
-function StageBackdrop() {
-  return (
-    <svg viewBox="0 0 400 300" className="absolute inset-0 h-full w-full" aria-hidden="true">
-      <defs>
-        <radialGradient id="mq-stage" cx="0.38" cy="0.05" r="0.95">
-          <stop offset="0" stopColor="#24432f" />
-          <stop offset="0.45" stopColor="#0e1d15" />
-          <stop offset="1" stopColor="#050a07" />
-        </radialGradient>
-        <linearGradient id="mq-cone" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#ffffff" stopOpacity="0.10" />
-          <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
-        </linearGradient>
-        <linearGradient id="mq-floor" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#09130e" stopOpacity="0.55" />
-          <stop offset="0.45" stopColor="#060c09" stopOpacity="0.92" />
-          <stop offset="1" stopColor="#040806" stopOpacity="1" />
-        </linearGradient>
-        <radialGradient id="mq-pool" cx="0.5" cy="0.5" r="0.5">
-          <stop offset="0" stopColor="#ffffff" stopOpacity="0.13" />
-          <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
-        </radialGradient>
-      </defs>
-      <rect width="400" height="300" fill="url(#mq-stage)" />
-      <path d="M128 -10 L213 -10 L293 250 L48 250 Z" fill="url(#mq-cone)" />
-      <ellipse cx="158" cy={FLOOR_Y + 4} rx="110" ry="14" fill="url(#mq-pool)" />
-      <rect x="0" y={FLOOR_Y} width="400" height={300 - FLOOR_Y} fill="url(#mq-floor)" />
-      <line x1="0" y1={FLOOR_Y} x2="400" y2={FLOOR_Y} stroke="#ffffff" strokeOpacity="0.06" />
-    </svg>
-  );
-}
-
 // The swing stage and its scrubber. React renders these once; the swing
 // itself (figure, trail, ball, pose overlay) and the playhead are animated
 // by mountSwing directly. React only re-renders here when the analysis
@@ -472,26 +439,7 @@ function SwingPlayer({ phase, leftHanded, between }: { phase: Phase; leftHanded:
         <StageBackdrop />
         <svg viewBox="0 0 400 300" className="absolute inset-0 h-full w-full" role="img" aria-label="A mannequin golfer swinging on a dark stage, with Caddie's pose analysis overlay">
           <defs>
-            <linearGradient id="mq-limb" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stopColor="#ffffff" />
-              <stop offset="0.3" stopColor="#eef1ec" />
-              <stop offset="0.75" stopColor="#a9b3ad" />
-              <stop offset="1" stopColor="#6f7a74" />
-            </linearGradient>
-            <radialGradient id="mq-ball" cx="0.35" cy="0.3" r="0.75">
-              <stop offset="0" stopColor="#ffffff" />
-              <stop offset="0.5" stopColor="#e3e7e2" />
-              <stop offset="1" stopColor="#7c8781" />
-            </radialGradient>
-            <radialGradient id="mq-heat" cx="0.5" cy="0.5" r="0.5">
-              <stop offset="0" stopColor="#f87171" stopOpacity="0.75" />
-              <stop offset="0.55" stopColor="#f4b942" stopOpacity="0.25" />
-              <stop offset="1" stopColor="#f4b942" stopOpacity="0" />
-            </radialGradient>
-            <linearGradient id="gm-bone" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" stopColor="#bbf7d0" />
-              <stop offset="1" stopColor="#4ade80" />
-            </linearGradient>
+            <SwingFigureDefs />
           </defs>
           {/* leftHanded mirrors the swing about the stage's centre */}
           <g ref={sceneRef} transform={leftHanded ? "translate(400 0) scale(-1 1)" : undefined} />

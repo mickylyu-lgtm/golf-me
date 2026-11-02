@@ -154,6 +154,8 @@ const RETURN = 0.5;
 export const SWING_MS = Math.round((ADDRESS_HOLD + SWING_S + FINISH_HOLD + RETURN) * 1000);
 const DUR = SWING_MS / 1000;
 const toU = (sec: number) => (ADDRESS_HOLD + sec) / DUR;
+// Loop position where the takeaway starts (the end of the address hold).
+export const ADDRESS_T = toU(0);
 export const TOP_T = toU(TOP_KEY);
 export const IMPACT_T = toU(IMPACT_KEY);
 export const FINISH_T = toU(FINISH_KEY);
