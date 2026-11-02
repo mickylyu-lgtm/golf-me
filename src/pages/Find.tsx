@@ -4,6 +4,7 @@ import { GolfCalls } from "./GolfCalls";
 import { Discover } from "./Discover";
 import { useLocale } from "../i18n/LocaleContext";
 import { useSessionState } from "../lib/useSessionState";
+import { TEE_TIMES_VISIBLE } from "../services/teeTimes/types";
 
 type Tab = "rounds" | "golfers";
 
@@ -47,14 +48,16 @@ export function Find() {
           competes with the Rounds/Golfers tab content below it. Still
           visible on both tabs since it's a general utility, not specific
           to either. */}
-      <button
-        onClick={() => navigate("/tee-times")}
-        className="flex items-center gap-1.5 self-start text-sm font-semibold text-fairway-700 transition-colors duration-200 hover:text-fairway-800"
-      >
-        <CalendarClock size={14} />
-        {t("teeTimes.title")}
-        <ChevronRight size={14} />
-      </button>
+      {TEE_TIMES_VISIBLE && (
+        <button
+          onClick={() => navigate("/tee-times")}
+          className="flex items-center gap-1.5 self-start text-sm font-semibold text-fairway-700 transition-colors duration-200 hover:text-fairway-800"
+        >
+          <CalendarClock size={14} />
+          {t("teeTimes.title")}
+          <ChevronRight size={14} />
+        </button>
+      )}
 
       {tab === "rounds" ? <GolfCalls embedded /> : <Discover embedded />}
     </div>

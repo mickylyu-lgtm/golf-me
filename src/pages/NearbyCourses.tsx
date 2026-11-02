@@ -12,7 +12,7 @@ import { useNearbyCourses } from "../lib/useCourseSearch";
 import { resolveTravelRadiusMiles } from "../lib/matchPreferences";
 import { formatDistanceMiles } from "../lib/geo";
 import type { PlayingArea } from "../lib/geo";
-import { matchSupportedTeeTimeCourse } from "../services/teeTimes/types";
+import { TEE_TIMES_VISIBLE, matchSupportedTeeTimeCourse } from "../services/teeTimes/types";
 import { CourseImageModeToggle, CourseThumb, PhotoAttribution, SatelliteAttribution } from "../components/courses/CourseThumb";
 import { useCourseImageMode } from "../lib/coursePhotos";
 import { satelliteImageryEnabled } from "../lib/courseImagery";
@@ -109,7 +109,7 @@ export function NearbyCourses() {
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-1.5">
                         <span className="truncate text-sm font-bold text-slate-900">{r.name}</span>
-                        {supported && <Badge tone="fairway">{t("nearbyCourses.teeTimesAvailable")}</Badge>}
+                        {TEE_TIMES_VISIBLE && supported && <Badge tone="fairway">{t("nearbyCourses.teeTimesAvailable")}</Badge>}
                       </span>
                       {r.area && <span className="block truncate text-xs text-slate-500">{r.area}</span>}
                     </span>

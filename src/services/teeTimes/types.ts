@@ -3,6 +3,13 @@
 // course_external_ids table the rest of the app uses — this is a narrow,
 // hand-verified integration, not a scaled-up version of course search.
 
+// Hidden for now (Micky, 2026-11-02): with only two NYC courses the Tee
+// Times entry points confused people, and "tee time" already means the time
+// you pick when hosting a round. While false: no Home card, no Find link, no
+// "Tee times available" badge, and every course opens the general course
+// page. /tee-times routes still work by direct link. Flip to true to restore.
+export const TEE_TIMES_VISIBLE = false;
+
 export interface SupportedTeeTimeCourse {
   id: string;
   name: string;
