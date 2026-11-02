@@ -4,6 +4,10 @@ import { AlertCircle, ArrowLeft, ArrowUpRight, Check, Languages, Loader2, Share2
 import { CaddieNavIcon } from "../components/icons/CaddieNavIcon";
 import { CaddieThinking } from "../components/caddie/CaddieThinking";
 import { CaddieSwingReplay } from "../components/caddie/CaddieSwingReplay";
+import { CoachReplayDemo } from "../components/caddie/CoachReplayDemo";
+import { DEMO_COACH_ANALYSIS_ID } from "../data/caddieCoachDemo";
+import { useAuth } from "../context/AuthContext";
+import { useCoachReplayEnabled } from "../lib/useCoachReplayEnabled";
 import { useData } from "../context/DataContext";
 import { useToast } from "../context/ToastContext";
 import { useRealCaddie } from "../context/RealCaddieContext";
@@ -56,6 +60,8 @@ export function CaddieAnalysisDetail() {
   const { getCaddieAnalysis, getPost, createCaddieAnalysis, markCaddieAnalysisShared, translateCaddieAnalysis, createPost, notifications, markNotificationRead } =
     useData();
   const { hasLoaded: caddieHasLoaded, loadPoseData, refreshMediaUrls } = useRealCaddie();
+  const { isDemo } = useAuth();
+  const coachEnabled = useCoachReplayEnabled();
   const { t, locale } = useLocale();
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -252,8 +258,13 @@ export function CaddieAnalysisDetail() {
           poseData={analysis.poseData}
           phases={details?.phases}
           cameraAngle={details?.cameraAngle}
+          coachEnabled={coachEnabled && analysis.status === "complete"}
+          score={details?.score}
         />
       )}
+      {/* Demo accounts have no swing video: Coach Replay plays over the
+          animated demo golfer instead, with demo-only cards. */}
+      {isDemo && coachEnabled && !analysis.sourceMediaUrl && analysis.id === DEMO_COACH_ANALYSIS_ID && <CoachReplayDemo />}
 
       {analysis.status === "complete" && details ? (
         <div className="flex flex-col gap-3.5 rounded-2xl border border-fairway-100 bg-fairway-50/40 p-4">

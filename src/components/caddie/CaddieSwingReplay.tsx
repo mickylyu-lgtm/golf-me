@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Check, Info, Minus, TriangleAlert } from "lucide-react";
 import { X } from "lucide-react";
-import type { CaddieCameraAngle, CaddiePoseData, CaddieSwingPhases } from "../../types";
+import type { CaddieCameraAngle, CaddiePoseData, CaddieScore, CaddieSwingPhases } from "../../types";
 import { enterNativeVideoFullscreen, getVideoContentRect } from "../../lib/video";
 import { useLocale } from "../../i18n/LocaleContext";
 import { computeSwingAssessment, segmentStatusAtTime } from "../../lib/swingAssessment";
@@ -10,6 +10,10 @@ import type { SwingSegmentId, SwingSegmentStatus } from "../../lib/swingAssessme
 import type { TranslationKey } from "../../i18n/locales/en";
 import { SwingCallout } from "./SwingCallout";
 import { separateCallouts } from "./calloutLayout";
+import { coachPlanFromV1 } from "../../lib/coachReplay";
+import type { CoachCheckpoint, CoachMomentLabel } from "../../lib/coachReplay";
+import { CoachModeSwitch, CoachReplayCard, CoachReplayStrip } from "./CoachReplayCard";
+import { useCoachVideoPauses } from "./useCoachVideoPauses";
 
 // Standard COCO-17 joint pairs — only drawn when BOTH ends are present in
 // that frame's keypoints. Roboflow's output already had unreliable joints
@@ -244,7 +248,21 @@ export interface CaddieSwingReplayProps {
   phases?: CaddieSwingPhases;
   // Gemini's camera_angle; gates checks the view can't see (swingAssessment.ts).
   cameraAngle?: CaddieCameraAngle;
+  // Caddie V3 Coach Replay (useCoachReplayEnabled): Slow Mode freezes at
+  // each key moment with a coaching card. score feeds the cards' text.
+  coachEnabled?: boolean;
+  score?: CaddieScore;
 }
+
+const NO_CHECKPOINTS: CoachCheckpoint[] = [];
+// The phase chip that matches a coach freeze, so Swing Check below the
+// video follows along.
+const COACH_PHASE_KEY: Partial<Record<CoachMomentLabel, PhaseButton["labelKey"]>> = {
+  address: "swingAnalysis.address",
+  top: "swingAnalysis.topOfBackswing",
+  impact: "swingAnalysis.impact",
+  follow_through: "swingAnalysis.followThrough",
+};
 
 // Two views of the same one video, not two separate rendered/stored files
 // (that would double storage for every analysis — see the product brief's
@@ -261,7 +279,7 @@ const REPLAY_MODES = [
   { speed: 0.25, labelKey: "caddie.replaySlowAnalysis", showOverlay: true },
 ] as const;
 
-export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, poseData, phases, cameraAngle }: CaddieSwingReplayProps) {
+export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, poseData, phases, cameraAngle, coachEnabled = false, score }: CaddieSwingReplayProps) {
   const { t } = useLocale();
   const videoRef = useRef<HTMLVideoElement>(null);
   const resumeAtRef = useRef<number | null>(null);
@@ -276,6 +294,25 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
   // Pure function of already-fetched poseData/phases (see swingAssessment.ts)
   // — computed once per analysis, not per frame.
   const assessment = useMemo(() => computeSwingAssessment(poseData, phases, { cameraAngle }), [poseData, phases, cameraAngle]);
+
+  // Coach Replay rides on Slow Mode (it needs the pose overlay's data and a
+  // slowed clock). "Coach mode" defaults on; switching it off leaves the
+  // plain slow replay. All of this is view state, derived from the stored
+  // analysis on every render; nothing durable lives here.
+  const coachCheckpoints = useMemo(
+    () => (coachEnabled ? coachPlanFromV1({ phases, assessment, score }).checkpoints : NO_CHECKPOINTS),
+    [coachEnabled, phases, assessment, score],
+  );
+  const coachAvailable = coachCheckpoints.length > 0 && !!poseData && poseData.frames.length > 0;
+  const [coachOn, setCoachOn] = useState(true);
+  const coachActive = coachAvailable && coachOn && mode.showOverlay;
+  const coach = useCoachVideoPauses(videoRef, coachCheckpoints, coachActive);
+  // Open straight into Slow Mode the first time coaching is available,
+  // unless the golfer already picked a mode themselves.
+  const pickedModeRef = useRef(false);
+  useEffect(() => {
+    if (coachAvailable && !pickedModeRef.current) setMode(REPLAY_MODES[1]);
+  }, [coachAvailable]);
 
   // Which phase's breakdown the Swing Check card below shows — driven by
   // an explicit tap on one of the phase buttons, not by continuous video
@@ -302,14 +339,20 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
   // fires from a fresh t=0 so it never yanks the video away from wherever
   // the user has already scrubbed to.
   useEffect(() => {
-    if (!showOverlay) return;
+    // Coach Replay starts from the beginning, so it can stop at Address.
+    if (!showOverlay || coachActive) return;
     const video = videoRef.current;
     const topT = phases?.top.timestampSeconds;
     if (video && video.currentTime === 0 && topT !== null && topT !== undefined) {
       video.currentTime = topT;
       setSelectedPhaseKey("swingAnalysis.topOfBackswing");
     }
-  }, [showOverlay, phases]);
+  }, [showOverlay, phases, coachActive]);
+
+  const coachPhaseKey = coach.active ? COACH_PHASE_KEY[coach.active.label] : undefined;
+  useEffect(() => {
+    if (coachPhaseKey) setSelectedPhaseKey(coachPhaseKey);
+  }, [coachPhaseKey]);
 
   // Default the Swing Check card to SOMETHING as soon as there's an
   // analysis to show, even before the effect above's video-seek condition
@@ -624,6 +667,21 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
 
   const buttons = phaseButtons(phases);
 
+  const coachSlot = coachActive ? (
+    coach.active ? (
+      <CoachReplayCard
+        key={coach.activeIndex}
+        checkpoint={coach.active}
+        index={coach.activeIndex ?? 0}
+        total={coachCheckpoints.length}
+        onContinue={coach.resume}
+        onSkip={coach.skip}
+      />
+    ) : (
+      <CoachReplayStrip count={coachCheckpoints.length} playing={coach.playing} onPlay={coach.start} />
+    )
+  ) : null;
+
   return (
     <div className="flex flex-col gap-2">
       <div
@@ -700,6 +758,17 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
               containerHeight={overlaySize.height}
             />
           ))}
+        {customFullscreen && coachSlot && (
+          // Fullscreen has no page below the video, so the card floats over
+          // its lower edge instead.
+          <div
+            className="absolute inset-x-3 z-10"
+            style={{ bottom: "max(4.5rem, calc(env(safe-area-inset-bottom) + 4rem))" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {coachSlot}
+          </div>
+        )}
         {customFullscreen && (
           <button
             onClick={(e) => {
@@ -714,22 +783,41 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
           </button>
         )}
       </div>
+      {!customFullscreen && coachSlot}
       {poseData && poseData.frames.length > 0 && (
-        // A single bordered segmented control (not two floating pills) —
-        // visually reads as one lightweight setting, distinct from the
-        // phase row below it, rather than competing for the same weight.
-        <div className="inline-flex w-fit items-center gap-0.5 self-start rounded-full border border-slate-200 bg-slate-50 p-0.5">
-          {REPLAY_MODES.map((m) => (
-            <button
-              key={m.labelKey}
-              onClick={() => setMode(m)}
-              className={`min-h-8 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors duration-150 ${
-                mode.labelKey === m.labelKey ? "bg-fairway-700 text-white" : "text-slate-500 hover:text-fairway-700"
-              }`}
-            >
-              {t(m.labelKey)}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          {/* A single bordered segmented control (not two floating pills) —
+              visually reads as one lightweight setting, distinct from the
+              phase row below it, rather than competing for the same weight. */}
+          <div className="inline-flex w-fit items-center gap-0.5 self-start rounded-full border border-slate-200 bg-slate-50 p-0.5">
+            {REPLAY_MODES.map((m) => (
+              <button
+                key={m.labelKey}
+                onClick={() => {
+                  pickedModeRef.current = true;
+                  setMode(m);
+                }}
+                className={`min-h-8 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors duration-150 ${
+                  mode.labelKey === m.labelKey ? "bg-fairway-700 text-white" : "text-slate-500 hover:text-fairway-700"
+                }`}
+              >
+                {t(m.labelKey)}
+              </button>
+            ))}
+          </div>
+          {coachAvailable && (
+            <CoachModeSwitch
+              on={coachOn && mode.showOverlay}
+              onToggle={() => {
+                const next = !(coachOn && mode.showOverlay);
+                setCoachOn(next);
+                if (next && !mode.showOverlay) {
+                  pickedModeRef.current = true;
+                  setMode(REPLAY_MODES[1]);
+                }
+              }}
+            />
+          )}
         </div>
       )}
       {buttons.length > 0 && (
