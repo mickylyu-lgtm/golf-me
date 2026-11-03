@@ -6,6 +6,7 @@ import { realRoundToGolfCall } from "../lib/golfCall";
 import type { RoundRow, ParticipantRow } from "../lib/golfCall";
 import { profileRowToGolferProfile } from "../lib/profile";
 import type { ProfileRow } from "../lib/profile";
+import { INITIAL_LOAD_STATUS, applyLoadOutcome, isFirstLoadError, isRefreshError } from "../lib/loadStatus";
 import type { ChatMessage, GolfCall, GolferProfile } from "../types";
 import type { ReviewInput } from "./DataContext";
 
@@ -53,8 +54,14 @@ interface RealRoundsContextValue {
   golfCalls: GolfCall[];
   profilesById: Map<string, GolferProfile>;
   isLoading: boolean;
-  /** True once the first fetch has finished (always true in demo) — lets a deep-linked page wait instead of showing "not found". */
+  /** True once the first fetch has finished, success OR failure (always true in demo) — lets a deep-linked page wait instead of showing "not found". Check loadError before treating an empty list as empty. */
   hasLoaded: boolean;
+  /** Nothing has loaded yet and the last fetch failed (never in demo). Show an error with retry, not "empty". */
+  loadError: boolean;
+  /** Data loaded before, but the latest refresh failed; the older data is still in state (never in demo). */
+  refreshFailed: boolean;
+  /** Re-runs the fetch (isLoading is true while it runs). */
+  retry: () => Promise<void>;
   hostRound: (input: HostRealRoundInput) => Promise<GolfCall>;
   joinRound: (roundId: string) => Promise<void>;
   leaveRound: (roundId: string) => Promise<void>;
@@ -81,7 +88,7 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
   const [myReviewedKeys, setMyReviewedKeys] = useState<Set<string>>(new Set());
   const [profilesById, setProfilesById] = useState<Map<string, GolferProfile>>(new Map());
   const [isLoading, setIsLoading] = useState(false);
-  const [loaded, setLoaded] = useState(false);
+  const [loadStatus, setLoadStatus] = useState(INITIAL_LOAD_STATUS);
   const fetchingRef = useRef(false);
   // Same fix as RealSocialContext's refetch(): a realtime event arriving
   // while a refetch is already in flight used to just be dropped with
@@ -133,8 +140,11 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
       } else {
         setProfilesById(new Map());
       }
+      setLoadStatus((prev) => applyLoadOutcome(prev, true));
     } catch (err) {
       console.error("GolfMe: failed to load real rounds.", err);
+      // State is left as it was: a failed refresh keeps the last good data.
+      setLoadStatus((prev) => applyLoadOutcome(prev, false));
     } finally {
       fetchingRef.current = false;
       if (pendingRefetchRef.current) {
@@ -150,15 +160,13 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
       setParticipants([]);
       setMessageRows([]);
       setProfilesById(new Map());
+      setLoadStatus(INITIAL_LOAD_STATUS);
       return;
     }
 
     setIsLoading(true);
-    setLoaded(false);
-    refetch().finally(() => {
-      setIsLoading(false);
-      setLoaded(true);
-    });
+    setLoadStatus(INITIAL_LOAD_STATUS);
+    refetch().finally(() => setIsLoading(false));
 
     // Global subscription (not per-round) — simplest correct way to satisfy
     // "membership changes appear across devices without restarting," and
@@ -176,6 +184,15 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
       supabase.removeChannel(channel);
     };
   }, [isDemo, authUser, refetch]);
+
+  const retry = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      await refetch();
+    } finally {
+      setIsLoading(false);
+    }
+  }, [refetch]);
 
   const golfCalls = useMemo(
     () => rounds.map((r) => realRoundToGolfCall(r, participants, profile?.playingAreaCoords)),
@@ -330,7 +347,10 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
     golfCalls,
     profilesById,
     isLoading,
-    hasLoaded: isDemo || loaded,
+    hasLoaded: isDemo || loadStatus.settled,
+    loadError: !isDemo && isFirstLoadError(loadStatus),
+    refreshFailed: !isDemo && isRefreshError(loadStatus),
+    retry,
     hostRound,
     joinRound,
     leaveRound,

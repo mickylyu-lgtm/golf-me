@@ -5,6 +5,7 @@ import { privatizeAnalysesOfPost } from "../lib/caddieMedia";
 import { useAuth } from "./AuthContext";
 import { profileRowToGolferProfile } from "../lib/profile";
 import type { ProfileRow } from "../lib/profile";
+import { INITIAL_LOAD_STATUS, applyLoadOutcome, isFirstLoadError, isRefreshError } from "../lib/loadStatus";
 import type { CommunityPost, PostComment, GolferProfile, PostMediaItem, PostType, PostCategory, SwingAnalysisStatus } from "../types";
 
 const COMMUNITY_MEDIA_BUCKET = "community-media";
@@ -104,8 +105,14 @@ interface RealCommunityContextValue {
   posts: CommunityPost[];
   comments: PostComment[];
   isLoading: boolean;
-  /** True once the first fetch has finished (always true in demo). */
+  /** True once the first fetch has finished, success OR failure (always true in demo). Check loadError before treating an empty feed as empty. */
   hasLoaded: boolean;
+  /** Nothing has loaded yet and the last fetch failed (never in demo). */
+  loadError: boolean;
+  /** Data loaded before, but the latest refresh failed; the older data is still in state (never in demo). */
+  refreshFailed: boolean;
+  /** Re-runs the fetch (isLoading is true while it runs). */
+  retry: () => Promise<void>;
   profilesById: Map<string, GolferProfile>;
 
   getPost: (id: string) => CommunityPost | undefined;
@@ -146,7 +153,7 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
   const [hiddenPostIds, setHiddenPostIds] = useState<string[]>([]);
   const [profilesById, setProfilesById] = useState<Map<string, GolferProfile>>(new Map());
   const [isLoading, setIsLoading] = useState(false);
-  const [loaded, setLoaded] = useState(false);
+  const [loadStatus, setLoadStatus] = useState(INITIAL_LOAD_STATUS);
   const fetchingRef = useRef(false);
   const selfId = authUser?.id;
 
@@ -205,8 +212,11 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
         for (const row of (profileRows ?? []) as ProfileRow[]) map.set(row.id, profileRowToGolferProfile(row));
         setProfilesById(map);
       }
+      setLoadStatus((prev) => applyLoadOutcome(prev, true));
     } catch (err) {
       console.error("GolfMe: failed to load Community.", err);
+      // State is left as it was: a failed refresh keeps the last good feed.
+      setLoadStatus((prev) => applyLoadOutcome(prev, false));
     } finally {
       fetchingRef.current = false;
     }
@@ -223,15 +233,13 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
       setHiddenPostIds([]);
       setProfilesById(new Map());
       setPendingPosts([]);
+      setLoadStatus(INITIAL_LOAD_STATUS);
       return;
     }
 
     setIsLoading(true);
-    setLoaded(false);
-    refetch().finally(() => {
-      setIsLoading(false);
-      setLoaded(true);
-    });
+    setLoadStatus(INITIAL_LOAD_STATUS);
+    refetch().finally(() => setIsLoading(false));
 
     const channel = supabase
       .channel("community-realtime")
@@ -245,6 +253,15 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
       supabase.removeChannel(channel);
     };
   }, [isDemo, selfId, refetch]);
+
+  const retry = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      await refetch();
+    } finally {
+      setIsLoading(false);
+    }
+  }, [refetch]);
 
   // Drops a pending (optimistic) post once refetch brings in the real row —
   // matched by author + exact text + created no earlier than the pending
@@ -508,7 +525,10 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
     posts,
     comments,
     isLoading,
-    hasLoaded: isDemo || loaded,
+    hasLoaded: isDemo || loadStatus.settled,
+    loadError: !isDemo && isFirstLoadError(loadStatus),
+    refreshFailed: !isDemo && isRefreshError(loadStatus),
+    retry,
     profilesById,
     getPost,
     createPost,

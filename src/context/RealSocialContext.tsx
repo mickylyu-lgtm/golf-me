@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabase";
 import { useAuth } from "./AuthContext";
 import { profileRowToGolferProfile } from "../lib/profile";
 import type { ProfileRow } from "../lib/profile";
+import { INITIAL_LOAD_STATUS, applyLoadOutcome, isFirstLoadError, isRefreshError } from "../lib/loadStatus";
 import { isObjectionableContentError } from "../lib/objectionableContent";
 import type { SendMessageResult } from "../lib/objectionableContent";
 import type { GolferProfile, AppNotification, DirectMessage, NotificationType, ReportCategory, Report } from "../types";
@@ -68,8 +69,14 @@ interface NotificationRow {
 interface RealSocialContextValue {
   profilesById: Map<string, GolferProfile>;
   isLoading: boolean;
-  /** True once the first full fetch has finished (always true in demo). */
+  /** True once the first full fetch has finished, success OR failure (always true in demo). Check loadError before treating an empty inbox as empty. */
   hasLoaded: boolean;
+  /** Nothing has loaded yet and the last fetch failed (never in demo). */
+  loadError: boolean;
+  /** Data loaded before, but the latest refresh failed; the older data is still in state (never in demo). */
+  refreshFailed: boolean;
+  /** Re-runs a full fetch (isLoading is true while it runs). */
+  retry: () => Promise<void>;
   // Every other real profile (minus self, minus blocked either direction) —
   // the real-mode data source for Discover/Find, distinct from profilesById
   // above (which only ever holds people already connected via a round/DM/
@@ -222,7 +229,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
   // notification actors) -- profilesById is exactly these, as before.
   const [connectedIds, setConnectedIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [loaded, setLoaded] = useState(false);
+  const [loadStatus, setLoadStatus] = useState(INITIAL_LOAD_STATUS);
   const fetchingRef = useRef(false);
   // conversation_id -> Date.now() of the last successful markConversationRead
   // call, so a caller that ends up invoking it repeatedly in a tight loop
@@ -399,11 +406,14 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
         }
         setConnectedIds((prev) => keepIfSame(prev, [...connected].sort()));
         if (full) lastFullAtRef.current = Date.now();
+        setLoadStatus((prev) => applyLoadOutcome(prev, true));
       } catch (err) {
         // Retry the full reload next time rather than silently falling
         // back to incremental on a half-applied state.
         if (full) forceFullRef.current = true;
         console.error("GolfMe: failed to load messages/blocks/notifications.", err);
+        // State is left as it was: a failed refresh keeps the last good data.
+        if (isCurrent()) setLoadStatus((prev) => applyLoadOutcome(prev, false));
       } finally {
         // A fetch that outlived its account must not clear the NEW
         // account's in-flight flag or run a follow-up with a stale closure.
@@ -418,6 +428,15 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     },
     [selfId],
   );
+
+  const retry = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      await refetch({ full: true });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [refetch]);
 
   useEffect(() => {
     // New account (or signed out / demo): nothing fetched so far applies.
@@ -444,15 +463,13 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       setConnectedIds([]);
       setFollows([]);
       setPendingMessages([]);
+      setLoadStatus(INITIAL_LOAD_STATUS);
       return;
     }
 
     setIsLoading(true);
-    setLoaded(false);
-    refetch({ full: true }).finally(() => {
-      setIsLoading(false);
-      setLoaded(true);
-    });
+    setLoadStatus(INITIAL_LOAD_STATUS);
+    refetch({ full: true }).finally(() => setIsLoading(false));
 
     // Receiver-side timeout: cleared/reset every time a fresh typing:start
     // for a conversation arrives, so a single missed typing:stop (dropped
@@ -951,7 +968,10 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     () => ({
       profilesById,
       isLoading,
-      hasLoaded: isDemo || loaded,
+      hasLoaded: isDemo || loadStatus.settled,
+      loadError: !isDemo && isFirstLoadError(loadStatus),
+      refreshFailed: !isDemo && isRefreshError(loadStatus),
+      retry,
       discoverableGolfers,
       canMessage,
       isBlocked,
@@ -984,7 +1004,8 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       profilesById,
       isLoading,
       isDemo,
-      loaded,
+      loadStatus,
+      retry,
       discoverableGolfers,
       canMessage,
       isBlocked,
