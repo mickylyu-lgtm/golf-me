@@ -11,6 +11,7 @@
 // touched — only the prose changes.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { sanitizeCheckpointCues, withSanitizedCheckpointCues } from "../_shared/caddieCues.ts";
 
 const GEMINI_MODEL = "gemini-3.6-flash";
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com";
@@ -96,6 +97,17 @@ function buildTranslationSchema(localeName: string) {
         },
         required: ["setup_and_posture", "backswing", "downswing_sequencing", "balance_and_weight_transfer", "finish"],
       },
+      // Optional, like analyze-swing's own: only present when the source
+      // analysis has cues. Re-sanitized before it is stored.
+      checkpoint_cues: {
+        type: "OBJECT",
+        properties: {
+          address: { type: "STRING", nullable: true, description: `Write in ${localeName}.` },
+          top: { type: "STRING", nullable: true, description: `Write in ${localeName}.` },
+          impact: { type: "STRING", nullable: true, description: `Write in ${localeName}.` },
+          follow_through: { type: "STRING", nullable: true, description: `Write in ${localeName}.` },
+        },
+      },
     },
     required: ["summary", "strengths", "work_on", "focus", "drill", "limitations", "score"],
   };
@@ -152,6 +164,7 @@ Deno.serve(async (req: Request) => {
 
   const source = row.analysis_json as Record<string, unknown>;
   const sourceScore = (source.score as Record<string, { points: number; reason: string }>) ?? {};
+  const sourceCues = sanitizeCheckpointCues(source.checkpoint_cues);
   const translationInput = {
     summary: source.summary,
     strengths: source.strengths,
@@ -160,6 +173,7 @@ Deno.serve(async (req: Request) => {
     drill: source.drill,
     limitations: source.limitations,
     score: Object.fromEntries(Object.entries(sourceScore).map(([k, v]) => [k, { reason: v.reason }])),
+    ...(sourceCues ? { checkpoint_cues: sourceCues } : {}),
   };
 
   try {
@@ -194,6 +208,7 @@ Deno.serve(async (req: Request) => {
       drill: { name: string; steps: string[] };
       limitations: string[];
       score: Record<string, { reason: string }>;
+      checkpoint_cues?: unknown;
     };
 
     // Merge translated prose back over the original analysis_json —
@@ -204,7 +219,11 @@ Deno.serve(async (req: Request) => {
     const mergedScore = Object.fromEntries(
       Object.entries(sourceScore).map(([k, v]) => [k, { points: v.points, reason: translated.score[k]?.reason ?? v.reason }]),
     );
-    const mergedJson = {
+    // Cues: the translated ones only (re-sanitized), never the originals —
+    // keeping an untranslated cue would put two languages on one card. If
+    // the translation came back without usable cues the field is dropped
+    // and Coach Replay falls back to its own translated copy.
+    const mergedJson = withSanitizedCheckpointCues({
       ...source,
       summary: translated.summary,
       strengths: translated.strengths,
@@ -213,7 +232,8 @@ Deno.serve(async (req: Request) => {
       drill: translated.drill,
       limitations: translated.limitations,
       score: mergedScore,
-    };
+      checkpoint_cues: sourceCues ? translated.checkpoint_cues : undefined,
+    });
 
     const { data: updated, error: updateError } = await supabase
       .from("caddie_analyses")
