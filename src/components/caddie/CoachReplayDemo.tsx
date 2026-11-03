@@ -174,7 +174,7 @@ export function CoachReplayDemo() {
 
       {coachOn &&
         (active ? (
-          <CoachReplayCard key={activeIndex} checkpoint={active} index={activeIndex ?? 0} total={checkpoints.length} onContinue={resume} onSkip={skip} />
+          <CoachReplayCard key={activeIndex} checkpoint={active} stepOffset={activeIndex ?? 0} stepTotal={checkpoints.length} onContinue={resume} onSkip={skip} />
         ) : summaryOpen && plan.summary ? (
           <CoachSummaryCard summary={plan.summary} onReplay={resume} onDone={() => setSummaryOpen(false)} />
         ) : (

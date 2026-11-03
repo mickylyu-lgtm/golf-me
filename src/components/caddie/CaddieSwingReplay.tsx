@@ -12,7 +12,8 @@ import { SwingCallout } from "./SwingCallout";
 import { separateCallouts } from "./calloutLayout";
 import { coachFocusSegments, coachPlanFromV1 } from "../../lib/coachReplay";
 import type { CoachCheckpoint, CoachFocusSegments, CoachMomentLabel, V1Coaching } from "../../lib/coachReplay";
-import { CoachModeSwitch, CoachReplayCard, CoachReplayStrip, CoachSummaryCard } from "./CoachReplayCard";
+import { CoachModeSwitch, CoachPageMeasurer, CoachReplayCard, CoachReplayStrip, CoachSummaryCard } from "./CoachReplayCard";
+import type { CoachPageLayout } from "./CoachReplayCard";
 import { useCoachVideoPauses } from "./useCoachVideoPauses";
 
 // Standard COCO-17 joint pairs — only drawn when BOTH ends are present in
@@ -325,6 +326,7 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
   const [coachOn, setCoachOn] = useState(true);
   const coachActive = coachAvailable && coachOn && mode.showOverlay;
   const coach = useCoachVideoPauses(videoRef, coachCheckpoints, coachActive);
+  const [coachLayout, setCoachLayout] = useState<CoachPageLayout | null>(null);
   // The body parts the open card talks about, highlighted on the paused
   // frame (draw() reads the ref; redrawRef repaints when the card changes).
   // Only findings from measured pose segments map; score/focus/work_on
@@ -796,21 +798,34 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
 
   const buttons = phaseButtons(phases);
 
-  const coachSlot = coachActive ? (
+  // Card pages come from measuring the real rendered blocks at the slot's
+  // width (CoachPageMeasurer, mounted inside the slot below); steps count
+  // pages across all checkpoints, so "2 of 5" means pages, not moments.
+  const checkpointPages = coachLayout?.checkpoints;
+  const stepOffsetOf = (i: number) => (checkpointPages ? checkpointPages.slice(0, i).reduce((n, p) => n + p.length, 0) : i);
+  const stepTotal = checkpointPages ? checkpointPages.reduce((n, p) => n + p.length, 0) : coachCheckpoints.length;
+  const coachCard = coachActive ? (
     coach.active ? (
       <CoachReplayCard
         key={coach.activeIndex}
         checkpoint={coach.active}
-        index={coach.activeIndex ?? 0}
-        total={coachCheckpoints.length}
+        pages={checkpointPages?.[coach.activeIndex ?? 0]}
+        stepOffset={stepOffsetOf(coach.activeIndex ?? 0)}
+        stepTotal={stepTotal}
         onContinue={coach.resume}
         onSkip={coach.skip}
       />
     ) : coach.ended && coachSummary ? (
-      <CoachSummaryCard summary={coachSummary} onReplay={coach.start} onDone={coach.dismissEnded} />
+      <CoachSummaryCard summary={coachSummary} pages={coachLayout?.summary} onReplay={coach.start} onDone={coach.dismissEnded} />
     ) : (
       <CoachReplayStrip count={coachCheckpoints.length} playing={coach.playing} onPlay={coach.start} />
     )
+  ) : null;
+  const coachSlot = coachCard ? (
+    <>
+      <CoachPageMeasurer checkpoints={coachCheckpoints} summary={coachSummary} onLayout={setCoachLayout} />
+      {coachCard}
+    </>
   ) : null;
   const fsReserve = customFullscreen && !!coachSlot && fsSlotHeight > 0;
 
@@ -943,7 +958,7 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
       </div>
       {/* Inline the card is below the video, never over it; its compact
           fixed shape keeps the clip on screen on a small phone. */}
-      {!customFullscreen && coachSlot}
+      {!customFullscreen && coachSlot && <div className="relative">{coachSlot}</div>}
       {poseData && poseData.frames.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2">
           {/* A single bordered segmented control (not two floating pills) —

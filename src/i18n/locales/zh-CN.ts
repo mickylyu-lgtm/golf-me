@@ -329,6 +329,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "coachReplay.mainFocus": "主要重点",
   "coachReplay.workOn": "改进点",
   "coachReplay.drill": "练习方法",
+  "coachReplay.drillSteps": "练习步骤",
   "coachReplay.done": "完成",
   "coachReplay.summaryOnlyHint": "播放你的挥杆，然后告诉你该练什么",
   "coachReplay.demo.summaryWorkOn": "转身送杆时让髋部保持在后方，避免过早起身。",

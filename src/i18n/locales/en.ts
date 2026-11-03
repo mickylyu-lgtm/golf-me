@@ -339,6 +339,7 @@ export const en = {
   "coachReplay.mainFocus": "Main focus",
   "coachReplay.workOn": "Work on",
   "coachReplay.drill": "Drill",
+  "coachReplay.drillSteps": "Drill steps",
   "coachReplay.done": "Done",
   "coachReplay.summaryOnlyHint": "Plays your swing, then what to work on",
   "coachReplay.demo.summaryWorkOn": "Keep your hips back as you turn through, so you don't stand up early.",

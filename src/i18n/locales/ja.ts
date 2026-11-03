@@ -329,6 +329,7 @@ export const ja: Record<TranslationKey, string> = {
   "coachReplay.mainFocus": "メインの課題",
   "coachReplay.workOn": "改善点",
   "coachReplay.drill": "ドリル",
+  "coachReplay.drillSteps": "ドリルの手順",
   "coachReplay.done": "完了",
   "coachReplay.summaryOnlyHint": "スイングを再生してから、練習することを表示します",
   "coachReplay.demo.summaryWorkOn": "振り抜くときに腰を後ろに残し、早く起き上がらないようにしましょう。",

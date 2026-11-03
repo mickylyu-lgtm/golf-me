@@ -329,6 +329,7 @@ export const ko: Record<TranslationKey, string> = {
   "coachReplay.mainFocus": "핵심 포인트",
   "coachReplay.workOn": "개선점",
   "coachReplay.drill": "드릴",
+  "coachReplay.drillSteps": "드릴 순서",
   "coachReplay.done": "완료",
   "coachReplay.summaryOnlyHint": "스윙을 재생한 뒤 연습할 점을 알려줍니다",
   "coachReplay.demo.summaryWorkOn": "몸을 돌려 지나갈 때 골반을 뒤에 두어 일찍 일어서지 않도록 하세요.",

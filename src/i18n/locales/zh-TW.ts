@@ -329,6 +329,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "coachReplay.mainFocus": "主要重點",
   "coachReplay.workOn": "改進點",
   "coachReplay.drill": "練習方法",
+  "coachReplay.drillSteps": "練習步驟",
   "coachReplay.done": "完成",
   "coachReplay.summaryOnlyHint": "播放你的揮桿，然後告訴你該練什麼",
   "coachReplay.demo.summaryWorkOn": "轉身送桿時讓髖部保持在後方，避免過早起身。",

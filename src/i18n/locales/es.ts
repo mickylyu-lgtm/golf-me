@@ -329,6 +329,7 @@ export const es: Record<TranslationKey, string> = {
   "coachReplay.mainFocus": "Enfoque principal",
   "coachReplay.workOn": "A trabajar",
   "coachReplay.drill": "Ejercicio",
+  "coachReplay.drillSteps": "Pasos del ejercicio",
   "coachReplay.done": "Listo",
   "coachReplay.summaryOnlyHint": "Reproduce tu swing y luego qué trabajar",
   "coachReplay.demo.summaryWorkOn": "Mantén las caderas atrás al girar para no levantarte antes de tiempo.",
