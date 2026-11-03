@@ -7,20 +7,23 @@ import type { RoundRow, ParticipantRow } from "../lib/golfCall";
 import { profileRowToGolferProfile } from "../lib/profile";
 import type { ProfileRow } from "../lib/profile";
 import { INITIAL_LOAD_STATUS, applyLoadOutcome, isFirstLoadError, isRefreshError } from "../lib/loadStatus";
+import { isObjectionableContentError } from "../lib/objectionableContent";
+import type { SendMessageResult } from "../lib/objectionableContent";
+import {
+  classifyRoundSendError,
+  createPendingRoundMessage,
+  discardRoundMessage as discardPending,
+  markRoundMessageFailed,
+  markRoundMessageRetrying,
+  markRoundMessageSent,
+  mergeRoundMessages,
+  reconcilePendingRoundMessages,
+} from "../lib/roundChat";
+import type { PendingRoundMessage, RoundMessageRowLike } from "../lib/roundChat";
 import type { ChatMessage, GolfCall, GolferProfile } from "../types";
 import type { ReviewInput } from "./DataContext";
 
-interface RoundMessageRow {
-  id: string;
-  round_id: string;
-  sender_id: string;
-  text: string;
-  created_at: string;
-}
-
-function roundMessageRowToChatMessage(row: RoundMessageRow): ChatMessage {
-  return { id: row.id, golfCallId: row.round_id, senderId: row.sender_id, text: row.text, createdAt: row.created_at };
-}
+type RoundMessageRow = RoundMessageRowLike;
 
 export interface HostRealRoundInput {
   courseId: string | null;
@@ -70,8 +73,14 @@ interface RealRoundsContextValue {
   editTeeTime: (roundId: string, input: EditTeeTimeInput) => Promise<{ proofInvalidated: boolean }>;
   hasReviewed: (roundId: string, revieweeId: string) => boolean;
   submitReview: (roundId: string, revieweeId: string, input: ReviewInput) => Promise<void>;
+  /** Real rows plus this device's sending/failed messages for the round (lib/roundChat.ts). */
   messagesForCall: (roundId: string) => ChatMessage[];
-  sendRoundMessage: (roundId: string, text: string) => Promise<void>;
+  /** Shows the message at once as "sending"; on failure it stays as a failed bubble (retry/discard) — except "objectionable", which is removed so the caller can put the text back. Never throws. */
+  sendRoundMessage: (roundId: string, text: string) => Promise<SendMessageResult>;
+  retryRoundMessage: (message: { clientId: string; roundId: string; text: string }) => Promise<SendMessageResult>;
+  discardRoundMessage: (clientId: string) => void;
+  /** The signed-in golfer was in this round and left it (participant row 'left'). */
+  hasLeftRound: (roundId: string) => boolean;
 }
 
 function reviewKey(roundId: string, revieweeId: string): string {
@@ -85,6 +94,10 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
   const [rounds, setRounds] = useState<RoundRow[]>([]);
   const [participants, setParticipants] = useState<ParticipantRow[]>([]);
   const [messageRows, setMessageRows] = useState<RoundMessageRow[]>([]);
+  // This device's not-yet-confirmed round messages (same idea as
+  // RealSocialContext's pendingMessages for DMs, plus a kept failed state).
+  // In memory only: a failed message survives navigation, not an app restart.
+  const [pendingMessages, setPendingMessages] = useState<PendingRoundMessage[]>([]);
   const [myReviewedKeys, setMyReviewedKeys] = useState<Set<string>>(new Set());
   const [profilesById, setProfilesById] = useState<Map<string, GolferProfile>>(new Map());
   const [isLoading, setIsLoading] = useState(false);
@@ -159,6 +172,7 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
       setRounds([]);
       setParticipants([]);
       setMessageRows([]);
+      setPendingMessages([]);
       setProfilesById(new Map());
       setLoadStatus(INITIAL_LOAD_STATUS);
       return;
@@ -297,24 +311,88 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
     [refetch],
   );
 
+  // Note: refetch() above still loads every round_messages row the caller
+  // can see (RLS scopes it to their rounds) on every realtime change. Fine
+  // at today's volume; per-round paging is the next step if it grows.
   const messagesForCall = useCallback(
-    (roundId: string) => messageRows.filter((m) => m.round_id === roundId).map(roundMessageRowToChatMessage),
-    [messageRows],
+    (roundId: string) => mergeRoundMessages(messageRows, pendingMessages, roundId),
+    [messageRows, pendingMessages],
   );
 
-  // No optimistic local echo here (unlike sendDirectMessage) — this file's
-  // other mutations (hostRound, joinRound, ...) all follow the same plain
-  // insert-then-let-realtime-catch-it convention rather than DMs' separate
-  // pending-message system, and a group chat message doesn't need the same
-  // instant-feedback treatment a 1:1 DM composer does.
-  const sendRoundMessage = useCallback(
-    async (roundId: string, text: string) => {
-      const trimmed = text.trim();
-      if (!trimmed || !authUser) return;
-      const { error } = await supabase.from("round_messages").insert({ round_id: roundId, sender_id: authUser.id, text: trimmed });
-      if (error) throw new Error(error.message);
+  // A sent message is kept until a refetch brings in its row (by id), so a
+  // refetch that started before the insert can't make it blink out.
+  // Also re-run when a message is marked sent: its row may already have
+  // arrived. reconcile returns the same array when nothing changes, so this
+  // settles immediately.
+  useEffect(() => {
+    setPendingMessages((prev) => reconcilePendingRoundMessages(prev, messageRows));
+  }, [messageRows, pendingMessages]);
+
+  // Optimistic, like sendDirectMessage: the bubble shows at once as
+  // "sending". On success it's marked sent with the real id; the realtime
+  // refetch then replaces it with the row. On failure it stays on screen as
+  // "Not sent" with retry/discard, so the text is never silently lost. A
+  // content-filter rejection is the exception: the bubble is removed and the
+  // caller puts the text back in the composer to edit (retrying unchanged
+  // text would fail again).
+  const attemptSend = useCallback(
+    async (clientId: string, roundId: string, text: string): Promise<SendMessageResult> => {
+      if (!authUser) {
+        setPendingMessages((prev) => markRoundMessageFailed(prev, clientId, "network"));
+        return "failed";
+      }
+      const { data, error } = await supabase
+        .from("round_messages")
+        .insert({ round_id: roundId, sender_id: authUser.id, text })
+        .select("id, created_at")
+        .single();
+      if (!error) {
+        setPendingMessages((prev) => markRoundMessageSent(prev, clientId, data as { id: string; created_at: string } | null));
+        return "sent";
+      }
+      if (isObjectionableContentError(error)) {
+        setPendingMessages((prev) => discardPending(prev, clientId));
+        return "objectionable";
+      }
+      console.error("GolfMe: failed to send round message.", error);
+      const failure = classifyRoundSendError(error);
+      setPendingMessages((prev) => markRoundMessageFailed(prev, clientId, failure));
+      // Refused by RLS: most likely the round just ended/was cancelled, the
+      // golfer left, or a block. Reload so the chat shows the right read-only
+      // or locked state instead of an open composer.
+      if (failure === "rejected") void refetch();
+      return "failed";
     },
-    [authUser],
+    [authUser, refetch],
+  );
+
+  const sendRoundMessage = useCallback(
+    async (roundId: string, text: string): Promise<SendMessageResult> => {
+      const trimmed = text.trim();
+      if (!trimmed) return "failed";
+      const clientId = `temp-${crypto.randomUUID()}`;
+      setPendingMessages((prev) => [...prev, createPendingRoundMessage({ clientId, roundId, senderId: authUser?.id ?? "", text: trimmed })]);
+      return attemptSend(clientId, roundId, trimmed);
+    },
+    [authUser, attemptSend],
+  );
+
+  const retryRoundMessage = useCallback(
+    async (message: { clientId: string; roundId: string; text: string }): Promise<SendMessageResult> => {
+      setPendingMessages((prev) => markRoundMessageRetrying(prev, message.clientId));
+      return attemptSend(message.clientId, message.roundId, message.text);
+    },
+    [attemptSend],
+  );
+
+  const discardRoundMessage = useCallback((clientId: string) => {
+    setPendingMessages((prev) => discardPending(prev, clientId));
+  }, []);
+
+  const hasLeftRound = useCallback(
+    (roundId: string) =>
+      Boolean(authUser) && participants.some((p) => p.round_id === roundId && p.user_id === authUser!.id && p.participant_status === "left"),
+    [participants, authUser],
   );
 
   const hasReviewed = useCallback((roundId: string, revieweeId: string) => myReviewedKeys.has(reviewKey(roundId, revieweeId)), [myReviewedKeys]);
@@ -361,6 +439,9 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
     submitReview,
     messagesForCall,
     sendRoundMessage,
+    retryRoundMessage,
+    discardRoundMessage,
+    hasLeftRound,
   };
   return <RealRoundsContext.Provider value={value}>{children}</RealRoundsContext.Provider>;
 }
