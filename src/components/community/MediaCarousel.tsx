@@ -25,6 +25,26 @@ const HOLD_TO_SPEED_UP_MS = 180;
 // Scroll-snap + a scroll-position-derived active index, not a drag library
 // — nothing else in this codebase pulls one in, and native momentum
 // scrolling on a touch device already gives the expected feel for free.
+// Wide screens (the sm: breakpoint, where SideNav replaces BottomNav): a
+// 320px-tall cover crop of a portrait phone photo across a ~680px-wide card
+// showed only a thin strip of it (Micky, 2026-11-02). There the card shows
+// the whole picture instead, contained in a taller box. Live, so resizing
+// the window (e.g. into macOS full screen) re-lays it out.
+const WIDE_QUERY = "(min-width: 640px)";
+
+function useWideScreen(): boolean {
+  const [wide, setWide] = useState(() => typeof window !== "undefined" && window.matchMedia?.(WIDE_QUERY).matches === true);
+  useEffect(() => {
+    const mq = window.matchMedia?.(WIDE_QUERY);
+    if (!mq) return;
+    const onChange = () => setWide(mq.matches);
+    onChange();
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return wide;
+}
+
 export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }: MediaCarouselProps) {
   const [activeIndex, setActiveIndex] = useState(initialIndex);
   const trackRef = useRef<HTMLDivElement>(null);
@@ -149,7 +169,9 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
     el.playbackRate = 1;
   }
 
-  const itemClass = variant === "card" ? "h-80 w-full shrink-0 snap-center object-cover" : "";
+  const wide = useWideScreen();
+  const itemClass =
+    variant !== "card" ? "" : wide ? "h-[min(70vh,36rem)] w-full shrink-0 snap-center object-contain" : "h-80 w-full shrink-0 snap-center object-cover";
 
   return (
     <div className="relative">
@@ -170,6 +192,7 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
                 src={item.url}
                 poster={item.thumbnailUrl}
                 className={itemClass}
+                fit={wide ? "contain" : "cover"}
                 onClick={(e) => {
                   // Only a plain tap on the video body (not the native
                   // controls bar) triggers this — otherwise tapping
@@ -269,7 +292,7 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
               </div>
             )
           ) : variant === "card" ? (
-            <CardImage key={item.id} src={item.url} className={itemClass} onClick={() => onItemClick?.(i)} />
+            <CardImage key={item.id} src={item.url} className={itemClass} fit={wide ? "contain" : "cover"} onClick={() => onItemClick?.(i)} />
           ) : (
             <div key={item.id} className="h-full w-full shrink-0 snap-center overflow-hidden bg-black">
               <img src={item.url} alt="" loading="lazy" className="h-full w-full object-contain" />
@@ -303,7 +326,9 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
 // Card-variant media fill a fixed box with object-cover, which already hides
 // any letterbox from a mismatched shape. Black bars baked into the picture
 // itself (an editing or social app's square/4:5 export) would still show, so
-// they're found (see blurredBackdrop) and zoomed out of the box.
+// they're found (see blurredBackdrop) and zoomed out of the box. Not when
+// the card shows the whole picture (fit "contain", wide screens): zooming
+// would crop it again.
 function BarCropBox({ className, bars, aspect, children }: {
   className: string;
   bars: BarInsets | null;
@@ -318,10 +343,10 @@ function BarCropBox({ className, bars, aspect, children }: {
   );
 }
 
-function CardImage({ src, className, onClick }: { src: string; className: string; onClick: () => void }) {
+function CardImage({ src, className, fit, onClick }: { src: string; className: string; fit: "cover" | "contain"; onClick: () => void }) {
   const [found, setFound] = useState<{ bars: BarInsets | null; aspect: number } | null>(null);
   return (
-    <BarCropBox className={className} bars={found?.bars ?? null} aspect={found?.aspect ?? null}>
+    <BarCropBox className={className} bars={fit === "cover" ? (found?.bars ?? null) : null} aspect={found?.aspect ?? null}>
       {(style, cls) => (
         <img
           src={src}
@@ -344,15 +369,16 @@ function CardImage({ src, className, onClick }: { src: string; className: string
   );
 }
 
-function CardVideo({ src, poster, className, onClick }: {
+function CardVideo({ src, poster, className, fit, onClick }: {
   src: string;
   poster?: string;
   className: string;
+  fit: "cover" | "contain";
   onClick: (e: React.MouseEvent<HTMLVideoElement>) => void;
 }) {
   const scan = useBlurredBackdrop(poster);
   return (
-    <BarCropBox className={className} bars={scan?.bars ?? null} aspect={scan?.aspect ?? null}>
+    <BarCropBox className={className} bars={fit === "cover" ? (scan?.bars ?? null) : null} aspect={scan?.aspect ?? null}>
       {(style, cls) =>
         style ? (
           // Zoomed past its own edges, the native controls bar would sit

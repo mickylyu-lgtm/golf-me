@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { PostMediaItem } from "../../types";
 import { createPortal } from "react-dom";
+import { X } from "lucide-react";
+import { useLocale } from "../../i18n/LocaleContext";
 import { MediaCarousel } from "./MediaCarousel";
 import { perfHudViewer } from "../../lib/perfHud";
 
@@ -58,6 +60,17 @@ export function FullscreenMediaViewer({ media, initialIndex = 0, onClose }: Full
   } | null>(null);
 
   const surfaceRef = useRef<HTMLDivElement>(null);
+  const { t } = useLocale();
+
+  // Drag-to-dismiss is touch only: on a computer, Esc and the close button
+  // are the way out.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
 
   useEffect(() => {
     perfHudViewer(true);
@@ -167,6 +180,16 @@ export function FullscreenMediaViewer({ media, initialIndex = 0, onClose }: Full
       >
         <MediaCarousel media={media} variant="lightbox" initialIndex={initialIndex} />
       </div>
+      {/* Top-left: a video's mute toggle owns the top-right corner. */}
+      <button
+        type="button"
+        aria-label={t("common.close")}
+        onClick={onClose}
+        className="absolute left-4 top-[calc(env(safe-area-inset-top)+1rem)] flex h-9 w-9 items-center justify-center rounded-full bg-black/40 text-white transition-colors duration-150 hover:bg-black/60"
+        style={{ opacity: backdropOpacity }}
+      >
+        <X size={18} />
+      </button>
     </div>,
     document.body,
   );
