@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { CircleCheck, Dumbbell, Play, RotateCcw, Target } from "lucide-react";
+import type { ReactNode } from "react";
 import { useLocale } from "../../i18n/LocaleContext";
 import type { TranslationKey } from "../../i18n/locales/en";
 import { coachDwellMs } from "../../lib/coachReplay";
@@ -19,43 +20,43 @@ const MOMENT_LABEL_KEYS: Record<CoachMomentLabel, TranslationKey> = {
   finish: "coachReplay.finish",
 };
 
-// Both cards are flex columns that may shrink (min-h-0) inside a slot with
-// a capped height: the player caps it so a card never covers the clip
-// (below the video inline, a bottom band in fullscreen). Only the body
-// scrolls; the header and Continue/Done always stay on screen.
+// Both cards are a fixed, compact shape that never scrolls (Micky,
+// 2026-11-03): the phase label, one line per finding, the cue in at most
+// two lines, and 44px buttons. Longer text is cut with an ellipsis; the full
+// text is in the results below the replay. Kept small enough to fit the
+// player's capped slot (below the video inline, a bottom band in
+// fullscreen) at 375x667 with the longest stored text, so the card never
+// covers the clip.
 const CARD_CLASS =
-  "relative flex min-h-0 flex-col overflow-hidden rounded-2xl bg-white p-3.5 shadow-[0_14px_34px_-14px_rgba(14,39,23,0.5)] ring-1 ring-black/[0.04] animate-coach-card-in";
-const CARD_BODY_CLASS = "mt-2.5 min-h-0 overflow-y-auto overscroll-contain";
-// Fades the last line when the body has more below, so it reads as scrollable.
-const CARD_BODY_MORE_CLASS = "[mask-image:linear-gradient(to_bottom,black_calc(100%-1.5rem),transparent)]";
-
-// Whether the capped body has content hidden below its fold (not yet
-// scrolled to the end). Re-checked on resize and scroll.
-function useHasMoreBelow() {
-  const [el, setEl] = useState<HTMLDivElement | null>(null);
-  const [more, setMore] = useState(false);
-  useEffect(() => {
-    if (!el) return;
-    const check = () => setMore(el.scrollHeight - el.scrollTop - el.clientHeight > 2);
-    check();
-    const observer = new ResizeObserver(check);
-    observer.observe(el);
-    el.addEventListener("scroll", check, { passive: true });
-    return () => {
-      observer.disconnect();
-      el.removeEventListener("scroll", check);
-    };
-  }, [el]);
-  return [setEl, more] as const;
-}
+  "relative flex flex-col overflow-hidden rounded-2xl bg-white p-3 shadow-[0_14px_34px_-14px_rgba(14,39,23,0.5)] ring-1 ring-black/[0.04] animate-coach-card-in";
+const BUTTON_ROW_CLASS = "mt-2 flex items-center justify-between gap-2";
+const SECONDARY_BUTTON_CLASS =
+  "flex min-h-11 items-center gap-1.5 rounded-full px-3 text-[13px] font-semibold text-slate-500 transition-colors duration-150 hover:text-slate-800";
+const PRIMARY_BUTTON_CLASS =
+  "flex min-h-11 items-center gap-1.5 rounded-full bg-brand-forest px-5 text-[13px] font-semibold text-white shadow-sm transition-colors duration-150 hover:bg-brand-forest-deep";
 
 type T = (key: TranslationKey, vars?: Record<string, string | number>) => string;
 const textOf = (t: T, text: CoachText) => (text.kind === "key" ? t(text.key) : text.text);
 const claimLength = (t: T, c: CoachClaim | undefined) => (c ? (c.title ? textOf(t, c.title).length : 0) + textOf(t, c.body).length : 0);
 
-function Claim({ claim, t }: { claim: CoachClaim; t: T }) {
+// One finding: a small label, then the claim on ONE line (title · body, cut
+// with an ellipsis). The full sentence carries on in the results below.
+function FindingRow({ icon, label, labelClass, children }: { icon: ReactNode; label: string; labelClass: string; children: ReactNode }) {
   return (
-    <p className="text-[13px] leading-snug text-slate-700">
+    <div className="flex items-start gap-2">
+      {icon}
+      <div className="min-w-0 flex-1">
+        <p className={`text-[10.5px] font-bold uppercase leading-[14px] tracking-wide ${labelClass}`}>{label}</p>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function ClaimLine({ claim, t }: { claim: CoachClaim; t: T }) {
+  const full = `${claim.title ? `${textOf(t, claim.title)} · ` : ""}${textOf(t, claim.body)}`;
+  return (
+    <p data-coach-text className="truncate text-[13px] leading-[18px] text-slate-700" title={full}>
       {claim.title && <span className="font-semibold text-slate-900">{textOf(t, claim.title)} · </span>}
       {textOf(t, claim.body)}
     </p>
@@ -76,14 +77,7 @@ export function CoachReplayCard({ checkpoint, index, total, onContinue, onSkip }
   // Tapping the card holds it: the swing waits until Continue. Under
   // reduced motion it always waits (nothing moves on its own).
   const [held, setHeld] = useState(false);
-  // A card whose text runs past its capped height waits for Continue: it
-  // shouldn't move on before the golfer has scrolled to read the rest.
-  const [bodyRef, moreBelow] = useHasMoreBelow();
-  const [everOverflowed, setEverOverflowed] = useState(false);
-  useEffect(() => {
-    if (moreBelow) setEverOverflowed(true);
-  }, [moreBelow]);
-  const autoContinue = !reducedMotion && !held && !everOverflowed;
+  const autoContinue = !reducedMotion && !held;
   const dwellMs = coachDwellMs(claimLength(t, checkpoint.good) + claimLength(t, checkpoint.fix) + claimLength(t, checkpoint.cue));
 
   useEffect(() => {
@@ -100,56 +94,64 @@ export function CoachReplayCard({ checkpoint, index, total, onContinue, onSkip }
       onClick={() => setHeld(true)}
       className={CARD_CLASS}
     >
-      <div className="flex shrink-0 items-center justify-between gap-2">
-        <p className="flex min-w-0 items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-brand-forest">
+      <div className="flex items-center justify-between gap-2">
+        <p className="flex min-w-0 items-center gap-1.5 text-[11px] font-bold uppercase leading-4 tracking-wider text-brand-forest">
           <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand-gold" />
           <span className="truncate">{t(MOMENT_LABEL_KEYS[checkpoint.label])}</span>
           {checkpoint.approximate && (
-            <span className="shrink-0 rounded-full bg-sun-50 px-1.5 py-0.5 text-[10px] font-semibold normal-case tracking-normal text-sun-700">
+            <span className="shrink-0 rounded-full bg-sun-50 px-1.5 text-[10px] font-semibold normal-case leading-4 tracking-normal text-sun-700">
               {t("coachReplay.approximate")}
             </span>
           )}
         </p>
-        <p className="shrink-0 text-[11px] font-semibold tabular-nums text-slate-400">{t("coachReplay.step", { current: index + 1, total })}</p>
+        <p className="shrink-0 text-[11px] font-semibold leading-4 tabular-nums text-slate-400">{t("coachReplay.step", { current: index + 1, total })}</p>
       </div>
 
-      {/* Header and buttons stay put; only this middle part scrolls when the
-          slot caps the card's height (so it never grows over the clip). */}
-      <div ref={bodyRef} className={`${CARD_BODY_CLASS} ${moreBelow ? CARD_BODY_MORE_CLASS : ""}`}>
-      <div className="flex flex-col gap-2">
+      <div className="mt-2 flex flex-col gap-1.5">
         {checkpoint.good && (
-          <div className="flex items-start gap-2">
-            <CircleCheck size={17} aria-hidden="true" className="mt-px shrink-0 text-fairway-600" />
-            <div className="min-w-0">
-              <p className="text-[10.5px] font-bold uppercase tracking-wide text-fairway-700">{t("coachReplay.doingWell")}</p>
-              <Claim claim={checkpoint.good} t={t} />
-            </div>
-          </div>
+          <FindingRow
+            icon={<CircleCheck size={17} aria-hidden="true" className="mt-px shrink-0 text-fairway-600" />}
+            label={t("coachReplay.doingWell")}
+            labelClass="text-fairway-700"
+          >
+            <ClaimLine claim={checkpoint.good} t={t} />
+          </FindingRow>
         )}
-        <div className="flex items-start gap-2">
-          <Target size={17} aria-hidden="true" className={`mt-px shrink-0 ${checkpoint.fix ? "text-sun-600" : "text-slate-300"}`} />
-          <div className="min-w-0">
-            <p className={`text-[10.5px] font-bold uppercase tracking-wide ${checkpoint.fix ? "text-sun-700" : "text-slate-400"}`}>{t("coachReplay.toFix")}</p>
-            {checkpoint.fix ? <Claim claim={checkpoint.fix} t={t} /> : <p className="text-[13px] leading-snug text-slate-500">{t("coachReplay.nothingFlagged")}</p>}
-          </div>
-        </div>
+        <FindingRow
+          icon={<Target size={17} aria-hidden="true" className={`mt-px shrink-0 ${checkpoint.fix ? "text-sun-600" : "text-slate-300"}`} />}
+          label={t("coachReplay.toFix")}
+          labelClass={checkpoint.fix ? "text-sun-700" : "text-slate-400"}
+        >
+          {checkpoint.fix ? (
+            <ClaimLine claim={checkpoint.fix} t={t} />
+          ) : (
+            <p data-coach-text className="truncate text-[13px] leading-[18px] text-slate-500">
+              {t("coachReplay.nothingFlagged")}
+            </p>
+          )}
+        </FindingRow>
       </div>
 
       {checkpoint.cue && (
-        <div className="mt-3 flex items-center gap-2.5 rounded-xl bg-brand-forest px-3 py-2">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-brand-gold">{t("coachReplay.remember")}</span>
-          <span className="min-w-0 text-sm font-semibold text-white">{textOf(t, checkpoint.cue.body)}</span>
+        // The label runs inline with the cue, so the cue gets the card's full
+        // width: at most two lines (90 characters fits).
+        // (Padding on the wrapper, clamp on the text: a clamped element with
+        // its own padding lets a third line show through the padding.)
+        <div className="mt-2.5 rounded-xl bg-brand-forest px-3 py-2">
+          <p data-coach-text className="line-clamp-2 text-[13px] font-semibold leading-[18px] text-white">
+            <span className="mr-1.5 text-[10px] font-bold uppercase tracking-wider text-brand-gold">{t("coachReplay.remember")}</span>
+            {textOf(t, checkpoint.cue.body)}
+          </p>
         </div>
       )}
-      </div>
 
-      <div className="mt-3 flex shrink-0 items-center justify-between gap-2">
+      <div className={BUTTON_ROW_CLASS}>
         <button
           onClick={(e) => {
             e.stopPropagation();
             onSkip();
           }}
-          className="min-h-9 rounded-full px-3 text-xs font-semibold text-slate-500 transition-colors duration-150 hover:text-slate-800"
+          className={SECONDARY_BUTTON_CLASS}
         >
           {t("coachReplay.skip")}
         </button>
@@ -158,7 +160,7 @@ export function CoachReplayCard({ checkpoint, index, total, onContinue, onSkip }
             e.stopPropagation();
             onContinue();
           }}
-          className="flex min-h-9 items-center gap-1.5 rounded-full bg-brand-forest px-4 text-xs font-semibold text-white shadow-sm transition-colors duration-150 hover:bg-brand-forest-deep"
+          className={PRIMARY_BUTTON_CLASS}
         >
           {t("coachReplay.continue")}
           <Play size={12} aria-hidden="true" className="fill-current" />
@@ -178,64 +180,40 @@ export function CoachReplayCard({ checkpoint, index, total, onContinue, onSkip }
 
 // The closing card, once a coached pass reaches the end: what to work on
 // (the main focus when no freeze carried it, the top work_on items) and the
-// drill. No auto-dismiss: there's nothing left to play into.
+// drill's name, one line each. The drill's steps are in the results below.
+// No auto-dismiss: there's nothing left to play into.
 export function CoachSummaryCard({ summary, onReplay, onDone }: { summary: CoachSummary; onReplay: () => void; onDone: () => void }) {
   const { t } = useLocale();
   const work: { claim: CoachClaim; labelKey: TranslationKey }[] = summary.focus ? [{ claim: summary.focus, labelKey: "coachReplay.mainFocus" }] : [];
   for (const claim of summary.workOn) work.push({ claim, labelKey: "coachReplay.workOn" });
-  const [bodyRef, moreBelow] = useHasMoreBelow();
   return (
-    <div
-      role="dialog"
-      aria-live="polite"
-      aria-label={t("coachReplay.summaryTitle")}
-      className={CARD_CLASS}
-    >
-      <p className="flex shrink-0 items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-brand-forest">
+    <div role="dialog" aria-live="polite" aria-label={t("coachReplay.summaryTitle")} className={CARD_CLASS}>
+      <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase leading-4 tracking-wider text-brand-forest">
         <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand-gold" />
         {t("coachReplay.summaryTitle")}
       </p>
 
-      <div ref={bodyRef} className={`${CARD_BODY_CLASS} flex flex-col gap-2 ${moreBelow ? CARD_BODY_MORE_CLASS : ""}`}>
+      <div className="mt-2 flex flex-col gap-1.5">
         {work.map(({ claim, labelKey }) => (
-          <div key={claim.source} className="flex items-start gap-2">
-            <Target size={17} aria-hidden="true" className="mt-px shrink-0 text-sun-600" />
-            <div className="min-w-0">
-              <p className="text-[10.5px] font-bold uppercase tracking-wide text-sun-700">{t(labelKey)}</p>
-              <Claim claim={claim} t={t} />
-            </div>
-          </div>
+          <FindingRow key={claim.source} icon={<Target size={17} aria-hidden="true" className="mt-px shrink-0 text-sun-600" />} label={t(labelKey)} labelClass="text-sun-700">
+            <ClaimLine claim={claim} t={t} />
+          </FindingRow>
         ))}
         {summary.drill && (
-          <div className="flex items-start gap-2">
-            <Dumbbell size={17} aria-hidden="true" className="mt-px shrink-0 text-fairway-600" />
-            <div className="min-w-0">
-              <p className="text-[10.5px] font-bold uppercase tracking-wide text-fairway-700">{t("coachReplay.drill")}</p>
-              <p className="text-[13px] font-semibold leading-snug text-slate-900">{textOf(t, summary.drill.name)}</p>
-              {summary.drill.steps.length > 0 && (
-                <ol className="mt-0.5 list-decimal pl-4 text-[12.5px] leading-snug text-slate-600">
-                  {summary.drill.steps.map((step, i) => (
-                    <li key={i}>{textOf(t, step)}</li>
-                  ))}
-                </ol>
-              )}
-            </div>
-          </div>
+          <FindingRow icon={<Dumbbell size={17} aria-hidden="true" className="mt-px shrink-0 text-fairway-600" />} label={t("coachReplay.drill")} labelClass="text-fairway-700">
+            <p data-coach-text className="truncate text-[13px] font-semibold leading-[18px] text-slate-900">
+              {textOf(t, summary.drill.name)}
+            </p>
+          </FindingRow>
         )}
       </div>
 
-      <div className="mt-3 flex shrink-0 items-center justify-between gap-2">
-        <button
-          onClick={onReplay}
-          className="flex min-h-9 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-slate-500 transition-colors duration-150 hover:text-slate-800"
-        >
-          <RotateCcw size={12} aria-hidden="true" />
+      <div className={BUTTON_ROW_CLASS}>
+        <button onClick={onReplay} className={SECONDARY_BUTTON_CLASS}>
+          <RotateCcw size={13} aria-hidden="true" />
           {t("coachReplay.watchAgain")}
         </button>
-        <button
-          onClick={onDone}
-          className="flex min-h-9 items-center gap-1.5 rounded-full bg-brand-forest px-4 text-xs font-semibold text-white shadow-sm transition-colors duration-150 hover:bg-brand-forest-deep"
-        >
+        <button onClick={onDone} className={PRIMARY_BUTTON_CLASS}>
           {t("coachReplay.done")}
         </button>
       </div>

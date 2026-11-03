@@ -910,13 +910,17 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
           ))}
         {customFullscreen && coachSlot && (
           // Fullscreen has no page below the video: the card sits in a
-          // bottom band capped at ~35% of the screen (its body scrolls), and
-          // the video above shrinks to fit (fsReserve), so it never covers
-          // the clip.
+          // bottom band and the video above shrinks to fit it (fsReserve),
+          // so it never covers the clip. The cards have a fixed compact
+          // shape (CoachReplayCard: one line per finding, two for the cue),
+          // about 35% of a 375x667 screen at most, and never scroll. No CSS
+          // height cap here on purpose: a cap the card exceeded would make
+          // it overflow onto the video, while uncapped the video only
+          // gets a little smaller.
           <div
             ref={fsSlotRef}
             data-coach-slot
-            className="absolute inset-x-3 z-10 flex max-h-[35%] flex-col"
+            className="absolute inset-x-3 z-10 flex flex-col"
             style={{ bottom: FS_SLOT_BOTTOM }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -937,11 +941,9 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
           </button>
         )}
       </div>
-      {!customFullscreen && coachSlot && (
-        // Inline the card is below the video; capped too, so a long card
-        // can't push the clip off a small screen (its body scrolls).
-        <div className="flex max-h-[40vh] flex-col">{coachSlot}</div>
-      )}
+      {/* Inline the card is below the video, never over it; its compact
+          fixed shape keeps the clip on screen on a small phone. */}
+      {!customFullscreen && coachSlot}
       {poseData && poseData.frames.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2">
           {/* A single bordered segmented control (not two floating pills) —
