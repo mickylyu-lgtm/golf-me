@@ -23,6 +23,7 @@ import { useRealRounds } from "../context/RealRoundsContext";
 import { useRealSocial } from "../context/RealSocialContext";
 import { useShareActions } from "../lib/useShareActions";
 import { GolfMeLoader } from "../components/loading/GolfMeLoader";
+import { LoadErrorState } from "../components/ui/LoadStates";
 import { useToast } from "../context/ToastContext";
 import { useLocale } from "../i18n/LocaleContext";
 import { Avatar } from "../components/ui/Avatar";
@@ -68,7 +69,7 @@ export function GolfCallDetail() {
     hasReviewed,
   } = useData();
   const { isDemo } = useAuth();
-  const { hasLoaded: roundsLoaded } = useRealRounds();
+  const { hasLoaded: roundsLoaded, loadError: roundsLoadError, isLoading: roundsLoading, retry: retryRounds } = useRealRounds();
   const { hasLoaded: socialLoaded } = useRealSocial();
   const { shareRound } = useShareActions();
   const location = useLocation();
@@ -114,6 +115,8 @@ export function GolfCallDetail() {
   // they blocked) would briefly resolve before DataContext hides it.
   const waitingForBlocks = !isDemo && !socialLoaded && call?.hostId !== currentUser.id;
   if ((!call && !roundsLoaded) || waitingForBlocks) return <GolfMeLoader className="py-12" />;
+  // The round list never loaded: that's a connection problem, not "not found".
+  if (!call && roundsLoadError) return roundsLoading ? <GolfMeLoader className="py-12" /> : <LoadErrorState onRetry={retryRounds} />;
   if (!call) {
     return (
       <div className="py-12 text-center text-slate-500">

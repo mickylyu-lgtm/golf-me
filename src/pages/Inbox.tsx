@@ -2,9 +2,14 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { MessageCircle, Search, ShieldCheck } from "lucide-react";
 import { useData } from "../context/DataContext";
+import { useAuth } from "../context/AuthContext";
+import { useRealSocial } from "../context/RealSocialContext";
 import { Avatar } from "../components/ui/Avatar";
 import { Button } from "../components/ui/Button";
 import { EmptyState } from "../components/ui/EmptyState";
+import { LoadErrorState, StaleDataNotice } from "../components/ui/LoadStates";
+import { GolfMeLoader } from "../components/loading/GolfMeLoader";
+import { listView } from "../lib/loadStatus";
 import { CLICKABLE_CARD_CLASS } from "../components/ui/cardStyles";
 import { FounderBadge } from "../components/golfer/TrustBadges";
 import { formatRelativeTime } from "../lib/format";
@@ -19,6 +24,10 @@ import { useLocale } from "../i18n/LocaleContext";
 // other golfer is — it's the canonical entry point for that.
 export function Inbox() {
   const { dmConversations, typingConversationIds } = useData();
+  const { isDemo } = useAuth();
+  const social = useRealSocial();
+  // A failed first load must not read as "no conversations yet".
+  const view = listView({ count: dmConversations.length, isDemo, hasLoaded: social.hasLoaded, loadError: social.loadError, isLoading: social.isLoading });
   const navigate = useNavigate();
   const { t, locale } = useLocale();
   const [query, setQuery] = useState("");
@@ -44,7 +53,13 @@ export function Inbox() {
         </div>
       )}
 
-      {dmConversations.length === 0 ? (
+      {social.refreshFailed && <StaleDataNotice onRetry={social.retry} />}
+
+      {view === "loading" ? (
+        <GolfMeLoader className="py-12" />
+      ) : view === "error" ? (
+        <LoadErrorState onRetry={social.retry} />
+      ) : dmConversations.length === 0 ? (
         <EmptyState
           icon={<MessageCircle size={20} />}
           title={t("chatInbox.emptyTitle")}

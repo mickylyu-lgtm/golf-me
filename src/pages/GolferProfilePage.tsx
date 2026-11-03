@@ -24,6 +24,7 @@ import { useRealRounds } from "../context/RealRoundsContext";
 import { useRealSocial } from "../context/RealSocialContext";
 import { useRealCommunity } from "../context/RealCommunityContext";
 import { GolfMeLoader } from "../components/loading/GolfMeLoader";
+import { LoadErrorState } from "../components/ui/LoadStates";
 import { useLocale } from "../i18n/LocaleContext";
 import { Avatar } from "../components/ui/Avatar";
 import { Badge } from "../components/ui/Badge";
@@ -73,9 +74,13 @@ export function GolferProfilePage() {
     unfollowUser,
     canMessage,
   } = useData();
-  const { hasLoaded: roundsLoaded } = useRealRounds();
-  const { hasLoaded: socialLoaded } = useRealSocial();
-  const { hasLoaded: communityLoaded } = useRealCommunity();
+  const realRounds = useRealRounds();
+  const realSocial = useRealSocial();
+  const realCommunity = useRealCommunity();
+  const { hasLoaded: roundsLoaded } = realRounds;
+  const { hasLoaded: socialLoaded } = realSocial;
+  const { hasLoaded: communityLoaded } = realCommunity;
+  const failedSources = [realRounds, realSocial, realCommunity].filter((s) => s.loadError);
   const { showToast } = useToast();
   const { t } = useLocale();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -106,6 +111,14 @@ export function GolferProfilePage() {
   // Opened cold, the profile caches (rounds / social / community) may not
   // have loaded yet — wait rather than flash "Golfer not found".
   if (!golfer && !(roundsLoaded && socialLoaded && communityLoaded)) return <GolfMeLoader className="py-12" />;
+  // A profile cache never loaded: that's a connection problem, not "not found".
+  if (!golfer && failedSources.length > 0) {
+    return failedSources.some((s) => s.isLoading) ? (
+      <GolfMeLoader className="py-12" />
+    ) : (
+      <LoadErrorState onRetry={() => Promise.all(failedSources.map((s) => s.retry())).then(() => undefined)} />
+    );
+  }
   if (!golfer) {
     return (
       <div className="py-12 text-center text-slate-500">

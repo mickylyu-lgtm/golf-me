@@ -2,7 +2,12 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, CalendarDays, ClipboardList, MapPin, Search, Users } from "lucide-react";
 import { useData } from "../context/DataContext";
+import { useAuth } from "../context/AuthContext";
+import { useRealRounds } from "../context/RealRoundsContext";
 import { useLocale } from "../i18n/LocaleContext";
+import { LoadErrorState, StaleDataNotice } from "../components/ui/LoadStates";
+import { GolfMeLoader } from "../components/loading/GolfMeLoader";
+import { listView } from "../lib/loadStatus";
 import { Avatar } from "../components/ui/Avatar";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
@@ -18,6 +23,8 @@ import { goBack } from "../lib/goBack";
 
 export function MyRounds() {
   const { currentUser, golfCalls, getGolfer, hasReviewed } = useData();
+  const { isDemo } = useAuth();
+  const rounds = useRealRounds();
   const { t, locale } = useLocale();
   const navigate = useNavigate();
   const [reviewTarget, setReviewTarget] = useState<{ call: GolfCall; revieweeId: string } | null>(null);
@@ -41,6 +48,10 @@ export function MyRounds() {
     [myCalls],
   );
 
+  // A failed first load must not read as "no upcoming / no past rounds".
+  const view = listView({ count: myCalls.length, isDemo, hasLoaded: rounds.hasLoaded, loadError: rounds.loadError, isLoading: rounds.isLoading });
+  const sectionsVisible = view === "list" || view === "empty";
+
   return (
     <div className="flex flex-col gap-8">
       <button
@@ -55,7 +66,12 @@ export function MyRounds() {
         <p className="text-sm text-slate-500">{t("myGolf.subtitle")}</p>
       </div>
 
-      <section>
+      {rounds.refreshFailed && <StaleDataNotice onRetry={rounds.retry} />}
+
+      {view === "loading" && <GolfMeLoader className="py-12" />}
+      {view === "error" && <LoadErrorState onRetry={rounds.retry} />}
+
+      <section hidden={!sectionsVisible}>
         <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-400">{t("myGolf.upcoming")}</h2>
         {upcoming.length === 0 ? (
           <EmptyState
@@ -112,7 +128,7 @@ export function MyRounds() {
         )}
       </section>
 
-      <section>
+      <section hidden={!sectionsVisible}>
         <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-400">{t("myGolf.past")}</h2>
         {past.length === 0 ? (
           <EmptyState icon={<ClipboardList size={20} />} title={t("myGolf.emptyPast")} description={t("myGolf.emptyPastDesc")} />
