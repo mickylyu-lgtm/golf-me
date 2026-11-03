@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
 import { Haptics, ImpactStyle } from "@capacitor/haptics";
-import { MOBILE_NAV_ITEMS } from "../../lib/nav";
+import { MOBILE_NAV_ITEMS, activeNavIndex } from "../../lib/nav";
 import { NAV_TUTORIAL_ID_BY_PATH } from "../../lib/tutorialSteps";
 import { useLocale } from "../../i18n/LocaleContext";
 import { useData } from "../../context/DataContext";
@@ -68,7 +68,7 @@ export function BottomNav() {
   // has to compare against "the real current tab" independent of any one
   // NavLink's own isActive render-prop.
   const activeIndex = useMemo(() => {
-    const idx = MOBILE_NAV_ITEMS.findIndex((item) => (item.path === "/" ? location.pathname === "/" : location.pathname.startsWith(item.path)));
+    const idx = activeNavIndex(MOBILE_NAV_ITEMS, location.pathname);
     return idx === -1 ? 0 : idx;
   }, [location.pathname]);
   // Read inside the touch-event closure below (registered once, not
