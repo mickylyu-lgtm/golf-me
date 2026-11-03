@@ -431,10 +431,16 @@ export type CaddieAnalysisStatus = "pending" | "processing" | "complete" | "fail
 export type CaddieCameraAngle = "face_on" | "down_the_line" | "other" | "uncertain";
 export type CaddieConfidence = "high" | "medium" | "low";
 
+// Where a work_on item shows most (analysis_json.work_on[].checkpoint,
+// sanitized server-side and again on read). Undefined for older rows or
+// when Gemini gave no valid tag.
+export type CaddieWorkOnCheckpoint = "address" | "top" | "impact" | "follow_through" | "whole_swing";
+
 export interface CaddieWorkOnItem {
   issue: string;
   whyItMatters: string;
   confidence: CaddieConfidence;
+  checkpoint?: CaddieWorkOnCheckpoint;
 }
 
 export interface CaddieFocus {

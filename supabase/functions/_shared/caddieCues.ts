@@ -3,6 +3,8 @@
 // client (src/context/RealCaddieContext.tsx) use the same rules as
 // analyze-swing and translate-caddie-analysis.
 //
+// Also the optional work_on[].checkpoint tag (see below).
+//
 // Gemini may write one short cue per key moment it placed in `phases`. The
 // field is optional and additive: it is stored as
 // analysis_json.checkpoint_cues ONLY after passing sanitizeCheckpointCues(),
@@ -80,6 +82,40 @@ export function placedCueCheckpoints(rawPhases: unknown): Set<CueCheckpoint> {
   }
   if (isNum(phases.impact?.window_start_seconds) && isNum(phases.impact?.window_end_seconds)) placed.add("impact");
   return placed;
+}
+
+// ── work_on[].checkpoint ────────────────────────────────────────────────
+// Gemini may tag each work_on item with the key moment it shows most, or
+// whole_swing. Optional and additive like the cues: an unknown or missing
+// tag is simply removed from that item (the item itself is kept), so it can
+// never fail an analysis. Old rows have no tag; Coach Replay then falls back
+// to its own placement (the main focus on the weakest checkpoint).
+export const WORK_ON_CHECKPOINTS = ["address", "top", "impact", "follow_through", "whole_swing"] as const;
+export type WorkOnCheckpoint = (typeof WORK_ON_CHECKPOINTS)[number];
+
+export function sanitizeWorkOnCheckpoint(raw: unknown): WorkOnCheckpoint | undefined {
+  if (typeof raw !== "string") return undefined;
+  const v = raw.trim().toLowerCase();
+  return (WORK_ON_CHECKPOINTS as readonly string[]).includes(v) ? (v as WorkOnCheckpoint) : undefined;
+}
+
+// Rewrites each work_on item's `checkpoint` to its sanitized value, or
+// removes the key. Leaves everything else (including non-object items and
+// a non-array work_on, which analyze-swing's own shape check handles)
+// exactly as it was. Never throws.
+export function withSanitizedWorkOnCheckpoints<T extends Record<string, unknown>>(json: T): T {
+  try {
+    if (!Array.isArray(json.work_on)) return json;
+    const workOn = json.work_on.map((item: unknown) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return item;
+      const { checkpoint, ...rest } = item as Record<string, unknown>;
+      const tag = sanitizeWorkOnCheckpoint(checkpoint);
+      return tag ? { ...rest, checkpoint: tag } : rest;
+    });
+    return { ...json, work_on: workOn };
+  } catch {
+    return json;
+  }
 }
 
 // Replaces whatever Gemini put in checkpoint_cues with the sanitized value,

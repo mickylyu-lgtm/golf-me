@@ -7,6 +7,7 @@ import type { SignedUrlEntry } from "../lib/caddieMedia";
 import { CaddieRequestError, isStaleProcessing } from "../lib/caddieAnalysis";
 import { FAILURE_BODY_KEYS, parseCaddieFailure } from "../lib/caddieFailure";
 import { checkpointCuesFromJson } from "../lib/coachReplay";
+import { sanitizeWorkOnCheckpoint } from "../../supabase/functions/_shared/caddieCues.ts";
 import { useAuth } from "./AuthContext";
 import { useLocale } from "../i18n/LocaleContext";
 import type {
@@ -113,11 +114,15 @@ function jsonToDetails(json: Record<string, unknown> | null, scoreTotal: number 
     summary: String(json.summary ?? ""),
     cameraAngle: (json.camera_angle as CaddieAnalysisDetails["cameraAngle"]) ?? "uncertain",
     strengths: Array.isArray(json.strengths) ? (json.strengths as string[]) : [],
-    workOn: workOn.map((w) => ({
-      issue: String(w.issue ?? ""),
-      whyItMatters: String(w.why_it_matters ?? ""),
-      confidence: (w.confidence as CaddieAnalysisDetails["workOn"][number]["confidence"]) ?? "medium",
-    })),
+    workOn: workOn.map((w) => {
+      const checkpoint = sanitizeWorkOnCheckpoint(w.checkpoint);
+      return {
+        issue: String(w.issue ?? ""),
+        whyItMatters: String(w.why_it_matters ?? ""),
+        confidence: (w.confidence as CaddieAnalysisDetails["workOn"][number]["confidence"]) ?? "medium",
+        ...(checkpoint ? { checkpoint } : {}),
+      };
+    }),
     focus: { title: String(focus.title ?? ""), instruction: String(focus.instruction ?? "") },
     drill: { name: String(drill.name ?? ""), steps: Array.isArray(drill.steps) ? (drill.steps as string[]) : [] },
     limitations: Array.isArray(json.limitations) ? (json.limitations as string[]) : [],
