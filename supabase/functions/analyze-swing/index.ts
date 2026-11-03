@@ -50,6 +50,7 @@ import {
   scaleKeypoints,
 } from "../_shared/caddieReliability.ts";
 import type { CaddieFailureCode } from "../_shared/caddieReliability.ts";
+import { CUE_MAX_CHARS, withSanitizedCheckpointCues } from "../_shared/caddieCues.ts";
 
 // ---- Centralized config — change these, nothing else, to retune Caddie. ----
 const GEMINI_MODEL = "gemini-3.6-flash"; // gemini-2.5-flash was retired for new API keys/projects (Gemini API started 404ing it with "no longer available to new users" on 2026-08-21); 3.6-flash is Google's named replacement, same video-understanding + structured-JSON-output support
@@ -145,7 +146,7 @@ const LOCALE_NAMES: Record<string, string> = {
 function buildSystemPrompt(localeName: string): string {
   return `You are GolfMe Caddie, a conservative golf swing feedback assistant for recreational golfers. This is a BETA feature, not a professional biomechanics system or launch monitor.
 
-CRITICAL LANGUAGE REQUIREMENT: every piece of free text you write — summary, strengths, work_on issue/why_it_matters, focus title/instruction, drill name/steps, limitations, score reasons — MUST be written in ${localeName}. Only JSON field/key names and enum values (e.g. "high"/"medium"/"low", "face_on") stay in English exactly as specified in the schema. This applies even if the video, TRUSTED_POSE_DATA, or golfer's club name below are in English — the OUTPUT language is ${localeName}, full stop.
+CRITICAL LANGUAGE REQUIREMENT: every piece of free text you write — summary, strengths, work_on issue/why_it_matters, focus title/instruction, drill name/steps, limitations, score reasons, checkpoint cues — MUST be written in ${localeName}. Only JSON field/key names and enum values (e.g. "high"/"medium"/"low", "face_on") stay in English exactly as specified in the schema. This applies even if the video, TRUSTED_POSE_DATA, or golfer's club name below are in English — the OUTPUT language is ${localeName}, full stop.
 
 You are given two things: the swing video itself, and TRUSTED_POSE_DATA — a JSON time series of body-joint pose measurements for this exact swing, produced by a validated computer-vision pipeline (Roboflow) sampled at a fixed rate across the clip. TRUSTED_POSE_DATA is the authoritative source for body position/angle claims, not your own visual estimate of the video — but it only ever tracks BODY joints, never the club or ball.
 
@@ -162,9 +163,10 @@ Rules:
 - Respond with feedback suitable for a recreational golfer, not jargon-heavy technical analysis.
 - Score the swing across exactly these 5 categories, 0-20 points each (100 total): setup_and_posture (address position, balance, alignment), backswing (shoulder turn, structure, tempo into transition), downswing_sequencing (hip/shoulder rotation order, lower-body initiation — only from what TRUSTED_POSE_DATA's angles/timing actually show), balance_and_weight_transfer (weight shift through the swing and into the finish), finish (balance, control, extension at the end). Give each a short one-sentence reason tied to something TRUSTED_POSE_DATA or the video actually shows — never a generic reason.
 - Grade like a strict, honest instructor, not a cheerleader. Most recreational golfers, even solid ones, should land in the 40-70 range overall — reserve 80+ in a category for genuinely sound, consistent technique with no real flaw visible in that category, and 90+ for something close to tour-level. Deduct points for every real flaw TRUSTED_POSE_DATA or the video actually shows (a swayed hip, an early upper-body initiation, a lost spine angle, poor balance at finish, and so on) — do not round scores up to be encouraging. This is separate from data uncertainty: when a phase has sparse/missing pose data, score it in the middle of its range with a reason that says so, not a confident extreme in either direction — that rule is about missing evidence, not about going easy on flaws you DO have evidence for.
+- Optionally, in checkpoint_cues, write one coaching cue for each of address, top, impact and follow_through that you placed in phases: a short (at most ${CUE_MAX_CHARS} characters), plain-language, actionable thing to feel or do at that moment, about the most useful change you see there (or what to keep, if nothing needs changing). Plain text only, no markdown, no numbers, no club/ball/contact claims, same rules as above. Use null for a moment you didn't place or have nothing specific to say about — never a generic tip.
 - The strictness above is a floor against flattering a flawed swing, not a ceiling on genuinely elite ones. If TRUSTED_POSE_DATA and the video together show real, tour-caliber mechanics in a category — a professional or elite-amateur swing, recognizable or not — score that category in the 90s (up to 100) without hesitation. Do not let "most golfers land in 40-70" pull a score downward when the evidence in front of you clearly does not belong in that range; grade the swing you were actually shown, not an assumed population average.
 
-REMINDER: write summary, strengths, work_on, focus, drill, limitations, and score reasons in ${localeName}. This is not optional.`;
+REMINDER: write summary, strengths, work_on, focus, drill, limitations, score reasons, and checkpoint_cues in ${localeName}. This is not optional.`;
 }
 
 const PHASE_MOMENT_SCHEMA = {
@@ -197,6 +199,9 @@ function buildScoreCriterionSchema(localeName: string) {
     required: ["points", "reason"],
   };
 }
+
+const CUE_FIELD_DESCRIPTION = (localeName: string) =>
+  `One plain-language, actionable line (at most ${CUE_MAX_CHARS} characters, no markdown) a golfer can feel or do at this moment, tied to what this swing shows there. Write this in ${localeName}.`;
 
 function buildResponseSchema(localeName: string) {
   const scoreCriterionSchema = buildScoreCriterionSchema(localeName);
@@ -275,6 +280,19 @@ function buildResponseSchema(localeName: string) {
           finish: scoreCriterionSchema,
         },
         required: ["setup_and_posture", "backswing", "downswing_sequencing", "balance_and_weight_transfer", "finish"],
+      },
+      // Optional and deliberately NOT in `required` (nor are its fields): a
+      // missing or bad cue must never fail an analysis. Sanitized by
+      // withSanitizedCheckpointCues() before it is stored (_shared/caddieCues.ts).
+      checkpoint_cues: {
+        type: "OBJECT",
+        description: `Optional. One short coaching cue for each key moment you placed in phases; null for any moment you didn't place or have nothing specific to say about. Write each in ${localeName}.`,
+        properties: {
+          address: { type: "STRING", nullable: true, description: CUE_FIELD_DESCRIPTION(localeName) },
+          top: { type: "STRING", nullable: true, description: CUE_FIELD_DESCRIPTION(localeName) },
+          impact: { type: "STRING", nullable: true, description: CUE_FIELD_DESCRIPTION(localeName) },
+          follow_through: { type: "STRING", nullable: true, description: CUE_FIELD_DESCRIPTION(localeName) },
+        },
       },
     },
     required: ["summary", "camera_angle", "strengths", "work_on", "focus", "drill", "limitations", "phases", "score"],
@@ -983,6 +1001,8 @@ Deno.serve(async (req: Request) => {
       limitations: string[];
       phases: Record<string, unknown>;
       score: Record<string, { points: number; reason: string }>;
+      // Optional, untrusted until withSanitizedCheckpointCues() below.
+      checkpoint_cues?: unknown;
     };
     const genStart = Date.now();
     let geminiFile: { name: string; uri: string; mimeType: string } | undefined;
@@ -1101,6 +1121,13 @@ Deno.serve(async (req: Request) => {
     const scoreCriteria = Object.values(parsed.score ?? {});
     const totalScore = scoreCriteria.reduce((sum, c) => sum + Math.max(0, Math.min(20, Math.round(c.points ?? 0))), 0);
 
+    // Per-checkpoint cues are optional and additive: unknown keys, empty or
+    // markdown-only values and cues for unplaced moments are dropped, long
+    // ones capped; if nothing survives the field is left out entirely. This
+    // never throws and never fails the analysis.
+    const analysisJson = withSanitizedCheckpointCues(parsed as unknown as Record<string, unknown>);
+    devLog("checkpoint cues", { kept: Object.keys((analysisJson.checkpoint_cues as Record<string, string> | undefined) ?? {}) });
+
     if (settled) return;
     const { data: savedRows, error: updateError } = await supabase
       .from("caddie_analyses")
@@ -1111,7 +1138,7 @@ Deno.serve(async (req: Request) => {
         // is only a signed link and is never saved). Otherwise the media
         // columns are left exactly as inserted.
         ...(trimmedPath ? { source_media_path: trimmedPath, source_media_url: null } : {}),
-        analysis_json: parsed,
+        analysis_json: analysisJson,
         roboflow_analysis_json: trustedPoseData,
         analysis_summary: parsed.summary,
         strengths: (parsed.strengths ?? []).slice(0, 3),
