@@ -20,6 +20,7 @@ import { vibeLabel } from "../lib/enumLabels";
 import { VIBE_TONE } from "../lib/theme";
 import type { GolfCall } from "../types";
 import { goBack } from "../lib/goBack";
+import { isUpcomingRound } from "../lib/golfCall";
 
 export function MyRounds() {
   const { currentUser, golfCalls, getGolfer, hasReviewed } = useData();
@@ -35,16 +36,17 @@ export function MyRounds() {
     [golfCalls, currentUser.id],
   );
 
+  // Upcoming = open/full with the tee time still ahead (isUpcomingRound,
+  // same rule as the Chat inbox's next-round card). An open/full round whose
+  // time has passed but nobody marked complete moves to Past instead of
+  // posing as upcoming.
   const upcoming = useMemo(
-    () =>
-      myCalls
-        .filter((c) => c.status === "open" || c.status === "full")
-        .sort((a, b) => a.dateISO.localeCompare(b.dateISO)),
+    () => myCalls.filter((c) => isUpcomingRound(c)).sort((a, b) => a.dateISO.localeCompare(b.dateISO)),
     [myCalls],
   );
 
   const past = useMemo(
-    () => myCalls.filter((c) => c.status === "completed" || c.status === "cancelled").sort((a, b) => b.dateISO.localeCompare(a.dateISO)),
+    () => myCalls.filter((c) => !isUpcomingRound(c)).sort((a, b) => b.dateISO.localeCompare(a.dateISO)),
     [myCalls],
   );
 
@@ -150,7 +152,9 @@ export function MyRounds() {
                         <CalendarDays size={12} /> {formatDate(c.dateISO, locale, t)}
                       </p>
                     </div>
-                    <Badge tone={c.status === "cancelled" ? "rose" : "slate"}>{c.status === "cancelled" ? t("myGolf.cancelled") : t("myGolf.completed")}</Badge>
+                    <Badge tone={c.status === "cancelled" ? "rose" : c.status === "completed" ? "slate" : "outline"}>
+                      {c.status === "cancelled" ? t("myGolf.cancelled") : c.status === "completed" ? t("myGolf.completed") : t("myGolf.notCompleted")}
+                    </Badge>
                   </button>
 
                   {c.status === "completed" && teammates.length > 0 && (

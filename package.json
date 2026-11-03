@@ -13,7 +13,7 @@
     "test:caddie": "node --test tests/calloutLayout.test.ts tests/swingAssessment.test.ts tests/caddieFailure.test.ts tests/coachReplay.test.ts tests/caddieCues.test.ts",
     "test:chat": "node --test tests/messageTime.test.ts tests/edgeSwipeBack.test.ts tests/chatSwipe.test.ts",
     "test:trust": "node --test tests/loadStatus.test.ts tests/roundAlerts.test.ts tests/caddieShare.test.ts tests/communityMediaCleanup.test.ts",
-    "test:roundchat": "node --test tests/roundChat.test.ts",
+    "test:roundchat": "node --test tests/roundChat.test.ts tests/roundChatPolicy.test.ts",
     "preview": "vite preview",
     "ios:sync": "npm run build && npx cap sync ios",
     "ios:open": "npx cap open ios",

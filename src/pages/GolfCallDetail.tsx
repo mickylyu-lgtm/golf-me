@@ -5,6 +5,7 @@ import {
   CalendarDays,
   Car,
   Check,
+  ChevronRight,
   Footprints,
   Lock,
   MapPin,
@@ -49,6 +50,7 @@ import { matchTier, callMatchReasons, TIER_FOR_YOU_KEYS } from "../lib/matchReas
 import { track } from "../lib/analytics";
 import { enrichRealCourse } from "../lib/realCourseSearch";
 import { isPastRound } from "../lib/golfCall";
+import { canReadRoundChat, roundChatAccess } from "../lib/roundChat";
 import { goBack } from "../lib/goBack";
 
 export function GolfCallDetail() {
@@ -67,6 +69,8 @@ export function GolfCallDetail() {
     approveRequest,
     declineRequest,
     hasReviewed,
+    hasLeftGolfCall,
+    isBlockedEitherWay,
   } = useData();
   const { isDemo } = useAuth();
   const { hasLoaded: roundsLoaded, loadError: roundsLoadError, isLoading: roundsLoading, retry: retryRounds } = useRealRounds();
@@ -139,7 +143,17 @@ export function GolfCallDetail() {
   const isCompleted = call.status === "completed";
   const isCancelled = call.status === "cancelled";
   const isUrgent = !isFull && !isCompleted && !isCancelled && openSpots === 1;
-  const chatUnlocked = isHost || isJoined;
+  // Same rule as the full-screen thread (/messages/round/:id): members only,
+  // and not across a block with the host.
+  const chatAccess = roundChatAccess({
+    exists: true,
+    status: call.status,
+    isHost,
+    isJoined,
+    hasLeft: hasLeftGolfCall(call.id),
+    blockedWithHost: isBlockedEitherWay(call.hostId),
+  });
+  const chatUnlocked = canReadRoundChat(chatAccess);
   const breakdown = !isHost ? computeCallCompatibility(currentUser, call) : null;
   const tier = breakdown ? matchTier(breakdown.overall) : null;
   const reasons = breakdown ? callMatchReasons(call, breakdown, locale, t) : [];
@@ -466,13 +480,23 @@ export function GolfCallDetail() {
         <div className="mb-2 flex items-center gap-1.5">
           <MessageCircle size={15} className="text-slate-400" />
           <h2 className="text-sm font-bold text-slate-800">{t("golfCallDetail.groupChat")}</h2>
+          {chatUnlocked && (
+            <button
+              onClick={() => navigate(`/messages/round/${call.id}`)}
+              className="ml-auto flex items-center gap-0.5 rounded text-xs font-semibold text-fairway-700 hover:text-fairway-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400"
+            >
+              {t("chatInbox.openChat")} <ChevronRight size={14} aria-hidden="true" />
+            </button>
+          )}
         </div>
         {chatUnlocked ? (
           <GroupChat callId={call.id} />
         ) : (
           <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-slate-200 bg-white/60 px-6 py-8 text-center">
             <Lock size={18} className="text-slate-400" />
-            <p className="text-sm text-slate-500">{t("golfCallDetail.chatLocked")}</p>
+            <p className="text-sm text-slate-500">
+              {chatAccess === "left" ? t("roundChat.left") : chatAccess === "blocked" ? t("roundChat.blocked") : t("golfCallDetail.chatLocked")}
+            </p>
           </div>
         )}
       </div>
