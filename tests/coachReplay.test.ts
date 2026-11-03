@@ -1,7 +1,7 @@
 // Run: npm run test:caddie  (node --test, built-in type stripping)
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildCoachPlan, coachDwellMs, coachPlanFromV1, v1Findings, v1Moments, v2Moments } from "../src/lib/coachReplay.ts";
+import { buildCoachPlan, checkpointCuesFromJson, coachDwellMs, coachPlanFromV1, v1Cues, v1Findings, v1Moments, v2Moments } from "../src/lib/coachReplay.ts";
 import type { CoachFinding, CoachMoment } from "../src/lib/coachReplay.ts";
 import type { SwingAssessment, SwingSegmentAssessment } from "../src/lib/swingAssessment.ts";
 import type { CaddieScore, CaddieSwingPhases } from "../src/types/index.ts";
@@ -165,6 +165,58 @@ test("v2Moments: detected high/medium key frames only; an unheld finish is a fol
   );
   const held = v2Moments({ finish: { status: "detected", timestampSeconds: 2.4, confidenceLabel: "high", held: true } });
   assert.equal(held[0].label, "finish");
+});
+
+// ── Server cues (analysis_json.checkpoint_cues) ──────────────────────────
+
+test("server cue wins over the fixed per-fault cue; old rows fall back to it", () => {
+  const assessment: SwingAssessment = { segments: [seg("wrists", "top", "needs_improvement")] };
+  const withCue = coachPlanFromV1({ phases: phases(), assessment, checkpointCues: { top: "Let the wrists hinge late" } });
+  assert.deepEqual(withCue.checkpoints[0].cue, { body: { kind: "stored", text: "Let the wrists hinge late" }, source: "details.checkpointCues.top" });
+
+  const oldRow = coachPlanFromV1({ phases: phases(), assessment });
+  assert.deepEqual(oldRow.checkpoints[0].cue?.body, { kind: "key", key: "coachReplay.cue.wrists" });
+
+  const otherMomentOnly = coachPlanFromV1({ phases: phases(), assessment, checkpointCues: { address: "Soft knees" } });
+  assert.deepEqual(otherMomentOnly.checkpoints[0].cue?.body, { kind: "key", key: "coachReplay.cue.wrists" }, "a cue for another moment doesn't leak");
+});
+
+test("server cue gives a Gemini-only checkpoint a cue it never had", () => {
+  const plan = coachPlanFromV1({ phases: phases(), score: score({ downswingSequencing: 5 }), checkpointCues: { impact: "Hips lead, arms follow" } });
+  assert.deepEqual(plan.checkpoints.map((c) => [c.id, c.cue?.body]), [["impact", { kind: "stored", text: "Hips lead, arms follow" }]]);
+});
+
+test("V1 finish checkpoint takes the follow_through cue", () => {
+  const plan = coachPlanFromV1({ phases: phases(), score: score({ finish: 18 }), checkpointCues: { followThrough: "Hold it to the count of three" } });
+  assert.equal(plan.checkpoints[0].id, "finish");
+  assert.equal(plan.checkpoints[0].cue?.source, "details.checkpointCues.followThrough");
+});
+
+test("a cue alone never creates a freeze", () => {
+  const plan = coachPlanFromV1({ phases: phases(), score: score(), checkpointCues: { address: "A", top: "T", impact: "I", followThrough: "F" } });
+  assert.deepEqual(plan.checkpoints, [], "mid-band scores, no verdicts: nothing to say, cue or not");
+});
+
+test("a cue for a moment that wasn't placed is never shown", () => {
+  const plan = coachPlanFromV1({
+    phases: phases({ top: { timestampSeconds: 1.3, confidence: "low" } }),
+    score: score({ backswing: 18 }),
+    checkpointCues: { top: "Full turn" },
+  });
+  assert.deepEqual(plan.checkpoints, []);
+});
+
+test("v1Cues: blank and missing cues are ignored", () => {
+  assert.deepEqual(v1Cues(undefined), {});
+  assert.deepEqual(Object.keys(v1Cues({ address: "   ", top: "Turn" })), ["top"]);
+});
+
+test("checkpointCuesFromJson: stored JSON is re-sanitized and mapped to camelCase", () => {
+  assert.deepEqual(checkpointCuesFromJson({ address: "**Soft** knees", follow_through: "Hold it", finish: "x", top: "" }), {
+    address: "Soft knees",
+    followThrough: "Hold it",
+  });
+  for (const raw of [undefined, null, "Turn", [], { top: 4 }]) assert.equal(checkpointCuesFromJson(raw), undefined);
 });
 
 test("coachDwellMs: calm floor, capped for long text", () => {

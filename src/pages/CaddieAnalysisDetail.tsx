@@ -260,6 +260,7 @@ export function CaddieAnalysisDetail() {
           cameraAngle={details?.cameraAngle}
           coachEnabled={coachEnabled && analysis.status === "complete"}
           score={details?.score}
+          checkpointCues={details?.checkpointCues}
         />
       )}
       {/* Demo accounts have no swing video: Coach Replay plays over the

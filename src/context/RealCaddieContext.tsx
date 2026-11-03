@@ -6,6 +6,7 @@ import { SIGNED_URL_CHECK_INTERVAL_MS, SIGNED_URL_REFRESH_MARGIN_MS, signCaddieM
 import type { SignedUrlEntry } from "../lib/caddieMedia";
 import { CaddieRequestError, isStaleProcessing } from "../lib/caddieAnalysis";
 import { FAILURE_BODY_KEYS, parseCaddieFailure } from "../lib/caddieFailure";
+import { checkpointCuesFromJson } from "../lib/coachReplay";
 import { useAuth } from "./AuthContext";
 import { useLocale } from "../i18n/LocaleContext";
 import type {
@@ -121,6 +122,7 @@ function jsonToDetails(json: Record<string, unknown> | null, scoreTotal: number 
     drill: { name: String(drill.name ?? ""), steps: Array.isArray(drill.steps) ? (drill.steps as string[]) : [] },
     limitations: Array.isArray(json.limitations) ? (json.limitations as string[]) : [],
     phases: jsonToPhases(json.phases),
+    checkpointCues: checkpointCuesFromJson(json.checkpoint_cues),
     score: jsonToScore(json.score, scoreTotal),
   };
 }

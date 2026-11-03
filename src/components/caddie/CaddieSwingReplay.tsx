@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Check, Info, Minus, TriangleAlert } from "lucide-react";
 import { X } from "lucide-react";
-import type { CaddieCameraAngle, CaddiePoseData, CaddieScore, CaddieSwingPhases } from "../../types";
+import type { CaddieCameraAngle, CaddieCheckpointCues, CaddiePoseData, CaddieScore, CaddieSwingPhases } from "../../types";
 import { enterNativeVideoFullscreen, getVideoContentRect } from "../../lib/video";
 import { useLocale } from "../../i18n/LocaleContext";
 import { computeSwingAssessment, segmentStatusAtTime } from "../../lib/swingAssessment";
@@ -252,6 +252,8 @@ export interface CaddieSwingReplayProps {
   // each key moment with a coaching card. score feeds the cards' text.
   coachEnabled?: boolean;
   score?: CaddieScore;
+  // The analysis's own per-moment cues, when it has any (else fixed copy).
+  checkpointCues?: CaddieCheckpointCues;
 }
 
 const NO_CHECKPOINTS: CoachCheckpoint[] = [];
@@ -286,7 +288,7 @@ const REPLAY_MODES = [
   { speed: 0.25, labelKey: "caddie.replaySlowAnalysis", showOverlay: true },
 ] as const;
 
-export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, poseData, phases, cameraAngle, coachEnabled = false, score }: CaddieSwingReplayProps) {
+export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, poseData, phases, cameraAngle, coachEnabled = false, score, checkpointCues }: CaddieSwingReplayProps) {
   const { t } = useLocale();
   const videoRef = useRef<HTMLVideoElement>(null);
   const resumeAtRef = useRef<number | null>(null);
@@ -307,8 +309,8 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
   // plain slow replay. All of this is view state, derived from the stored
   // analysis on every render; nothing durable lives here.
   const coachCheckpoints = useMemo(
-    () => (coachEnabled ? coachPlanFromV1({ phases, assessment, score }).checkpoints : NO_CHECKPOINTS),
-    [coachEnabled, phases, assessment, score],
+    () => (coachEnabled ? coachPlanFromV1({ phases, assessment, score, checkpointCues }).checkpoints : NO_CHECKPOINTS),
+    [coachEnabled, phases, assessment, score, checkpointCues],
   );
   const coachAvailable = coachCheckpoints.length > 0 && !!poseData && poseData.frames.length > 0;
   const [coachOn, setCoachOn] = useState(true);

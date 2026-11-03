@@ -1,7 +1,8 @@
-import type { CaddieConfidence, CaddieScore, CaddieScoreCriterionKey, CaddieSwingPhases } from "../types";
+import type { CaddieCheckpointCues, CaddieConfidence, CaddieScore, CaddieScoreCriterionKey, CaddieSwingPhases } from "../types";
 import type { TranslationKey } from "../i18n/locales/en";
 import type { SwingAssessment, SwingSegmentId } from "./swingAssessment";
 import { isTrustedPhaseConfidence, trustedPhaseTimeSeconds } from "./swingAssessment.ts";
+import { sanitizeCheckpointCues } from "../../supabase/functions/_shared/caddieCues.ts";
 
 // Caddie V3 "Coach Replay": the slow-motion replay freezes at up to four key
 // moments and shows a card (what's going well, the one thing to fix, a short
@@ -77,7 +78,12 @@ export interface CoachReplayPlan {
   checkpoints: CoachCheckpoint[];
 }
 
-export function buildCoachPlan(source: CoachPlanSource, moments: CoachMoment[], findings: CoachFinding[]): CoachReplayPlan {
+// A cue the analysis wrote for one checkpoint (V1: analysis_json.
+// checkpoint_cues). It never creates a freeze on its own: a checkpoint still
+// needs a good/fix finding to be shown.
+export type CoachCues = Partial<Record<CoachCheckpointId, CoachClaim>>;
+
+export function buildCoachPlan(source: CoachPlanSource, moments: CoachMoment[], findings: CoachFinding[], cues?: CoachCues): CoachReplayPlan {
   const byId = new Map<CoachCheckpointId, CoachMoment>();
   for (const m of moments) if (!byId.has(m.id) && Number.isFinite(m.timeSeconds) && m.timeSeconds >= 0) byId.set(m.id, m);
 
@@ -95,7 +101,9 @@ export function buildCoachPlan(source: CoachPlanSource, moments: CoachMoment[], 
     const good = pick("good");
     const fix = pick("fix");
     if (!good && !fix) continue;
-    checkpoints.push({ ...moment, good: good?.claim, fix: fix?.claim, cue: fix?.cue ?? good?.cue });
+    // The analysis's own cue for this moment first; the fixed per-fault
+    // cue is the fallback (old rows, or no usable cue for this moment).
+    checkpoints.push({ ...moment, good: good?.claim, fix: fix?.claim, cue: cues?.[id] ?? fix?.cue ?? good?.cue });
   }
   return { source, checkpoints };
 }
@@ -146,8 +154,10 @@ const SEGMENT_DESCRIPTION_KEYS: Record<SwingSegmentId, Record<"good" | "needs_im
 };
 // A few-word cue per measured fault. Generic coaching advice keyed off a
 // measured "needs_improvement" verdict, not a claim about the golfer, so a
-// fixed translation is honest here. Gemini-sourced fixes get no cue on V1:
-// it never wrote one, and we don't paraphrase its sentence into one.
+// fixed translation is honest here. It is the FALLBACK: when the analysis
+// stored its own cue for that moment (analysis_json.checkpoint_cues, see
+// v1Cues) that wins. Gemini-sourced fixes otherwise get no cue: we don't
+// paraphrase its sentence into one.
 const SEGMENT_CUE_KEYS: Record<SwingSegmentId, TranslationKey> = {
   torso: "coachReplay.cue.torso",
   left_arm: "coachReplay.cue.arm",
@@ -207,8 +217,48 @@ export function v1Findings(assessment: SwingAssessment | undefined, score: Caddi
   return findings;
 }
 
-export function coachPlanFromV1(input: { phases?: CaddieSwingPhases; assessment?: SwingAssessment; score?: CaddieScore }): CoachReplayPlan {
-  return buildCoachPlan("v1", v1Moments(input.phases), v1Findings(input.assessment, input.score));
+// analysis_json.checkpoint_cues (snake_case, as stored) -> details.
+// Re-sanitized on read with the server's own rules: the row is the caller's
+// own, but stored JSON is still treated as untrusted input.
+export function checkpointCuesFromJson(raw: unknown): CaddieCheckpointCues | undefined {
+  const cues = sanitizeCheckpointCues(raw);
+  if (!cues) return undefined;
+  const out: CaddieCheckpointCues = {};
+  if (cues.address) out.address = cues.address;
+  if (cues.top) out.top = cues.top;
+  if (cues.impact) out.impact = cues.impact;
+  if (cues.follow_through) out.followThrough = cues.follow_through;
+  return out;
+}
+
+// V1's fourth checkpoint is its follow-through (see v1Moments), so that's
+// the cue it takes.
+const V1_CUE_FIELD: Record<CoachCheckpointId, keyof CaddieCheckpointCues> = {
+  address: "address",
+  top: "top",
+  impact: "impact",
+  finish: "followThrough",
+};
+
+export function v1Cues(checkpointCues: CaddieCheckpointCues | undefined): CoachCues {
+  const cues: CoachCues = {};
+  if (!checkpointCues) return cues;
+  for (const id of COACH_CHECKPOINT_ORDER) {
+    const field = V1_CUE_FIELD[id];
+    const value = checkpointCues[field];
+    const text = typeof value === "string" ? value.trim() : "";
+    if (text) cues[id] = { body: { kind: "stored", text }, source: `details.checkpointCues.${field}` };
+  }
+  return cues;
+}
+
+export function coachPlanFromV1(input: {
+  phases?: CaddieSwingPhases;
+  assessment?: SwingAssessment;
+  score?: CaddieScore;
+  checkpointCues?: CaddieCheckpointCues;
+}): CoachReplayPlan {
+  return buildCoachPlan("v1", v1Moments(input.phases), v1Findings(input.assessment, input.score), v1Cues(input.checkpointCues));
 }
 
 // ── V2: local MediaPipe keyFrames (branch caddie-v2, not shipped) ───────

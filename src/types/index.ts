@@ -499,6 +499,17 @@ export interface CaddieAnalysisDetails {
   phases?: CaddieSwingPhases;
   // Same vintage cutoff as phases — undefined for pre-scoring analyses.
   score?: CaddieScore;
+  // Optional short coaching cue per key moment (analysis_json.checkpoint_cues,
+  // sanitized server-side and again on read). Undefined for analyses from
+  // before cues shipped, or when Gemini wrote none worth keeping.
+  checkpointCues?: CaddieCheckpointCues;
+}
+
+export interface CaddieCheckpointCues {
+  address?: string;
+  top?: string;
+  impact?: string;
+  followThrough?: string;
 }
 
 export interface CaddiePoseKeypoint {
