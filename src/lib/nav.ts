@@ -27,3 +27,8 @@ export const NAV_ITEMS: { labelKey: TranslationKey; path: string; icon: NavIconC
 ];
 
 export const MOBILE_NAV_ITEMS = NAV_ITEMS;
+
+// Active-tab matching shared by BottomNav and SideNav (see navMatch.ts):
+// Play stays lit on Golf Calls, round pages, Auto-Match, Golfers, Tee Times
+// and course pages, not only on /find itself.
+export { NAV_RELATED_PREFIXES, activeNavIndex, isNavPathActive } from "./navMatch";

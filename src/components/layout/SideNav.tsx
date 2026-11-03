@@ -1,5 +1,5 @@
-import { NavLink, useNavigate } from "react-router-dom";
-import { NAV_ITEMS } from "../../lib/nav";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { NAV_ITEMS, isNavPathActive } from "../../lib/nav";
 import { NAV_TUTORIAL_ID_BY_PATH } from "../../lib/tutorialSteps";
 import { GolfMeLogo } from "../brand/GolfMeLogo";
 import { useLocale } from "../../i18n/LocaleContext";
@@ -10,6 +10,7 @@ import { CaddieNavStatusIcon } from "./CaddieNavStatusIcon";
 export function SideNav() {
   const { t } = useLocale();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const { dmConversations, markNotificationRead } = useData();
   const unreadCount = dmConversations.filter((c) => c.unread).length;
   const { isProcessing: caddieProcessing, unseenNotification: caddieUnseen } = useCaddieNavStatus();
@@ -42,13 +43,14 @@ export function SideNav() {
                   navigate(caddieUnseen.linkTo);
                 }
               }}
-              className={({ isActive }) =>
+              // The shared matcher, not NavLink's own isActive (that only
+              // knows /find itself, so Play went dark on every round page).
+              className={
                 `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none ${
-                  isActive
+                  isNavPathActive(path, pathname)
                     ? "bg-fairway-50 text-fairway-700"
                     : "text-slate-500 hover:bg-slate-50 hover:text-slate-800 active:bg-slate-100"
-                }`
-              }
+                }`}
             >
               {/* Fixed-width wrapper keeps every label starting at the same
                   x-offset regardless of icon size — Caddie's icon renders

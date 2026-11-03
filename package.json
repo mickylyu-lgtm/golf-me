@@ -11,7 +11,7 @@
     "test:courses": "node --test supabase/functions/_shared/courseFilter.test.ts tests/coursePhotoMatch.test.ts",
     "test:onboarding": "node --test tests/firstRoundPrompt.test.ts tests/shareLinks.test.ts",
     "test:caddie": "node --test tests/calloutLayout.test.ts tests/swingAssessment.test.ts tests/caddieFailure.test.ts tests/coachReplay.test.ts tests/caddieCues.test.ts",
-    "test:play": "node --test tests/roundSearchParams.test.ts tests/findTab.test.ts tests/discoverFilters.test.ts",
+    "test:play": "node --test tests/roundSearchParams.test.ts tests/findTab.test.ts tests/discoverFilters.test.ts tests/navMatch.test.ts",
     "test:chat":"node --test tests/messageTime.test.ts tests/edgeSwipeBack.test.ts tests/chatSwipe.test.ts",
     "preview": "vite preview",
     "ios:sync": "npm run build && npx cap sync ios",
