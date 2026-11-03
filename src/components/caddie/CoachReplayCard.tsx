@@ -19,6 +19,36 @@ const MOMENT_LABEL_KEYS: Record<CoachMomentLabel, TranslationKey> = {
   finish: "coachReplay.finish",
 };
 
+// Both cards are flex columns that may shrink (min-h-0) inside a slot with
+// a capped height: the player caps it so a card never covers the clip
+// (below the video inline, a bottom band in fullscreen). Only the body
+// scrolls; the header and Continue/Done always stay on screen.
+const CARD_CLASS =
+  "relative flex min-h-0 flex-col overflow-hidden rounded-2xl bg-white p-3.5 shadow-[0_14px_34px_-14px_rgba(14,39,23,0.5)] ring-1 ring-black/[0.04] animate-coach-card-in";
+const CARD_BODY_CLASS = "mt-2.5 min-h-0 overflow-y-auto overscroll-contain";
+// Fades the last line when the body has more below, so it reads as scrollable.
+const CARD_BODY_MORE_CLASS = "[mask-image:linear-gradient(to_bottom,black_calc(100%-1.5rem),transparent)]";
+
+// Whether the capped body has content hidden below its fold (not yet
+// scrolled to the end). Re-checked on resize and scroll.
+function useHasMoreBelow() {
+  const [el, setEl] = useState<HTMLDivElement | null>(null);
+  const [more, setMore] = useState(false);
+  useEffect(() => {
+    if (!el) return;
+    const check = () => setMore(el.scrollHeight - el.scrollTop - el.clientHeight > 2);
+    check();
+    const observer = new ResizeObserver(check);
+    observer.observe(el);
+    el.addEventListener("scroll", check, { passive: true });
+    return () => {
+      observer.disconnect();
+      el.removeEventListener("scroll", check);
+    };
+  }, [el]);
+  return [setEl, more] as const;
+}
+
 type T = (key: TranslationKey, vars?: Record<string, string | number>) => string;
 const textOf = (t: T, text: CoachText) => (text.kind === "key" ? t(text.key) : text.text);
 const claimLength = (t: T, c: CoachClaim | undefined) => (c ? (c.title ? textOf(t, c.title).length : 0) + textOf(t, c.body).length : 0);
@@ -46,7 +76,14 @@ export function CoachReplayCard({ checkpoint, index, total, onContinue, onSkip }
   // Tapping the card holds it: the swing waits until Continue. Under
   // reduced motion it always waits (nothing moves on its own).
   const [held, setHeld] = useState(false);
-  const autoContinue = !reducedMotion && !held;
+  // A card whose text runs past its capped height waits for Continue: it
+  // shouldn't move on before the golfer has scrolled to read the rest.
+  const [bodyRef, moreBelow] = useHasMoreBelow();
+  const [everOverflowed, setEverOverflowed] = useState(false);
+  useEffect(() => {
+    if (moreBelow) setEverOverflowed(true);
+  }, [moreBelow]);
+  const autoContinue = !reducedMotion && !held && !everOverflowed;
   const dwellMs = coachDwellMs(claimLength(t, checkpoint.good) + claimLength(t, checkpoint.fix) + claimLength(t, checkpoint.cue));
 
   useEffect(() => {
@@ -61,9 +98,9 @@ export function CoachReplayCard({ checkpoint, index, total, onContinue, onSkip }
       aria-live="polite"
       aria-label={t(MOMENT_LABEL_KEYS[checkpoint.label])}
       onClick={() => setHeld(true)}
-      className="relative overflow-hidden rounded-2xl bg-white p-3.5 shadow-[0_14px_34px_-14px_rgba(14,39,23,0.5)] ring-1 ring-black/[0.04] animate-coach-card-in"
+      className={CARD_CLASS}
     >
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex shrink-0 items-center justify-between gap-2">
         <p className="flex min-w-0 items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-brand-forest">
           <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand-gold" />
           <span className="truncate">{t(MOMENT_LABEL_KEYS[checkpoint.label])}</span>
@@ -76,7 +113,10 @@ export function CoachReplayCard({ checkpoint, index, total, onContinue, onSkip }
         <p className="shrink-0 text-[11px] font-semibold tabular-nums text-slate-400">{t("coachReplay.step", { current: index + 1, total })}</p>
       </div>
 
-      <div className="mt-2.5 flex flex-col gap-2">
+      {/* Header and buttons stay put; only this middle part scrolls when the
+          slot caps the card's height (so it never grows over the clip). */}
+      <div ref={bodyRef} className={`${CARD_BODY_CLASS} ${moreBelow ? CARD_BODY_MORE_CLASS : ""}`}>
+      <div className="flex flex-col gap-2">
         {checkpoint.good && (
           <div className="flex items-start gap-2">
             <CircleCheck size={17} aria-hidden="true" className="mt-px shrink-0 text-fairway-600" />
@@ -101,8 +141,9 @@ export function CoachReplayCard({ checkpoint, index, total, onContinue, onSkip }
           <span className="min-w-0 text-sm font-semibold text-white">{textOf(t, checkpoint.cue.body)}</span>
         </div>
       )}
+      </div>
 
-      <div className="mt-3 flex items-center justify-between gap-2">
+      <div className="mt-3 flex shrink-0 items-center justify-between gap-2">
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -142,19 +183,20 @@ export function CoachSummaryCard({ summary, onReplay, onDone }: { summary: Coach
   const { t } = useLocale();
   const work: { claim: CoachClaim; labelKey: TranslationKey }[] = summary.focus ? [{ claim: summary.focus, labelKey: "coachReplay.mainFocus" }] : [];
   for (const claim of summary.workOn) work.push({ claim, labelKey: "coachReplay.workOn" });
+  const [bodyRef, moreBelow] = useHasMoreBelow();
   return (
     <div
       role="dialog"
       aria-live="polite"
       aria-label={t("coachReplay.summaryTitle")}
-      className="relative overflow-hidden rounded-2xl bg-white p-3.5 shadow-[0_14px_34px_-14px_rgba(14,39,23,0.5)] ring-1 ring-black/[0.04] animate-coach-card-in"
+      className={CARD_CLASS}
     >
-      <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-brand-forest">
+      <p className="flex shrink-0 items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-brand-forest">
         <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand-gold" />
         {t("coachReplay.summaryTitle")}
       </p>
 
-      <div className="mt-2.5 flex max-h-[45vh] flex-col gap-2 overflow-y-auto">
+      <div ref={bodyRef} className={`${CARD_BODY_CLASS} flex flex-col gap-2 ${moreBelow ? CARD_BODY_MORE_CLASS : ""}`}>
         {work.map(({ claim, labelKey }) => (
           <div key={claim.source} className="flex items-start gap-2">
             <Target size={17} aria-hidden="true" className="mt-px shrink-0 text-sun-600" />
@@ -182,7 +224,7 @@ export function CoachSummaryCard({ summary, onReplay, onDone }: { summary: Coach
         )}
       </div>
 
-      <div className="mt-3 flex items-center justify-between gap-2">
+      <div className="mt-3 flex shrink-0 items-center justify-between gap-2">
         <button
           onClick={onReplay}
           className="flex min-h-9 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-slate-500 transition-colors duration-150 hover:text-slate-800"

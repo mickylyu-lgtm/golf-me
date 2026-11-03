@@ -5,6 +5,7 @@ import {
   buildCoachPlan,
   checkpointCuesFromJson,
   coachDwellMs,
+  coachFocusSegments,
   coachPlanFromV1,
   v1Cues,
   v1Findings,
@@ -351,6 +352,16 @@ test("Coach Replay without coaching data (old callers) keeps its old behaviour",
   const plan = coachPlanFromV1({ phases: phases(), score: score({ downswingSequencing: 11 }) });
   assert.deepEqual(plan.checkpoints, []);
   assert.equal(plan.summary, undefined);
+});
+
+test("coachFocusSegments: only measured pose findings highlight a body part", () => {
+  const assessment: SwingAssessment = { segments: [seg("shoulder_line", "impact", "good"), seg("hip_sway", "impact", "needs_improvement")] };
+  const plan = coachPlanFromV1({ phases: phases(), assessment, score: score({ downswingSequencing: 10 }), coaching: coaching() });
+  assert.deepEqual(coachFocusSegments(plan.checkpoints[0]), { shoulder_line: "good", hip_sway: "needs_improvement" });
+
+  const scoreOnly = coachPlanFromV1({ phases: phases(), score: score({ downswingSequencing: 10, setupAndPosture: 18 }), coaching: coaching() });
+  for (const c of scoreOnly.checkpoints) assert.deepEqual(coachFocusSegments(c), {}, `${c.id}: score/focus findings have no body part`);
+  assert.deepEqual(coachFocusSegments({ good: { body: { kind: "stored", text: "x" }, source: "assessment.elbow" } }), {}, "unknown segment ids are ignored");
 });
 
 test("coachDwellMs: calm floor, capped for long text", () => {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Check, Info, Minus, TriangleAlert } from "lucide-react";
 import { X } from "lucide-react";
@@ -10,8 +10,8 @@ import type { SwingSegmentId, SwingSegmentStatus } from "../../lib/swingAssessme
 import type { TranslationKey } from "../../i18n/locales/en";
 import { SwingCallout } from "./SwingCallout";
 import { separateCallouts } from "./calloutLayout";
-import { coachPlanFromV1 } from "../../lib/coachReplay";
-import type { CoachCheckpoint, CoachMomentLabel, V1Coaching } from "../../lib/coachReplay";
+import { coachFocusSegments, coachPlanFromV1 } from "../../lib/coachReplay";
+import type { CoachCheckpoint, CoachFocusSegments, CoachMomentLabel, V1Coaching } from "../../lib/coachReplay";
 import { CoachModeSwitch, CoachReplayCard, CoachReplayStrip, CoachSummaryCard } from "./CoachReplayCard";
 import { useCoachVideoPauses } from "./useCoachVideoPauses";
 
@@ -285,6 +285,8 @@ const FS_DISMISS_PX = 120;
 const FS_DISMISS_VELOCITY = 0.5;
 // The native video controls bar sits along the bottom edge.
 const FS_CONTROLS_STRIP_PX = 90;
+// The fullscreen coach card's distance from the bottom edge.
+const FS_SLOT_BOTTOM = "max(0.75rem, env(safe-area-inset-bottom))";
 
 const REPLAY_MODES = [
   { speed: 1, labelKey: "caddie.replayOriginal", showOverlay: false },
@@ -323,6 +325,17 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
   const [coachOn, setCoachOn] = useState(true);
   const coachActive = coachAvailable && coachOn && mode.showOverlay;
   const coach = useCoachVideoPauses(videoRef, coachCheckpoints, coachActive);
+  // The body parts the open card talks about, highlighted on the paused
+  // frame (draw() reads the ref; redrawRef repaints when the card changes).
+  // Only findings from measured pose segments map; score/focus/work_on
+  // findings have no body part and get no highlight.
+  const coachFocusRef = useRef<CoachFocusSegments>({});
+  const redrawRef = useRef<(() => void) | null>(null);
+  const activeCheckpoint = coach.active;
+  useEffect(() => {
+    coachFocusRef.current = activeCheckpoint ? coachFocusSegments(activeCheckpoint) : {};
+    redrawRef.current?.();
+  }, [activeCheckpoint]);
   // Open straight into Slow Mode the first time coaching is available,
   // unless the golfer already picked a mode themselves.
   const pickedModeRef = useRef(false);
@@ -401,6 +414,22 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
   // than handing off to the OS player. Original mode keeps the real native
   // player (no overlay to lose, and it's the nicer/native experience).
   const [customFullscreen, setCustomFullscreen] = useState(false);
+  // Height of the fullscreen coach card's slot, so the video can shrink to
+  // the space above it (fsReserve below). 0 when no slot is mounted.
+  const [fsSlotHeight, setFsSlotHeight] = useState(0);
+  const fsSlotObserverRef = useRef<ResizeObserver | null>(null);
+  const fsSlotRef = useCallback((el: HTMLDivElement | null) => {
+    fsSlotObserverRef.current?.disconnect();
+    fsSlotObserverRef.current = null;
+    if (!el) {
+      setFsSlotHeight(0);
+      return;
+    }
+    const observer = new ResizeObserver(() => setFsSlotHeight(el.offsetHeight));
+    observer.observe(el);
+    fsSlotObserverRef.current = observer;
+    setFsSlotHeight(el.offsetHeight);
+  }, []);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -440,7 +469,10 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
     if (!customFullscreen) return;
     const touch = e.touches[0];
     const onCard = e.target instanceof Element && e.target.closest("[data-coach-slot]") !== null;
-    const onControls = touch.clientY > window.innerHeight - FS_CONTROLS_STRIP_PX;
+    // The video may sit above a coach card in fullscreen, so its controls
+    // bar is along the video's own bottom edge, not the screen's.
+    const videoBottom = videoRef.current?.getBoundingClientRect().bottom ?? window.innerHeight;
+    const onControls = touch.clientY > videoBottom - FS_CONTROLS_STRIP_PX && touch.clientY <= videoBottom;
     fsDragRef.current = onCard || onControls || e.touches.length > 1 ? null : { x: touch.clientX, y: touch.clientY, t: Date.now(), axis: "none" };
   }
   function onFsTouchMove(e: React.TouchEvent) {
@@ -539,6 +571,7 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
       const toCanvas = (x: number, y: number): [number, number] => [rect.left + x * scaleX, rect.top + y * scaleY];
 
       const statusNow = segmentStatusAtTime(assessment, phases, video.currentTime);
+      const coachFocus = coachFocusRef.current;
       // A joint gets flagged (small colored ring, see below) only if it's
       // an endpoint of a needs_improvement EDGE-owning segment — good/
       // unknown segments communicate entirely through their line color,
@@ -575,10 +608,24 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
         // actually carrying a validated verdict (good or needs_improvement)
         // gets the bolder stroke weight, on top of its own color.
         const status = segmentId ? statusNow[segmentId] : "unknown";
-        ctx.strokeStyle = segmentId ? STATUS_STROKE[status] : NEUTRAL_STROKE;
-        ctx.lineWidth = status !== "unknown" ? 2.5 : 1.5;
         const [ax, ay] = toCanvas(kpA.x, kpA.y);
         const [bx, by] = toCanvas(kpB.x, kpB.y);
+        // The segment the open coach card is about gets a soft halo in its
+        // own measured colour, only while that measurement applies here.
+        const focused = segmentId !== undefined && status !== "unknown" && coachFocus[segmentId] === status;
+        if (focused) {
+          ctx.save();
+          ctx.globalAlpha = 0.35;
+          ctx.strokeStyle = STATUS_STROKE[status];
+          ctx.lineWidth = 10;
+          ctx.beginPath();
+          ctx.moveTo(ax, ay);
+          ctx.lineTo(bx, by);
+          ctx.stroke();
+          ctx.restore();
+        }
+        ctx.strokeStyle = segmentId ? STATUS_STROKE[status] : NEUTRAL_STROKE;
+        ctx.lineWidth = focused ? 3.5 : status !== "unknown" ? 2.5 : 1.5;
         ctx.beginPath();
         ctx.moveTo(ax, ay);
         ctx.lineTo(bx, by);
@@ -591,9 +638,29 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
       // nearby segment's color, keeping the base skeleton readable. Sized
       // down further (~25-30%) from the original 3px/4px for the same
       // "quiet skeleton, loud feedback" reasoning as the lines above.
+      // Joints of the coach card's segment(s): its edge endpoints, or a
+      // joint-only segment's own joints (wrists), ringed in that colour.
+      const focusJoints: Partial<Record<string, SwingSegmentStatus>> = {};
+      for (const id of SEGMENT_ORDER) {
+        const status = statusNow[id];
+        if (status === "unknown" || coachFocus[id] !== status) continue;
+        for (const [a, b] of SEGMENT_EDGES[id] ?? []) {
+          focusJoints[a] = status;
+          focusJoints[b] = status;
+        }
+        for (const joint of SEGMENT_JOINTS[id] ?? []) focusJoints[joint] = status;
+      }
       for (const [name, kp] of Object.entries(frame.keypoints)) {
         const [x, y] = toCanvas(kp.x, kp.y);
-        const status = jointStatus[name] ?? (flaggedJoints.has(name) ? "needs_improvement" : undefined);
+        const focusStatus = focusJoints[name];
+        const status = focusStatus ?? jointStatus[name] ?? (flaggedJoints.has(name) ? "needs_improvement" : undefined);
+        if (focusStatus) {
+          ctx.strokeStyle = STATUS_STROKE[focusStatus];
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(x, y, 6.5, 0, Math.PI * 2);
+          ctx.stroke();
+        }
         ctx.fillStyle = status ? STATUS_DOT[status] : "#ffffff";
         ctx.beginPath();
         ctx.arc(x, y, status ? 3 : 2.2, 0, Math.PI * 2);
@@ -618,7 +685,8 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
           candidates.push({ segment: seg.segment, status, x, y });
         }
       }
-      const rankOf = (segId: SwingSegmentId) => SEGMENT_ORDER.indexOf(segId);
+      // The coach card's own segment(s) win the callout slots while it's up.
+      const rankOf = (segId: SwingSegmentId) => SEGMENT_ORDER.indexOf(segId) - (coachFocus[segId] ? 100 : 0);
       const bestNeedsImprovement = candidates
         .filter((c) => c.status === "needs_improvement")
         .sort((a, b) => rankOf(a.segment) - rankOf(b.segment))[0];
@@ -702,6 +770,9 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
     // viewport), which ResizeObserver picks up automatically either way.
     const resizeObserver = new ResizeObserver(resizeCanvas);
     resizeObserver.observe(container);
+    // In fullscreen the video shrinks above a coach card without the
+    // container changing, so its box is watched too.
+    resizeObserver.observe(video);
     video.addEventListener("loadedmetadata", resizeCanvas);
     video.addEventListener("seeked", draw);
     video.addEventListener("play", startLoop);
@@ -709,8 +780,10 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
     video.addEventListener("ended", stopLoop);
     resizeCanvas();
     if (!video.paused) startLoop();
+    redrawRef.current = draw;
 
     return () => {
+      redrawRef.current = null;
       resizeObserver.disconnect();
       video.removeEventListener("loadedmetadata", resizeCanvas);
       video.removeEventListener("seeked", draw);
@@ -739,6 +812,7 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
       <CoachReplayStrip count={coachCheckpoints.length} playing={coach.playing} onPlay={coach.start} />
     )
   ) : null;
+  const fsReserve = customFullscreen && !!coachSlot && fsSlotHeight > 0;
 
   return (
     <div className="flex flex-col gap-2">
@@ -788,8 +862,15 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
           // occlude a plain sibling canvas specifically WHILE PLAYING (paused
           // frames render through the normal software path and composite
           // fine) — the standard mitigation for that class of bug.
-          style={{ transform: "translateZ(0)" }}
-          className={customFullscreen ? "block h-full w-full object-contain" : "block max-h-80 w-full"}
+          style={
+            fsReserve
+              ? // Fullscreen with a coach card: the clip shrinks to the space
+                // above the card instead of playing underneath it, so the
+                // golfer and the skeleton stay fully visible while it's up.
+                { transform: "translateZ(0)", height: `calc(100% - ${fsSlotHeight}px - ${FS_SLOT_BOTTOM} - 0.5rem)` }
+              : { transform: "translateZ(0)" }
+          }
+          className={customFullscreen ? `block w-full object-contain ${fsReserve ? "" : "h-full"}` : "block max-h-80 w-full"}
           onClick={(e) => {
             if (!(e.target instanceof HTMLVideoElement)) return;
             if (showOverlay) {
@@ -828,12 +909,15 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
             />
           ))}
         {customFullscreen && coachSlot && (
-          // Fullscreen has no page below the video, so the card floats over
-          // its lower edge instead.
+          // Fullscreen has no page below the video: the card sits in a
+          // bottom band capped at ~35% of the screen (its body scrolls), and
+          // the video above shrinks to fit (fsReserve), so it never covers
+          // the clip.
           <div
+            ref={fsSlotRef}
             data-coach-slot
-            className="absolute inset-x-3 z-10"
-            style={{ bottom: "max(4.5rem, calc(env(safe-area-inset-bottom) + 4rem))" }}
+            className="absolute inset-x-3 z-10 flex max-h-[35%] flex-col"
+            style={{ bottom: FS_SLOT_BOTTOM }}
             onClick={(e) => e.stopPropagation()}
           >
             {coachSlot}
@@ -853,7 +937,11 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
           </button>
         )}
       </div>
-      {!customFullscreen && coachSlot}
+      {!customFullscreen && coachSlot && (
+        // Inline the card is below the video; capped too, so a long card
+        // can't push the clip off a small screen (its body scrolls).
+        <div className="flex max-h-[40vh] flex-col">{coachSlot}</div>
+      )}
       {poseData && poseData.frames.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2">
           {/* A single bordered segmented control (not two floating pills) —

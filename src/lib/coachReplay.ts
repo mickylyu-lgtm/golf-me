@@ -416,6 +416,27 @@ export function v2Moments(keyFrames: Partial<Record<CoachCheckpointId, V2KeyFram
   return moments;
 }
 
+// ── Highlight on the paused frame ───────────────────────────────────────
+
+// Which measured pose segments the card is about, and with which verdict,
+// so the overlay can highlight them. Only findings sourced from
+// swingAssessment ("assessment.<segment>") map to a body part; score,
+// focus and work_on findings don't, and get no highlight. The overlay
+// still only draws it where that verdict is in force and the keypoints
+// were observed in the frame.
+export type CoachFocusSegments = Partial<Record<SwingSegmentId, "good" | "needs_improvement">>;
+
+export function coachFocusSegments(checkpoint: Pick<CoachCheckpoint, "good" | "fix">): CoachFocusSegments {
+  const out: CoachFocusSegments = {};
+  const add = (claim: CoachClaim | undefined, status: "good" | "needs_improvement") => {
+    const seg = claim?.source.startsWith("assessment.") ? claim.source.slice("assessment.".length) : "";
+    if ((SEGMENT_RANK as string[]).includes(seg)) out[seg as SwingSegmentId] = status;
+  };
+  add(checkpoint.good, "good");
+  add(checkpoint.fix, "needs_improvement");
+  return out;
+}
+
 // ── Freeze length ────────────────────────────────────────────────────────
 
 // How long a card stays up before the swing carries on by itself: a calm
