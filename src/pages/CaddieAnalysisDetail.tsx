@@ -15,6 +15,7 @@ import { useLocale, LOCALES } from "../i18n/LocaleContext";
 import { Button } from "../components/ui/Button";
 import { Badge } from "../components/ui/Badge";
 import { formatShortDate } from "../lib/format";
+import { postFeedbackThenMark } from "../lib/caddieShare";
 import { isStaleProcessing, usePeriodicRerender } from "../lib/caddieAnalysis";
 import { FAILURE_BODY_KEYS, FAILURE_TITLE_KEYS, analysisFailure } from "../lib/caddieFailure";
 import type { CaddieConfidence, CaddieCameraAngle, CaddieScoreCriterionKey } from "../types";
@@ -67,6 +68,10 @@ export function CaddieAnalysisDetail() {
   const navigate = useNavigate();
   const [retrying, setRetrying] = useState(false);
   const [sharingFeedback, setSharingFeedback] = useState(false);
+  // Analysis ids whose feedback post already went out on this screen, even
+  // if marking shared_to_community then failed: never post them twice.
+  const [feedbackPostedIds, setFeedbackPostedIds] = useState<Set<string>>(() => new Set());
+  const sharingFeedbackRef = useRef(false);
   const [translating, setTranslating] = useState(false);
 
   const analysis = analysisId ? getCaddieAnalysis(analysisId) : undefined;
@@ -194,8 +199,11 @@ export function CaddieAnalysisDetail() {
   // never the full structured breakdown. shared_to_community only flips via
   // this explicit tap, never automatically.
   async function shareFeedback() {
-    if (!analysis || !details || sharingFeedback) return;
+    if (!analysis || !details || sharingFeedbackRef.current || analysis.sharedToCommunity || feedbackPostedIds.has(analysis.id)) return;
+    // A ref, not just state: a fast double tap lands before the re-render.
+    sharingFeedbackRef.current = true;
     setSharingFeedback(true);
+    const analysisId = analysis.id;
     try {
       const lines = [
         t("caddie.feedbackPostTitle"),
@@ -206,15 +214,25 @@ export function CaddieAnalysisDetail() {
         "",
         `${t("caddie.shareFeedbackFocusLabel")} ${details.focus.title}`,
       ];
-      await createPost({ type: "text", text: lines.join("\n"), category: "General" });
-      await markCaddieAnalysisShared(analysis.id);
+      // Rejects only if createPost failed (nothing posted, safe to retry).
+      // Once the post is out it counts as shared here even if the mark
+      // fails; postFeedbackThenMark retries the mark once, then logs.
+      await postFeedbackThenMark({
+        createPost: async () => {
+          await createPost({ type: "text", text: lines.join("\n"), category: "General" });
+          setFeedbackPostedIds((prev) => new Set(prev).add(analysisId));
+        },
+        markShared: () => markCaddieAnalysisShared(analysisId),
+      });
       showToast(t("caddie.feedbackShared"), "success");
     } catch (err) {
       showToast(err instanceof Error ? err.message : t("caddie.couldNotSave"), "warning");
     } finally {
+      sharingFeedbackRef.current = false;
       setSharingFeedback(false);
     }
   }
+  const feedbackShared = Boolean(analysis?.sharedToCommunity) || (analysis ? feedbackPostedIds.has(analysis.id) : false);
 
   const cameraAngleLabel: Record<CaddieCameraAngle, string> = {
     face_on: t("caddie.cameraAngleFaceOn"),
@@ -383,13 +401,11 @@ export function CaddieAnalysisDetail() {
       {analysis.status === "complete" && details && (
         <Button
           variant="outline"
-          icon={
-            analysis.sharedToCommunity ? <Check size={15} /> : sharingFeedback ? <Loader2 size={15} className="animate-spin" /> : <Share2 size={15} />
-          }
+          icon={feedbackShared ? <Check size={15} /> : sharingFeedback ? <Loader2 size={15} className="animate-spin" /> : <Share2 size={15} />}
           onClick={shareFeedback}
-          disabled={sharingFeedback || analysis.sharedToCommunity}
+          disabled={sharingFeedback || feedbackShared}
         >
-          {analysis.sharedToCommunity ? t("caddie.feedbackShared") : t("caddie.shareFeedback")}
+          {feedbackShared ? t("caddie.feedbackShared") : t("caddie.shareFeedback")}
         </Button>
       )}
 

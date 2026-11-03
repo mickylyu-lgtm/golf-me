@@ -19,7 +19,7 @@ import { formatDate, formatMoney } from "../lib/format";
 import { postCategoryLabel } from "../lib/enumLabels";
 import { supabase } from "../lib/supabase";
 import { clearCommunityPostDraft, loadCommunityPostDraft, saveCommunityPostDraft } from "../lib/communityPostDraft";
-import { copyCaddieMediaToCommunity, signCaddieMediaPath } from "../lib/caddieMedia";
+import { copyCaddieMediaToCommunity, removeCommunityMediaCreatedForFailedPost, signCaddieMediaPath } from "../lib/caddieMedia";
 import type { DraftMediaItem } from "../lib/communityPostDraft";
 import { isObjectionableContentError } from "../lib/objectionableContent";
 import { goBack } from "../lib/goBack";
@@ -371,6 +371,11 @@ export function CreatePost() {
     if (!canPost || posting) return;
     setPosting(true);
     setUploadProgress(kind === "swing" && videoFile ? "uploading" : "publishing");
+    // Public community-media objects THIS attempt wrote. If the post then
+    // fails they'd be public with nothing pointing at them, so they're
+    // removed again (never the private Caddie original, never a
+    // pre-existing URL such as prefilledVideoUrl).
+    const createdMediaUrls: string[] = [];
     try {
       let videoUrl: string | undefined;
       let videoThumbnailUrl: string | undefined;
@@ -387,9 +392,11 @@ export function CreatePost() {
         }
         setUploadProgress("uploading");
         videoUrl = await copyCaddieMediaToCommunity(authUser.id, privateShare.videoPath, "video");
+        createdMediaUrls.push(videoUrl);
         if (privateShare.thumbnailPath) {
           try {
             videoThumbnailUrl = await copyCaddieMediaToCommunity(authUser.id, privateShare.thumbnailPath, "thumb");
+            createdMediaUrls.push(videoThumbnailUrl);
           } catch (thumbErr) {
             console.error("GolfMe: failed to copy the swing thumbnail.", thumbErr);
           }
@@ -421,6 +428,7 @@ export function CreatePost() {
         if (uploadError) throw uploadError;
         const { data } = supabase.storage.from(COMMUNITY_MEDIA_BUCKET).getPublicUrl(path);
         videoUrl = data.publicUrl;
+        createdMediaUrls.push(videoUrl);
 
         // Best-effort: a real captured frame from the actual video, so the
         // post shows something other than a black rectangle before anyone
@@ -435,6 +443,7 @@ export function CreatePost() {
             .upload(thumbPath, thumbBlob, { contentType: "image/jpeg" });
           if (!thumbUploadError) {
             videoThumbnailUrl = supabase.storage.from(COMMUNITY_MEDIA_BUCKET).getPublicUrl(thumbPath).data.publicUrl;
+            createdMediaUrls.push(videoThumbnailUrl);
           }
         } catch (thumbErr) {
           console.error("GolfMe: failed to capture a video thumbnail.", thumbErr);
@@ -459,6 +468,7 @@ export function CreatePost() {
       showToast("Post published.", "success");
       navigate("/community");
     } catch (err) {
+      if (createdMediaUrls.length > 0 && authUser) void removeCommunityMediaCreatedForFailedPost(authUser.id, createdMediaUrls);
       showToast(
         isObjectionableContentError(err)
           ? t("moderation.objectionableContent")
