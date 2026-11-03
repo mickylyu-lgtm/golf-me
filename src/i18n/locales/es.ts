@@ -841,6 +841,7 @@ export const es: Record<TranslationKey, string> = {
   "filters.tomorrow": "Mañana",
   "filters.thisWeekend": "Este Fin de Semana",
   "filters.chooseDate": "Elegir Fecha",
+  "filters.anyDay": "Cualquier Día",
   "filters.playingArea": "Zona de juego",
   "filters.playingSomewhereElse": "¿Vas a jugar en otro sitio?",
   "filters.setAsDefault": "Establecer como Predeterminado",

@@ -13,6 +13,8 @@ import { LocationPicker } from "../location/LocationPicker";
 import { inputClass } from "../ui/FormControls";
 import { BUDGET_PREF_MAX, BUDGET_PREF_MIN, GOLF_VIBES, TRAVEL_RADIUS_MAX, TRAVEL_RADIUS_MIN } from "../../types";
 import type { GolfVibe, SkillFilter, WalkOrCart } from "../../types";
+import { SKILL_FILTERS, WALK_FILTERS, findRoundDraft, findRoundSearch } from "../../lib/roundSearchParams";
+import type { WhenChoice } from "../../lib/roundSearchParams";
 import { skillLabel, vibeLabel, walkOrCartLabel } from "../../lib/enumLabels";
 import {
   GAME_FORMAT_OPTIONS,
@@ -23,26 +25,27 @@ import {
   TRAVEL_RADIUS_PRESETS,
   formatBudgetValue,
   formatDistanceValue,
-  newPreferenceParams,
   selectedNewPreferenceLabels,
 } from "../../lib/matchPreferences";
 import type { NewPreferenceSelections } from "../../lib/preferenceMatch";
-import { locationParams } from "../../lib/travelLocation";
 import type { PlayingArea } from "../../lib/geo";
 import { coarsenOptionalGeoPoint } from "../../lib/coarseLocation";
 import { localDateInputValue } from "../../lib/golfCall";
 
-export type WhenChoice = "today" | "tomorrow" | "weekend" | "date";
+export type { WhenChoice };
 
-const WHEN_OPTIONS: { value: WhenChoice; labelKey: "filters.today" | "filters.tomorrow" | "filters.thisWeekend" | "filters.chooseDate" }[] = [
+// null = any upcoming day -- what a quick Auto-Match search uses, so Edit
+// search on its "Browse all" list can keep it instead of forcing a day.
+const WHEN_OPTIONS: { value: WhenChoice | null; labelKey: "filters.anyDay" | "filters.today" | "filters.tomorrow" | "filters.thisWeekend" | "filters.chooseDate" }[] = [
+  { value: null, labelKey: "filters.anyDay" },
   { value: "today", labelKey: "filters.today" },
   { value: "tomorrow", labelKey: "filters.tomorrow" },
   { value: "weekend", labelKey: "filters.thisWeekend" },
   { value: "date", labelKey: "filters.chooseDate" },
 ];
 
-const SKILL_OPTIONS: SkillFilter[] = ["Any Skill Level", "Beginner", "Intermediate", "Advanced"];
-const WALK_OPTIONS: WalkOrCart[] = ["Either", "Walking", "Cart"];
+const SKILL_OPTIONS: SkillFilter[] = SKILL_FILTERS;
+const WALK_OPTIONS: WalkOrCart[] = WALK_FILTERS;
 
 function newPreferencesFromUser(user: { roundLengthPreference: NewPreferenceSelections["roundLengthPreference"]; genderPreference: NewPreferenceSelections["genderPreference"]; groupTypePreference: NewPreferenceSelections["groupTypePreference"]; gameFormatPreference: NewPreferenceSelections["gameFormatPreference"]; networkingPreference: NewPreferenceSelections["networkingPreference"] }): NewPreferenceSelections {
   return {
@@ -56,26 +59,31 @@ function newPreferencesFromUser(user: { roundLengthPreference: NewPreferenceSele
 
 // Reached only from the homepage's "Find Me a Round" action, so intent is
 // implied (join an existing group) — no separate question needed here.
-export function FindRoundModal({ onClose }: { onClose: () => void }) {
+// `searchParams`: the search currently on screen (Edit search / the filter
+// button on a matched list), so every field starts from it rather than from
+// fixed defaults; with no search, today + the golfer's travel radius.
+export function FindRoundModal({ onClose, searchParams }: { onClose: () => void; searchParams?: URLSearchParams }) {
   const navigate = useNavigate();
   const { currentUser, updateCurrentUserProfile } = useData();
   const { showToast } = useToast();
   const { t } = useLocale();
 
-  const [when, setWhen] = useState<WhenChoice>("today");
-  const [customDate, setCustomDate] = useState("");
-  const [radius, setRadius] = useState(25);
-  const [showFilters, setShowFilters] = useState(false);
-  const [budgetCapEnabled, setBudgetCapEnabled] = useState(false);
-  const [budgetMax, setBudgetMax] = useState(100);
-  const [skillLevel, setSkillLevel] = useState<SkillFilter | "">("");
-  const [vibe, setVibe] = useState<GolfVibe | "">("");
-  const [walkOrCart, setWalkOrCart] = useState<WalkOrCart | "">("");
+  // Read once on open; later URL changes don't reset an edit in progress.
+  const [initial] = useState(() => findRoundDraft(searchParams ?? new URLSearchParams(), currentUser.travelRadiusMiles));
+  const [when, setWhen] = useState<WhenChoice | null>(initial.when);
+  const [customDate, setCustomDate] = useState(initial.customDate);
+  const [radius, setRadius] = useState(initial.radius);
+  const [showFilters, setShowFilters] = useState(initial.showAdvanced);
+  const [budgetCapEnabled, setBudgetCapEnabled] = useState(initial.budgetCapEnabled);
+  const [budgetMax, setBudgetMax] = useState(initial.budgetMax);
+  const [skillLevel, setSkillLevel] = useState<SkillFilter | "">(initial.skillLevel);
+  const [vibe, setVibe] = useState<GolfVibe | "">(initial.vibe);
+  const [walkOrCart, setWalkOrCart] = useState<WalkOrCart | "">(initial.walkOrCart);
 
   // null = use the golfer's saved playing area; set only when "Playing
   // Somewhere Else?" is used — never written back to the profile unless
   // "Set as My Default" is tapped explicitly.
-  const [travelLocation, setTravelLocation] = useState<PlayingArea | null>(null);
+  const [travelLocation, setTravelLocation] = useState<PlayingArea | null>(initial.travelLocation);
   const [locationPickerOpen, setLocationPickerOpen] = useState(false);
   const effectiveAreaLabel = travelLocation?.label ?? currentUser.areaLabel;
 
@@ -83,21 +91,17 @@ export function FindRoundModal({ onClose }: { onClose: () => void }) {
   // saved defaults, but never writes back to the profile unless "Save as my
   // new preference" is tapped explicitly.
   const [editingPrefs, setEditingPrefs] = useState(false);
-  const [draftPrefs, setDraftPrefs] = useState<NewPreferenceSelections>(() => newPreferencesFromUser(currentUser));
+  const [draftPrefs, setDraftPrefs] = useState<NewPreferenceSelections>(() => initial.prefs ?? newPreferencesFromUser(currentUser));
 
   // A past custom date can only ever match nothing (past rounds are hidden).
   const canSubmit = when !== "date" || (Boolean(customDate) && customDate >= localDateInputValue());
   const preferenceLabels = selectedNewPreferenceLabels(draftPrefs);
 
   function buildParams() {
-    const params = new URLSearchParams({ matched: "1", when, radius: String(radius), intent: "join", ...newPreferenceParams(draftPrefs) });
-    if (when === "date" && customDate) params.set("date", customDate);
-    if (budgetCapEnabled) params.set("budgetMax", String(budgetMax));
-    if (skillLevel) params.set("skill", skillLevel);
-    if (vibe) params.set("vibe", vibe);
-    if (walkOrCart) params.set("walk", walkOrCart);
-    if (travelLocation) for (const [k, v] of Object.entries(locationParams(travelLocation))) params.set(k, v);
-    return params;
+    return findRoundSearch(
+      { when, customDate, radius, budgetCapEnabled, budgetMax, skillLevel, vibe, walkOrCart, travelLocation, prefs: draftPrefs, showAdvanced: showFilters },
+      draftPrefs,
+    );
   }
 
   async function setTravelLocationAsDefault() {
@@ -241,7 +245,7 @@ export function FindRoundModal({ onClose }: { onClose: () => void }) {
           <p className="mb-2 text-sm font-bold text-slate-800">{t("filters.when")}</p>
           <div className="flex flex-wrap gap-1.5">
             {WHEN_OPTIONS.map((opt) => (
-              <Pill key={opt.value} active={when === opt.value} onClick={() => setWhen(opt.value)}>
+              <Pill key={opt.value ?? "any"} active={when === opt.value} onClick={() => setWhen(opt.value)}>
                 {t(opt.labelKey)}
               </Pill>
             ))}

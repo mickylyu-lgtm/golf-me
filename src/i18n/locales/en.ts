@@ -737,6 +737,7 @@ export const en = {
   "filters.tomorrow": "Tomorrow",
   "filters.thisWeekend": "This Weekend",
   "filters.chooseDate": "Choose Date",
+  "filters.anyDay": "Any Day",
   "filters.playingArea": "Playing area",
   "filters.playingSomewhereElse": "Playing Somewhere Else?",
   "filters.setAsDefault": "Set as My Default",

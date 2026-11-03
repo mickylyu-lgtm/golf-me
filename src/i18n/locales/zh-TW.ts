@@ -841,6 +841,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "filters.tomorrow": "明天",
   "filters.thisWeekend": "本週末",
   "filters.chooseDate": "選擇日期",
+  "filters.anyDay": "任意日期",
   "filters.playingArea": "打球區域",
   "filters.playingSomewhereElse": "去別的地方打球？",
   "filters.setAsDefault": "設為預設",

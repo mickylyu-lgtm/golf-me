@@ -16,7 +16,8 @@ import { effectiveLocation } from "../lib/travelLocation";
 import { resolveCallDistanceMiles } from "../lib/courseSearch";
 import { MIN_PREFERENCES_FOR_AUTO_MATCH, preferenceTierLabel, selectedPreferenceCount } from "../lib/preferenceMatch";
 import type { PreferenceMatchContext } from "../lib/preferenceMatch";
-import type { GolferProfile, GolfVibe, SkillFilter, WalkOrCart } from "../types";
+import type { GolferProfile } from "../types";
+import { browseAllSearch, parseRoundSearch } from "../lib/roundSearchParams";
 import type { TranslationKey } from "../i18n/locales/en";
 import { goBack } from "../lib/goBack";
 import { isPastRound } from "../lib/golfCall";
@@ -86,13 +87,11 @@ export function AutoMatch() {
   const [notified, setNotified] = useState(false);
   const [showClosest, setShowClosest] = useState(false);
 
-  const when = searchParams.get("when");
-  const radius = searchParams.get("radius");
-  const customDate = searchParams.get("date");
-  const budgetMax = searchParams.get("budgetMax");
-  const skill = searchParams.get("skill") as SkillFilter | null;
-  const vibeFilter = searchParams.get("vibe") as GolfVibe | null;
-  const walk = searchParams.get("walk") as WalkOrCart | null;
+  // Shared parser (roundSearchParams.ts), same as the browse list.
+  const { when, radius, date: customDate, budgetMax, skill, vibe: vibeFilter, walk } = useMemo(
+    () => parseRoundSearch(searchParams),
+    [searchParams],
+  );
 
   const whenLabel =
     when === "today"
@@ -146,11 +145,11 @@ export function AutoMatch() {
     if (radius) {
       list = list.filter((c) => {
         const distance = resolveCallDistanceMiles(c, effectiveLoc);
-        return distance !== undefined && distance <= Number(radius);
+        return distance !== undefined && distance <= radius;
       });
     }
     if (when) list = list.filter((c) => matchesWhen(c, when, customDate));
-    if (budgetMax) list = list.filter((c) => c.estimatedPricePerPerson <= Number(budgetMax));
+    if (budgetMax !== null) list = list.filter((c) => c.estimatedPricePerPerson <= budgetMax);
     if (skill) list = list.filter((c) => c.skillLevel === skill || c.skillLevel === "Any Skill Level");
     if (vibeFilter) list = list.filter((c) => c.vibe === vibeFilter);
     if (walk && walk !== "Either") list = list.filter((c) => c.walkOrCart === walk || c.walkOrCart === "Either");
@@ -344,7 +343,7 @@ export function AutoMatch() {
                 {t("autoMatch.showAnother")}
               </Button>
             )}
-            <Button variant="ghost" size="sm" onClick={() => navigate(`/golf-calls?${searchParams.toString()}`)}>
+            <Button variant="ghost" size="sm" onClick={() => navigate(`/golf-calls?${browseAllSearch(searchParams).toString()}`)}>
               {t("autoMatch.browseAll")}
             </Button>
           </div>

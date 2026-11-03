@@ -841,6 +841,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "filters.tomorrow": "明天",
   "filters.thisWeekend": "本周末",
   "filters.chooseDate": "选择日期",
+  "filters.anyDay": "任意日期",
   "filters.playingArea": "打球区域",
   "filters.playingSomewhereElse": "去别的地方打球？",
   "filters.setAsDefault": "设为默认",

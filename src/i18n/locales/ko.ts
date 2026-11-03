@@ -841,6 +841,7 @@ export const ko: Record<TranslationKey, string> = {
   "filters.tomorrow": "내일",
   "filters.thisWeekend": "이번 주말",
   "filters.chooseDate": "날짜 선택",
+  "filters.anyDay": "언제든지",
   "filters.playingArea": "라운드 지역",
   "filters.playingSomewhereElse": "다른 지역에서 라운드하시나요?",
   "filters.setAsDefault": "기본값으로 설정",
