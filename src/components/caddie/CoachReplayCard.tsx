@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { CircleCheck, Play, Target } from "lucide-react";
+import { CircleCheck, Dumbbell, Play, RotateCcw, Target } from "lucide-react";
 import { useLocale } from "../../i18n/LocaleContext";
 import type { TranslationKey } from "../../i18n/locales/en";
 import { coachDwellMs } from "../../lib/coachReplay";
-import type { CoachCheckpoint, CoachClaim, CoachMomentLabel, CoachText } from "../../lib/coachReplay";
+import type { CoachCheckpoint, CoachClaim, CoachMomentLabel, CoachSummary, CoachText } from "../../lib/coachReplay";
 import { usePrefersReducedMotion } from "../loading/loaderState";
 
 // The freeze card Coach Replay shows at each checkpoint, plus the slim strip
@@ -135,6 +135,72 @@ export function CoachReplayCard({ checkpoint, index, total, onContinue, onSkip }
   );
 }
 
+// The closing card, once a coached pass reaches the end: what to work on
+// (the main focus when no freeze carried it, the top work_on items) and the
+// drill. No auto-dismiss: there's nothing left to play into.
+export function CoachSummaryCard({ summary, onReplay, onDone }: { summary: CoachSummary; onReplay: () => void; onDone: () => void }) {
+  const { t } = useLocale();
+  const work: { claim: CoachClaim; labelKey: TranslationKey }[] = summary.focus ? [{ claim: summary.focus, labelKey: "coachReplay.mainFocus" }] : [];
+  for (const claim of summary.workOn) work.push({ claim, labelKey: "coachReplay.workOn" });
+  return (
+    <div
+      role="dialog"
+      aria-live="polite"
+      aria-label={t("coachReplay.summaryTitle")}
+      className="relative overflow-hidden rounded-2xl bg-white p-3.5 shadow-[0_14px_34px_-14px_rgba(14,39,23,0.5)] ring-1 ring-black/[0.04] animate-coach-card-in"
+    >
+      <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-brand-forest">
+        <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand-gold" />
+        {t("coachReplay.summaryTitle")}
+      </p>
+
+      <div className="mt-2.5 flex max-h-[45vh] flex-col gap-2 overflow-y-auto">
+        {work.map(({ claim, labelKey }) => (
+          <div key={claim.source} className="flex items-start gap-2">
+            <Target size={17} aria-hidden="true" className="mt-px shrink-0 text-sun-600" />
+            <div className="min-w-0">
+              <p className="text-[10.5px] font-bold uppercase tracking-wide text-sun-700">{t(labelKey)}</p>
+              <Claim claim={claim} t={t} />
+            </div>
+          </div>
+        ))}
+        {summary.drill && (
+          <div className="flex items-start gap-2">
+            <Dumbbell size={17} aria-hidden="true" className="mt-px shrink-0 text-fairway-600" />
+            <div className="min-w-0">
+              <p className="text-[10.5px] font-bold uppercase tracking-wide text-fairway-700">{t("coachReplay.drill")}</p>
+              <p className="text-[13px] font-semibold leading-snug text-slate-900">{textOf(t, summary.drill.name)}</p>
+              {summary.drill.steps.length > 0 && (
+                <ol className="mt-0.5 list-decimal pl-4 text-[12.5px] leading-snug text-slate-600">
+                  {summary.drill.steps.map((step, i) => (
+                    <li key={i}>{textOf(t, step)}</li>
+                  ))}
+                </ol>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <button
+          onClick={onReplay}
+          className="flex min-h-9 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-slate-500 transition-colors duration-150 hover:text-slate-800"
+        >
+          <RotateCcw size={12} aria-hidden="true" />
+          {t("coachReplay.watchAgain")}
+        </button>
+        <button
+          onClick={onDone}
+          className="flex min-h-9 items-center gap-1.5 rounded-full bg-brand-forest px-4 text-xs font-semibold text-white shadow-sm transition-colors duration-150 hover:bg-brand-forest-deep"
+        >
+          {t("coachReplay.done")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // Between freezes: what Coach Replay is, how many moments it will stop on,
 // and a play button while the swing is stopped.
 export function CoachReplayStrip({
@@ -156,7 +222,7 @@ export function CoachReplayStrip({
           <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-brand-gold" />
           {t("coachReplay.title")}
         </p>
-        <p className="pl-3 text-xs text-slate-500">{t("coachReplay.momentsHint", { count })}</p>
+        <p className="pl-3 text-xs text-slate-500">{count > 0 ? t("coachReplay.momentsHint", { count }) : t("coachReplay.summaryOnlyHint")}</p>
       </div>
       {!playing && (
         <button

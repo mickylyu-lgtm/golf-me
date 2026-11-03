@@ -8,9 +8,13 @@ import type { CoachCheckpoint } from "../../lib/coachReplay";
 // triggers a freeze. Scrubbing past a checkpoint doesn't, and scrubbing back
 // before one re-arms it, so a rewatch coaches again. Pure UI state: nothing
 // here is durable or touches the analysis itself.
+//
+// `ended` is true once a coached pass has played to the end of the clip
+// (the summary card's cue); playing, seeking or dismissing clears it.
 export function useCoachVideoPauses(videoRef: RefObject<HTMLVideoElement | null>, checkpoints: CoachCheckpoint[], enabled: boolean) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [playing, setPlaying] = useState(false);
+  const [ended, setEnded] = useState(false);
   const consumedRef = useRef(new Set<number>());
   const skippedRef = useRef(false);
 
@@ -18,8 +22,10 @@ export function useCoachVideoPauses(videoRef: RefObject<HTMLVideoElement | null>
     consumedRef.current.clear();
     skippedRef.current = false;
     setActiveIndex(null);
+    setEnded(false);
     const video = videoRef.current;
-    if (!video || !enabled || checkpoints.length === 0) return;
+    // No checkpoints can still mean a summary card, so keep listening.
+    if (!video || !enabled) return;
     setPlaying(!video.paused);
 
     let raf = 0;
@@ -44,6 +50,7 @@ export function useCoachVideoPauses(videoRef: RefObject<HTMLVideoElement | null>
     const onPlay = () => {
       // Playing again (our Continue, or the native control) dismisses the card.
       setActiveIndex(null);
+      setEnded(false);
       setPlaying(true);
       last = video.currentTime;
       if (!raf) raf = requestAnimationFrame(tick);
@@ -52,13 +59,16 @@ export function useCoachVideoPauses(videoRef: RefObject<HTMLVideoElement | null>
     const onSeeking = () => {
       const t = video.currentTime;
       for (const i of [...consumedRef.current]) if (checkpoints[i].timeSeconds > t + 0.02) consumedRef.current.delete(i);
-      if (t < checkpoints[0].timeSeconds) skippedRef.current = false;
+      if (checkpoints.length > 0 && t < checkpoints[0].timeSeconds) skippedRef.current = false;
+      // Scrubbing back means rewatching; scrubbing to the very end is not a finished pass.
+      setEnded(false);
       last = t;
     };
     const onEnded = () => {
       consumedRef.current.clear();
       skippedRef.current = false;
       setPlaying(false);
+      setEnded(true);
     };
     video.addEventListener("play", onPlay);
     video.addEventListener("pause", onPause);
@@ -94,6 +104,7 @@ export function useCoachVideoPauses(videoRef: RefObject<HTMLVideoElement | null>
     }
     resume();
   }, [videoRef, checkpoints, resume]);
+  const dismissEnded = useCallback(() => setEnded(false), []);
 
-  return { active: activeIndex === null ? null : (checkpoints[activeIndex] ?? null), activeIndex, playing, resume, skip, start };
+  return { active: activeIndex === null ? null : (checkpoints[activeIndex] ?? null), activeIndex, playing, ended, dismissEnded, resume, skip, start };
 }

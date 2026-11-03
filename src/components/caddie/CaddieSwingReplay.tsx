@@ -11,8 +11,8 @@ import type { TranslationKey } from "../../i18n/locales/en";
 import { SwingCallout } from "./SwingCallout";
 import { separateCallouts } from "./calloutLayout";
 import { coachPlanFromV1 } from "../../lib/coachReplay";
-import type { CoachCheckpoint, CoachMomentLabel } from "../../lib/coachReplay";
-import { CoachModeSwitch, CoachReplayCard, CoachReplayStrip } from "./CoachReplayCard";
+import type { CoachCheckpoint, CoachMomentLabel, V1Coaching } from "../../lib/coachReplay";
+import { CoachModeSwitch, CoachReplayCard, CoachReplayStrip, CoachSummaryCard } from "./CoachReplayCard";
 import { useCoachVideoPauses } from "./useCoachVideoPauses";
 
 // Standard COCO-17 joint pairs — only drawn when BOTH ends are present in
@@ -254,6 +254,9 @@ export interface CaddieSwingReplayProps {
   score?: CaddieScore;
   // The analysis's own per-moment cues, when it has any (else fixed copy).
   checkpointCues?: CaddieCheckpointCues;
+  // The analysis's work_on/focus/drill: the "what to work on" side of the
+  // cards and the closing summary. Pass a stable reference (memoized).
+  coaching?: V1Coaching;
 }
 
 const NO_CHECKPOINTS: CoachCheckpoint[] = [];
@@ -288,7 +291,7 @@ const REPLAY_MODES = [
   { speed: 0.25, labelKey: "caddie.replaySlowAnalysis", showOverlay: true },
 ] as const;
 
-export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, poseData, phases, cameraAngle, coachEnabled = false, score, checkpointCues }: CaddieSwingReplayProps) {
+export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, poseData, phases, cameraAngle, coachEnabled = false, score, checkpointCues, coaching }: CaddieSwingReplayProps) {
   const { t } = useLocale();
   const videoRef = useRef<HTMLVideoElement>(null);
   const resumeAtRef = useRef<number | null>(null);
@@ -308,11 +311,15 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
   // slowed clock). "Coach mode" defaults on; switching it off leaves the
   // plain slow replay. All of this is view state, derived from the stored
   // analysis on every render; nothing durable lives here.
-  const coachCheckpoints = useMemo(
-    () => (coachEnabled ? coachPlanFromV1({ phases, assessment, score, checkpointCues }).checkpoints : NO_CHECKPOINTS),
-    [coachEnabled, phases, assessment, score, checkpointCues],
+  const coachPlan = useMemo(
+    () => (coachEnabled ? coachPlanFromV1({ phases, assessment, score, checkpointCues, coaching }) : undefined),
+    [coachEnabled, phases, assessment, score, checkpointCues, coaching],
   );
-  const coachAvailable = coachCheckpoints.length > 0 && !!poseData && poseData.frames.length > 0;
+  const coachCheckpoints = coachPlan?.checkpoints ?? NO_CHECKPOINTS;
+  const coachSummary = coachPlan?.summary;
+  // A plan with no freeze but a summary still coaches: it plays the swing
+  // slowly, then ends on what to work on.
+  const coachAvailable = (coachCheckpoints.length > 0 || !!coachSummary) && !!poseData && poseData.frames.length > 0;
   const [coachOn, setCoachOn] = useState(true);
   const coachActive = coachAvailable && coachOn && mode.showOverlay;
   const coach = useCoachVideoPauses(videoRef, coachCheckpoints, coachActive);
@@ -726,6 +733,8 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
         onContinue={coach.resume}
         onSkip={coach.skip}
       />
+    ) : coach.ended && coachSummary ? (
+      <CoachSummaryCard summary={coachSummary} onReplay={coach.start} onDone={coach.dismissEnded} />
     ) : (
       <CoachReplayStrip count={coachCheckpoints.length} playing={coach.playing} onPlay={coach.start} />
     )

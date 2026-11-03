@@ -1,8 +1,19 @@
 // Run: npm run test:caddie  (node --test, built-in type stripping)
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildCoachPlan, checkpointCuesFromJson, coachDwellMs, coachPlanFromV1, v1Cues, v1Findings, v1Moments, v2Moments } from "../src/lib/coachReplay.ts";
-import type { CoachFinding, CoachMoment } from "../src/lib/coachReplay.ts";
+import {
+  buildCoachPlan,
+  checkpointCuesFromJson,
+  coachDwellMs,
+  coachPlanFromV1,
+  v1Cues,
+  v1Findings,
+  v1Moments,
+  v1Summary,
+  v2Moments,
+  weakestCheckpoint,
+} from "../src/lib/coachReplay.ts";
+import type { CoachFinding, CoachMoment, V1Coaching } from "../src/lib/coachReplay.ts";
 import type { SwingAssessment, SwingSegmentAssessment } from "../src/lib/swingAssessment.ts";
 import type { CaddieScore, CaddieSwingPhases } from "../src/types/index.ts";
 
@@ -217,6 +228,129 @@ test("checkpointCuesFromJson: stored JSON is re-sanitized and mapped to camelCas
     followThrough: "Hold it",
   });
   for (const raw of [undefined, null, "Turn", [], { top: 4 }]) assert.equal(checkpointCuesFromJson(raw), undefined);
+});
+
+// ── What to work on (focus, work_on, drill) ──────────────────────────────
+
+function coaching(overrides: Partial<V1Coaching> = {}): V1Coaching {
+  return {
+    workOn: [
+      { issue: "Upper body starts the downswing", whyItMatters: "Costs power.", confidence: "high" },
+      { issue: "Arms lift", whyItMatters: "Hard to repeat.", confidence: "medium" },
+      { issue: "Short finish", whyItMatters: "Face can stay open.", confidence: "low" },
+    ],
+    focus: { title: "Hips first", instruction: "Turn the lead hip before the shoulders unwind." },
+    drill: { name: "Pump drill", steps: ["Pause at the top.", "Pump the hips twice.", "Swing through.", "Repeat ten times."] },
+    ...overrides,
+  };
+}
+const FOCUS_BODY = { kind: "stored", text: "Turn the lead hip before the shoulders unwind." };
+
+test("a mid-band-only analysis now yields a fix (the focus, on the weakest checkpoint) and a summary card", () => {
+  const plan = coachPlanFromV1({
+    phases: phases(),
+    score: score({ setupAndPosture: 13, backswing: 12, downswingSequencing: 11, finish: 14, balanceAndWeightTransfer: 3 }),
+    coaching: coaching(),
+  });
+  assert.deepEqual(plan.checkpoints.map((c) => [c.id, c.fix?.source, c.good]), [["impact", "details.focus", undefined]]);
+  assert.deepEqual(plan.checkpoints[0].fix?.title, { kind: "stored", text: "Hips first" });
+  assert.deepEqual(plan.checkpoints[0].fix?.body, FOCUS_BODY);
+  const s = plan.summary!;
+  assert.equal(s.focus, undefined, "the focus is already on a card");
+  assert.deepEqual(s.workOn.map((c) => c.source), ["details.workOn.0", "details.workOn.1"], "high/medium only, in stored order");
+  assert.deepEqual(s.workOn[0].title, { kind: "stored", text: "Upper body starts the downswing" });
+  assert.deepEqual(s.drill?.name, { kind: "stored", text: "Pump drill" });
+  assert.equal(s.drill?.steps.length, 3, "at most three drill steps");
+});
+
+test("focus placement: ties go to the earlier checkpoint; balance never counts", () => {
+  assert.equal(weakestCheckpoint(score({ setupAndPosture: 10, backswing: 10, downswingSequencing: 12, finish: 15, balanceAndWeightTransfer: 1 })), "address");
+  assert.equal(weakestCheckpoint(score({ setupAndPosture: 15, backswing: 9, downswingSequencing: 9, finish: 9 })), "top");
+  assert.equal(weakestCheckpoint(undefined), undefined);
+});
+
+test("no fix on a moment when every checkpoint criterion is >= 16; the focus moves to the summary", () => {
+  const s = score({ setupAndPosture: 16, backswing: 18, downswingSequencing: 17, finish: 16, balanceAndWeightTransfer: 4 });
+  assert.equal(weakestCheckpoint(s), undefined);
+  const plan = coachPlanFromV1({ phases: phases(), score: s, coaching: coaching() });
+  assert.ok(plan.checkpoints.length > 0);
+  assert.ok(plan.checkpoints.every((c) => c.fix === undefined && c.good !== undefined));
+  assert.deepEqual(plan.summary?.focus?.body, FOCUS_BODY);
+  assert.deepEqual(plan.summary?.workOn.map((c) => c.source), ["details.workOn.0"], "focus takes one of the two lines");
+});
+
+test("old rows without a work_on tag: items stay off the moments and go to the summary", () => {
+  const f = v1Findings(undefined, score(), coaching({ focus: { title: "", instruction: "" } }));
+  assert.deepEqual(f, [], "no tag, no focus, mid-band scores: nothing is pinned to a moment");
+  const plan = coachPlanFromV1({ phases: phases(), score: score(), coaching: coaching({ focus: { title: "", instruction: "" } }) });
+  assert.deepEqual(plan.checkpoints, []);
+  assert.deepEqual(plan.summary?.workOn.map((c) => c.source), ["details.workOn.0", "details.workOn.1"]);
+});
+
+test("a tagged high/medium work_on item is a fix on its checkpoint, ahead of the focus fallback", () => {
+  const c = coaching();
+  c.workOn[0] = { ...c.workOn[0], checkpoint: "impact" };
+  c.workOn[1] = { ...c.workOn[1], checkpoint: "follow_through" };
+  c.workOn[2] = { ...c.workOn[2], checkpoint: "top" }; // low confidence: never pinned
+  const plan = coachPlanFromV1({ phases: phases(), score: score({ downswingSequencing: 9 }), coaching: c });
+  assert.deepEqual(
+    plan.checkpoints.map((x) => [x.id, x.fix?.source]),
+    [
+      ["impact", "details.workOn.0"],
+      ["finish", "details.workOn.1"],
+    ],
+  );
+  assert.deepEqual(plan.summary?.focus?.body, FOCUS_BODY, "the focus lost its moment to the tagged item, so it closes the replay");
+  assert.deepEqual(plan.summary?.workOn, [], "both sure items are already on cards");
+});
+
+test("whole_swing and invalid tags never pin an item to a moment", () => {
+  const c = coaching({ focus: { title: "", instruction: "" } });
+  c.workOn[0] = { ...c.workOn[0], checkpoint: "whole_swing" };
+  c.workOn[1] = { ...c.workOn[1], checkpoint: "backswing" as never };
+  const plan = coachPlanFromV1({ phases: phases(), score: score(), coaching: c });
+  assert.deepEqual(plan.checkpoints, []);
+  assert.deepEqual(plan.summary?.workOn.map((x) => x.source), ["details.workOn.0", "details.workOn.1"]);
+});
+
+test("a tag for a moment that wasn't placed falls back to the summary", () => {
+  const c = coaching({ focus: { title: "", instruction: "" } });
+  c.workOn[0] = { ...c.workOn[0], checkpoint: "top" };
+  const plan = coachPlanFromV1({ phases: phases({ top: { timestampSeconds: 1.3, confidence: "low" } }), score: score(), coaching: c });
+  assert.deepEqual(plan.checkpoints, []);
+  assert.equal(plan.summary?.workOn[0].source, "details.workOn.0");
+});
+
+test("a checkpoint with both a strength and a fix shows both", () => {
+  const assessment: SwingAssessment = { segments: [seg("hip_sway", "impact", "good")] };
+  const plan = coachPlanFromV1({ phases: phases(), assessment, score: score({ downswingSequencing: 10 }), coaching: coaching() });
+  assert.equal(plan.checkpoints[0].id, "impact");
+  assert.equal(plan.checkpoints[0].good?.source, "assessment.hip_sway");
+  assert.equal(plan.checkpoints[0].fix?.source, "details.focus");
+});
+
+test("measured faults and clear-flaw score reasons still outrank the focus", () => {
+  const assessment: SwingAssessment = { segments: [seg("torso", "impact", "needs_improvement")] };
+  const plan = coachPlanFromV1({ phases: phases(), assessment, score: score({ downswingSequencing: 10 }), coaching: coaching() });
+  assert.equal(plan.checkpoints[0].fix?.source, "assessment.torso");
+  assert.deepEqual(plan.summary?.focus?.body, FOCUS_BODY);
+});
+
+test("v1Summary: nothing usable means no summary card; blank text is skipped", () => {
+  assert.equal(v1Summary(undefined, new Set()), undefined);
+  assert.equal(
+    v1Summary({ workOn: [{ issue: "  ", whyItMatters: "x", confidence: "high" }], focus: { title: "", instruction: " " }, drill: { name: "", steps: ["a"] } }, new Set()),
+    undefined,
+  );
+  const s = v1Summary({ workOn: [{ issue: "Turn more", whyItMatters: "  ", confidence: "medium" }], drill: { name: "Wall drill", steps: [" ", "Go"] } }, new Set());
+  assert.deepEqual(s?.workOn[0], { body: { kind: "stored", text: "Turn more" }, source: "details.workOn.0" });
+  assert.deepEqual(s?.drill?.steps, [{ kind: "stored", text: "Go" }]);
+});
+
+test("Coach Replay without coaching data (old callers) keeps its old behaviour", () => {
+  const plan = coachPlanFromV1({ phases: phases(), score: score({ downswingSequencing: 11 }) });
+  assert.deepEqual(plan.checkpoints, []);
+  assert.equal(plan.summary, undefined);
 });
 
 test("coachDwellMs: calm floor, capped for long text", () => {
