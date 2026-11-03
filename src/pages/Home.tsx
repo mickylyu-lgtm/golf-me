@@ -16,6 +16,7 @@ import { MIN_PREFERENCES_FOR_AUTO_MATCH, selectedPreferenceCount } from "../lib/
 import { formatShortDate } from "../lib/format";
 import { isPastRound } from "../lib/golfCall";
 import { COMMUNITY_TUTORIAL_ID } from "../lib/tutorialSteps";
+import { findTabPath } from "../lib/findTab";
 import { SUPPORTED_TEE_TIME_COURSES, TEE_TIMES_VISIBLE } from "../services/teeTimes/types";
 import { NearbyCoursesHomeCard } from "../components/courses/NearbyCoursesHomeCard";
 import { HostReminderCard } from "../components/onboarding/HostReminderCard";
@@ -175,7 +176,7 @@ export function Home() {
         <AddToHomeScreenPrompt />
 
         <button
-          onClick={() => navigate("/find")}
+          onClick={() => navigate(findTabPath("rounds"))}
           className={`flex w-full items-center gap-3 p-4 text-left ${PRIMARY_ACTION_CLASS}`}
         >
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15 text-white">
@@ -240,7 +241,7 @@ export function Home() {
           </h2>
           {homeRounds.length > 0 && (
             <button
-              onClick={() => navigate("/find")}
+              onClick={() => navigate(findTabPath("rounds"))}
               className="text-sm font-semibold text-fairway-700 transition-colors duration-200 hover:text-fairway-800 hover:underline"
             >
               {t("common.viewMore")}
