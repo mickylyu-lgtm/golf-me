@@ -657,6 +657,27 @@ body {
   scrollbar-color: theme(colors.fairway.200) transparent;
 }
 
+/* iOS Safari/WKWebView draws date and time inputs as native controls that
+   ignore width: 100% and keep their own minimum width and height, so in a
+   two-column row (Edit Tee Time) the date box spilled over the tee time box
+   and stood taller than it (Micky, 2026-11-02, iPhone screenshot). Without
+   the native appearance they size like every other input; the value is
+   left-aligned like the text fields, and the min-height matches inputClass
+   (py-2.5 + one 16px line + border = 46px) so an empty date isn't short. */
+input[type="date"],
+input[type="time"] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 2.875rem;
+}
+input[type="date"]::-webkit-date-and-time-value,
+input[type="time"]::-webkit-date-and-time-value {
+  margin: 0;
+  text-align: left;
+}
+
 /* iOS auto-zooms the whole page when a focused input's font-size is under
    16px (meant to make small text legible while typing). Real mobile
    Safari resets that zoom on blur; the native app's bare WKWebView

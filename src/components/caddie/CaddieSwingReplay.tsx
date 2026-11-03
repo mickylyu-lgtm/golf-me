@@ -274,6 +274,13 @@ const COACH_PHASE_KEY: Partial<Record<CoachMomentLabel, PhaseButton["labelKey"]>
 // phase flash by too fast to actually study, even with the jump-to-phase
 // buttons below. The overlay only shows in analysis mode so the normal
 // view stays clean, uncluttered by dots/lines someone didn't ask to see.
+// In-app fullscreen swipe-down-to-close (see onFsTouchStart).
+const FS_AXIS_LOCK_PX = 10;
+const FS_DISMISS_PX = 120;
+const FS_DISMISS_VELOCITY = 0.5;
+// The native video controls bar sits along the bottom edge.
+const FS_CONTROLS_STRIP_PX = 90;
+
 const REPLAY_MODES = [
   { speed: 1, labelKey: "caddie.replayOriginal", showOverlay: false },
   { speed: 0.25, labelKey: "caddie.replaySlowAnalysis", showOverlay: true },
@@ -402,10 +409,50 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
     if (!customFullscreen) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    // Esc leaves it on a computer, like the post media viewer.
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setCustomFullscreen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
     return () => {
       document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
     };
   }, [customFullscreen]);
+
+  // Swipe down to leave the in-app fullscreen (Micky, 2026-11-02: Coach
+  // mode had only the small X), same feel as FullscreenMediaViewer: the
+  // view follows the finger and a long or quick downward drag closes it.
+  // Touches starting on the coach card or the video's native controls bar
+  // (bottom strip) are left alone.
+  const [fsDragY, setFsDragY] = useState(0);
+  const fsDragRef = useRef<{ x: number; y: number; t: number; axis: "none" | "vertical" | "other" } | null>(null);
+  function onFsTouchStart(e: React.TouchEvent) {
+    if (!customFullscreen) return;
+    const touch = e.touches[0];
+    const onCard = e.target instanceof Element && e.target.closest("[data-coach-slot]") !== null;
+    const onControls = touch.clientY > window.innerHeight - FS_CONTROLS_STRIP_PX;
+    fsDragRef.current = onCard || onControls || e.touches.length > 1 ? null : { x: touch.clientX, y: touch.clientY, t: Date.now(), axis: "none" };
+  }
+  function onFsTouchMove(e: React.TouchEvent) {
+    const state = fsDragRef.current;
+    if (!state) return;
+    const touch = e.touches[0];
+    const dx = touch.clientX - state.x;
+    const dy = touch.clientY - state.y;
+    if (state.axis === "none" && (Math.abs(dx) > FS_AXIS_LOCK_PX || Math.abs(dy) > FS_AXIS_LOCK_PX)) {
+      state.axis = dy > 0 && Math.abs(dy) > Math.abs(dx) ? "vertical" : "other";
+    }
+    if (state.axis === "vertical") setFsDragY(Math.max(0, dy));
+  }
+  function onFsTouchEnd() {
+    const state = fsDragRef.current;
+    fsDragRef.current = null;
+    if (!state || state.axis !== "vertical") return;
+    const velocity = fsDragY / Math.max(1, Date.now() - state.t);
+    if (fsDragY > FS_DISMISS_PX || velocity > FS_DISMISS_VELOCITY) setCustomFullscreen(false);
+    setFsDragY(0);
+  }
 
   // Leaving analysis mode (or losing pose data) while mid-custom-fullscreen
   // would otherwise strand the video pinned full-viewport with no overlay
@@ -687,6 +734,17 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
       <div
         ref={containerRef}
         className={customFullscreen ? "fixed inset-0 z-[200] bg-black" : "relative overflow-hidden rounded-2xl bg-black"}
+        onTouchStart={onFsTouchStart}
+        onTouchMove={onFsTouchMove}
+        onTouchEnd={onFsTouchEnd}
+        onTouchCancel={onFsTouchEnd}
+        style={
+          customFullscreen && fsDragY > 0
+            ? { transform: `translateY(${fsDragY}px)`, opacity: Math.max(0.4, 1 - fsDragY / 500) }
+            : customFullscreen
+              ? { transition: "transform 200ms ease-out" }
+              : undefined
+        }
       >
         {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
         <video
@@ -762,6 +820,7 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
           // Fullscreen has no page below the video, so the card floats over
           // its lower edge instead.
           <div
+            data-coach-slot
             className="absolute inset-x-3 z-10"
             style={{ bottom: "max(4.5rem, calc(env(safe-area-inset-bottom) + 4rem))" }}
             onClick={(e) => e.stopPropagation()}
