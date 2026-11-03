@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, Flag, Search, SlidersHorizontal, Sparkles } from "lucide-react";
 import { useData } from "../context/DataContext";
@@ -11,8 +11,18 @@ import { GOLF_VIBES } from "../types";
 import type { GolfVibe } from "../types";
 import { vibeLabel } from "../lib/enumLabels";
 import { useCredibilityForGolfers } from "../lib/useCredibility";
-
-type SortMode = "compatibility" | "distance" | "reputation";
+import { useSessionState } from "../lib/useSessionState";
+import {
+  DISCOVER_FILTERS_OPEN_KEY,
+  DISCOVER_SORT_KEY,
+  DISCOVER_VIBES_KEY,
+  isOpenFlag,
+  isSortMode,
+  parseVibes,
+  serializeVibes,
+  toggleVibe as toggledVibes,
+} from "../lib/discoverFilters";
+import type { SortMode } from "../lib/discoverFilters";
 
 interface DiscoverProps {
   embedded?: boolean;
@@ -23,12 +33,17 @@ export function Discover({ embedded = false }: DiscoverProps) {
   const { isDemo } = useAuth();
   const { t } = useLocale();
   const navigate = useNavigate();
-  const [activeVibes, setActiveVibes] = useState<GolfVibe[]>([]);
-  const [sortMode, setSortMode] = useState<SortMode>("compatibility");
-  const [showFilters, setShowFilters] = useState(false);
+  // Session-persisted (see discoverFilters.ts): Back from a golfer and a
+  // Rounds/Golfers switch both unmount this page, which used to reset all three.
+  const [storedVibes, setStoredVibes] = useSessionState<string>(DISCOVER_VIBES_KEY, "");
+  const activeVibes = useMemo(() => parseVibes(storedVibes), [storedVibes]);
+  const [sortMode, setSortMode] = useSessionState<SortMode>(DISCOVER_SORT_KEY, "compatibility", isSortMode);
+  const [filtersOpen, setFiltersOpen] = useSessionState<"1" | "0">(DISCOVER_FILTERS_OPEN_KEY, "0", isOpenFlag);
+  const showFilters = filtersOpen === "1";
+  const setShowFilters = (update: (open: boolean) => boolean) => setFiltersOpen((v) => (update(v === "1") ? "1" : "0"));
 
   function toggleVibe(v: GolfVibe) {
-    setActiveVibes((prev) => (prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]));
+    setStoredVibes((prev) => serializeVibes(toggledVibes(parseVibes(prev), v)));
   }
 
   const rawCandidates = visibleGolfers();
