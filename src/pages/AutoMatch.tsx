@@ -1,13 +1,19 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Bell, Users } from "lucide-react";
+import { ArrowLeft, Users } from "lucide-react";
 import { useData } from "../context/DataContext";
+import { useAuth } from "../context/AuthContext";
+import { useRealRounds } from "../context/RealRoundsContext";
 import { useToast } from "../context/ToastContext";
 import { useLocale } from "../i18n/LocaleContext";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { EmptyState } from "../components/ui/EmptyState";
 import { GolfCallCard } from "../components/golfcall/GolfCallCard";
+import { RoundAlertsCard } from "../components/find/RoundAlertsCard";
+import { LoadErrorState } from "../components/ui/LoadStates";
+import { GolfMeLoader } from "../components/loading/GolfMeLoader";
+import { listView } from "../lib/loadStatus";
 import { SharedPreferencesBadge } from "../components/golfcall/SharedPreferencesBadge";
 import { rankCallsWithPreferences } from "../lib/autoMatch";
 import { matchesWhen } from "../lib/roundFilters";
@@ -83,8 +89,11 @@ export function AutoMatch() {
   const quick = searchParams.get("quick") === "1";
   const [started, setStarted] = useState(quick);
   const [resultIndex, setResultIndex] = useState(0);
-  const [notified, setNotified] = useState(false);
   const [showClosest, setShowClosest] = useState(false);
+  const { isDemo } = useAuth();
+  const rounds = useRealRounds();
+  // Rounds failed to load -> say so instead of "no matches".
+  const roundsView = listView({ count: golfCalls.length, isDemo, hasLoaded: rounds.hasLoaded, loadError: rounds.loadError, isLoading: rounds.isLoading });
 
   const when = searchParams.get("when");
   const radius = searchParams.get("radius");
@@ -196,11 +205,6 @@ export function AutoMatch() {
     setResultIndex((i) => (i + 1) % results.length);
   }
 
-  function handleNotifyMe() {
-    setNotified(true);
-    showToast(t("find.willNotify"), "success");
-  }
-
   return (
     <div className="flex flex-col gap-5 pb-6">
       <button
@@ -271,6 +275,10 @@ export function AutoMatch() {
             </Button>
           </div>
         )
+      ) : roundsView === "loading" ? (
+        <GolfMeLoader className="py-12" />
+      ) : roundsView === "error" ? (
+        <LoadErrorState onRetry={rounds.retry} />
       ) : results.length === 0 ? (
         !showClosest ? (
           <EmptyState
@@ -278,18 +286,18 @@ export function AutoMatch() {
             title={t("autoMatch.noStrongMatches")}
             description={t("autoMatch.noStrongMatchesDesc")}
             action={
-              <div className="flex flex-wrap justify-center gap-2">
-                {closestMatches.length > 0 && (
-                  <Button size="sm" variant="outline" onClick={() => setShowClosest(true)}>
-                    {t("autoMatch.showClosest")}
+              <div className="flex w-full flex-col items-center gap-3">
+                <div className="flex flex-wrap justify-center gap-2">
+                  {closestMatches.length > 0 && (
+                    <Button size="sm" variant="outline" onClick={() => setShowClosest(true)}>
+                      {t("autoMatch.showClosest")}
+                    </Button>
+                  )}
+                  <Button size="sm" onClick={() => navigate("/golf-calls/new")}>
+                    {t("find.createGolfCall")}
                   </Button>
-                )}
-                <Button size="sm" onClick={() => navigate("/golf-calls/new")}>
-                  {t("find.createGolfCall")}
-                </Button>
-                <Button size="sm" variant="outline" icon={<Bell size={14} />} disabled={notified} onClick={handleNotifyMe}>
-                  {notified ? t("find.notifiedMe") : t("find.notifyMe")}
-                </Button>
+                </div>
+                <RoundAlertsCard />
               </div>
             }
           />
@@ -299,13 +307,11 @@ export function AutoMatch() {
             title={t("autoMatch.nothingNearby")}
             description={t("find.emptyNoMatchesDesc")}
             action={
-              <div className="flex flex-wrap justify-center gap-2">
+              <div className="flex w-full flex-col items-center gap-3">
                 <Button size="sm" onClick={() => navigate("/golf-calls/new")}>
                   {t("find.createGolfCall")}
                 </Button>
-                <Button size="sm" variant="outline" icon={<Bell size={14} />} disabled={notified} onClick={handleNotifyMe}>
-                  {notified ? t("find.notifiedMe") : t("find.notifyMe")}
-                </Button>
+                <RoundAlertsCard />
               </div>
             }
           />
@@ -350,13 +356,11 @@ export function AutoMatch() {
           </div>
 
           {!hasStrongMatch && (
-            <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-3">
-              <Button size="sm" onClick={() => navigate("/golf-calls/new")}>
+            <div className="flex flex-col gap-3 border-t border-slate-100 pt-3">
+              <Button size="sm" className="self-start" onClick={() => navigate("/golf-calls/new")}>
                 {t("find.createGolfCall")}
               </Button>
-              <Button size="sm" variant="outline" icon={<Bell size={14} />} disabled={notified} onClick={handleNotifyMe}>
-                {notified ? t("find.notifiedMe") : t("find.notifyMe")}
-              </Button>
+              <RoundAlertsCard />
             </div>
           )}
         </div>

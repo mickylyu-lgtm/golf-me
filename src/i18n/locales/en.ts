@@ -703,11 +703,9 @@ export const en = {
   "find.sortReputation": "Reputation",
   "find.browseGolfCalls": "Looking for a round instead? Browse Golf Calls",
   "find.emptyNoMatches": "Nothing matches yet. Start the round.",
-  "find.emptyNoMatchesDesc": "There aren't any matching rounds right now — widen your search, host your own, or we'll let you know when one opens up.",
+  "find.emptyNoMatchesDesc": "There aren't any matching rounds right now — widen your search or host your own.",
   "find.emptyNoResults": "No open Golf Calls right now — be the first to start one.",
   "find.emptyNoResultsSearch": "No open Golf Calls match that search — try something else.",
-  "find.notifyMe": "Notify Me When One Opens",
-  "find.notifiedMe": "We'll notify you",
   "find.createGolfCall": "Create a Golf Call",
   "find.hostGolfCall": "Host a Golf Call",
   "find.noGolfersMatch": "No golfers match those vibes",
@@ -727,7 +725,27 @@ export const en = {
   "find.withinRadius": "within {radius} mi",
   "find.sortedByCompatibility": "Sorted by Golf Compatibility Score.",
   "find.editSearch": "Edit search",
-  "find.willNotify": "We'll notify you when a matching round appears.",
+
+  // "Notify me" on an empty search = the existing new-round alerts
+  // (RoundAlertsCard.tsx). Never promise an alert for the exact search.
+  "roundAlerts.scope": "Covers new rounds near your home area (within {radius} mi), not this exact search. At most 3 a day.",
+  "roundAlerts.noHomeArea": "Set your home area to get alerts when new rounds open near you.",
+  "roundAlerts.off": "New-round alerts are off.",
+  "roundAlerts.saving": "Turning on alerts…",
+  "roundAlerts.saveFailed": "Couldn't turn on alerts. Check your connection and try again.",
+  "roundAlerts.onDemo": "New-round alerts are on (demo account, nothing is sent).",
+  "roundAlerts.onWeb": "Alerts are on. They show in your GolfMe notifications. Push alerts need the iPhone app.",
+  "roundAlerts.onChecking": "New-round alerts are on.",
+  "roundAlerts.onPush": "Alerts are on. This iPhone gets a push and an in-app notification.",
+  "roundAlerts.onPushOff": "Alerts are on, in-app only. Push notifications are off in Settings.",
+  "roundAlerts.onPushDenied": "Alerts are on, in-app only. Push is blocked in iPhone Settings → Notifications → GolfMe.",
+  "roundAlerts.onPushPrompt": "Alerts are on, in-app only until you allow push notifications.",
+  "roundAlerts.onInApp": "Alerts are on. They show in your GolfMe notifications.",
+  "roundAlerts.turnOn": "Turn on alerts",
+  "roundAlerts.turnedOn": "New-round alerts are on.",
+  "roundAlerts.setHomeArea": "Set home area",
+  "roundAlerts.allowPush": "Allow push",
+  "roundAlerts.openSettings": "Open Settings",
   "find.yourChosenDate": "your chosen date",
 
   // Find Round modal (Filters sheet)
@@ -1104,6 +1122,7 @@ export const en = {
   "loading.retry": "Try again",
   "loading.slow": "Taking longer than usual.",
   "loading.unreachable": "Can't reach GolfMe. Check your connection and try again.",
+  "loading.refreshFailed": "Couldn't refresh. Showing what loaded earlier.",
 
   // Golf Call detail
   "golfCallDetail.notFound": "Golf Call not found.",
