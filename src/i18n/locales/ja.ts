@@ -927,6 +927,7 @@ export const ja: Record<TranslationKey, string> = {
   "host.otherGolfers": "その他のゴルファー",
   "host.tellUsWhenTeeTime": "ティータイム",
   "host.pastStartError": "その日時はすでに過ぎています。今日の後の時間か、未来の日付を選んでください。",
+  "host.whenNeeded": "続けるには日にちを選び、ティータイムを入力してください。",
   "host.verifyYourTeeTime": "ティータイムを確認する",
   "host.verifyYourTeeTimeBody": "このラウンドが実際の予約に基づいていることを他のゴルファーに伝えましょう。",
   "host.skipForNow": "今はスキップ",

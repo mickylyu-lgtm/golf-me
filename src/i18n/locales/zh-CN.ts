@@ -927,6 +927,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "host.otherGolfers": "其他球友",
   "host.tellUsWhenTeeTime": "开球时间",
   "host.pastStartError": "该日期和时间已经过去。请选择今天稍后的时间或未来的日期。",
+  "host.whenNeeded": "请选择日期并填写开球时间以继续。",
   "host.verifyYourTeeTime": "验证你的开球时间",
   "host.verifyYourTeeTimeBody": "帮助其他球友知道这个球局基于真实预订。",
   "host.skipForNow": "暂时跳过",

@@ -927,6 +927,7 @@ export const ko: Record<TranslationKey, string> = {
   "host.otherGolfers": "다른 골퍼",
   "host.tellUsWhenTeeTime": "티타임",
   "host.pastStartError": "이미 지난 날짜와 시간입니다. 오늘 이후 시간이나 미래 날짜를 선택해 주세요.",
+  "host.whenNeeded": "계속하려면 날짜를 고르고 티타임을 입력해 주세요.",
   "host.verifyYourTeeTime": "티타임 인증하기",
   "host.verifyYourTeeTimeBody": "이 라운드가 실제 예약을 기반으로 한다는 것을 다른 골퍼들에게 알려주세요.",
   "host.skipForNow": "나중에 하기",

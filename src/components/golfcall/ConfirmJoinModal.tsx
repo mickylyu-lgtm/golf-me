@@ -59,17 +59,23 @@ export function ConfirmJoinModal({ call, onClose, onConfirm }: ConfirmJoinModalP
       }
     >
       <div className="flex flex-col gap-4">
-        <div className="rounded-2xl border border-fairway-100 bg-fairway-50/60 p-4">
-          <ul className="flex flex-col gap-2 text-sm text-fairway-800">
-            <li className="flex items-center gap-2 font-semibold">
-              <ShieldCheck size={15} className="text-fairway-500" />
-              {verifiedCount === 1 ? t("joinConfirm.verifiedGolfer") : t("joinConfirm.verifiedGolfers", { count: verifiedCount })}
-            </li>
-            <li className="font-semibold">{t("joinConfirm.combinedRounds", { count: combinedRounds })}</li>
-            <li className="font-semibold">{t("joinConfirm.wouldPlayAgain", { pct: avgWouldPlayAgain })}</li>
-            {noRecentNoShows && <li className="font-semibold">{t("joinConfirm.noNoShows")}</li>}
-          </ul>
-        </div>
+        {/* Zero lines are left out: a new player with no rounds or ratings
+            yet would otherwise read as "0% Would Play Again". */}
+        {(verifiedCount > 0 || combinedRounds > 0 || avgWouldPlayAgain > 0 || noRecentNoShows) && (
+          <div className="rounded-2xl border border-fairway-100 bg-fairway-50/60 p-4">
+            <ul className="flex flex-col gap-2 text-sm text-fairway-800">
+              {verifiedCount > 0 && (
+                <li className="flex items-center gap-2 font-semibold">
+                  <ShieldCheck size={15} className="text-fairway-500" />
+                  {verifiedCount === 1 ? t("joinConfirm.verifiedGolfer") : t("joinConfirm.verifiedGolfers", { count: verifiedCount })}
+                </li>
+              )}
+              {combinedRounds > 0 && <li className="font-semibold">{t("joinConfirm.combinedRounds", { count: combinedRounds })}</li>}
+              {avgWouldPlayAgain > 0 && <li className="font-semibold">{t("joinConfirm.wouldPlayAgain", { pct: avgWouldPlayAgain })}</li>}
+              {noRecentNoShows && <li className="font-semibold">{t("joinConfirm.noNoShows")}</li>}
+            </ul>
+          </div>
+        )}
 
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{t("joinConfirm.playingWith")}</p>

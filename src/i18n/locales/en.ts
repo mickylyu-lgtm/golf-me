@@ -826,6 +826,7 @@ export const en = {
   "host.otherGolfers": "Other golfers",
   "host.tellUsWhenTeeTime": "Tee time",
   "host.pastStartError": "That date and time has already passed. Pick today with a later time, or a future date.",
+  "host.whenNeeded": "Pick a day and add a tee time to continue.",
   "host.verifyYourTeeTime": "Verify Your Tee Time",
   "host.verifyYourTeeTimeBody": "Help other golfers know this round is based on a real booking.",
   "host.skipForNow": "Skip for now",

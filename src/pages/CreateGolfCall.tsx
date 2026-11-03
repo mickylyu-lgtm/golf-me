@@ -897,6 +897,7 @@ export function CreateGolfCall() {
         </div>
       )}
 
+      {step === 2 && !step2Valid && !startsInPast && <p className="-mb-2 text-center text-xs font-medium text-slate-500">{t("host.whenNeeded")}</p>}
       {step < TOTAL_STEPS ? (
         <Button
           disabled={step === 1 ? !step1Valid : step === 2 ? !step2Valid : step === 3 ? !step3Valid : false}

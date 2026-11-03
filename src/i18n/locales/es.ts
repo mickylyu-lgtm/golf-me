@@ -927,6 +927,7 @@ export const es: Record<TranslationKey, string> = {
   "host.otherGolfers": "Otros golfistas",
   "host.tellUsWhenTeeTime": "Hora de salida",
   "host.pastStartError": "Esa fecha y hora ya pasaron. Elige hoy con una hora posterior o una fecha futura.",
+  "host.whenNeeded": "Elige un día y añade una hora de salida para continuar.",
   "host.verifyYourTeeTime": "Verifica Tu Hora de Salida",
   "host.verifyYourTeeTimeBody": "Ayuda a otros golfistas a saber que esta ronda se basa en una reserva real.",
   "host.skipForNow": "Omitir por ahora",
