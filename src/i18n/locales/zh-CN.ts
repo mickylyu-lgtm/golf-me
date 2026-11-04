@@ -228,6 +228,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "caddie.scoreFinish": "收杆",
   "caddie.translateTo": "翻译为{language}",
   "caddie.translating": "翻译中...",
+  "caddie.feedbackLanguageNotice": "这条反馈是用{language}写的。",
   "caddie.replayOriginal": "原始视频",
   "caddie.replaySlowAnalysis": "慢动作模式",
   "swingAssessment.summaryTitle": "挥杆检查",

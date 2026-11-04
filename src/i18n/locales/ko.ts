@@ -228,6 +228,7 @@ export const ko: Record<TranslationKey, string> = {
   "caddie.scoreFinish": "피니시",
   "caddie.translateTo": "{language}로 번역",
   "caddie.translating": "번역 중...",
+  "caddie.feedbackLanguageNotice": "이 피드백은 {language}로 작성되었습니다.",
   "caddie.replayOriginal": "원본",
   "caddie.replaySlowAnalysis": "슬로우 모드",
   "swingAssessment.summaryTitle": "스윙 체크",

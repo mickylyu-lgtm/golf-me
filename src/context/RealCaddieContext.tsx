@@ -7,20 +7,12 @@ import type { SignedUrlEntry } from "../lib/caddieMedia";
 import { CaddieRequestError, isStaleProcessing } from "../lib/caddieAnalysis";
 import { FAILURE_BODY_KEYS, parseCaddieFailure } from "../lib/caddieFailure";
 import { checkpointCuesFromJson } from "../lib/coachReplay";
+import { analysisLanguageFromJson } from "../lib/caddieLanguage";
 import { sanitizeWorkOnCheckpoint } from "../../supabase/functions/_shared/caddieCues.ts";
+import { phasesFromJson, poseDataFromJson } from "../../supabase/functions/_shared/caddieVerdicts.ts";
 import { useAuth } from "./AuthContext";
 import { useLocale } from "../i18n/LocaleContext";
-import type {
-  CaddieAnalysis,
-  CaddieAnalysisDetails,
-  CaddieAnalysisStatus,
-  CaddiePhaseMoment,
-  CaddiePoseData,
-  CaddieScore,
-  CaddieScoreCriterionKey,
-  CaddieSourceType,
-  CaddieSwingPhases,
-} from "../types";
+import type { CaddieAnalysis, CaddieAnalysisDetails, CaddieAnalysisStatus, CaddiePoseData, CaddieScore, CaddieScoreCriterionKey, CaddieSourceType } from "../types";
 
 interface CaddieAnalysisRow {
   id: string;
@@ -61,30 +53,9 @@ interface CaddieAnalysisRow {
 // analysis_json is stored exactly as Gemini returned it (snake_case field
 // names) — this maps it into the camelCase shape the rest of the app uses.
 // Real rows only; demo mode's fixture data never sets analysis_json.
-function jsonToPhaseMoment(raw: Record<string, unknown> | undefined): CaddiePhaseMoment {
-  return {
-    timestampSeconds: typeof raw?.timestamp_seconds === "number" ? raw.timestamp_seconds : null,
-    confidence: (raw?.confidence as CaddiePhaseMoment["confidence"]) ?? null,
-  };
-}
-
-function jsonToPhases(raw: unknown): CaddieSwingPhases | undefined {
-  if (!raw || typeof raw !== "object") return undefined;
-  const phases = raw as Record<string, Record<string, unknown>>;
-  const impact = phases.impact ?? {};
-  return {
-    address: jsonToPhaseMoment(phases.address),
-    backswing: jsonToPhaseMoment(phases.backswing),
-    top: jsonToPhaseMoment(phases.top),
-    downswing: jsonToPhaseMoment(phases.downswing),
-    impact: {
-      windowStartSeconds: typeof impact.window_start_seconds === "number" ? impact.window_start_seconds : null,
-      windowEndSeconds: typeof impact.window_end_seconds === "number" ? impact.window_end_seconds : null,
-      confidence: (impact.confidence as CaddiePhaseMoment["confidence"]) ?? null,
-    },
-    followThrough: jsonToPhaseMoment(phases.follow_through),
-  };
-}
+// Phases and pose frames go through the same parsers analyze-swing uses
+// for its measured-verdict check (_shared/caddieVerdicts.ts), so both
+// sides measure the same swing.
 
 const SCORE_CRITERION_KEYS: [string, CaddieScoreCriterionKey][] = [
   ["setup_and_posture", "setupAndPosture"],
@@ -126,34 +97,14 @@ function jsonToDetails(json: Record<string, unknown> | null, scoreTotal: number 
     focus: { title: String(focus.title ?? ""), instruction: String(focus.instruction ?? "") },
     drill: { name: String(drill.name ?? ""), steps: Array.isArray(drill.steps) ? (drill.steps as string[]) : [] },
     limitations: Array.isArray(json.limitations) ? (json.limitations as string[]) : [],
-    phases: jsonToPhases(json.phases),
+    phases: phasesFromJson(json.phases),
     checkpointCues: checkpointCuesFromJson(json.checkpoint_cues),
+    language: analysisLanguageFromJson(json.language),
     score: jsonToScore(json.score, scoreTotal),
   };
 }
 
-function jsonToPoseData(raw: Record<string, unknown> | null): CaddiePoseData | undefined {
-  if (!raw || !Array.isArray(raw.frames)) return undefined;
-  const video = (raw.video as Record<string, unknown>) ?? {};
-  return {
-    analysisFps: typeof video.analysis_fps === "number" ? video.analysis_fps : 8,
-    frames: (raw.frames as Record<string, unknown>[]).map((f) => {
-      const rawKeypoints = (f.keypoints as Record<string, Record<string, unknown>>) ?? {};
-      const keypoints: CaddiePoseData["frames"][number]["keypoints"] = {};
-      for (const [name, kp] of Object.entries(rawKeypoints)) {
-        if (typeof kp.x === "number" && typeof kp.y === "number") {
-          keypoints[name] = { x: kp.x, y: kp.y, confidence: typeof kp.confidence === "number" ? kp.confidence : 0 };
-        }
-      }
-      return {
-        frameIndex: typeof f.frame_index === "number" ? f.frame_index : 0,
-        timestampSeconds: typeof f.timestamp_seconds === "number" ? f.timestamp_seconds : 0,
-        personConfidence: typeof f.person_confidence === "number" ? f.person_confidence : null,
-        keypoints,
-      };
-    }),
-  };
-}
+const jsonToPoseData = (raw: Record<string, unknown> | null): CaddiePoseData | undefined => poseDataFromJson(raw);
 
 // A private path resolves through the signed-URL cache ("" / undefined until
 // signed — every renderer already guards on a falsy URL); otherwise the

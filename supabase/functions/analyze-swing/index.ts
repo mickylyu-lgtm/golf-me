@@ -51,6 +51,7 @@ import {
 } from "../_shared/caddieReliability.ts";
 import type { CaddieFailureCode } from "../_shared/caddieReliability.ts";
 import { CUE_MAX_CHARS, WORK_ON_CHECKPOINTS, withSanitizedCheckpointCues, withSanitizedWorkOnCheckpoints } from "../_shared/caddieCues.ts";
+import { withMeasuredCueCheck } from "../_shared/caddieVerdicts.ts";
 
 // ---- Centralized config — change these, nothing else, to retune Caddie. ----
 const GEMINI_MODEL = "gemini-3.6-flash"; // gemini-2.5-flash was retired for new API keys/projects (Gemini API started 404ing it with "no longer available to new users" on 2026-08-21); 3.6-flash is Google's named replacement, same video-understanding + structured-JSON-output support
@@ -1136,8 +1137,19 @@ Deno.serve(async (req: Request) => {
     // never throws and never fails the analysis.
     // Same for the optional work_on[].checkpoint tag: an invalid tag is
     // removed from its item, the item itself is kept.
-    const analysisJson = withSanitizedWorkOnCheckpoints(withSanitizedCheckpointCues(parsed as unknown as Record<string, unknown>));
-    devLog("checkpoint cues", { kept: Object.keys((analysisJson.checkpoint_cues as Record<string, string> | undefined) ?? {}) });
+    // Then the measured-verdict check (_shared/caddieVerdicts.ts): Gemini
+    // wrote its cues without seeing what the pose measurement finds, so a
+    // cue that coaches a different body part than a measured fault at the
+    // same moment is dropped (never rewritten). `language` records the
+    // locale this text was requested in, so the client can offer a
+    // translation when the app's language differs (translate-caddie-
+    // analysis updates it). Rows from before this have no field.
+    const { json: checkedJson, dropped: droppedCues } = withMeasuredCueCheck(
+      withSanitizedWorkOnCheckpoints(withSanitizedCheckpointCues(parsed as unknown as Record<string, unknown>)),
+      trustedPoseData,
+    );
+    const analysisJson: Record<string, unknown> = { ...checkedJson, language: locale };
+    devLog("checkpoint cues", { kept: Object.keys((analysisJson.checkpoint_cues as Record<string, string> | undefined) ?? {}), droppedByMeasurement: droppedCues });
 
     if (settled) return;
     const { data: savedRows, error: updateError } = await supabase

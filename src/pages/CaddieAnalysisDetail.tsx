@@ -17,6 +17,7 @@ import { Badge } from "../components/ui/Badge";
 import { formatShortDate } from "../lib/format";
 import { postFeedbackThenMark } from "../lib/caddieShare";
 import { isStaleProcessing, usePeriodicRerender } from "../lib/caddieAnalysis";
+import { showsLanguageNotice } from "../lib/caddieLanguage";
 import { FAILURE_BODY_KEYS, FAILURE_TITLE_KEYS, analysisFailure } from "../lib/caddieFailure";
 import type { CaddieConfidence, CaddieCameraAngle, CaddieScoreCriterionKey } from "../types";
 import type { CreatePostSwingPrefill } from "./CreatePost";
@@ -245,6 +246,18 @@ export function CaddieAnalysisDetail() {
     medium: t("caddie.confidenceMedium"),
     low: t("caddie.confidenceLow"),
   };
+  const languageName = (value: string) => LOCALES.find((l) => l.value === value)?.nativeName ?? value;
+  const languageNotice = showsLanguageNotice(details?.language, locale);
+  const translateButton = (
+    <button
+      onClick={translateFeedback}
+      disabled={translating}
+      className="flex min-h-8 items-center gap-1 text-xs font-semibold text-fairway-700 hover:underline disabled:opacity-60"
+    >
+      {translating ? <Loader2 size={12} className="animate-spin" /> : <Languages size={12} />}
+      {translating ? t("caddie.translating") : t("caddie.translateTo", { language: languageName(locale) })}
+    </button>
+  );
 
   return (
     <div className="flex flex-col gap-5 pb-6">
@@ -293,19 +306,22 @@ export function CaddieAnalysisDetail() {
               <CaddieNavIcon size={14} /> {t("caddie.title")}
             </p>
             <div className="flex flex-wrap items-center justify-end gap-1.5">
-              <button
-                onClick={translateFeedback}
-                disabled={translating}
-                className="flex min-h-8 items-center gap-1 text-xs font-semibold text-fairway-700 hover:underline disabled:opacity-60"
-              >
-                {translating ? <Loader2 size={12} className="animate-spin" /> : <Languages size={12} />}
-                {translating
-                  ? t("caddie.translating")
-                  : t("caddie.translateTo", { language: LOCALES.find((l) => l.value === locale)?.nativeName ?? locale })}
-              </button>
+              {!languageNotice && translateButton}
               <Badge tone="outline">{cameraAngleLabel[details.cameraAngle]}</Badge>
             </div>
           </div>
+          {/* The feedback text keeps the language it was written in while
+              the labels follow the app; say so and offer the translation
+              (only when the row recorded its language, see caddieLanguage). */}
+          {languageNotice && (
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border border-fairway-100 bg-white px-3 py-2">
+              <p className="flex items-center gap-1.5 text-xs text-slate-600">
+                <Languages size={12} className="shrink-0 text-fairway-700" />
+                {t("caddie.feedbackLanguageNotice", { language: languageName(details.language!) })}
+              </p>
+              {translateButton}
+            </div>
+          )}
           {details.score && (
             <div>
               <p className="text-3xl font-bold text-brand-forest">{t("caddie.scoreOutOf100", { score: details.score.total })}</p>

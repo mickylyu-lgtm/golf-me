@@ -8,10 +8,12 @@
 // for an existing analysis: a text-only Gemini call (no video re-upload, no
 // Roboflow re-run) that translates the saved free-text fields in place.
 // Numbers, enums (confidence/camera_angle), and phase timestamps are never
-// touched — only the prose changes.
+// touched — only the prose changes, and analysis_json.language is set to
+// the new locale.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { sanitizeCheckpointCues, sanitizeWorkOnCheckpoint, withSanitizedCheckpointCues } from "../_shared/caddieCues.ts";
+import { withMeasuredCueCheck } from "../_shared/caddieVerdicts.ts";
 
 const GEMINI_MODEL = "gemini-3.6-flash";
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com";
@@ -227,8 +229,10 @@ Deno.serve(async (req: Request) => {
     // Cues: the translated ones only (re-sanitized), never the originals —
     // keeping an untranslated cue would put two languages on one card. If
     // the translation came back without usable cues the field is dropped
-    // and Coach Replay falls back to its own translated copy.
-    const mergedJson = withSanitizedCheckpointCues({
+    // and Coach Replay falls back to its own translated copy. Then the same
+    // measured-verdict check analyze-swing runs (_shared/caddieVerdicts.ts),
+    // which also covers rows analyzed before that check existed.
+    const { json: mergedJson } = withMeasuredCueCheck(withSanitizedCheckpointCues({
       ...source,
       summary: translated.summary,
       strengths: translated.strengths,
@@ -238,7 +242,10 @@ Deno.serve(async (req: Request) => {
       limitations: translated.limitations,
       score: mergedScore,
       checkpoint_cues: sourceCues ? translated.checkpoint_cues : undefined,
-    });
+      // The prose is now in this locale (see analyze-swing: the client
+      // offers a translation when this differs from the app's language).
+      language: body.locale,
+    }), row.roboflow_analysis_json);
 
     const { data: updated, error: updateError } = await supabase
       .from("caddie_analyses")
