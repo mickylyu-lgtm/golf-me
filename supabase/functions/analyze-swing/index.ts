@@ -1148,7 +1148,7 @@ Deno.serve(async (req: Request) => {
       withSanitizedWorkOnCheckpoints(withSanitizedCheckpointCues(parsed as unknown as Record<string, unknown>)),
       trustedPoseData,
     );
-    const analysisJson = { ...checkedJson, language: locale };
+    const analysisJson: Record<string, unknown> = { ...checkedJson, language: locale };
     devLog("checkpoint cues", { kept: Object.keys((analysisJson.checkpoint_cues as Record<string, string> | undefined) ?? {}), droppedByMeasurement: droppedCues });
 
     if (settled) return;
