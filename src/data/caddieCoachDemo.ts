@@ -1,4 +1,4 @@
-import type { CoachFinding, CoachText } from "../lib/coachReplay";
+import type { CoachFinding, CoachSummary, CoachText } from "../lib/coachReplay";
 import type { TranslationKey } from "../i18n/locales/en";
 
 // Demo mode's Coach Replay script, played over the animated demo golfer
@@ -46,4 +46,13 @@ export function demoCoachFindings(): CoachFinding[] {
       cue: { body: key("coachReplay.demo.finishCue"), source: "demo" },
     },
   ];
+}
+
+// The demo's closing card, from the same demo analysis: its hip issue and
+// its drill (demo-caddie-1's "Hip Depth Drill").
+export function demoCoachSummary(): CoachSummary {
+  return {
+    workOn: [claim(key("coachReplay.demo.hipsTitle"), key("coachReplay.demo.summaryWorkOn"))],
+    drill: { name: key("coachReplay.demo.drillName"), steps: [key("coachReplay.demo.drillStep1"), key("coachReplay.demo.drillStep2")], source: "demo" },
+  };
 }

@@ -8,7 +8,10 @@ import {
   placedCueCheckpoints,
   sanitizeCheckpointCues,
   sanitizeCue,
+  sanitizeWorkOnCheckpoint,
+  WORK_ON_CHECKPOINTS,
   withSanitizedCheckpointCues,
+  withSanitizedWorkOnCheckpoints,
 } from "../supabase/functions/_shared/caddieCues.ts";
 
 const ALL_PLACED = {
@@ -88,4 +91,36 @@ test("withSanitizedCheckpointCues: keeps every other field, rewrites or removes 
   assert.deepEqual(withSanitizedCheckpointCues(base), base);
   // Garbage never throws.
   assert.deepEqual(withSanitizedCheckpointCues({ ...base, checkpoint_cues: "Turn" }), base);
+});
+
+// ── work_on[].checkpoint ────────────────────────────────────────────────
+
+test("sanitizeWorkOnCheckpoint: only the five known values, case/whitespace tolerant", () => {
+  for (const v of WORK_ON_CHECKPOINTS) assert.equal(sanitizeWorkOnCheckpoint(v), v);
+  assert.equal(sanitizeWorkOnCheckpoint(" Impact "), "impact");
+  for (const v of [undefined, null, "", "backswing", "finish", "followThrough", 3, {}, ["top"]]) assert.equal(sanitizeWorkOnCheckpoint(v), undefined, String(v));
+});
+
+test("withSanitizedWorkOnCheckpoints: keeps valid tags, removes invalid ones, never drops an item", () => {
+  const json = {
+    summary: "s",
+    work_on: [
+      { issue: "a", why_it_matters: "x", confidence: "high", checkpoint: "top" },
+      { issue: "b", why_it_matters: "y", confidence: "medium", checkpoint: "downswing" },
+      { issue: "c", why_it_matters: "z", confidence: "low" },
+      "not an object",
+    ],
+  };
+  assert.deepEqual(withSanitizedWorkOnCheckpoints(json), {
+    summary: "s",
+    work_on: [
+      { issue: "a", why_it_matters: "x", confidence: "high", checkpoint: "top" },
+      { issue: "b", why_it_matters: "y", confidence: "medium" },
+      { issue: "c", why_it_matters: "z", confidence: "low" },
+      "not an object",
+    ],
+  });
+  // A malformed work_on is left for analyze-swing's own shape check, untouched.
+  assert.deepEqual(withSanitizedWorkOnCheckpoints({ work_on: "nope" }), { work_on: "nope" });
+  assert.deepEqual(withSanitizedWorkOnCheckpoints({ summary: "s" }), { summary: "s" });
 });

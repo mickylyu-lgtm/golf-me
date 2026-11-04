@@ -11,7 +11,7 @@
 // touched — only the prose changes.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { sanitizeCheckpointCues, withSanitizedCheckpointCues } from "../_shared/caddieCues.ts";
+import { sanitizeCheckpointCues, sanitizeWorkOnCheckpoint, withSanitizedCheckpointCues } from "../_shared/caddieCues.ts";
 
 const GEMINI_MODEL = "gemini-3.6-flash";
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com";
@@ -214,8 +214,13 @@ Deno.serve(async (req: Request) => {
     // Merge translated prose back over the original analysis_json —
     // camera_angle, phases, per-item confidence, and score points are
     // copied through unchanged from the original.
-    const originalWorkOn = Array.isArray(source.work_on) ? (source.work_on as { confidence: string }[]) : [];
-    const mergedWorkOn = translated.work_on.map((w, i) => ({ ...w, confidence: originalWorkOn[i]?.confidence ?? "medium" }));
+    // work_on[].checkpoint (an enum, never translated) is copied through
+    // the same way as confidence, then re-sanitized with the rest below.
+    const originalWorkOn = Array.isArray(source.work_on) ? (source.work_on as { confidence: string; checkpoint?: unknown }[]) : [];
+    const mergedWorkOn = translated.work_on.map((w, i) => {
+      const checkpoint = sanitizeWorkOnCheckpoint(originalWorkOn[i]?.checkpoint);
+      return { ...w, confidence: originalWorkOn[i]?.confidence ?? "medium", ...(checkpoint ? { checkpoint } : {}) };
+    });
     const mergedScore = Object.fromEntries(
       Object.entries(sourceScore).map(([k, v]) => [k, { points: v.points, reason: translated.score[k]?.reason ?? v.reason }]),
     );

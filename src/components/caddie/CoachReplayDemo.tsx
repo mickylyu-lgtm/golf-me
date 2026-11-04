@@ -2,11 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocale } from "../../i18n/LocaleContext";
 import { buildCoachPlan } from "../../lib/coachReplay";
 import type { CoachCheckpointId, CoachMoment } from "../../lib/coachReplay";
-import { demoCoachFindings } from "../../data/caddieCoachDemo";
+import { demoCoachFindings, demoCoachSummary } from "../../data/caddieCoachDemo";
 import { ADDRESS_T, FINISH_T, IMPACT_T, SWING_MS, TOP_T } from "../landing/swingMotion";
 import { mountSwing } from "../landing/swingRenderer";
 import { StageBackdrop, SwingFigureDefs } from "../landing/swingStage";
-import { CoachModeSwitch, CoachReplayCard, CoachReplayStrip } from "./CoachReplayCard";
+import { CoachModeSwitch, CoachReplayCard, CoachReplayStrip, CoachSummaryCard } from "./CoachReplayCard";
 
 // Coach Replay for the demo account, over the landing page's animated demo
 // golfer instead of a real swing video (demo accounts have none). The same
@@ -32,9 +32,11 @@ export function CoachReplayDemo() {
       approximate: false,
       source: "demo.swingMotion",
     }));
-    return buildCoachPlan("demo", moments, demoCoachFindings());
+    return { ...buildCoachPlan("demo", moments, demoCoachFindings()), summary: demoCoachSummary() };
   }, []);
   const checkpoints = plan.checkpoints;
+  // The closing card shows once a coached pass ends, until Done or Watch again.
+  const [summaryOpen, setSummaryOpen] = useState(false);
   const marks = useMemo(() => checkpoints.map((c) => (c.timeSeconds * 1000) / SWING_MS), [checkpoints]);
 
   const sceneRef = useRef<SVGGElement>(null);
@@ -73,6 +75,7 @@ export function CoachReplayDemo() {
           c.running = false;
           setPlaying(false);
           setFinished(true);
+          setSummaryOpen(true);
           return 0;
         }
       }
@@ -101,6 +104,7 @@ export function CoachReplayDemo() {
     const c = clock.current;
     setActiveIndex(null);
     setFinished(false);
+    setSummaryOpen(false);
     c.lastNow = 0;
     c.running = true;
     setPlaying(true);
@@ -120,6 +124,7 @@ export function CoachReplayDemo() {
     c.skipped = false;
     setActiveIndex(null);
     setFinished(false);
+    setSummaryOpen(false);
     if (next) {
       // Back to the start, ready to coach from address.
       c.u = 0;
@@ -169,7 +174,9 @@ export function CoachReplayDemo() {
 
       {coachOn &&
         (active ? (
-          <CoachReplayCard key={activeIndex} checkpoint={active} index={activeIndex ?? 0} total={checkpoints.length} onContinue={resume} onSkip={skip} />
+          <CoachReplayCard key={activeIndex} checkpoint={active} stepOffset={activeIndex ?? 0} stepTotal={checkpoints.length} onContinue={resume} onSkip={skip} />
+        ) : summaryOpen && plan.summary ? (
+          <CoachSummaryCard summary={plan.summary} onReplay={resume} onDone={() => setSummaryOpen(false)} />
         ) : (
           <CoachReplayStrip count={checkpoints.length} playing={playing} onPlay={resume} playLabelKey={finished ? "coachReplay.watchAgain" : "coachReplay.playShort"} />
         ))}

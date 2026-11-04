@@ -50,7 +50,7 @@ import {
   scaleKeypoints,
 } from "../_shared/caddieReliability.ts";
 import type { CaddieFailureCode } from "../_shared/caddieReliability.ts";
-import { CUE_MAX_CHARS, withSanitizedCheckpointCues } from "../_shared/caddieCues.ts";
+import { CUE_MAX_CHARS, WORK_ON_CHECKPOINTS, withSanitizedCheckpointCues, withSanitizedWorkOnCheckpoints } from "../_shared/caddieCues.ts";
 
 // ---- Centralized config — change these, nothing else, to retune Caddie. ----
 const GEMINI_MODEL = "gemini-3.6-flash"; // gemini-2.5-flash was retired for new API keys/projects (Gemini API started 404ing it with "no longer available to new users" on 2026-08-21); 3.6-flash is Google's named replacement, same video-understanding + structured-JSON-output support
@@ -163,7 +163,8 @@ Rules:
 - Respond with feedback suitable for a recreational golfer, not jargon-heavy technical analysis.
 - Score the swing across exactly these 5 categories, 0-20 points each (100 total): setup_and_posture (address position, balance, alignment), backswing (shoulder turn, structure, tempo into transition), downswing_sequencing (hip/shoulder rotation order, lower-body initiation — only from what TRUSTED_POSE_DATA's angles/timing actually show), balance_and_weight_transfer (weight shift through the swing and into the finish), finish (balance, control, extension at the end). Give each a short one-sentence reason tied to something TRUSTED_POSE_DATA or the video actually shows — never a generic reason.
 - Grade like a strict, honest instructor, not a cheerleader. Most recreational golfers, even solid ones, should land in the 40-70 range overall — reserve 80+ in a category for genuinely sound, consistent technique with no real flaw visible in that category, and 90+ for something close to tour-level. Deduct points for every real flaw TRUSTED_POSE_DATA or the video actually shows (a swayed hip, an early upper-body initiation, a lost spine angle, poor balance at finish, and so on) — do not round scores up to be encouraging. This is separate from data uncertainty: when a phase has sparse/missing pose data, score it in the middle of its range with a reason that says so, not a confident extreme in either direction — that rule is about missing evidence, not about going easy on flaws you DO have evidence for.
-- Optionally, in checkpoint_cues, write one coaching cue for each of address, top, impact and follow_through that you placed in phases: a short (at most ${CUE_MAX_CHARS} characters), plain-language, actionable thing to feel or do at that moment, about the most useful change you see there (or what to keep, if nothing needs changing). Plain text only, no markdown, no numbers, no club/ball/contact claims, same rules as above. Use null for a moment you didn't place or have nothing specific to say about — never a generic tip.
+- Optionally, in checkpoint_cues, write one coaching cue for each of address, top, impact and follow_through that you placed in phases: a short (at most ${CUE_MAX_CHARS} characters), plain-language, corrective instruction — what to do differently at that moment to fix the most useful thing you see there. A cue is a "what to do", never praise or a description of what already went well. Plain text only, no markdown, no numbers, no club/ball/contact claims, same rules as above. Use null for a moment you didn't place, or where nothing at that moment needs changing — never a generic tip.
+- Optionally, tag each work_on item with checkpoint: the key moment where that issue shows most (address, top, impact or follow_through), or whole_swing if it isn't tied to one moment. Only tag a moment you placed in phases.
 - The strictness above is a floor against flattering a flawed swing, not a ceiling on genuinely elite ones. If TRUSTED_POSE_DATA and the video together show real, tour-caliber mechanics in a category — a professional or elite-amateur swing, recognizable or not — score that category in the 90s (up to 100) without hesitation. Do not let "most golfers land in 40-70" pull a score downward when the evidence in front of you clearly does not belong in that range; grade the swing you were actually shown, not an assumed population average.
 
 REMINDER: write summary, strengths, work_on, focus, drill, limitations, score reasons, and checkpoint_cues in ${localeName}. This is not optional.`;
@@ -201,7 +202,7 @@ function buildScoreCriterionSchema(localeName: string) {
 }
 
 const CUE_FIELD_DESCRIPTION = (localeName: string) =>
-  `One plain-language, actionable line (at most ${CUE_MAX_CHARS} characters, no markdown) a golfer can feel or do at this moment, tied to what this swing shows there. Write this in ${localeName}.`;
+  `One plain-language corrective line (at most ${CUE_MAX_CHARS} characters, no markdown): what to do differently at this moment, tied to what this swing shows there. Not praise; null if nothing here needs changing. Write this in ${localeName}.`;
 
 function buildResponseSchema(localeName: string) {
   const scoreCriterionSchema = buildScoreCriterionSchema(localeName);
@@ -220,6 +221,14 @@ function buildResponseSchema(localeName: string) {
             issue: { type: "STRING", description: `Write in ${localeName}.` },
             why_it_matters: { type: "STRING", description: `Write in ${localeName}.` },
             confidence: { type: "STRING", enum: ["high", "medium", "low"] },
+            // Optional and NOT in `required`: a missing or bad tag never fails
+            // an analysis. Sanitized by withSanitizedWorkOnCheckpoints() before
+            // it is stored (_shared/caddieCues.ts).
+            checkpoint: {
+              type: "STRING",
+              enum: [...WORK_ON_CHECKPOINTS],
+              description: "Optional. The key moment where this issue shows most, or whole_swing if it isn't tied to one moment.",
+            },
           },
           required: ["issue", "why_it_matters", "confidence"],
         },
@@ -1125,7 +1134,9 @@ Deno.serve(async (req: Request) => {
     // markdown-only values and cues for unplaced moments are dropped, long
     // ones capped; if nothing survives the field is left out entirely. This
     // never throws and never fails the analysis.
-    const analysisJson = withSanitizedCheckpointCues(parsed as unknown as Record<string, unknown>);
+    // Same for the optional work_on[].checkpoint tag: an invalid tag is
+    // removed from its item, the item itself is kept.
+    const analysisJson = withSanitizedWorkOnCheckpoints(withSanitizedCheckpointCues(parsed as unknown as Record<string, unknown>));
     devLog("checkpoint cues", { kept: Object.keys((analysisJson.checkpoint_cues as Record<string, string> | undefined) ?? {}) });
 
     if (settled) return;

@@ -1,4 +1,14 @@
-import type { CaddieCheckpointCues, CaddieConfidence, CaddieScore, CaddieScoreCriterionKey, CaddieSwingPhases } from "../types";
+import type {
+  CaddieCheckpointCues,
+  CaddieConfidence,
+  CaddieDrill,
+  CaddieFocus,
+  CaddieScore,
+  CaddieScoreCriterionKey,
+  CaddieSwingPhases,
+  CaddieWorkOnCheckpoint,
+  CaddieWorkOnItem,
+} from "../types";
 import type { TranslationKey } from "../i18n/locales/en";
 import type { SwingAssessment, SwingSegmentId } from "./swingAssessment";
 import { isTrustedPhaseConfidence, trustedPhaseTimeSeconds } from "./swingAssessment.ts";
@@ -26,6 +36,10 @@ import { sanitizeCheckpointCues } from "../../supabase/functions/_shared/caddieC
 //     and its text is either a fixed translation keyed off a measured
 //     verdict or the analysis's own stored sentence, verbatim.
 //   - "Nothing to fix" is never asserted: the card says nothing was FLAGGED.
+//   - Every plan with a usable analysis ends on what to work on: the main
+//     focus sits on the weakest-scoring checkpoint (when one is below the
+//     "good" band), and a closing summary card carries the top work_on
+//     items and the drill (see v1Summary).
 
 export type CoachCheckpointId = "address" | "top" | "impact" | "finish";
 export const COACH_CHECKPOINT_ORDER: readonly CoachCheckpointId[] = ["address", "top", "impact", "finish"];
@@ -73,9 +87,20 @@ export interface CoachCheckpoint extends CoachMoment {
 
 export type CoachPlanSource = "v1" | "v2" | "demo";
 
+// The closing card, shown once the coached pass reaches the end of the
+// clip. Every line is the analysis's own stored text (or, for the demo, its
+// fixed copy); labels are fixed translation keys in the card.
+export interface CoachSummary {
+  // The main focus, only when it isn't already the fix on a shown checkpoint.
+  focus?: CoachClaim;
+  workOn: CoachClaim[];
+  drill?: { name: CoachText; steps: CoachText[]; source: string };
+}
+
 export interface CoachReplayPlan {
   source: CoachPlanSource;
   checkpoints: CoachCheckpoint[];
+  summary?: CoachSummary;
 }
 
 // A cue the analysis wrote for one checkpoint (V1: analysis_json.
@@ -188,8 +213,68 @@ const SCORE_CRITERION_FOR: Record<CoachCheckpointId, CaddieScoreCriterionKey> = 
 export const SCORE_GOOD_MIN_POINTS = 16;
 export const SCORE_FIX_MAX_POINTS = 8;
 const SCORE_RANK = 100; // measured geometry first, Gemini's sentence second
+// Then a work_on item Gemini itself tagged with this moment, then the main
+// focus placed by score (the fallback for rows without tags).
+const WORK_ON_RANK = 200;
+const FOCUS_RANK = 300;
 
-export function v1Findings(assessment: SwingAssessment | undefined, score: CaddieScore | undefined): CoachFinding[] {
+// The analysis's free-text coaching (details.workOn/focus/drill).
+export interface V1Coaching {
+  workOn?: CaddieWorkOnItem[];
+  focus?: CaddieFocus;
+  drill?: CaddieDrill;
+}
+
+// work_on[].checkpoint -> Coach Replay checkpoint. V1's fourth checkpoint is
+// its follow-through (see v1Moments). whole_swing has no moment: such an
+// item can only appear on the summary card.
+const WORK_ON_CHECKPOINT_FOR: Partial<Record<CaddieWorkOnCheckpoint, CoachCheckpointId>> = {
+  address: "address",
+  top: "top",
+  impact: "impact",
+  follow_through: "finish",
+};
+
+const trimmed = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+const stored = (text: string): CoachText => ({ kind: "stored", text });
+const isSure = (c: CaddieConfidence | undefined) => c === "high" || c === "medium";
+
+// A work_on item as a claim: the issue as its title, why it matters as the
+// body (or the issue alone when there's no why).
+function workOnClaim(item: CaddieWorkOnItem, index: number): CoachClaim | undefined {
+  const issue = trimmed(item.issue);
+  if (!issue) return undefined;
+  const why = trimmed(item.whyItMatters);
+  const source = `details.workOn.${index}`;
+  return why ? { title: stored(issue), body: stored(why), source } : { body: stored(issue), source };
+}
+
+function focusClaim(focus: CaddieFocus | undefined): CoachClaim | undefined {
+  const title = trimmed(focus?.title);
+  const instruction = trimmed(focus?.instruction);
+  if (!title && !instruction) return undefined;
+  return title && instruction ? { title: stored(title), body: stored(instruction), source: "details.focus" } : { body: stored(title || instruction), source: "details.focus" };
+}
+
+// The checkpoint whose criterion scored lowest, if any is below the "good"
+// band. Ties go to the earlier checkpoint. balance_and_weight_transfer has
+// no moment (see SCORE_CRITERION_FOR), so it never counts.
+export function weakestCheckpoint(score: CaddieScore | undefined): CoachCheckpointId | undefined {
+  if (!score) return undefined;
+  let weakest: CoachCheckpointId | undefined;
+  let lowest = SCORE_GOOD_MIN_POINTS;
+  for (const id of COACH_CHECKPOINT_ORDER) {
+    const points = score.criteria[SCORE_CRITERION_FOR[id]]?.points;
+    if (typeof points !== "number" || !Number.isFinite(points)) continue;
+    if (points < lowest) {
+      lowest = points;
+      weakest = id;
+    }
+  }
+  return weakest;
+}
+
+export function v1Findings(assessment: SwingAssessment | undefined, score: CaddieScore | undefined, coaching?: V1Coaching): CoachFinding[] {
   const findings: CoachFinding[] = [];
   for (const seg of assessment?.segments ?? []) {
     if (seg.status === "unknown") continue;
@@ -214,7 +299,47 @@ export function v1Findings(assessment: SwingAssessment | undefined, score: Caddi
       findings.push({ checkpoint, kind, rank: SCORE_RANK, claim: { body: { kind: "stored", text: reason }, source: `details.score.${key}.reason` } });
     }
   }
+  // A work_on item Gemini tagged with a moment (high/medium confidence only)
+  // is a fix there. Untagged, whole-swing and low-confidence items are left
+  // for the summary card.
+  (coaching?.workOn ?? []).forEach((item, i) => {
+    const checkpoint = item.checkpoint ? WORK_ON_CHECKPOINT_FOR[item.checkpoint] : undefined;
+    const claim = workOnClaim(item, i);
+    if (!checkpoint || !claim || !isSure(item.confidence)) return;
+    findings.push({ checkpoint, kind: "fix", rank: WORK_ON_RANK + i, claim });
+  });
+  // The main focus goes on the weakest-scoring checkpoint. The typical swing
+  // scores 9-15 everywhere (the silent middle band above), so without this
+  // most cards would only ever say what's going well.
+  const weakest = weakestCheckpoint(score);
+  const focus = focusClaim(coaching?.focus);
+  if (weakest && focus) findings.push({ checkpoint: weakest, kind: "fix", rank: FOCUS_RANK, claim: focus });
   return findings;
+}
+
+// The closing card: the main focus when no shown checkpoint carries it,
+// the top high/medium work_on items not already shown on a checkpoint, and
+// the drill. At most two work lines, so the card reads in one glance.
+// `shownFixSources` are the sources of the fixes the plan actually shows.
+const SUMMARY_MAX_WORK_LINES = 2;
+const SUMMARY_MAX_DRILL_STEPS = 3;
+
+export function v1Summary(coaching: V1Coaching | undefined, shownFixSources: ReadonlySet<string>): CoachSummary | undefined {
+  if (!coaching) return undefined;
+  const focusCandidate = focusClaim(coaching.focus);
+  const focus = focusCandidate && !shownFixSources.has(focusCandidate.source) ? focusCandidate : undefined;
+  const workOn: CoachClaim[] = [];
+  const room = SUMMARY_MAX_WORK_LINES - (focus ? 1 : 0);
+  (coaching.workOn ?? []).forEach((item, i) => {
+    if (workOn.length >= room || !isSure(item.confidence)) return;
+    const claim = workOnClaim(item, i);
+    if (claim && !shownFixSources.has(claim.source)) workOn.push(claim);
+  });
+  const name = trimmed(coaching.drill?.name);
+  const steps = (coaching.drill?.steps ?? []).map(trimmed).filter(Boolean).slice(0, SUMMARY_MAX_DRILL_STEPS).map(stored);
+  const drill = name ? { name: stored(name), steps, source: "details.drill" } : undefined;
+  if (!focus && workOn.length === 0 && !drill) return undefined;
+  return { focus, workOn, drill };
 }
 
 // analysis_json.checkpoint_cues (snake_case, as stored) -> details.
@@ -257,8 +382,12 @@ export function coachPlanFromV1(input: {
   assessment?: SwingAssessment;
   score?: CaddieScore;
   checkpointCues?: CaddieCheckpointCues;
+  coaching?: V1Coaching;
 }): CoachReplayPlan {
-  return buildCoachPlan("v1", v1Moments(input.phases), v1Findings(input.assessment, input.score), v1Cues(input.checkpointCues));
+  const plan = buildCoachPlan("v1", v1Moments(input.phases), v1Findings(input.assessment, input.score, input.coaching), v1Cues(input.checkpointCues));
+  const shown = new Set(plan.checkpoints.flatMap((c) => (c.fix ? [c.fix.source] : [])));
+  const summary = v1Summary(input.coaching, shown);
+  return summary ? { ...plan, summary } : plan;
 }
 
 // ── V2: local MediaPipe keyFrames (branch caddie-v2, not shipped) ───────
@@ -285,6 +414,27 @@ export function v2Moments(keyFrames: Partial<Record<CoachCheckpointId, V2KeyFram
     moments.push({ id, timeSeconds: kf.timestampSeconds, label, approximate: kf.confidenceLabel === "medium", source: `v2.keyFrames.${id}` });
   }
   return moments;
+}
+
+// ── Highlight on the paused frame ───────────────────────────────────────
+
+// Which measured pose segments the card is about, and with which verdict,
+// so the overlay can highlight them. Only findings sourced from
+// swingAssessment ("assessment.<segment>") map to a body part; score,
+// focus and work_on findings don't, and get no highlight. The overlay
+// still only draws it where that verdict is in force and the keypoints
+// were observed in the frame.
+export type CoachFocusSegments = Partial<Record<SwingSegmentId, "good" | "needs_improvement">>;
+
+export function coachFocusSegments(checkpoint: Pick<CoachCheckpoint, "good" | "fix">): CoachFocusSegments {
+  const out: CoachFocusSegments = {};
+  const add = (claim: CoachClaim | undefined, status: "good" | "needs_improvement") => {
+    const seg = claim?.source.startsWith("assessment.") ? claim.source.slice("assessment.".length) : "";
+    if ((SEGMENT_RANK as string[]).includes(seg)) out[seg as SwingSegmentId] = status;
+  };
+  add(checkpoint.good, "good");
+  add(checkpoint.fix, "needs_improvement");
+  return out;
 }
 
 // ── Freeze length ────────────────────────────────────────────────────────
