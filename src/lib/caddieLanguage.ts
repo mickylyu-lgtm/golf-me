@@ -73,3 +73,17 @@ export function claimAutoTranslateAttempt(analysisId: string, locale: string): b
   autoAttempts.add(key);
   return true;
 }
+
+// Gives an attempt back when it never really ran (the server said "too
+// soon"), so the retry isn't refused as already tried.
+export function releaseAutoTranslateAttempt(analysisId: string, locale: string): void {
+  autoAttempts.delete(`${analysisId}:${locale}`);
+}
+
+// Retry delay after a "too soon" answer: just past the server's 5 s
+// double-tap cooldown (translate-caddie-analysis COOLDOWN_SECONDS).
+export const AUTO_TRANSLATE_RETRY_MS = 5500;
+
+export function isTooSoonError(err: unknown): boolean {
+  return typeof err === "object" && err !== null && (err as { status?: unknown }).status === 429;
+}

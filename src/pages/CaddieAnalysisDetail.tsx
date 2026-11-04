@@ -17,7 +17,7 @@ import { Badge } from "../components/ui/Badge";
 import { formatShortDate } from "../lib/format";
 import { postFeedbackThenMark } from "../lib/caddieShare";
 import { isStaleProcessing, usePeriodicRerender } from "../lib/caddieAnalysis";
-import { claimAutoTranslateAttempt, needsAutoTranslate, showsLanguageNotice } from "../lib/caddieLanguage";
+import { AUTO_TRANSLATE_RETRY_MS, claimAutoTranslateAttempt, isTooSoonError, needsAutoTranslate, releaseAutoTranslateAttempt, showsLanguageNotice } from "../lib/caddieLanguage";
 import { FAILURE_BODY_KEYS, FAILURE_TITLE_KEYS, analysisFailure } from "../lib/caddieFailure";
 import type { CaddieConfidence, CaddieCameraAngle, CaddieScoreCriterionKey } from "../types";
 import type { CreatePostSwingPrefill } from "./CreatePost";
@@ -117,19 +117,46 @@ export function CaddieAnalysisDetail() {
   // language (needsAutoTranslate in lib/caddieLanguage.ts): once per
   // analysis and language per session, quietly (a failure just leaves the
   // Translate button). Everything less certain keeps the button.
+  //
+  // One translation at a time (Micky, 2026-11-04: switching the language
+  // quickly made it miss): while one runs, a language change only waits;
+  // when it finishes, `autoTick` re-runs this check against the language
+  // the app is in NOW. A "too soon" answer (429) gives the attempt back and
+  // retries once the server's cooldown has passed.
   const autoDetails = analysis?.status === "complete" ? analysis.details : undefined;
   const autoSample = autoDetails ? [autoDetails.summary, ...autoDetails.strengths, autoDetails.focus?.title ?? ""].join(" ") : "";
   const autoLanguage = autoDetails?.language;
   const autoId = analysis?.id;
+  const autoInFlightRef = useRef(false);
+  const autoRetryTimerRef = useRef<number | null>(null);
+  const [autoTick, setAutoTick] = useState(0);
   useEffect(() => {
-    if (isDemo || !autoId || !autoSample) return;
+    if (isDemo || !autoId || !autoSample || autoInFlightRef.current) return;
     if (!needsAutoTranslate({ language: autoLanguage, sampleText: autoSample }, locale)) return;
     if (!claimAutoTranslateAttempt(autoId, locale)) return;
+    autoInFlightRef.current = true;
     setTranslating(true);
     translateCaddieAnalysis(autoId, locale)
-      .catch((err) => console.error("GolfMe: automatic feedback translation failed.", err))
-      .finally(() => setTranslating(false));
-  }, [isDemo, autoId, autoSample, autoLanguage, locale, translateCaddieAnalysis]);
+      .catch((err) => {
+        if (isTooSoonError(err)) {
+          releaseAutoTranslateAttempt(autoId, locale);
+          autoRetryTimerRef.current = window.setTimeout(() => setAutoTick((n) => n + 1), AUTO_TRANSLATE_RETRY_MS);
+        } else {
+          console.error("GolfMe: automatic feedback translation failed.", err);
+        }
+      })
+      .finally(() => {
+        autoInFlightRef.current = false;
+        setTranslating(false);
+        setAutoTick((n) => n + 1);
+      });
+  }, [isDemo, autoId, autoSample, autoLanguage, locale, translateCaddieAnalysis, autoTick]);
+  useEffect(
+    () => () => {
+      if (autoRetryTimerRef.current !== null) window.clearTimeout(autoRetryTimerRef.current);
+    },
+    [],
+  );
 
   // Opened cold (push tap from a killed app, web refresh) the list hasn't
   // loaded yet — wait for the first fetch before deciding the row is gone.

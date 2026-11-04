@@ -559,13 +559,16 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
     const { data, error } = await supabase.functions.invoke("translate-caddie-analysis", { body: { analysisId: id, locale } });
     if (error) {
       let message = error.message;
+      const status = typeof error.context?.status === "number" ? (error.context.status as number) : undefined;
       try {
         const body = await error.context?.json();
         if (body?.error) message = body.error;
       } catch {
         // Falls back to error.message below.
       }
-      throw new Error(message);
+      // The HTTP status rides along so automatic translation can tell
+      // "too soon, retry" (429) from a real failure.
+      throw Object.assign(new Error(message), { status });
     }
     const row = (data as { analysis: CaddieAnalysisRow }).analysis;
     cachePoseFromFullRow(row);

@@ -18,6 +18,10 @@ import { withMeasuredCueCheck } from "../_shared/caddieVerdicts.ts";
 const GEMINI_MODEL = "gemini-3.6-flash";
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com";
 const COOLDOWN_SECONDS = 5; // just enough to absorb an accidental double-tap on the same analysis, not a real rate limit — this is a cheap text-only call, not worth the daily-analysis-limit machinery
+// The columns the app's Caddie list reads: everything except the pose
+// frames (roboflow_analysis_json, often megabytes).
+const LIST_COLUMNS =
+  "id, owner_id, source_type, source_post_id, source_media_url, thumbnail_url, source_media_path, thumbnail_path, swing_type, status, analysis_summary, strengths, issues, recommendations, drills, analysis_json, camera_angle, score, model, error_message, shared_to_community, created_at, updated_at";
 
 const SUPPORTED_LOCALES = new Set(["en", "zh-CN", "zh-TW", "es", "ko", "ja"]);
 const LOCALE_NAMES: Record<string, string> = {
@@ -157,18 +161,28 @@ Deno.serve(async (req: Request) => {
   // read and sent back on every translation, which made it slow (Micky,
   // 2026-11-04: "the translation is so slow"). It's fetched below only
   // when the measured-verdict check actually needs it.
-  const { data: row, error: fetchError } = await supabase.from("caddie_analyses").select("id, status, analysis_json, updated_at").eq("id", body.analysisId).single();
+  const { data: row, error: fetchError } = await supabase.from("caddie_analyses").select(LIST_COLUMNS).eq("id", body.analysisId).single();
   if (fetchError || !row) return jsonResponse({ error: "Analysis not found." }, 404);
   if (row.status !== "complete" || !row.analysis_json) {
     return jsonResponse({ error: "This analysis isn't ready to translate yet." }, 400);
   }
 
+  const source = row.analysis_json as Record<string, unknown>;
+  const sourceLanguage = typeof source.language === "string" ? source.language : undefined;
+  // Already in this language (a repeat, or the app switched back): nothing
+  // to do, no Gemini call.
+  if (sourceLanguage === body.locale) return jsonResponse({ analysis: row }, 200);
+
+  // The double-tap cooldown only for rows that don't record their language.
+  // A row that does is never re-translated into the same language (above),
+  // and moving it to a different language right after a translation is a
+  // real request (Micky, 2026-11-04: switching languages quickly made the
+  // automatic translation miss), not a double tap.
   const lastUpdatedAt = row.updated_at ? new Date(row.updated_at).getTime() : 0;
-  if (lastUpdatedAt && Date.now() - lastUpdatedAt < COOLDOWN_SECONDS * 1000) {
+  if (sourceLanguage === undefined && lastUpdatedAt && Date.now() - lastUpdatedAt < COOLDOWN_SECONDS * 1000) {
     return jsonResponse({ error: "Please wait a moment before translating again." }, 429);
   }
 
-  const source = row.analysis_json as Record<string, unknown>;
   const sourceScore = (source.score as Record<string, { points: number; reason: string }>) ?? {};
   const sourceCues = sanitizeCheckpointCues(source.checkpoint_cues);
   const translationInput = {
@@ -286,10 +300,7 @@ Deno.serve(async (req: Request) => {
         drills: translated.drill?.name ? [translated.drill.name] : [],
       })
       .eq("id", row.id)
-      // The same columns the app's Caddie list reads (no pose frames).
-      .select(
-        "id, owner_id, source_type, source_post_id, source_media_url, thumbnail_url, source_media_path, thumbnail_path, swing_type, status, analysis_summary, strengths, issues, recommendations, drills, analysis_json, camera_angle, score, model, error_message, shared_to_community, created_at, updated_at",
-      )
+      .select(LIST_COLUMNS)
       .single();
     if (updateError || !updated) {
       console.error("[translate-caddie-analysis] save failed.", { rowId: row.id, reason: updateError?.message });
