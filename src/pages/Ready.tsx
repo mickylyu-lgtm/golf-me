@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { setOnboardingFinishing } from "../lib/onboardingHandoff";
-import { Bell, Check } from "lucide-react";
+import { Check } from "lucide-react";
 import { Button } from "../components/ui/Button";
 import { FoundingGolferReveal } from "../components/golfer/FoundingGolfer";
 import { markFoundingRevealSeen } from "../components/golfer/FoundingRevealHost";
@@ -15,12 +15,14 @@ import type { TranslationKey } from "../i18n/locales/en";
 // reusing this existing screen rather than building a new one. Intent is
 // kept client-side only (no DB column): stored in localStorage so it's
 // available for later, lightweight personalization, never persisted server-
-// side or required to proceed. The notification-permission ask is folded in
-// here too (shown at most once ever, tracked separately in localStorage),
-// right before landing on Home. A golfer the server just made a Founding
+// side or required to proceed. A golfer the server just made a Founding
 // Golfer sees the number reveal first (ProfileSetup's save refetches the
 // profile after the award trigger, so the number is already there).
-const NOTIF_SHOWN_KEY = "golfme:notifPermissionShown";
+//
+// No notification ask here any more: its "Enable" called the browser
+// Notification API, which the iPhone app's web view doesn't have and the
+// web never uses (there is no web push), so it did nothing, and iPhone users
+// were then asked again by PushPrePermissionPrompt on Home, the real one.
 export const ONBOARDING_INTENT_KEY = "golfme:onboardingIntent";
 
 export type OnboardingIntent = "find_people" | "join_round" | "host_round" | "improve_swing";
@@ -36,7 +38,6 @@ export function Ready() {
   const navigate = useNavigate();
   const { t } = useLocale();
   const [intents, setIntents] = useState<OnboardingIntent[]>([]);
-  const [showingNotifAsk, setShowingNotifAsk] = useState(false);
   const { isDemo, profile, authUser } = useAuth();
   const [revealDone, setRevealDone] = useState(false);
   useEffect(() => setOnboardingFinishing(false), []);
@@ -54,24 +55,6 @@ export function Ready() {
     if (typeof window !== "undefined") {
       window.localStorage.setItem(ONBOARDING_INTENT_KEY, JSON.stringify(intents));
     }
-    const alreadyShown = typeof window !== "undefined" && window.localStorage.getItem(NOTIF_SHOWN_KEY) === "1";
-    if (alreadyShown) {
-      navigate("/");
-      return;
-    }
-    track("notifications_permission_shown");
-    setShowingNotifAsk(true);
-  }
-
-  function resolveNotifPermission(enable: boolean) {
-    window.localStorage.setItem(NOTIF_SHOWN_KEY, "1");
-    if (enable && "Notification" in window) {
-      Notification.requestPermission().then((result) => {
-        if (result === "granted") track("notifications_permission_granted");
-      });
-    } else {
-      track("notifications_permission_dismissed");
-    }
     navigate("/");
   }
 
@@ -85,31 +68,6 @@ export function Ready() {
           setRevealDone(true);
         }}
       />
-    );
-  }
-
-  if (showingNotifAsk) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-[#faf9f6] px-6 py-12 text-center">
-        <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-fairway-50 text-fairway-600">
-          <Bell size={26} />
-        </span>
-        <div>
-          <h1 className="text-xl font-extrabold text-slate-900">{t("notifPermission.title")}</h1>
-          <p className="mx-auto mt-2 max-w-xs text-sm text-slate-500">{t("notifPermission.body")}</p>
-        </div>
-        <div className="flex w-full max-w-xs flex-col gap-3">
-          <Button size="lg" fullWidth onClick={() => resolveNotifPermission(true)}>
-            {t("notifPermission.enable")}
-          </Button>
-          <button
-            onClick={() => resolveNotifPermission(false)}
-            className="rounded-full px-4 py-2.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
-          >
-            {t("common.notNow")}
-          </button>
-        </div>
-      </div>
     );
   }
 

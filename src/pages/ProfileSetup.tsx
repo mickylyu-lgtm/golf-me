@@ -302,8 +302,20 @@ export function ProfileSetup() {
               onChange={choosePhoto}
             />
             <div>
-              <label className={labelClass}>{t("profileSetup.name")}</label>
-              <input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} placeholder={t("profileSetup.namePlaceholder")} />
+              <label htmlFor="profile-setup-name" className={labelClass}>
+                {t("profileSetup.name")}
+              </label>
+              <input
+                id="profile-setup-name"
+                name="name"
+                autoComplete="name"
+                autoCapitalize="words"
+                enterKeyHint="next"
+                className={inputClass}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={t("profileSetup.namePlaceholder")}
+              />
             </div>
             <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 px-3.5 py-3">
               <input type="checkbox" checked={is18Plus} onChange={() => setIs18Plus((v) => !v)} className="mt-0.5 h-4 w-4 accent-fairway-600" />

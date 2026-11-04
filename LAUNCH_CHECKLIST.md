@@ -33,7 +33,7 @@ On the 1.1 App Store build: blocker 1 items. Still-open device checks from earli
 | Status | Item | Evidence / notes |
 |---|---|---|
 | [x] | Email signup/login | Fresh incognito email signup completed onboarding into the real app (Micky, 2026-09-28). Custom SMTP via Resend. |
-| [~] | 6-digit email sign-in code | Live (`bb01f4b`). 2026-10-17: the code first went missing because the Dashboard "Magic link" template lacked `{{ .Token }}`. Micky pasted `supabase/templates/sign-in-email.html` into both "Magic link" and "Confirm signup", and the code now arrives (Micky, existing account). Still to check: typing the code in the app, a brand-new email, iOS code autofill. |
+| [~] | 6-digit email sign-in code | Live (`bb01f4b`). 2026-10-17: the code first went missing because the Dashboard "Magic link" template lacked `{{ .Token }}`. Micky pasted `supabase/templates/sign-in-email.html` into both "Magic link" and "Confirm signup", and the code now arrives (Micky, existing account). Still to check: typing the code in the app, a brand-new email, iOS code autofill. 2026-11-03 branch `fix/signin-support` (not deployed): code-first copy, email kept across Terms/Privacy and app switches, email autofill/validation/Enter, translated errors; headless-verified only, the device checks above still apply. (A) |
 | [x] | Google signup/login | Fresh incognito Google signup completed onboarding (Micky, 2026-09-28). OAuth consent "In production". |
 | [x] | Onboarding | Same two tests. 18+ checkbox required (`ProfileSetup.tsx`). |
 | [x] | Profile setup (first-run) | Same two tests. |

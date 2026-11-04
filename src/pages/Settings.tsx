@@ -385,7 +385,6 @@ export function Settings() {
             icon={<RotateCcw size={14} />}
             onClick={() => {
               clearOnboardingDraft();
-              window.localStorage.removeItem("golfme:notifPermissionShown");
               logOut();
               showToast("Onboarding reset — back to Welcome.", "info");
               navigate("/welcome");

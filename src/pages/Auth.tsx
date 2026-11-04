@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
-import { ArrowLeft, Check, Eye, EyeOff, Mail } from "lucide-react";
+import { ArrowLeft, Check, Eye, EyeOff, Loader2, Mail } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
@@ -15,6 +15,7 @@ import { GolfMeIcon } from "../components/brand/GolfMeIcon";
 import { GoogleIcon } from "../components/icons/GoogleIcon";
 import { AppleIcon } from "../components/icons/AppleIcon";
 import { isAppleSignInCanceled, isNativeSocialSignInEnabled } from "../lib/socialSignIn";
+import { AUTH_ERROR_MESSAGE_KEY, authErrorKind, clearEmailDraft, isValidEmail, loadEmailDraft, normalizeEmail, saveEmailDraft } from "../lib/authInput";
 
 interface AuthProps {
   mode: "login" | "signup";
@@ -29,10 +30,9 @@ const EMAIL_OTP_MAX_LENGTH = 10;
 // Supabase's default minimum gap between sign-in emails to one address.
 const RESEND_COOLDOWN_SECONDS = 60;
 
-function isRateLimited(err: unknown): boolean {
-  if (typeof err !== "object" || err === null) return false;
-  const { status, code } = err as { status?: number; code?: string };
-  return status === 429 || (typeof code === "string" && code.startsWith("over_"));
+function cooldownLeft(sentAt: number | null): number {
+  if (sentAt === null) return 0;
+  return Math.max(0, RESEND_COOLDOWN_SECONDS - Math.floor((Date.now() - sentAt) / 1000));
 }
 
 export function Auth({ mode }: AuthProps) {
@@ -65,13 +65,27 @@ export function Auth({ mode }: AuthProps) {
   // with one-tap sign-in). Login without them (web is Google-only, so this
   // means an older native build) keeps the box open, since a lone "Continue
   // with Email" button there would just be an extra tap.
-  const [showEmailField, setShowEmailField] = useState(mode === "login" && !showGoogle);
-  const [email, setEmail] = useState("");
-  const [emailSent, setEmailSent] = useState(false);
+  //
+  // The box's contents survive leaving this screen (Terms/Privacy, or iOS
+  // reloading the page after a trip to the Mail app) for the rest of the
+  // browser session: see EmailDraft in lib/authInput.
+  const [initialDraft] = useState(() => loadEmailDraft());
+  const [showEmailField, setShowEmailField] = useState(initialDraft?.open || (mode === "login" && !showGoogle));
+  const [email, setEmail] = useState(initialDraft?.email ?? "");
+  const [emailTouched, setEmailTouched] = useState(false);
+  const [sentAt, setSentAt] = useState<number | null>(initialDraft?.sentAt ?? null);
+  const emailSent = sentAt !== null;
   const [busy, setBusy] = useState(false);
+  // A second tap in the same frame sees busy still false; this doesn't.
+  const sendingRef = useRef(false);
   const [code, setCode] = useState("");
   const [codeError, setCodeError] = useState<string | null>(null);
-  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resendCooldown, setResendCooldown] = useState(() => cooldownLeft(initialDraft?.sentAt ?? null));
+  const emailValid = isValidEmail(email);
+
+  useEffect(() => {
+    saveEmailDraft({ email, open: showEmailField, sentAt });
+  }, [email, showEmailField, sentAt]);
   // Set when the visitor arrives from a sign-in link that failed (expired,
   // already used on another device, or consumed by a mail scanner).
   const [linkFailed, setLinkFailed] = useState(false);
@@ -118,7 +132,8 @@ export function Auth({ mode }: AuthProps) {
       // button permanently disabled — busy was never reset because
       // nothing here ever threw, and there was no unmount to make it moot.
     } catch (err) {
-      showToast(err instanceof Error ? err.message : t("auth.authError"), "warning");
+      console.error("GolfMe: Google sign-in failed.", err);
+      showToast(t(AUTH_ERROR_MESSAGE_KEY[authErrorKind(err)]), "warning");
     } finally {
       setBusy(false);
     }
@@ -133,32 +148,34 @@ export function Auth({ mode }: AuthProps) {
       // Closing Apple's sheet is a normal choice, not an error.
       if (!isAppleSignInCanceled(err)) {
         console.error("GolfMe: Sign in with Apple failed.", err);
-        showToast(t("auth.authError"), "warning");
+        showToast(t(AUTH_ERROR_MESSAGE_KEY[authErrorKind(err)]), "warning");
       }
     } finally {
       setBusy(false);
     }
   }
 
-  async function continueWithEmail() {
-    if (!email.includes("@")) return;
+  async function continueWithEmail(e?: FormEvent) {
+    e?.preventDefault();
+    setEmailTouched(true);
+    if (!emailValid || sendingRef.current) return;
+    sendingRef.current = true;
     setBusy(true);
     try {
-      await signInWithEmailOtp(email.trim());
+      await signInWithEmailOtp(normalizeEmail(email));
       if (emailSent) showToast(t("auth.code.resent"), "success");
-      setEmailSent(true);
+      setSentAt(Date.now());
       setLinkFailed(false);
       setCode("");
       setCodeError(null);
       setResendCooldown(RESEND_COOLDOWN_SECONDS);
     } catch (err) {
-      if (isRateLimited(err)) {
-        showToast(t("auth.code.rateLimited"), "warning");
-        if (emailSent) setResendCooldown(RESEND_COOLDOWN_SECONDS);
-      } else {
-        showToast(err instanceof Error ? err.message : t("auth.authError"), "warning");
-      }
+      const kind = authErrorKind(err);
+      if (kind !== "rateLimited") console.error("GolfMe: sending the sign-in email failed.", err);
+      showToast(t(AUTH_ERROR_MESSAGE_KEY[kind]), "warning");
+      if (kind === "rateLimited" && emailSent) setResendCooldown(RESEND_COOLDOWN_SECONDS);
     } finally {
+      sendingRef.current = false;
       setBusy(false);
     }
   }
@@ -169,13 +186,14 @@ export function Auth({ mode }: AuthProps) {
     setBusy(true);
     setCodeError(null);
     try {
-      await verifyEmailOtp(email.trim(), code);
+      await verifyEmailOtp(normalizeEmail(email), code);
       // Success: onAuthStateChange in AuthContext takes over, as for the link.
     } catch (err) {
       const status = (err as { status?: number } | null)?.status;
+      const kind = authErrorKind(err);
       setCodeError(
-        isRateLimited(err)
-          ? t("auth.code.rateLimited")
+        kind === "rateLimited" || kind === "network"
+          ? t(AUTH_ERROR_MESSAGE_KEY[kind])
           : status === 400 || status === 403 || status === 422
             ? t("auth.code.invalid")
             : t("auth.authError"),
@@ -185,23 +203,26 @@ export function Auth({ mode }: AuthProps) {
     }
   }
 
-  async function continueWithPassword() {
-    if (!passwordEmail.includes("@") || !password) return;
+  async function continueWithPassword(e?: FormEvent) {
+    e?.preventDefault();
+    if (!isValidEmail(passwordEmail) || !password || busy) return;
     setBusy(true);
     try {
-      await signInWithPassword(passwordEmail.trim(), password);
+      await signInWithPassword(normalizeEmail(passwordEmail), password);
       // No further action on success — the onAuthStateChange listener in
       // AuthContext picks up the new session and App.tsx's route guards
       // take it from there, same as every other sign-in method here.
     } catch (err) {
-      showToast(err instanceof Error ? err.message : t("auth.authError"), "warning");
+      showToast(t(AUTH_ERROR_MESSAGE_KEY[authErrorKind(err)]), "warning");
     } finally {
       setBusy(false);
     }
   }
 
   function useDifferentMethod() {
-    setEmailSent(false);
+    clearEmailDraft();
+    setSentAt(null);
+    setEmailTouched(false);
     setCode("");
     setCodeError(null);
     // Same as the initial state: back to the buttons when Apple/Google show.
@@ -295,7 +316,8 @@ export function Auth({ mode }: AuthProps) {
                   {codeError}
                 </p>
               )}
-              <Button type="submit" disabled={code.length < EMAIL_OTP_LENGTH || busy} fullWidth className="min-h-11">
+              <Button type="submit" disabled={code.length < EMAIL_OTP_LENGTH || busy} aria-busy={busy || undefined} fullWidth className="min-h-11 gap-2">
+                {busy && <Loader2 size={16} className="animate-spin motion-reduce:animate-none" aria-hidden />}
                 {t("auth.code.verify")}
               </Button>
             </form>
@@ -351,19 +373,41 @@ export function Auth({ mode }: AuthProps) {
                 <Mail size={16} /> {t("auth.continueWithEmail")}
               </button>
             ) : (
-              <div className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-3">
+              // A real form: Enter / the keyboard's Go key sends, and iOS
+              // offers the saved email address above the keyboard.
+              <form onSubmit={continueWithEmail} noValidate className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-3">
+                <label htmlFor="auth-email" className="text-xs font-semibold text-slate-600">
+                  {t("auth.emailLabel")}
+                </label>
                 <input
+                  id="auth-email"
+                  name="email"
                   type="email"
-                  autoFocus={mode !== "login" || showGoogle}
+                  inputMode="email"
+                  autoComplete="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  enterKeyHint="send"
+                  autoFocus={!initialDraft?.email && (mode !== "login" || showGoogle)}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  onBlur={() => setEmailTouched(true)}
                   placeholder="you@example.com"
+                  aria-invalid={emailTouched && email && !emailValid ? true : undefined}
+                  aria-describedby={emailTouched && email && !emailValid ? "auth-email-error" : undefined}
                   className={inputClass}
                 />
-                <Button onClick={continueWithEmail} disabled={!email.includes("@") || busy} fullWidth>
+                {emailTouched && email && !emailValid && (
+                  <p id="auth-email-error" role="alert" className="text-xs leading-relaxed text-red-600">
+                    {t("auth.invalidEmail")}
+                  </p>
+                )}
+                <Button type="submit" disabled={!emailValid || busy} aria-busy={busy || undefined} fullWidth className="gap-2">
+                  {busy && <Loader2 size={16} className="animate-spin motion-reduce:animate-none" aria-hidden />}
                   {t("auth.sendMagicLink")}
                 </Button>
-              </div>
+              </form>
             )}
 
             {mode === "login" && showDemoEntry && (
@@ -394,9 +438,16 @@ export function Auth({ mode }: AuthProps) {
                     {t("auth.signInWithPassword")}
                   </button>
                 ) : (
-                  <div className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-3">
+                  <form onSubmit={continueWithPassword} noValidate className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-3">
                     <input
                       type="email"
+                      name="username"
+                      inputMode="email"
+                      autoComplete="username"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      aria-label={t("auth.emailLabel")}
                       value={passwordEmail}
                       onChange={(e) => setPasswordEmail(e.target.value)}
                       placeholder="you@example.com"
@@ -405,6 +456,9 @@ export function Auth({ mode }: AuthProps) {
                     <div className="relative">
                       <input
                         type={passwordVisible ? "text" : "password"}
+                        name="password"
+                        autoComplete="current-password"
+                        aria-label={t("auth.passwordPlaceholder")}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder={t("auth.passwordPlaceholder")}
@@ -422,10 +476,11 @@ export function Auth({ mode }: AuthProps) {
                         {passwordVisible ? <EyeOff size={18} /> : <Eye size={18} />}
                       </button>
                     </div>
-                    <Button onClick={continueWithPassword} disabled={!passwordEmail.includes("@") || !password || busy} fullWidth>
+                    <Button type="submit" disabled={!isValidEmail(passwordEmail) || !password || busy} aria-busy={busy || undefined} fullWidth className="gap-2">
+                      {busy && <Loader2 size={16} className="animate-spin motion-reduce:animate-none" aria-hidden />}
                       {t("auth.signIn")}
                     </Button>
-                  </div>
+                  </form>
                 )}
               </>
             )}

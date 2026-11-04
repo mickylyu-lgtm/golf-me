@@ -9,6 +9,7 @@ import { unregisterPushNotifications } from "../lib/push";
 import { authorizeWithApple, randomNonce } from "../lib/socialSignIn";
 import { profileRowToGolferProfile } from "../lib/profile";
 import type { ProfileRow } from "../lib/profile";
+import { clearEmailDraft } from "../lib/authInput";
 import type { GolferProfile } from "../types";
 
 // Must match the CFBundleURLTypes scheme registered in
@@ -196,6 +197,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // A failed sign-in link means nothing to someone who is signed in
       // (already, or by the code); don't let it resurface after a later sign-out.
       if (nextUser) setAuthError(null);
+      // Same for the sign-in screen's saved email/"check your email" state.
+      if (nextUser) clearEmailDraft();
 
       if (sameUser && nextUser) {
         // Keep the existing user object reference unless something a

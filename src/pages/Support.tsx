@@ -56,10 +56,24 @@ export function Support() {
 
       <Section title="Signing in">
         <p>
-          On the web you can sign in with Google or with a sign-in link sent to your email. In the iPhone app, use the email sign-in
-          link, or "Sign in with a password" on the log-in screen if your account has a password. If you signed up with Google and have trouble signing in on iPhone, email us and we'll help. If a link doesn't work, it may have expired or already
-          been used (some email apps open links automatically) — request a new one from the sign-in screen. Check your spam folder if the
-          email doesn't arrive within a few minutes.
+          <span className="font-semibold text-slate-800">On the web:</span> Continue with Google, or Continue with Email. With email,
+          we send you a 6-digit code: type it on the sign-in screen. The same email also has a sign-in link, which only works on the
+          device where you tap it.
+        </p>
+        <p>
+          <span className="font-semibold text-slate-800">In the iPhone app:</span> Sign in with Apple, Continue with Google, or
+          Continue with Email. With email, use the 6-digit code — it works even if you read the email on another device, and you
+          stay in the app. Tapping the link in the email may open Safari instead of the app. If you only see email and "Sign in with
+          a password", update the app to the latest version.
+        </p>
+        <p>
+          Signing in with Google or Apple uses the account that has the same email address, so you keep your profile. If you choose
+          Apple's Hide My Email, GolfMe only sees a private relay address, which becomes a separate account.
+        </p>
+        <p>
+          A code or link stops working once it's been used or after a while (some email apps open links automatically, which uses
+          them up). Ask for a new one from the sign-in screen; you can request another after a minute. Check your spam folder if the
+          email doesn't arrive within a few minutes. Still stuck? Email us from the address you sign in with.
         </p>
       </Section>
 
@@ -84,8 +98,9 @@ export function Support() {
 
       <Section title="Notifications">
         <p>
-          Turn push notifications on or off in the app under Me → Settings. To hide message previews on your lock screen, change
-          "Show Previews" for GolfMe in your iPhone's Settings → Notifications.
+          Push notifications are available in the iPhone app; turn them on or off under Me → Settings. On the web, updates appear
+          under the bell at the top of the app. To hide message previews on your lock screen, change "Show Previews" for GolfMe in
+          your iPhone's Settings → Notifications.
         </p>
       </Section>
 
