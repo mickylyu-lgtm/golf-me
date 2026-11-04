@@ -37,6 +37,11 @@ const MAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
 const MAP_COURSE_LIMIT = 100;
 // Camera glide to a tapped pin.
 const GLIDE_MS = 450;
+// Pins fading in: gap between neighbours, longest total delay, and how long
+// to wait for the map's first draw before showing them anyway.
+const PIN_STAGGER_MS = 18;
+const PIN_STAGGER_MAX_MS = 400;
+const PIN_REVEAL_FALLBACK_MS = 2500;
 // Dragging the sheet down this far closes it.
 const SHEET_CLOSE_DRAG_PX = 90;
 
@@ -209,8 +214,9 @@ export function CourseMap() {
       el.setAttribute("aria-label", course.name);
       el.className = "block h-8 w-6";
       const shape = document.createElement("span");
+      // Starts hidden and a little low; revealed below once the map has drawn.
       shape.className =
-        "block h-full w-full origin-bottom text-fairway-600 drop-shadow transition-[scale,color] duration-200 ease-out motion-reduce:transition-none";
+        "block h-full w-full origin-bottom translate-y-1.5 text-fairway-600 opacity-0 drop-shadow transition-[scale,color,opacity,translate] duration-300 ease-out motion-reduce:transition-none";
       shape.innerHTML = PIN_SVG;
       el.appendChild(shape);
       el.addEventListener("click", (e) => {
@@ -221,14 +227,43 @@ export function CourseMap() {
       markers.set(key, { marker, el, shape });
       bounds.extend(lngLat);
     }
-    if (fittedAreaRef.current === areaId) return;
-    fittedAreaRef.current = areaId;
-    if (lat != null && lng != null) bounds.extend([lng, lat]);
-    try {
-      map.fitBounds(bounds, { padding: { top: 140, bottom: 160, left: 40, right: 40 }, maxZoom: 13, duration: 0 });
-    } catch {
-      // A screen too small for that padding: the pins are still on the map.
+    if (fittedAreaRef.current !== areaId) {
+      fittedAreaRef.current = areaId;
+      if (lat != null && lng != null) bounds.extend([lng, lat]);
+      try {
+        map.fitBounds(bounds, { padding: { top: 140, bottom: 160, left: 40, right: 40 }, maxZoom: 13, duration: 0 });
+      } catch {
+        // A screen too small for that padding: the pins are still on the map.
+      }
     }
+
+    // Fade the pins in (Micky: popping in "looks cheap") only once the map
+    // has drawn and the view is already fitted, so they never appear over a
+    // blank map or jump with the camera. Nearest first (results come sorted
+    // by distance), a few ms apart, so they settle in from the centre out.
+    const timers: number[] = [];
+    const shapes = [...markers.values()].map((m) => m.shape);
+    const reveal = () => {
+      const stagger = prefersReducedMotion() ? 0 : PIN_STAGGER_MS;
+      shapes.forEach((shape, i) => {
+        timers.push(window.setTimeout(() => shape.classList.remove("opacity-0", "translate-y-1.5"), Math.min(i * stagger, PIN_STAGGER_MAX_MS)));
+      });
+    };
+    let revealed = false;
+    const revealOnce = () => {
+      if (revealed) return;
+      revealed = true;
+      requestAnimationFrame(reveal);
+    };
+    if (map.isStyleLoaded()) revealOnce();
+    else map.once("load", revealOnce);
+    // A slow tile server still gets its pins.
+    timers.push(window.setTimeout(revealOnce, PIN_REVEAL_FALLBACK_MS));
+    return () => {
+      revealed = true;
+      map.off("load", revealOnce);
+      for (const t of timers) window.clearTimeout(t);
+    };
     // Keyed on the result set, not the array identity of each render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mappedKeys]);
