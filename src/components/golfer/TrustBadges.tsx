@@ -1,6 +1,7 @@
-import { Crown, ShieldCheck, Sparkles } from "lucide-react";
+import { Crown, ShieldCheck, Sprout } from "lucide-react";
 import type { GolferProfile } from "../../types";
-import { isNewAccount } from "../../lib/format";
+import { showNewMemberBadge } from "../../lib/newMemberBadge";
+import { isFounder } from "../../lib/founder";
 import { Badge } from "../ui/Badge";
 import { useLocale } from "../../i18n/LocaleContext";
 
@@ -25,14 +26,14 @@ export function FounderBadge() {
 export function NewAccountBadge() {
   const { t } = useLocale();
   return (
-    <Badge tone="sun" icon={<Sparkles size={12} />}>
+    <Badge tone="sun" icon={<Sprout size={12} />}>
       {t("trust.newToGolfMe")}
     </Badge>
   );
 }
 
 export function TrustBadgeRow({ golfer, className = "" }: { golfer: GolferProfile; className?: string }) {
-  const isNew = isNewAccount(golfer.reputation.completedRounds);
+  const isNew = showNewMemberBadge(golfer, isFounder(golfer.id));
   if (!golfer.verification.verifiedGolfer && !isNew) return null;
   return (
     <div className={`flex flex-wrap gap-1.5 ${className}`}>
