@@ -24,6 +24,9 @@ import { goBack } from "../lib/goBack";
 // no per-view billing) drawn by MapLibre; this page is lazy-loaded, so the
 // map library only downloads when someone opens it.
 const MAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
+// Pins on the map (the lists show the nearest 10). Until course-search
+// allows it the server returns at most 20, which still works.
+const MAP_COURSE_LIMIT = 100;
 
 const PIN_SVG =
   '<svg viewBox="0 0 24 32" width="100%" height="100%" aria-hidden="true"><path d="M12 0C5.4 0 0 5.3 0 11.9 0 20.8 12 32 12 32s12-11.2 12-20.1C24 5.3 18.6 0 12 0z" fill="currentColor" stroke="white" stroke-width="1.5"/><circle cx="12" cy="11.5" r="4.2" fill="white"/></svg>';
@@ -47,7 +50,7 @@ export function CourseMap() {
   const [mapFailed, setMapFailed] = useState(false);
 
   const radiusMiles = resolveTravelRadiusMiles(currentUser);
-  const { results, loading, error, retry } = useNearbyCourses(area, radiusMiles);
+  const { results, loading, error, retry } = useNearbyCourses(area, radiusMiles, MAP_COURSE_LIMIT);
   const mapped = results.filter((r) => r.lat != null && r.lng != null);
   const selected = mapped.find((r) => courseKey(r) === selectedKey) ?? null;
 

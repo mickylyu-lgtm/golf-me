@@ -58,6 +58,9 @@ interface GeoapifyFeature {
 // since GEOAPIFY_API_KEY was never set until 2026-08-16, meaning this
 // endpoint was never actually called successfully before today.
 const GEOAPIFY_CATEGORY = "sport.golf_course";
+// Most courses one nearby request returns (the course map's pins).
+const NEARBY_MAX = 100;
+const UPSERT_BATCH = 10;
 
 // Same CORS preflight issue as delete-account: without an explicit OPTIONS
 // response and Access-Control-Allow-* headers, the browser's preflight for
@@ -133,7 +136,9 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: "Invalid request body." }, 400);
   }
 
-  const limit = Math.min(body.limit ?? 10, 20);
+  // Nearby goes up to 100 for the course map (Micky, 2026-11-04: "way more
+  // pins"); search stays at 20.
+  const limit = Math.min(body.limit ?? 10, body.mode === "nearby" ? NEARBY_MAX : 20);
   const lat = typeof body.lat === "number" && Number.isFinite(body.lat) ? body.lat : undefined;
   const lng = typeof body.lng === "number" && Number.isFinite(body.lng) ? body.lng : undefined;
 
@@ -150,10 +155,12 @@ Deno.serve(async (req: Request) => {
   let candidates: CourseCandidate[];
   if (body.mode === "nearby") {
     if (lat == null || lng == null) return jsonResponse({ error: "lat/lng required for nearby search." }, 400);
-    // Always ask Geoapify for 20 (one credit covers up to 20 places) so the
-    // list is still full after unnamed features, ranges and mini golf are
-    // dropped below; the response is cut back to `limit`.
-    const params = new URLSearchParams({ categories: GEOAPIFY_CATEGORY, limit: "20", apiKey });
+    // Ask Geoapify for at least 20 (one credit covers up to 20 places) so
+    // the list is still full after unnamed features, ranges and mini golf
+    // are dropped below; the response is cut back to `limit`. A map-sized
+    // request asks for a little more than it needs for the same reason.
+    const fetchCount = limit <= 20 ? 20 : Math.min(Math.ceil(limit * 1.2), NEARBY_MAX + 20);
+    const params = new URLSearchParams({ categories: GEOAPIFY_CATEGORY, limit: String(fetchCount), apiKey });
     const radiusMeters = Math.round((body.radiusMiles ?? 25) * 1609.34);
     params.set("filter", `circle:${lng},${lat},${radiusMeters}`);
     params.set("bias", `proximity:${lng},${lat}`);
@@ -197,10 +204,11 @@ Deno.serve(async (req: Request) => {
   // course from ever getting a second, duplicate courses row if it's later
   // also matched by name in GolfCourseAPI: both providers' mappings point at
   // one canonical courses.id.
-  const results = [];
-  for (const c of candidates) {
+  // In batches, in order: a 100-pin map request one call at a time took
+  // seconds; a whole batch at once would hit the database all together.
+  const upsert = async (c: CourseCandidate) => {
     const name = geoapifyCourseName(c);
-    const { data, error } = await supabase.rpc("upsert_external_course", {
+    return await supabase.rpc("upsert_external_course", {
       p_provider: "geoapify",
       p_external_id: c.place_id,
       p_name: name,
@@ -212,8 +220,14 @@ Deno.serve(async (req: Request) => {
       p_latitude: c.lat,
       p_longitude: c.lon,
     });
-    if (error) return jsonResponse({ error: `Failed to cache course results: ${error.message}` }, 500);
-    results.push(data);
+  };
+  const results = [];
+  for (let i = 0; i < candidates.length; i += UPSERT_BATCH) {
+    const batch = await Promise.all(candidates.slice(i, i + UPSERT_BATCH).map(upsert));
+    for (const { data, error } of batch) {
+      if (error) return jsonResponse({ error: `Failed to cache course results: ${error.message}` }, 500);
+      results.push(data);
+    }
   }
 
   return jsonResponse({ results, courseFilter: COURSE_FILTER_VERSION });

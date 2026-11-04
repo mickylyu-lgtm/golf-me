@@ -31,7 +31,9 @@ function errorMessage(err: unknown, fallback: string): string {
 // Real accounts hit the Geoapify-backed Edge Function — real network call,
 // real loading/error states, never a silent fallback to fixture data (see
 // Phase 3's "never silently fall back to fake course lists" requirement).
-export function useNearbyCourses(location: PlayingArea | undefined, radiusMiles: number): CourseSearchState {
+// `limit`: how many real courses to ask for (the map asks for many more
+// than the lists; the server caps nearby at 100).
+export function useNearbyCourses(location: PlayingArea | undefined, radiusMiles: number, limit?: number): CourseSearchState {
   const { isDemo } = useAuth();
   const [results, setResults] = useState<DisplayCourseResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -59,7 +61,7 @@ export function useNearbyCourses(location: PlayingArea | undefined, radiusMiles:
     let cancelled = false;
     setLoading(true);
     setError(null);
-    getNearbyRealCourses(location!, radiusMiles)
+    getNearbyRealCourses(location!, radiusMiles, limit)
       .then((r) => !cancelled && setResults(r))
       .catch((err) => !cancelled && setError(errorMessage(err, "Couldn't load nearby courses.")))
       .finally(() => !cancelled && setLoading(false));
@@ -67,7 +69,7 @@ export function useNearbyCourses(location: PlayingArea | undefined, radiusMiles:
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isDemo, lat, lng, radiusMiles, retryNonce]);
+  }, [isDemo, lat, lng, radiusMiles, limit, retryNonce]);
 
   return { results, loading, error, retry: () => setRetryNonce((n) => n + 1) };
 }
