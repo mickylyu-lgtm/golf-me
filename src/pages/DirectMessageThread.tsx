@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Eraser, MoreHorizontal, Reply, ShieldAlert, ShieldCheck, ShieldOff, Trash2, X } from "lucide-react";
+import { AlertCircle, ArrowLeft, Eraser, MoreHorizontal, Reply, ShieldAlert, ShieldCheck, ShieldOff, Trash2, X } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useToast } from "../context/ToastContext";
 import { Avatar } from "../components/ui/Avatar";
@@ -25,6 +25,8 @@ import { useMessageLongPress } from "../lib/useMessageLongPress";
 import { MessageActionsMenu } from "../components/chat/MessageActionsMenu";
 import { canUnsendMessage, unsendRemainingMs } from "../lib/unsend";
 import { copyText } from "../lib/share";
+import { goBack } from "../lib/goBack";
+import { type FailedDm, sendDmWithRecovery } from "../lib/dmFailedSend";
 import { Capacitor } from "@capacitor/core";
 
 const IS_NATIVE = Capacitor.isNativePlatform();
@@ -64,6 +66,24 @@ export function DirectMessageThread() {
   const [replyToId, setReplyToId] = useState<string | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const highlightTimerRef = useRef(0);
+  // Sends that failed after the golfer had already typed something newer or
+  // picked a new reply (lib/dmFailedSend.ts): kept as "Not sent" bubbles
+  // instead of overwriting the composer. Page-local, per thread id.
+  const [failedSends, setFailedSends] = useState<FailedDm[]>([]);
+  // The composer as it is right now, for a send that settles later (its
+  // own closure only has the values from when Send was tapped). Read as
+  // null once the page has unmounted.
+  const composerRef = useRef<{ threadId: string | undefined; text: string; replyToId: string | null }>({ threadId: id, text, replyToId });
+  const mountedRef = useRef(false);
+  useLayoutEffect(() => {
+    composerRef.current = { threadId: id, text, replyToId };
+  });
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
   const listRef = useRef<HTMLDivElement>(null);
   // Wraps the message rows only (inside listRef) so the swipe-to-reveal-
   // times gesture can move them all with one transform. See
@@ -241,7 +261,7 @@ export function DirectMessageThread() {
   useEffect(() => {
     const el = listRef.current;
     if (el && nearBottomRef.current) el.scrollTop = el.scrollHeight;
-  }, [messages.length]);
+  }, [messages.length, failedSends.length]);
 
   // Switching to a different thread always opens at its latest message,
   // same as opening any chat app fresh -- not gated on nearBottomRef, which
@@ -340,7 +360,9 @@ export function DirectMessageThread() {
       <div className="py-12 text-center text-slate-500">
         Golfer not found.
         <div className="mt-4">
-          <Button variant="outline" onClick={() => navigate(-1)}>
+          {/* Opened from a push or a link there may be no in-app page to
+              go back to (lib/goBack.ts): fall back to the Inbox. */}
+          <Button variant="outline" onClick={() => goBack(navigate, "/messages")}>
             Go back
           </Button>
         </div>
@@ -387,27 +409,63 @@ export function DirectMessageThread() {
     if (m && (await copyText(m.text))) showToast(t("chat.copied"), "info");
   }
 
+  function showSendFailed(result: "failed" | "objectionable") {
+    if (result === "objectionable") showToast(t("moderation.objectionableContent"), "warning");
+    else showToast("Message didn't send — try again in a moment.", "info");
+  }
+
+  // A failed send never overwrites newer input (lib/dmFailedSend.ts): the
+  // text goes back into the composer only if it is still empty with no
+  // reply picked; otherwise it stays as a "Not sent" bubble below.
   async function handleSend() {
     if (!text.trim() || !other) return;
-    const pendingText = text;
-    const pendingReplyTo = replyTarget?.id;
-    updateText("");
-    setReplyToId(null);
-    stopTyping();
-    const result = await sendDirectMessage(other.id, pendingText, pendingReplyTo);
-    if (result !== "sent") {
-      updateText(pendingText);
-      if (pendingReplyTo) setReplyToId(pendingReplyTo);
-      if (result === "objectionable") showToast(t("moderation.objectionableContent"), "warning");
-      else showToast("Message didn't send — try again in a moment.", "info");
-    }
+    const threadId = other.id;
+    const { result } = await sendDmWithRecovery({
+      threadId,
+      text,
+      replyToId: replyTarget?.id ?? null,
+      clear: () => {
+        updateText("");
+        setReplyToId(null);
+        stopTyping();
+      },
+      send: (body, replyTo) => sendDirectMessage(threadId, body, replyTo ?? undefined),
+      snapshot: () => (mountedRef.current ? composerRef.current : null),
+      loadDraft: (thread) => loadChatDraft(dmDraftKey(thread)),
+      restore: (body, replyTo) => {
+        setText(body);
+        saveChatDraft(dmDraftKey(threadId), body);
+        setReplyToId(replyTo);
+      },
+      saveDraft: (thread, body) => saveChatDraft(dmDraftKey(thread), body),
+      keepFailed: (failed) => setFailedSends((prev) => [...prev, failed]),
+      newKey: () => crypto.randomUUID(),
+    });
+    if (result !== "sent") showSendFailed(result);
   }
+
+  // Retry from a "Not sent" bubble: the composer is left alone; a second
+  // failure just puts the bubble back.
+  async function retryFailedSend(failed: FailedDm) {
+    setFailedSends((prev) => prev.filter((f) => f.key !== failed.key));
+    const result = await sendDirectMessage(failed.threadId, failed.text, failed.replyToId ?? undefined);
+    if (result === "sent") return;
+    setFailedSends((prev) => [...prev, { ...failed, objectionable: result === "objectionable" }]);
+    showSendFailed(result);
+  }
+
+  function discardFailedSend(key: string) {
+    setFailedSends((prev) => prev.filter((f) => f.key !== key));
+  }
+
+  const threadFailedSends = failedSends.filter((f) => f.threadId === other.id);
 
   return (
     <div className="flex flex-col gap-4 pb-6">
       <div className="flex items-center justify-between gap-3">
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => goBack(navigate, "/messages")}
+          aria-label={t("common.back")}
           className="flex shrink-0 items-center gap-1.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
         >
           <ArrowLeft size={16} />
@@ -530,7 +588,7 @@ export function DirectMessageThread() {
           className="flex min-h-0 flex-1 touch-pan-y flex-col gap-3 overflow-x-hidden overflow-y-auto px-4 py-4"
         >
           <div className="mt-auto" />
-          {messages.length === 0 && (
+          {messages.length === 0 && threadFailedSends.length === 0 && (
             <p className="my-auto text-center text-sm text-slate-400">
               {eligible ? "No messages yet — say hello." : "You can't message this golfer."}
             </p>
@@ -629,6 +687,48 @@ export function DirectMessageThread() {
                 </div>
               );
             })}
+            {/* Failed sends kept aside so newer input wasn't overwritten
+                (lib/dmFailedSend.ts). Same look as round chat's failed
+                bubble. No data-reply-* / data-actions-* attributes: not a
+                swipe-to-reply or unsend target. */}
+            {threadFailedSends.map((f) => (
+              <div key={f.key} className="flex items-end gap-2 flex-row-reverse">
+                <span className="shrink-0 rounded-full">
+                  <Avatar golfer={currentUser} size="xs" showVerified={false} />
+                </span>
+                <div className="flex max-w-[75%] flex-col items-end">
+                  <div className="rounded-2xl rounded-br-sm border border-rose-300 bg-rose-50 px-3.5 py-2 text-sm text-slate-800 [overflow-wrap:anywhere]">
+                    {f.text}
+                  </div>
+                  <div className="mt-1 flex items-center gap-3 text-[11px] font-semibold">
+                    {f.objectionable ? (
+                      <span className="flex items-center gap-1 text-rose-600">
+                        <AlertCircle size={12} aria-hidden="true" /> {t("moderation.objectionableContent")}
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        // Don't take focus off the composer (keyboard stays put).
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => retryFailedSend(f)}
+                        aria-label={t("roundChat.retryLabel")}
+                        className="flex items-center gap-1 rounded text-rose-600 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
+                      >
+                        <AlertCircle size={12} aria-hidden="true" /> {t("roundChat.notSentRetry")}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => discardFailedSend(f.key)}
+                      className="rounded text-slate-400 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+                    >
+                      {t("roundChat.discard")}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
           {/* Just another item at the end of the same list the messages
               themselves render in -- no separate positioning, no new scroll
               code. The existing ResizeObserver on this list (see above)
