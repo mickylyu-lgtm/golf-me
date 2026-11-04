@@ -5,7 +5,8 @@ import { useLocale } from "../../i18n/LocaleContext";
 import type { TranslationKey } from "../../i18n/locales/en";
 import { coachDwellMs } from "../../lib/coachReplay";
 import type { CoachCheckpoint, CoachClaim, CoachMomentLabel, CoachSummary, CoachText } from "../../lib/coachReplay";
-import { COACH_CARD_MAX_SCREEN_FRACTION, paginateBlocks } from "../../lib/coachPaging";
+import { COACH_CARD_MAX_SCREEN_FRACTION, paginateWithSentences, splitSentences } from "../../lib/coachPaging";
+import type { PageItem } from "../../lib/coachPaging";
 import { usePrefersReducedMotion } from "../loading/loaderState";
 
 // The freeze card Coach Replay shows at each checkpoint, plus the slim strip
@@ -19,6 +20,8 @@ import { usePrefersReducedMotion } from "../loading/loaderState";
 // shown one after the other ("Doing well", then "One thing to fix" + its
 // cue; for the summary: focus, work-on items, drill). Whether to split is
 // decided from measured heights (CoachPageMeasurer), not character counts.
+// A single finding taller than a whole page is split between sentences
+// (paginateWithSentences); its label repeats on each page it spans.
 
 const MOMENT_LABEL_KEYS: Record<CoachMomentLabel, TranslationKey> = {
   address: "swingAnalysis.address",
@@ -42,7 +45,17 @@ const TEXT_CLASS = "text-[13px] leading-[18px]";
 
 type T = (key: TranslationKey, vars?: Record<string, string | number>) => string;
 const textOf = (t: T, text: CoachText) => (text.kind === "key" ? t(text.key) : text.text);
-const claimLength = (t: T, c: CoachClaim | undefined) => (c ? (c.title ? textOf(t, c.title).length : 0) + textOf(t, c.body).length : 0);
+// A run of sentences [from, to) of a claim's body; undefined = all of it.
+type Range = readonly [number, number];
+const bodyOf = (t: T, c: CoachClaim, range?: Range) => {
+  const body = textOf(t, c.body);
+  return range ? splitSentences(body).slice(range[0], range[1]).join("").trim() : body;
+};
+const showsTitle = (range?: Range) => !range || range[0] === 0;
+const claimLength = (t: T, c: CoachClaim | undefined, range?: Range) =>
+  c ? (c.title && showsTitle(range) ? textOf(t, c.title).length : 0) + bodyOf(t, c, range).length : 0;
+const sentenceCount = (t: T, c: CoachClaim | undefined) => (c ? splitSentences(textOf(t, c.body)).length : 0);
+const rangeOf = (item: PageItem): { block: number; range?: Range } => (typeof item === "number" ? { block: item } : { block: item.block, range: [item.from, item.to] });
 
 // ── Blocks ──────────────────────────────────────────────────────────────
 // A card is a list of blocks; `group` keeps blocks together on one page
@@ -87,21 +100,25 @@ function FindingRow({ icon, label, labelClass, children }: { icon: ReactNode; la
   );
 }
 
-// The claim in full: title · body, wrapping as needed.
-function ClaimText({ claim, t }: { claim: CoachClaim; t: T }) {
+// The claim in full: title · body, wrapping as needed. With a range, only
+// those sentences of the body (the title goes with the first).
+function ClaimText({ claim, t, range }: { claim: CoachClaim; t: T; range?: Range }) {
   return (
     <p data-coach-text className={`${TEXT_CLASS} text-slate-700`}>
-      {claim.title && <span className="font-semibold text-slate-900">{textOf(t, claim.title)} · </span>}
-      {textOf(t, claim.body)}
+      {claim.title && showsTitle(range) && <span className="font-semibold text-slate-900">{textOf(t, claim.title)} · </span>}
+      {bodyOf(t, claim, range)}
     </p>
   );
 }
 
-function CheckpointBlockView({ checkpoint, id, t }: { checkpoint: CoachCheckpoint; id: CheckpointBlockId; t: T }) {
+// The claim a checkpoint block shows, for the blocks that can be split by sentence.
+const checkpointClaim = (checkpoint: CoachCheckpoint, id: CheckpointBlockId) => (id === "good" ? checkpoint.good : id === "fix" ? checkpoint.fix : undefined);
+
+function CheckpointBlockView({ checkpoint, id, t, range }: { checkpoint: CoachCheckpoint; id: CheckpointBlockId; t: T; range?: Range }) {
   if (id === "good" && checkpoint.good) {
     return (
       <FindingRow icon={<CircleCheck size={17} aria-hidden="true" className="mt-px shrink-0 text-fairway-600" />} label={t("coachReplay.doingWell")} labelClass="text-fairway-700">
-        <ClaimText claim={checkpoint.good} t={t} />
+        <ClaimText claim={checkpoint.good} t={t} range={range} />
       </FindingRow>
     );
   }
@@ -113,7 +130,7 @@ function CheckpointBlockView({ checkpoint, id, t }: { checkpoint: CoachCheckpoin
         labelClass={checkpoint.fix ? "text-sun-700" : "text-slate-400"}
       >
         {checkpoint.fix ? (
-          <ClaimText claim={checkpoint.fix} t={t} />
+          <ClaimText claim={checkpoint.fix} t={t} range={range} />
         ) : (
           <p data-coach-text className={`${TEXT_CLASS} text-slate-500`}>
             {t("coachReplay.nothingFlagged")}
@@ -135,12 +152,15 @@ function CheckpointBlockView({ checkpoint, id, t }: { checkpoint: CoachCheckpoin
   return null;
 }
 
-function SummaryBlockView({ summary, id, t }: { summary: CoachSummary; id: SummaryBlockId; t: T }) {
+const summaryClaim = (summary: CoachSummary, id: SummaryBlockId) =>
+  id === "focus" ? summary.focus : id.startsWith("work-") ? summary.workOn[Number(id.slice("work-".length))] : undefined;
+
+function SummaryBlockView({ summary, id, t, range }: { summary: CoachSummary; id: SummaryBlockId; t: T; range?: Range }) {
   const workIcon = <Target size={17} aria-hidden="true" className="mt-px shrink-0 text-sun-600" />;
   if (id === "focus" && summary.focus) {
     return (
       <FindingRow icon={workIcon} label={t("coachReplay.mainFocus")} labelClass="text-sun-700">
-        <ClaimText claim={summary.focus} t={t} />
+        <ClaimText claim={summary.focus} t={t} range={range} />
       </FindingRow>
     );
   }
@@ -149,7 +169,7 @@ function SummaryBlockView({ summary, id, t }: { summary: CoachSummary; id: Summa
     if (!claim) return null;
     return (
       <FindingRow icon={workIcon} label={t("coachReplay.workOn")} labelClass="text-sun-700">
-        <ClaimText claim={claim} t={t} />
+        <ClaimText claim={claim} t={t} range={range} />
       </FindingRow>
     );
   }
@@ -182,11 +202,11 @@ function SummaryBlockView({ summary, id, t }: { summary: CoachSummary; id: Summa
 
 // ── Measuring ───────────────────────────────────────────────────────────
 
-// Pages per card, as block indices: one list of pages per checkpoint, plus
-// the summary's.
+// Pages per card, as block indices (or a sentence range of one block): one
+// list of pages per checkpoint, plus the summary's.
 export interface CoachPageLayout {
-  checkpoints: number[][][];
-  summary: number[][];
+  checkpoints: PageItem[][][];
+  summary: PageItem[][];
 }
 
 function CardHeader({ label, approximate, step, t }: { label: string; approximate?: boolean; step?: string; t: T }) {
@@ -225,26 +245,27 @@ export function CoachPageMeasurer({
     if (!root) return;
     const budget = Math.floor(window.innerHeight * COACH_CARD_MAX_SCREEN_FRACTION);
     const chromeOf = (name: string) => (root.querySelector(`[data-measure-chrome="${name}"]`) as HTMLElement | null)?.offsetHeight ?? 0;
-    const heightsOf = (prefix: string, count: number) => {
-      const out: number[] = [];
-      for (let i = 0; i < count; i++) out.push((root.querySelector(`[data-measure-block="${prefix}-${i}"]`) as HTMLElement | null)?.offsetHeight ?? 0);
-      return out;
-    };
+    const heightOf = (key: string) => (root.querySelector(`[data-measure-block="${key}"]`) as HTMLElement | null)?.offsetHeight ?? 0;
+    // Each block's height, plus each sentence's on its own when it has several.
+    const measured = (prefix: string, blocks: { group: number }[], claimAt: (i: number) => CoachClaim | undefined) =>
+      blocks.map((b, i) => {
+        const n = sentenceCount(t, claimAt(i));
+        const sentenceHeights = n > 1 ? Array.from({ length: n }, (_, s) => heightOf(`${prefix}-${i}-s${s}`)) : undefined;
+        return { group: b.group, height: heightOf(`${prefix}-${i}`), sentenceHeights };
+      });
     const checkpointPages = checkpoints.map((c, ci) => {
       const blocks = checkpointBlocks(c);
-      const heights = heightsOf(`c${ci}`, blocks.length);
-      return paginateBlocks(
-        blocks.map((b, i) => ({ group: b.group, height: heights[i] })),
+      return paginateWithSentences(
+        measured(`c${ci}`, blocks, (i) => checkpointClaim(c, blocks[i].id)),
         budget - chromeOf("checkpoint"),
         BLOCK_GAP_PX,
       );
     });
-    let summaryPages: number[][] = [];
+    let summaryPages: PageItem[][] = [];
     if (summary) {
       const blocks = summaryBlocks(summary);
-      const heights = heightsOf("s", blocks.length);
-      summaryPages = paginateBlocks(
-        blocks.map((b, i) => ({ group: b.group, height: heights[i] })),
+      summaryPages = paginateWithSentences(
+        measured("s", blocks, (i) => summaryClaim(summary, blocks[i].id)),
         budget - chromeOf("summary"),
         BLOCK_GAP_PX,
       );
@@ -255,7 +276,7 @@ export function CoachPageMeasurer({
       lastRef.current = key;
       onLayout(layout);
     }
-  }, [checkpoints, summary, onLayout]);
+  }, [checkpoints, summary, onLayout, t]);
 
   useLayoutEffect(() => {
     lastRef.current = "";
@@ -298,15 +319,31 @@ export function CoachPageMeasurer({
         <div className="px-3">
           {checkpoints.map((c, ci) =>
             checkpointBlocks(c).map((b, i) => (
-              <div key={`c${ci}-${i}`} data-measure-block={`c${ci}-${i}`}>
-                <CheckpointBlockView checkpoint={c} id={b.id} t={t} />
+              <div key={`c${ci}-${i}`}>
+                <div data-measure-block={`c${ci}-${i}`}>
+                  <CheckpointBlockView checkpoint={c} id={b.id} t={t} />
+                </div>
+                {sentenceCount(t, checkpointClaim(c, b.id)) > 1 &&
+                  splitSentences(textOf(t, checkpointClaim(c, b.id)!.body)).map((_, s) => (
+                    <div key={s} data-measure-block={`c${ci}-${i}-s${s}`}>
+                      <CheckpointBlockView checkpoint={c} id={b.id} t={t} range={[s, s + 1]} />
+                    </div>
+                  ))}
               </div>
             )),
           )}
           {summary &&
             summaryBlocks(summary).map((b, i) => (
-              <div key={`s-${i}`} data-measure-block={`s-${i}`}>
-                <SummaryBlockView summary={summary} id={b.id} t={t} />
+              <div key={`s-${i}`}>
+                <div data-measure-block={`s-${i}`}>
+                  <SummaryBlockView summary={summary} id={b.id} t={t} />
+                </div>
+                {sentenceCount(t, summaryClaim(summary, b.id)) > 1 &&
+                  splitSentences(textOf(t, summaryClaim(summary, b.id)!.body)).map((_, s) => (
+                    <div key={s} data-measure-block={`s-${i}-s${s}`}>
+                      <SummaryBlockView summary={summary} id={b.id} t={t} range={[s, s + 1]} />
+                    </div>
+                  ))}
               </div>
             ))}
         </div>
@@ -326,9 +363,10 @@ function usePage(pageCount: number) {
 
 export interface CoachReplayCardProps {
   checkpoint: CoachCheckpoint;
-  // This card's pages (block indices), from CoachPageMeasurer. Undefined:
-  // everything on one page (the demo's short fixed copy).
-  pages?: number[][];
+  // This card's pages (block indices, or a sentence range of one block),
+  // from CoachPageMeasurer. Undefined: everything on one page (the demo's
+  // short fixed copy).
+  pages?: PageItem[][];
   // Step numbering across the whole replay: this card's first page is
   // step `stepOffset + 1` of `stepTotal`.
   stepOffset: number;
@@ -341,15 +379,15 @@ export function CoachReplayCard({ checkpoint, pages, stepOffset, stepTotal, onCo
   const { t } = useLocale();
   const reducedMotion = usePrefersReducedMotion();
   const blocks = checkpointBlocks(checkpoint);
-  const cardPages = pages && pages.length > 0 ? pages : [blocks.map((_, i) => i)];
+  const cardPages: PageItem[][] = pages && pages.length > 0 ? pages : [blocks.map((_, i) => i)];
   const [page, setPage] = usePage(cardPages.length);
-  const visible = (cardPages[page] ?? []).map((i) => blocks[i]).filter(Boolean);
+  const visible = (cardPages[page] ?? []).map(rangeOf).flatMap(({ block, range }) => (blocks[block] ? [{ ...blocks[block], range }] : []));
   const isLastPage = page >= cardPages.length - 1;
   // Tapping the card holds this page: the swing waits until Continue. Under
   // reduced motion it always waits (nothing moves on its own).
   const [heldPage, setHeldPage] = useState<number | null>(null);
   const autoContinue = !reducedMotion && heldPage !== page;
-  const pageTextLength = visible.reduce((n, b) => n + (b.id === "good" ? claimLength(t, checkpoint.good) : b.id === "fix" ? claimLength(t, checkpoint.fix) : claimLength(t, checkpoint.cue)), 0);
+  const pageTextLength = visible.reduce((n, b) => n + claimLength(t, b.id === "cue" ? checkpoint.cue : checkpointClaim(checkpoint, b.id), b.range), 0);
   const dwellMs = coachDwellMs(pageTextLength);
 
   const next = useCallback(() => {
@@ -380,7 +418,7 @@ export function CoachReplayCard({ checkpoint, pages, stepOffset, stepTotal, onCo
 
       <div key={page} className={BODY_CLASS}>
         {visible.map((b) => (
-          <CheckpointBlockView key={b.id} checkpoint={checkpoint} id={b.id} t={t} />
+          <CheckpointBlockView key={b.id} checkpoint={checkpoint} id={b.id} t={t} range={b.range} />
         ))}
       </div>
 
@@ -422,12 +460,12 @@ export function CoachReplayCard({ checkpoint, pages, stepOffset, stepTotal, onCo
 // (the main focus when no freeze carried it, the top work_on items) and the
 // drill with its steps, paged like the checkpoint cards when it's long.
 // No auto-dismiss: there's nothing left to play into.
-export function CoachSummaryCard({ summary, pages, onReplay, onDone }: { summary: CoachSummary; pages?: number[][]; onReplay: () => void; onDone: () => void }) {
+export function CoachSummaryCard({ summary, pages, onReplay, onDone }: { summary: CoachSummary; pages?: PageItem[][]; onReplay: () => void; onDone: () => void }) {
   const { t } = useLocale();
   const blocks = summaryBlocks(summary);
-  const cardPages = pages && pages.length > 0 ? pages : [blocks.map((_, i) => i)];
+  const cardPages: PageItem[][] = pages && pages.length > 0 ? pages : [blocks.map((_, i) => i)];
   const [page, setPage] = usePage(cardPages.length);
-  const visible = (cardPages[page] ?? []).map((i) => blocks[i]).filter(Boolean);
+  const visible = (cardPages[page] ?? []).map(rangeOf).flatMap(({ block, range }) => (blocks[block] ? [{ ...blocks[block], range }] : []));
   const isLastPage = page >= cardPages.length - 1;
   return (
     <div role="dialog" aria-live="polite" aria-label={t("coachReplay.summaryTitle")} className={CARD_CLASS}>
@@ -439,7 +477,7 @@ export function CoachSummaryCard({ summary, pages, onReplay, onDone }: { summary
 
       <div key={page} className={BODY_CLASS}>
         {visible.map((b) => (
-          <SummaryBlockView key={b.id} summary={summary} id={b.id} t={t} />
+          <SummaryBlockView key={b.id} summary={summary} id={b.id} t={t} range={b.range} />
         ))}
       </div>
 

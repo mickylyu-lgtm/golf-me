@@ -126,11 +126,30 @@ export function buildCoachPlan(source: CoachPlanSource, moments: CoachMoment[], 
     const good = pick("good");
     const fix = pick("fix");
     if (!good && !fix) continue;
-    // The analysis's own cue for this moment first; the fixed per-fault
-    // cue is the fallback (old rows, or no usable cue for this moment).
-    checkpoints.push({ ...moment, good: good?.claim, fix: fix?.claim, cue: cues?.[id] ?? fix?.cue ?? good?.cue });
+    checkpoints.push({ ...moment, good: good?.claim, fix: fix?.claim, cue: pickCue(fix, good, cues?.[id]) });
   }
   return { source, checkpoints };
+}
+
+// A measured claim: swingAssessment's pose geometry (already reliability-
+// gated there: tracked joints at a trusted phase, else "unknown" and no
+// finding at all).
+const isMeasured = (claim: CoachClaim | undefined) => !!claim?.source.startsWith("assessment.");
+
+// The cue under a card has to agree with the claim it sits under. The
+// analysis writes checkpoint_cues without seeing what the pose measured, so
+// its cue could coach a different fault than the one on the card (Micky,
+// 2026-11-03: fix the contradiction client-side first). So:
+//   - the fix is a measured fault -> that fault's own fixed cue;
+//   - the fix is the analysis's own text (score reason, work_on, focus) ->
+//     the analysis's cue for this moment, else the fix's own cue;
+//   - no fix, and the "going well" line is measured -> no cue (a cue there
+//     would read as a correction to something we just measured as fine);
+//   - no fix, analysis-sourced "going well" -> the analysis's cue.
+function pickCue(fix: CoachFinding | undefined, good: CoachFinding | undefined, analysisCue: CoachClaim | undefined): CoachClaim | undefined {
+  if (fix) return isMeasured(fix.claim) ? fix.cue : (analysisCue ?? fix.cue);
+  if (isMeasured(good?.claim)) return good?.cue;
+  return analysisCue ?? good?.cue;
 }
 
 // ── V1: Gemini phases + score, swingAssessment's pose geometry ──────────
@@ -179,10 +198,11 @@ const SEGMENT_DESCRIPTION_KEYS: Record<SwingSegmentId, Record<"good" | "needs_im
 };
 // A few-word cue per measured fault. Generic coaching advice keyed off a
 // measured "needs_improvement" verdict, not a claim about the golfer, so a
-// fixed translation is honest here. It is the FALLBACK: when the analysis
-// stored its own cue for that moment (analysis_json.checkpoint_cues, see
-// v1Cues) that wins. Gemini-sourced fixes otherwise get no cue: we don't
-// paraphrase its sentence into one.
+// fixed translation is honest here. A card whose fix is a measured fault
+// always takes this cue, even when the analysis stored one for that moment
+// (analysis_json.checkpoint_cues, see v1Cues and pickCue): the analysis
+// never saw the measurement. Gemini-sourced fixes take the analysis's cue,
+// or none: we don't paraphrase its sentence into one.
 const SEGMENT_CUE_KEYS: Record<SwingSegmentId, TranslationKey> = {
   torso: "coachReplay.cue.torso",
   left_arm: "coachReplay.cue.arm",

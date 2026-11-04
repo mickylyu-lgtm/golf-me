@@ -181,10 +181,13 @@ test("v2Moments: detected high/medium key frames only; an unheld finish is a fol
 
 // ── Server cues (analysis_json.checkpoint_cues) ──────────────────────────
 
-test("server cue wins over the fixed per-fault cue; old rows fall back to it", () => {
+test("a measured fault keeps its own cue, even when the analysis wrote one for that moment", () => {
+  // The contradiction this guards against: the card says the hands stayed
+  // low at the top (measured), the analysis's cue talks about something else.
   const assessment: SwingAssessment = { segments: [seg("wrists", "top", "needs_improvement")] };
-  const withCue = coachPlanFromV1({ phases: phases(), assessment, checkpointCues: { top: "Let the wrists hinge late" } });
-  assert.deepEqual(withCue.checkpoints[0].cue, { body: { kind: "stored", text: "Let the wrists hinge late" }, source: "details.checkpointCues.top" });
+  const withCue = coachPlanFromV1({ phases: phases(), assessment, checkpointCues: { top: "Keep your head still" } });
+  assert.equal(withCue.checkpoints[0].fix?.source, "assessment.wrists");
+  assert.deepEqual(withCue.checkpoints[0].cue, { body: { kind: "key", key: "coachReplay.cue.wrists" }, source: "assessment.wrists" });
 
   const oldRow = coachPlanFromV1({ phases: phases(), assessment });
   assert.deepEqual(oldRow.checkpoints[0].cue?.body, { kind: "key", key: "coachReplay.cue.wrists" });
@@ -193,9 +196,41 @@ test("server cue wins over the fixed per-fault cue; old rows fall back to it", (
   assert.deepEqual(otherMomentOnly.checkpoints[0].cue?.body, { kind: "key", key: "coachReplay.cue.wrists" }, "a cue for another moment doesn't leak");
 });
 
-test("server cue gives a Gemini-only checkpoint a cue it never had", () => {
+test("every measured fault's fixed cue is the one for that fault", () => {
+  const cases: [SwingSegmentAssessment["segment"], SwingSegmentAssessment["anchorPhase"], string][] = [
+    ["torso", "top", "coachReplay.cue.torso"],
+    ["left_arm", "top", "coachReplay.cue.arm"],
+    ["right_arm", "top", "coachReplay.cue.arm"],
+    ["hip_sway", "impact", "coachReplay.cue.hipSway"],
+    ["shoulder_line", "address", "coachReplay.cue.shoulderLine"],
+    ["knees", "address", "coachReplay.cue.knees"],
+    ["wrists", "top", "coachReplay.cue.wrists"],
+  ];
+  for (const [segment, at, key] of cases) {
+    const plan = coachPlanFromV1({ phases: phases(), assessment: { segments: [seg(segment, at, "needs_improvement")] }, checkpointCues: { [at]: "Something else" } });
+    assert.deepEqual(plan.checkpoints[0].cue?.body, { kind: "key", key }, segment);
+  }
+});
+
+test("an analysis-sourced fix takes the analysis's cue", () => {
   const plan = coachPlanFromV1({ phases: phases(), score: score({ downswingSequencing: 5 }), checkpointCues: { impact: "Hips lead, arms follow" } });
   assert.deepEqual(plan.checkpoints.map((c) => [c.id, c.cue?.body]), [["impact", { kind: "stored", text: "Hips lead, arms follow" }]]);
+});
+
+test("a measured fault outranks an analysis fix at the same moment, and so does its cue", () => {
+  const assessment: SwingAssessment = { segments: [seg("hip_sway", "impact", "needs_improvement")] };
+  const plan = coachPlanFromV1({ phases: phases(), assessment, score: score({ downswingSequencing: 5 }), checkpointCues: { impact: "Hips lead, arms follow" } });
+  assert.equal(plan.checkpoints[0].fix?.source, "assessment.hip_sway");
+  assert.deepEqual(plan.checkpoints[0].cue?.body, { kind: "key", key: "coachReplay.cue.hipSway" });
+});
+
+test("no cue under a measured 'going well' line; an analysis 'going well' line keeps the analysis's cue", () => {
+  const measuredGood = coachPlanFromV1({ phases: phases(), assessment: { segments: [seg("knees", "address", "good")] }, checkpointCues: { address: "Flex your knees more" } });
+  assert.equal(measuredGood.checkpoints[0].good?.source, "assessment.knees");
+  assert.equal(measuredGood.checkpoints[0].cue, undefined);
+
+  const scoredGood = coachPlanFromV1({ phases: phases(), score: score({ setupAndPosture: 18 }), checkpointCues: { address: "Same setup every time" } });
+  assert.deepEqual(scoredGood.checkpoints[0].cue?.body, { kind: "stored", text: "Same setup every time" });
 });
 
 test("V1 finish checkpoint takes the follow_through cue", () => {
