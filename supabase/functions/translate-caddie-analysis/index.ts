@@ -152,8 +152,12 @@ Deno.serve(async (req: Request) => {
   const localeName = LOCALE_NAMES[body.locale];
 
   // RLS (owner-only select on caddie_analyses) already scopes this to the
-  // caller's own row — no separate ownership check needed.
-  const { data: row, error: fetchError } = await supabase.from("caddie_analyses").select("*").eq("id", body.analysisId).single();
+  // caller's own row — no separate ownership check needed. Light columns
+  // only: roboflow_analysis_json (the pose frames, often megabytes) was
+  // read and sent back on every translation, which made it slow (Micky,
+  // 2026-11-04: "the translation is so slow"). It's fetched below only
+  // when the measured-verdict check actually needs it.
+  const { data: row, error: fetchError } = await supabase.from("caddie_analyses").select("id, status, analysis_json, updated_at").eq("id", body.analysisId).single();
   if (fetchError || !row) return jsonResponse({ error: "Analysis not found." }, 404);
   if (row.status !== "complete" || !row.analysis_json) {
     return jsonResponse({ error: "This analysis isn't ready to translate yet." }, 400);
@@ -178,8 +182,19 @@ Deno.serve(async (req: Request) => {
     ...(sourceCues ? { checkpoint_cues: sourceCues } : {}),
   };
 
-  try {
-    const genRes = await fetch(`${GEMINI_API_BASE}/v1beta/models/${GEMINI_MODEL}:generateContent?key=${geminiApiKey}`, {
+  // The measured-verdict check needs the pose frames, but rows analyzed
+  // since that check shipped (they record `language`) already went through
+  // it in analyze-swing, so only older rows with cues fetch them.
+  const needsPoseForCueCheck = sourceCues !== null && sourceCues !== undefined && typeof source.language !== "string";
+  const posePromise = needsPoseForCueCheck
+    ? supabase.from("caddie_analyses").select("roboflow_analysis_json").eq("id", row.id).single().then((r) => r.data?.roboflow_analysis_json ?? null)
+    : Promise.resolve(null);
+
+  // A translation needs no deliberation: minimal thinking is much faster
+  // than the model's default (medium). If the API ever rejects the setting,
+  // retry once without it rather than failing the translation.
+  const geminiRequest = (thinking: boolean) =>
+    fetch(`${GEMINI_API_BASE}/v1beta/models/${GEMINI_MODEL}:generateContent?key=${geminiApiKey}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -191,9 +206,22 @@ Deno.serve(async (req: Request) => {
           ],
         },
         contents: [{ role: "user", parts: [{ text: `Translate this JSON's free-text fields into ${localeName}: ${JSON.stringify(translationInput)}` }] }],
-        generationConfig: { temperature: 0.2, responseMimeType: "application/json", responseSchema: buildTranslationSchema(localeName) },
+        generationConfig: {
+          temperature: 0.2,
+          responseMimeType: "application/json",
+          responseSchema: buildTranslationSchema(localeName),
+          ...(thinking ? { thinkingConfig: { thinkingLevel: "minimal" } } : {}),
+        },
       }),
     });
+
+  try {
+    let genRes = await geminiRequest(true);
+    if (genRes.status === 400) {
+      const errBody = await genRes.text().catch(() => "");
+      console.error("[translate-caddie-analysis] Gemini rejected minimal thinking; retrying without it.", { body: errBody.slice(0, 300) });
+      genRes = await geminiRequest(false);
+    }
     if (!genRes.ok) {
       const errBody = await genRes.text().catch(() => "");
       console.error("[translate-caddie-analysis] Gemini call failed.", { status: genRes.status, body: errBody.slice(0, 500) });
@@ -245,7 +273,7 @@ Deno.serve(async (req: Request) => {
       // The prose is now in this locale (see analyze-swing: the client
       // offers a translation when this differs from the app's language).
       language: body.locale,
-    }), row.roboflow_analysis_json);
+    }), await posePromise);
 
     const { data: updated, error: updateError } = await supabase
       .from("caddie_analyses")
@@ -258,7 +286,10 @@ Deno.serve(async (req: Request) => {
         drills: translated.drill?.name ? [translated.drill.name] : [],
       })
       .eq("id", row.id)
-      .select()
+      // The same columns the app's Caddie list reads (no pose frames).
+      .select(
+        "id, owner_id, source_type, source_post_id, source_media_url, thumbnail_url, source_media_path, thumbnail_path, swing_type, status, analysis_summary, strengths, issues, recommendations, drills, analysis_json, camera_angle, score, model, error_message, shared_to_community, created_at, updated_at",
+      )
       .single();
     if (updateError || !updated) {
       console.error("[translate-caddie-analysis] save failed.", { rowId: row.id, reason: updateError?.message });

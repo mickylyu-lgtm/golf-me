@@ -569,6 +569,16 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
     }
     const row = (data as { analysis: CaddieAnalysisRow }).analysis;
     cachePoseFromFullRow(row);
+    // The function now returns the light row (no pose frames). A
+    // translation never changes the pose, so the frames already cached for
+    // this analysis stay valid for its new updated_at instead of being
+    // downloaded again.
+    if (row.roboflow_analysis_json === undefined) {
+      setPoseCache((prev) => {
+        const cached = prev.get(row.id);
+        return cached ? new Map(prev).set(row.id, { ...cached, updatedAt: row.updated_at }) : prev;
+      });
+    }
     setRows((prev) => prev.map((r) => (r.id === row.id ? row : r)));
   }, [cachePoseFromFullRow]);
 
