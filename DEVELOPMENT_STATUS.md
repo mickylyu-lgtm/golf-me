@@ -6,6 +6,14 @@ Last updated: 2026-11-03 (Coach Replay "what to work on" on branch feat/coach-re
 
 Note: Phases between Phase 20/21 (see below) and Phase 22 span roughly 31 commits (2026-09-16 through 2026-09-21) that also never got a numbered write-up as they landed — Phase 22 below reconstructs them from `git log`/code review (that session's own commit messages are unusually detailed, so this is a faithful summary, not a guess) rather than live session narration. Older gap, still not backfilled: Phases between Phase 6 and Phase 20 (chat keyboard/Capacitor Keyboard native linking, floating swipeable BottomNav + auto-collapse + centering fixes, tee-time booking fallback hero image, and everything else through 2026-09-15) — see `git log` for that range (commits from "Prefer GolfCourseAPI v1.1 coordinates..." through "Floating pill bottom nav with press-and-slide tab selection, haptics, Caddie unify").
 
+## CI on GitHub Actions — 2026-11-03 (branch `chore/ci`, based on `fix/signin-support`; not pushed)
+
+Micky's priorities plan, item H ("lint, type checks, tests and build on pushes... keep it separate from deployment").
+- `.github/workflows/ci.yml`: on pushes to main and on pull requests — `npm ci`, `npx tsc -b`, `npm run lint`, `node --test tests/*.test.ts supabase/functions/_shared/*.test.ts` (every test file, so one left out of a `test:*` script still runs), `npm run build`. Node 24 (needed for `node --test` type stripping), npm cache, `contents: read` only, checkout without persisted credentials, 15-min timeout, superseded runs cancelled.
+- No secrets, no deploy, no Supabase. The only env values are dummy placeholders (`VITE_SUPABASE_URL=http://127.0.0.1:9`) so the build and landing prerender run. Test fixtures must stay synthetic (no real swing videos, user data or keys).
+- Checked locally: lockfile root deps match package.json (npm ci would pass), all 220 tests pass with the CI command, tsc/lint/build pass. Not yet run on GitHub: it starts with the first push, which needs Micky's OK (and a token with the `workflow` scope).
+- Not included: the Review Gate / telegram-inbox tool tests (dev tooling; the gate copy in the repo is older than the live one), Caddie real-output fixtures (wait for E/F, which changes the analysis shape).
+
 ## Caddie cue consistency + oversized findings — 2026-11-03 (branch `fix/signin-support`; not deployed)
 
 Micky's priorities plan, items B + D (client only; E, server-side verdict alignment, stays later).
