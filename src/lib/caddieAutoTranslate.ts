@@ -29,6 +29,24 @@ export function queueTranslation(analysisId: string, job: () => Promise<void>): 
   return next;
 }
 
+// One automatic translation as a queued job: skipped when the app has moved
+// to another language before its turn (the last pick wins), otherwise
+// translated. Resolves "translated" or "skipped"; rejects with the
+// translation's own error.
+export function queueAutoTranslation(
+  analysisId: string,
+  target: string,
+  currentLocale: () => string,
+  translate: (analysisId: string, locale: string) => Promise<void>,
+): Promise<"translated" | "skipped"> {
+  let outcome: "translated" | "skipped" = "skipped";
+  return queueTranslation(analysisId, async () => {
+    if (currentLocale() !== target) return;
+    await translate(analysisId, target);
+    outcome = "translated";
+  }).then(() => outcome);
+}
+
 export function isTranslationRunning(analysisId: string): boolean {
   return running.has(analysisId);
 }
