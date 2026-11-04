@@ -52,6 +52,11 @@ export function EditMatchPreferencesSheet({ onClose }: { onClose: () => void }) 
           {saving ? t("preferences.saving") : t("common.saveChanges")}
         </Button>
       }
+      // The panel's course search is a text field: the sheet sits on top of
+      // the iOS keyboard and keeps the focused field visible in its own
+      // scroller (and locks the page behind it) instead of letting iOS pan
+      // the whole screen.
+      keyboardAware
     >
       <MatchPreferencesPanel
         value={draft}
