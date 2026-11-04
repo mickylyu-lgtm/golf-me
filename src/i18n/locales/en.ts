@@ -238,6 +238,7 @@ export const en = {
   "caddie.scoreFinish": "Finish",
   "caddie.translateTo": "Translate to {language}",
   "caddie.translating": "Translating...",
+  "caddie.feedbackLanguageNotice": "This feedback is in {language}.",
   "caddie.replayOriginal": "Original",
   "caddie.replaySlowAnalysis": "Slow Mode",
   "swingAssessment.summaryTitle": "Swing Check",

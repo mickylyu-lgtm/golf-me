@@ -7,6 +7,7 @@ import type { SignedUrlEntry } from "../lib/caddieMedia";
 import { CaddieRequestError, isStaleProcessing } from "../lib/caddieAnalysis";
 import { FAILURE_BODY_KEYS, parseCaddieFailure } from "../lib/caddieFailure";
 import { checkpointCuesFromJson } from "../lib/coachReplay";
+import { analysisLanguageFromJson } from "../lib/caddieLanguage";
 import { sanitizeWorkOnCheckpoint } from "../../supabase/functions/_shared/caddieCues.ts";
 import { phasesFromJson, poseDataFromJson } from "../../supabase/functions/_shared/caddieVerdicts.ts";
 import { useAuth } from "./AuthContext";
@@ -98,6 +99,7 @@ function jsonToDetails(json: Record<string, unknown> | null, scoreTotal: number 
     limitations: Array.isArray(json.limitations) ? (json.limitations as string[]) : [],
     phases: phasesFromJson(json.phases),
     checkpointCues: checkpointCuesFromJson(json.checkpoint_cues),
+    language: analysisLanguageFromJson(json.language),
     score: jsonToScore(json.score, scoreTotal),
   };
 }

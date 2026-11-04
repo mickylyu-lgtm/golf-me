@@ -228,6 +228,7 @@ export const ja: Record<TranslationKey, string> = {
   "caddie.scoreFinish": "フィニッシュ",
   "caddie.translateTo": "{language}に翻訳",
   "caddie.translating": "翻訳中...",
+  "caddie.feedbackLanguageNotice": "このフィードバックは{language}で書かれています。",
   "caddie.replayOriginal": "オリジナル",
   "caddie.replaySlowAnalysis": "スローモード",
   "swingAssessment.summaryTitle": "スイングチェック",

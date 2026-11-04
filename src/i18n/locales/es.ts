@@ -228,6 +228,7 @@ export const es: Record<TranslationKey, string> = {
   "caddie.scoreFinish": "Finalización",
   "caddie.translateTo": "Traducir a {language}",
   "caddie.translating": "Traduciendo...",
+  "caddie.feedbackLanguageNotice": "Estos comentarios están en {language}.",
   "caddie.replayOriginal": "Original",
   "caddie.replaySlowAnalysis": "Modo lento",
   "swingAssessment.summaryTitle": "Revisión del swing",

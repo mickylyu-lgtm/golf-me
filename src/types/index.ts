@@ -515,7 +515,13 @@ export interface CaddieAnalysisDetails {
   // sanitized server-side and again on read). Undefined for analyses from
   // before cues shipped, or when Gemini wrote none worth keeping.
   checkpointCues?: CaddieCheckpointCues;
+  // The locale the free text was written in (analysis_json.language, set by
+  // analyze-swing and updated by translate-caddie-analysis). Undefined for
+  // older rows, which never guess one.
+  language?: CaddieAnalysisLanguage;
 }
+
+export type CaddieAnalysisLanguage = "en" | "zh-CN" | "zh-TW" | "es" | "ko" | "ja";
 
 export interface CaddieCheckpointCues {
   address?: string;

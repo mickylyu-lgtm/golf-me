@@ -1140,11 +1140,15 @@ Deno.serve(async (req: Request) => {
     // Then the measured-verdict check (_shared/caddieVerdicts.ts): Gemini
     // wrote its cues without seeing what the pose measurement finds, so a
     // cue that coaches a different body part than a measured fault at the
-    // same moment is dropped (never rewritten).
-    const { json: analysisJson, dropped: droppedCues } = withMeasuredCueCheck(
+    // same moment is dropped (never rewritten). `language` records the
+    // locale this text was requested in, so the client can offer a
+    // translation when the app's language differs (translate-caddie-
+    // analysis updates it). Rows from before this have no field.
+    const { json: checkedJson, dropped: droppedCues } = withMeasuredCueCheck(
       withSanitizedWorkOnCheckpoints(withSanitizedCheckpointCues(parsed as unknown as Record<string, unknown>)),
       trustedPoseData,
     );
+    const analysisJson = { ...checkedJson, language: locale };
     devLog("checkpoint cues", { kept: Object.keys((analysisJson.checkpoint_cues as Record<string, string> | undefined) ?? {}), droppedByMeasurement: droppedCues });
 
     if (settled) return;
