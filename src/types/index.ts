@@ -365,6 +365,9 @@ export interface DirectMessage {
   // by the database). Absent/null for a normal message, and set back to null
   // by the database if the quoted message is ever deleted.
   replyToId?: string | null;
+  // Unsend (lib/unsend.ts): set when the sender unsent it; the text is then
+  // empty (wiped by the database for real accounts).
+  unsentAt?: string | null;
 }
 
 // Per-user "last read" marker for a conversation, used only to compute

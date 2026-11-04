@@ -49,6 +49,8 @@ import { useRealCommunity } from "./RealCommunityContext";
 import { useRealCaddie } from "./RealCaddieContext";
 import type { CreateAnalysisInput } from "./RealCaddieContext";
 import { buildDemoCaddieAnalyses } from "../data/caddie";
+import { canUnsendMessage } from "../lib/unsend";
+import type { UnsendResult } from "../lib/unsend";
 
 export interface DraftSwingVideo {
   file: File;
@@ -237,6 +239,10 @@ interface DataContextValue {
   // only once the database has messages.reply_to_message_id (see
   // RealSocialContext.repliesSupported).
   canReplyToMessages: boolean;
+  // Unsend within 5 minutes (lib/unsend.ts): always in demo; for real
+  // accounts once the unsend migration is applied.
+  canUnsendMessages: boolean;
+  unsendDirectMessage: (messageId: string) => Promise<UnsendResult>;
   markConversationRead: (golferId: string) => Promise<void>;
   clearChatHistory: (golferId: string) => Promise<void>;
   deleteConversation: (golferId: string) => Promise<void>;
@@ -1136,6 +1142,26 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const canReplyToMessages = auth.isDemo || realSocial.repliesSupported;
 
+  const canUnsendMessages = auth.isDemo || realSocial.unsendSupported;
+  // Demo: same rule as the database (own message, within the window), on
+  // the localStorage copy; the text is wiped there too.
+  const unsendDirectMessage = useCallback(
+    async (messageId: string): Promise<UnsendResult> => {
+      if (!auth.isDemo) return realSocial.unsendDirectMessage(messageId);
+      const target = data.directMessages.find((m) => m.id === messageId);
+      if (!target || target.senderId !== currentUser.id) return "failed";
+      if (target.unsentAt) return "unsent";
+      if (!canUnsendMessage(target, currentUser.id, Date.now())) return "expired";
+      const unsentAt = new Date().toISOString();
+      setData((prev) => ({
+        ...prev,
+        directMessages: prev.directMessages.map((m) => (m.id === messageId ? { ...m, text: "", unsentAt } : m)),
+      }));
+      return "unsent";
+    },
+    [auth.isDemo, realSocial, data.directMessages, currentUser.id],
+  );
+
   // Demo accounts have no real second person who could be typing -- always
   // false/no-op rather than simulating a fake typing partner.
   const isOtherTyping = useCallback((golferId: string) => (auth.isDemo ? false : realSocial.isOtherTyping(golferId)), [auth.isDemo, realSocial]);
@@ -1768,6 +1794,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       messagesWithGolfer,
       sendDirectMessage,
       canReplyToMessages,
+      canUnsendMessages,
+      unsendDirectMessage,
       markConversationRead,
       clearChatHistory,
       deleteConversation,
@@ -1864,6 +1892,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       messagesWithGolfer,
       sendDirectMessage,
       canReplyToMessages,
+      canUnsendMessages,
+      unsendDirectMessage,
       markConversationRead,
       clearChatHistory,
       deleteConversation,

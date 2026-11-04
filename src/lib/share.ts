@@ -32,7 +32,7 @@ export async function shareOrCopy(payload: SharePayload): Promise<ShareOutcome> 
   return (await copyText(`${payload.text} ${payload.url}`.trim())) ? "copied" : "failed";
 }
 
-async function copyText(text: string): Promise<boolean> {
+export async function copyText(text: string): Promise<boolean> {
   try {
     if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(text);

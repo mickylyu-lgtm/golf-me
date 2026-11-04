@@ -11,6 +11,9 @@ import type { GolferProfile, AppNotification, DirectMessage, NotificationType, R
 import type { DmConversation } from "./DataContext";
 import { isMissingColumnError, reportRow } from "../lib/reportRow";
 import type { ReportTarget } from "../lib/reportRow";
+import { reconcilePendingDms } from "../lib/dmPending";
+import { classifyUnsendError } from "../lib/unsend";
+import type { UnsendResult } from "../lib/unsend";
 
 interface ConversationParticipantRow {
   conversation_id: string;
@@ -30,6 +33,9 @@ interface MessageRow {
   // applied (select("*") then returns it, null or not). Its presence on
   // fetched rows is how repliesSupported below detects the column.
   reply_to_message_id?: string | null;
+  // Only present once migration 20261105120000_add_dm_unsend is applied;
+  // its presence is how unsendSupported detects the feature.
+  unsent_at?: string | null;
 }
 
 // A message this client just sent, rendered before the server round trip
@@ -44,6 +50,10 @@ interface PendingMessage {
   text: string;
   created_at: string;
   reply_to_message_id: string | null;
+  // Set when the insert succeeds (lib/dmPending.ts): the pending bubble is
+  // then matched to its real row by this id, not by text and clock.
+  sent?: boolean;
+  serverId?: string;
 }
 
 interface BlockRow {
@@ -105,6 +115,10 @@ interface RealSocialContextValue {
   // the reply migration is applied (and until any message row has loaded to
   // prove it), so swipe-to-reply is simply not offered on an older schema.
   repliesSupported: boolean;
+  // Unsend within 5 minutes (lib/unsend.ts, public.unsend_message). False
+  // until the unsend migration is applied and a row has proved it.
+  unsendSupported: boolean;
+  unsendDirectMessage: (messageId: string) => Promise<UnsendResult>;
   markConversationRead: (otherId: string) => Promise<void>;
   clearChatHistory: (otherId: string) => Promise<void>;
   deleteConversation: (otherId: string) => Promise<void>;
@@ -140,6 +154,7 @@ function messageRowToDirectMessage(row: MessageRow): DirectMessage {
     text: row.text,
     createdAt: row.created_at,
     replyToId: row.reply_to_message_id ?? null,
+    unsentAt: row.unsent_at ?? null,
   };
 }
 
@@ -493,9 +508,12 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       .channel("social-realtime")
       // A deleted message (e.g. the other account was deleted and its
       // messages cascaded away) can't be picked up by the incremental
-      // new-messages fetch, so DELETE forces the full window.
+      // new-messages fetch, so DELETE forces the full window. So does
+      // UPDATE: the only one is an unsend (public.unsend_message wipes the
+      // text of an existing row), which the new-rows-only incremental fetch
+      // would never pick up.
       .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, (payload) =>
-        refetch(payload.eventType === "DELETE" ? { full: true } : undefined),
+        refetch(payload.eventType === "DELETE" || payload.eventType === "UPDATE" ? { full: true } : undefined),
       )
       .on("postgres_changes", { event: "*", schema: "public", table: "notifications" }, () => refetch())
       .on("postgres_changes", { event: "*", schema: "public", table: "blocks" }, () => refetch())
@@ -599,22 +617,16 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
   const allProfiles = useMemo(() => Array.from(profileCache.values()), [profileCache]);
 
   // Drops a pending (optimistic) message once the realtime-driven refetch
-  // above brings in the real row it corresponds to -- matched by
-  // conversation + sender + exact text, canonical row created no earlier
-  // than the pending entry's own local timestamp. This is what prevents the
-  // optimistic render and the realtime-delivered row from both staying on
-  // screen as two separate bubbles.
+  // above brings in the real row it corresponds to -- by the row id the
+  // insert returned (lib/dmPending.ts; the old text + client-clock match
+  // left a second bubble whenever the phone's clock ran ahead of the
+  // server). visiblePending applies the same rule at render time, so there
+  // is never a frame with both bubbles once the id is known.
   useEffect(() => {
     if (pendingMessages.length === 0) return;
-    setPendingMessages((prevPending) =>
-      prevPending.filter(
-        (p) =>
-          !messages.some(
-            (m) => m.conversation_id === p.conversation_id && m.sender_id === p.sender_id && m.text === p.text && m.created_at >= p.created_at,
-          ),
-      ),
-    );
-  }, [messages, pendingMessages.length]);
+    setPendingMessages((prevPending) => reconcilePendingDms(prevPending, messages));
+  }, [messages, pendingMessages]);
+  const visiblePending = useMemo(() => reconcilePendingDms(pendingMessages, messages), [pendingMessages, messages]);
 
   const blockedIds = useMemo(() => (selfId ? blocks.filter((b) => b.blocker_id === selfId).map((b) => b.blocked_id) : []), [blocks, selfId]);
   const blockedByIds = useMemo(() => (selfId ? blocks.filter((b) => b.blocked_id === selfId).map((b) => b.blocker_id) : []), [blocks, selfId]);
@@ -700,11 +712,14 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       // -- a brand-new conversation's very first message is sent before
       // conversation_participants has been refetched, so conversationIdWith
       // can't resolve it yet. Matching on otherId works regardless.
-      const pending = pendingMessages
+      const pending = visiblePending
         .filter((p) => p.otherId === otherId)
         .map(
           (p): MessageRow => ({
-            id: p.tempId,
+            // The real id once the insert returned it: the bubble keeps its
+            // React key when the real row replaces it, and swipe-to-reply
+            // on a just-sent message quotes a real message id.
+            id: p.serverId ?? p.tempId,
             conversation_id: p.conversation_id,
             sender_id: p.sender_id,
             text: p.text,
@@ -714,7 +729,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
         );
       return [...canonical, ...pending].sort((a, b) => a.created_at.localeCompare(b.created_at)).map(messageRowToDirectMessage);
     },
-    [conversationIdWith, messages, pendingMessages],
+    [conversationIdWith, messages, visiblePending],
   );
 
   const isOtherTyping = useCallback(
@@ -785,12 +800,16 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
         sender_id: selfId,
         text: trimmed,
       };
-      let { error } = await supabase.from("messages").insert(replyTo ? { ...row, reply_to_message_id: replyTo } : row);
+      // .select("id"): the insert returns its row id, which is what the
+      // pending bubble is reconciled by (lib/dmPending.ts). Readable under
+      // messages_select_participant (the sender is a participant).
+      const insert = (values: typeof row) => supabase.from("messages").insert(values).select("id").maybeSingle();
+      let { data, error } = await insert(replyTo ? { ...row, reply_to_message_id: replyTo } : row);
       if (error && replyTo && isMissingReplyColumnError(error)) {
         // The column isn't there after all: send it as a plain message.
         setReplyColumnMissing(true);
         setPendingMessages((prev) => prev.map((p) => (p.tempId === tempId ? { ...p, reply_to_message_id: null } : p)));
-        ({ error } = await supabase.from("messages").insert(row));
+        ({ data, error } = await insert(row));
       }
       if (error) {
         setPendingMessages((prev) => prev.filter((p) => p.tempId !== tempId));
@@ -798,9 +817,35 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
         console.error("GolfMe: failed to send message.", error);
         return "failed";
       }
+      const serverId = (data as { id?: string } | null)?.id;
+      setPendingMessages((prev) => prev.map((p) => (p.tempId === tempId ? { ...p, sent: true, serverId } : p)));
       return "sent";
     },
     [selfId, canMessage, repliesSupported],
+  );
+
+  // Unsend (migration 20261105120000_add_dm_unsend): detected like replies,
+  // from the column's presence on fetched rows. The server enforces sender
+  // + 5-minute window and wipes the text; the realtime UPDATE then brings
+  // the wiped row to both devices (full refetch, see the channel above).
+  const unsendSupported = useMemo(() => messages.some((m) => Object.prototype.hasOwnProperty.call(m, "unsent_at")), [messages]);
+  const unsendDirectMessage = useCallback(
+    async (messageId: string): Promise<UnsendResult> => {
+      if (!selfId) return "failed";
+      const { error } = await supabase.rpc("unsend_message", { p_message_id: messageId });
+      if (error) {
+        const result = classifyUnsendError(error);
+        if (result === "failed") console.error("GolfMe: failed to unsend message.", error);
+        return result;
+      }
+      // Don't wait for the realtime echo to update this device.
+      const unsentAt = new Date().toISOString();
+      const next = messagesRef.current.map((m) => (m.id === messageId ? { ...m, text: "", unsent_at: m.unsent_at ?? unsentAt } : m));
+      messagesRef.current = next;
+      setMessages(next);
+      return "unsent";
+    },
+    [selfId],
   );
 
   const markConversationRead = useCallback(
@@ -884,10 +929,10 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     // list yet regardless -- conversation_participants hasn't been fetched
     // for it, so there's no otherGolfer/otherParticipant to build a
     // DmConversation row from until the next refetch.
-    for (const p of pendingMessages) {
+    for (const p of visiblePending) {
       if (!myConvIds.has(p.conversation_id)) continue;
       const row: MessageRow = {
-        id: p.tempId,
+        id: p.serverId ?? p.tempId,
         conversation_id: p.conversation_id,
         sender_id: p.sender_id,
         text: p.text,
@@ -916,7 +961,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       result.push({ conversationId, otherGolfer, lastMessage: messageRowToDirectMessage(lastMessageRow), unread });
     }
     return result.sort((a, b) => b.lastMessage.createdAt.localeCompare(a.lastMessage.createdAt));
-  }, [participants, messages, pendingMessages, profilesById, selfId, blockedIds, blockedByIds]);
+  }, [participants, messages, visiblePending, profilesById, selfId, blockedIds, blockedByIds]);
 
   const hasUnreadMessages = useMemo(() => dmConversations.some((c) => c.unread), [dmConversations]);
 
@@ -987,6 +1032,8 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       messagesWithGolfer,
       sendDirectMessage,
       repliesSupported,
+      unsendSupported,
+      unsendDirectMessage,
       markConversationRead,
       clearChatHistory,
       deleteConversation,
@@ -1021,6 +1068,8 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       messagesWithGolfer,
       sendDirectMessage,
       repliesSupported,
+      unsendSupported,
+      unsendDirectMessage,
       markConversationRead,
       clearChatHistory,
       deleteConversation,

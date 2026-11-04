@@ -148,6 +148,15 @@ function fakeNativeBridge() {
     },
     log: () => state.log.slice(),
   };
+}
+
+// Probe helpers, injected after either fake (they read window.__kb).
+function probeHelpers() {
+  const state = {
+    get height() {
+      return window.__kb.height;
+    },
+  };
   const describe = (el) => {
     if (!el || el === document.body) return null;
     const bits = [el.tagName.toLowerCase()];
@@ -163,6 +172,8 @@ function fakeNativeBridge() {
       const r = el.getBoundingClientRect();
       if (r.width === 0 && r.height === 0) return false;
       if (r.right <= 0 || r.left >= window.innerWidth) return false;
+      // (ChatComposer's measuring mirror is an invisible, aria-hidden textarea.)
+      if (getComputedStyle(el).visibility === "hidden") return false;
       return !el.closest('[aria-hidden="true"], [inert]');
     };
     const all = Array.from(document.querySelectorAll(selector)).filter((el) => !text || new RegExp(text, "i").test((el.getAttribute("aria-label") || "") + " " + (el.textContent || "")));
@@ -200,6 +211,58 @@ function fakeNativeBridge() {
       sheetOverlayPaddingBottom: dialog ? dialog.parentElement?.style.paddingBottom || "0" : null,
       listeners: window.__kb.listenerCounts(),
     };
+  };
+}
+
+// ---------------------------------------------------------------------------
+// --web: iPhone Safari instead of the native app. No Capacitor bridge (so
+// Capacitor.isNativePlatform() is false and the Keyboard plugin never
+// fires); window.visualViewport is replaced by a fake whose height __kb
+// drives, the way Safari shrinks the visual viewport (and NOT
+// window.innerHeight) for its keyboard. __kb.show(h) also does a crude
+// Safari focus pan: if the focused field's bottom is below the visible
+// area, the page is scrolled by the difference. Same __kb / __kbProbe API.
+function fakeSafariViewport() {
+  const state = { height: 0, log: [] };
+  const vv = new EventTarget();
+  const props = {
+    width: () => window.innerWidth,
+    height: () => window.innerHeight - state.height,
+    offsetTop: () => 0,
+    offsetLeft: () => 0,
+    pageTop: () => window.scrollY,
+    pageLeft: () => window.scrollX,
+    scale: () => 1,
+  };
+  for (const [name, get] of Object.entries(props)) Object.defineProperty(vv, name, { get, enumerable: true });
+  Object.defineProperty(window, "visualViewport", { configurable: true, get: () => vv });
+  const fire = (name) => {
+    state.log.push(name);
+    vv.dispatchEvent(new Event(name));
+  };
+  const pan = () => {
+    const el = document.activeElement;
+    if (!el || el === document.body) return;
+    const visibleBottom = window.innerHeight - state.height;
+    const over = el.getBoundingClientRect().bottom - visibleBottom;
+    if (over > 0) window.scrollBy(0, Math.ceil(over));
+    fire("scroll");
+  };
+  window.__kb = {
+    get height() {
+      return state.height;
+    },
+    show(h) {
+      state.height = h;
+      pan();
+      fire("resize");
+    },
+    hide() {
+      state.height = 0;
+      fire("resize");
+    },
+    listenerCounts: () => ({}),
+    log: () => state.log.slice(),
   };
 }
 
@@ -258,6 +321,192 @@ async function openHostForm(page, base) {
   await page.evaluate(() => window.scrollTo(0, 0));
 }
 
+// ---------------------------------------------------------------------------
+// Composer-growth checks (dm-composer, roundchat-composer). The demo thread
+// gets enough seeded messages to overflow its list, then the composer is
+// typed into with the keyboard up while a per-frame sampler records, for
+// every frame of each step: the composer's bottom vs the keyboard top, the
+// page header's top, window.scrollY, and the message list's distance from
+// its bottom (scrollHeight - scrollTop - clientHeight; 0 = pinned).
+async function seedThread(page, kind) {
+  const changed = await page.evaluate((k) => {
+    const KEY = "golfme:data:v8";
+    const data = JSON.parse(window.localStorage.getItem(KEY) || "null");
+    if (!data) return false;
+    const now = Date.now();
+    const filler = (i) => `Seeded message ${i}: ${"tee times and pace of play ".repeat(1 + (i % 3))}`.trim();
+    if (k === "dm") {
+      const conv = "g1__g11"; // lib/dm.ts dmConversationId("g1", "g11")
+      const mine = data.directMessages.filter((m) => m.conversationId === conv);
+      if (mine.length >= 20) return false;
+      for (let i = 0; i < 30; i++) {
+        data.directMessages.push({ id: `seed-dm-${i}`, conversationId: conv, senderId: i % 2 ? "g1" : "g11", text: filler(i), createdAt: new Date(now - (40 - i) * 60_000).toISOString(), replyToId: null });
+      }
+    } else {
+      const mine = data.messages.filter((m) => m.golfCallId === "call-7");
+      if (mine.length >= 20) return false;
+      for (let i = 0; i < 30; i++) {
+        data.messages.push({ id: `seed-rc-${i}`, golfCallId: "call-7", senderId: i % 2 ? "g1" : "g3", text: filler(i), createdAt: new Date(now - (40 - i) * 60_000).toISOString() });
+      }
+    }
+    window.localStorage.setItem(KEY, JSON.stringify(data));
+    return true;
+  }, kind);
+  if (changed) {
+    await page.reload({ waitUntil: "load" });
+    await settle(page, 1200);
+  }
+}
+
+async function samplerStart(page, cfg) {
+  await page.evaluate((c) => {
+    const pick = (s) => window.__kbPick(s);
+    const agg = {};
+    const add = (k, v) => {
+      if (v === null || v === undefined || Number.isNaN(v)) return;
+      const a = (agg[k] ??= { min: v, max: v });
+      a.min = Math.min(a.min, v);
+      a.max = Math.max(a.max, v);
+    };
+    let frames = 0;
+    const sample = () => {
+      const ta = pick(c.textarea);
+      const list = pick(c.list);
+      const header = pick(c.header);
+      const kbTop = window.innerHeight - window.__kb.height;
+      if (ta) {
+        const comp = ta.parentElement.getBoundingClientRect();
+        add("composerBottomMinusKbTop", Math.round(comp.bottom - kbTop));
+        add("composerTop", Math.round(comp.top));
+        add("textareaH", Math.round(ta.getBoundingClientRect().height));
+      }
+      if (header) add("headerTop", Math.round(header.getBoundingClientRect().top));
+      add("scrollY", Math.round(window.scrollY));
+      if (list) {
+        add("listDistFromBottom", Math.round(list.scrollHeight - list.scrollTop - list.clientHeight));
+        add("listScrollTop", Math.round(list.scrollTop));
+      }
+      frames++;
+    };
+    // Once per frame, at the state that frame PAINTS: a fresh
+    // ResizeObserver made in the frame's rAF delivers its first callback
+    // after that frame's layout, and after every older observer's callback
+    // (the app's own list re-pin included), i.e. right before paint. A
+    // plain rAF sample would read the pre-layout state instead.
+    let raf = 0;
+    const loop = () => {
+      const ro = new ResizeObserver(() => {
+        ro.disconnect();
+        sample();
+      });
+      ro.observe(document.documentElement);
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    window.__sampler = {
+      stop() {
+        cancelAnimationFrame(raf);
+        sample();
+        return { frames, ...agg };
+      },
+    };
+  }, cfg);
+}
+const samplerStop = (page) => page.evaluate(() => window.__sampler.stop());
+
+async function clearComposer(page) {
+  await page.keyboard.press("Control+A");
+  await page.keyboard.press("Backspace");
+  await frames(page, 2);
+}
+
+async function typeLines(page, lines) {
+  for (let i = 0; i < lines.length; i++) {
+    if (i > 0) await page.keyboard.press("Shift+Enter");
+    await page.keyboard.type(lines[i]);
+  }
+}
+
+const LONG_LINE = "Meet at the first tee at 7:40 please";
+const linesOf = (n) => Array.from({ length: n }, (_, i) => `${i + 1}. ${LONG_LINE}`);
+const PASTE_TEXT = Array.from({ length: 14 }, (_, i) => `Paragraph ${i + 1} of a pasted note about the round, the course and the plan.`).join("\n");
+
+async function composerScenario(page, kb, shot, cfg) {
+  const step = async (name, fn) => {
+    await samplerStart(page, cfg);
+    await fn();
+    await settle(page, 350);
+    const r = await samplerStop(page);
+    const final = await page.evaluate((c) => {
+      const ta = window.__kbPick(c.textarea);
+      const list = window.__kbPick(c.list);
+      return {
+        valueLength: ta ? ta.value.length : null,
+        selection: ta ? [ta.selectionStart, ta.selectionEnd] : null,
+        focused: document.activeElement === ta,
+        textareaScrollTop: ta ? Math.round(ta.scrollTop) : null,
+        listDist: list ? Math.round(list.scrollHeight - list.scrollTop - list.clientHeight) : null,
+        listScrollTop: list ? Math.round(list.scrollTop) : null,
+      };
+    }, cfg);
+    results[name] = { ...r, final };
+  };
+  const results = {};
+  await focus(page, cfg.textarea);
+  await kbShow(page, kb);
+  await settle(page);
+  results.open = await probe(page, cfg.textarea);
+  await step("short", () => page.keyboard.type("Hello there"));
+  await clearComposer(page);
+  await step("lines2", () => typeLines(page, linesOf(2)));
+  await clearComposer(page);
+  await step("lines5", () => typeLines(page, linesOf(5)));
+  await clearComposer(page);
+  await step("lines8", () => typeLines(page, linesOf(8)));
+  await shot("8lines");
+  // Edit in the middle of a capped (scrolling) draft: the caret line must
+  // stay where it is, not jump to the textarea's top/bottom.
+  await step("edit-middle", async () => {
+    await page.evaluate((s) => {
+      const ta = window.__kbPick(s);
+      ta.setSelectionRange(60, 60);
+    }, cfg.textarea);
+    await page.keyboard.type("abc");
+  });
+  await clearComposer(page);
+  await step("rapid-type-delete", async () => {
+    await page.keyboard.type(`${LONG_LINE} ${LONG_LINE} ${LONG_LINE}`);
+    for (let i = 0; i < 120; i++) await page.keyboard.press("Backspace");
+  });
+  await clearComposer(page);
+  await step("paste-long", () => page.evaluate((t) => document.execCommand("insertText", false, t), PASTE_TEXT));
+  await shot("paste");
+  await step("kb-260-300-260", async () => {
+    await kbShow(page, kb + 40);
+    await settle(page, 300);
+    await kbShow(page, kb);
+  });
+  await step("kb-close-open", async () => {
+    await kbHide(page);
+    await settle(page, 300);
+    await kbShow(page, kb);
+  });
+  // Scrolled up to read older messages: growing the composer must not pull
+  // the list back down (listScrollTop stays 0).
+  await clearComposer(page);
+  await page.evaluate((s) => {
+    window.__kbPick(s).scrollTop = 0;
+    window.__kbPick(s).dispatchEvent(new Event("scroll"));
+  }, cfg.list);
+  await settle(page, 200);
+  await step("scrolled-up-lines5", () => typeLines(page, linesOf(5)));
+  await clearComposer(page);
+  await kbHide(page);
+  await settle(page);
+  results.after = await probe(page, cfg.textarea);
+  return results;
+}
+
 // Demo seed ids (src/data): g11 = Ethan Park (has a DM thread with the
 // demo user), call-7 = a round the demo user hosts, post-2 = a post with a
 // comment by someone else.
@@ -280,6 +529,104 @@ const SCREENS = {
     await settle(page);
     const after = await probe(page, "textarea");
     return { route: href, closed, open, openSettled, after };
+  },
+
+  // Composer growth in the DM thread (see composerScenario).
+  async "dm-composer"(page, base, kb, shot) {
+    await seedThread(page, "dm");
+    const href = "/messages/g11";
+    await gotoRoute(page, base, href);
+    const r = await composerScenario(page, kb, shot, { textarea: "textarea", list: "[data-no-swipe]", header: 'button[aria-label="More options"]' });
+    return { route: href, ...r };
+  },
+
+  // Unsend: send a message (demo), long-press its bubble with a real touch
+  // hold (CDP), pick Unsend; then right-click another; and check a right
+  // swipe on a bubble still starts a reply. Keyboard up throughout.
+  async "dm-unsend"(page, base, kb, shot) {
+    await seedThread(page, "dm");
+    const href = "/messages/g11";
+    await gotoRoute(page, base, href);
+    await focus(page, "textarea");
+    await kbShow(page, kb);
+    await settle(page);
+    const sendOne = async (text) => {
+      await page.keyboard.type(text);
+      await page.keyboard.press("Enter");
+      await settle(page, 1100); // demo rate limit is 1s
+    };
+    await sendOne("Unsend me by long press");
+    await sendOne("Unsend me by right click");
+    const center = (text) =>
+      page.evaluate((t) => {
+        const b = Array.from(document.querySelectorAll("[data-reply-bubble]")).find((el) => el.textContent.includes(t));
+        if (!b) return null;
+        const r = b.getBoundingClientRect();
+        return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2), actions: b.getAttribute("data-actions-bubble") !== null };
+      }, text);
+    const state = () =>
+      page.evaluate(() => ({
+        menu: Boolean(document.querySelector('[role="menu"]')),
+        placeholders: Array.from(document.querySelectorAll("p.italic")).map((p) => p.textContent),
+        focused: document.activeElement?.tagName ?? null,
+        replyBanner: Boolean(document.querySelector('button[aria-label="Cancel reply"]')),
+      }));
+    const out = {};
+    const a = await center("Unsend me by long press");
+    out.bubbleHasActions = a?.actions ?? null;
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: a.x, y: a.y }] });
+    await page.waitForTimeout(250);
+    out.menuAt250ms = (await state()).menu;
+    await page.waitForTimeout(400);
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await frames(page, 2);
+    out.afterHold = await state();
+    await shot("menu");
+    await jsClick(page, '[role="menu"] button', "unsend");
+    await settle(page, 300);
+    out.afterUnsend = await state();
+    // Right-click (desktop).
+    const b = await center("Unsend me by right click");
+    await page.mouse.click(b.x, b.y, { button: "right" });
+    await frames(page, 2);
+    out.afterRightClick = await state();
+    await page.keyboard.press("Escape");
+    await frames(page, 2);
+    out.afterEscape = await state();
+    // A short tap is not a long-press.
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: b.x, y: b.y }] });
+    await page.waitForTimeout(120);
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await page.waitForTimeout(500);
+    out.afterTap = await state();
+    // Swipe right on the same bubble: reply, no menu.
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: b.x - 40, y: b.y }] });
+    for (let i = 1; i <= 10; i++) {
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: b.x - 40 + i * 10, y: b.y }] });
+      await page.waitForTimeout(16);
+    }
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await page.waitForTimeout(600);
+    out.afterSwipe = await state();
+    await cdp.detach();
+    await kbHide(page);
+    await settle(page);
+    return { route: href, ...out };
+  },
+
+  // Same checks on the round group chat page (shared ChatComposer, docked
+  // while the keyboard is up).
+  async "roundchat-composer"(page, base, kb, shot) {
+    await seedThread(page, "round");
+    const href = "/messages/round/call-7";
+    await gotoRoute(page, base, href);
+    const r = await composerScenario(page, kb, shot, {
+      textarea: '[data-keyboard-drag-dismiss="off"] textarea',
+      list: '[data-keyboard-drag-dismiss="off"] > div.overflow-y-auto',
+      header: "main h1, main h2",
+    });
+    return { route: href, ...r };
   },
 
   // The reported bug: a keyboardAware sheet mounted while the keyboard is
@@ -504,7 +851,8 @@ async function main() {
         if (url.protocol === "data:" || url.protocol === "blob:") return route.continue();
         return route.abort();
       });
-      await context.addInitScript(fakeNativeBridge);
+      await context.addInitScript(args.web ? fakeSafariViewport : fakeNativeBridge);
+      await context.addInitScript(probeHelpers);
       const page = await context.newPage();
       const errors = [];
       page.on("pageerror", (e) => errors.push(String(e)));
@@ -533,7 +881,7 @@ async function main() {
       }
       for (const name of screens) {
         const run = SCREENS[name];
-        const id = `${name}@${vp}`;
+        const id = `${name}@${vp}${args.web ? "-web" : ""}`;
         if (!run) {
           results[id] = { error: "unknown screen" };
           continue;
@@ -570,7 +918,16 @@ async function main() {
     }
     const phases = Object.keys(r).filter((p) => r[p] && typeof r[p] === "object" && "kb" in r[p]);
     const line = phases.map((p) => `${p}: covered=${r[p].coveredPx} bottom=${r[p].bottom} kbTop=${r[p].kbTop} scrollY=${r[p].scrollY} lock=${r[p].pageLocked} nav=${r[p].bottomNavVisible} pad=${r[p].sheetOverlayPaddingBottom}`).join(" | ");
-    console.log(`${id}${r.blurredByDrag !== undefined ? ` blurredByDrag=${r.blurredByDrag}` : ""}\n  ${line}\n  listeners(open)=${JSON.stringify((r.open ?? r.closed).listeners)}`);
+    console.log(`${id}${r.blurredByDrag !== undefined ? ` blurredByDrag=${r.blurredByDrag}` : ""}\n  ${line}\n  listeners(open)=${JSON.stringify((r.open ?? r.closed)?.listeners ?? null)}`);
+    // Composer steps: [min,max] over every sampled frame.
+    const range = (a) => (a ? (a.min === a.max ? `${a.min}` : `${a.min}..${a.max}`) : "-");
+    for (const [stepName, s] of Object.entries(r)) {
+      if (!s || typeof s !== "object" || !("frames" in s)) continue;
+      console.log(
+        `  ${stepName.padEnd(20)} compBottom-kbTop=${range(s.composerBottomMinusKbTop)} headerTop=${range(s.headerTop)} scrollY=${range(s.scrollY)} ` +
+          `listDist=${range(s.listDistFromBottom)} (final ${s.final.listDist}, top ${s.final.listScrollTop}) taH=${range(s.textareaH)} taScroll=${s.final.textareaScrollTop} sel=${s.final.selection} focus=${s.final.focused}`,
+      );
+    }
   }
   console.log(`\nwrote ${file}`);
 }

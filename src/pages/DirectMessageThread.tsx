@@ -20,6 +20,14 @@ import { useLocale } from "../i18n/LocaleContext";
 import { formatMessageTime } from "../lib/messageTime";
 import { useSwipeToRevealTimes } from "../lib/useSwipeToRevealTimes";
 import { useSwipeToReply } from "../lib/useSwipeToReply";
+import { useWebKeyboardInset } from "../lib/useWebKeyboardInset";
+import { useMessageLongPress } from "../lib/useMessageLongPress";
+import { MessageActionsMenu } from "../components/chat/MessageActionsMenu";
+import { canUnsendMessage, unsendRemainingMs } from "../lib/unsend";
+import { copyText } from "../lib/share";
+import { Capacitor } from "@capacitor/core";
+
+const IS_NATIVE = Capacitor.isNativePlatform();
 
 export function DirectMessageThread() {
   const { id } = useParams<{ id: string }>();
@@ -34,6 +42,8 @@ export function DirectMessageThread() {
     messagesWithGolfer,
     sendDirectMessage,
     canReplyToMessages,
+    canUnsendMessages,
+    unsendDirectMessage,
     markConversationRead,
     clearChatHistory,
     deleteConversation,
@@ -92,11 +102,18 @@ export function DirectMessageThread() {
   // from the plugin's own keyboardWillShow/Hide event payload is real,
   // native-reported data and the only value that reliably reflects the
   // keyboard's actual height on this device.
+  //
+  // Web (iPhone Safari / PWA) has no plugin events, so there the keyboard
+  // height comes from the visual viewport instead (useWebKeyboardInset,
+  // disabled in the native app). Exactly one source per platform, so the
+  // two can never add up to a double offset.
+  const webKeyboardInset = useWebKeyboardInset(!IS_NATIVE, boxRef);
+  const keyboardInset = IS_NATIVE ? keyboardHeight : webKeyboardInset;
   const boxHeight =
     boxTop === null
       ? undefined
-      : keyboardHeight > 0
-        ? `${window.innerHeight - boxTop - keyboardHeight}px`
+      : keyboardInset > 0
+        ? `${window.innerHeight - boxTop - keyboardInset}px`
         : `calc(${window.innerHeight}px - ${boxTop}px - 4.25rem - env(safe-area-inset-bottom))`;
 
   const other = id ? getGolfer(id) : undefined;
@@ -118,9 +135,39 @@ export function DirectMessageThread() {
     const textarea = boxRef.current?.querySelector("textarea");
     if (textarea && document.activeElement !== textarea) textarea.focus({ preventScroll: true });
   });
+  // Unsend (lib/unsend.ts): long-press (touch) / right-click (mouse) one of
+  // MY bubbles while it's within 5 minutes of sending opens a small menu
+  // (useMessageLongPress, MessageActionsMenu). Only those bubbles carry
+  // data-actions-bubble, so the gesture is simply absent elsewhere. nowMs
+  // ticks once at the next window expiry so a lapsed message loses the
+  // attribute (and gets its normal text selection back) without a reload;
+  // the server still decides (it answers "expired" if this clock is slow).
+  const [actionsFor, setActionsFor] = useState<{ id: string; bubble: HTMLElement } | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const unsendEnabled = Boolean(other) && canUnsendMessages;
+  const unsendableIds = new Set(
+    unsendEnabled ? messages.filter((m) => canUnsendMessage(m, currentUser.id, nowMs)).map((m) => m.id) : [],
+  );
+  const nextUnsendExpiry = unsendEnabled
+    ? Math.min(...messages.filter((m) => unsendableIds.has(m.id)).map((m) => unsendRemainingMs(m.createdAt, nowMs)))
+    : Infinity;
+  useEffect(() => {
+    if (!Number.isFinite(nextUnsendExpiry)) return;
+    const t = window.setTimeout(() => setNowMs(Date.now()), nextUnsendExpiry + 50);
+    return () => window.clearTimeout(t);
+  }, [nextUnsendExpiry]);
+  useMessageLongPress(listRef, unsendEnabled, (messageId, bubble) => {
+    // Re-checked with a fresh clock at the moment of the press.
+    const m = messages.find((x) => x.id === messageId);
+    if (!m || !canUnsendMessage(m, currentUser.id, Date.now())) return;
+    setActionsFor({ id: messageId, bubble });
+  });
+  const closeActions = useCallback(() => setActionsFor(null), []);
+
   // A reply target belongs to one thread; a highlight timer never outlives
   // the page.
   useEffect(() => setReplyToId(null), [id]);
+  useEffect(() => setActionsFor(null), [id]);
   useEffect(() => () => window.clearTimeout(highlightTimerRef.current), []);
 
   // Ephemeral only -- never a persisted message, never touches unread
@@ -245,7 +292,7 @@ export function DirectMessageThread() {
   useLayoutEffect(() => {
     const el = listRef.current;
     if (el && nearBottomRef.current) el.scrollTop = el.scrollHeight;
-  }, [keyboardHeight]);
+  }, [keyboardInset]);
 
   // The chat box below is sized to fit the viewport exactly (see its own
   // comment), but that's a best-effort calc(), not a hard guarantee --
@@ -322,6 +369,22 @@ export function DirectMessageThread() {
     setHighlightId(messageId);
     window.clearTimeout(highlightTimerRef.current);
     highlightTimerRef.current = window.setTimeout(() => setHighlightId(null), 1400);
+  }
+
+  async function handleUnsend(messageId: string) {
+    setActionsFor(null);
+    if (replyToId === messageId) setReplyToId(null);
+    const result = await unsendDirectMessage(messageId);
+    if (result === "expired") {
+      setNowMs(Date.now());
+      showToast(t("chat.unsendExpired"), "info");
+    } else if (result === "failed") showToast(t("chat.unsendFailed"), "warning");
+  }
+
+  async function handleCopy(messageId: string) {
+    setActionsFor(null);
+    const m = messagesById.get(messageId);
+    if (m && (await copyText(m.text))) showToast(t("chat.copied"), "info");
   }
 
   async function handleSend() {
@@ -407,8 +470,12 @@ export function DirectMessageThread() {
                 onClick={() => {
                   setMenuOpen(false);
                   if (blocked) {
-                    unblockUser(other.id);
-                    showToast(`Unblocked ${other.name}.`, "info");
+                    // Promise.resolve: unblockUser returns a Promise that
+                    // rejects on a failed save (GolferProfilePage pattern).
+                    Promise.resolve(unblockUser(other.id)).then(
+                      () => showToast(`Unblocked ${other.name}.`, "info"),
+                      () => showToast(`Couldn't unblock ${other.name}. Check your connection and try again.`, "warning"),
+                    );
                   } else {
                     setBlockConfirmOpen(true);
                   }
@@ -473,6 +540,21 @@ export function DirectMessageThread() {
               const isMe = m.senderId === currentUser.id;
               const sent = formatMessageTime(m.createdAt, locale, t);
               const quoted = m.replyToId ? messagesById.get(m.replyToId) : undefined;
+              // Unsent: a quiet placeholder where the message was (the text
+              // is already gone). Not a reply/unsend target.
+              if (m.unsentAt) {
+                return (
+                  <div key={m.id} data-reply-row={m.id} className={`relative flex items-end gap-2 ${isMe ? "flex-row-reverse" : ""}`}>
+                    <span className="shrink-0 rounded-full">
+                      <Avatar golfer={isMe ? currentUser : other} size="xs" showVerified={false} />
+                    </span>
+                    <p className="max-w-[75%] rounded-2xl border border-dashed border-slate-200 px-3.5 py-2 text-xs text-slate-400 italic">
+                      {isMe ? t("chat.youUnsent") : t("chat.theyUnsent", { name: other.name })}
+                    </p>
+                  </div>
+                );
+              }
+              const unsendable = unsendableIds.has(m.id);
               return (
                 // data-reply-row/-arrow/-bubble: the DOM contract
                 // useSwipeToReply drives (only the bubble moves).
@@ -499,9 +581,14 @@ export function DirectMessageThread() {
                   </button>
                   <div
                     data-reply-bubble={replyEnabled ? m.id : undefined}
+                    // Long-press / right-click -> Unsend (useMessageLongPress).
+                    // No iOS selection callout on these (Copy is in the menu).
+                    data-actions-bubble={unsendable ? m.id : undefined}
                     className={`max-w-[75%] rounded-2xl px-3.5 py-2 text-sm transition-shadow duration-300 [overflow-wrap:anywhere] ${
                       isMe ? "rounded-br-sm bg-fairway-600 text-white" : "rounded-bl-sm bg-slate-100 text-slate-800"
-                    } ${highlightId === m.id ? "ring-2 ring-amber-300 ring-offset-2" : ""}`}
+                    } ${highlightId === m.id ? "ring-2 ring-amber-300 ring-offset-2" : ""} ${
+                      unsendable ? "select-none [-webkit-touch-callout:none]" : ""
+                    } ${actionsFor?.id === m.id ? "ring-2 ring-fairway-300 ring-offset-2" : ""}`}
                   >
                     {/* Quote of the replied-to message, taken only from
                         messages this reader already has loaded (RLS-visible
@@ -517,7 +604,7 @@ export function DirectMessageThread() {
                           }`}
                         >
                           <span className={`block font-semibold ${isMe ? "text-white" : "text-slate-700"}`}>{senderLabel(quoted.senderId)}</span>
-                          <span className="line-clamp-2">{quoted.text}</span>
+                          <span className={`line-clamp-2 ${quoted.unsentAt ? "italic" : ""}`}>{quoted.unsentAt ? t("chat.messageUnsent") : quoted.text}</span>
                         </button>
                       ) : (
                         <div
@@ -581,7 +668,7 @@ export function DirectMessageThread() {
                     <p className="truncate font-semibold text-slate-700">
                       {replyTarget.senderId === currentUser.id ? t("chat.replyingToSelf") : t("chat.replyingTo", { name: other.name })}
                     </p>
-                    <p className="truncate text-slate-500">{replyTarget.text}</p>
+                    <p className="truncate text-slate-500">{replyTarget.unsentAt ? t("chat.messageUnsent") : replyTarget.text}</p>
                   </div>
                   <button
                     type="button"
@@ -602,6 +689,16 @@ export function DirectMessageThread() {
         </div>
       </div>
 
+      {actionsFor && (
+        <MessageActionsMenu
+          bubble={actionsFor.bubble}
+          alignRight
+          labels={{ menu: t("chat.messageActions"), unsend: t("chat.unsend"), copy: t("chat.copy") }}
+          onUnsend={() => handleUnsend(actionsFor.id)}
+          onCopy={() => handleCopy(actionsFor.id)}
+          onClose={closeActions}
+        />
+      )}
       {reportOpen && <ReportModal reportedId={other.id} reportedName={other.name} context="chat" onClose={() => setReportOpen(false)} />}
       {clearConfirmOpen && (
         <ConfirmDialog
@@ -647,8 +744,13 @@ export function DirectMessageThread() {
           message="You won't see each other's profiles or Golf Calls, and they won't be able to message you. You can unblock anytime."
           confirmLabel="Block"
           danger
-          onConfirm={() => {
-            blockUser(other.id);
+          onConfirm={async () => {
+            try {
+              await Promise.resolve(blockUser(other.id));
+            } catch {
+              showToast(`Couldn't block ${other.name}. Check your connection and try again.`, "warning");
+              return;
+            }
             setBlockConfirmOpen(false);
             showToast(`Blocked ${other.name}.`, "info");
           }}

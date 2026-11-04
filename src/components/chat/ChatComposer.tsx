@@ -1,10 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { Send, Smile } from "lucide-react";
 import { EmojiPicker } from "./EmojiPicker";
 import { isSendEnter } from "../../lib/isImeComposing";
+import { composerTextareaHeight } from "../../lib/composerAutosize";
+import { createSendGuard } from "../../lib/sendGuard";
 
-const MAX_TEXTAREA_HEIGHT_PX = 120;
+// Font, line-height and padding shared by the textarea and its hidden
+// measuring mirror: the mirror only measures correctly while these match.
+const TEXTAREA_METRICS = "px-3.5 py-2 text-base leading-snug sm:text-sm";
 
 interface ChatComposerProps {
   value: string;
@@ -15,29 +19,74 @@ interface ChatComposerProps {
 }
 
 // Shared by DirectMessageThread and GroupChat. Auto-expanding textarea
-// (Enter sends, Shift+Enter inserts a newline, capped height then scrolls
-// internally), a desktop-only emoji button that inserts at the current
-// cursor position, and a 16px+ font at mobile widths (text-base, stepping
-// down to text-sm at sm:) so iOS Safari never auto-zooms the page on focus.
+// (Enter sends, Shift+Enter inserts a newline, grows up to
+// COMPOSER_MAX_LINES lines then scrolls internally), a desktop-only emoji
+// button that inserts at the current cursor position, and a 16px+ font at
+// mobile widths (text-base, stepping down to text-sm at sm:) so iOS Safari
+// never auto-zooms the page on focus.
+//
+// Growth only ever changes this component's own height; the pages keep
+// their bottom edge where it is (DirectMessageThread: a fixed-height box,
+// GroupChat: a bar fixed above the keyboard), so extra lines push the
+// composer's TOP up. The height is measured on a hidden mirror, never by
+// collapsing the real textarea (lib/composerAutosize.ts says why).
 export function ChatComposer({ value, onChange, onSend, placeholder = "Type a message...", onBlur }: ChatComposerProps) {
   const [emojiOpen, setEmojiOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const mirrorRef = useRef<HTMLTextAreaElement>(null);
   const emojiButtonRef = useRef<HTMLButtonElement>(null);
   // Whether the textarea had focus when the send button was pressed.
   const focusedAtPressRef = useRef(false);
+  const sendGuardRef = useRef(createSendGuard());
 
-  useEffect(() => {
+  // Layout effect: the new height lands in the same frame as the new text
+  // (and the list's ResizeObserver re-pin with it), never a frame later.
+  useLayoutEffect(() => {
+    sendGuardRef.current.release();
     const el = textareaRef.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, MAX_TEXTAREA_HEIGHT_PX)}px`;
+    const mirror = mirrorRef.current;
+    if (!el || !mirror) return;
+    const resize = () => {
+      mirror.style.width = `${el.offsetWidth}px`;
+      mirror.value = el.value;
+      const cs = window.getComputedStyle(el);
+      const height = composerTextareaHeight({
+        contentHeight: mirror.scrollHeight,
+        lineHeight: parseFloat(cs.lineHeight),
+        paddingY: parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom),
+        borderY: parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth),
+      });
+      const next = `${height}px`;
+      // Only a real change touches the textarea, so typing within a line
+      // causes no layout work above it at all.
+      if (el.style.height !== next) el.style.height = next;
+    };
+    resize();
+    // Width changes (rotation, window resize, the desktop emoji button
+    // appearing at sm:) re-wrap the text: measure again. Height changes are
+    // ours and ignored, so this never loops.
+    let width = el.offsetWidth;
+    const ro = new ResizeObserver(() => {
+      if (el.offsetWidth === width) return;
+      width = el.offsetWidth;
+      resize();
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
   }, [value]);
+
+  function send() {
+    // One send per draft (lib/sendGuard.ts): Enter and the button can't
+    // both send the same text before the page clears it.
+    if (!sendGuardRef.current.claim(value)) return;
+    onSend();
+  }
 
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     // Not while an IME is composing: that Enter confirms a candidate.
     if (isSendEnter(e)) {
       e.preventDefault();
-      onSend();
+      send();
     }
   }
 
@@ -53,7 +102,7 @@ export function ChatComposer({ value, onChange, onSend, placeholder = "Type a me
   function handleSendClick() {
     const wasFocused = focusedAtPressRef.current;
     focusedAtPressRef.current = false;
-    onSend();
+    send();
     const el = textareaRef.current;
     if (wasFocused && el && document.activeElement !== el) el.focus({ preventScroll: true });
   }
@@ -75,7 +124,7 @@ export function ChatComposer({ value, onChange, onSend, placeholder = "Type a me
   }
 
   return (
-    <div className="flex items-end gap-2 border-t border-slate-100 px-3 py-2.5">
+    <div className="relative flex items-end gap-2 border-t border-slate-100 px-3 py-2.5">
       <div className="relative hidden shrink-0 sm:block">
         <button
           ref={emojiButtonRef}
@@ -97,7 +146,17 @@ export function ChatComposer({ value, onChange, onSend, placeholder = "Type a me
         onBlur={onBlur}
         placeholder={placeholder}
         rows={1}
-        className="max-h-[120px] flex-1 resize-none overflow-y-auto rounded-2xl bg-slate-100 px-3.5 py-2 text-base leading-snug outline-none focus:bg-slate-50 focus:ring-2 focus:ring-fairway-100 sm:text-sm"
+        className={`flex-1 resize-none overflow-y-auto rounded-2xl bg-slate-100 outline-none focus:bg-slate-50 focus:ring-2 focus:ring-fairway-100 ${TEXTAREA_METRICS}`}
+      />
+      {/* Measuring mirror (see the layout effect): same metrics, out of
+          flow, invisible, unfocusable and hidden from assistive tech. */}
+      <textarea
+        ref={mirrorRef}
+        aria-hidden="true"
+        tabIndex={-1}
+        readOnly
+        rows={1}
+        className={`pointer-events-none invisible absolute top-0 left-0 h-0 resize-none overflow-hidden ${TEXTAREA_METRICS}`}
       />
       <button
         onPointerDown={() => {

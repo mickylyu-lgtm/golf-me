@@ -59,6 +59,31 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
     if (composerDocked && composerRef.current) setComposerHeight(composerRef.current.offsetHeight);
   }, [composerDocked]);
 
+  // While docked, a longer message grows the bar UPWARD (it's pinned to the
+  // keyboard top), over the newest messages. Grow the spacer by the same
+  // amount and scroll the page with it, so what was right above the bar
+  // stays right above it; deleting lines does the reverse. Done in the
+  // ResizeObserver callback itself (before paint), straight on the spacer's
+  // style, so there's no frame with the bar covering a message; the state
+  // update just keeps the next render in agreement.
+  const spacerRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = composerRef.current;
+    if (!composerDocked || !el) return;
+    let last = el.offsetHeight;
+    const ro = new ResizeObserver(() => {
+      const height = el.offsetHeight;
+      if (height === last) return;
+      const delta = height - last;
+      last = height;
+      if (spacerRef.current) spacerRef.current.style.height = `${height + keyboardHeight}px`;
+      setComposerHeight(height);
+      window.scrollBy(0, delta);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [composerDocked, keyboardHeight]);
+
   // Page scroll position captured when the composer gets focus, before the
   // keyboard starts opening. iOS may pan the page to reveal the textbox in
   // the moment before the composer docks; if it did, the page is put back
@@ -268,7 +293,7 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
       {/* Holds the composer's place, plus the keyboard's height: near the
           bottom of the page there's otherwise no room to scroll the latest
           content up above the docked bar (it's hidden under the keyboard). */}
-      {composerDocked && <div aria-hidden="true" style={{ height: composerHeight + keyboardHeight }} />}
+      {composerDocked && <div ref={spacerRef} aria-hidden="true" style={{ height: composerHeight + keyboardHeight }} />}
       {readOnly ? (
         <p role="status" className="flex items-center justify-center gap-1.5 border-t border-slate-100 px-4 py-3 text-center text-xs font-medium text-slate-500">
           <Lock size={13} aria-hidden="true" className="shrink-0" /> {readOnlyNote}

@@ -197,7 +197,7 @@ function DirectList() {
                   ) : (
                     <>
                       {c.lastMessage.senderId === c.otherGolfer.id ? "" : t("chatInbox.youPrefix")}
-                      {c.lastMessage.text}
+                      {c.lastMessage.unsentAt ? <span className="italic">{t("chat.messageUnsent")}</span> : c.lastMessage.text}
                     </>
                   )}
                 </p>
