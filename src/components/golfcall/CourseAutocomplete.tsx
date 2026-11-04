@@ -238,9 +238,11 @@ export function CourseAutocomplete({ value, onChange, onPickKnownCourse, recentC
           itself above the keyboard, so it opts out of the app-wide reveal
           (useRevealFocusedFieldAboveKeyboard). */}
       <div data-keyboard-drag-dismiss="off" data-keyboard-reveal={inlineSuggestions ? "off" : undefined} className="relative">
-        {inlineSuggestions && isNative && focused && (
+        {inlineSuggestions && isNative && (focused || keyboardHeight > 0) && (
           // Invisible scroll room (see above): absolutely positioned, so it
-          // adds to the page's scroll range without moving anything.
+          // adds to the page's scroll range without moving anything. Kept
+          // until the keyboard has finished closing, so the page settles
+          // back together with the keyboard rather than jumping after it.
           <div aria-hidden className="pointer-events-none invisible absolute inset-x-0 top-0" style={{ height: window.innerHeight }} />
         )}
         {quickPicks.length > 0 && <label className={labelClass}>{t("courseAutocomplete.searchAllCourses")}</label>}

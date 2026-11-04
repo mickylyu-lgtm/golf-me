@@ -54,13 +54,19 @@ function ModalFrame({ title, onClose, children, footer, overlayStyle, sheetStyle
   const dialogRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  // Whatever had focus when the sheet opened, read during the first render:
+  // by the time effects run, a field inside the sheet with autoFocus (the
+  // location picker's search) already holds focus and would be mistaken
+  // for the opener.
+  const openerRef = useRef<HTMLElement | null | undefined>(undefined);
+  if (openerRef.current === undefined) openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 
   // Escape closes only the topmost sheet (nested sheets used to all close
   // at once), and focus goes into the sheet and back to whatever opened it
   // on close, without scrolling the page either way.
   useEffect(() => {
     const entry = pushModal();
-    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const opener = openerRef.current ?? null;
     // A field that autofocused already holds focus; otherwise the dialog
     // itself takes it, so the keyboard and screen readers start inside.
     if (!dialogRef.current?.contains(document.activeElement)) dialogRef.current?.focus({ preventScroll: true });
