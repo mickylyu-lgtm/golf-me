@@ -23,6 +23,13 @@ Note: Phases between Phase 20/21 (see below) and Phase 22 span roughly 31 commit
 - **Caddie sharing**: Share Caddie Feedback never posts twice when the shared mark fails (mark retried once, then logged). CreatePost removes the public `swing-<uuid>` copies/uploads a failed attempt created (own folder, community-media only, only if no post row references them).
 - Tests: `npm run test:trust` (32, mocked, no network) + existing suites pass; tsc, lint (0 errors), build clean. No screenshots (headless shell lacks system libs here). Needs a real account + iPhone: the alert save, the native push prompt from the card, and error states with the network off.
 
+## Google profile photo at signup — 2026-11-03 (branch `feat/google-profile-photo`, not deployed)
+
+- **Prefill**: onboarding (ProfileSetup) shows the Google account's picture as the profile photo (`src/lib/providerPhoto.ts`: only for accounts that really signed in with Google, only https `*.googleusercontent.com`, resized to `=s320-c`). The golfer can Remove/Change it there or later on Profile; it's only offered during onboarding, so a removed photo never comes back. Apple never sends a photo, so Apple sign-ins keep initials.
+- **Stored in our bucket**: on finish the picture is copied into `avatars/<id>/avatar.jpg` (`copyPhotoToAvatar` in `src/lib/avatarStorage.ts`); if that fetch fails (offline/CORS), Google's URL is saved instead.
+- **Bug fixed**: real accounts' onboarding never saved `photo_url`, so a photo picked during signup was uploaded but lost. It's now written by the same `saveProfile` call.
+- Privacy Policy Account item says the Google picture is suggested and removable. Tests: `npm run test:onboarding` (providerPhoto cases). Needs a real Google sign-in check on web + iPhone: photo shows at setup, is copied (URL is `.../storage/v1/object/public/avatars/...`), and Remove leaves initials. No migration.
+
 ## Tee Times hidden + host/join polish — 2026-11-02 (branch `fix/host-join-polish`)
 
 - **Tee Times hidden** (Micky: "hide tee times"): `TEE_TIMES_VISIBLE = false` in `src/services/teeTimes/types.ts`. No Home card, no Find link, no "Tee times available" badge, and every course (Skyway/Dyker Beach included) opens the general course page. `/tee-times` routes still work by direct link; flip the flag to restore. The round's own tee time and the course page's "Find tee times" Google search are unchanged.

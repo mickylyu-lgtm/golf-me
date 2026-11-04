@@ -82,7 +82,8 @@ export function PrivacyPolicy() {
       <Section title="Information we collect">
         <Item label="Account">
           Your email address and sign-in details. If you sign in with Google, we receive your name, email and profile picture from Google —
-          nothing else. If you sign in with Apple, we receive the name and email you choose to share; if you choose Hide My Email, we only
+          nothing else. Your Google picture is suggested as your GolfMe profile photo when you set up your profile; you can remove or
+          change it then or at any time on your profile. If you sign in with Apple, we receive the name and email you choose to share; if you choose Hide My Email, we only
           see Apple's private relay address.
         </Item>
         <Item label="Profile">
