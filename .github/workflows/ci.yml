@@ -1,0 +1,56 @@
+# GolfMe CI: typecheck, lint, unit tests and a production build on every
+# push to main and every pull request (Micky, 2026-11-03: "lint, type
+# checks, tests and build on pushes... keep it separate from deployment").
+#
+# Deliberately NOT here: deploys, Supabase, migrations, and any secrets. The only env values
+# are dummy, public-shaped placeholders so the build and the landing-page
+# prerender can run; nothing is reachable at 127.0.0.1:9. Fixtures in
+# tests/ are synthetic: never real swing videos, user data or keys.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VITE_SUPABASE_URL: http://127.0.0.1:9
+      VITE_SUPABASE_ANON_KEY: ci-placeholder-not-a-key
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          # node --test runs the .ts tests with built-in type stripping.
+          node-version: 24
+          cache: npm
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      - name: Typecheck
+        run: npx tsc -b
+
+      - name: Lint
+        run: npm run lint
+
+      # Every test file, not just the ones a test:* script lists, so a new
+      # test can't be skipped by forgetting to add it to package.json.
+      - name: Unit tests
+        run: node --test tests/*.test.ts supabase/functions/_shared/*.test.ts
+
+      - name: Build
+        run: npm run build
