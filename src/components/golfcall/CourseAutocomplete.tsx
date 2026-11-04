@@ -178,7 +178,9 @@ export function CourseAutocomplete({ value, onChange, onPickKnownCourse, recentC
               <button
                 key={p.name}
                 type="button"
-                onClick={() => pick(p)}
+                // Tapping the selected pick again unselects it (Micky, 2026-11-03).
+                onClick={() => (value === p.name ? onChange("") : pick(p))}
+                aria-pressed={value === p.name}
                 className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors duration-150 ${
                   value === p.name
                     ? "border-transparent bg-fairway-600 text-white"

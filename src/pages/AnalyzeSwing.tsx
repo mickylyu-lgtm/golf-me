@@ -15,6 +15,7 @@ import { formatClock } from "../lib/format";
 import { supabase } from "../lib/supabase";
 import { CADDIE_MEDIA_BUCKET } from "../lib/caddieMedia";
 import { CaddieRequestError } from "../lib/caddieAnalysis";
+import { clubLabel } from "../lib/clubLabel";
 const MAX_SWING_VIDEO_BYTES = 200 * 1024 * 1024; // matches the Storage bucket's own file_size_limit
 const MAX_SWING_VIDEO_SECONDS = 10; // max length of the WINDOW actually analyzed (2026-08-22 credit-efficiency pass) — Caddie's Roboflow pass calls once per sampled frame, so a longer clip directly multiplies calls/latency/credit spend; see analyze-swing's ANALYSIS_FPS comment. Was 15s. A source video longer than this is no longer rejected outright — VideoTrimSelector lets the golfer pick which 10s window to analyze instead.
 // Once analyze-swing actually creates the 'processing' row, the real
@@ -366,8 +367,9 @@ export function AnalyzeSwing() {
         <select value={swingType} onChange={(e) => setSwingType(e.target.value)} className={inputClass}>
           <option value="">{t("caddie.swingTypeSelectPlaceholder")}</option>
           {CLUB_OPTIONS.map((club) => (
+            // Shown in the app's language; the stored value stays English.
             <option key={club} value={club}>
-              {club}
+              {clubLabel(club, t)}
             </option>
           ))}
         </select>

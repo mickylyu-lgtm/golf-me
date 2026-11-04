@@ -277,8 +277,9 @@ export function CreateGolfCall() {
     setCourse(value);
     setPickedCourseId(null);
     // A chosen town still applies to the (re)typed name; a searched course's
-    // own point doesn't.
-    if (!courseTownLabel) {
+    // own point doesn't. Clearing the course clears its town too.
+    if (!value.trim()) setCourseTownLabel(null);
+    if (!courseTownLabel || !value.trim()) {
       setPickedCourseLat(null);
       setPickedCourseLng(null);
     }

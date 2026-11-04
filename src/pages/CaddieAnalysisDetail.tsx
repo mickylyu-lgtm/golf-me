@@ -22,6 +22,7 @@ import { FAILURE_BODY_KEYS, FAILURE_TITLE_KEYS, analysisFailure } from "../lib/c
 import type { CaddieConfidence, CaddieCameraAngle, CaddieScoreCriterionKey } from "../types";
 import type { CreatePostSwingPrefill } from "./CreatePost";
 import type { TranslationKey } from "../i18n/locales/en";
+import { clubLabel } from "../lib/clubLabel";
 
 const SCORE_CRITERIA_ORDER: [CaddieScoreCriterionKey, TranslationKey][] = [
   ["setupAndPosture", "caddie.scoreSetupAndPosture"],
@@ -269,7 +270,7 @@ export function CaddieAnalysisDetail() {
       </button>
 
       <div>
-        <h1 className="text-xl font-bold text-slate-900">{analysis.swingType || t("caddie.title")}</h1>
+        <h1 className="text-xl font-bold text-slate-900">{clubLabel(analysis.swingType, t) || t("caddie.title")}</h1>
         <p className="text-sm text-slate-500">{formatShortDate(analysis.createdAt, locale)}</p>
         {sourcePost && (
           <button

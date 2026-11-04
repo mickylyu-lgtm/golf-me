@@ -10,6 +10,7 @@ import { CLICKABLE_CARD_CLASS } from "../components/ui/cardStyles";
 import { formatShortDate } from "../lib/format";
 import { isStaleProcessing, usePeriodicRerender } from "../lib/caddieAnalysis";
 import { FAILURE_SHORT_KEYS, analysisFailure } from "../lib/caddieFailure";
+import { clubLabel } from "../lib/clubLabel";
 
 // Caddie's own destination — kept deliberately uncrowded (per brief: the
 // most obvious action is always "Analyze a Swing"). Reuses the same
@@ -132,7 +133,7 @@ export function Caddie() {
                     />
                   )}
                   <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-bold text-slate-900">{a.swingType || t("caddie.title")}</span>
+                    <span className="block text-sm font-bold text-slate-900">{clubLabel(a.swingType, t) || t("caddie.title")}</span>
                     <span className="block text-xs text-slate-500">{formatShortDate(a.createdAt, locale)}</span>
                   </span>
                   {a.status === "complete" ? (

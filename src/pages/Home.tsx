@@ -21,6 +21,7 @@ import { SUPPORTED_TEE_TIME_COURSES, TEE_TIMES_VISIBLE } from "../services/teeTi
 import { NearbyCoursesHomeCard } from "../components/courses/NearbyCoursesHomeCard";
 import { HostReminderCard } from "../components/onboarding/HostReminderCard";
 import { useFirstRoundPrompt } from "../context/FirstRoundPromptContext";
+import { clubLabel } from "../lib/clubLabel";
 
 const HOME_RADIUS_MILES = 25;
 const NEARBY_ROUNDS_SHOWN = 3;
@@ -293,7 +294,7 @@ export function Home() {
           <span className="min-w-0 flex-1">
             <span className="block text-xs font-bold uppercase tracking-wide text-brand-forest">{t("caddie.title")}</span>
             <span className="block text-sm font-semibold text-slate-900">
-              {latestCaddieAnalysis.swingType || t("caddie.homeCardTitle")} · {formatShortDate(latestCaddieAnalysis.createdAt, locale)}
+              {clubLabel(latestCaddieAnalysis.swingType, t) || t("caddie.homeCardTitle")} · {formatShortDate(latestCaddieAnalysis.createdAt, locale)}
             </span>
             {latestCaddieAnalysis.status === "complete" &&
               (latestCaddieAnalysis.score !== undefined ? (
