@@ -54,14 +54,25 @@ function scriptRulesOut(text: string, locale: string): boolean {
   }
 }
 
+// `explicit`: the golfer chose this language in Caddie's own picker (see
+// caddieAutoTranslate.ts), so an older row whose language can't be told
+// apart by script is translated too, rather than left to the button.
 export function needsAutoTranslate(
   feedback: { language?: CaddieAnalysisLanguage; sampleText: string },
   currentLocale: string,
+  explicit = false,
 ): boolean {
   if (!(ANALYSIS_LANGUAGES as readonly string[]).includes(currentLocale)) return false;
   if (feedback.language !== undefined) return feedback.language !== currentLocale;
   const text = feedback.sampleText.trim();
-  return text.length > 0 && scriptRulesOut(text, currentLocale);
+  if (text.length === 0) return false;
+  return explicit || scriptRulesOut(text, currentLocale);
+}
+
+// The text an analysis's language is judged by.
+export function feedbackSampleText(details: { summary?: string; strengths?: string[]; focus?: { title?: string } } | undefined): string {
+  if (!details) return "";
+  return [details.summary ?? "", ...(details.strengths ?? []), details.focus?.title ?? ""].join(" ");
 }
 
 // One automatic attempt per analysis and language per app session, so a

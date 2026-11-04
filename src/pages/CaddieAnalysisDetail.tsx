@@ -17,7 +17,8 @@ import { Badge } from "../components/ui/Badge";
 import { formatShortDate } from "../lib/format";
 import { postFeedbackThenMark } from "../lib/caddieShare";
 import { isStaleProcessing, usePeriodicRerender } from "../lib/caddieAnalysis";
-import { AUTO_TRANSLATE_RETRY_MS, claimAutoTranslateAttempt, isTooSoonError, needsAutoTranslate, releaseAutoTranslateAttempt, showsLanguageNotice } from "../lib/caddieLanguage";
+import { AUTO_TRANSLATE_RETRY_MS, claimAutoTranslateAttempt, feedbackSampleText, isTooSoonError, needsAutoTranslate, releaseAutoTranslateAttempt, showsLanguageNotice } from "../lib/caddieLanguage";
+import { isExplicitCaddieLocale, isTranslationRunning, queueTranslation, whenTranslationSettled } from "../lib/caddieAutoTranslate";
 import { FAILURE_BODY_KEYS, FAILURE_TITLE_KEYS, analysisFailure } from "../lib/caddieFailure";
 import type { CaddieConfidence, CaddieCameraAngle, CaddieScoreCriterionKey } from "../types";
 import type { CreatePostSwingPrefill } from "./CreatePost";
@@ -118,25 +119,34 @@ export function CaddieAnalysisDetail() {
   // analysis and language per session, quietly (a failure just leaves the
   // Translate button). Everything less certain keeps the button.
   //
-  // One translation at a time (Micky, 2026-11-04: switching the language
-  // quickly made it miss): while one runs, a language change only waits;
-  // when it finishes, `autoTick` re-runs this check against the language
+  // One translation at a time per analysis, shared with the Caddie
+  // screen's picker (lib/caddieAutoTranslate; Micky, 2026-11-04: switching
+  // the language quickly made it miss): while one runs, this only waits for
+  // it; when it settles, `autoTick` re-runs the check against the language
   // the app is in NOW. A "too soon" answer (429) gives the attempt back and
-  // retries once the server's cooldown has passed.
+  // retries once the server's cooldown has passed. A language picked in
+  // Caddie's own picker is explicit, so it also covers older rows whose
+  // language can't be told apart by script.
   const autoDetails = analysis?.status === "complete" ? analysis.details : undefined;
-  const autoSample = autoDetails ? [autoDetails.summary, ...autoDetails.strengths, autoDetails.focus?.title ?? ""].join(" ") : "";
+  const autoSample = feedbackSampleText(autoDetails);
   const autoLanguage = autoDetails?.language;
   const autoId = analysis?.id;
-  const autoInFlightRef = useRef(false);
   const autoRetryTimerRef = useRef<number | null>(null);
   const [autoTick, setAutoTick] = useState(0);
   useEffect(() => {
-    if (isDemo || !autoId || !autoSample || autoInFlightRef.current) return;
-    if (!needsAutoTranslate({ language: autoLanguage, sampleText: autoSample }, locale)) return;
+    if (isDemo || !autoId || !autoSample) return;
+    if (isTranslationRunning(autoId)) {
+      setTranslating(true);
+      void whenTranslationSettled(autoId).then(() => {
+        setTranslating(false);
+        setAutoTick((n) => n + 1);
+      });
+      return;
+    }
+    if (!needsAutoTranslate({ language: autoLanguage, sampleText: autoSample }, locale, isExplicitCaddieLocale(locale))) return;
     if (!claimAutoTranslateAttempt(autoId, locale)) return;
-    autoInFlightRef.current = true;
     setTranslating(true);
-    translateCaddieAnalysis(autoId, locale)
+    queueTranslation(autoId, () => translateCaddieAnalysis(autoId, locale))
       .catch((err) => {
         if (isTooSoonError(err)) {
           releaseAutoTranslateAttempt(autoId, locale);
@@ -146,7 +156,6 @@ export function CaddieAnalysisDetail() {
         }
       })
       .finally(() => {
-        autoInFlightRef.current = false;
         setTranslating(false);
         setAutoTick((n) => n + 1);
       });
@@ -232,8 +241,10 @@ export function CaddieAnalysisDetail() {
   async function translateFeedback() {
     if (!analysis || translating) return;
     setTranslating(true);
+    const id = analysis.id;
     try {
-      await translateCaddieAnalysis(analysis.id, locale);
+      // Same queue as the automatic translation, so they never overlap.
+      await queueTranslation(id, () => translateCaddieAnalysis(id, locale));
     } catch (err) {
       showToast(err instanceof Error ? err.message : t("caddie.askCaddieError"), "warning");
     } finally {
