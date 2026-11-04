@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { Bell, Calendar, Flag, LayoutGrid, MessageSquare, Smartphone, TrendingDown, TrendingUp, Trophy, Users, Wand2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useRoles } from "../lib/useRoles";
@@ -225,6 +225,9 @@ interface ReportRow {
   reported_username: string | null;
   reported_message_id: string | null;
   round_id: string | null;
+  // From 20261104120000; optional so rows from a database without it still render.
+  reported_post_id?: string | null;
+  reported_comment_id?: string | null;
   category: string;
   context: string;
   details: string;
@@ -472,7 +475,17 @@ export function AdminDashboard() {
                     Report {r.id}
                     {r.round_id && <> · Golf Call {r.round_id}</>}
                     {r.reported_message_id && <> · Message {r.reported_message_id}</>}
+                    {r.reported_post_id && <> · Post {r.reported_post_id}</>}
+                    {r.reported_comment_id && <> · Comment {r.reported_comment_id}</>}
                   </p>
+                  {r.reported_post_id && (
+                    <Link
+                      to={`/community/${r.reported_post_id}`}
+                      className="self-start text-xs font-semibold text-fairway-700 underline underline-offset-2"
+                    >
+                      {r.reported_comment_id ? "Open the post this comment is on" : "Open reported post"}
+                    </Link>
+                  )}
                   <div className="flex flex-wrap gap-1.5">
                     {REPORT_ACTIONS.map((a) => (
                       <button
