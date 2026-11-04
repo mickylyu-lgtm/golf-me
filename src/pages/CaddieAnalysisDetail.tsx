@@ -17,7 +17,7 @@ import { Badge } from "../components/ui/Badge";
 import { formatShortDate } from "../lib/format";
 import { postFeedbackThenMark } from "../lib/caddieShare";
 import { isStaleProcessing, usePeriodicRerender } from "../lib/caddieAnalysis";
-import { showsLanguageNotice } from "../lib/caddieLanguage";
+import { claimAutoTranslateAttempt, needsAutoTranslate, showsLanguageNotice } from "../lib/caddieLanguage";
 import { FAILURE_BODY_KEYS, FAILURE_TITLE_KEYS, analysisFailure } from "../lib/caddieFailure";
 import type { CaddieConfidence, CaddieCameraAngle, CaddieScoreCriterionKey } from "../types";
 import type { CreatePostSwingPrefill } from "./CreatePost";
@@ -112,6 +112,24 @@ export function CaddieAnalysisDetail() {
     const match = notifications.find((n) => n.type === "caddie_analysis_complete" && n.linkTo === `/caddie/${analysisId}` && !n.read);
     if (match) markNotificationRead(match.id);
   }, [analysisId, notifications, markNotificationRead]);
+
+  // Translates the feedback by itself when it is clearly not in the app's
+  // language (needsAutoTranslate in lib/caddieLanguage.ts): once per
+  // analysis and language per session, quietly (a failure just leaves the
+  // Translate button). Everything less certain keeps the button.
+  const autoDetails = analysis?.status === "complete" ? analysis.details : undefined;
+  const autoSample = autoDetails ? [autoDetails.summary, ...autoDetails.strengths, autoDetails.focus?.title ?? ""].join(" ") : "";
+  const autoLanguage = autoDetails?.language;
+  const autoId = analysis?.id;
+  useEffect(() => {
+    if (isDemo || !autoId || !autoSample) return;
+    if (!needsAutoTranslate({ language: autoLanguage, sampleText: autoSample }, locale)) return;
+    if (!claimAutoTranslateAttempt(autoId, locale)) return;
+    setTranslating(true);
+    translateCaddieAnalysis(autoId, locale)
+      .catch((err) => console.error("GolfMe: automatic feedback translation failed.", err))
+      .finally(() => setTranslating(false));
+  }, [isDemo, autoId, autoSample, autoLanguage, locale, translateCaddieAnalysis]);
 
   // Opened cold (push tap from a killed app, web refresh) the list hasn't
   // loaded yet — wait for the first fetch before deciding the row is gone.
