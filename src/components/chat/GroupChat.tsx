@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { AlertCircle, Lock } from "lucide-react";
 import { useData } from "../../context/DataContext";
 import { useToast } from "../../context/ToastContext";
 import { Avatar } from "../ui/Avatar";
@@ -6,15 +7,28 @@ import { ChatComposer } from "./ChatComposer";
 import { groupChatDraftKey, loadChatDraft, saveChatDraft } from "../../lib/chatDraft";
 import { useLocale } from "../../i18n/LocaleContext";
 import { useKeyboardHeight } from "../../lib/useKeyboardHeight";
+import type { ChatMessage } from "../../types";
 
-export function GroupChat({ callId }: { callId: string }) {
-  const { currentUser, getGolfer, messagesForCall, sendMessage } = useData();
+// layout "card" (default): the inline card on the round page, list capped
+// at max-h-96. "page": the full-screen /messages/round/:id thread -- same
+// card, the list just fills the screen (svh: the small viewport, which the
+// keyboard never changes, so docking below works exactly as in the card).
+// Callers only render this for members (lib/roundChat.ts canReadRoundChat).
+const PAGE_LIST_HEIGHT = "calc(100svh - 18rem - env(safe-area-inset-top) - env(safe-area-inset-bottom))";
+
+export function GroupChat({ callId, layout = "card" }: { callId: string; layout?: "card" | "page" }) {
+  const { currentUser, getGolfer, getGolfCall, messagesForCall, sendMessage, retryRoundMessage, discardRoundMessage } = useData();
   const { showToast } = useToast();
   const { t } = useLocale();
   const [text, setText] = useState(() => loadChatDraft(groupChatDraftKey(callId)));
   const bottomRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const messages = messagesForCall(callId);
+  // Completed / cancelled: history stays, the composer is replaced by a
+  // read-only note (the round_messages insert policy refuses posts too).
+  const status = getGolfCall(callId)?.status;
+  const readOnly = status === "completed" || status === "cancelled";
+  const readOnlyNote = status === "cancelled" ? t("roundChat.cancelledReadOnly") : t("roundChat.endedReadOnly");
 
   // iOS keyboard (capacitor.config.ts Keyboard resize:"body"): that mode
   // only shrinks document.body's inline height -- the WebView, 100dvh and
@@ -29,7 +43,8 @@ export function GroupChat({ callId }: { callId: string }) {
   // keyboardHeight comes from the plugin's own events and is always 0 on
   // web, where nothing here changes.
   const keyboardHeight = useKeyboardHeight();
-  const composerDocked = keyboardHeight > 0;
+  // Never docked while read-only: there's no composer to dock.
+  const composerDocked = !readOnly && keyboardHeight > 0;
   const composerRef = useRef<HTMLDivElement>(null);
   const [composerHeight, setComposerHeight] = useState(0);
 
@@ -116,23 +131,36 @@ export function GroupChat({ callId }: { callId: string }) {
     saveChatDraft(groupChatDraftKey(callId), value);
   }
 
+  // Content filter: the message was removed, so put the text back (unless
+  // the golfer already started typing something new) to edit.
+  function restoreRejectedText(sending: string) {
+    showToast(t("moderation.objectionableContent"), "warning");
+    setText((current) => {
+      if (current.trim()) return current;
+      saveChatDraft(groupChatDraftKey(callId), sending);
+      return sending;
+    });
+  }
+
   async function handleSend() {
     const sending = text;
-    if (!sending.trim()) return;
-    // Clear right away so sending feels instant; if it fails, say so and put
-    // the text back (unless the golfer already started typing something new)
-    // so it can be retried instead of silently vanishing.
+    if (!sending.trim() || readOnly) return;
+    // Clear right away: the message shows at once (real accounts: as
+    // "sending", then a "Not sent · Tap to retry" bubble if it fails, so the
+    // text is never silently lost; demo: delivered instantly).
     updateText("");
     const result = await sendMessage(callId, sending);
-    if (result !== "sent") {
-      showToast(result === "objectionable" ? t("moderation.objectionableContent") : t("chat.sendFailedToast"), "warning");
-      setText((current) => {
-        if (current.trim()) return current;
-        saveChatDraft(groupChatDraftKey(callId), sending);
-        return sending;
-      });
-    }
+    if (result === "objectionable") restoreRejectedText(sending);
   }
+
+  async function handleRetry(m: ChatMessage) {
+    const result = await retryRoundMessage(m);
+    if (result === "objectionable") restoreRejectedText(m.text);
+  }
+
+  // A failed message once the round is over: retry can't help, so say why
+  // (discard is still offered, and the text stays visible to copy).
+  const failedAfterEndLabel = status === "cancelled" ? t("roundChat.notSentCancelled") : t("roundChat.notSentEnded");
 
   return (
     // Opted out of useDismissKeyboardOnDrag: while the composer is docked
@@ -144,7 +172,15 @@ export function GroupChat({ callId }: { callId: string }) {
       {/* justify-end bottom-anchors a short thread against the composer
           (same fix as DirectMessageThread) instead of stacking from the top
           and leaving the gap below instead. */}
-      <div ref={listRef} className="flex max-h-96 flex-col justify-end gap-3 overflow-y-auto px-4 py-4">
+      <div
+        ref={listRef}
+        className={`flex flex-col justify-end gap-3 overflow-y-auto px-4 py-4 ${layout === "page" ? "" : "max-h-96"}`}
+        // Page: fill the screen between the thread header and the bottom
+        // nav (18rem ~ top bar + header + composer + nav), so the composer
+        // sits low like a chat app. A fixed height, not one that follows the
+        // keyboard: the composer docks over the keyboard on its own.
+        style={layout === "page" ? { height: PAGE_LIST_HEIGHT, minHeight: "16rem" } : undefined}
+      >
         {messages.length === 0 && <p className="text-center text-sm text-slate-400">{t("chat.noMessagesYet")}</p>}
         {messages.map((m) => {
           if (m.system) {
@@ -156,18 +192,49 @@ export function GroupChat({ callId }: { callId: string }) {
           }
           const sender = getGolfer(m.senderId);
           const isMe = m.senderId === currentUser.id;
+          const failed = m.delivery === "failed";
           return (
-            <div key={m.id} className={`flex items-end gap-2 ${isMe ? "flex-row-reverse" : ""}`}>
+            <div key={m.clientId ?? m.id} className={`flex items-end gap-2 ${isMe ? "flex-row-reverse" : ""}`}>
               {sender && <Avatar golfer={sender} size="xs" showVerified={false} />}
               <div className={`flex max-w-[75%] flex-col ${isMe ? "items-end" : "items-start"}`}>
                 {!isMe && <span className="mb-0.5 text-[11px] font-medium text-slate-400">{sender?.name}</span>}
                 <div
-                  className={`rounded-2xl px-3.5 py-2 text-sm ${
-                    isMe ? "rounded-br-sm bg-fairway-600 text-white" : "rounded-bl-sm bg-slate-100 text-slate-800"
-                  }`}
+                  className={`rounded-2xl px-3.5 py-2 text-sm transition-opacity duration-200 ${
+                    failed
+                      ? "rounded-br-sm border border-rose-300 bg-rose-50 text-slate-800"
+                      : isMe
+                        ? "rounded-br-sm bg-fairway-600 text-white"
+                        : "rounded-bl-sm bg-slate-100 text-slate-800"
+                  } ${m.delivery === "sending" ? "opacity-60" : ""}`}
                 >
                   {m.text}
+                  {m.delivery === "sending" && <span className="sr-only"> ({t("roundChat.sending")})</span>}
                 </div>
+                {failed && m.clientId && (
+                  <div className="mt-1 flex items-center gap-3 text-[11px] font-semibold">
+                    {readOnly ? (
+                      <span className="flex items-center gap-1 text-rose-600">
+                        <AlertCircle size={12} aria-hidden="true" /> {failedAfterEndLabel}
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleRetry(m)}
+                        aria-label={t("roundChat.retryLabel")}
+                        className="flex items-center gap-1 rounded text-rose-600 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
+                      >
+                        <AlertCircle size={12} aria-hidden="true" /> {t("roundChat.notSentRetry")}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => discardRoundMessage(m.clientId!)}
+                      className="rounded text-slate-400 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+                    >
+                      {t("roundChat.discard")}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           );
@@ -178,6 +245,11 @@ export function GroupChat({ callId }: { callId: string }) {
           bottom of the page there's otherwise no room to scroll the latest
           content up above the docked bar (it's hidden under the keyboard). */}
       {composerDocked && <div aria-hidden="true" style={{ height: composerHeight + keyboardHeight }} />}
+      {readOnly ? (
+        <p role="status" className="flex items-center justify-center gap-1.5 border-t border-slate-100 px-4 py-3 text-center text-xs font-medium text-slate-500">
+          <Lock size={13} aria-hidden="true" className="shrink-0" /> {readOnlyNote}
+        </p>
+      ) : (
       <div
         ref={composerRef}
         onFocusCapture={rememberScrollBeforeKeyboard}
@@ -190,6 +262,7 @@ export function GroupChat({ callId }: { callId: string }) {
       >
         <ChatComposer value={text} onChange={updateText} onSend={handleSend} placeholder={t("chat.messagePlaceholder")} />
       </div>
+      )}
     </div>
   );
 }

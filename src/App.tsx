@@ -44,6 +44,7 @@ import { Profile } from "./pages/Profile";
 import { GolferProfilePage } from "./pages/GolferProfilePage";
 import { Inbox } from "./pages/Inbox";
 import { DirectMessageThread } from "./pages/DirectMessageThread";
+import { RoundChatThread } from "./pages/RoundChatThread";
 import { SwipeBackToInbox } from "./components/chat/SwipeBackToInbox";
 import { Community } from "./pages/Community";
 import { PostDetail } from "./pages/PostDetail";
@@ -452,6 +453,11 @@ export default function App() {
                   <Route path="/about" element={<About />} />
                   <Route path="/golfer/:id" element={<GolferProfilePage />} />
                   <Route path="/messages" element={<Inbox />} />
+                  {/* Round group chat. Three segments, so it never collides
+                      with /messages/:id (a DM, keyed by golfer id); declared
+                      first anyway so the intent is obvious. Not wrapped in
+                      SwipeBackToInbox (DM-only, frozen). */}
+                  <Route path="/messages/round/:id" element={<RoundChatThread />} />
                   <Route path="/messages/:id" element={<SwipeBackToInbox><DirectMessageThread /></SwipeBackToInbox>} />
                   <Route path="/community" element={<Community />} />
                   <Route path="/community/new" element={<CreatePost />} />

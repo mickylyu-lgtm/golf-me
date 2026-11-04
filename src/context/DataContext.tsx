@@ -42,7 +42,6 @@ import { avatarColorForName, initialsFromName } from "../lib/avatar";
 import { dmConversationId, otherParticipant } from "../lib/dm";
 import { useAuth } from "./AuthContext";
 import { placeholderGolferProfile, golferPatchToProfileRow } from "../lib/profile";
-import { isObjectionableContentError } from "../lib/objectionableContent";
 import type { SendMessageResult } from "../lib/objectionableContent";
 import { useRealRounds } from "./RealRoundsContext";
 import { useRealSocial } from "./RealSocialContext";
@@ -185,8 +184,16 @@ interface DataContextValue {
   approveRequest: (callId: string, golferId: string) => void;
   declineRequest: (callId: string, golferId: string) => void;
 
-  /** Resolves "failed" when a real round-chat message failed to send, or "objectionable" when the content filter rejected it (caller keeps the text either way). */
+  /** Round chat. Real: the message shows at once as sending; "failed" leaves it on screen as a failed bubble (retry/discard); "objectionable" removes it so the caller restores the text. Demo: instant. */
   sendMessage: (callId: string, text: string) => Promise<SendMessageResult>;
+  /** Re-sends a failed round message (a ChatMessage with delivery "failed"). No-op in demo. */
+  retryRoundMessage: (message: ChatMessage) => Promise<SendMessageResult>;
+  /** Drops a failed round message from this device. No-op in demo. */
+  discardRoundMessage: (clientId: string) => void;
+  /** The current golfer was in this round and left it. */
+  hasLeftGolfCall: (callId: string) => boolean;
+  /** A block exists either way between the current golfer and this golfer. */
+  isBlockedEitherWay: (id: string) => boolean;
 
   hasReviewed: (callId: string, revieweeId: string) => boolean;
   submitReview: (callId: string, revieweeId: string, input: ReviewInput) => void;
@@ -389,6 +396,24 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [auth.isDemo, data.golfers, currentUser, realRounds.profilesById, realSocial.profilesById, realSocial.discoverableGolfers],
   );
   const getGolfCall = useCallback((id: string) => golfCalls.find((c) => c.id === id), [golfCalls]);
+  // Same either-way check the golfCalls filter above uses.
+  const isBlockedEitherWay = useCallback(
+    (otherId: string) => {
+      const selfId = currentUser.id;
+      if (!otherId || otherId === selfId) return false;
+      return auth.isDemo
+        ? data.blocks.some((b) => (b.blockerId === selfId && b.blockedId === otherId) || (b.blockerId === otherId && b.blockedId === selfId))
+        : realIsBlocked(otherId) || realIsBlockedBy(otherId);
+    },
+    [currentUser.id, auth.isDemo, data.blocks, realIsBlocked, realIsBlockedBy],
+  );
+  // Demo has no participant rows, so "left" is remembered for this session
+  // only (cleared on rejoin). Real: round_participants.participant_status.
+  const [demoLeftCallIds, setDemoLeftCallIds] = useState<ReadonlySet<string>>(() => new Set());
+  const hasLeftGolfCall = useCallback(
+    (callId: string) => (auth.isDemo ? demoLeftCallIds.has(callId) : realRounds.hasLeftRound(callId)),
+    [auth.isDemo, demoLeftCallIds, realRounds],
+  );
   const messagesForCall = useCallback(
     (callId: string) => {
       if (!auth.isDemo) return realRounds.messagesForCall(callId);
@@ -619,6 +644,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
       }
       const call = data.golfCalls.find((c) => c.id === callId);
       if (!call) return;
+      setDemoLeftCallIds((prev) => {
+        if (!prev.has(callId)) return prev;
+        const next = new Set(prev);
+        next.delete(callId);
+        return next;
+      });
       const uid = data.currentUserId;
       if (call.joinedGolferIds.includes(uid) || call.pendingRequestIds.includes(uid)) return;
 
@@ -672,6 +703,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         ),
       }));
       addSystemMessage(callId, `${currentUser.name} left the round.`);
+      setDemoLeftCallIds((prev) => new Set(prev).add(callId));
     },
     [auth.isDemo, realRounds, addSystemMessage, currentUser.name],
   );
@@ -711,16 +743,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
       const trimmed = text.trim();
       if (!trimmed) return "failed";
       if (!auth.isDemo) {
-        // Surfaced to GroupChat (error toast + typed text restored) instead of
-        // failing silently — previously a failed send just vanished.
-        try {
-          await realRounds.sendRoundMessage(callId, trimmed);
-          return "sent";
-        } catch (err) {
-          if (isObjectionableContentError(err)) return "objectionable";
-          console.error("GolfMe: failed to send round message.", err);
-          return "failed";
-        }
+        // Pending/sent/failed lives in RealRoundsContext (never throws): a
+        // failure stays on screen as a "Not sent" bubble instead of vanishing.
+        return realRounds.sendRoundMessage(callId, trimmed);
       }
       setData((prev) => ({
         ...prev,
@@ -736,6 +761,20 @@ export function DataProvider({ children }: { children: ReactNode }) {
         ],
       }));
       return "sent";
+    },
+    [auth.isDemo, realRounds],
+  );
+
+  const retryRoundMessage = useCallback(
+    async (message: ChatMessage): Promise<SendMessageResult> => {
+      if (auth.isDemo || !message.clientId) return "failed";
+      return realRounds.retryRoundMessage({ clientId: message.clientId, roundId: message.golfCallId, text: message.text });
+    },
+    [auth.isDemo, realRounds],
+  );
+  const discardRoundMessage = useCallback(
+    (clientId: string) => {
+      if (!auth.isDemo) realRounds.discardRoundMessage(clientId);
     },
     [auth.isDemo, realRounds],
   );
@@ -1691,6 +1730,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
       approveRequest,
       declineRequest,
       sendMessage,
+      retryRoundMessage,
+      discardRoundMessage,
+      hasLeftGolfCall,
+      isBlockedEitherWay,
       hasReviewed,
       submitReview,
       reportUser,
@@ -1783,6 +1826,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
       approveRequest,
       declineRequest,
       sendMessage,
+      retryRoundMessage,
+      discardRoundMessage,
+      hasLeftGolfCall,
+      isBlockedEitherWay,
       hasReviewed,
       submitReview,
       reportUser,

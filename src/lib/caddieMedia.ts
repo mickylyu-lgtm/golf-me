@@ -1,4 +1,6 @@
 import { supabase } from "./supabase";
+import { removeOrphanedCommunityMedia } from "./communityMediaCleanup";
+import type { CleanupClient, CleanupResult } from "./communityMediaCleanup";
 
 // Private home for direct-upload Caddie swing videos, their thumbnails and
 // analyze-swing's trimmed copies (migration 20260925090000). Objects live at
@@ -84,6 +86,16 @@ export async function copyCaddieMediaToCommunity(ownerId: string, sourcePath: st
   const targetPath = `${ownerId}/${kind === "video" ? "swing" : "swing-thumb"}-${crypto.randomUUID()}.${ext}`;
   await copyObject(CADDIE_MEDIA_BUCKET, sourcePath, COMMUNITY_MEDIA_BUCKET, targetPath, kind === "video" ? "video/mp4" : "image/jpeg");
   return supabase.storage.from(COMMUNITY_MEDIA_BUCKET).getPublicUrl(targetPath).data.publicUrl;
+}
+
+/**
+ * After a failed publish: deletes the public community-media objects that
+ * attempt created (copyCaddieMediaToCommunity copies or fresh swing
+ * uploads), using the golfer's own session. Never touches caddie-media or
+ * anything a post row still references; see communityMediaCleanup.ts.
+ */
+export function removeCommunityMediaCreatedForFailedPost(ownerId: string, createdUrls: string[]): Promise<CleanupResult> {
+  return removeOrphanedCommunityMedia(supabase as unknown as CleanupClient, ownerId, createdUrls);
 }
 
 const PUBLIC_MARKER = `/storage/v1/object/public/${COMMUNITY_MEDIA_BUCKET}/`;

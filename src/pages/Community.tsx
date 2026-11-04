@@ -2,9 +2,14 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, MessageSquareText, Plus, Search } from "lucide-react";
 import { useData } from "../context/DataContext";
+import { useAuth } from "../context/AuthContext";
+import { useRealCommunity } from "../context/RealCommunityContext";
 import { useLocale } from "../i18n/LocaleContext";
 import { Button } from "../components/ui/Button";
 import { EmptyState } from "../components/ui/EmptyState";
+import { LoadErrorState, StaleDataNotice } from "../components/ui/LoadStates";
+import { GolfMeLoader } from "../components/loading/GolfMeLoader";
+import { listView } from "../lib/loadStatus";
 import { PostCard } from "../components/community/PostCard";
 import { rankForYou, rankFollowing, rankNearby } from "../lib/communityFeed";
 import type { FeedContext } from "../lib/communityFeed";
@@ -34,6 +39,10 @@ export function Community() {
   );
 
   const basePosts = useMemo(() => visiblePosts(), [visiblePosts]);
+  const { isDemo } = useAuth();
+  const community = useRealCommunity();
+  // A failed first load must not read as "no posts yet".
+  const view = listView({ count: basePosts.length, isDemo, hasLoaded: community.hasLoaded, loadError: community.loadError, isLoading: community.isLoading });
 
   const searched = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -113,7 +122,13 @@ export function Community() {
         ))}
       </div>
 
-      {feed.length === 0 ? (
+      {community.refreshFailed && <StaleDataNotice onRetry={community.retry} />}
+
+      {view === "loading" ? (
+        <GolfMeLoader className="py-12" />
+      ) : view === "error" ? (
+        <LoadErrorState onRetry={community.retry} />
+      ) : feed.length === 0 ? (
         <EmptyState
           icon={<MessageSquareText size={20} />}
           title={search ? t("community.emptyNoSearch") : t("community.emptyDefault")}

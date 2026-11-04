@@ -2,7 +2,12 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, CalendarDays, ClipboardList, MapPin, Search, Users } from "lucide-react";
 import { useData } from "../context/DataContext";
+import { useAuth } from "../context/AuthContext";
+import { useRealRounds } from "../context/RealRoundsContext";
 import { useLocale } from "../i18n/LocaleContext";
+import { LoadErrorState, StaleDataNotice } from "../components/ui/LoadStates";
+import { GolfMeLoader } from "../components/loading/GolfMeLoader";
+import { listView } from "../lib/loadStatus";
 import { Avatar } from "../components/ui/Avatar";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
@@ -15,9 +20,12 @@ import { vibeLabel } from "../lib/enumLabels";
 import { VIBE_TONE } from "../lib/theme";
 import type { GolfCall } from "../types";
 import { goBack } from "../lib/goBack";
+import { isUpcomingRound } from "../lib/golfCall";
 
 export function MyRounds() {
   const { currentUser, golfCalls, getGolfer, hasReviewed } = useData();
+  const { isDemo } = useAuth();
+  const rounds = useRealRounds();
   const { t, locale } = useLocale();
   const navigate = useNavigate();
   const [reviewTarget, setReviewTarget] = useState<{ call: GolfCall; revieweeId: string } | null>(null);
@@ -28,18 +36,23 @@ export function MyRounds() {
     [golfCalls, currentUser.id],
   );
 
+  // Upcoming = open/full with the tee time still ahead (isUpcomingRound,
+  // same rule as the Chat inbox's next-round card). An open/full round whose
+  // time has passed but nobody marked complete moves to Past instead of
+  // posing as upcoming.
   const upcoming = useMemo(
-    () =>
-      myCalls
-        .filter((c) => c.status === "open" || c.status === "full")
-        .sort((a, b) => a.dateISO.localeCompare(b.dateISO)),
+    () => myCalls.filter((c) => isUpcomingRound(c)).sort((a, b) => a.dateISO.localeCompare(b.dateISO)),
     [myCalls],
   );
 
   const past = useMemo(
-    () => myCalls.filter((c) => c.status === "completed" || c.status === "cancelled").sort((a, b) => b.dateISO.localeCompare(a.dateISO)),
+    () => myCalls.filter((c) => !isUpcomingRound(c)).sort((a, b) => b.dateISO.localeCompare(a.dateISO)),
     [myCalls],
   );
+
+  // A failed first load must not read as "no upcoming / no past rounds".
+  const view = listView({ count: myCalls.length, isDemo, hasLoaded: rounds.hasLoaded, loadError: rounds.loadError, isLoading: rounds.isLoading });
+  const sectionsVisible = view === "list" || view === "empty";
 
   return (
     <div className="flex flex-col gap-8">
@@ -55,7 +68,12 @@ export function MyRounds() {
         <p className="text-sm text-slate-500">{t("myGolf.subtitle")}</p>
       </div>
 
-      <section>
+      {rounds.refreshFailed && <StaleDataNotice onRetry={rounds.retry} />}
+
+      {view === "loading" && <GolfMeLoader className="py-12" />}
+      {view === "error" && <LoadErrorState onRetry={rounds.retry} />}
+
+      <section hidden={!sectionsVisible}>
         <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-400">{t("myGolf.upcoming")}</h2>
         {upcoming.length === 0 ? (
           <EmptyState
@@ -112,7 +130,7 @@ export function MyRounds() {
         )}
       </section>
 
-      <section>
+      <section hidden={!sectionsVisible}>
         <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-400">{t("myGolf.past")}</h2>
         {past.length === 0 ? (
           <EmptyState icon={<ClipboardList size={20} />} title={t("myGolf.emptyPast")} description={t("myGolf.emptyPastDesc")} />
@@ -134,7 +152,9 @@ export function MyRounds() {
                         <CalendarDays size={12} /> {formatDate(c.dateISO, locale, t)}
                       </p>
                     </div>
-                    <Badge tone={c.status === "cancelled" ? "rose" : "slate"}>{c.status === "cancelled" ? t("myGolf.cancelled") : t("myGolf.completed")}</Badge>
+                    <Badge tone={c.status === "cancelled" ? "rose" : c.status === "completed" ? "slate" : "outline"}>
+                      {c.status === "cancelled" ? t("myGolf.cancelled") : c.status === "completed" ? t("myGolf.completed") : t("myGolf.notCompleted")}
+                    </Badge>
                   </button>
 
                   {c.status === "completed" && teammates.length > 0 && (

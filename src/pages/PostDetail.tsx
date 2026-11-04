@@ -5,6 +5,7 @@ import { useData } from "../context/DataContext";
 import { useToast } from "../context/ToastContext";
 import { useRealCommunity } from "../context/RealCommunityContext";
 import { GolfMeLoader } from "../components/loading/GolfMeLoader";
+import { LoadErrorState } from "../components/ui/LoadStates";
 import { useLocale } from "../i18n/LocaleContext";
 import { Button } from "../components/ui/Button";
 import { Avatar } from "../components/ui/Avatar";
@@ -20,7 +21,7 @@ export function PostDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { getPost, commentsForPost, createComment, currentUser } = useData();
-  const { hasLoaded: communityLoaded } = useRealCommunity();
+  const { hasLoaded: communityLoaded, loadError: communityLoadError, isLoading: communityLoading, retry: retryCommunity } = useRealCommunity();
   const { showToast } = useToast();
   const { t } = useLocale();
   const [commentText, setCommentText] = useState(() => (id ? loadChatDraft(postCommentDraftKey(id)) : ""));
@@ -112,6 +113,8 @@ export function PostDetail() {
   // Opened cold (shared link, refresh) the feed may not have loaded yet —
   // wait rather than flash "not found".
   if (!post && !communityLoaded) return <GolfMeLoader className="py-12" />;
+  // The feed never loaded: that's a connection problem, not "not found".
+  if (!post && communityLoadError) return communityLoading ? <GolfMeLoader className="py-12" /> : <LoadErrorState onRetry={retryCommunity} />;
   if (!post) {
     return (
       <div className="py-12 text-center text-slate-500">

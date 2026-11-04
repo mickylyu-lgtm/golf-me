@@ -1,13 +1,18 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Bell, ChevronRight, Plus, Search, SlidersHorizontal, Users, X } from "lucide-react";
+import { ChevronRight, Plus, Search, SlidersHorizontal, Users, X } from "lucide-react";
 import { useData } from "../context/DataContext";
-import { useToast } from "../context/ToastContext";
+import { useAuth } from "../context/AuthContext";
+import { useRealRounds } from "../context/RealRoundsContext";
 import { useLocale } from "../i18n/LocaleContext";
 import { GolfCallCard } from "../components/golfcall/GolfCallCard";
 import { Button } from "../components/ui/Button";
 import { EmptyState } from "../components/ui/EmptyState";
+import { LoadErrorState, StaleDataNotice } from "../components/ui/LoadStates";
+import { GolfMeLoader } from "../components/loading/GolfMeLoader";
 import { FindRoundModal } from "../components/find/FindRoundModal";
+import { RoundAlertsCard } from "../components/find/RoundAlertsCard";
+import { listView } from "../lib/loadStatus";
 import type { GolfCall, GolfVibe, SkillFilter, WalkOrCart } from "../types";
 import { computeCallCompatibility } from "../lib/compatibility";
 import { matchesWhen } from "../lib/roundFilters";
@@ -22,13 +27,15 @@ interface GolfCallsProps {
 
 export function GolfCalls({ embedded = false }: GolfCallsProps) {
   const { currentUser, golfCalls } = useData();
-  const { showToast } = useToast();
+  const { isDemo } = useAuth();
+  const rounds = useRealRounds();
   const { t } = useLocale();
   const navigate = useNavigate();
   const [query, setQuery] = useSessionState<string>("golfme:roundSearch", "");
   const [wizardOpen, setWizardOpen] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
-  const [notified, setNotified] = useState(false);
+  // A failed first load must not read as "no rounds near you".
+  const view = listView({ count: golfCalls.length, isDemo, hasLoaded: rounds.hasLoaded, loadError: rounds.loadError, isLoading: rounds.isLoading });
 
   const isMatched = searchParams.get("matched") === "1";
   const when = searchParams.get("when");
@@ -107,11 +114,6 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
 
   function clearSearch() {
     setSearchParams({});
-  }
-
-  function handleNotifyMe() {
-    setNotified(true);
-    showToast(t("find.willNotify"), "success");
   }
 
   const results: GolfCall[] = isMatched ? (matchedResults ?? []).map((r) => r.call) : defaultResults;
@@ -201,20 +203,24 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
         <h2 className="text-sm font-bold uppercase tracking-wide text-slate-400">{t("find.nearYou")}</h2>
       )}
 
-      {results.length === 0 ? (
+      {rounds.refreshFailed && <StaleDataNotice onRetry={rounds.retry} />}
+
+      {view === "loading" ? (
+        <GolfMeLoader className="py-12" />
+      ) : view === "error" ? (
+        <LoadErrorState onRetry={rounds.retry} />
+      ) : results.length === 0 ? (
         isMatched ? (
           <EmptyState
             icon={<SlidersHorizontal size={20} />}
             title={t("find.emptyNoMatches")}
             description={t("find.emptyNoMatchesDesc")}
             action={
-              <div className="flex flex-wrap justify-center gap-2">
+              <div className="flex w-full flex-col items-center gap-3">
                 <Button size="sm" onClick={() => navigate("/golf-calls/new")}>
                   {t("find.createGolfCall")}
                 </Button>
-                <Button size="sm" variant="outline" icon={<Bell size={14} />} disabled={notified} onClick={handleNotifyMe}>
-                  {notified ? t("find.notifiedMe") : t("find.notifyMe")}
-                </Button>
+                <RoundAlertsCard />
               </div>
             }
           />

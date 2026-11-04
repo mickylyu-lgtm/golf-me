@@ -1,6 +1,8 @@
 import type { GolfCall } from "../types";
-import { haversineMiles } from "./geo";
-import type { GeoPoint } from "./geo";
+// Explicit .ts so tests/roundChat.test.ts can load this module under
+// node --test (same as coachReplay.ts -> swingAssessment.ts).
+import { haversineMiles } from "./geo.ts";
+import type { GeoPoint } from "./geo.ts";
 
 // A round's dateISO is noon on the host's chosen day, converted to UTC
 // (CreateGolfCall / EditTeeTimeModal: new Date(`${date}T12:00:00`)). For
@@ -74,6 +76,68 @@ export function isPastRound(call: Pick<GolfCall, "dateISO">): boolean {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return roundDay.getTime() < today.getTime();
+}
+
+type RoundTiming = Pick<GolfCall, "dateISO" | "timeLabel">;
+
+// When the round starts, in the viewer's local clock: the round's calendar
+// day (roundCalendarDay, so every viewer agrees on the day) at its tee time.
+// timeKnown is false when the label isn't a clock time ("Morning", "TBD");
+// start is then local midnight of that day. Null for an unreadable date.
+export function roundStartTime(call: RoundTiming): { start: Date; timeKnown: boolean } | null {
+  const day = roundCalendarDay(call.dateISO);
+  if (Number.isNaN(day.getTime())) return null;
+  const time = parseTeeTimeLabel(call.timeLabel);
+  if (time) day.setHours(time.hours, time.minutes, 0, 0);
+  else day.setHours(0, 0, 0, 0);
+  return { start: day, timeKnown: Boolean(time) };
+}
+
+// Still to be played: open or full, and the tee time hasn't passed. With no
+// readable tee time it stays upcoming for its whole day. An unreadable date
+// stays upcoming (as before this helper existed) rather than vanishing.
+export function isUpcomingRound(call: RoundTiming & Pick<GolfCall, "status">, now: Date = new Date()): boolean {
+  if (call.status !== "open" && call.status !== "full") return false;
+  const timing = roundStartTime(call);
+  if (!timing) return true;
+  if (timing.timeKnown) return timing.start.getTime() >= now.getTime();
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  return timing.start.getTime() >= today.getTime();
+}
+
+// Ordering key for "soonest first". A round with no clock time sorts as
+// midday on its day.
+export function roundSortTime(call: RoundTiming): number {
+  const timing = roundStartTime(call);
+  if (!timing) return Number.POSITIVE_INFINITY;
+  return timing.timeKnown ? timing.start.getTime() : timing.start.getTime() + 12 * 60 * 60 * 1000;
+}
+
+function isMyRound(call: Pick<GolfCall, "hostId" | "joinedGolferIds">, viewerId: string): boolean {
+  return call.hostId === viewerId || call.joinedGolferIds.includes(viewerId);
+}
+
+// The Chat inbox's pinned "next round": the earliest upcoming round the
+// viewer hosts or has joined. Null when there isn't one.
+export function nextUpcomingRound<T extends GolfCall>(calls: readonly T[], viewerId: string, now: Date = new Date()): T | null {
+  let best: T | null = null;
+  for (const c of calls) {
+    if (!isMyRound(c, viewerId) || !isUpcomingRound(c, now)) continue;
+    if (!best || roundSortTime(c) < roundSortTime(best) || (roundSortTime(c) === roundSortTime(best) && c.id < best.id)) best = c;
+  }
+  return best;
+}
+
+// The Chat inbox's Rounds list: every round the viewer hosts or has joined
+// (a round they left isn't in joinedGolferIds, so it drops out). Upcoming
+// rounds first, soonest first; then everything else (past-dated, completed,
+// cancelled), most recent first.
+export function orderRoundChats<T extends GolfCall>(calls: readonly T[], viewerId: string, now: Date = new Date()): T[] {
+  const mine = calls.filter((c) => isMyRound(c, viewerId));
+  const upcoming = mine.filter((c) => isUpcomingRound(c, now)).sort((a, b) => roundSortTime(a) - roundSortTime(b) || a.id.localeCompare(b.id));
+  const rest = mine.filter((c) => !isUpcomingRound(c, now)).sort((a, b) => roundSortTime(b) - roundSortTime(a) || a.id.localeCompare(b.id));
+  return [...upcoming, ...rest];
 }
 
 export interface RoundRow {

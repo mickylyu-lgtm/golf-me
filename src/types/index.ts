@@ -246,6 +246,12 @@ export interface ChatMessage {
   text: string;
   createdAt: string;
   system?: boolean;
+  /** Real round chat only: this device's message that isn't confirmed yet (lib/roundChat.ts). Unset = delivered. */
+  delivery?: "sending" | "failed";
+  /** Why a `delivery: "failed"` message failed. */
+  failure?: "rejected" | "network";
+  /** Local id of a message sent from this device, for retry/discard. */
+  clientId?: string;
 }
 
 export type PaceOfPlay = "Fast" | "Good" | "Slow";
