@@ -11,6 +11,7 @@ import { ChatComposer } from "../components/chat/ChatComposer";
 import { FounderBadge } from "../components/golfer/TrustBadges";
 import { dmDraftKey, loadChatDraft, saveChatDraft } from "../lib/chatDraft";
 import { useKeyboardHeight } from "../lib/useKeyboardHeight";
+import { lockPageScroll } from "../lib/scrollLock";
 import { useTypingIndicator } from "../lib/useTypingIndicator";
 import { TypingBubble } from "../components/chat/TypingBubble";
 import { handicapLabel } from "../lib/format";
@@ -254,13 +255,9 @@ export function DirectMessageThread() {
   // scroll while this thread is open (same technique already used for
   // CaddieSwingReplay's fullscreen mode) makes that true regardless of
   // whether the height math above is ever slightly off.
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, []);
+  // Counted (lib/scrollLock): a sheet opened over the thread (Report) and
+  // released in any order never leaves the page stuck or unlocked.
+  useEffect(() => lockPageScroll(), []);
 
   // (The old WKWebView keyboard-pan-vs-sticky-TopBar cancel-scroll hack --
   // useCancelKeyboardViewportPan, force-scrolling to (0,0) on every

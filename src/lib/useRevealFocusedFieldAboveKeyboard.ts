@@ -112,9 +112,13 @@ export function useRevealFocusedFieldAboveKeyboard() {
 
     const onFocusIn = (e: FocusEvent) => {
       const field = textField(e.target instanceof Element ? e.target : null);
-      if (!field || !scrollsWithWindow(field)) return;
-      ensureRoom(field);
+      if (!field) return;
+      // Scheduled before the check (reveal() checks again a frame later):
+      // focus moving from a docked composer to this field with the keyboard
+      // up undocks it, and its page lock is only released after this runs.
       if (keyboardHeight > 0) scheduleReveal();
+      if (!scrollsWithWindow(field)) return;
+      ensureRoom(field);
     };
 
     const showListener = Keyboard.addListener("keyboardWillShow", (info: KeyboardInfo) => {

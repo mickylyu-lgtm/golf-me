@@ -18,6 +18,7 @@ import { isMatchedSearch, parseRoundSearch, quickAutoMatchSearch } from "../lib/
 import { computeCallCompatibility } from "../lib/compatibility";
 import { matchesWhen } from "../lib/roundFilters";
 import { isPastRound } from "../lib/golfCall";
+import { isImeComposing } from "../lib/isImeComposing";
 import { effectiveLocation } from "../lib/travelLocation";
 import { resolveCallDistanceMiles } from "../lib/courseSearch";
 import { useSessionState } from "../lib/useSessionState";
@@ -165,7 +166,7 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
             enterKeyHint="search"
             onKeyDown={(e) => {
               // Search is live as you type; Return just closes the keyboard.
-              if (e.key === "Enter") e.currentTarget.blur();
+              if (e.key === "Enter" && !isImeComposing(e)) e.currentTarget.blur();
             }}
             className="w-full rounded-full border border-slate-200 bg-white py-2.5 pl-9 pr-4 text-sm outline-none transition focus:border-fairway-400"
           />

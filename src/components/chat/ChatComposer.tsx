@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { Send, Smile } from "lucide-react";
 import { EmojiPicker } from "./EmojiPicker";
+import { isSendEnter } from "../../lib/isImeComposing";
 
 const MAX_TEXTAREA_HEIGHT_PX = 120;
 
@@ -33,7 +34,8 @@ export function ChatComposer({ value, onChange, onSend, placeholder = "Type a me
   }, [value]);
 
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === "Enter" && !e.shiftKey) {
+    // Not while an IME is composing: that Enter confirms a candidate.
+    if (isSendEnter(e)) {
       e.preventDefault();
       onSend();
     }

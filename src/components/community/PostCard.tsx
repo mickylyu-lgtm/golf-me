@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Capacitor } from "@capacitor/core";
 import {
   Bookmark,
   Loader2,
@@ -304,8 +305,13 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
       return;
     }
     const input = document.getElementById("comment-composer-input");
-    input?.scrollIntoView({ behavior: "smooth", block: "center" });
-    input?.focus();
+    // Focus without its own jump. iOS app: no scroll at all -- the composer
+    // docks itself above the keyboard and scrolls the comments into view; a
+    // smooth scroll still running then fought that dock scroll (and left
+    // the "where to put the page back" position mid-animation). Web: the
+    // smooth scroll alone brings it into view.
+    if (!Capacitor.isNativePlatform()) input?.scrollIntoView({ behavior: "smooth", block: "center" });
+    input?.focus({ preventScroll: true });
   }
 
   function stop(e: React.MouseEvent) {
