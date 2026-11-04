@@ -16,6 +16,7 @@ import { formatDistanceMiles } from "../lib/geo";
 import type { PlayingArea } from "../lib/geo";
 import { TEE_TIMES_VISIBLE, matchSupportedTeeTimeCourse } from "../services/teeTimes/types";
 import { goBack } from "../lib/goBack";
+import { initialBrowseArea, withBrowseArea } from "../lib/browseArea";
 import { loadMapCamera, prefersReducedMotion, saveMapCamera } from "../lib/courseMapCamera";
 
 // "Golf Courses Near You" as a full-screen map (Micky, 2026-11-04, after
@@ -59,8 +60,11 @@ export function CourseMap() {
   const routerLocation = useLocation();
   const routeState = (routerLocation.state as CourseMapState | null) ?? {};
 
-  const [area, setArea] = useState<PlayingArea | undefined>(
-    routeState.area ?? (currentUser.playingAreaCoords ? { label: currentUser.areaLabel, coords: currentUser.playingAreaCoords } : undefined),
+  const [area, setArea] = useState<PlayingArea | undefined>(() =>
+    initialBrowseArea(
+      routeState,
+      currentUser.playingAreaCoords ? { label: currentUser.areaLabel, coords: currentUser.playingAreaCoords } : undefined,
+    ),
   );
   const lat = area?.coords?.lat;
   const lng = area?.coords?.lng;
@@ -404,6 +408,9 @@ export function CourseMap() {
             setArea(picked);
             setSelectedKey(null);
             setLocationPickerOpen(false);
+            // Kept on this history entry, so a remount after Back (a tee-time
+            // page, Host here) stays on this area and its kept camera.
+            navigate("/courses/map", { replace: true, state: withBrowseArea<CourseMapState>(routeState, picked) });
           }}
           onClose={() => setLocationPickerOpen(false)}
         />

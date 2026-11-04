@@ -18,6 +18,7 @@ import { useCourseImageMode } from "../lib/coursePhotos";
 import { satelliteImageryEnabled } from "../lib/courseImagery";
 import { openCourse } from "../lib/openCourse";
 import { goBack } from "../lib/goBack";
+import { initialBrowseArea, withBrowseArea } from "../lib/browseArea";
 
 // Standalone "Golf Courses Near You" results screen — reuses the existing
 // nearby-course source end to end (Geoapify via useNearbyCourses, the same
@@ -31,10 +32,11 @@ export function NearbyCourses() {
   const { t } = useLocale();
   const navigate = useNavigate();
   const routerLocation = useLocation();
-  const passedArea = (routerLocation.state as { area?: PlayingArea } | null)?.area;
-
-  const [area, setArea] = useState<PlayingArea | undefined>(
-    passedArea ?? (currentUser.playingAreaCoords ? { label: currentUser.areaLabel, coords: currentUser.playingAreaCoords } : undefined),
+  const [area, setArea] = useState<PlayingArea | undefined>(() =>
+    initialBrowseArea(
+      routerLocation.state,
+      currentUser.playingAreaCoords ? { label: currentUser.areaLabel, coords: currentUser.playingAreaCoords } : undefined,
+    ),
   );
   const [locationPickerOpen, setLocationPickerOpen] = useState(false);
 
@@ -49,6 +51,9 @@ export function NearbyCourses() {
   function handleLocationSelected(picked: PlayingArea) {
     setArea(picked);
     setLocationPickerOpen(false);
+    // Kept on this history entry, so opening a course and coming Back
+    // stays on this area (lib/browseArea); the saved area is untouched.
+    navigate(routerLocation.pathname, { replace: true, state: withBrowseArea(routerLocation.state as object | null, picked) });
   }
 
   return (
