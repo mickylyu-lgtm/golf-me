@@ -679,8 +679,13 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
             message="You won't see each other's posts, profiles, or Golf Calls, and they won't be able to message you. You can unblock anytime from Settings."
             confirmLabel="Block"
             danger
-            onConfirm={() => {
-              blockUser(author.id);
+            onConfirm={async () => {
+              try {
+                await blockUser(author.id);
+              } catch {
+                showToast(`Couldn't block ${author.name}. Check your connection and try again.`, "warning");
+                return;
+              }
               setBlockConfirmOpen(false);
               showToast(`Blocked ${author.name}.`, "info");
             }}

@@ -207,8 +207,9 @@ interface DataContextValue {
     context: Report["context"],
     meta?: { golfCallId?: string; postId?: string; commentId?: string; messageId?: string },
   ) => Promise<void>;
-  blockUser: (blockedId: string) => void;
-  unblockUser: (blockedId: string) => void;
+  // Reject on failure, so callers only confirm a block that actually saved.
+  blockUser: (blockedId: string) => Promise<void>;
+  unblockUser: (blockedId: string) => Promise<void>;
   isBlocked: (id: string) => boolean;
   blockedIds: string[];
 
@@ -852,9 +853,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
   );
 
   const blockUser = useCallback(
-    (blockedId: string) => {
+    async (blockedId: string) => {
       if (!auth.isDemo) {
-        realSocial.blockUser(blockedId).catch((err) => console.error("GolfMe: failed to block user.", err));
+        await realSocial.blockUser(blockedId).catch((err) => {
+          console.error("GolfMe: failed to block user.", err);
+          throw err;
+        });
         return;
       }
       setData((prev) => ({
@@ -866,9 +870,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
   );
 
   const unblockUser = useCallback(
-    (blockedId: string) => {
+    async (blockedId: string) => {
       if (!auth.isDemo) {
-        realSocial.unblockUser(blockedId).catch((err) => console.error("GolfMe: failed to unblock user.", err));
+        await realSocial.unblockUser(blockedId).catch((err) => {
+          console.error("GolfMe: failed to unblock user.", err);
+          throw err;
+        });
         return;
       }
       setData((prev) => ({

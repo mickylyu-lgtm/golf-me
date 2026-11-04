@@ -182,8 +182,10 @@ export function GolferProfilePage() {
                 onClick={() => {
                   setMenuOpen(false);
                   if (blocked) {
-                    unblockUser(golfer.id);
-                    showToast(`Unblocked ${golfer.name}.`, "info");
+                    unblockUser(golfer.id).then(
+                      () => showToast(`Unblocked ${golfer.name}.`, "info"),
+                      () => showToast(`Couldn't unblock ${golfer.name}. Check your connection and try again.`, "warning"),
+                    );
                   } else {
                     setBlockConfirmOpen(true);
                   }
@@ -423,8 +425,13 @@ export function GolferProfilePage() {
           message="You won't see each other's profiles or Golf Calls, and they won't be able to message you. You can unblock anytime from this profile."
           confirmLabel="Block"
           danger
-          onConfirm={() => {
-            blockUser(golfer.id);
+          onConfirm={async () => {
+            try {
+              await blockUser(golfer.id);
+            } catch {
+              showToast(`Couldn't block ${golfer.name}. Check your connection and try again.`, "warning");
+              return;
+            }
             setBlockConfirmOpen(false);
             showToast(`Blocked ${golfer.name}.`, "info");
           }}

@@ -303,8 +303,10 @@ export function Settings() {
                   <p className="flex-1 text-sm text-slate-700">{g.name}</p>
                   <button
                     onClick={() => {
-                      unblockUser(g.id);
-                      showToast(`Unblocked ${g.name}.`, "info");
+                      unblockUser(g.id).then(
+                        () => showToast(`Unblocked ${g.name}.`, "info"),
+                        () => showToast(`Couldn't unblock ${g.name}. Check your connection and try again.`, "warning"),
+                      );
                     }}
                     className="text-xs font-semibold text-fairway-700 hover:underline"
                   >

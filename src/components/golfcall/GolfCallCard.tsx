@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import type { GolfCall, GolferProfile } from "../../types";
@@ -61,11 +61,16 @@ export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
     return evaluatePreferenceMatch(currentUser, currentUser.id, call, roster, ctx);
   }, [showMatch, isHost, call, getGolfer, followingGolfers, circleGolfers, playedWithIds, currentUser]);
 
+  // Like GolfCallDetail's join: a quick double tap must not send a second
+  // join request while the first is still going through.
+  const [joining, setJoining] = useState(false);
   async function handleJoin(e: React.MouseEvent) {
     e.stopPropagation();
-    track("first_round_joined");
+    if (joining) return;
+    setJoining(true);
     try {
       await joinGolfCall(call.id);
+      track("first_round_joined");
       showToast(
         call.joinMode === "instant"
           ? t("golfCallDetail.joinedInstantToast", { date: formatDate(call.dateISO, locale, t) })
@@ -76,6 +81,8 @@ export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
       // Real, atomic failure (e.g. someone else took the last spot) —
       // surfaced, never a silent no-op.
       showToast(err instanceof Error ? err.message : t("golfCallDetail.joinError"), "warning");
+    } finally {
+      setJoining(false);
     }
   }
 
@@ -94,7 +101,7 @@ export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
     cta = <Badge tone="slate">{t("golfCallDetail.full")}</Badge>;
   } else {
     cta = (
-      <Button size="sm" icon={<ArrowRight size={13} />} className="flex-row-reverse" onClick={handleJoin}>
+      <Button size="sm" icon={<ArrowRight size={13} />} className="flex-row-reverse" disabled={joining} onClick={handleJoin}>
         {call.joinMode === "instant" ? t("golfCallDetail.joinRound") : t("golfCallDetail.requestToJoinButton")}
       </Button>
     );

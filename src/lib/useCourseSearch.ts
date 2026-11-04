@@ -42,14 +42,18 @@ export function useNearbyCourses(location: PlayingArea | undefined, radiusMiles:
   const lng = location?.coords?.lng;
 
   useEffect(() => {
+    // These branches also clear `loading`: a request cancelled when the
+    // location goes away never reaches its own finally below.
     if (lat == null || lng == null) {
       setResults([]);
       setError(null);
+      setLoading(false);
       return;
     }
     if (isDemo) {
       setResults(getNearbyCoursesMock(location!, radiusMiles));
       setError(null);
+      setLoading(false);
       return;
     }
     let cancelled = false;
