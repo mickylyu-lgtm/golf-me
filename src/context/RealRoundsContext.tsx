@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { supabase } from "../lib/supabase";
+import { refetchOnResume } from "../lib/resumeRefetch";
 import { useAuth } from "./AuthContext";
 import { realRoundToGolfCall } from "../lib/golfCall";
 import type { RoundRow, ParticipantRow } from "../lib/golfCall";
@@ -108,6 +109,12 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
   // nothing to trigger a follow-up. This now runs one more refetch right
   // after the in-flight one finishes instead of losing the event.
   const pendingRefetchRef = useRef(false);
+  // The signed-in user right now, and the latest refetch: a fetch started
+  // under one account (e.g. before switching profiles) must not write its
+  // results for the next one, and its follow-up must run as the new one.
+  const userIdRef = useRef(authUser?.id);
+  userIdRef.current = authUser?.id;
+  const refetchRef = useRef<() => Promise<void>>(async () => {});
 
   const refetch = useCallback(async () => {
     if (fetchingRef.current) {
@@ -115,6 +122,8 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
       return;
     }
     fetchingRef.current = true;
+    const forUser = authUser?.id;
+    const stale = () => userIdRef.current !== forUser;
     try {
       const [
         { data: roundRows, error: roundsError },
@@ -133,6 +142,7 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
       if (participantsError) throw participantsError;
       if (reviewsError) throw reviewsError;
       if (messagesError) throw messagesError;
+      if (stale()) return;
 
       const nextRounds = (roundRows ?? []) as RoundRow[];
       const nextParticipants = (participantRows ?? []) as ParticipantRow[];
@@ -147,6 +157,7 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
       if (ids.size > 0) {
         const { data: profileRows, error: profilesError } = await supabase.from("profiles").select("*").in("id", Array.from(ids));
         if (profilesError) throw profilesError;
+        if (stale()) return;
         const map = new Map<string, GolferProfile>();
         for (const row of (profileRows ?? []) as ProfileRow[]) map.set(row.id, profileRowToGolferProfile(row));
         setProfilesById(map);
@@ -157,15 +168,16 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error("GolfMe: failed to load real rounds.", err);
       // State is left as it was: a failed refresh keeps the last good data.
-      setLoadStatus((prev) => applyLoadOutcome(prev, false));
+      if (!stale()) setLoadStatus((prev) => applyLoadOutcome(prev, false));
     } finally {
       fetchingRef.current = false;
       if (pendingRefetchRef.current) {
         pendingRefetchRef.current = false;
-        refetch();
+        void refetchRef.current();
       }
     }
   }, [authUser]);
+  refetchRef.current = refetch;
 
   useEffect(() => {
     if (isDemo || !authUser) {
@@ -193,9 +205,11 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "round_participants" }, () => refetch())
       .on("postgres_changes", { event: "*", schema: "public", table: "round_messages" }, () => refetch())
       .subscribe();
+    const stopResume = refetchOnResume(() => void refetch());
 
     return () => {
       supabase.removeChannel(channel);
+      stopResume();
     };
   }, [isDemo, authUser, refetch]);
 

@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { supabase } from "../lib/supabase";
+import { refetchOnResume } from "../lib/resumeRefetch";
 import { privatizeAnalysesOfPost } from "../lib/caddieMedia";
 import { useAuth } from "./AuthContext";
 import { profileRowToGolferProfile } from "../lib/profile";
@@ -248,9 +249,11 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "community_comments" }, () => refetch())
       .on("postgres_changes", { event: "*", schema: "public", table: "community_post_votes" }, () => refetch())
       .subscribe();
+    const stopResume = refetchOnResume(() => void refetch());
 
     return () => {
       supabase.removeChannel(channel);
+      stopResume();
     };
   }, [isDemo, selfId, refetch]);
 
