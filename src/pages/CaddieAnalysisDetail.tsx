@@ -18,7 +18,7 @@ import { formatShortDate } from "../lib/format";
 import { postFeedbackThenMark } from "../lib/caddieShare";
 import { isStaleProcessing, usePeriodicRerender } from "../lib/caddieAnalysis";
 import { AUTO_TRANSLATE_RETRY_MS, claimAutoTranslateAttempt, feedbackSampleText, isTooSoonError, needsAutoTranslate, releaseAutoTranslateAttempt, showsLanguageNotice } from "../lib/caddieLanguage";
-import { isExplicitCaddieLocale, isTranslationRunning, queueTranslation, whenTranslationSettled } from "../lib/caddieAutoTranslate";
+import { isExplicitCaddieLocale, isTranslationRunning, queueAutoTranslation, queueTranslation, whenTranslationSettled } from "../lib/caddieAutoTranslate";
 import { FAILURE_BODY_KEYS, FAILURE_TITLE_KEYS, analysisFailure } from "../lib/caddieFailure";
 import type { CaddieConfidence, CaddieCameraAngle, CaddieScoreCriterionKey } from "../types";
 import type { CreatePostSwingPrefill } from "./CreatePost";
@@ -132,6 +132,9 @@ export function CaddieAnalysisDetail() {
   const autoLanguage = autoDetails?.language;
   const autoId = analysis?.id;
   const autoRetryTimerRef = useRef<number | null>(null);
+  // The app's language right now, for queued jobs deciding whether they're stale.
+  const localeRef = useRef(locale);
+  localeRef.current = locale;
   const [autoTick, setAutoTick] = useState(0);
   useEffect(() => {
     if (isDemo || !autoId || !autoSample) return;
@@ -146,10 +149,19 @@ export function CaddieAnalysisDetail() {
     if (!needsAutoTranslate({ language: autoLanguage, sampleText: autoSample }, locale, isExplicitCaddieLocale(locale))) return;
     if (!claimAutoTranslateAttempt(autoId, locale)) return;
     setTranslating(true);
-    queueTranslation(autoId, () => translateCaddieAnalysis(autoId, locale))
+    const target = locale;
+    // Skipped if the app has moved to another language before this job's
+    // turn in the queue: the last language picked is the one that counts.
+    queueAutoTranslation(autoId, target, () => localeRef.current, translateCaddieAnalysis)
+      // A translation that went through (or was skipped) gives the attempt
+      // back: the stored language now says where the text is, so coming back
+      // to this language later translates again instead of being refused as
+      // "already tried" (Micky, 2026-11-04: switching fast still missed).
+      // Only real failures keep it used, so they can't loop.
+      .then(() => releaseAutoTranslateAttempt(autoId, target))
       .catch((err) => {
         if (isTooSoonError(err)) {
-          releaseAutoTranslateAttempt(autoId, locale);
+          releaseAutoTranslateAttempt(autoId, target);
           autoRetryTimerRef.current = window.setTimeout(() => setAutoTick((n) => n + 1), AUTO_TRANSLATE_RETRY_MS);
         } else {
           console.error("GolfMe: automatic feedback translation failed.", err);

@@ -13,7 +13,7 @@ import { FAILURE_SHORT_KEYS, analysisFailure } from "../lib/caddieFailure";
 import { clubLabel } from "../lib/clubLabel";
 import { useAuth } from "../context/AuthContext";
 import { claimAutoTranslateAttempt, feedbackSampleText, isTooSoonError, needsAutoTranslate, releaseAutoTranslateAttempt } from "../lib/caddieLanguage";
-import { PICKER_TRANSLATE_COUNT, PICKER_TRANSLATE_DELAY_MS, markExplicitCaddieLocale, queueTranslation } from "../lib/caddieAutoTranslate";
+import { PICKER_TRANSLATE_COUNT, PICKER_TRANSLATE_DELAY_MS, markExplicitCaddieLocale, queueAutoTranslation } from "../lib/caddieAutoTranslate";
 
 // Caddie's own destination — kept deliberately uncrowded (per brief: the
 // most obvious action is always "Analyze a Swing"). Reuses the same
@@ -74,6 +74,9 @@ export function Caddie() {
   // translation backend); a failure just leaves the analysis page to try.
   const [pickedLocale, setPickedLocale] = useState<string | null>(null);
   const analysesRef = useRef(sorted);
+  // The app's language right now, for queued jobs deciding whether they're stale.
+  const localeRef = useRef(locale);
+  localeRef.current = locale;
   analysesRef.current = sorted;
   useEffect(() => {
     if (isDemo || pickedLocale === null) return;
@@ -85,11 +88,14 @@ export function Caddie() {
         .filter((a) => needsAutoTranslate({ language: a.details!.language, sampleText: feedbackSampleText(a.details) }, target, true));
       for (const a of candidates) {
         if (!claimAutoTranslateAttempt(a.id, target)) continue;
-        queueTranslation(a.id, () => translateCaddieAnalysis(a.id, target)).catch((err) => {
-          // Give the attempt back so opening the analysis can still try.
-          releaseAutoTranslateAttempt(a.id, target);
-          if (!isTooSoonError(err)) console.error("GolfMe: background feedback translation failed.", err);
-        });
+        // Skipped if another language was picked before its turn; the
+        // attempt is always given back, so switching back to a language
+        // translates again and opening the analysis can still try.
+        queueAutoTranslation(a.id, target, () => localeRef.current, translateCaddieAnalysis)
+          .catch((err) => {
+            if (!isTooSoonError(err)) console.error("GolfMe: background feedback translation failed.", err);
+          })
+          .finally(() => releaseAutoTranslateAttempt(a.id, target));
       }
     }, PICKER_TRANSLATE_DELAY_MS);
     return () => window.clearTimeout(timer);
