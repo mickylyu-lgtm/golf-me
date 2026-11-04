@@ -6,6 +6,13 @@ Last updated: 2026-11-02 (Caddie per-checkpoint cues on branch feat/caddie-check
 
 Note: Phases between Phase 20/21 (see below) and Phase 22 span roughly 31 commits (2026-09-16 through 2026-09-21) that also never got a numbered write-up as they landed — Phase 22 below reconstructs them from `git log`/code review (that session's own commit messages are unusually detailed, so this is a faithful summary, not a guess) rather than live session narration. Older gap, still not backfilled: Phases between Phase 6 and Phase 20 (chat keyboard/Capacitor Keyboard native linking, floating swipeable BottomNav + auto-collapse + centering fixes, tee-time booking fallback hero image, and everything else through 2026-09-15) — see `git log` for that range (commits from "Prefer GolfCourseAPI v1.1 coordinates..." through "Floating pill bottom nav with press-and-slide tab selection, haptics, Caddie unify").
 
+## Google profile photo at signup — 2026-11-03 (branch `feat/google-profile-photo`, not deployed)
+
+- **Prefill**: onboarding (ProfileSetup) shows the Google account's picture as the profile photo (`src/lib/providerPhoto.ts`: only for accounts that really signed in with Google, only https `*.googleusercontent.com`, resized to `=s320-c`). The golfer can Remove/Change it there or later on Profile; it's only offered during onboarding, so a removed photo never comes back. Apple never sends a photo, so Apple sign-ins keep initials.
+- **Stored in our bucket**: on finish the picture is copied into `avatars/<id>/avatar.jpg` (`copyPhotoToAvatar` in `src/lib/avatarStorage.ts`); if that fetch fails (offline/CORS), Google's URL is saved instead.
+- **Bug fixed**: real accounts' onboarding never saved `photo_url`, so a photo picked during signup was uploaded but lost. It's now written by the same `saveProfile` call.
+- Privacy Policy Account item says the Google picture is suggested and removable. Tests: `npm run test:onboarding` (providerPhoto cases). Needs a real Google sign-in check on web + iPhone: photo shows at setup, is copied (URL is `.../storage/v1/object/public/avatars/...`), and Remove leaves initials. No migration.
+
 ## Tee Times hidden + host/join polish — 2026-11-02 (branch `fix/host-join-polish`)
 
 - **Tee Times hidden** (Micky: "hide tee times"): `TEE_TIMES_VISIBLE = false` in `src/services/teeTimes/types.ts`. No Home card, no Find link, no "Tee times available" badge, and every course (Skyway/Dyker Beach included) opens the general course page. `/tee-times` routes still work by direct link; flip the flag to restore. The round's own tee time and the course page's "Find tee times" Google search are unchanged.

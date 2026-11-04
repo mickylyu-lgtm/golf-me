@@ -19,6 +19,8 @@ import { track } from "../lib/analytics";
 import { clearOnboardingDraft, loadOnboardingDraft, saveOnboardingDraft } from "../lib/onboardingDraft";
 import type { OnboardingDraft } from "../lib/onboardingDraft";
 import { isObjectionableContentError } from "../lib/objectionableContent";
+import { isGooglePhotoUrl, providerPhotoUrl } from "../lib/providerPhoto";
+import { copyPhotoToAvatar } from "../lib/avatarStorage";
 
 function draftDefaults(): OnboardingDraft {
   return {
@@ -52,7 +54,7 @@ const DEFAULT_GENDER = "Prefer not to say";
 export function ProfileSetup() {
   const navigate = useNavigate();
   const { signUpNewGolfer } = useData();
-  const { isDemo, profileRow, saveProfile, signOut } = useAuth();
+  const { isDemo, authUser, profileRow, saveProfile, signOut } = useAuth();
   const { showToast } = useToast();
   const { t } = useLocale();
   const [submitting, setSubmitting] = useState(false);
@@ -61,6 +63,9 @@ export function ProfileSetup() {
 
   const [name, setName] = useState(initial.name);
   const [photoUrl, setPhotoUrl] = useState<string | undefined>(undefined);
+  // Set once the golfer adds, changes or removes the photo themselves, so a
+  // late-arriving prefill below never overrides their choice.
+  const [photoChosen, setPhotoChosen] = useState(false);
   const [is18Plus, setIs18Plus] = useState(initial.is18Plus);
 
   const [areaLabel, setAreaLabel] = useState(initial.areaLabel);
@@ -77,6 +82,20 @@ export function ProfileSetup() {
   useEffect(() => {
     if (savedName) setName((current) => (current.trim() ? current : savedName));
   }, [savedName]);
+
+  // Pre-fill the photo the same way: one already on the profile row, else
+  // the Google account's picture. The golfer can remove or change it here
+  // (and later on Profile); it's only ever offered during onboarding, so a
+  // removed photo never comes back on the next sign-in.
+  const prefillPhoto = isDemo ? undefined : (profileRow?.photo_url ?? providerPhotoUrl(authUser));
+  useEffect(() => {
+    if (prefillPhoto && !photoChosen) setPhotoUrl((current) => current ?? prefillPhoto);
+  }, [prefillPhoto, photoChosen]);
+
+  function choosePhoto(url: string | undefined) {
+    setPhotoChosen(true);
+    setPhotoUrl(url);
+  }
 
   // Persist a resumable draft on every change (not photoUrl — a data-URL
   // image would bloat localStorage for a draft that might never be
@@ -113,9 +132,9 @@ export function ProfileSetup() {
       // Real account: the auth identity already exists (Google/email sign-in
       // happened before this screen could even be reached — see App.tsx's
       // route guards), so this writes into that existing profiles row
-      // instead of minting a new mock golfer. Avatar upload isn't wired to
-      // Supabase Storage yet (that's a later phase) — photoUrl stays local-
-      // only for real accounts for now, never written as a data-URL.
+      // instead of minting a new mock golfer. photoUrl is a Storage URL
+      // (AvatarUpload uploads real accounts' photos) or the prefilled Google
+      // picture, which is copied into Storage below; never a data-URL.
       // age_range is deliberately omitted — it isn't asked here, and
       // leaving the column NULL (never a fabricated band) is exactly what
       // every consumer (autoMatch, GolferCard, Profile) already handles.
@@ -142,9 +161,20 @@ export function ProfileSetup() {
         preferenceDefaults.round_length_preference = DEFAULT_ROUND_LENGTH_PREFERENCE;
       }
       setSubmitting(true);
+      let finalPhotoUrl = photoUrl ?? null;
+      if (finalPhotoUrl && isGooglePhotoUrl(finalPhotoUrl) && authUser) {
+        // Best effort: if the copy fails (offline, Google blocks the fetch),
+        // keep Google's URL rather than dropping the photo or the signup.
+        try {
+          finalPhotoUrl = await copyPhotoToAvatar(authUser.id, finalPhotoUrl);
+        } catch (err) {
+          console.error("GolfMe: could not copy the Google profile photo; using Google's URL.", err);
+        }
+      }
       try {
         await saveProfile({
           name: name.trim(),
+          photo_url: finalPhotoUrl,
           avatar_color: avatarColorForName(name),
           avatar_initials: initialsFromName(name),
           area_label: areaLabel.trim(),
@@ -269,7 +299,7 @@ export function ProfileSetup() {
                 avatarInitials: name.trim() ? initialsFromName(name) : "?",
                 verification: { phoneVerified: false, emailVerified: false, verifiedGolfer: false },
               }}
-              onChange={setPhotoUrl}
+              onChange={choosePhoto}
             />
             <div>
               <label className={labelClass}>{t("profileSetup.name")}</label>

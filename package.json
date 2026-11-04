@@ -9,7 +9,7 @@
     "prerender": "node scripts/prerender-landing.mjs",
     "lint": "oxlint",
     "test:courses": "node --test supabase/functions/_shared/courseFilter.test.ts tests/coursePhotoMatch.test.ts",
-    "test:onboarding": "node --test tests/firstRoundPrompt.test.ts tests/shareLinks.test.ts",
+    "test:onboarding": "node --test tests/firstRoundPrompt.test.ts tests/shareLinks.test.ts tests/providerPhoto.test.ts",
     "test:caddie": "node --test tests/calloutLayout.test.ts tests/swingAssessment.test.ts tests/caddieFailure.test.ts tests/coachReplay.test.ts tests/caddieCues.test.ts",
     "test:chat": "node --test tests/messageTime.test.ts tests/edgeSwipeBack.test.ts tests/chatSwipe.test.ts",
     "preview": "vite preview",
