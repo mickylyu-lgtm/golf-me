@@ -89,9 +89,15 @@ export function CoursePicker({ selected, onChange, location }: CoursePickerProps
         />
         {query && (
           <div className="mt-1.5 flex flex-col gap-1.5">
-            <CourseSearchStatus loading={searchState.loading} error={searchState.error} onRetry={searchState.retry} />
-            {!searchState.loading && !searchState.error && (
-              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+            {/* The search reruns 300 ms after each keystroke. The previous
+                results stay (tappable) while it runs instead of the whole box
+                collapsing to a spinner and back on every letter; the spinner
+                only shows before there's anything to show. */}
+            {(searchState.error || (searchState.loading && filtered.length === 0)) && (
+              <CourseSearchStatus loading={searchState.loading} error={searchState.error} onRetry={searchState.retry} />
+            )}
+            {!searchState.error && !(searchState.loading && filtered.length === 0) && (
+              <div className="max-h-64 overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white shadow-sm">
                 {filtered.length > 0 ? (
                   filtered.map((c) => (
                     <button

@@ -46,9 +46,12 @@ export function useFriendSearch(query: string) {
   const [error, setError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
 
+  const trimmed = query.trim();
   useEffect(() => {
-    const trimmed = query.trim();
     if (!trimmed) {
+      // Also invalidates a request still in flight: its answer used to land
+      // after the field was cleared and show under the next query.
+      requestIdRef.current += 1;
       setResults([]);
       setLoading(false);
       setError(null);
@@ -83,7 +86,8 @@ export function useFriendSearch(query: string) {
       setLoading(false);
     }, DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
-  }, [query]);
+    // The trimmed text: a trailing space isn't a new search.
+  }, [trimmed]);
 
   return { results, loading, error };
 }

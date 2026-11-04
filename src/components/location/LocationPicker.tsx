@@ -209,9 +209,15 @@ export function LocationPicker({ title = "Where do you usually play?", onSelect,
               <span className="flex-1">{p.label}</span>
             </button>
           ))}
-          {placeStatus === "loading" && <p className="px-3 py-2 text-xs text-slate-400">{t("locationPicker.searchingPlaces")}</p>}
-          {placeStatus === "error" && <p className="px-3 py-2 text-xs text-slate-500">{t("locationPicker.placeSearchFailed")}</p>}
-          {trimmedQuery && !exactMatch && placeStatus !== "loading" && (
+          {/* One status line with its space kept while a place search can
+              run, and the "use what I typed" row always last: rows no
+              longer appear and vanish (shifting the list) on each keystroke. */}
+          {!isDemo && trimmedQuery.length >= PLACE_SEARCH_MIN_CHARS && (
+            <p aria-live="polite" className={`min-h-8 px-3 py-2 text-xs ${placeStatus === "error" ? "text-slate-500" : "text-slate-400"}`}>
+              {placeStatus === "loading" ? t("locationPicker.searchingPlaces") : placeStatus === "error" ? t("locationPicker.placeSearchFailed") : ""}
+            </p>
+          )}
+          {trimmedQuery && !exactMatch && (
             <button
               onClick={useFreeTextLabel}
               className="flex flex-col items-start gap-0.5 rounded-xl px-3 py-2.5 text-left transition-colors duration-150 hover:bg-fairway-50"
