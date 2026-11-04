@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Clock, Globe, Sparkles, Video } from "lucide-react";
 import { useData } from "../context/DataContext";
@@ -11,6 +11,9 @@ import { formatShortDate } from "../lib/format";
 import { isStaleProcessing, usePeriodicRerender } from "../lib/caddieAnalysis";
 import { FAILURE_SHORT_KEYS, analysisFailure } from "../lib/caddieFailure";
 import { clubLabel } from "../lib/clubLabel";
+import { useAuth } from "../context/AuthContext";
+import { claimAutoTranslateAttempt, feedbackSampleText, isTooSoonError, needsAutoTranslate, releaseAutoTranslateAttempt } from "../lib/caddieLanguage";
+import { PICKER_TRANSLATE_COUNT, PICKER_TRANSLATE_DELAY_MS, markExplicitCaddieLocale, queueTranslation } from "../lib/caddieAutoTranslate";
 
 // Caddie's own destination — kept deliberately uncrowded (per brief: the
 // most obvious action is always "Analyze a Swing"). Reuses the same
@@ -50,7 +53,8 @@ function saveHistoryCount(n: number): void {
 }
 
 export function Caddie() {
-  const { caddieAnalyses } = useData();
+  const { caddieAnalyses, translateCaddieAnalysis } = useData();
+  const { isDemo } = useAuth();
   const { refreshMediaUrls } = useRealCaddie();
   const { t, locale, setLocale } = useLocale();
   const navigate = useNavigate();
@@ -60,6 +64,36 @@ export function Caddie() {
   const visible = sorted.slice(0, visibleCount);
   const hasMore = sorted.length > visible.length;
   usePeriodicRerender(visible.some((a) => a.status === "processing"));
+
+  // Picking a language here translates the newest analyses' feedback into
+  // it in the background (Micky, 2026-11-04: the picker should "send a
+  // stronger signal"), so it's usually ready before an analysis is opened.
+  // Waits until the picker has rested for a moment, so flicking through
+  // languages translates into the last one only; each analysis goes through
+  // the shared one-at-a-time queue. Real accounts only (demo has no
+  // translation backend); a failure just leaves the analysis page to try.
+  const [pickedLocale, setPickedLocale] = useState<string | null>(null);
+  const analysesRef = useRef(sorted);
+  analysesRef.current = sorted;
+  useEffect(() => {
+    if (isDemo || pickedLocale === null) return;
+    const target = pickedLocale;
+    const timer = window.setTimeout(() => {
+      const candidates = analysesRef.current
+        .filter((a) => a.status === "complete" && a.details)
+        .slice(0, PICKER_TRANSLATE_COUNT)
+        .filter((a) => needsAutoTranslate({ language: a.details!.language, sampleText: feedbackSampleText(a.details) }, target, true));
+      for (const a of candidates) {
+        if (!claimAutoTranslateAttempt(a.id, target)) continue;
+        queueTranslation(a.id, () => translateCaddieAnalysis(a.id, target)).catch((err) => {
+          // Give the attempt back so opening the analysis can still try.
+          releaseAutoTranslateAttempt(a.id, target);
+          if (!isTooSoonError(err)) console.error("GolfMe: background feedback translation failed.", err);
+        });
+      }
+    }, PICKER_TRANSLATE_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [isDemo, pickedLocale, translateCaddieAnalysis]);
 
   return (
     <div className="flex flex-col gap-6 pb-6">
@@ -87,7 +121,14 @@ export function Caddie() {
           <Globe size={13} className="text-slate-400" />
           <select
             value={locale}
-            onChange={(e) => setLocale(e.target.value as (typeof LOCALES)[number]["value"])}
+            onChange={(e) => {
+              const next = e.target.value as (typeof LOCALES)[number]["value"];
+              // An explicit "my Caddie feedback in this language": see the
+              // pre-translation effect above and lib/caddieAutoTranslate.
+              markExplicitCaddieLocale(next);
+              setPickedLocale(next);
+              setLocale(next);
+            }}
             aria-label={t("language.title")}
             className="appearance-none bg-transparent pr-1 text-xs font-semibold text-slate-700 !outline-none"
           >

@@ -54,14 +54,25 @@ function scriptRulesOut(text: string, locale: string): boolean {
   }
 }
 
+// `explicit`: the golfer chose this language in Caddie's own picker (see
+// caddieAutoTranslate.ts), so an older row whose language can't be told
+// apart by script is translated too, rather than left to the button.
 export function needsAutoTranslate(
   feedback: { language?: CaddieAnalysisLanguage; sampleText: string },
   currentLocale: string,
+  explicit = false,
 ): boolean {
   if (!(ANALYSIS_LANGUAGES as readonly string[]).includes(currentLocale)) return false;
   if (feedback.language !== undefined) return feedback.language !== currentLocale;
   const text = feedback.sampleText.trim();
-  return text.length > 0 && scriptRulesOut(text, currentLocale);
+  if (text.length === 0) return false;
+  return explicit || scriptRulesOut(text, currentLocale);
+}
+
+// The text an analysis's language is judged by.
+export function feedbackSampleText(details: { summary?: string; strengths?: string[]; focus?: { title?: string } } | undefined): string {
+  if (!details) return "";
+  return [details.summary ?? "", ...(details.strengths ?? []), details.focus?.title ?? ""].join(" ");
 }
 
 // One automatic attempt per analysis and language per app session, so a
@@ -72,4 +83,18 @@ export function claimAutoTranslateAttempt(analysisId: string, locale: string): b
   if (autoAttempts.has(key)) return false;
   autoAttempts.add(key);
   return true;
+}
+
+// Gives an attempt back when it never really ran (the server said "too
+// soon"), so the retry isn't refused as already tried.
+export function releaseAutoTranslateAttempt(analysisId: string, locale: string): void {
+  autoAttempts.delete(`${analysisId}:${locale}`);
+}
+
+// Retry delay after a "too soon" answer: just past the server's 5 s
+// double-tap cooldown (translate-caddie-analysis COOLDOWN_SECONDS).
+export const AUTO_TRANSLATE_RETRY_MS = 5500;
+
+export function isTooSoonError(err: unknown): boolean {
+  return typeof err === "object" && err !== null && (err as { status?: unknown }).status === 429;
 }

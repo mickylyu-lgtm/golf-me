@@ -11,6 +11,7 @@ import { Button } from "../components/ui/Button";
 import { EmptyState } from "../components/ui/EmptyState";
 import { GolfCallCard } from "../components/golfcall/GolfCallCard";
 import { RoundAlertsCard } from "../components/find/RoundAlertsCard";
+import { EditMatchPreferencesSheet } from "../components/find/EditMatchPreferencesSheet";
 import { LoadErrorState } from "../components/ui/LoadStates";
 import { GolfMeLoader } from "../components/loading/GolfMeLoader";
 import { listView } from "../lib/loadStatus";
@@ -91,6 +92,8 @@ export function AutoMatch() {
   const [started, setStarted] = useState(quick);
   const [resultIndex, setResultIndex] = useState(0);
   const [showClosest, setShowClosest] = useState(false);
+  // Match Preferences edited here, in a sheet, instead of leaving Auto-Match.
+  const [prefsSheetOpen, setPrefsSheetOpen] = useState(false);
   const { isDemo } = useAuth();
   const rounds = useRealRounds();
   // Rounds failed to load -> say so instead of "no matches".
@@ -247,7 +250,7 @@ export function AutoMatch() {
                 ))}
               </div>
             </div>
-            <Button variant="ghost" size="sm" className="self-start" onClick={() => navigate("/profile/preferences")}>
+            <Button variant="ghost" size="sm" className="self-start" onClick={() => setPrefsSheetOpen(true)}>
               {t("autoMatch.setPreferences")}
             </Button>
           </div>
@@ -256,7 +259,7 @@ export function AutoMatch() {
             <div className="rounded-2xl border border-slate-100 bg-white p-4">
               <div className="mb-3 flex items-center justify-between">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t("autoMatch.usingPreferences")}</p>
-                <button onClick={() => navigate("/profile/preferences")} className="text-xs font-semibold text-fairway-700 hover:underline">
+                <button onClick={() => setPrefsSheetOpen(true)} className="text-xs font-semibold text-fairway-700 hover:underline">
                   {t("autoMatch.editPreferences")}
                 </button>
               </div>
@@ -296,6 +299,9 @@ export function AutoMatch() {
                     {t("find.createGolfCall")}
                   </Button>
                 </div>
+                <Button size="sm" variant="ghost" onClick={() => setPrefsSheetOpen(true)}>
+                  {t("autoMatch.editPreferences")}
+                </Button>
                 <RoundAlertsCard />
               </div>
             }
@@ -309,6 +315,9 @@ export function AutoMatch() {
               <div className="flex w-full flex-col items-center gap-3">
                 <Button size="sm" onClick={() => navigate("/golf-calls/new")}>
                   {t("find.createGolfCall")}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setPrefsSheetOpen(true)}>
+                  {t("autoMatch.editPreferences")}
                 </Button>
                 <RoundAlertsCard />
               </div>
@@ -352,6 +361,9 @@ export function AutoMatch() {
             <Button variant="ghost" size="sm" onClick={() => navigate(`/golf-calls?${browseAllSearch(searchParams).toString()}`)}>
               {t("autoMatch.browseAll")}
             </Button>
+            <Button variant="ghost" size="sm" onClick={() => setPrefsSheetOpen(true)}>
+              {t("autoMatch.editPreferences")}
+            </Button>
           </div>
 
           {!hasStrongMatch && (
@@ -364,6 +376,7 @@ export function AutoMatch() {
           )}
         </div>
       )}
+      {prefsSheetOpen && <EditMatchPreferencesSheet onClose={() => setPrefsSheetOpen(false)} />}
     </div>
   );
 }

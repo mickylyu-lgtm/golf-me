@@ -3,7 +3,34 @@
 // (src/lib/caddieLanguage.ts).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { analysisLanguageFromJson, claimAutoTranslateAttempt, needsAutoTranslate, showsLanguageNotice } from "../src/lib/caddieLanguage.ts";
+import {
+  AUTO_TRANSLATE_RETRY_MS,
+  analysisLanguageFromJson,
+  claimAutoTranslateAttempt,
+  isTooSoonError,
+  needsAutoTranslate,
+  releaseAutoTranslateAttempt,
+  showsLanguageNotice,
+} from "../src/lib/caddieLanguage.ts";
+
+test("a 'too soon' answer gives the attempt back so the retry runs", () => {
+  assert.equal(claimAutoTranslateAttempt("race1", "ja"), true);
+  assert.equal(claimAutoTranslateAttempt("race1", "ja"), false);
+  releaseAutoTranslateAttempt("race1", "ja");
+  assert.equal(claimAutoTranslateAttempt("race1", "ja"), true, "claimable again after release");
+  assert.equal(isTooSoonError(Object.assign(new Error("Please wait"), { status: 429 })), true);
+  assert.equal(isTooSoonError(Object.assign(new Error("boom"), { status: 502 })), false);
+  assert.equal(isTooSoonError(new Error("no status")), false);
+  assert.equal(isTooSoonError(null), false);
+  assert.ok(AUTO_TRANSLATE_RETRY_MS > 5000, "waits past the server's 5 s cooldown");
+});
+
+test("switching languages mid-translation: the finished one decides what's next", () => {
+  // Translation to ja finished while the app moved on to ko: the row now
+  // says ja, so ko still needs one; switching back to ja needs none.
+  assert.equal(needsAutoTranslate({ language: "ja", sampleText: "x" }, "ko"), true);
+  assert.equal(needsAutoTranslate({ language: "ja", sampleText: "x" }, "ja"), false);
+});
 
 const EN = "Your hips slide toward the target at impact. Turn them instead.";
 const ZH = "你的髋部在击球时向目标方向滑动。请改为转动。";
