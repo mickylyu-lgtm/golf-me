@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { Capacitor } from "@capacitor/core";
 import { Keyboard } from "@capacitor/keyboard";
 import type { KeyboardInfo } from "@capacitor/keyboard";
+import { createKeyboardStore } from "./keyboard/store";
+import type { KeyboardSource, KeyboardWillEvent } from "./keyboard/store";
 
 // Returns the on-screen keyboard's real height in px (0 when closed).
 // Replaces useKeyboardOpen/useVisualViewportHeight for anything that needs
@@ -11,21 +13,40 @@ import type { KeyboardInfo } from "@capacitor/keyboard";
 // window.visualViewport.height likely never update for the keyboard under
 // this mode either (confirmed live: a fix built on visualViewport.height
 // still produced broken/blank layout on a real device). keyboardHeight
-// from the plugin's keyboardWillShow/keyboardDidShow event payload is
-// real native data reported directly by iOS, not something inferred from
-// a viewport value this resize mode explicitly doesn't touch.
+// from the plugin's keyboardWillShow event payload is real native data
+// reported directly by iOS, not something inferred from a viewport value
+// this resize mode explicitly doesn't touch.
+//
+// All readers share one app-wide store (lib/keyboard/store.ts): one set of
+// native listeners for the app's life, and a component mounted while the
+// keyboard is already open (a sheet opened from a focused comment box)
+// reads the real height on its first render instead of 0.
+// useSyncExternalStore re-renders every reader synchronously (sync lane,
+// before the next paint) on keyboardWillShow/WillHide, so layout effects
+// keyed on the height (DirectMessageThread) still run in that same commit.
+
+const capacitorKeyboardSource: KeyboardSource = (handlers) => {
+  const add = (registration: Promise<unknown>) => void registration.catch(() => {});
+  add(Keyboard.addListener("keyboardWillShow", (info: KeyboardInfo) => handlers.willShow(info.keyboardHeight)));
+  add(Keyboard.addListener("keyboardWillHide", () => handlers.willHide()));
+  add(Keyboard.addListener("keyboardDidShow", (info: KeyboardInfo) => handlers.didShow(info.keyboardHeight)));
+};
+
+const keyboardStore = createKeyboardStore(Capacitor.isNativePlatform() ? capacitorKeyboardSource : null);
+
+const getServerHeight = () => 0;
+
 export function useKeyboardHeight(): number {
-  const [height, setHeight] = useState(0);
+  return useSyncExternalStore(keyboardStore.subscribe, keyboardStore.getHeight, getServerHeight);
+}
 
-  useEffect(() => {
-    if (!Capacitor.isNativePlatform()) return;
-    const showListener = Keyboard.addListener("keyboardWillShow", (info: KeyboardInfo) => setHeight(info.keyboardHeight));
-    const hideListener = Keyboard.addListener("keyboardWillHide", () => setHeight(0));
-    return () => {
-      void showListener.then((l) => l.remove());
-      void hideListener.then((l) => l.remove());
-    };
-  }, []);
+// Current height outside React (0 off-native).
+export function getKeyboardHeight(): number {
+  return keyboardStore.getHeight();
+}
 
-  return height;
+// Every keyboardWillShow / keyboardWillHide, as received, for imperative
+// app-wide hooks. Returns the unsubscribe. A no-op off-native.
+export function subscribeKeyboardEvents(listener: (event: KeyboardWillEvent) => void): () => void {
+  return keyboardStore.subscribeEvents(listener);
 }

@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Capacitor } from "@capacitor/core";
-import { Keyboard } from "@capacitor/keyboard";
-import type { KeyboardInfo } from "@capacitor/keyboard";
+import { KEYBOARD_GAP_PX, KEYBOARD_REVEAL_OPT_OUT_SELECTOR, isDmThreadPath, textEntryElement } from "./keyboard/fields";
+import { getKeyboardHeight, subscribeKeyboardEvents } from "./useKeyboardHeight";
 
 // iOS app: keep a focused text field on a normal page above the keyboard
 // (Micky, 2026-10-23: Host a Round's Notes textarea opened the keyboard but
@@ -42,22 +42,17 @@ import type { KeyboardInfo } from "@capacitor/keyboard";
 //   component has taken over the keyboard layout.
 // Web/PWA: never runs; the browser handles the keyboard itself.
 
-const GAP_PX = 12;
-const OPT_OUT_SELECTOR = '[data-keyboard-reveal="off"]';
-const DM_THREAD_PATH = /^\/messages\/[^/]+\/?$/;
-const NON_TEXT_INPUT_TYPES = new Set(["button", "checkbox", "color", "date", "datetime-local", "file", "hidden", "image", "month", "radio", "range", "reset", "submit", "time", "week"]);
+// Keyboard events come from the app-wide keyboard store
+// (lib/useKeyboardHeight.ts): every keyboardWillShow / keyboardWillHide,
+// exactly as the plugin sends them.
 
-function textField(el: Element | null): HTMLElement | null {
-  if (!(el instanceof HTMLElement)) return null;
-  if (el instanceof HTMLTextAreaElement) return el;
-  if (el instanceof HTMLInputElement) return NON_TEXT_INPUT_TYPES.has(el.type) ? null : el;
-  return el.isContentEditable ? el : null;
-}
+const GAP_PX = KEYBOARD_GAP_PX;
+const textField = textEntryElement;
 
 // The field scrolls with the window (not a sheet, not its own scroller).
 function scrollsWithWindow(field: HTMLElement): boolean {
-  if (field.closest(OPT_OUT_SELECTOR)) return false;
-  if (DM_THREAD_PATH.test(window.location.pathname)) return false;
+  if (field.closest(KEYBOARD_REVEAL_OPT_OUT_SELECTOR)) return false;
+  if (isDmThreadPath(window.location.pathname)) return false;
   if (document.body.style.overflow === "hidden") return false;
   for (let el: HTMLElement | null = field.parentElement; el && el !== document.body; el = el.parentElement) {
     const style = getComputedStyle(el);
@@ -71,7 +66,7 @@ export function useRevealFocusedFieldAboveKeyboard() {
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
 
-    let keyboardHeight = 0;
+    let keyboardHeight = getKeyboardHeight();
     let spacer: HTMLDivElement | null = null;
     let frame = 0;
 
@@ -121,14 +116,15 @@ export function useRevealFocusedFieldAboveKeyboard() {
       ensureRoom(field);
     };
 
-    const showListener = Keyboard.addListener("keyboardWillShow", (info: KeyboardInfo) => {
-      keyboardHeight = info.keyboardHeight;
-      scheduleReveal();
-    });
-    const hideListener = Keyboard.addListener("keyboardWillHide", () => {
-      keyboardHeight = 0;
-      cancelAnimationFrame(frame);
-      removeRoom();
+    const unsubscribeKeyboard = subscribeKeyboardEvents((event) => {
+      if (event.type === "willShow") {
+        keyboardHeight = event.height;
+        scheduleReveal();
+      } else {
+        keyboardHeight = 0;
+        cancelAnimationFrame(frame);
+        removeRoom();
+      }
     });
 
     // A blur without the keyboard closing (e.g. tapping a button) also
@@ -142,8 +138,7 @@ export function useRevealFocusedFieldAboveKeyboard() {
     document.addEventListener("focusin", onFocusIn);
     document.addEventListener("focusout", onFocusOut);
     return () => {
-      void showListener.then((l) => l.remove());
-      void hideListener.then((l) => l.remove());
+      unsubscribeKeyboard();
       document.removeEventListener("focusin", onFocusIn);
       document.removeEventListener("focusout", onFocusOut);
       cancelAnimationFrame(frame);

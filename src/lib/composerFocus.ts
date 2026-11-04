@@ -10,23 +10,12 @@
 //   tapping Post/Send or the keyboard closing behaves exactly as before.
 // No React imports, so tests/composerFocus.test.ts runs under plain node.
 
-const NON_TEXT_INPUT_TYPES = new Set(["button", "checkbox", "color", "date", "datetime-local", "file", "hidden", "image", "month", "radio", "range", "reset", "submit", "time", "week"]);
+import { isTextEntryElement } from "./keyboard/fields.ts";
+import type { ElementLike } from "./keyboard/fields.ts";
 
-interface ElementLike {
-  tagName: string;
-  type?: string;
-  isContentEditable?: boolean;
-}
-
-// Fields that bring up the keyboard (same rule as
-// useRevealFocusedFieldAboveKeyboard's textField).
-export function isTextEntryElement(el: ElementLike | null | undefined): boolean {
-  if (!el) return false;
-  const tag = el.tagName.toUpperCase();
-  if (tag === "TEXTAREA") return true;
-  if (tag === "INPUT") return !NON_TEXT_INPUT_TYPES.has((el.type ?? "text").toLowerCase());
-  return el.isContentEditable === true;
-}
+// Fields that bring up the keyboard: one rule for every keyboard hook
+// (lib/keyboard/fields.ts), re-exported so existing imports keep working.
+export { isTextEntryElement };
 
 export function nextComposerOwnsFocus(owns: boolean, focus: { insideComposer: boolean; isTextField: boolean }): boolean {
   if (focus.insideComposer) return true;

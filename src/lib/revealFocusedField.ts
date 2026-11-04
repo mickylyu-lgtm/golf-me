@@ -1,5 +1,9 @@
+import { KEYBOARD_GAP_PX } from "./keyboard/fields.ts";
+
 // Gap kept between the focused field / sheet top and the screen edges.
-export const KEYBOARD_GAP_PX = 12;
+// Defined once in lib/keyboard/fields.ts; re-exported here so existing
+// imports keep working.
+export { KEYBOARD_GAP_PX };
 
 // Scrolls only `scroller` (never the window) so the focused element inside
 // it sits at least KEYBOARD_GAP_PX inside its visible edges. Shared by

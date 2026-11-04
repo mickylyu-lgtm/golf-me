@@ -6,6 +6,7 @@ import { Capacitor } from "@capacitor/core";
 import { useKeyboardHeight } from "../../lib/useKeyboardHeight";
 import { KEYBOARD_GAP_PX } from "../../lib/revealFocusedField";
 import { revealDelta } from "../../lib/minimalReveal";
+import { createFrameScheduler } from "../../lib/frameScheduler";
 import type { PlayingArea } from "../../lib/geo";
 import { inputClass, labelClass } from "../ui/FormControls";
 import { CourseSearchStatus } from "../ui/CourseSearchStatus";
@@ -116,7 +117,9 @@ export function CourseAutocomplete({ value, onChange, onPickKnownCourse, recentC
     if (!revealing) return;
     const keep = () => {
       const input = inputRef.current;
-      if (!input) return;
+      // Only while this field still has the keyboard: a check that arrives
+      // after it lost focus must never move the page.
+      if (!input || document.activeElement !== input) return;
       const rect = input.getBoundingClientRect();
       const headerBottom = document.querySelector("header")?.getBoundingClientRect().bottom ?? 0;
       const delta = revealDelta({
@@ -131,11 +134,17 @@ export function CourseAutocomplete({ value, onChange, onPickKnownCourse, recentC
     keep();
     // Content above the field resizing (chips, status rows) and the
     // plugin's body resize after the keyboard opens are the only things
-    // that can move the field from here; re-check on those.
-    const observer = new ResizeObserver(() => requestAnimationFrame(keep));
+    // that can move the field from here; re-check on those, at most once a
+    // frame. Cleanup (blur, keyboard closed or resized, unmount) cancels a
+    // queued check so it can't fire late with the old keyboard height.
+    const scheduler = createFrameScheduler(keep, (cb) => window.requestAnimationFrame(cb), (id) => window.cancelAnimationFrame(id));
+    const observer = new ResizeObserver(() => scheduler.schedule());
     if (rootRef.current) observer.observe(rootRef.current);
     observer.observe(document.body);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      scheduler.dispose();
+    };
   }, [revealing, keyboardHeight]);
 
   // A blur closes the list a moment later (so a tap on a suggestion still

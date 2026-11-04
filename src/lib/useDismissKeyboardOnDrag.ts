@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Capacitor } from "@capacitor/core";
-import { Keyboard } from "@capacitor/keyboard";
+import { KEYBOARD_DRAG_DISMISS_OPT_OUT_SELECTOR, isDmThreadPath, textEntryElement } from "./keyboard/fields";
+import { getKeyboardHeight, subscribeKeyboardEvents } from "./useKeyboardHeight";
 
 // iOS-style "dismiss keyboard on drag" for the native app (Micky,
 // 2026-10-22: typing in Find Golfers' search and then scrolling the
@@ -30,9 +31,6 @@ import { Keyboard } from "@capacitor/keyboard";
 // scrolls normally.
 
 const DRAG_THRESHOLD_PX = 10;
-const OPT_OUT_SELECTOR = '[data-keyboard-drag-dismiss="off"]';
-const DM_THREAD_PATH = /^\/messages\/[^/]+\/?$/;
-const NON_TEXT_INPUT_TYPES = new Set(["button", "checkbox", "color", "file", "hidden", "image", "radio", "range", "reset", "submit"]);
 
 let lastDragDismissAt = 0;
 
@@ -45,11 +43,7 @@ export function wasKeyboardDismissedByDrag(withinMs = 1500): boolean {
 }
 
 function focusedTextField(): HTMLElement | null {
-  const active = document.activeElement;
-  if (!(active instanceof HTMLElement)) return null;
-  if (active instanceof HTMLTextAreaElement) return active;
-  if (active instanceof HTMLInputElement) return NON_TEXT_INPUT_TYPES.has(active.type) ? null : active;
-  return active.isContentEditable ? active : null;
+  return textEntryElement(document.activeElement);
 }
 
 function hasTextSelection(field: HTMLElement): boolean {
@@ -68,12 +62,11 @@ export function useDismissKeyboardOnDrag() {
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
 
-    let keyboardOpen = false;
-    const showListener = Keyboard.addListener("keyboardWillShow", () => {
-      keyboardOpen = true;
-    });
-    const hideListener = Keyboard.addListener("keyboardWillHide", () => {
-      keyboardOpen = false;
+    // Any keyboardWillShow counts as open (as before, even one reporting
+    // height 0); only keyboardWillHide closes.
+    let keyboardOpen = getKeyboardHeight() > 0;
+    const unsubscribeKeyboard = subscribeKeyboardEvents((event) => {
+      keyboardOpen = event.type === "willShow";
     });
 
     // Per-gesture state; null when this gesture is not a candidate.
@@ -87,8 +80,8 @@ export function useDismissKeyboardOnDrag() {
       const target = e.target;
       if (!(target instanceof Node)) return;
       if (field.contains(target)) return;
-      if (target instanceof Element && target.closest(OPT_OUT_SELECTOR)) return;
-      if (DM_THREAD_PATH.test(window.location.pathname)) return;
+      if (target instanceof Element && target.closest(KEYBOARD_DRAG_DISMISS_OPT_OUT_SELECTOR)) return;
+      if (isDmThreadPath(window.location.pathname)) return;
       const touch = e.touches[0];
       start = { x: touch.clientX, y: touch.clientY, field };
     };
@@ -121,8 +114,7 @@ export function useDismissKeyboardOnDrag() {
     document.addEventListener("touchend", onTouchEnd, options);
     document.addEventListener("touchcancel", onTouchEnd, options);
     return () => {
-      void showListener.then((l) => l.remove());
-      void hideListener.then((l) => l.remove());
+      unsubscribeKeyboard();
       document.removeEventListener("touchstart", onTouchStart, options);
       document.removeEventListener("touchmove", onTouchMove, options);
       document.removeEventListener("touchend", onTouchEnd, options);
