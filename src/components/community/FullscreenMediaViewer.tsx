@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import { useLocale } from "../../i18n/LocaleContext";
 import { MediaCarousel } from "./MediaCarousel";
 import { perfHudViewer } from "../../lib/perfHud";
+import { lockPageScroll } from "../../lib/scrollLock";
 
 interface FullscreenMediaViewerProps {
   media: PostMediaItem[];
@@ -86,8 +87,8 @@ export function FullscreenMediaViewer({ media, initialIndex = 0, onClose }: Full
   //   native swipe between items keeps working. Runs before React's own
   //   onTouchMove (which only reads the touch), using the same drag state.
   useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    // Counted page lock (lib/scrollLock): released in any order with sheets.
+    const unlock = lockPageScroll();
     const surface = surfaceRef.current;
     const onNativeTouchMove = (e: TouchEvent) => {
       const state = dragStateRef.current;
@@ -100,7 +101,7 @@ export function FullscreenMediaViewer({ media, initialIndex = 0, onClose }: Full
     };
     surface?.addEventListener("touchmove", onNativeTouchMove, { passive: false });
     return () => {
-      document.body.style.overflow = previousOverflow;
+      unlock();
       surface?.removeEventListener("touchmove", onNativeTouchMove);
     };
   }, []);
@@ -133,6 +134,14 @@ export function FullscreenMediaViewer({ media, initialIndex = 0, onClose }: Full
     // Only follows downward drags; dragging up just resists, nothing to
     // reveal above a fullscreen viewer.
     setDragY(dy > 0 ? dy : dy / 4);
+  }
+
+  // An interrupted touch (iOS touchcancel: a call, the system gesture area)
+  // never dismisses: the drag just springs back.
+  function onTouchCancel() {
+    dragStateRef.current = null;
+    setDragging(false);
+    setDragY(0);
   }
 
   function onTouchEnd() {
@@ -174,7 +183,7 @@ export function FullscreenMediaViewer({ media, initialIndex = 0, onClose }: Full
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
-        onTouchCancel={onTouchEnd}
+        onTouchCancel={onTouchCancel}
         className={`h-dvh w-full ${dragging ? "" : "transition-transform duration-200 ease-out"}`}
         style={{ transform: `translateY(${dragY}px)` }}
       >

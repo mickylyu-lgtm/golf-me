@@ -15,6 +15,7 @@ import type { CoachCheckpoint, CoachFocusSegments, CoachMomentLabel, V1Coaching 
 import { CoachModeSwitch, CoachPageMeasurer, CoachReplayCard, CoachReplayStrip, CoachSummaryCard } from "./CoachReplayCard";
 import type { CoachPageLayout } from "./CoachReplayCard";
 import { useCoachVideoPauses } from "./useCoachVideoPauses";
+import { lockPageScroll } from "../../lib/scrollLock";
 
 // Standard COCO-17 joint pairs — only drawn when BOTH ends are present in
 // that frame's keypoints. Roboflow's output already had unreliable joints
@@ -447,15 +448,15 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
 
   useEffect(() => {
     if (!customFullscreen) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    // Counted page lock (lib/scrollLock): released in any order with sheets.
+    const unlock = lockPageScroll();
     // Esc leaves it on a computer, like the post media viewer.
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") setCustomFullscreen(false);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => {
-      document.body.style.overflow = previousOverflow;
+      unlock();
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [customFullscreen]);

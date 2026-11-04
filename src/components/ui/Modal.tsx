@@ -1,10 +1,12 @@
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useId, useLayoutEffect, useRef } from "react";
 import type { CSSProperties, ReactNode, RefObject } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { useKeyboardHeight } from "../../lib/useKeyboardHeight";
 import { KEYBOARD_GAP_PX, revealFocusedField } from "../../lib/revealFocusedField";
 import { wasKeyboardDismissedByDrag } from "../../lib/useDismissKeyboardOnDrag";
+import { pushModal } from "../../lib/modalStack";
+import { lockPageScroll } from "../../lib/scrollLock";
 
 interface ModalProps {
   title: string;
@@ -48,30 +50,65 @@ interface ModalFrameProps extends Omit<ModalProps, "keyboardAware"> {
 }
 
 function ModalFrame({ title, onClose, children, footer, overlayStyle, sheetStyle, scrollerRef }: ModalFrameProps) {
+  const titleId = useId();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  // Escape closes only the topmost sheet (nested sheets used to all close
+  // at once), and focus goes into the sheet and back to whatever opened it
+  // on close, without scrolling the page either way.
   useEffect(() => {
+    const entry = pushModal();
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    // A field that autofocused already holds focus; otherwise the dialog
+    // itself takes it, so the keyboard and screen readers start inside.
+    if (!dialogRef.current?.contains(document.activeElement)) dialogRef.current?.focus({ preventScroll: true });
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && entry.isTop()) onCloseRef.current();
     }
     document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      entry.release();
+      // Never back into a text field: on iPhone that reopens the keyboard
+      // the golfer just closed the sheet to get rid of.
+      const typing = opener?.matches("input, textarea, select, [contenteditable='true']");
+      if (opener?.isConnected && !typing) opener.focus({ preventScroll: true });
+    };
+  }, []);
+
+  // A backdrop tap closes only when the whole tap happened on the backdrop:
+  // closing on mousedown let iOS deliver the same tap's click to whatever
+  // was under the removed backdrop, and a drag that ended outside the sheet
+  // closed it too.
+  const pressStartedOnBackdropRef = useRef(false);
 
   return createPortal(
     <div
       className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-900/50 backdrop-blur-sm sm:items-center sm:p-4"
       style={overlayStyle}
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
+      onPointerDown={(e) => {
+        pressStartedOnBackdropRef.current = e.target === e.currentTarget;
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget && pressStartedOnBackdropRef.current) onClose();
+        pressStartedOnBackdropRef.current = false;
       }}
     >
       <div
-        className="animate-slide-up flex max-h-[88dvh] w-full flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:max-w-md sm:rounded-3xl"
+        ref={dialogRef}
+        tabIndex={-1}
+        className="animate-slide-up flex max-h-[88dvh] w-full flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl outline-none sm:max-w-md sm:rounded-3xl"
         style={sheetStyle}
         role="dialog"
         aria-modal="true"
+        aria-labelledby={titleId}
       >
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-          <h2 className="text-base font-bold text-slate-900">{title}</h2>
+          <h2 id={titleId} className="text-base font-bold text-slate-900">
+            {title}
+          </h2>
           <button
             onClick={onClose}
             aria-label="Close"
@@ -107,15 +144,10 @@ function KeyboardAwareModal(props: Omit<ModalProps, "keyboardAware">) {
   const keyboardHeight = useKeyboardHeight();
   const scrollerRef = useRef<HTMLDivElement>(null);
 
-  // The page behind never scrolls while the sheet is open (same technique
-  // as DirectMessageThread). Previous value restored on close.
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, []);
+  // The page behind never scrolls while the sheet is open. Counted with
+  // every other page lock (lib/scrollLock), so closing in any order never
+  // leaves the page stuck.
+  useEffect(() => lockPageScroll(), []);
 
   // Scroller position from just before the keyboard opened, restored when
   // it closes. Deliberately the PRE-keyboard position even if the golfer

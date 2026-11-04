@@ -100,6 +100,16 @@ export function LocationPicker({ title = "Where do you usually play?", onSelect,
   const extraPlaces = places.filter((p) => !curatedLabels.has(p.label.toLowerCase()));
   const exactMatch = [...results.map((r) => r.label), ...extraPlaces.map((p) => p.label)].some((l) => l.toLowerCase() === trimmedQuery.toLowerCase());
 
+  // A location fix that arrives after the sheet was closed is dropped: it
+  // used to still apply the location the golfer had walked away from.
+  const openRef = useRef(true);
+  useEffect(() => {
+    openRef.current = true;
+    return () => {
+      openRef.current = false;
+    };
+  }, []);
+
   function requestCurrentLocation() {
     if (!("geolocation" in navigator)) {
       setGeoStatus("unsupported");
@@ -108,6 +118,7 @@ export function LocationPicker({ title = "Where do you usually play?", onSelect,
     setGeoStatus("requesting");
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        if (!openRef.current) return;
         // Coarsen before anything else touches the fix — the raw device
         // coordinates never leave this callback (not to the profile, not
         // to course search). See lib/coarseLocation.ts.
@@ -115,7 +126,7 @@ export function LocationPicker({ title = "Where do you usually play?", onSelect,
         const region = nearestRegion(coords.lat, coords.lng);
         onSelect({ label: region?.label ?? "Current Location", coords });
       },
-      () => setGeoStatus("denied"),
+      () => openRef.current && setGeoStatus("denied"),
       { enableHighAccuracy: false, timeout: 10_000, maximumAge: 5 * 60_000 },
     );
   }

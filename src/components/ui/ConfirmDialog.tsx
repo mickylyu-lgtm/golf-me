@@ -29,7 +29,10 @@ export function ConfirmDialog({ title, message, confirmLabel, danger, onConfirm,
   }
 
   return (
-    <Modal title={title} onClose={onCancel}>
+    // X, Escape and a backdrop tap can't dismiss it while the action runs
+    // either: the dialog vanishing looked like a cancel while the delete /
+    // leave / cancel was still going through.
+    <Modal title={title} onClose={() => !busy && onCancel()}>
       <p className="text-sm text-slate-600">{message}</p>
       <div className="mt-5 flex gap-3">
         <Button variant="outline" fullWidth disabled={busy} onClick={onCancel}>

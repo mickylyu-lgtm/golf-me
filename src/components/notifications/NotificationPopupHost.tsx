@@ -161,6 +161,13 @@ export function NotificationPopupHost() {
     setDragY(dy < 0 ? dy : dy / 4);
   }
 
+  // An interrupted touch (iOS touchcancel) never dismisses the popup.
+  function onTouchCancel() {
+    dragStateRef.current = null;
+    setDragging(false);
+    setDragY(0);
+  }
+
   function onTouchEnd() {
     const state = dragStateRef.current;
     dragStateRef.current = null;
@@ -189,7 +196,7 @@ export function NotificationPopupHost() {
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
-        onTouchCancel={onTouchEnd}
+        onTouchCancel={onTouchCancel}
         className={`w-full max-w-sm ${dragging ? "" : "transition-all duration-200 ease-out"} ${visible ? "opacity-100" : "-translate-y-2 opacity-0"}`}
         style={{
           pointerEvents: "auto",

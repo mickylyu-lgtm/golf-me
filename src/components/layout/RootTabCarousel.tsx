@@ -238,13 +238,20 @@ export function RootTabCarousel({ activePath }: { activePath: string }) {
     // handlers are passive by default and silently ignore preventDefault.
     swipeRegion.addEventListener("touchstart", onTouchStart, { passive: true });
     swipeRegion.addEventListener("touchmove", onTouchMove, { passive: false });
+    // An interrupted touch (iOS touchcancel) springs back; it used to be
+    // treated like a finished swipe and could switch tabs.
+    function cancelGesture() {
+      touchRef.current = null;
+      setDragging(false);
+      setDragOffsetPct(0);
+    }
     swipeRegion.addEventListener("touchend", finishGesture, { passive: true });
-    swipeRegion.addEventListener("touchcancel", finishGesture, { passive: true });
+    swipeRegion.addEventListener("touchcancel", cancelGesture, { passive: true });
     return () => {
       swipeRegion.removeEventListener("touchstart", onTouchStart);
       swipeRegion.removeEventListener("touchmove", onTouchMove);
       swipeRegion.removeEventListener("touchend", finishGesture);
-      swipeRegion.removeEventListener("touchcancel", finishGesture);
+      swipeRegion.removeEventListener("touchcancel", cancelGesture);
     };
   }, [activeIndex, navigate]);
 

@@ -63,6 +63,7 @@ export function RangeSlider({ label, min, max, step, valueMin, valueMax, onChang
           onChange={(e) => onChangeMin(Math.min(Number(e.target.value), valueMax - step))}
           onPointerDown={() => setDragging("min")}
           onPointerUp={() => setDragging(null)}
+          onPointerCancel={() => setDragging(null)}
           aria-label={`${label} minimum`}
         />
         <input
@@ -77,6 +78,7 @@ export function RangeSlider({ label, min, max, step, valueMin, valueMax, onChang
           onChange={(e) => onChangeMax(Math.max(Number(e.target.value), valueMin + step))}
           onPointerDown={() => setDragging("max")}
           onPointerUp={() => setDragging(null)}
+          onPointerCancel={() => setDragging(null)}
           aria-label={`${label} maximum`}
         />
       </div>
