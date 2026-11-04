@@ -4,6 +4,7 @@ import { Bell, X } from "lucide-react";
 import { useData } from "../../context/DataContext";
 import { useTutorial } from "../../context/TutorialContext";
 import { Avatar } from "../ui/Avatar";
+import { isFreshForPopup } from "../../lib/notificationPopups";
 import type { AppNotification, NotificationType } from "../../types";
 
 // Only these types are worth interrupting the user for while they're
@@ -47,6 +48,7 @@ export function NotificationPopupHost() {
   const navigate = useNavigate();
   const location = useLocation();
   const seenIds = useRef<Set<string> | null>(null);
+  const sessionStartMs = useRef(Date.now());
   const notificationsRef = useRef(notifications);
   notificationsRef.current = notifications;
   // Read via a ref inside the notifications effect below (which only
@@ -92,6 +94,9 @@ export function NotificationPopupHost() {
     // person you're already texting."
     const poppable = fresh.filter((n) => {
       if (!POPUP_TYPES.has(n.type)) return false;
+      // Only unread rows created since the app opened: a slow first load on
+      // a new device must not replay old history (see lib/notificationPopups).
+      if (!isFreshForPopup(n, sessionStartMs.current)) return false;
       if (n.type === "new_message" && n.actorId && pathnameRef.current === `/messages/${n.actorId}`) return false;
       // caddie_analysis_complete always pops, even on that analysis's own
       // loading screen: per Micky (2026-10-16) finishing deserves a visible
