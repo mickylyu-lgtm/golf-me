@@ -15,6 +15,10 @@ import { CoachReviewSection } from "../components/community/CoachReviewSection";
 import { loadChatDraft, postCommentDraftKey, saveChatDraft } from "../lib/chatDraft";
 import { isObjectionableContentError } from "../lib/objectionableContent";
 import { useKeyboardHeight } from "../lib/useKeyboardHeight";
+import { useComposerFocus } from "../lib/useComposerFocus";
+import { focusMovedToOtherField } from "../lib/composerFocus";
+import { isSendEnter } from "../lib/isImeComposing";
+import { lockPageScroll } from "../lib/scrollLock";
 import { goBack } from "../lib/goBack";
 
 export function PostDetail() {
@@ -38,9 +42,13 @@ export function PostDetail() {
   // doesn't shift, and the page behind is scroll-locked. keyboardHeight
   // comes from the plugin's own events (the only signal that's real in
   // this mode) and is always 0 on web, where nothing here changes.
+  // Docked only while the keyboard is this composer's (useComposerFocus):
+  // an inline reply or a sheet's textarea opening it leaves the composer
+  // and the page alone, so that field is revealed normally.
   const keyboardHeight = useKeyboardHeight();
-  const composerDocked = keyboardHeight > 0;
   const composerRef = useRef<HTMLDivElement>(null);
+  const composerOwnsFocus = useComposerFocus(composerRef, rememberScrollBeforeKeyboard);
+  const composerDocked = composerOwnsFocus && keyboardHeight > 0;
   const [composerHeight, setComposerHeight] = useState(0);
 
   // Measured on docking, before paint, so the spacer is never a frame late.
@@ -70,8 +78,8 @@ export function PostDetail() {
   // iOS-panned page could flash for a frame before snapping back.
   useLayoutEffect(() => {
     if (!composerDocked) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const releaseScroll = lockPageScroll();
+    const composerEl = composerRef.current;
     // Line the composer's old spot up with the top of the docked bar, so
     // what was right above it stays visible right above the keyboard. The
     // page is put back where it was when the keyboard closes.
@@ -84,10 +92,13 @@ export function PostDetail() {
       if (saved !== null && Math.abs(window.scrollY - saved) > 1) window.scrollTo(0, saved);
     }
     return () => {
-      document.body.style.overflow = previousOverflow;
+      releaseScroll();
       const restoreTo = scrollYBeforeKeyboardRef.current;
       scrollYBeforeKeyboardRef.current = null;
       composerPageTopRef.current = null;
+      // Not when another field took the keyboard (it's revealed on its own).
+      const active = document.activeElement as HTMLElement | null;
+      if (focusMovedToOtherField(active, !!active && !!composerEl?.contains(active))) return;
       if (restoreTo !== null) requestAnimationFrame(() => window.scrollTo(0, restoreTo));
     };
     // keyboardHeight is final when the composer docks (keyboardWillShow);
@@ -217,8 +228,7 @@ export function PostDetail() {
             id="comment-composer-input"
             value={commentText}
             onChange={(e) => updateCommentText(e.target.value)}
-            onFocus={rememberScrollBeforeKeyboard}
-            onKeyDown={(e) => e.key === "Enter" && submitComment()}
+            onKeyDown={(e) => isSendEnter(e) && submitComment()}
             placeholder={t("community.writeCommentPlaceholder")}
             className="min-w-0 flex-1 bg-transparent px-1.5 text-sm outline-none"
           />

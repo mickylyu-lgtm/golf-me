@@ -13,6 +13,7 @@ import { FoundingSpotsNote } from "../components/golfer/FoundingGolfer";
 import { inputClass, labelClass } from "../components/ui/FormControls";
 import { revealFocusedField } from "../lib/revealFocusedField";
 import { useKeyboardHeight } from "../lib/useKeyboardHeight";
+import { lockPageScroll } from "../lib/scrollLock";
 import { initialsFromName, avatarColorForName } from "../lib/avatar";
 import type { GeoPoint } from "../lib/geo";
 import { track } from "../lib/analytics";
@@ -233,13 +234,7 @@ export function ProfileSetup() {
   // fixed-height column that never scrolls the body anyway).
   const keyboardHeight = useKeyboardHeight();
   const scrollerRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, []);
+  useEffect(() => lockPageScroll(), []);
   useLayoutEffect(() => {
     const scroller = scrollerRef.current;
     if (!scroller || keyboardHeight <= 0) return;

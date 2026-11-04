@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { MoreHorizontal, ShieldAlert, ShieldCheck, ShieldX, ThumbsUp, Trash2 } from "lucide-react";
 import type { PostComment } from "../../types";
@@ -11,6 +11,7 @@ import { formatRelativeTime } from "../../lib/format";
 import { commentReplyDraftKey, loadChatDraft, saveChatDraft } from "../../lib/chatDraft";
 import { useLocale } from "../../i18n/LocaleContext";
 import { isObjectionableContentError } from "../../lib/objectionableContent";
+import { isSendEnter } from "../../lib/isImeComposing";
 
 interface CommentItemProps {
   comment: PostComment;
@@ -32,6 +33,10 @@ export function CommentItem({ comment, postId, replies }: CommentItemProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
+  // In-flight guard: a fast double tap / double Enter must post once. A ref,
+  // not only state, so a second press before the re-render is refused too.
+  const sendingRef = useRef(false);
+  const [sending, setSending] = useState(false);
 
   const author = getGolfer(comment.authorId);
   if (!author || isBlocked(comment.authorId)) return null;
@@ -46,7 +51,9 @@ export function CommentItem({ comment, postId, replies }: CommentItemProps) {
   }
 
   async function submitReply() {
-    if (!replyText.trim()) return;
+    if (!replyText.trim() || sendingRef.current) return;
+    sendingRef.current = true;
+    setSending(true);
     const text = replyText;
     updateReplyText("");
     setReplyOpen(false);
@@ -64,6 +71,9 @@ export function CommentItem({ comment, postId, replies }: CommentItemProps) {
             : "Couldn't post your reply. Please try again.",
         "warning",
       );
+    } finally {
+      sendingRef.current = false;
+      setSending(false);
     }
   }
 
@@ -147,13 +157,13 @@ export function CommentItem({ comment, postId, replies }: CommentItemProps) {
                 autoFocus
                 value={replyText}
                 onChange={(e) => updateReplyText(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && submitReply()}
+                onKeyDown={(e) => isSendEnter(e) && submitReply()}
                 placeholder={t("community.replyToPlaceholder", { name: author.name.split(" ")[0] })}
                 className="min-w-0 flex-1 rounded-full border border-slate-200 bg-white px-3.5 py-1.5 text-sm outline-none focus:border-fairway-400"
               />
               <button
                 onClick={submitReply}
-                disabled={!replyText.trim()}
+                disabled={!replyText.trim() || sending}
                 className="shrink-0 px-1 py-2 text-xs font-semibold text-fairway-700 disabled:opacity-40"
               >
                 {t("community.send")}
