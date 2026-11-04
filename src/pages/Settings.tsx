@@ -17,6 +17,7 @@ import { Toggle } from "../components/ui/Toggle";
 import { ProfileSwitcher } from "../components/layout/ProfileSwitcher";
 import { AddToHomeScreenPrompt } from "../components/layout/AddToHomeScreenPrompt";
 import { clearOnboardingDraft } from "../lib/onboardingDraft";
+import { clearChatDrafts } from "../lib/chatDraft";
 import { goBack } from "../lib/goBack";
 
 // Plain-language push status for THIS phone, from what it knows locally:
@@ -179,6 +180,7 @@ export function Settings() {
       // local state and land back on Welcome, same destination as a normal
       // logout, not a special "your account is gone" screen.
       await supabase.auth.signOut();
+      clearChatDrafts();
       setDeleteConfirmOpen(false);
       navigate("/welcome");
       showToast(t("settings.accountDeletedToast"), "info");

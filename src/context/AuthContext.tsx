@@ -10,6 +10,8 @@ import { authorizeWithApple, randomNonce } from "../lib/socialSignIn";
 import { profileRowToGolferProfile } from "../lib/profile";
 import type { ProfileRow } from "../lib/profile";
 import { clearEmailDraft } from "../lib/authInput";
+import { clearChatDrafts } from "../lib/chatDraft";
+import { clearOnboardingDraft } from "../lib/onboardingDraft";
 import type { GolferProfile } from "../types";
 
 // Must match the CFBundleURLTypes scheme registered in
@@ -366,15 +368,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // receiving pushes on a device it's signed out of.
     await unregisterPushNotifications();
     await supabase.auth.signOut();
+    // Unsent messages and a half-finished setup aren't stored per account:
+    // the next person to sign in on this device must not see them.
+    clearChatDrafts();
+    clearOnboardingDraft();
   }, []);
 
   const enterDemoMode = useCallback(() => {
     window.localStorage.setItem(DEMO_FLAG_KEY, "1");
+    clearChatDrafts();
     setIsDemo(true);
   }, []);
 
   const exitDemoMode = useCallback(() => {
     window.localStorage.removeItem(DEMO_FLAG_KEY);
+    clearChatDrafts();
     setIsDemo(false);
   }, []);
 

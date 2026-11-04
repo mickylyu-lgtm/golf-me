@@ -32,6 +32,18 @@ export function saveChatDraft(key: string, text: string): void {
   writeAll(drafts);
 }
 
+// Drafts aren't stored per account, so signing out (or switching between
+// the demo and a real account) clears them: on a shared phone the next
+// account must not find someone else's half-typed message.
+export function clearChatDrafts(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(DRAFTS_KEY);
+  } catch {
+    // Storage blocked: there were no saved drafts either.
+  }
+}
+
 export function dmDraftKey(golferId: string): string {
   return `dm:${golferId}`;
 }
