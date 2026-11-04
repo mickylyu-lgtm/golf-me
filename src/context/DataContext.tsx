@@ -196,15 +196,17 @@ interface DataContextValue {
   isBlockedEitherWay: (id: string) => boolean;
 
   hasReviewed: (callId: string, revieweeId: string) => boolean;
-  submitReview: (callId: string, revieweeId: string, input: ReviewInput) => void;
+  // Both resolve only once the server has the write (real accounts) and
+  // reject on failure, so the forms can keep the input and offer a retry.
+  submitReview: (callId: string, revieweeId: string, input: ReviewInput) => Promise<void>;
 
   reportUser: (
     reportedId: string,
     category: ReportCategory,
     details: string,
     context: Report["context"],
-    meta?: { golfCallId?: string; postId?: string; commentId?: string },
-  ) => void;
+    meta?: { golfCallId?: string; postId?: string; commentId?: string; messageId?: string },
+  ) => Promise<void>;
   blockUser: (blockedId: string) => void;
   unblockUser: (blockedId: string) => void;
   isBlocked: (id: string) => boolean;
@@ -788,9 +790,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
   );
 
   const submitReview = useCallback(
-    (callId: string, revieweeId: string, input: ReviewInput) => {
+    async (callId: string, revieweeId: string, input: ReviewInput) => {
       if (!auth.isDemo) {
-        realRounds.submitReview(callId, revieweeId, input).catch((err) => console.error("GolfMe: failed to submit review.", err));
+        // Awaited: ReviewModal shows success only after the RPC answers.
+        await realRounds.submitReview(callId, revieweeId, input);
         return;
       }
       setData((prev) => {
@@ -813,15 +816,17 @@ export function DataProvider({ children }: { children: ReactNode }) {
   );
 
   const reportUser = useCallback(
-    (
+    async (
       reportedId: string,
       category: ReportCategory,
       details: string,
       context: Report["context"],
-      meta?: { golfCallId?: string; postId?: string; commentId?: string },
+      meta?: { golfCallId?: string; postId?: string; commentId?: string; messageId?: string },
     ) => {
       if (!auth.isDemo) {
-        realSocial.reportUser(reportedId, category, details, context, { golfCallId: meta?.golfCallId }).catch((err) => console.error("GolfMe: failed to submit report.", err));
+        // The whole target goes through (it used to forward only the round
+        // id), and failures reach the form instead of the console.
+        await realSocial.reportUser(reportedId, category, details, context, meta);
         return;
       }
       setData((prev) => ({

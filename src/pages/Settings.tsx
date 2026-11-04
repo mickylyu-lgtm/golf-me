@@ -100,15 +100,22 @@ export function Settings() {
   // Demo accounts never had a real profiles.push_enabled row to persist
   // against, so they keep the old local-only toggle; real accounts persist
   // through AuthContext (see push_enabled's own migration comment for why
-  // this actually gates anything, unlike emailEnabled/profileDiscoverable
-  // below which remain cosmetic-only).
+  // this actually gates anything). The old "Email updates" and
+  // "Discoverable" switches were removed (Micky, 2026-11-04): neither was
+  // saved or enforced anywhere, so they promised a digest and a hidden
+  // profile that didn't exist.
   const [demoPushEnabled, setDemoPushEnabled] = useState(true);
   const pushEnabled = isDemo ? demoPushEnabled : realPushEnabled;
+  // Which real switch is saving: it stays put (disabled) until the write
+  // answers, so a fast second tap can't race the first.
+  const [savingSwitch, setSavingSwitch] = useState<string | null>(null);
   async function handlePushToggle(value: boolean) {
     if (isDemo) {
       setDemoPushEnabled(value);
       return;
     }
+    if (savingSwitch) return;
+    setSavingSwitch("push_enabled");
     try {
       await saveProfile({ push_enabled: value });
       // Turning this back on after having said "Not Now"/never decided is
@@ -120,6 +127,8 @@ export function Settings() {
       if (value) registerPushNotifications(currentUser.id);
     } catch (err) {
       showToast(err instanceof Error ? err.message : t("auth.authError"), "warning");
+    } finally {
+      setSavingSwitch(null);
     }
   }
   // Category switches, stored server-side (profiles.notify_new_rounds /
@@ -133,14 +142,16 @@ export function Settings() {
       setDemoNotify((prev) => ({ ...prev, [column]: value }));
       return;
     }
+    if (savingSwitch) return;
+    setSavingSwitch(column);
     try {
       await saveProfile({ [column]: value });
     } catch (err) {
       showToast(err instanceof Error ? err.message : t("auth.authError"), "warning");
+    } finally {
+      setSavingSwitch(null);
     }
   }
-  const [emailEnabled, setEmailEnabled] = useState(true);
-  const [profileDiscoverable, setProfileDiscoverable] = useState(true);
 
   async function handleDeleteAccount() {
     setDeletingAccount(true);
@@ -217,7 +228,7 @@ export function Settings() {
                 <p className="text-sm font-semibold text-slate-800">{t("settings.pushNotifications")}</p>
                 <p className="text-xs text-slate-500">{t("settings.pushNotificationsDesc")}</p>
               </div>
-              <Toggle checked={pushEnabled} onChange={handlePushToggle} label={t("settings.pushNotifications")} />
+              <Toggle checked={pushEnabled} onChange={handlePushToggle} label={t("settings.pushNotifications")} disabled={savingSwitch !== null} />
             </div>
             {!isDemo && <PushStatusLine userId={currentUser.id} pushEnabled={pushEnabled} />}
             <div className="flex items-center gap-3">
@@ -226,7 +237,7 @@ export function Settings() {
                 <p className="text-sm font-semibold text-slate-800">{t("settings.newRoundsNearMe")}</p>
                 <p className="text-xs text-slate-500">{t("settings.newRoundsNearMeDesc")}</p>
               </div>
-              <Toggle checked={notifyNewRounds} onChange={(v) => handleCategoryToggle("notify_new_rounds", v)} label={t("settings.newRoundsNearMe")} />
+              <Toggle checked={notifyNewRounds} onChange={(v) => handleCategoryToggle("notify_new_rounds", v)} label={t("settings.newRoundsNearMe")} disabled={savingSwitch !== null} />
             </div>
             <div className="flex items-center gap-3">
               <Users size={16} className="text-slate-400" />
@@ -234,15 +245,7 @@ export function Settings() {
                 <p className="text-sm font-semibold text-slate-800">{t("settings.circlePosts")}</p>
                 <p className="text-xs text-slate-500">{t("settings.circlePostsDesc")}</p>
               </div>
-              <Toggle checked={notifyCirclePosts} onChange={(v) => handleCategoryToggle("notify_circle_posts", v)} label={t("settings.circlePosts")} />
-            </div>
-            <div className="flex items-center gap-3">
-              <Bell size={16} className="text-slate-400" />
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-slate-800">{t("settings.emailUpdates")}</p>
-                <p className="text-xs text-slate-500">{t("settings.emailUpdatesDesc")}</p>
-              </div>
-              <Toggle checked={emailEnabled} onChange={setEmailEnabled} label={t("settings.emailUpdates")} />
+              <Toggle checked={notifyCirclePosts} onChange={(v) => handleCategoryToggle("notify_circle_posts", v)} label={t("settings.circlePosts")} disabled={savingSwitch !== null} />
             </div>
           </div>
         </div>
@@ -254,13 +257,12 @@ export function Settings() {
               <MapPin size={16} className="text-slate-400" />
               <p className="flex-1 text-xs text-slate-600">{t("settings.locationNote")}</p>
             </div>
-            <div className="flex items-center gap-3">
+            {/* What's true today, instead of a visibility switch nothing
+                enforced: every signed-in golfer can see a profile; blocking is
+                the real control. */}
+            <div className="flex items-center gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
               <Users size={16} className="text-slate-400" />
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-slate-800">{t("settings.discoverable")}</p>
-                <p className="text-xs text-slate-500">{t("settings.discoverableDesc")}</p>
-              </div>
-              <Toggle checked={profileDiscoverable} onChange={setProfileDiscoverable} label={t("settings.discoverable")} />
+              <p className="flex-1 text-xs text-slate-600">{t("settings.profileVisibilityNote")}</p>
             </div>
           </div>
         </div>

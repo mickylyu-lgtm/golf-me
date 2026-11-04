@@ -9,6 +9,8 @@ import { isObjectionableContentError } from "../lib/objectionableContent";
 import type { SendMessageResult } from "../lib/objectionableContent";
 import type { GolferProfile, AppNotification, DirectMessage, NotificationType, ReportCategory, Report } from "../types";
 import type { DmConversation } from "./DataContext";
+import { isMissingColumnError, reportRow } from "../lib/reportRow";
+import type { ReportTarget } from "../lib/reportRow";
 
 interface ConversationParticipantRow {
   conversation_id: string;
@@ -119,7 +121,7 @@ interface RealSocialContextValue {
     category: ReportCategory,
     details: string,
     context: Report["context"],
-    meta?: { golfCallId?: string },
+    meta?: ReportTarget,
   ) => Promise<void>;
 
   notifications: AppNotification[];
@@ -924,16 +926,13 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
   );
 
   const reportUser = useCallback(
-    async (reportedId: string, category: ReportCategory, details: string, context: Report["context"], meta?: { golfCallId?: string }) => {
-      if (!selfId) return;
-      const { error } = await supabase.from("reports").insert({
-        reporter_id: selfId,
-        reported_user_id: reportedId,
-        round_id: meta?.golfCallId ?? null,
-        category,
-        details,
-        context,
-      });
+    async (reportedId: string, category: ReportCategory, details: string, context: Report["context"], meta?: ReportTarget) => {
+      // Never a silent "success": the report form waits for this answer.
+      if (!selfId) throw new Error("You need to be signed in to report.");
+      const input = { reporterId: selfId, reportedUserId: reportedId, category, details, context, ...meta };
+      let { error } = await supabase.from("reports").insert(reportRow(input, true));
+      // Database without the post/comment columns yet (see lib/reportRow).
+      if (error && isMissingColumnError(error)) ({ error } = await supabase.from("reports").insert(reportRow(input, false)));
       if (error) throw new Error(error.message);
     },
     [selfId],

@@ -14,25 +14,42 @@ interface ReportModalProps {
   golfCallId?: string;
   postId?: string;
   commentId?: string;
+  messageId?: string;
   onClose: () => void;
 }
 
-export function ReportModal({ reportedId, reportedName, context, golfCallId, postId, commentId, onClose }: ReportModalProps) {
+export function ReportModal({ reportedId, reportedName, context, golfCallId, postId, commentId, messageId, onClose }: ReportModalProps) {
   const { reportUser } = useData();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const [category, setCategory] = useState<ReportCategory | null>(null);
   const [details, setDetails] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(false);
 
-  function submit() {
-    if (!category) return;
-    reportUser(reportedId, category, details.trim(), context, { golfCallId, postId, commentId });
+  // Waits for the server: "Report submitted" only once the report is saved.
+  // A failure keeps the chosen reason and the details, says so, and the
+  // button retries; a second tap while sending does nothing.
+  async function submit() {
+    if (!category || submitting) return;
+    setSubmitting(true);
+    setSubmitError(false);
+    try {
+      await reportUser(reportedId, category, details.trim(), context, { golfCallId, postId, commentId, messageId });
+    } catch (err) {
+      console.error("GolfMe: failed to submit report.", err);
+      setSubmitError(true);
+      setSubmitting(false);
+      return;
+    }
     showToast("Report submitted. Our trust & safety team will review it — thank you for keeping GolfMe safe.", "success");
     onClose();
   }
 
   return (
-    <Modal title={`Report ${reportedName}`} onClose={onClose} keyboardAware>
+    // Not dismissable mid-send: closing would look like a cancel while the
+    // report is still being written.
+    <Modal title={`Report ${reportedName}`} onClose={() => !submitting && onClose()} keyboardAware>
       <div className="flex flex-col gap-3">
         <p className="text-xs text-slate-500">Reports are confidential. {reportedName} will not be notified.</p>
         <div className="flex flex-col gap-1.5">
@@ -55,15 +72,24 @@ export function ReportModal({ reportedId, reportedName, context, golfCallId, pos
           rows={3}
           className="w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-fairway-400"
         />
-        <Button disabled={!category} onClick={submit} fullWidth>
-          Submit report
+        {submitError && (
+          <p role="alert" className="rounded-xl bg-red-50 px-3 py-2 text-xs leading-relaxed text-red-700">
+            Your report wasn't sent. Check your connection and try again — what you wrote is still here.
+          </p>
+        )}
+        <Button disabled={!category || submitting} aria-busy={submitting || undefined} onClick={submit} fullWidth>
+          {submitting ? "Sending…" : submitError ? "Try again" : "Submit report"}
         </Button>
+        {/* Opens the guidelines in a new screen only when nothing typed would
+            be lost; otherwise the link waits until the report is sent. */}
         <button
           onClick={() => {
+            if (submitting) return;
             onClose();
             navigate("/community/guidelines");
           }}
-          className="text-center text-xs font-semibold text-fairway-700 hover:underline"
+          disabled={submitting || Boolean(details.trim())}
+          className="text-center text-xs font-semibold text-fairway-700 hover:underline disabled:text-slate-400 disabled:no-underline"
         >
           Read Community Guidelines
         </button>

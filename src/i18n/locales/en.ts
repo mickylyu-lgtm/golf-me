@@ -1042,6 +1042,9 @@ export const en = {
   "review.addToCircleDesc": "Golfers you've played with and would play with again.",
   "review.alreadyInCircle": "{name} is already in your Golf Circle.",
   "review.submit": "Submit review",
+  "review.submitting": "Saving…",
+  "review.retry": "Try again",
+  "review.submitError": "Your review wasn't saved. Check your connection and try again — your answers are still here.",
   "review.submittedToast": "Review for {name} submitted — visible only to GolfMe's trust system.",
 
   // Golf Circle detail
@@ -1101,12 +1104,9 @@ export const en = {
   "settings.pushStatus.ready": "This iPhone will get notifications.",
   "settings.pushStatus.allow": "Allow",
   "settings.pushStatus.retry": "Try again",
-  "settings.emailUpdates": "Email updates",
-  "settings.emailUpdatesDesc": "Weekly digest of rounds near you.",
   "settings.privacy": "Privacy",
   "settings.locationNote": "Your exact location is never shown. Other golfers only see an approximate distance and general area.",
-  "settings.discoverable": "Discoverable to nearby golfers",
-  "settings.discoverableDesc": "Turn off to hide your profile from Discover and matches.",
+  "settings.profileVisibilityNote": "Signed-in GolfMe golfers can see your profile and message you. To stop someone, block them from their profile.",
   "settings.safety": "Safety",
   "settings.blockedGolfers": "Blocked golfers",
   "settings.unblock": "Unblock",

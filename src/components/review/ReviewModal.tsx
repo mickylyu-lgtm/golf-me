@@ -78,24 +78,36 @@ export function ReviewModal({ callId, reviewee, onClose, onSubmitted }: ReviewMo
   const alreadyInCircle = isInCircle(reviewee.id);
   const [addCircle, setAddCircle] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const showedUp = state.showedUp;
   const secondaryAnswered = showedUp !== true || (state.onTime !== undefined && state.handicapAccuracy !== undefined);
   const canSubmit = state.wouldPlayAgain !== undefined && showedUp !== undefined && state.respectful !== undefined && secondaryAnswered;
 
-  function submit() {
+  // Waits for the server: success (and the Circle add, and the share
+  // prompt) only once the review is saved. A failure keeps every answer
+  // and the private note, says so, and the button retries.
+  async function submit() {
     if (submitting || !canSubmit || state.wouldPlayAgain === undefined || showedUp === undefined || state.respectful === undefined) return;
     setSubmitting(true);
+    setSubmitError(null);
     const noShowTag = showedUp === false && state.noShowReason ? `[${state.noShowReason}] ` : "";
     const privateNote = `${noShowTag}${state.privateNote.trim()}`.trim() || undefined;
-    submitReview(callId, reviewee.id, {
-      wouldPlayAgain: state.wouldPlayAgain,
-      showedUp,
-      respectful: state.respectful,
-      onTime: showedUp ? state.onTime : undefined,
-      handicapAccuracy: showedUp ? (state.handicapAccuracy ?? "not_sure") : "not_sure",
-      privateNote,
-    });
+    try {
+      await submitReview(callId, reviewee.id, {
+        wouldPlayAgain: state.wouldPlayAgain,
+        showedUp,
+        respectful: state.respectful,
+        onTime: showedUp ? state.onTime : undefined,
+        handicapAccuracy: showedUp ? (state.handicapAccuracy ?? "not_sure") : "not_sure",
+        privateNote,
+      });
+    } catch (err) {
+      console.error("GolfMe: failed to submit review.", err);
+      setSubmitError(t("review.submitError"));
+      setSubmitting(false);
+      return;
+    }
     if (!alreadyInCircle && addCircle && state.wouldPlayAgain) addToCircle(reviewee.id);
     showToast(t("review.submittedToast", { name: reviewee.name }), "success");
     onClose();
@@ -103,7 +115,9 @@ export function ReviewModal({ callId, reviewee, onClose, onSubmitted }: ReviewMo
   }
 
   return (
-    <Modal title={t("review.title", { name: reviewee.name })} onClose={onClose} keyboardAware>
+    // Not dismissable mid-save: closing would look like a cancel while the
+    // review is still being written.
+    <Modal title={t("review.title", { name: reviewee.name })} onClose={() => !submitting && onClose()} keyboardAware>
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-3">
           <Avatar golfer={reviewee} size="md" />
@@ -209,8 +223,13 @@ export function ReviewModal({ callId, reviewee, onClose, onSubmitted }: ReviewMo
           )
         )}
 
-        <Button onClick={submit} disabled={submitting || !canSubmit} fullWidth>
-          {t("review.submit")}
+        {submitError && (
+          <p role="alert" className="rounded-xl bg-red-50 px-3 py-2 text-xs leading-relaxed text-red-700">
+            {submitError}
+          </p>
+        )}
+        <Button onClick={submit} disabled={submitting || !canSubmit} aria-busy={submitting || undefined} fullWidth>
+          {submitting ? t("review.submitting") : submitError ? t("review.retry") : t("review.submit")}
         </Button>
       </div>
     </Modal>
