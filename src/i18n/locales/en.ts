@@ -868,6 +868,7 @@ export const en = {
   "courseAutocomplete.nearYou": "Near You",
   "courseAutocomplete.searchAllCourses": "Search All Courses",
   "courseAutocomplete.noNearbyCourses": "No known courses nearby yet — search for any course below.",
+  "courseAutocomplete.noResults": "No matching courses. You can keep what you typed.",
   "courseAutocomplete.placeholder": "e.g. Bethpage Red",
   "host.titleFresh": "Host a Round",
   "host.titleFill": "Fill My Foursome",

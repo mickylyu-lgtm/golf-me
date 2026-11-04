@@ -966,6 +966,7 @@ export const es: Record<TranslationKey, string> = {
   "courseAutocomplete.nearYou": "Cerca de ti",
   "courseAutocomplete.searchAllCourses": "Buscar todos los campos",
   "courseAutocomplete.noNearbyCourses": "Aún no hay campos conocidos cerca — busca cualquier campo abajo.",
+  "courseAutocomplete.noResults": "No hay campos que coincidan. Puedes dejar lo que escribiste.",
   "courseAutocomplete.placeholder": "p. ej. Bethpage Red",
   "host.titleFresh": "Organizar una Ronda",
   "host.titleFill": "Completar Mi Grupo",

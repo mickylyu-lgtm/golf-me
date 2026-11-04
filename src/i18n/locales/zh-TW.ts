@@ -966,6 +966,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "courseAutocomplete.nearYou": "附近",
   "courseAutocomplete.searchAllCourses": "搜尋所有球場",
   "courseAutocomplete.noNearbyCourses": "附近暫無已知球場 — 請在下方搜尋球場。",
+  "courseAutocomplete.noResults": "沒有相符的球場,可以直接使用你輸入的名稱。",
   "courseAutocomplete.placeholder": "例如：Bethpage Red",
   "host.titleFresh": "揪球局",
   "host.titleFill": "招募球友補齊四人組",

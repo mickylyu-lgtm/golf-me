@@ -966,6 +966,7 @@ export const ko: Record<TranslationKey, string> = {
   "courseAutocomplete.nearYou": "내 주변",
   "courseAutocomplete.searchAllCourses": "모든 코스 검색",
   "courseAutocomplete.noNearbyCourses": "근처에 등록된 코스가 아직 없어요 — 아래에서 코스를 검색해 보세요.",
+  "courseAutocomplete.noResults": "일치하는 코스가 없어요. 입력한 이름을 그대로 써도 돼요.",
   "courseAutocomplete.placeholder": "예: Bethpage Red",
   "host.titleFresh": "라운드 만들기",
   "host.titleFill": "조 채우기",

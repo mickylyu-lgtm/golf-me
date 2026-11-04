@@ -966,6 +966,7 @@ export const ja: Record<TranslationKey, string> = {
   "courseAutocomplete.nearYou": "近くのコース",
   "courseAutocomplete.searchAllCourses": "すべてのコースを検索",
   "courseAutocomplete.noNearbyCourses": "近くに登録済みのコースがまだありません — 下から検索してください。",
+  "courseAutocomplete.noResults": "一致するコースがありません。入力した名前のまま使えます。",
   "courseAutocomplete.placeholder": "例：Bethpage Red",
   "host.titleFresh": "ラウンドを作成",
   "host.titleFill": "メンバーを募集",

@@ -966,6 +966,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "courseAutocomplete.nearYou": "附近",
   "courseAutocomplete.searchAllCourses": "搜索所有球场",
   "courseAutocomplete.noNearbyCourses": "附近暂无已知球场 — 请在下方搜索球场。",
+  "courseAutocomplete.noResults": "没有匹配的球场,可以直接使用你输入的名称。",
   "courseAutocomplete.placeholder": "例如：Bethpage Red",
   "host.titleFresh": "发起球局",
   "host.titleFill": "招募球友补齐四人组",
