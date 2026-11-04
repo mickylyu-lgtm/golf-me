@@ -891,6 +891,7 @@ export const ja: Record<TranslationKey, string> = {
   "filters.tomorrow": "明日",
   "filters.thisWeekend": "今週末",
   "filters.chooseDate": "日付を選択",
+  "filters.anyDay": "いつでも",
   "filters.playingArea": "プレーエリア",
   "filters.playingSomewhereElse": "別の場所でプレーしますか？",
   "filters.setAsDefault": "デフォルトに設定",

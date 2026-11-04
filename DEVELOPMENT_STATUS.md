@@ -30,6 +30,14 @@ Note: Phases between Phase 20/21 (see below) and Phase 22 span roughly 31 commit
 - **Bug fixed**: real accounts' onboarding never saved `photo_url`, so a photo picked during signup was uploaded but lost. It's now written by the same `saveProfile` call.
 - Privacy Policy Account item says the Google picture is suggested and removable. Tests: `npm run test:onboarding` (providerPhoto cases). Needs a real Google sign-in check on web + iPhone: photo shows at setup, is copied (URL is `.../storage/v1/object/public/avatars/...`), and Remove leaves initials. No migration.
 
+## Play journey (NYC-launch UX Phase 2) — 2026-11-03 (branch `fix/play-journey`, not deployed)
+
+- **Find a Round opens Rounds**: `/find?tab=rounds|golfers` (`src/lib/findTab.ts`). Home's Find a Round / View more and GolfCallDetail's Back fallback ask for Rounds; the request beats the session-remembered tab, becomes the remembered tab, and is stripped from the URL (replace). A plain bottom-nav tap / swipe / Back keeps the remembered tab. Pathname stays `/find`, so RootTabCarousel is unaffected.
+- **Shared round-search params** (`src/lib/roundSearchParams.ts`, used by FindRoundModal, GolfCalls, AutoMatch, PostCard): Edit search prefills every field from the URL (no search -> today + the golfer's travel radius); new "Any Day" pill (`filters.anyDay`, 6 locales) so quick searches stay any-day; Auto-Match "Browse all" now writes `matched=1` + keeps radius and all filters; course post Find Rounds uses the travel radius; malformed params read as unset.
+- **Golfers (Discover) filters** persist for the session (`src/lib/discoverFilters.ts` + useSessionState).
+- **Nav active state**: `isNavPathActive`/`activeNavIndex` in `src/lib/navMatch.ts`, re-exported from `nav.ts`. Play = `/find`, `/golf-calls/*`, `/auto-match`, `/discover`, `/tee-times/*`, `/courses/*`; Me also covers Settings/Help/About/My Golf/Saved/Coach reviews. SideNav uses it. **BottomNav (frozen) not changed** — still needs the one-line swap at its `activeIndex` (`MOBILE_NAV_ITEMS.findIndex(... startsWith ...)` -> `activeNavIndex(MOBILE_NAV_ITEMS, location.pathname)`), pending approval.
+- Tests: `npm run test:play` (20). tsc, lint (0 errors), build clean; before/after demo-mode screenshots taken. Needs iPhone check: swipe carousel after `?tab=` strip, native Back gesture onto Find.
+
 ## Tee Times hidden + host/join polish — 2026-11-02 (branch `fix/host-join-polish`)
 
 - **Tee Times hidden** (Micky: "hide tee times"): `TEE_TIMES_VISIBLE = false` in `src/services/teeTimes/types.ts`. No Home card, no Find link, no "Tee times available" badge, and every course (Skyway/Dyker Beach included) opens the general course page. `/tee-times` routes still work by direct link; flip the flag to restore. The round's own tee time and the course page's "Find tee times" Google search are unchanged.

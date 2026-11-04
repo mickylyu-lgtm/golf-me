@@ -1,17 +1,43 @@
-import { useNavigate } from "react-router-dom";
+import { useEffect } from "react";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { CalendarClock, ChevronRight } from "lucide-react";
 import { GolfCalls } from "./GolfCalls";
 import { Discover } from "./Discover";
 import { useLocale } from "../i18n/LocaleContext";
 import { useSessionState } from "../lib/useSessionState";
+import { FIND_TAB_PARAM, FIND_TAB_STORAGE_KEY, isFindTab, resolveFindTab } from "../lib/findTab";
+import type { FindTab } from "../lib/findTab";
 import { TEE_TIMES_VISIBLE } from "../services/teeTimes/types";
 
-type Tab = "rounds" | "golfers";
-
 export function Find() {
-  const [tab, setTab] = useSessionState<Tab>("golfme:findTab", "rounds", (v): v is Tab => v === "rounds" || v === "golfers");
+  const [rememberedTab, setTab] = useSessionState<FindTab>(FIND_TAB_STORAGE_KEY, "rounds", isFindTab);
   const { t } = useLocale();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // RootTabCarousel keeps Find mounted under every root tab, so only read
+  // ?tab= while Play itself is showing.
+  const requestedTab = pathname === "/find" ? searchParams.get(FIND_TAB_PARAM) : null;
+  // Derived during render (not only in the effect below) so an explicit
+  // request never flashes the remembered tab for a frame first.
+  const tab = resolveFindTab(requestedTab, rememberedTab);
+
+  // Adopt the request as the remembered tab, then drop it from the URL
+  // (replace, no new history entry). Left in place, Back from a golfer
+  // opened on Golfers would land on /find?tab=rounds and undo the switch.
+  useEffect(() => {
+    if (requestedTab === null) return;
+    if (isFindTab(requestedTab)) setTab(requestedTab);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete(FIND_TAB_PARAM);
+        return next;
+      },
+      { replace: true },
+    );
+  }, [requestedTab, setTab, setSearchParams]);
 
   return (
     <div className="flex flex-col gap-5">

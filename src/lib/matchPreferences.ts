@@ -8,7 +8,9 @@ import type {
   RoundLengthPreference,
   WalkOrCart,
 } from "../types";
-import { AGE_PREF_MAX, BUDGET_PREF_MAX, HANDICAP_PREF_MAX } from "../types";
+// Explicit extension so node --test (tests/roundSearchParams.test.ts) can load
+// this module through roundSearchParams.ts.
+import { AGE_PREF_MAX, BUDGET_PREF_MAX, HANDICAP_PREF_MAX } from "../types/index.ts";
 import type { NewPreferenceSelections } from "./preferenceMatch";
 
 // Shared value formatters for the Match Preferences sliders — each range's
@@ -123,16 +125,21 @@ const NEW_PREF_PARAM_KEYS = ["roundLength", "gender", "groupType", "gameFormat",
 // even "No Preference" ones — so an explicit "clear this for one search"
 // choice is distinguishable from "no override given."
 export function effectiveNewPreferences(user: GolferProfile, params: URLSearchParams): NewPreferenceSelections {
-  const hasOverride = NEW_PREF_PARAM_KEYS.some((k) => params.has(k));
-  if (!hasOverride) {
-    return {
+  return (
+    newPreferenceOverride(params) ?? {
       roundLengthPreference: user.roundLengthPreference,
       genderPreference: user.genderPreference,
       groupTypePreference: user.groupTypePreference,
       gameFormatPreference: user.gameFormatPreference,
       networkingPreference: user.networkingPreference,
-    };
-  }
+    }
+  );
+}
+
+// The per-search override alone, or null when none of the 5 keys is present.
+export function newPreferenceOverride(params: URLSearchParams): NewPreferenceSelections | null {
+  const hasOverride = NEW_PREF_PARAM_KEYS.some((k) => params.has(k));
+  if (!hasOverride) return null;
   return {
     roundLengthPreference: (params.get("roundLength") as RoundLengthPreference) || "No Preference",
     genderPreference: (params.get("gender") as GenderPreference) || "No preference",

@@ -11,8 +11,14 @@ const PARAM_LAT = "locLat";
 const PARAM_LNG = "locLng";
 
 export function effectiveLocation(user: GolferProfile, params: URLSearchParams): PlayingArea {
+  return locationOverride(params) ?? { label: user.areaLabel, coords: user.playingAreaCoords };
+}
+
+// The "Playing Somewhere Else?" override alone, or null when the search uses
+// the saved playing area -- what Edit search needs to prefill the picker.
+export function locationOverride(params: URLSearchParams): PlayingArea | null {
   const label = params.get(PARAM_LABEL);
-  if (!label) return { label: user.areaLabel, coords: user.playingAreaCoords };
+  if (!label) return null;
   const lat = params.get(PARAM_LAT);
   const lng = params.get(PARAM_LNG);
   return { label, coords: lat && lng ? { lat: Number(lat), lng: Number(lng) } : undefined };

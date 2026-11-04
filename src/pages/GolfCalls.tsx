@@ -13,7 +13,8 @@ import { GolfMeLoader } from "../components/loading/GolfMeLoader";
 import { FindRoundModal } from "../components/find/FindRoundModal";
 import { RoundAlertsCard } from "../components/find/RoundAlertsCard";
 import { listView } from "../lib/loadStatus";
-import type { GolfCall, GolfVibe, SkillFilter, WalkOrCart } from "../types";
+import type { GolfCall } from "../types";
+import { isMatchedSearch, parseRoundSearch, quickAutoMatchSearch } from "../lib/roundSearchParams";
 import { computeCallCompatibility } from "../lib/compatibility";
 import { matchesWhen } from "../lib/roundFilters";
 import { isPastRound } from "../lib/golfCall";
@@ -37,15 +38,13 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
   // A failed first load must not read as "no rounds near you".
   const view = listView({ count: golfCalls.length, isDemo, hasLoaded: rounds.hasLoaded, loadError: rounds.loadError, isLoading: rounds.isLoading });
 
-  const isMatched = searchParams.get("matched") === "1";
-  const when = searchParams.get("when");
-  const radius = searchParams.get("radius");
-  const intent = searchParams.get("intent");
-  const budgetMax = searchParams.get("budgetMax");
-  const skill = searchParams.get("skill") as SkillFilter | null;
-  const vibeFilter = searchParams.get("vibe") as GolfVibe | null;
-  const walk = searchParams.get("walk") as WalkOrCart | null;
-  const customDate = searchParams.get("date");
+  // Shared parser (roundSearchParams.ts) -- the same one FindRoundModal and
+  // Auto-Match use, so a search reads back exactly as it was written.
+  const isMatched = isMatchedSearch(searchParams);
+  const { when, radius, intent, budgetMax, skill, vibe: vibeFilter, walk, date: customDate } = useMemo(
+    () => parseRoundSearch(searchParams),
+    [searchParams],
+  );
   const effectiveLoc = useMemo(() => effectiveLocation(currentUser, searchParams), [currentUser, searchParams]);
 
   const trimmedQuery = query.trim().toLowerCase();
@@ -67,13 +66,13 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
     if (radius) {
       list = list.filter((c) => {
         const distance = resolveCallDistanceMiles(c, effectiveLoc);
-        return distance !== undefined && distance <= Number(radius);
+        return distance !== undefined && distance <= radius;
       });
     }
     if (when) list = list.filter((c) => matchesWhen(c, when, customDate));
 
     if (intent === "join") list = list.filter((c) => c.totalSpots - c.joinedGolferIds.length > 0);
-    if (budgetMax) list = list.filter((c) => c.estimatedPricePerPerson <= Number(budgetMax));
+    if (budgetMax !== null) list = list.filter((c) => c.estimatedPricePerPerson <= budgetMax);
     if (skill) list = list.filter((c) => c.skillLevel === skill || c.skillLevel === "Any Skill Level");
     if (vibeFilter) list = list.filter((c) => c.vibe === vibeFilter);
     if (walk && walk !== "Either") list = list.filter((c) => c.walkOrCart === walk || c.walkOrCart === "Either");
@@ -138,7 +137,7 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
           preferences and travel radius, any upcoming day -- the filter
           sheet is still there for a specific day or area. */}
       <button
-        onClick={() => navigate(`/auto-match?quick=1&radius=${currentUser.travelRadiusMiles || 25}`)}
+        onClick={() => navigate(`/auto-match?${quickAutoMatchSearch(currentUser.travelRadiusMiles).toString()}`)}
         className="flex items-center gap-3 rounded-2xl bg-gradient-to-br from-brand-forest to-brand-forest-deep px-4 py-3.5 text-left text-white shadow-sm transition active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2"
       >
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15">
@@ -244,7 +243,7 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
         </div>
       )}
 
-      {wizardOpen && <FindRoundModal onClose={() => setWizardOpen(false)} />}
+      {wizardOpen && <FindRoundModal searchParams={searchParams} onClose={() => setWizardOpen(false)} />}
     </div>
   );
 }

@@ -39,6 +39,7 @@ import { isStaleProcessing, usePeriodicRerender } from "../../lib/caddieAnalysis
 import { FAILURE_SHORT_KEYS, analysisFailure } from "../../lib/caddieFailure";
 import { barsCoverStyle, readVideoFrame, thumbIsDark, thumbResults, useBlurredBackdrop, type BlurredBackdrop, type FrameReadResult } from "../../lib/blurredBackdrop";
 import { barsDebugEnabled, buildTag } from "../../lib/barsDebug";
+import { courseFindRoundsSearch } from "../../lib/roundSearchParams";
 import { useLocale } from "../../i18n/LocaleContext";
 
 // A touch that moves further than this between press and release is a
@@ -572,7 +573,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
           </p>
           {areaForCourse(post.courseTag) && <p className="text-xs text-slate-500">{areaForCourse(post.courseTag)}</p>}
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" onClick={() => navigate(`/golf-calls?matched=1&when=weekend&radius=25`)}>
+            <Button size="sm" variant="outline" onClick={() => navigate(`/golf-calls?${courseFindRoundsSearch(currentUser.travelRadiusMiles).toString()}`)}>
               Find Rounds
             </Button>
             <Button size="sm" variant="outline" onClick={() => navigate(`/golf-calls/new?course=${encodeURIComponent(post.courseTag!)}`)}>

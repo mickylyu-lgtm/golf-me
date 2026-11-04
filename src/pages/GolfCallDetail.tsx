@@ -52,6 +52,7 @@ import { enrichRealCourse } from "../lib/realCourseSearch";
 import { isPastRound } from "../lib/golfCall";
 import { canReadRoundChat, roundChatAccess } from "../lib/roundChat";
 import { goBack } from "../lib/goBack";
+import { findTabPath } from "../lib/findTab";
 
 export function GolfCallDetail() {
   const { id } = useParams<{ id: string }>();
@@ -126,7 +127,7 @@ export function GolfCallDetail() {
       <div className="py-12 text-center text-slate-500">
         {t("golfCallDetail.notFound")}
         <div className="mt-4">
-          <Button variant="outline" onClick={() => goBack(navigate, "/find")}>
+          <Button variant="outline" onClick={() => goBack(navigate, findTabPath("rounds"))}>
             {t("golfCallDetail.goBack")}
           </Button>
         </div>
@@ -181,7 +182,7 @@ export function GolfCallDetail() {
   return (
     <div className="flex flex-col gap-6 pb-6">
       <div className="flex items-center justify-between">
-        <button onClick={() => goBack(navigate, "/find")} className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-800">
+        <button onClick={() => goBack(navigate, findTabPath("rounds"))} className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-800">
           <ArrowLeft size={16} /> {t("golfCallDetail.back")}
         </button>
         {!isDemo && !isHost && (
