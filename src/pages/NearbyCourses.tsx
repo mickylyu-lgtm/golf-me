@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { ArrowLeft, ChevronRight, LocateFixed, MapPin, Search } from "lucide-react";
+import { ArrowLeft, ChevronRight, LocateFixed, Map as MapIcon, MapPin, Search } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useLocale } from "../i18n/LocaleContext";
 import { Button } from "../components/ui/Button";
@@ -65,7 +65,16 @@ export function NearbyCourses() {
           <h1 className="text-xl font-bold text-slate-900">{t("nearbyCourses.title")}</h1>
           <p className="text-sm text-slate-500">{t("nearbyCourses.subtitle")}</p>
         </div>
-        {area && <CourseImageModeToggle />}
+        <div className="flex shrink-0 items-center gap-2">
+          {area && <CourseImageModeToggle />}
+          <button
+            onClick={() => navigate("/courses/map", { replace: true, state: area ? { area } : undefined })}
+            aria-label={t("courseMap.showMap")}
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-colors hover:border-fairway-300 hover:text-fairway-700"
+          >
+            <MapIcon size={16} />
+          </button>
+        </div>
       </div>
 
       {!area ? (

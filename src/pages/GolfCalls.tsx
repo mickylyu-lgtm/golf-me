@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ChevronRight, Plus, Search, SlidersHorizontal, Users, X } from "lucide-react";
+import { ChevronRight, MapPinned, Plus, Search, SlidersHorizontal, Users, X } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
 import { useRealRounds } from "../context/RealRoundsContext";
@@ -177,6 +177,14 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-all duration-200 ease-out hover:border-fairway-300 hover:text-fairway-700 active:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2"
         >
           <SlidersHorizontal size={16} />
+        </button>
+        {/* Golf courses near you, on a map (Micky, 2026-11-04). */}
+        <button
+          onClick={() => navigate("/courses/map")}
+          aria-label={t("courseMap.showMap")}
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-all duration-200 ease-out hover:border-fairway-300 hover:text-fairway-700 active:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2"
+        >
+          <MapPinned size={16} />
         </button>
       </div>
 
