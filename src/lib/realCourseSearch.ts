@@ -69,6 +69,28 @@ export async function searchRealCourses(query: string, location?: PlayingArea, l
   return sortByDistance(rows.map((r) => rowToResult(r, location)));
 }
 
+// A typed area (town, neighbourhood, zip) -> labelled, already-coarsened
+// coordinates, from the same Edge Function's "place" mode. Real accounts
+// only; nothing is stored server-side. An older course-search deployment
+// answers 400 for this mode, which surfaces as a CourseSearchError and the
+// picker just keeps its curated list.
+export interface PlaceSearchResult {
+  label: string;
+  coords: GeoPoint;
+}
+
+export async function searchRealPlaces(query: string, near?: GeoPoint): Promise<PlaceSearchResult[]> {
+  const { data, error } = await supabase.functions.invoke("course-search", { body: { mode: "place", query, lat: near?.lat, lng: near?.lng } });
+  if (error) throw new CourseSearchError(error.message || "Place search failed.");
+  const body = data as { places?: { label?: unknown; lat?: unknown; lng?: unknown }[]; error?: string } | null;
+  if (body?.error) throw new CourseSearchError(body.error);
+  return (body?.places ?? []).flatMap((p) =>
+    typeof p.label === "string" && typeof p.lat === "number" && typeof p.lng === "number" && Number.isFinite(p.lat) && Number.isFinite(p.lng)
+      ? [{ label: p.label, coords: { lat: p.lat, lng: p.lng } }]
+      : [],
+  );
+}
+
 export async function getNearbyRealCourses(location: PlayingArea, radiusMiles: number, limit = 10): Promise<RealCourseResult[]> {
   if (!location.coords) return [];
   const rows = await invokeCourseSearch("nearby", { lat: location.coords.lat, lng: location.coords.lng, radiusMiles, limit });

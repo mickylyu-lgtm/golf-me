@@ -18,8 +18,27 @@ export interface Region {
 // genuine public coordinates, not placeholders. Structured as a flat list
 // so a real geocoding provider (Google Places, Mapbox, etc.) can replace
 // searchRegions()'s implementation later without touching callers.
+//
+// NYC-area entries (Micky, 2026-11-03: expand location selection): the five
+// boroughs and the nearby places NYC golfers commonly play from, so a typed
+// "Brooklyn" or "Hoboken" gets real coordinates even offline or in demo
+// mode. Public municipal/borough centroids; real accounts also get
+// server-side place search (searchRealPlaces) for anything not listed.
 export const REGIONS: Region[] = [
   { id: "nyc", label: "New York, NY", coords: { lat: 40.7128, lng: -74.006 }, hasCourseCoverage: true },
+  { id: "manhattan", label: "Manhattan, NY", coords: { lat: 40.7831, lng: -73.9712 }, hasCourseCoverage: true },
+  { id: "brooklyn", label: "Brooklyn, NY", coords: { lat: 40.6782, lng: -73.9442 }, hasCourseCoverage: true },
+  { id: "queens", label: "Queens, NY", coords: { lat: 40.7282, lng: -73.7949 }, hasCourseCoverage: true },
+  { id: "bronx", label: "The Bronx, NY", coords: { lat: 40.8448, lng: -73.8648 }, hasCourseCoverage: true },
+  { id: "staten-island", label: "Staten Island, NY", coords: { lat: 40.5795, lng: -74.1502 }, hasCourseCoverage: true },
+  { id: "jersey-city", label: "Jersey City, NJ", coords: { lat: 40.7178, lng: -74.0431 }, hasCourseCoverage: true },
+  { id: "hoboken", label: "Hoboken, NJ", coords: { lat: 40.744, lng: -74.0324 }, hasCourseCoverage: true },
+  { id: "newark", label: "Newark, NJ", coords: { lat: 40.7357, lng: -74.1724 } },
+  { id: "yonkers", label: "Yonkers, NY", coords: { lat: 40.9312, lng: -73.8988 } },
+  { id: "white-plains", label: "White Plains, NY", coords: { lat: 41.034, lng: -73.7629 } },
+  { id: "garden-city", label: "Garden City, NY (Nassau County)", coords: { lat: 40.7268, lng: -73.6343 } },
+  { id: "farmingdale", label: "Farmingdale, NY", coords: { lat: 40.7326, lng: -73.4454 } },
+  { id: "stamford", label: "Stamford, CT", coords: { lat: 41.0534, lng: -73.5387 } },
   { id: "la", label: "Los Angeles, CA", coords: { lat: 34.0522, lng: -118.2437 } },
   { id: "miami", label: "Miami, FL", coords: { lat: 25.7617, lng: -80.1918 } },
   { id: "chicago", label: "Chicago, IL", coords: { lat: 41.8781, lng: -87.6298 } },

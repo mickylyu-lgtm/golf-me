@@ -172,6 +172,13 @@ const GOLFISH_NAME = /golf|links|country\s?club|\bclub\b|\bcourse\b|\bcc\b|\bgc\
 const STREETISH_NAME =
   /(\b(road|rd|street|st|avenue|ave|lane|ln|drive|dr|boulevard|blvd|highway|hwy|expressway|catchwater|path|trail|close|crescent|terrace)\.?$)|(^\d+[\w-]*\s)|([路街道]$)|(通り$)|((로|길)$)/i;
 
+// A name that reads like a golf venue ("Rock Spring Golf Club", "Bethpage
+// Black", "… CC"), in any of the app's languages. Used to keep geocoder hits
+// that carry no golf category (see _shared/geoapifySearch.ts).
+export function looksLikeGolfName(name: string | null | undefined): boolean {
+  return GOLFISH_NAME.test((name ?? "").trim());
+}
+
 export function looksLikeStreetAddressName(name: string | null | undefined): boolean {
   const n = (name ?? "").trim();
   if (!n || GOLFISH_NAME.test(n)) return false;

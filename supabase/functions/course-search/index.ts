@@ -16,9 +16,20 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { COURSE_FILTER_VERSION, geoapifyCourseName, rejectGeoapifyCourse } from "../_shared/courseFilter.ts";
+import {
+  cleanQuery,
+  geocodeAmenityUrl,
+  geocodeResultToCourse,
+  mergeCourseCandidates,
+  placeAutocompleteUrl,
+  placesByNameUrl,
+  toPlaceResults,
+} from "../_shared/geoapifySearch.ts";
+import type { CourseCandidate, GeocodeResult } from "../_shared/geoapifySearch.ts";
 
 interface RequestBody {
-  mode: "search" | "nearby";
+  // "place": a typed area (town, neighbourhood, zip) -> coarse coordinates.
+  mode: "search" | "nearby" | "place";
   query?: string;
   lat?: number;
   lng?: number;
@@ -67,6 +78,36 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+// One Geoapify GET. Errors come back as values so a search can still use
+// the other provider's answer.
+async function fetchGeoapify<T>(url: string): Promise<{ body: T } | { error: string }> {
+  let res: Response;
+  try {
+    res = await fetch(url);
+  } catch (err) {
+    return { error: `Could not reach course search provider: ${err instanceof Error ? err.message : String(err)}` };
+  }
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    return { error: `Course search provider returned an error (${res.status}): ${detail.slice(0, 200)}` };
+  }
+  try {
+    return { body: (await res.json()) as T };
+  } catch {
+    return { error: "Course search provider returned an unreadable response." };
+  }
+}
+
+// Only real, playable, named courses are cached or returned: no unnamed
+// features (never a street address as the name), no miniature golf, no
+// driving ranges/simulators (see _shared/courseFilter.ts).
+function placesFeatures(features: GeoapifyFeature[] | undefined): CourseCandidate[] {
+  return (features ?? [])
+    .filter((f) => f.properties?.place_id && f.properties.lat != null && f.properties.lon != null)
+    .filter((f) => rejectGeoapifyCourse(f.properties) === null)
+    .map((f) => ({ ...f.properties }));
+}
+
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -93,53 +134,53 @@ Deno.serve(async (req: Request) => {
   }
 
   const limit = Math.min(body.limit ?? 10, 20);
-  // Always ask Geoapify for 20 (one credit covers up to 20 places) so the
-  // list is still full after unnamed features, ranges and mini golf are
-  // dropped below; the response is cut back to `limit`.
-  const params = new URLSearchParams({
-    categories: GEOAPIFY_CATEGORY,
-    limit: "20",
-    apiKey,
-  });
+  const lat = typeof body.lat === "number" && Number.isFinite(body.lat) ? body.lat : undefined;
+  const lng = typeof body.lng === "number" && Number.isFinite(body.lng) ? body.lng : undefined;
 
+  // Place search: coordinates for a typed area. Returns rounded points and
+  // labels only; nothing is cached or written.
+  if (body.mode === "place") {
+    const query = cleanQuery(body.query);
+    if (query.length < 2) return jsonResponse({ error: "query required for place search." }, 400);
+    const res = await fetchGeoapify<{ results?: GeocodeResult[] }>(placeAutocompleteUrl(apiKey, query, lat, lng));
+    if ("error" in res) return jsonResponse({ error: res.error }, 502);
+    return jsonResponse({ places: toPlaceResults(res.body.results ?? []) });
+  }
+
+  let candidates: CourseCandidate[];
   if (body.mode === "nearby") {
-    if (body.lat == null || body.lng == null) return jsonResponse({ error: "lat/lng required for nearby search." }, 400);
+    if (lat == null || lng == null) return jsonResponse({ error: "lat/lng required for nearby search." }, 400);
+    // Always ask Geoapify for 20 (one credit covers up to 20 places) so the
+    // list is still full after unnamed features, ranges and mini golf are
+    // dropped below; the response is cut back to `limit`.
+    const params = new URLSearchParams({ categories: GEOAPIFY_CATEGORY, limit: "20", apiKey });
     const radiusMeters = Math.round((body.radiusMiles ?? 25) * 1609.34);
-    params.set("filter", `circle:${body.lng},${body.lat},${radiusMeters}`);
-    params.set("bias", `proximity:${body.lng},${body.lat}`);
+    params.set("filter", `circle:${lng},${lat},${radiusMeters}`);
+    params.set("bias", `proximity:${lng},${lat}`);
+    const res = await fetchGeoapify<{ features?: GeoapifyFeature[] }>(`https://api.geoapify.com/v2/places?${params.toString()}`);
+    if ("error" in res) return jsonResponse({ error: res.error }, 502);
+    candidates = placesFeatures(res.body.features);
   } else if (body.mode === "search") {
-    if (!body.query?.trim()) return jsonResponse({ error: "query required for search." }, 400);
-    params.set("text", body.query.trim());
-    // Location-aware ranking (nearby result outranks a distant namesake):
-    // Geoapify sorts by proximity when a bias is given, even without a hard
-    // radius filter, so out-of-area matches still surface, just lower.
-    if (body.lat != null && body.lng != null) params.set("bias", `proximity:${body.lng},${body.lat}`);
+    const query = cleanQuery(body.query);
+    if (!query) return jsonResponse({ error: "query required for search." }, 400);
+    // A real name search (see _shared/geoapifySearch.ts for why both). The
+    // proximity bias still ranks a nearby course above a distant namesake
+    // without hiding out-of-area matches. Either provider failing alone is
+    // fine; both failing is a real error.
+    const [byName, byText] = await Promise.all([
+      fetchGeoapify<{ features?: GeoapifyFeature[] }>(placesByNameUrl(apiKey, query, lat, lng)),
+      fetchGeoapify<{ results?: GeocodeResult[] }>(geocodeAmenityUrl(apiKey, query, lat, lng)),
+    ]);
+    if ("error" in byName && "error" in byText) return jsonResponse({ error: byName.error }, 502);
+    candidates = mergeCourseCandidates(
+      "error" in byName ? [] : placesFeatures(byName.body.features),
+      "error" in byText ? [] : (byText.body.results ?? []).map(geocodeResultToCourse).filter((c): c is CourseCandidate => c !== null),
+    );
   } else {
-    return jsonResponse({ error: "mode must be 'search' or 'nearby'." }, 400);
+    return jsonResponse({ error: "mode must be 'search', 'nearby' or 'place'." }, 400);
   }
 
-  let geoapifyRes: Response;
-  try {
-    geoapifyRes = await fetch(`https://api.geoapify.com/v2/places?${params.toString()}`);
-  } catch (err) {
-    return jsonResponse({ error: `Could not reach course search provider: ${err instanceof Error ? err.message : String(err)}` }, 502);
-  }
-
-  if (!geoapifyRes.ok) {
-    const detail = await geoapifyRes.text().catch(() => "");
-    return jsonResponse({ error: `Course search provider returned an error (${geoapifyRes.status}): ${detail}` }, 502);
-  }
-
-  const geoapifyBody = (await geoapifyRes.json()) as { features?: GeoapifyFeature[] };
-  const features = geoapifyBody.features ?? [];
-
-  // Only real, playable, named courses are cached or returned: no unnamed
-  // features (never a street address as the name), no miniature golf, no
-  // driving ranges/simulators (see _shared/courseFilter.ts).
-  const candidates = features
-    .filter((f) => f.properties?.place_id && f.properties.lat != null && f.properties.lon != null)
-    .filter((f) => rejectGeoapifyCourse(f.properties) === null)
-    .slice(0, limit);
+  candidates = candidates.slice(0, limit);
   if (candidates.length === 0) return jsonResponse({ results: [], courseFilter: COURSE_FILTER_VERSION });
 
   const authHeader = req.headers.get("Authorization") ?? "";
@@ -157,19 +198,19 @@ Deno.serve(async (req: Request) => {
   // also matched by name in GolfCourseAPI: both providers' mappings point at
   // one canonical courses.id.
   const results = [];
-  for (const f of candidates) {
-    const name = geoapifyCourseName(f.properties);
+  for (const c of candidates) {
+    const name = geoapifyCourseName(c);
     const { data, error } = await supabase.rpc("upsert_external_course", {
       p_provider: "geoapify",
-      p_external_id: f.properties.place_id,
+      p_external_id: c.place_id,
       p_name: name,
       p_normalized_name: name.toLowerCase(),
-      p_city: f.properties.city ?? null,
-      p_region: f.properties.state ?? null,
-      p_country: f.properties.country ?? null,
-      p_address: f.properties.formatted ?? null,
-      p_latitude: f.properties.lat,
-      p_longitude: f.properties.lon,
+      p_city: c.city ?? null,
+      p_region: c.state ?? null,
+      p_country: c.country ?? null,
+      p_address: c.formatted ?? null,
+      p_latitude: c.lat,
+      p_longitude: c.lon,
     });
     if (error) return jsonResponse({ error: `Failed to cache course results: ${error.message}` }, 500);
     results.push(data);

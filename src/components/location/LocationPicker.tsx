@@ -8,7 +8,13 @@ import type { Region } from "../../data/regions";
 import { haversineMiles } from "../../lib/geo";
 import type { PlayingArea } from "../../lib/geo";
 import { coarsenGeoPoint } from "../../lib/coarseLocation";
+import { searchRealPlaces } from "../../lib/realCourseSearch";
+import type { PlaceSearchResult } from "../../lib/realCourseSearch";
+import { useAuth } from "../../context/AuthContext";
 import { useLocale } from "../../i18n/LocaleContext";
+
+const PLACE_SEARCH_DEBOUNCE_MS = 300;
+const PLACE_SEARCH_MIN_CHARS = 2;
 
 // How close a real geolocation fix needs to be to one of our curated
 // region centroids before we're willing to label it with that city name —
@@ -54,9 +60,45 @@ export function LocationPicker({ title = "Where do you usually play?", onSelect,
   const [geoStatus, setGeoStatus] = useState<GeoStatus>("idle");
   const autoRequested = useRef(false);
 
+  const { isDemo } = useAuth();
   const results = searchRegions(query);
   const trimmedQuery = query.trim();
-  const exactMatch = results.some((r) => r.label.toLowerCase() === trimmedQuery.toLowerCase());
+
+  // Real accounts: anything not in the curated list (a neighbourhood, a
+  // town, a zip code) is looked up server-side, debounced. Coordinates come
+  // back already rounded to ~1 km. Demo stays on the curated list only.
+  const [places, setPlaces] = useState<PlaceSearchResult[]>([]);
+  const [placeStatus, setPlaceStatus] = useState<"idle" | "loading" | "error">("idle");
+  useEffect(() => {
+    if (isDemo || trimmedQuery.length < PLACE_SEARCH_MIN_CHARS) {
+      setPlaces([]);
+      setPlaceStatus("idle");
+      return;
+    }
+    let cancelled = false;
+    setPlaceStatus("loading");
+    const timer = window.setTimeout(() => {
+      searchRealPlaces(trimmedQuery)
+        .then((found) => {
+          if (cancelled) return;
+          setPlaces(found);
+          setPlaceStatus("idle");
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setPlaces([]);
+          setPlaceStatus("error");
+        });
+    }, PLACE_SEARCH_DEBOUNCE_MS);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [isDemo, trimmedQuery]);
+  // A server place with the same label as a curated one is shown once.
+  const curatedLabels = new Set(results.map((r) => r.label.toLowerCase()));
+  const extraPlaces = places.filter((p) => !curatedLabels.has(p.label.toLowerCase()));
+  const exactMatch = [...results.map((r) => r.label), ...extraPlaces.map((p) => p.label)].some((l) => l.toLowerCase() === trimmedQuery.toLowerCase());
 
   function requestCurrentLocation() {
     if (!("geolocation" in navigator)) {
@@ -90,6 +132,12 @@ export function LocationPicker({ title = "Where do you usually play?", onSelect,
     onSelect({ label: region.label, coords: coarsenGeoPoint(region.coords) });
   }
 
+  function selectPlace(place: PlaceSearchResult) {
+    onSelect({ label: place.label, coords: coarsenGeoPoint(place.coords) });
+  }
+
+  // Name only, no coordinates: kept as a last resort (offline, an area the
+  // search doesn't know), with a note saying what it costs.
   function useFreeTextLabel() {
     if (!trimmedQuery) return;
     onSelect({ label: trimmedQuery });
@@ -136,16 +184,32 @@ export function LocationPicker({ title = "Where do you usually play?", onSelect,
             >
               <MapPin size={15} className="shrink-0 text-fairway-600" />
               <span className="flex-1">{r.label}</span>
-              {!r.hasCourseCoverage && <span className="shrink-0 text-[11px] font-normal text-slate-400">{t("locationPicker.limitedData")}</span>}
+              {/* Demo course data is a small fixture; real accounts search every course. */}
+              {isDemo && !r.hasCourseCoverage && <span className="shrink-0 text-[11px] font-normal text-slate-400">{t("locationPicker.limitedData")}</span>}
             </button>
           ))}
-          {trimmedQuery && !exactMatch && (
+          {extraPlaces.map((p) => (
+            <button
+              key={`place-${p.label}`}
+              onClick={() => selectPlace(p)}
+              className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-slate-700 transition-colors duration-150 hover:bg-fairway-50"
+            >
+              <MapPin size={15} className="shrink-0 text-fairway-600" />
+              <span className="flex-1">{p.label}</span>
+            </button>
+          ))}
+          {placeStatus === "loading" && <p className="px-3 py-2 text-xs text-slate-400">{t("locationPicker.searchingPlaces")}</p>}
+          {placeStatus === "error" && <p className="px-3 py-2 text-xs text-slate-500">{t("locationPicker.placeSearchFailed")}</p>}
+          {trimmedQuery && !exactMatch && placeStatus !== "loading" && (
             <button
               onClick={useFreeTextLabel}
-              className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-fairway-700 transition-colors duration-150 hover:bg-fairway-50"
+              className="flex flex-col items-start gap-0.5 rounded-xl px-3 py-2.5 text-left transition-colors duration-150 hover:bg-fairway-50"
             >
-              <MapPin size={15} className="shrink-0" />
-              {t("locationPicker.useAsArea", { query: trimmedQuery })}
+              <span className="flex items-center gap-2.5 text-sm font-medium text-fairway-700">
+                <MapPin size={15} className="shrink-0" />
+                {t("locationPicker.useAsArea", { query: trimmedQuery })}
+              </span>
+              <span className="pl-[25px] text-[11px] leading-snug text-slate-400">{t("locationPicker.nameOnlyNote")}</span>
             </button>
           )}
           {results.length === 0 && !trimmedQuery && <p className="px-3 py-2.5 text-sm text-slate-400">{t("locationPicker.startTyping")}</p>}

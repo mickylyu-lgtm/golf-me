@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, ArrowRight, ChevronDown, ShieldCheck, Users } from "lucide-react";
+import { ArrowLeft, ArrowRight, ChevronDown, MapPin, ShieldCheck, Users } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
 import { useRealRounds } from "../context/RealRoundsContext";
@@ -15,6 +15,8 @@ import { Pill } from "../components/ui/Pill";
 import { GAME_FORMATS, GOLF_VIBES } from "../types";
 import type { GameFormat, GolfVibe, Holes, JoinMode, SkillFilter, WalkOrCart } from "../types";
 import { CourseAutocomplete } from "../components/golfcall/CourseAutocomplete";
+import { LocationPicker } from "../components/location/LocationPicker";
+import type { PlayingArea } from "../lib/geo";
 import { inputClass, labelClass } from "../components/ui/FormControls";
 import { formatDate, formatMoney } from "../lib/format";
 import { skillLabel, vibeLabel, walkOrCartLabel } from "../lib/enumLabels";
@@ -136,6 +138,12 @@ export function CreateGolfCall() {
   const [submitting, setSubmitting] = useState(false);
   const [areaLabel, setAreaLabel] = useState(() => initial?.areaLabel ?? currentUser.areaLabel);
   const [editingArea, setEditingArea] = useState(false);
+  // A course typed by hand (not in the search) gets its town's coordinates
+  // instead, so the round still shows up as "near" golfers and in new-round
+  // alerts; without any, it was invisible to every distance feature. Set
+  // while the picked coordinates are that approximate town point.
+  const [courseTownLabel, setCourseTownLabel] = useState<string | null>(null);
+  const [townPickerOpen, setTownPickerOpen] = useState(false);
   // "" is a valid mid-edit state — never coerced to 0 until handleSubmit, so
   // an intentional 0 can't get stuck un-clearable.
   const [distanceMiles, setDistanceMiles] = useState<number | "">(initial?.distanceMiles ?? 5);
@@ -268,11 +276,26 @@ export function CreateGolfCall() {
   function handleCourseChange(value: string) {
     setCourse(value);
     setPickedCourseId(null);
-    setPickedCourseLat(null);
-    setPickedCourseLng(null);
+    // A chosen town still applies to the (re)typed name; a searched course's
+    // own point doesn't.
+    if (!courseTownLabel) {
+      setPickedCourseLat(null);
+      setPickedCourseLng(null);
+    }
+  }
+
+  function handlePickCourseTown(area: PlayingArea) {
+    setTownPickerOpen(false);
+    if (!area.coords) return; // a name-only area adds nothing here
+    setCourseTownLabel(area.label);
+    setAreaLabel(area.label);
+    setPickedCourseLat(area.coords.lat);
+    setPickedCourseLng(area.coords.lng);
+    if (currentUser.playingAreaCoords) setDistanceMiles(Math.round(haversineMiles(currentUser.playingAreaCoords, area.coords)));
   }
 
   function handlePickKnownCourse(pick: { name: string; area?: string; id?: string; lat?: number; lng?: number }) {
+    setCourseTownLabel(null);
     if (pick.area) setAreaLabel(pick.area);
     setPickedCourseId(pick.id ?? null);
     setPickedCourseLat(pick.lat ?? null);
@@ -310,7 +333,10 @@ export function CreateGolfCall() {
     });
   }
 
-  const step1Valid = Boolean(course.trim() && areaLabel.trim());
+  // Real rounds need a location: the searched course's, or its town's.
+  const courseHasLocation = pickedCourseLat != null && pickedCourseLng != null;
+  const needsCourseTown = !isDemo && Boolean(course.trim()) && !courseHasLocation;
+  const step1Valid = Boolean(course.trim() && areaLabel.trim()) && !needsCourseTown;
   // A round can't start in the past (a past-dated round is instantly
   // unjoinable — the server refuses joins once its day is over).
   const startsInPast = isPastRoundStart(date, timeLabel);
@@ -439,6 +465,24 @@ export function CreateGolfCall() {
             location={userLocation}
             inlineSuggestions
           />
+          {needsCourseTown && (
+            <div role="status" className="rounded-xl border border-sun-200 bg-sun-50 px-3.5 py-3">
+              <p className="text-sm leading-relaxed text-sun-700">{t("host.courseTownPrompt")}</p>
+              <Button size="sm" variant="outline" className="mt-2" icon={<MapPin size={14} />} onClick={() => setTownPickerOpen(true)}>
+                {t("host.chooseCourseTown")}
+              </Button>
+            </div>
+          )}
+          {courseTownLabel && courseHasLocation && (
+            <p className="flex items-center gap-1.5 text-xs text-slate-500">
+              <MapPin size={12} aria-hidden className="shrink-0 text-fairway-600" />
+              {t("host.courseTownSet", { area: courseTownLabel })}
+              <button onClick={() => setTownPickerOpen(true)} className="font-semibold text-fairway-700 hover:underline">
+                {t("common.edit")}
+              </button>
+            </p>
+          )}
+          {townPickerOpen && <LocationPicker title={t("host.courseTownTitle")} onSelect={handlePickCourseTown} onClose={() => setTownPickerOpen(false)} />}
           {course.trim() && (
             <div className="rounded-xl bg-slate-50/60 px-3.5 py-3">
               <div className="flex items-center justify-between gap-3">
