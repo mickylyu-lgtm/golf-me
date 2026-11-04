@@ -14,6 +14,8 @@ import type { ChatMessage } from "../../types";
 // card, the list just fills the screen (svh: the small viewport, which the
 // keyboard never changes, so docking below works exactly as in the card).
 // Callers only render this for members (lib/roundChat.ts canReadRoundChat).
+const PAGE_LIST_HEIGHT = "calc(100svh - 18rem - env(safe-area-inset-top) - env(safe-area-inset-bottom))";
+
 export function GroupChat({ callId, layout = "card" }: { callId: string; layout?: "card" | "page" }) {
   const { currentUser, getGolfer, getGolfCall, messagesForCall, sendMessage, retryRoundMessage, discardRoundMessage } = useData();
   const { showToast } = useToast();
@@ -172,9 +174,12 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
           and leaving the gap below instead. */}
       <div
         ref={listRef}
-        className={`flex flex-col justify-end gap-3 overflow-y-auto px-4 py-4 ${
-          layout === "page" ? "min-h-[40svh] max-h-[calc(100svh-18rem)]" : "max-h-96"
-        }`}
+        className={`flex flex-col justify-end gap-3 overflow-y-auto px-4 py-4 ${layout === "page" ? "" : "max-h-96"}`}
+        // Page: fill the screen between the thread header and the bottom
+        // nav (18rem ~ top bar + header + composer + nav), so the composer
+        // sits low like a chat app. A fixed height, not one that follows the
+        // keyboard: the composer docks over the keyboard on its own.
+        style={layout === "page" ? { height: PAGE_LIST_HEIGHT, minHeight: "16rem" } : undefined}
       >
         {messages.length === 0 && <p className="text-center text-sm text-slate-400">{t("chat.noMessagesYet")}</p>}
         {messages.map((m) => {
