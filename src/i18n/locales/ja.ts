@@ -1229,6 +1229,8 @@ export const ja: Record<TranslationKey, string> = {
   "tutorial.home.text": "ゴルファーを見つけて、コミュニティの様子を確認し、次のラウンドにすぐアクセスできます。",
   "tutorial.play.title": "次のラウンドを見つけよう",
   "tutorial.play.text": "ゴルファーを探したり、ラウンドを作成・参加したり、自分に合ったプレースタイルの人を見つけられます。",
+  "tutorial.courseMap.title": "コースを地図で",
+  "tutorial.courseMap.text": "近くのゴルフコースを地図で確認できます。ピンをタップすると詳細や道順を見たり、そこでラウンドを主催したりできます。",
   "tutorial.chat.title": "つながりを保とう",
   "tutorial.chat.text": "ゴルファーとメッセージをやり取りし、ラウンドを調整し、また一緒にプレーしたい人と連絡を取り合えます。",
   "tutorial.community.title": "ゴルフをシェアしよう",

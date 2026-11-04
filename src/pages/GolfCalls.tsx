@@ -22,6 +22,7 @@ import { isImeComposing } from "../lib/isImeComposing";
 import { effectiveLocation } from "../lib/travelLocation";
 import { resolveCallDistanceMiles } from "../lib/courseSearch";
 import { useSessionState } from "../lib/useSessionState";
+import { COURSE_MAP_TUTORIAL_ID } from "../lib/tutorialSteps";
 
 interface GolfCallsProps {
   embedded?: boolean;
@@ -182,6 +183,7 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
         <button
           onClick={() => navigate("/courses/map")}
           aria-label={t("courseMap.showMap")}
+          data-tutorial-id={COURSE_MAP_TUTORIAL_ID}
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-all duration-200 ease-out hover:border-fairway-300 hover:text-fairway-700 active:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2"
         >
           <MapPinned size={16} />

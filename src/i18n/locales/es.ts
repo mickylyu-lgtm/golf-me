@@ -1229,6 +1229,8 @@ export const es: Record<TranslationKey, string> = {
   "tutorial.home.text": "Encuentra golfistas, entérate de lo que pasa en tu comunidad de golf y llega rápido a tu próxima ronda.",
   "tutorial.play.title": "Encuentra tu próxima ronda",
   "tutorial.play.text": "Descubre golfistas, crea o únete a rondas, y encuentra personas que jueguen como a ti te gusta.",
+  "tutorial.courseMap.title": "Campos en un mapa",
+  "tutorial.courseMap.text": "Mira los campos de golf cerca de ti en un mapa. Toca un pin para ver detalles, cómo llegar u organizar una ronda allí.",
   "tutorial.chat.title": "Mantente conectado",
   "tutorial.chat.text": "Escribe a golfistas, coordina rondas y mantente en contacto con quienes quieras volver a jugar.",
   "tutorial.community.title": "Comparte tu golf",

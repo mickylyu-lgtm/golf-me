@@ -1229,6 +1229,8 @@ export const zhTW: Record<TranslationKey, string> = {
   "tutorial.home.text": "尋找球友，了解高爾夫社群動態，快速找到你的下一場球局。",
   "tutorial.play.title": "找到你的下一場球局",
   "tutorial.play.text": "發掘球友，建立或加入球局，找到和你打球風格相符的人。",
+  "tutorial.courseMap.title": "地圖看球場",
+  "tutorial.courseMap.text": "在地圖上查看附近的高爾夫球場。點一下圖釘即可查看詳情、導航，或在那裡發起球局。",
   "tutorial.chat.title": "保持聯繫",
   "tutorial.chat.text": "傳訊息給球友，安排球局，並與想再次一起打球的人保持聯繫。",
   "tutorial.community.title": "分享你的高爾夫",

@@ -1229,6 +1229,8 @@ export const ko: Record<TranslationKey, string> = {
   "tutorial.home.text": "골퍼를 찾고, 골프 커뮤니티 소식을 확인하고, 다음 라운드에 빠르게 참여해 보세요.",
   "tutorial.play.title": "다음 라운드를 찾아보세요",
   "tutorial.play.text": "골퍼를 찾고, 라운드를 만들거나 참여하고, 나와 플레이 스타일이 맞는 사람을 찾아보세요.",
+  "tutorial.courseMap.title": "지도로 골프장 보기",
+  "tutorial.courseMap.text": "내 주변 골프장을 지도에서 확인하세요. 핀을 누르면 상세 정보와 길찾기를 보거나 그곳에서 라운드를 열 수 있어요.",
   "tutorial.chat.title": "연락을 이어가세요",
   "tutorial.chat.text": "골퍼에게 메시지를 보내고, 라운드 일정을 조율하고, 다시 함께 플레이하고 싶은 사람과 연락을 유지하세요.",
   "tutorial.community.title": "골프를 공유하세요",

@@ -13,6 +13,8 @@ export const NAV_TUTORIAL_ID_BY_PATH: Record<string, string> = {
 };
 
 export const COMMUNITY_TUTORIAL_ID = "tutorial-community";
+// The course map button beside Play's search bar (Rounds tab).
+export const COURSE_MAP_TUTORIAL_ID = "tutorial-course-map";
 
 export interface TutorialStep {
   route: string;
@@ -33,6 +35,10 @@ export interface TutorialStep {
 // TutorialOverlay measures it.
 export const TUTORIAL_STEPS: TutorialStep[] = [
   { route: "/find", targetId: "nav-play", titleKey: "tutorial.play.title", textKey: "tutorial.play.text" },
+  // Micky, 2026-11-04: the course map should be part of the tour. Opens
+  // Play on its Rounds tab, where the button lives; if it still can't be
+  // found the card just centres.
+  { route: "/find?tab=rounds", targetId: COURSE_MAP_TUTORIAL_ID, titleKey: "tutorial.courseMap.title", textKey: "tutorial.courseMap.text" },
   { route: "/messages", targetId: "nav-messages", titleKey: "tutorial.chat.title", textKey: "tutorial.chat.text" },
   { route: "/caddie", targetId: "nav-caddie", titleKey: "tutorial.caddie.title", textKey: "tutorial.caddie.text" },
 ];

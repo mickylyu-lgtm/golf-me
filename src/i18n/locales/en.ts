@@ -1140,6 +1140,8 @@ export const en = {
   "tutorial.home.text": "Find golfers, see what's happening in your golf community, and quickly get to your next round.",
   "tutorial.play.title": "Find Your Next Round",
   "tutorial.play.text": "Discover golfers, create or join rounds, and find people who match how you like to play.",
+  "tutorial.courseMap.title": "Courses on a Map",
+  "tutorial.courseMap.text": "See golf courses near you on a map. Tap a pin for details, directions, or to host a round there.",
   "tutorial.chat.title": "Stay Connected",
   "tutorial.chat.text": "Message golfers, coordinate rounds, and keep in touch with people you want to play with again.",
   "tutorial.community.title": "Share Your Golf",

@@ -1229,6 +1229,8 @@ export const zhCN: Record<TranslationKey, string> = {
   "tutorial.home.text": "寻找球友，了解高尔夫社区动态，快速找到你的下一场球局。",
   "tutorial.play.title": "找到你的下一场球局",
   "tutorial.play.text": "发现球友，创建或加入球局，找到和你打球风格相符的人。",
+  "tutorial.courseMap.title": "地图看球场",
+  "tutorial.courseMap.text": "在地图上查看附近的高尔夫球场。点一下图钉即可查看详情、导航，或在那里发起球局。",
   "tutorial.chat.title": "保持联系",
   "tutorial.chat.text": "给球友发消息，安排球局，并与想再次一起打球的人保持联系。",
   "tutorial.community.title": "分享你的高尔夫",
