@@ -650,6 +650,7 @@ export const en = {
   // Avatar upload (used in onboarding and Profile)
   "avatarUpload.invalidFile": "Please choose an image file.",
   "avatarUpload.loadError": "Couldn't load that image — try another.",
+  "avatarUpload.saveError": "Couldn't save your photo. Please try again.",
   "avatarUpload.changePhoto": "Change photo",
   "avatarUpload.addPhoto": "Add a profile photo",
   "avatarUpload.remove": "Remove",

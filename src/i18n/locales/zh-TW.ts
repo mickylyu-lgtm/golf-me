@@ -635,6 +635,7 @@ export const zhTW: Record<TranslationKey, string> = {
 
   "avatarUpload.invalidFile": "請選擇一張圖片檔案。",
   "avatarUpload.loadError": "圖片載入失敗——換一張試試。",
+  "avatarUpload.saveError": "無法儲存你的照片,請再試一次。",
   "avatarUpload.changePhoto": "更換照片",
   "avatarUpload.addPhoto": "新增大頭貼照片",
   "avatarUpload.remove": "移除",

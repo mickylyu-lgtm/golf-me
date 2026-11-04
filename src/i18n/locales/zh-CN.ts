@@ -635,6 +635,7 @@ export const zhCN: Record<TranslationKey, string> = {
 
   "avatarUpload.invalidFile": "请选择一张图片文件。",
   "avatarUpload.loadError": "图片加载失败——换一张试试。",
+  "avatarUpload.saveError": "无法保存你的照片,请重试。",
   "avatarUpload.changePhoto": "更换照片",
   "avatarUpload.addPhoto": "添加头像照片",
   "avatarUpload.remove": "移除",

@@ -39,7 +39,15 @@ export function ShareRoundPrompt({ call, onClose }: ShareRoundPromptProps) {
     }
   }
 
+  // A ref, not just state: a fast double tap lands before the re-render
+  // and used to create the post twice.
+  const sharingRef = useRef(false);
+  const [sharing, setSharing] = useState(false);
+
   async function share() {
+    if (sharingRef.current || imageLoading) return;
+    sharingRef.current = true;
+    setSharing(true);
     try {
       await createPost({
         type: "round",
@@ -57,6 +65,8 @@ export function ShareRoundPrompt({ call, onClose }: ShareRoundPromptProps) {
             : "Couldn't share your round. Please try again.",
         "warning",
       );
+      sharingRef.current = false;
+      setSharing(false);
       return;
     }
     showToast("Shared with the Community.", "success");
@@ -64,7 +74,7 @@ export function ShareRoundPrompt({ call, onClose }: ShareRoundPromptProps) {
   }
 
   return (
-    <Modal title="Share your round?" onClose={onClose} keyboardAware>
+    <Modal title="Share your round?" onClose={() => !sharingRef.current && onClose()} keyboardAware>
       <div className="flex flex-col gap-3">
         <p className="text-sm text-slate-500">Let other golfers know how it went — totally optional.</p>
         <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3">
@@ -100,11 +110,11 @@ export function ShareRoundPrompt({ call, onClose }: ShareRoundPromptProps) {
         )}
         <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
         <div className="flex gap-3">
-          <Button variant="outline" fullWidth onClick={onClose}>
+          <Button variant="outline" fullWidth onClick={onClose} disabled={sharing}>
             Not Now
           </Button>
-          <Button fullWidth onClick={share}>
-            Share
+          <Button fullWidth onClick={share} disabled={sharing || imageLoading} aria-busy={sharing || undefined}>
+            {sharing ? "Sharing…" : "Share"}
           </Button>
         </div>
       </div>

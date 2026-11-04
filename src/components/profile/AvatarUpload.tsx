@@ -42,49 +42,78 @@ function resizeImageToSquareDataUrl(file: File, size = 320): Promise<string> {
 
 interface AvatarUploadProps {
   golfer: Pick<GolferProfile, "avatarColor" | "avatarInitials" | "verification" | "photoUrl">;
-  onChange: (photoUrl: string | undefined) => void;
+  // May return the profile write; it's awaited so a failed save is shown
+  // here instead of being lost, and a removed photo's file is only deleted
+  // once the profile no longer points at it.
+  onChange: (photoUrl: string | undefined) => void | Promise<unknown>;
+  // Tells the parent an upload/remove is in flight (e.g. so onboarding's
+  // Continue waits for the photo instead of saving without it).
+  onBusyChange?: (busy: boolean) => void;
   size?: "lg" | "xl";
 }
 
-export function AvatarUpload({ golfer, onChange, size = "xl" }: AvatarUploadProps) {
+export function AvatarUpload({ golfer, onChange, onBusyChange, size = "xl" }: AvatarUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const { t } = useLocale();
   const { isDemo, authUser } = useAuth();
 
+  function setBusy(busy: boolean) {
+    setLoading(busy);
+    onBusyChange?.(busy);
+  }
+
   async function handleFile(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
-    if (!file) return;
+    if (!file || loading) return;
     if (!file.type.startsWith("image/")) {
       setError(t("avatarUpload.invalidFile"));
       return;
     }
-    setLoading(true);
+    setBusy(true);
     setError(null);
+    let photoUrl: string;
     try {
-      if (!isDemo && authUser) {
-        // Real account: upload the actual bytes to Storage, never a
-        // data-URL/base64 string into the database.
-        onChange(await uploadAvatarBlob(authUser.id, await resizeImageToSquareBlob(file)));
-      } else {
-        const dataUrl = await resizeImageToSquareDataUrl(file);
-        onChange(dataUrl);
-      }
+      // Real account: upload the actual bytes to Storage, never a
+      // data-URL/base64 string into the database.
+      photoUrl = !isDemo && authUser ? await uploadAvatarBlob(authUser.id, await resizeImageToSquareBlob(file)) : await resizeImageToSquareDataUrl(file);
     } catch {
       setError(t("avatarUpload.loadError"));
+      setBusy(false);
+      return;
+    }
+    try {
+      await onChange(photoUrl);
+    } catch (err) {
+      console.error("GolfMe: failed to save the profile photo.", err);
+      setError(t("avatarUpload.saveError"));
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
   }
 
+  // The profile stops pointing at the photo FIRST; only then is the file
+  // deleted. The other way round, a failed profile save left the profile
+  // pointing at a deleted image.
   async function handleRemove() {
+    if (loading) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await onChange(undefined);
+    } catch (err) {
+      console.error("GolfMe: failed to remove the profile photo.", err);
+      setError(t("avatarUpload.saveError"));
+      setBusy(false);
+      return;
+    }
     if (!isDemo && authUser) {
       const { error: removeError } = await supabase.storage.from(AVATAR_BUCKET).remove([avatarPath(authUser.id)]);
       if (removeError) console.error("GolfMe: failed to remove avatar from storage.", removeError);
     }
-    onChange(undefined);
+    setBusy(false);
   }
 
   return (
@@ -102,7 +131,8 @@ export function AvatarUpload({ golfer, onChange, size = "xl" }: AvatarUploadProp
           <button
             type="button"
             onClick={() => inputRef.current?.click()}
-            className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition-all duration-200 ease-out hover:border-fairway-300 hover:text-fairway-700 active:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2"
+            disabled={loading}
+            className="flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition-all duration-200 ease-out hover:border-fairway-300 hover:text-fairway-700 active:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 disabled:opacity-50"
           >
             <ImagePlus size={13} /> {golfer.photoUrl ? t("avatarUpload.changePhoto") : t("avatarUpload.addPhoto")}
           </button>
@@ -110,7 +140,8 @@ export function AvatarUpload({ golfer, onChange, size = "xl" }: AvatarUploadProp
             <button
               type="button"
               onClick={handleRemove}
-              className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-slate-500 transition-colors duration-200 hover:text-red-600"
+              disabled={loading}
+              className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-slate-500 transition-colors duration-200 hover:text-red-600 disabled:opacity-50"
             >
               <X size={13} /> {t("avatarUpload.remove")}
             </button>

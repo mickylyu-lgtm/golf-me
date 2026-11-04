@@ -635,6 +635,7 @@ export const ja: Record<TranslationKey, string> = {
 
   "avatarUpload.invalidFile": "画像ファイルを選択してください。",
   "avatarUpload.loadError": "画像を読み込めませんでした — 別の画像をお試しください。",
+  "avatarUpload.saveError": "写真を保存できませんでした。もう一度お試しください。",
   "avatarUpload.changePhoto": "写真を変更",
   "avatarUpload.addPhoto": "プロフィール写真を追加",
   "avatarUpload.remove": "削除",

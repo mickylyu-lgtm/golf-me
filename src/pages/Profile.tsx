@@ -74,6 +74,9 @@ export function Profile() {
   const [editing, setEditing] = useState(false);
   const [avatarModalOpen, setAvatarModalOpen] = useState(false);
   const [savingUsername, setSavingUsername] = useState(false);
+  // The main profile write: Save stays disabled until it answers, so a
+  // double tap can't send it twice.
+  const [savingProfile, setSavingProfile] = useState(false);
 
   function buildForm(g: typeof currentUser) {
     return {
@@ -97,6 +100,16 @@ export function Profile() {
   const USERNAME_FORMAT = /^[a-zA-Z0-9_.]{3,30}$/;
 
   async function save() {
+    if (savingProfile || savingUsername) return;
+    setSavingProfile(true);
+    try {
+      await saveFields();
+    } finally {
+      setSavingProfile(false);
+    }
+  }
+
+  async function saveFields() {
     // Username has its own real-backend uniqueness constraint (see
     // profiles_username_unique_idx) that the generic updateCurrentUserProfile
     // path can't surface an error for — it's fire-and-forget by design for
@@ -289,7 +302,7 @@ export function Profile() {
               <Button variant="outline" fullWidth onClick={() => setEditing(false)}>
                 {t("common.cancel")}
               </Button>
-              <Button fullWidth onClick={save} disabled={savingUsername}>
+              <Button fullWidth onClick={save} disabled={savingUsername || savingProfile}>
                 {t("common.save")}
               </Button>
             </div>

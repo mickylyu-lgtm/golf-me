@@ -104,7 +104,10 @@ export function ProfileSetup() {
     saveOnboardingDraft({ name, is18Plus, areaLabel, playingAreaCoords, hasHandicap, handicap });
   }, [name, is18Plus, areaLabel, playingAreaCoords, hasHandicap, handicap]);
 
-  const formValid = Boolean(name.trim()) && is18Plus && Boolean(areaLabel.trim());
+  // Continue waits while a photo is uploading: finishing mid-upload saved
+  // the profile without it and the late upload was lost.
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const formValid = Boolean(name.trim()) && is18Plus && Boolean(areaLabel.trim()) && !photoBusy;
 
   async function submit() {
     if (!formValid || submitting) return;
@@ -300,6 +303,7 @@ export function ProfileSetup() {
                 verification: { phoneVerified: false, emailVerified: false, verifiedGolfer: false },
               }}
               onChange={choosePhoto}
+              onBusyChange={setPhotoBusy}
             />
             <div>
               <label htmlFor="profile-setup-name" className={labelClass}>

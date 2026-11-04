@@ -635,6 +635,7 @@ export const es: Record<TranslationKey, string> = {
 
   "avatarUpload.invalidFile": "Elige un archivo de imagen.",
   "avatarUpload.loadError": "No se pudo cargar esa imagen — prueba con otra.",
+  "avatarUpload.saveError": "No se pudo guardar tu foto. Inténtalo de nuevo.",
   "avatarUpload.changePhoto": "Cambiar foto",
   "avatarUpload.addPhoto": "Añadir foto de perfil",
   "avatarUpload.remove": "Quitar",
