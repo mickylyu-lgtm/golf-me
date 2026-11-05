@@ -9,16 +9,19 @@ import { useLocale } from "../../i18n/LocaleContext";
 import { useKeyboardHeight } from "../../lib/useKeyboardHeight";
 import { useComposerFocus } from "../../lib/useComposerFocus";
 import { focusMovedToOtherField } from "../../lib/composerFocus";
-import { isNearBottom, pinToBottom, shouldPinToBottom } from "../../lib/chatScroll";
+import { followNewMessages, isNearBottom, messagesAfter, pinToBottom } from "../../lib/chatScroll";
 import { lockPageScroll } from "../../lib/scrollLock";
+import { useChatViewportBox } from "../../lib/useChatViewportBox";
+import { NewMessagesPill } from "./NewMessagesPill";
 import type { ChatMessage } from "../../types";
 
 // layout "card" (default): the inline card on the round page, list capped
-// at max-h-96. "page": the full-screen /messages/round/:id thread -- same
-// card, the list just fills the screen (svh: the small viewport, which the
-// keyboard never changes, so docking below works exactly as in the card).
+// at max-h-96, composer docked over the keyboard while typing (below).
+// "page": the full-screen /messages/round/:id thread, laid out like the DM
+// thread (lib/useChatViewportBox.ts): the card fills the space between the
+// thread header and the keyboard / bottom nav, only the list scrolls, and
+// the page itself never moves, so the header and its Back button stay put.
 // Callers only render this for members (lib/roundChat.ts canReadRoundChat).
-const PAGE_LIST_HEIGHT = "calc(100svh - 18rem - env(safe-area-inset-top) - env(safe-area-inset-bottom))";
 
 export function GroupChat({ callId, layout = "card" }: { callId: string; layout?: "card" | "page" }) {
   const { currentUser, getGolfer, getGolfCall, messagesForCall, sendMessage, retryRoundMessage, discardRoundMessage } = useData();
@@ -51,7 +54,8 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
   // a sheet's textarea on the round page opening it leaves the chat and
   // the page alone. Never docked while read-only: there's no composer.
   const composerOwnsFocus = useComposerFocus(composerRef, rememberScrollBeforeKeyboard);
-  const composerDocked = !readOnly && composerOwnsFocus && keyboardHeight > 0;
+  // The full-screen page never docks: its box already ends at the keyboard.
+  const composerDocked = layout === "card" && !readOnly && composerOwnsFocus && keyboardHeight > 0;
   const [composerHeight, setComposerHeight] = useState(0);
 
   // Measured on docking, before paint, so the spacer is never a frame late.
@@ -144,22 +148,48 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
   // round page to the chat card on load and on every incoming message.
   // Starts true so the first load opens at the newest message.
   const nearBottomRef = useRef(true);
-  const justSentRef = useRef(false);
+  const [unseenCount, setUnseenCount] = useState(0);
   useEffect(() => {
     const el = listRef.current;
     if (!el) return;
     const update = () => {
       nearBottomRef.current = isNearBottom(el);
+      if (nearBottomRef.current) setUnseenCount(0);
     };
     el.addEventListener("scroll", update, { passive: true });
     return () => el.removeEventListener("scroll", update);
   }, []);
 
-  useEffect(() => {
+  // Full-screen thread: DM-thread layout (see the layout comment above).
+  const boxRef = useRef<HTMLDivElement>(null);
+  const pageBoxHeight = useChatViewportBox({ enabled: layout === "page", boxRef, listRef, nearBottomRef });
+
+  // lib/chatScroll.ts followNewMessages: the golfer's own message always
+  // pins (keyed on the bubble, so a retry or a slow send pins too); someone
+  // else's only if the reader is near the bottom, otherwise it's counted
+  // for the "New messages" pill. Layout effect: pinned in the bubble's frame.
+  const lastSeenIdRef = useRef<string | null>(null);
+  const lastMessageId = messages.length > 0 ? (messages[messages.length - 1].clientId ?? messages[messages.length - 1].id) : null;
+  useLayoutEffect(() => {
     const el = listRef.current;
-    if (el && shouldPinToBottom({ nearBottom: nearBottomRef.current, justSent: justSentRef.current })) pinToBottom(el);
-    justSentRef.current = false;
-  }, [messages.length]);
+    const keyed = messages.map((m) => ({ ...m, id: m.clientId ?? m.id }));
+    const added = messagesAfter(keyed, lastSeenIdRef.current);
+    lastSeenIdRef.current = lastMessageId;
+    const { pin, unseen } = followNewMessages({ added, selfId: currentUser.id, nearBottom: nearBottomRef.current });
+    if (el && (pin || nearBottomRef.current)) {
+      pinToBottom(el);
+      nearBottomRef.current = true;
+      setUnseenCount(0);
+    } else if (unseen > 0) setUnseenCount((n) => n + unseen);
+    // messages is read for its new tail only; these keys change with it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages.length, lastMessageId]);
+  const showLatest = () => {
+    const el = listRef.current;
+    if (el) pinToBottom(el);
+    nearBottomRef.current = true;
+    setUnseenCount(0);
+  };
 
   // Same golf call's chat can be revisited across navigations without this
   // component staying mounted the whole time — restore whatever was typed
@@ -191,11 +221,8 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
     // "sending", then a "Not sent · Tap to retry" bubble if it fails, so the
     // text is never silently lost; demo: delivered instantly).
     updateText("");
-    // The bubble is added synchronously (demo and real), so the message
-    // effect above sees this and pins the golfer's own message into view.
-    justSentRef.current = true;
+    // The golfer's own bubble pins itself into view (message effect above).
     const result = await sendMessage(callId, sending);
-    justSentRef.current = false;
     if (result === "objectionable") restoreRejectedText(sending);
   }
 
@@ -214,7 +241,13 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
     // to read back keeps the keyboard (and the docked composer) up.
     // Also opted out of useRevealFocusedFieldAboveKeyboard: the composer
     // docks itself above the keyboard.
-    <div data-keyboard-drag-dismiss="off" data-keyboard-reveal="off" className="flex flex-col rounded-2xl border border-slate-100 bg-white">
+    <div
+      ref={boxRef}
+      data-keyboard-drag-dismiss="off"
+      data-keyboard-reveal="off"
+      className="flex flex-col rounded-2xl border border-slate-100 bg-white"
+      style={layout === "page" ? { height: pageBoxHeight } : undefined}
+    >
       {/* A leading mt-auto spacer bottom-anchors a short thread against the
           composer (DirectMessageThread's fix). Not justify-end on the
           scroller: that makes the browser report scrollHeight equal to
@@ -223,12 +256,8 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
           headless: 17 messages, scrollHeight 384 = clientHeight). */}
       <div
         ref={listRef}
-        className={`flex flex-col gap-3 overflow-y-auto px-4 py-4 ${layout === "page" ? "" : "max-h-96"}`}
-        // Page: fill the screen between the thread header and the bottom
-        // nav (18rem ~ top bar + header + composer + nav), so the composer
-        // sits low like a chat app. A fixed height, not one that follows the
-        // keyboard: the composer docks over the keyboard on its own.
-        style={layout === "page" ? { height: PAGE_LIST_HEIGHT, minHeight: "16rem" } : undefined}
+        // Page: the list takes whatever the box leaves above the composer.
+        className={`flex flex-col gap-3 overflow-y-auto px-4 py-4 ${layout === "page" ? "min-h-0 flex-1" : "max-h-96"}`}
       >
         <div className="mt-auto" />
         {messages.length === 0 && <p className="text-center text-sm text-slate-400">{t("chat.noMessagesYet")}</p>}
@@ -293,6 +322,7 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
       {/* Holds the composer's place, plus the keyboard's height: near the
           bottom of the page there's otherwise no room to scroll the latest
           content up above the docked bar (it's hidden under the keyboard). */}
+      {unseenCount > 0 && <NewMessagesPill onClick={showLatest} />}
       {composerDocked && <div ref={spacerRef} aria-hidden="true" style={{ height: composerHeight + keyboardHeight }} />}
       {readOnly ? (
         <p role="status" className="flex items-center justify-center gap-1.5 border-t border-slate-100 px-4 py-3 text-center text-xs font-medium text-slate-500">

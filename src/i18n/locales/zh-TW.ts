@@ -427,6 +427,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "chat.messageActions": "訊息操作",
   "chat.copy": "複製",
   "chat.copied": "已複製。",
+  "chat.newMessages": "新訊息",
   "chat.unsend": "收回",
   "chat.youUnsent": "你收回了一則訊息",
   "chat.theyUnsent": "{name} 收回了一則訊息",

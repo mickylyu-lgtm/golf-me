@@ -427,6 +427,7 @@ export const ja: Record<TranslationKey, string> = {
   "chat.messageActions": "メッセージの操作",
   "chat.copy": "コピー",
   "chat.copied": "コピーしました。",
+  "chat.newMessages": "新着メッセージ",
   "chat.unsend": "送信を取り消す",
   "chat.youUnsent": "メッセージの送信を取り消しました",
   "chat.theyUnsent": "{name}がメッセージの送信を取り消しました",

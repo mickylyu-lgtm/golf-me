@@ -427,6 +427,7 @@ export const es: Record<TranslationKey, string> = {
   "chat.messageActions": "Acciones del mensaje",
   "chat.copy": "Copiar",
   "chat.copied": "Copiado.",
+  "chat.newMessages": "Mensajes nuevos",
   "chat.unsend": "Anular envío",
   "chat.youUnsent": "Anulaste el envío de un mensaje",
   "chat.theyUnsent": "{name} anuló el envío de un mensaje",

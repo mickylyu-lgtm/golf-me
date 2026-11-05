@@ -427,6 +427,7 @@ export const ko: Record<TranslationKey, string> = {
   "chat.messageActions": "메시지 옵션",
   "chat.copy": "복사",
   "chat.copied": "복사했습니다.",
+  "chat.newMessages": "새 메시지",
   "chat.unsend": "전송 취소",
   "chat.youUnsent": "메시지 전송을 취소했습니다",
   "chat.theyUnsent": "{name}님이 메시지 전송을 취소했습니다",

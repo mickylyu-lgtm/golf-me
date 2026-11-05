@@ -427,6 +427,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "chat.messageActions": "消息操作",
   "chat.copy": "复制",
   "chat.copied": "已复制。",
+  "chat.newMessages": "新消息",
   "chat.unsend": "撤回",
   "chat.youUnsent": "你撤回了一条消息",
   "chat.theyUnsent": "{name} 撤回了一条消息",

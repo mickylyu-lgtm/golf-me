@@ -437,6 +437,7 @@ export const en = {
   "chat.messageActions": "Message actions",
   "chat.copy": "Copy",
   "chat.copied": "Copied.",
+  "chat.newMessages": "New messages",
   "chat.unsend": "Unsend",
   "chat.youUnsent": "You unsent a message",
   "chat.theyUnsent": "{name} unsent a message",

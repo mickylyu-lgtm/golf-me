@@ -29,6 +29,8 @@ import { messageActions } from "../lib/messageLongPress";
 import { QUICK_REACTIONS, canReactToMessage, groupReactionsByMessage, myReaction, nextReaction, summarizeReactions, type QuickReaction } from "../lib/reactions";
 import { copyText } from "../lib/share";
 import { goBack } from "../lib/goBack";
+import { followNewMessages, messagesAfter } from "../lib/chatScroll";
+import { NewMessagesPill } from "../components/chat/NewMessagesPill";
 import { type FailedDm, sendDmWithRecovery } from "../lib/dmFailedSend";
 import { Capacitor } from "@capacitor/core";
 
@@ -102,6 +104,9 @@ export function DirectMessageThread() {
   // true so a freshly opened thread opens pinned to its latest message, same
   // as before.
   const nearBottomRef = useRef(true);
+  // Someone else's messages that arrived while the golfer was reading older
+  // ones (the "New messages" pill; see the message effect below).
+  const [unseenCount, setUnseenCount] = useState(0);
   const boxRef = useRef<HTMLDivElement>(null);
   const [boxTop, setBoxTop] = useState<number | null>(null);
 
@@ -109,12 +114,22 @@ export function DirectMessageThread() {
   // header row isn't sticky/fixed, so nothing else knows where the box
   // starts. Only re-measured on a real window resize/rotation, not per
   // keyboard event.
-  useEffect(() => {
+  //
+  // Measured in a layout effect, before the first paint: route changes are
+  // transitions (React Router 7), so a passive effect ran a frame after the
+  // thread first painted, and that first frame showed an unsized box -- the
+  // oldest messages, no composer -- before snapping to the newest message
+  // (the "jump" opening a thread, worst from a notification). Re-run once
+  // the thread body exists (hasThread): opened from a push/notification
+  // before the golfer's profile has loaded, the first render is "Golfer not
+  // found" with no box, and the box never got measured once it appeared.
+  const hasThread = Boolean(id && getGolfer(id));
+  useLayoutEffect(() => {
     const measure = () => setBoxTop(boxRef.current?.getBoundingClientRect().top ?? null);
     measure();
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
-  }, []);
+  }, [hasThread]);
   const keyboardHeight = useKeyboardHeight();
   // Confirmed live on a physical iPhone, on a build where the Keyboard
   // plugin is genuinely linked (accessory bar correctly disappears, proving
@@ -260,19 +275,48 @@ export function DirectMessageThread() {
     const NEAR_BOTTOM_PX = 120;
     const update = () => {
       nearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX;
+      // Scrolled back down to the newest message: the pill has done its job.
+      if (nearBottomRef.current) setUnseenCount(0);
     };
     update();
     el.addEventListener("scroll", update, { passive: true });
     return () => el.removeEventListener("scroll", update);
-  }, [id]);
+  }, [id, hasThread]);
 
-  // A new message (sent or received) only pins to the bottom if the user
-  // was already there -- someone reading older messages shouldn't get
-  // yanked down just because a new one arrived (see nearBottomRef above).
-  useEffect(() => {
+  // New messages (lib/chatScroll.ts followNewMessages): the golfer's own
+  // (optimistic, confirmed or "Not sent") always pins to the bottom, even
+  // when they were reading older messages; someone else's pins only if they
+  // were already near the bottom, otherwise it's counted for the "New
+  // messages" pill instead of yanking them down. A layout effect, so the
+  // pin lands in the same frame as the new bubble (a real DM's bubble
+  // appears after a network round trip, outside the tap, where a passive
+  // effect could paint one frame with it below the composer).
+  const lastSeenIdRef = useRef<string | null>(null);
+  const failedCountRef = useRef(failedSends.length);
+  const lastMessageId = messages.length > 0 ? messages[messages.length - 1].id : null;
+  useLayoutEffect(() => {
     const el = listRef.current;
-    if (el && nearBottomRef.current) el.scrollTop = el.scrollHeight;
-  }, [messages.length, failedSends.length]);
+    const added = messagesAfter(messages, lastSeenIdRef.current);
+    lastSeenIdRef.current = lastMessageId;
+    const failedGrew = failedSends.length > failedCountRef.current;
+    failedCountRef.current = failedSends.length;
+    const { pin, unseen } = followNewMessages({ added, selfId: currentUser.id, nearBottom: nearBottomRef.current });
+    if (el && (pin || failedGrew || nearBottomRef.current)) {
+      el.scrollTop = el.scrollHeight;
+      nearBottomRef.current = true;
+      setUnseenCount(0);
+    } else if (unseen > 0) setUnseenCount((n) => n + unseen);
+    // messages is read for its new tail only; these keys change exactly
+    // when that tail does.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages.length, lastMessageId, failedSends.length]);
+  useEffect(() => setUnseenCount(0), [id]);
+  const showLatest = () => {
+    const el = listRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+    nearBottomRef.current = true;
+    setUnseenCount(0);
+  };
 
   // Switching to a different thread always opens at its latest message,
   // same as opening any chat app fresh -- not gated on nearBottomRef, which
@@ -281,7 +325,15 @@ export function DirectMessageThread() {
     nearBottomRef.current = true;
     const el = listRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [id]);
+  }, [id, hasThread]);
+
+  // The box got its real height (boxTop above, measured before paint):
+  // pin in that same frame too, before it paints, rather than waiting for
+  // the ResizeObserver a frame later. Same near-bottom rule as everywhere.
+  useLayoutEffect(() => {
+    const el = listRef.current;
+    if (el && nearBottomRef.current) el.scrollTop = el.scrollHeight;
+  }, [boxTop]);
 
   // The list's own height changes for reasons that have nothing to do with
   // new messages arriving -- the composer growing to a second line, a
@@ -310,7 +362,7 @@ export function DirectMessageThread() {
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [hasThread]);
 
   // The keyboard opening/closing is the one resize cause already known
   // about directly (via keyboardHeight, not by waiting to notice the list
@@ -335,7 +387,10 @@ export function DirectMessageThread() {
   // whether the height math above is ever slightly off.
   // Counted (lib/scrollLock): a sheet opened over the thread (Report) and
   // released in any order never leaves the page stuck or unlocked.
-  useEffect(() => lockPageScroll(), []);
+  // Layout effect: locked from the thread's first painted frame, so a
+  // fling still running from the page the golfer left (a scrolled feed
+  // when a notification was tapped) can't scroll it before the lock.
+  useLayoutEffect(() => lockPageScroll(), []);
 
   // (The old WKWebView keyboard-pan-vs-sticky-TopBar cancel-scroll hack --
   // useCancelKeyboardViewportPan, force-scrolling to (0,0) on every
@@ -778,6 +833,7 @@ export function DirectMessageThread() {
           </div>
         </div>
 
+        {unseenCount > 0 && <NewMessagesPill onClick={showLatest} />}
         <div className="shrink-0 rounded-b-2xl bg-white">
           {blocked ? (
             <p className="border-t border-slate-100 px-4 py-3 text-center text-xs text-slate-500">
