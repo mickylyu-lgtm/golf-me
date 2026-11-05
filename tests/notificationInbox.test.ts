@@ -3,6 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   EARLIER_LIMIT,
+  EARLIER_MAX_AGE_MS,
   groupNotifications,
   linkPath,
   notificationBadgeKind,
@@ -21,21 +22,26 @@ function n(partial: Partial<InboxNotification> & Pick<InboxNotification, "type" 
 
 // ---- grouping ----
 
+// The fixtures are dated 2026-11-05; grouping is judged "now" on that day
+// so Earlier's age cut-off never depends on when the tests run.
+const NOW = Date.parse("2026-11-05T13:00:00Z");
+const DAY = 24 * 60 * 60 * 1000;
+
 test("unread rows are the list, read rows go to Earlier, both newest first", () => {
   const a = n({ type: "new_message", linkTo: "/messages/g1", createdAt: "2026-11-05T10:00:00Z" });
   const b = n({ type: "round_joined", linkTo: "/golf-calls/r1", read: true, createdAt: "2026-11-05T11:00:00Z" });
   const c = n({ type: "new_follower", linkTo: "/golfer/g2", createdAt: "2026-11-05T12:00:00Z" });
   const d = n({ type: "post_reply", linkTo: "/community/p1", read: true, createdAt: "2026-11-05T09:00:00Z" });
-  const { unread, earlier } = groupNotifications([a, b, c, d]);
+  const { unread, earlier } = groupNotifications([a, b, c, d], EARLIER_LIMIT, NOW);
   assert.deepEqual(unread.map((x) => x.id), [c.id, a.id]);
   assert.deepEqual(earlier.map((x) => x.id), [b.id, d.id]);
 });
 
 test("a tapped (now read) notification leaves the main list", () => {
   const a = n({ type: "new_message", linkTo: "/messages/g1" });
-  const before = groupNotifications([a]);
+  const before = groupNotifications([a], EARLIER_LIMIT, NOW);
   assert.equal(before.unread.length, 1);
-  const after = groupNotifications(withLocallyRead([a], new Set([a.id])));
+  const after = groupNotifications(withLocallyRead([a], new Set([a.id])), EARLIER_LIMIT, NOW);
   assert.equal(after.unread.length, 0);
   assert.equal(after.earlier.length, 1);
 });
@@ -43,10 +49,20 @@ test("a tapped (now read) notification leaves the main list", () => {
 test("Earlier is capped; nothing unread is ever cut", () => {
   const rows = Array.from({ length: EARLIER_LIMIT + 20 }, () => n({ type: "round_left", linkTo: "/golf-calls/x", read: true }));
   rows.push(...Array.from({ length: 70 }, () => n({ type: "new_message", linkTo: "/messages/y" })));
-  const { unread, earlier } = groupNotifications(rows);
+  const { unread, earlier } = groupNotifications(rows, EARLIER_LIMIT, NOW);
   assert.equal(unread.length, 70);
   assert.equal(earlier.length, EARLIER_LIMIT);
-  assert.equal(groupNotifications(rows, 0).earlier.length, 0);
+  assert.equal(groupNotifications(rows, 0, NOW).earlier.length, 0);
+});
+
+test("Earlier only keeps a few days of read rows; unread rows never age out", () => {
+  const fresh = n({ type: "round_joined", linkTo: "/golf-calls/r1", read: true, createdAt: new Date(NOW - 2 * DAY).toISOString() });
+  const stale = n({ type: "round_joined", linkTo: "/golf-calls/r2", read: true, createdAt: new Date(NOW - EARLIER_MAX_AGE_MS - 1).toISOString() });
+  const edge = n({ type: "round_joined", linkTo: "/golf-calls/r3", read: true, createdAt: new Date(NOW - EARLIER_MAX_AGE_MS).toISOString() });
+  const oldUnread = n({ type: "new_message", linkTo: "/messages/g1", createdAt: new Date(NOW - 30 * DAY).toISOString() });
+  const { unread, earlier } = groupNotifications([fresh, stale, edge, oldUnread], EARLIER_LIMIT, NOW);
+  assert.deepEqual(earlier.map((x) => x.id), [fresh.id, edge.id]);
+  assert.deepEqual(unread.map((x) => x.id), [oldUnread.id]);
 });
 
 test("grouping does not mutate the input order", () => {

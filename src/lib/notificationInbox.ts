@@ -15,22 +15,31 @@ export interface InboxNotification {
 // Read rows kept in the collapsed "Earlier" section. The fetch window is
 // 200 rows; older read history is not worth scrolling through in a sheet.
 export const EARLIER_LIMIT = 50;
+// ...and only for a few days (Micky 2026-11-05: "Earlier" should go away
+// after a few days, not sit at 50 for good). Rows aren't deleted; they just
+// stop being listed.
+export const EARLIER_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
 
 function newestFirst<T extends InboxNotification>(list: readonly T[]): T[] {
   return [...list].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
 /**
- * Unread rows make the main list; read rows go to "Earlier" (newest first,
- * at most `earlierLimit`; the collapsed header counts what it would show).
+ * Unread rows make the main list; read rows from the last
+ * EARLIER_MAX_AGE_MS go to "Earlier" (newest first, at most `earlierLimit`;
+ * the collapsed header counts what it would show). Unread rows never age out.
  */
 export function groupNotifications<T extends InboxNotification>(
   list: readonly T[],
   earlierLimit: number = EARLIER_LIMIT,
+  nowMs: number = Date.now(),
 ): { unread: T[]; earlier: T[] } {
   const sorted = newestFirst(list);
   const unread = sorted.filter((n) => !n.read);
-  const earlier = sorted.filter((n) => n.read).slice(0, Math.max(0, earlierLimit));
+  const cutoff = nowMs - EARLIER_MAX_AGE_MS;
+  const earlier = sorted
+    .filter((n) => n.read && !(Date.parse(n.createdAt) < cutoff))
+    .slice(0, Math.max(0, earlierLimit));
   return { unread, earlier };
 }
 
