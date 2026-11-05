@@ -34,6 +34,8 @@ import { browseAllSearch, defaultSearchRadius, parseRoundSearch } from "../lib/r
 import { dayRangeFor, isEligibleRound, matchesAdvancedFilters, planAutoMatch } from "../lib/autoMatchLadder";
 import type { GolferCandidate, Widening } from "../lib/autoMatchLadder";
 import { hostPrefillSearch } from "../lib/hostPrefill";
+import { golferDistanceSource, golfersForSource } from "../lib/travelGolfers";
+import { useTravelGolferDirectory } from "../lib/useTravelGolferDirectory";
 import { useInviteToPlay } from "../lib/useInviteToPlay";
 import { useShareActions } from "../lib/useShareActions";
 import { formatShortDate } from "../lib/format";
@@ -162,18 +164,37 @@ export function AutoMatch() {
 
   // Golfers come from visibleGolfers (discoverability + blocks already
   // applied there), ranked by the same compatibility as the Golfers tab.
+  // Real golfers' distance buckets are measured from the SAVED area, so a
+  // "Playing Somewhere Else?" search uses the directory measured from that
+  // area instead (golfer_directory_from), and shows no golfers when the
+  // server can't measure from it (lib/travelGolfers). URL-only; the saved
+  // area is never written here.
+  const travel = useTravelGolferDirectory(effectiveLoc.coords, temporaryLocation && !isDemo);
+  const golferSource = golferDistanceSource({
+    temporaryArea: temporaryLocation,
+    isDemo,
+    areaHasCoords: Boolean(effectiveLoc.coords),
+    travelStatus: travel.status,
+  });
   const golferCandidates = useMemo<GolferSuggestion[]>(
     () =>
-      visibleGolfers().map((g) => {
+      golfersForSource(
+        golferSource,
+        visibleGolfers(),
+        travel.profiles.filter((g) => !isBlockedEitherWay(g.id)),
+      ).map((g) => {
         const compat = computeCompatibility(currentUser, g);
         const distanceMiles =
-          temporaryLocation && effectiveLoc.coords && g.playingAreaCoords
+          golferSource === "local" && effectiveLoc.coords && g.playingAreaCoords
             ? haversineMiles(effectiveLoc.coords, g.playingAreaCoords)
-            : golferDistanceMiles(currentUser, g);
+            : golferSource === "local"
+              ? undefined
+              : golferDistanceMiles(currentUser, g);
         return { id: g.id, golfer: g, compat, distanceMiles, score: compat.overall };
       }),
-    [visibleGolfers, currentUser, temporaryLocation, effectiveLoc],
+    [golferSource, visibleGolfers, travel.profiles, isBlockedEitherWay, currentUser, effectiveLoc],
   );
+  const golfersHiddenForArea = golferSource === "hidden";
 
   const plan = useMemo(
     () =>
@@ -196,7 +217,14 @@ export function AutoMatch() {
   const current = results[Math.min(resultIndex, Math.max(results.length - 1, 0))];
   const currentIsStrong = Boolean(current) && current.preferenceMatchedCount >= MIN_PREFERENCES_FOR_AUTO_MATCH;
   // Real golfers load separately from rounds; don't call it empty early.
-  const golfersPending = !isDemo && !social.hasLoaded;
+  const golfersPending = (!isDemo && !social.hasLoaded) || golferSource === "pending";
+  // Why no golfers are suggested for a "Playing Somewhere Else?" area.
+  const golfersHiddenNote = golfersHiddenForArea ? (
+    <p className="flex items-start gap-1.5 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600" role="note">
+      <Info size={14} className="mt-0.5 shrink-0 text-slate-400" />
+      {t("autoMatch.golfersHiddenForArea", { area: effectiveLoc.label })}
+    </p>
+  ) : null;
 
   function widenedNotes(w: Widening, stepRadius: number): string[] {
     const notes: string[] = [];
@@ -392,6 +420,7 @@ export function AutoMatch() {
               {golferCards(plan.golfers)}
             </section>
           )}
+          {golfersHiddenNote}
 
           {prefsNudge}
         </div>
@@ -418,6 +447,7 @@ export function AutoMatch() {
           description={t("autoMatch.emptyDesc")}
           action={
             <div className="flex w-full flex-col items-center gap-3">
+              {golfersHiddenNote}
               {hostAndInvite}
               <Button size="sm" variant="ghost" className="min-h-11" onClick={() => setPrefsSheetOpen(true)}>
                 {t("autoMatch.editPreferences")}

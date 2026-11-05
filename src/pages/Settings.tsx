@@ -20,6 +20,7 @@ import { clearOnboardingDraft } from "../lib/onboardingDraft";
 import { clearChatDrafts } from "../lib/chatDraft";
 import { noteIntentionalSignOut } from "../lib/authInput";
 import { goBack } from "../lib/goBack";
+import { runUnblock } from "../lib/blockedContacts";
 import { discoverableSetting } from "../lib/discoverability";
 
 // Plain-language push status for THIS phone, from what it knows locally:
@@ -89,7 +90,7 @@ function PushStatusLine({ userId, pushEnabled }: { userId: string; pushEnabled: 
 }
 
 export function Settings() {
-  const { currentUser, golfers, blockedIds, getGolfer, unblockUser, logOut, resetDemoData } = useData();
+  const { currentUser, golfers, blockedContacts, unblockUser, logOut, resetDemoData } = useData();
   const { isDemo, authUser, profileRow, pushEnabled: realPushEnabled, notifyNewRounds: realNotifyNewRounds, notifyCirclePosts: realNotifyCirclePosts, saveProfile } = useAuth();
   const { showToast } = useToast();
   const { locale, t } = useLocale();
@@ -221,7 +222,18 @@ export function Settings() {
     }
   }
 
-  const blockedGolfers = blockedIds.map((id) => getGolfer(id)).filter((g): g is NonNullable<typeof g> => Boolean(g));
+  // Every block this account made, one row each, whether or not a profile
+  // can be resolved: a contact the directory no longer returns (blocked
+  // either way, deleted, unavailable) reads "Blocked contact" and keeps a
+  // working Unblock (lib/blockedContacts). The id is only the row's key and
+  // the unblock target; it is never shown.
+  const [unblocking, setUnblocking] = useState<Set<string>>(() => new Set());
+  async function handleUnblock(id: string, label: string) {
+    if (unblocking.has(id)) return;
+    const outcome = await runUnblock(id, unblockUser, setUnblocking);
+    if (outcome === "unblocked") showToast(t("settings.unblockedToast", { name: label }), "info");
+    else showToast(t("settings.unblockFailedToast", { name: label }), "warning");
+  }
   const currentLanguageName = LOCALES.find((l) => l.value === locale)?.nativeName ?? "English";
 
   return (
@@ -348,29 +360,36 @@ export function Settings() {
 
       <section className="flex flex-col gap-3">
         <p className="px-1 text-xs font-bold uppercase tracking-wide text-slate-400">{t("settings.safety")}</p>
-        {blockedGolfers.length > 0 && (
+        {blockedContacts.length > 0 && (
           <div className="rounded-2xl border border-slate-100 bg-white p-4">
             <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
               <ShieldOff size={12} /> {t("settings.blockedGolfers")}
             </p>
             <div className="flex flex-col gap-2">
-              {blockedGolfers.map((g) => (
-                <div key={g.id} className="flex items-center gap-3">
-                  <Avatar golfer={g} size="xs" showVerified={false} />
-                  <p className="flex-1 text-sm text-slate-700">{g.name}</p>
-                  <button
-                    onClick={() => {
-                      unblockUser(g.id).then(
-                        () => showToast(`Unblocked ${g.name}.`, "info"),
-                        () => showToast(`Couldn't unblock ${g.name}. Check your connection and try again.`, "warning"),
-                      );
-                    }}
-                    className="text-xs font-semibold text-fairway-700 hover:underline"
-                  >
-                    {t("settings.unblock")}
-                  </button>
-                </div>
-              ))}
+              {blockedContacts.map((row) => {
+                const label = row.golfer?.name ?? t("settings.blockedContact");
+                const pending = unblocking.has(row.id);
+                return (
+                  <div key={row.id} className="flex items-center gap-3">
+                    {row.golfer ? (
+                      <Avatar golfer={row.golfer} size="xs" showVerified={false} />
+                    ) : (
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-400" aria-hidden="true">
+                        <ShieldOff size={14} />
+                      </span>
+                    )}
+                    <p className={`flex-1 text-sm ${row.golfer ? "text-slate-700" : "text-slate-500"}`}>{label}</p>
+                    <button
+                      onClick={() => void handleUnblock(row.id, label)}
+                      disabled={pending}
+                      aria-label={`${t("settings.unblock")} ${label}`}
+                      className="min-h-11 px-1 text-xs font-semibold text-fairway-700 hover:underline disabled:opacity-50"
+                    >
+                      {pending ? t("settings.unblocking") : t("settings.unblock")}
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

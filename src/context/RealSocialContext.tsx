@@ -2,8 +2,10 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { ReactNode } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "./AuthContext";
-import { fetchGolferDirectory, fetchPublicProfiles } from "../lib/publicProfilesFetch";
+import { fetchGolferDirectory, fetchMyBlockedProfiles, fetchPublicProfiles } from "../lib/publicProfilesFetch";
 import { discoverableCandidates } from "../lib/discoverability";
+import { blockedContactRows } from "../lib/blockedContacts";
+import type { BlockedContact } from "../lib/blockedContacts";
 import { INITIAL_LOAD_STATUS, applyLoadOutcome, isFirstLoadError, isRefreshError } from "../lib/loadStatus";
 import { isObjectionableContentError } from "../lib/objectionableContent";
 import type { SendMessageResult } from "../lib/objectionableContent";
@@ -103,6 +105,11 @@ interface RealSocialContextValue {
   // hidden golfers it is connected to (follows either way, DMs,
   // notifications). For looking up a known person, never for listing.
   getKnownProfile: (id: string) => GolferProfile | undefined;
+  // Settings' unblock list: one row per block THIS account made, whether or
+  // not a profile can be resolved (lib/blockedContacts). Named only when
+  // my_blocked_profiles() (or the cache) knows them and they haven't
+  // blocked this account back; otherwise golfer is null ("Blocked contact").
+  blockedContacts: BlockedContact<GolferProfile>[];
 
   canMessage: (otherId: string) => boolean;
   isBlocked: (id: string) => boolean;
@@ -270,6 +277,10 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
   // offer. The cache above holds more than these (people this account is
   // connected to, hidden from the directory or not).
   const [directoryIds, setDirectoryIds] = useState<string[]>([]);
+  // my_blocked_profiles() rows (name + avatar only), and the blocked-id set
+  // they were fetched for.
+  const [blockedNames, setBlockedNames] = useState<Map<string, GolferProfile>>(new Map());
+  const blockedNamesKeyRef = useRef<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [loadStatus, setLoadStatus] = useState(INITIAL_LOAD_STATUS);
   const fetchingRef = useRef(false);
@@ -420,6 +431,21 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
           directoryProfiles = profiles;
         }
         if (!isCurrent()) return;
+        // Names for this account's own blocks (my_blocked_profiles), on a
+        // full refetch or whenever the set it blocked changed. Never fails
+        // the refetch: the unblock list renders every block row anyway.
+        const myBlockedKey = ((blockRows ?? []) as BlockRow[])
+          .filter((b) => b.blocker_id === selfId)
+          .map((b) => b.blocked_id)
+          .sort()
+          .join(",");
+        if (full || myBlockedKey !== blockedNamesKeyRef.current) {
+          const named = myBlockedKey ? await fetchMyBlockedProfiles() : [];
+          if (!isCurrent()) return;
+          blockedNamesKeyRef.current = myBlockedKey;
+          const next = new Map(named.map((g) => [g.id, g]));
+          setBlockedNames((prev) => (sameProfileMap(prev, next) ? prev : next));
+        }
 
         setBlocks((prev) => keepIfSame(prev, (blockRows ?? []) as BlockRow[]));
         setNotificationRows((prev) => keepIfSame(prev, (notifRows ?? []) as NotificationRow[]));
@@ -566,6 +592,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     lastFullAtRef.current = 0;
     messagesRef.current = [];
     profileCacheRef.current = new Map();
+    blockedNamesKeyRef.current = null;
     convKeyRef.current = null;
     clearedKeyRef.current = null;
     realtimeHealthyRef.current = false;
@@ -590,6 +617,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       setNotificationRows([]);
       setProfileCache(new Map());
       setDirectoryIds([]);
+      setBlockedNames(new Map());
       setConnectedIds([]);
       setFollows([]);
       setPendingMessages([]);
@@ -778,7 +806,8 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       if (!selfId) return;
       const { error } = await supabase.from("blocks").insert({ blocker_id: selfId, blocked_id: id });
       if (error) throw new Error(error.message);
-      await refetch();
+      // Full: the directory and the blocked-names list both change.
+      await refetch({ full: true });
     },
     [selfId, refetch],
   );
@@ -788,7 +817,8 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       if (!selfId) return;
       const { error } = await supabase.from("blocks").delete().eq("blocker_id", selfId).eq("blocked_id", id);
       if (error) throw new Error(error.message);
-      await refetch();
+      // Full: the unblocked golfer can reappear in the directory.
+      await refetch({ full: true });
     },
     [selfId, refetch],
   );
@@ -1168,6 +1198,12 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
   // Any profile this client already holds (directory + connected people),
   // for resolving a known id -- never a list to browse.
   const getKnownProfile = useCallback((id: string) => profileCache.get(id), [profileCache]);
+  // Every block this account made, named where allowed (lib/blockedContacts):
+  // server blocked-names first, then anything already cached.
+  const blockedContacts = useMemo(
+    () => blockedContactRows(blockedIds, new Set(blockedByIds), [(id) => blockedNames.get(id), (id) => profileCache.get(id)]),
+    [blockedIds, blockedByIds, blockedNames, profileCache],
+  );
 
   const reportUser = useCallback(
     async (reportedId: string, category: ReportCategory, details: string, context: Report["context"], meta?: ReportTarget) => {
@@ -1217,6 +1253,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       retry,
       discoverableGolfers,
       getKnownProfile,
+      blockedContacts,
       canMessage,
       isBlocked,
       isBlockedBy,
@@ -1257,6 +1294,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       retry,
       discoverableGolfers,
       getKnownProfile,
+      blockedContacts,
       canMessage,
       isBlocked,
       isBlockedBy,

@@ -13,18 +13,22 @@ import { profileRowToGolferProfile } from "./profile";
 import type { ProfileRow } from "./profile";
 import type { GolferProfile } from "../types";
 import {
+  DIRECTORY_FROM_RPC,
   DIRECTORY_MAX,
   DIRECTORY_PAGE_SIZE,
   DIRECTORY_RPC,
+  MY_BLOCKED_PROFILES_RPC,
   PUBLIC_PROFILES_CHUNK,
   PUBLIC_PROFILES_RPC,
   RpcAvailability,
+  blockedProfileRowToGolferProfile,
   chunk,
   isListableFallbackRow,
   isMissingFunctionError,
   publicProfileRowToGolferProfile,
+  snapToDirectoryCell,
 } from "./publicDirectory";
-import type { PublicProfileRow } from "./publicDirectory";
+import type { BlockedProfileRow, PublicProfileRow } from "./publicDirectory";
 
 export interface ProfilesResult {
   profiles: GolferProfile[];
@@ -100,4 +104,61 @@ export async function fetchPublicProfiles(ids: readonly string[]): Promise<Profi
     for (const row of (data ?? []) as ProfileRow[]) profiles.push(profileRowToGolferProfile(row));
   }
   return { profiles, error: null };
+}
+
+export interface TravelDirectoryResult extends ProfilesResult {
+  /** The database has no golfer_directory_from yet: show no golfer suggestions. */
+  unsupported: boolean;
+}
+
+/**
+ * The Golfers directory with distance buckets measured from a temporary
+ * search area (golfer_directory_from). The area is snapped to its ~5 km
+ * cell before it is sent. There is deliberately NO table fallback: on a
+ * database without the function the answer is "unsupported", and the
+ * caller shows no golfer suggestions rather than home-based ones.
+ */
+export async function fetchGolferDirectoryFrom(area: { lat: number; lng: number }): Promise<TravelDirectoryResult> {
+  const origin = snapToDirectoryCell(area);
+  if (!origin) return { profiles: [], error: null, unsupported: true };
+  if (!availability.shouldTry(DIRECTORY_FROM_RPC, Date.now())) return { profiles: [], error: null, unsupported: true };
+  const profiles: GolferProfile[] = [];
+  for (let offset = 0; offset < DIRECTORY_MAX; offset += DIRECTORY_PAGE_SIZE) {
+    const { data, error } = await supabase.rpc(DIRECTORY_FROM_RPC, {
+      p_origin_lat: origin.lat,
+      p_origin_lng: origin.lng,
+      p_limit: DIRECTORY_PAGE_SIZE,
+      p_offset: offset,
+    });
+    if (error) {
+      if (isMissingFunctionError(error, DIRECTORY_FROM_RPC)) {
+        availability.markMissing(DIRECTORY_FROM_RPC, Date.now());
+        return { profiles: [], error: null, unsupported: true };
+      }
+      return { profiles: [], error, unsupported: false };
+    }
+    const rows = (data ?? []) as PublicProfileRow[];
+    for (const row of rows) profiles.push(publicProfileRowToGolferProfile(row));
+    if (rows.length < DIRECTORY_PAGE_SIZE) break;
+  }
+  availability.markPresent(DIRECTORY_FROM_RPC);
+  return { profiles, error: null, unsupported: false };
+}
+
+/**
+ * Names/avatars for the caller's own blocks (my_blocked_profiles). Missing
+ * function or any error -> no names; the Settings list still shows every
+ * block row with the "Blocked contact" fallback, so this never fails a
+ * refetch.
+ */
+export async function fetchMyBlockedProfiles(): Promise<GolferProfile[]> {
+  if (!availability.shouldTry(MY_BLOCKED_PROFILES_RPC, Date.now())) return [];
+  const { data, error } = await supabase.rpc(MY_BLOCKED_PROFILES_RPC);
+  if (error) {
+    if (isMissingFunctionError(error, MY_BLOCKED_PROFILES_RPC)) availability.markMissing(MY_BLOCKED_PROFILES_RPC, Date.now());
+    else console.error("GolfMe: failed to load blocked contacts' names.", error);
+    return [];
+  }
+  availability.markPresent(MY_BLOCKED_PROFILES_RPC);
+  return ((data ?? []) as BlockedProfileRow[]).map(blockedProfileRowToGolferProfile);
 }

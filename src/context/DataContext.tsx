@@ -36,6 +36,8 @@ import type {
 } from "../types";
 import { AGE_PREF_MAX, AGE_PREF_MIN } from "../types";
 import { generateId } from "../lib/id";
+import { blockedContactRows } from "../lib/blockedContacts";
+import type { BlockedContact } from "../lib/blockedContacts";
 import type { GeoPoint } from "../lib/geo";
 import { loadData, saveData, resetToSeedData } from "../lib/storage";
 import { avatarColorForName, initialsFromName } from "../lib/avatar";
@@ -217,6 +219,10 @@ interface DataContextValue {
   unblockUser: (blockedId: string) => Promise<void>;
   isBlocked: (id: string) => boolean;
   blockedIds: string[];
+  // Settings' unblock list: every block this account made, named where
+  // allowed, golfer null otherwise ("Blocked contact"). Never drops a row
+  // because a profile can't be resolved (lib/blockedContacts).
+  blockedContacts: BlockedContact<GolferProfile>[];
 
   circleGolfers: GolferProfile[];
   isInCircle: (golferId: string) => boolean;
@@ -449,6 +455,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [data.blocks, currentUser.id],
   );
   const blockedIds = auth.isDemo ? mockBlockedIds : realSocial.blockedIds;
+  const realBlockedContacts = realSocial.blockedContacts;
+  const blockedContacts = useMemo(
+    () =>
+      auth.isDemo
+        ? blockedContactRows(mockBlockedIds, new Set<string>(), [(id: string) => data.golfers.find((g) => g.id === id)])
+        : realBlockedContacts,
+    [auth.isDemo, mockBlockedIds, data.golfers, realBlockedContacts],
+  );
 
   const isBlocked = useCallback((id: string) => (auth.isDemo ? mockBlockedIds.includes(id) : realSocial.isBlocked(id)), [auth.isDemo, mockBlockedIds, realSocial]);
 
@@ -1817,6 +1831,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       unblockUser,
       isBlocked,
       blockedIds,
+      blockedContacts,
       circleGolfers,
       isInCircle,
       addToCircle,
@@ -1918,6 +1933,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       unblockUser,
       isBlocked,
       blockedIds,
+      blockedContacts,
       circleGolfers,
       isInCircle,
       addToCircle,

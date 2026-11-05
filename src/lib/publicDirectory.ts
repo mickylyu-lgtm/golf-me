@@ -57,6 +57,26 @@ function neutralProfile(id: string, name: string): GolferProfile {
 
 export const DIRECTORY_RPC = "golfer_directory";
 export const PUBLIC_PROFILES_RPC = "golfer_public_profiles";
+/** Directory with buckets measured from a search area (migration 20261106130100). */
+export const DIRECTORY_FROM_RPC = "golfer_directory_from";
+/** Names/avatars for the caller's own blocks (migration 20261106130000). */
+export const MY_BLOCKED_PROFILES_RPC = "my_blocked_profiles";
+
+/** Directory cell size in degrees (same as the server's 0.05). */
+export const DIRECTORY_CELL_DEGREES = 0.05;
+
+/**
+ * A search area snapped to the centre of its ~5 km directory cell, the same
+ * snapping the server applies. Sent instead of the picked point, so a
+ * temporary area never leaves the device more precisely than the server
+ * would use it anyway. null for missing/invalid coordinates.
+ */
+export function snapToDirectoryCell(point: { lat: number; lng: number } | null | undefined): { lat: number; lng: number } | null {
+  if (!point || !Number.isFinite(point.lat) || !Number.isFinite(point.lng)) return null;
+  if (point.lat < -90 || point.lat > 90 || point.lng < -180 || point.lng > 180) return null;
+  const snap = (v: number) => Math.round((Math.floor(v / DIRECTORY_CELL_DEGREES) * DIRECTORY_CELL_DEGREES + DIRECTORY_CELL_DEGREES / 2) * 1e6) / 1e6;
+  return { lat: snap(point.lat), lng: snap(point.lng) };
+}
 /** Server cap per golfer_directory page. */
 export const DIRECTORY_PAGE_SIZE = 100;
 /** The client stops paging after this many golfers (Discover ranks client-side). */
@@ -202,6 +222,27 @@ export function publicProfileRowToGolferProfile(row: PublicProfileRow): GolferPr
     memberSince: row.member_since,
     foundingMemberNumber: row.founding_member_number ?? undefined,
     circleSize: row.circle_size ?? 0,
+  };
+}
+
+/** Row shape of my_blocked_profiles(): name and avatar only. */
+export interface BlockedProfileRow {
+  id: string;
+  name: string | null;
+  avatar_color: string | null;
+  avatar_initials: string | null;
+  photo_url: string | null;
+}
+
+/** A blocked contact's name/avatar as a GolferProfile (everything else neutral). */
+export function blockedProfileRowToGolferProfile(row: BlockedProfileRow): GolferProfile {
+  const name = row.name?.trim() || "Golfer";
+  const base = neutralProfile(row.id, name);
+  return {
+    ...base,
+    avatarColor: row.avatar_color || base.avatarColor,
+    avatarInitials: row.avatar_initials || base.avatarInitials,
+    photoUrl: row.photo_url ?? undefined,
   };
 }
 
