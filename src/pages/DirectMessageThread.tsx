@@ -23,6 +23,8 @@ import { useSwipeToReply } from "../lib/useSwipeToReply";
 import { useWebKeyboardInset } from "../lib/useWebKeyboardInset";
 import { useMessageLongPress } from "../lib/useMessageLongPress";
 import { MessageActionsMenu } from "../components/chat/MessageActionsMenu";
+import { useExitPresence } from "../lib/useExitPresence";
+import { FOCUS_EXIT_MS } from "../lib/messageFocus";
 import { ReactionPill } from "../components/chat/ReactionPill";
 import { canUnsendMessage, unsendRemainingMs } from "../lib/unsend";
 import { messageActions } from "../lib/messageLongPress";
@@ -209,6 +211,9 @@ export function DirectMessageThread() {
     setActionsFor({ id: messageId, bubble });
   });
   const closeActions = useCallback(() => setActionsFor(null), []);
+  // The menu stays mounted FOCUS_EXIT_MS after closing so its focus
+  // overlay animates out (MessageActionsMenu `closing`).
+  const actionsShown = useExitPresence(actionsFor, FOCUS_EXIT_MS);
 
   // A reply target belongs to one thread; a highlight timer never outlives
   // the page.
@@ -438,8 +443,9 @@ export function DirectMessageThread() {
 
   const messagesById = new Map(messages.map((m) => [m.id, m]));
   const replyTarget = replyToId ? messagesById.get(replyToId) : undefined;
-  // The menu's message; gone (e.g. unsent from the other phone) = no menu.
-  const actionsCandidate = actionsFor ? messagesById.get(actionsFor.id) : undefined;
+  // The menu's message; gone (e.g. unsent from the other phone, or just
+  // unsent from the menu) = no menu, and no exit animation either.
+  const actionsCandidate = actionsShown.value ? messagesById.get(actionsShown.value.id) : undefined;
   const actionsMessage = actionsCandidate && !actionsCandidate.unsentAt ? actionsCandidate : undefined;
 
   function senderLabel(senderId: string) {
@@ -721,11 +727,15 @@ export function DirectMessageThread() {
                     // On touch screens no iOS selection callout / text
                     // selection (Copy is in the menu); a mouse still selects.
                     data-actions-bubble={m.id}
-                    className={`relative max-w-[75%] rounded-2xl px-3.5 py-2 text-sm transition-shadow duration-300 [overflow-wrap:anywhere] pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none] ${
+                    // data-pressing (set by useMessageLongPress while a hold
+                    // is building): eases down to PRESS_SCALE via the CSS
+                    // `scale` property, which composes with the inline
+                    // `transform` useSwipeToReply writes. No layout change.
+                    // While the menu is open the bubble is drawn by its
+                    // focus copy (MessageActionsMenu), no ring here.
+                    className={`relative max-w-[75%] rounded-2xl px-3.5 py-2 text-sm transition-[box-shadow,scale] duration-300 ease-out data-pressing:scale-[0.97] data-pressing:duration-[350ms] [overflow-wrap:anywhere] pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none] ${
                       isMe ? "rounded-br-sm bg-fairway-600 text-white" : "rounded-bl-sm bg-slate-100 text-slate-800"
-                    } ${highlightId === m.id ? "ring-2 ring-amber-300 ring-offset-2" : ""} ${
-                      actionsFor?.id === m.id ? "ring-2 ring-fairway-300 ring-offset-2" : ""
-                    } ${reactionSummary.length > 0 ? "mb-4" : ""}`}
+                    } ${highlightId === m.id ? "ring-2 ring-amber-300 ring-offset-2" : ""} ${reactionSummary.length > 0 ? "mb-4" : ""}`}
                   >
                     {/* Quote of the replied-to message, taken only from
                         messages this reader already has loaded (RLS-visible
@@ -876,9 +886,11 @@ export function DirectMessageThread() {
         </div>
       </div>
 
-      {actionsMessage && actionsFor && (
+      {actionsMessage && actionsShown.value && (
         <MessageActionsMenu
-          bubble={actionsFor.bubble}
+          key={actionsShown.key}
+          bubble={actionsShown.value.bubble}
+          closing={actionsShown.exiting}
           alignRight={actionsMessage.senderId === currentUser.id}
           reactions={
             reactEnabled && canReactToMessage(actionsMessage)

@@ -2,6 +2,7 @@ import { useEffect, useRef, type RefObject } from "react";
 import { Capacitor } from "@capacitor/core";
 import { Haptics, ImpactStyle } from "@capacitor/haptics";
 import { LONG_PRESS_MS, longPressCancelledByMove, longPressSurvivesCancel } from "./messageLongPress";
+import { PRESS_FEEDBACK_DELAY_MS } from "./messageFocus";
 
 // Opens a DM bubble's actions menu (reactions, Reply, Copy, Unsend) by:
 //   - touch / pen: holding the bubble still for LONG_PRESS_MS (iPhone app
@@ -31,6 +32,16 @@ import { LONG_PRESS_MS, longPressCancelledByMove, longPressSurvivesCancel } from
 // swipe or a scroll) cancels the press (lib/messageLongPress.ts). The click
 // that ends a completed long-press is swallowed, so lifting the finger
 // never also taps a quote or the avatar. Never touches scroll or sizes.
+//
+// Press cue: PRESS_FEEDBACK_DELAY_MS into a press the bubble gets
+// data-pressing (DirectMessageThread eases it to PRESS_SCALE with the CSS
+// `scale` property, which composes with useSwipeToReply's inline
+// `transform`); it's removed the moment the press ends, is cancelled or
+// opens the menu. Not set with prefers-reduced-motion.
+function prefersReducedMotion(): boolean {
+  return typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+}
+
 export function useMessageLongPress(
   listRef: RefObject<HTMLElement | null>,
   enabled: boolean,
@@ -53,15 +64,25 @@ export function useMessageLongPress(
     let lastX = 0;
     let lastY = 0;
     let firedAt = 0;
+    let pressTimer = 0;
+    let pressed: HTMLElement | null = null;
 
     const bubbleOf = (target: EventTarget | null) =>
       target instanceof Element ? target.closest<HTMLElement>("[data-actions-bubble]") : null;
+
+    const release = () => {
+      window.clearTimeout(pressTimer);
+      pressTimer = 0;
+      if (pressed) pressed.removeAttribute("data-pressing");
+      pressed = null;
+    };
 
     const cancel = () => {
       window.clearTimeout(timer);
       timer = 0;
       pointerId = null;
       touchId = null;
+      release();
     };
 
     const open = (bubble: HTMLElement) => {
@@ -75,12 +96,22 @@ export function useMessageLongPress(
         // Feedback never breaks the gesture.
       }
       onOpenRef.current(id, bubble);
+      release();
     };
 
     const start = (bubble: HTMLElement, x: number, y: number) => {
       window.clearTimeout(timer);
+      release();
       startX = lastX = x;
       startY = lastY = y;
+      if (!prefersReducedMotion()) {
+        pressTimer = window.setTimeout(() => {
+          pressTimer = 0;
+          if (!timer || !bubble.isConnected) return;
+          bubble.setAttribute("data-pressing", "");
+          pressed = bubble;
+        }, PRESS_FEEDBACK_DELAY_MS);
+      }
       timer = window.setTimeout(() => {
         timer = 0;
         pointerId = null;
