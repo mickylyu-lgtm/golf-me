@@ -212,10 +212,10 @@ export function GolfMeLoader({ message, fullScreen = false, slowLoadRetry = fals
               reference) while genuinely loading — respects prefers-
               reduced-motion by falling back to the plain one-time pop-in
               instead of an unbounded spin. */}
-          <span
-            className={`flex h-11 w-11 items-center justify-center rounded-2xl bg-fairway-900 ${reducedMotion ? "animate-pop" : "animate-geometry-hop"}`}
-          >
-            <GolfMeIcon size={24} dotColor="#f8faf8" flagColor="#4ade80" holeColor="#14532d" />
+          {/* The real app-icon rendering (gradient, same as Splash/Auth),
+              Micky 2026-11-05: the hopping logo should be the GolfMe logo. */}
+          <span className={`flex ${reducedMotion ? "animate-pop" : "animate-geometry-hop"}`}>
+            <GolfMeIcon size={44} variant="gradient" className="rounded-2xl" />
           </span>
           {reducedMotion ? (
             <ReducedMotionIndicator message={message} />
