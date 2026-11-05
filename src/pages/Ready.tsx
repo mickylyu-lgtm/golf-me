@@ -8,14 +8,18 @@ import { markFoundingRevealSeen } from "../components/golfer/FoundingRevealHost"
 import { useAuth } from "../context/AuthContext";
 import { useLocale } from "../i18n/LocaleContext";
 import { track } from "../lib/analytics";
+import { saveOnboardingIntents } from "../lib/onboardingIntent";
+import type { OnboardingIntent } from "../lib/onboardingIntent";
 import type { TranslationKey } from "../i18n/locales/en";
 
 // Shown once, right after Quick Profile finishes — the one intent question
 // from the shortened onboarding flow ("what are you looking for?"),
 // reusing this existing screen rather than building a new one. Intent is
-// kept client-side only (no DB column): stored in localStorage so it's
-// available for later, lightweight personalization, never persisted server-
-// side or required to proceed. A golfer the server just made a Founding
+// kept client-side only (no DB column): saved on this device for this
+// account (lib/onboardingIntent.ts), where Home uses it to lead with what
+// the golfer picked for their first week, and the first-round hosting
+// prompt holds off for someone who came to find people or join a round.
+// Never required to proceed. A golfer the server just made a Founding
 // Golfer sees the number reveal first (ProfileSetup's save refetches the
 // profile after the award trigger, so the number is already there).
 //
@@ -23,10 +27,6 @@ import type { TranslationKey } from "../i18n/locales/en";
 // Notification API, which the iPhone app's web view doesn't have and the
 // web never uses (there is no web push), so it did nothing, and iPhone users
 // were then asked again by PushPrePermissionPrompt on Home, the real one.
-export const ONBOARDING_INTENT_KEY = "golfme:onboardingIntent";
-
-export type OnboardingIntent = "find_people" | "join_round" | "host_round" | "improve_swing";
-
 const INTENT_OPTIONS: { key: OnboardingIntent; labelKey: TranslationKey }[] = [
   { key: "find_people", labelKey: "ready.intentFindPeople" },
   { key: "join_round", labelKey: "ready.intentJoinRound" },
@@ -52,9 +52,8 @@ export function Ready() {
 
   function startGolfing() {
     track("onboarding_completed", { intents: intents.length > 0 ? intents.join(",") : "none" });
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(ONBOARDING_INTENT_KEY, JSON.stringify(intents));
-    }
+    const owner = isDemo ? "demo" : authUser?.id;
+    if (owner) saveOnboardingIntents(owner, intents);
     navigate("/");
   }
 
@@ -83,6 +82,8 @@ export function Ready() {
           return (
             <button
               key={opt.key}
+              type="button"
+              aria-pressed={active}
               onClick={() => toggleIntent(opt.key)}
               className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3.5 text-left text-sm font-semibold transition-all duration-150 ${
                 active ? "border-fairway-400 bg-fairway-50 text-fairway-700" : "border-slate-200 bg-white text-slate-700"

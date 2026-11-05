@@ -94,8 +94,6 @@ export function Welcome() {
   ];
 
   const nycCourses = ["Van Cortlandt Park", "Dyker Beach", "Forest Park", "Pelham Bay", "Marine Park", "Clearview", "Douglaston", "La Tourette"];
-  const campuses = ["NYU", "Columbia", "Fordham", "CUNY", "St. John's", "Pace"];
-
   return (
     <div className="min-h-screen overflow-x-clip bg-[#faf9f6] text-slate-900">
       {/* ─── Hero ─────────────────────────────────────────────────────── */}
@@ -266,15 +264,10 @@ export function Welcome() {
               <p className="mt-4 text-base text-slate-600 sm:text-lg">
                 <HighlightGolfMe text={t("landing.nyc.body")} />
               </p>
-              <p className="mt-6 text-xs font-bold uppercase tracking-wider text-slate-400">{t("landing.nyc.campusesLabel")}</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {campuses.map((c) => (
-                  <span key={c} className="rounded-full border border-fairway-200 bg-fairway-50 px-3 py-1 text-sm font-semibold text-fairway-800">
-                    {c}
-                  </span>
-                ))}
-              </div>
-              <p className="mt-5 text-xs font-bold uppercase tracking-wider text-slate-400">{t("landing.nyc.coursesLabel")}</p>
+              {/* No named-campus chips: GolfMe has no campus partnerships or
+                  verified student communities to point to, so naming schools
+                  read as a reach claim. Students are welcomed in the copy. */}
+              <p className="mt-6 text-xs font-bold uppercase tracking-wider text-slate-400">{t("landing.nyc.coursesLabel")}</p>
               <CourseTicker items={nycCourses} />
             </Reveal>
             <Reveal delayMs={200}>

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ChevronRight, MapPinned, Plus, Search, SlidersHorizontal, Users, X } from "lucide-react";
+import { ChevronRight, MapPinned, Plus, Search, Share2, SlidersHorizontal, Users, X } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
 import { useRealRounds } from "../context/RealRoundsContext";
@@ -23,6 +23,7 @@ import { effectiveLocation } from "../lib/travelLocation";
 import { resolveCallDistanceMiles } from "../lib/courseSearch";
 import { useSessionState } from "../lib/useSessionState";
 import { COURSE_MAP_TUTORIAL_ID } from "../lib/tutorialSteps";
+import { useShareActions } from "../lib/useShareActions";
 
 interface GolfCallsProps {
   embedded?: boolean;
@@ -36,6 +37,7 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
   const navigate = useNavigate();
   const [query, setQuery] = useSessionState<string>("golfme:roundSearch", "");
   const [wizardOpen, setWizardOpen] = useState(false);
+  const { shareApp } = useShareActions();
   const [searchParams, setSearchParams] = useSearchParams();
   // A failed first load must not read as "no rounds near you".
   const view = listView({ count: golfCalls.length, isDemo, hasLoaded: rounds.hasLoaded, loadError: rounds.loadError, isLoading: rounds.isLoading });
@@ -209,8 +211,10 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
         </div>
       )}
 
+      {/* The unfiltered list is every upcoming round, not a distance-filtered
+          one, so it isn't labelled "near you". */}
       {!isMatched && (
-        <h2 className="text-sm font-bold uppercase tracking-wide text-slate-400">{t("find.nearYou")}</h2>
+        <h2 className="text-sm font-bold uppercase tracking-wide text-slate-400">{t("find.upcomingRounds")}</h2>
       )}
 
       {rounds.refreshFailed && <StaleDataNotice onRetry={rounds.retry} />}
@@ -227,10 +231,33 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
             description={t("find.emptyNoMatchesDesc")}
             action={
               <div className="flex w-full flex-col items-center gap-3">
-                <Button size="sm" onClick={() => navigate("/golf-calls/new")}>
-                  {t("find.createGolfCall")}
-                </Button>
+                {/* Widening the search happens in the same sheet that made it
+                    (day, area, radius); saved preferences are never changed here. */}
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <Button size="sm" variant="outline" icon={<SlidersHorizontal size={14} />} onClick={() => setWizardOpen(true)}>
+                    {t("find.editSearch")}
+                  </Button>
+                  <Button size="sm" onClick={() => navigate("/golf-calls/new")}>
+                    {t("find.createGolfCall")}
+                  </Button>
+                </div>
                 <RoundAlertsCard />
+              </div>
+            }
+          />
+        ) : query.trim() ? (
+          <EmptyState
+            icon={<Search size={20} />}
+            title={t("find.emptyNoMatches")}
+            description={t("find.emptyNoResultsSearch")}
+            action={
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <Button size="sm" variant="outline" onClick={() => setQuery("")}>
+                  {t("find.clearSearchText")}
+                </Button>
+                <Button size="sm" onClick={() => navigate("/golf-calls/new")}>
+                  {t("find.hostGolfCall")}
+                </Button>
               </div>
             }
           />
@@ -238,11 +265,19 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
           <EmptyState
             icon={<Plus size={20} />}
             title={t("find.emptyNoMatches")}
-            description={query ? t("find.emptyNoResultsSearch") : t("find.emptyNoResults")}
+            description={t("find.emptyNoResults")}
             action={
-              <Button size="sm" onClick={() => navigate("/golf-calls/new")}>
-                {t("find.hostGolfCall")}
-              </Button>
+              <div className="flex w-full flex-col items-center gap-3">
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <Button size="sm" onClick={() => navigate("/golf-calls/new")}>
+                    {t("find.hostGolfCall")}
+                  </Button>
+                  <Button size="sm" variant="outline" icon={<Share2 size={14} />} onClick={() => void shareApp()}>
+                    {t("common.inviteFriend")}
+                  </Button>
+                </div>
+                <RoundAlertsCard />
+              </div>
             }
           />
         )

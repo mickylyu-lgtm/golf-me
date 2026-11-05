@@ -6,6 +6,18 @@ Last updated: 2026-11-04 (**"New to GolfMe" badge** — sprout icon instead of t
 
 Note: Phases between Phase 20/21 (see below) and Phase 22 span roughly 31 commits (2026-09-16 through 2026-09-21) that also never got a numbered write-up as they landed — Phase 22 below reconstructs them from `git log`/code review (that session's own commit messages are unusually detailed, so this is a faithful summary, not a guess) rather than live session narration. Older gap, still not backfilled: Phases between Phase 6 and Phase 20 (chat keyboard/Capacitor Keyboard native linking, floating swipeable BottomNav + auto-collapse + centering fixes, tee-time booking fallback hero image, and everything else through 2026-09-15) — see `git log` for that range (commits from "Prefer GolfCourseAPI v1.1 coordinates..." through "Floating pill bottom nav with press-and-slide tab selection, haptics, Caddie unify").
 
+## New-user experience fixes — 2026-11-05 (LIVE 2026-11-05 on Micky's "ship nux")
+
+From the new-user audit (items 2–6, app side only; the golfer directory / profile visibility is separate work). No migration.
+- **Landing** (`Welcome.tsx`, 6 locales): no unbacked claims ("you decide who joins", "right now", "golfers already finding", "most golfers today"); NYU/Columbia campus chips removed; hero says "helps you find… open up the spare spots". Micky approved all three extra rewrites.
+- **Empty states** (Rounds, Golfers, Home, Chat): always a next step (Host, Invite a friend via `shareApp`, Clear/Edit search, See open rounds); Golfers shows loader / error-with-retry instead of "Be one of the first" while loading or failed.
+- **First session**: `lib/onboardingIntent.ts` (per account, honoured 7 days): find-people intent leads Home with Find Golfers; join/find-only intent defers the first-round host prompt (`hostingDeferred`).
+- **Profiles**: Message primary + "Invite to play" (prefills the DM draft via `lib/inviteToPlay.ts`, never sends); profile page strings translated; whole-mile distances (`roundedMiles` in `lib/geo.ts`, "<1").
+- **Join**: round card uses the same `ConfirmJoinModal` as the round page (`lib/useJoinRound.ts`). A confirmation, not host approval.
+- **Events** (`lib/analytics.ts`, client dev-log only): `intro_started`/`intro_completed`, `round_joined` (every join), `round_viewed`; first-join counting would need the server.
+- Not translated yet: Compare's "Strong credibility" line and `matchTier().label`. Real-account empty states (no golfers / no DMs) not seen (unreachable in demo).
+- Tests: `tests/onboardingIntent.test.ts`, `tests/distanceLabel.test.ts`; 356 pass, tsc, lint 0 errors, build.
+
 ## Interaction audit fixes — 2026-11-04 (branch `fix/interaction-audit`, includes `fix/chat-composer-keyboard`; not deployed)
 
 Micky's "fix unnatural interactions and misleading feedback" request; audit + plan approved (remove both fake switches, add report columns, chat via the specialist).

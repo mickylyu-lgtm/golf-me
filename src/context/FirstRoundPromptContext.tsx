@@ -14,6 +14,7 @@ import {
   shouldShowHostReminderCard,
 } from "../lib/firstRoundPrompt";
 import { useShareActions } from "../lib/useShareActions";
+import { hostingPromptDeferred, readOnboardingIntents } from "../lib/onboardingIntent";
 import { FirstRoundPromptDialog } from "../components/onboarding/FirstRoundPromptDialog";
 
 // First Round Hosting Onboarding: gathers the inputs for the pure rules in
@@ -117,6 +118,11 @@ export function FirstRoundPromptProvider({ children }: { children: ReactNode }) 
     userId && (profileRow?.first_round_prompt_dismissed_at || localDismissedFor === userId || readLocalDismissed(userId)),
   );
 
+  // ---- A find-people / join-a-round answer on Ready holds hosting nudges
+  // back for that first week (this device only; see lib/onboardingIntent.ts).
+  // Read once per account per mount: it only changes on Ready, before Home.
+  const hostingDeferred = useMemo(() => hostingPromptDeferred(readOnboardingIntents(userId)), [userId]);
+
   const [open, setOpen] = useState(false);
 
   const markDismissed = useCallback(() => {
@@ -150,6 +156,7 @@ export function FirstRoundPromptProvider({ children }: { children: ReactNode }) 
       tutorialJustCompleted: completedThisSession,
       hasHosted,
       dismissed,
+      hostingDeferred,
       onHome: pathname === "/",
       blockingOverlayOpen: false,
       sessionStartWindowOpen: true,
@@ -220,7 +227,7 @@ export function FirstRoundPromptProvider({ children }: { children: ReactNode }) 
     setOpen(false);
   }, [markDismissed]);
 
-  const showReminderCard = !open && shouldShowHostReminderCard({ isDemo, signedIn: Boolean(userId), hasHosted, dismissed });
+  const showReminderCard = !open && shouldShowHostReminderCard({ isDemo, signedIn: Boolean(userId), hasHosted, dismissed, hostingDeferred });
 
   const value = useMemo(() => ({ hasHosted, showReminderCard, startHosting }), [hasHosted, showReminderCard, startHosting]);
 

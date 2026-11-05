@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import type { GolfCall, GolferProfile } from "../../types";
 import { useData } from "../../context/DataContext";
-import { useToast } from "../../context/ToastContext";
 import { Avatar } from "../ui/Avatar";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
@@ -17,8 +16,10 @@ import { VIBE_TONE } from "../../lib/theme";
 import { computeCallCompatibility } from "../../lib/compatibility";
 import { matchTier, callMatchReasons, TIER_FOR_YOU_KEYS } from "../../lib/matchReasons";
 import { evaluatePreferenceMatch } from "../../lib/preferenceMatch";
-import { track } from "../../lib/analytics";
 import { isPastRound } from "../../lib/golfCall";
+import { roundedMiles } from "../../lib/geo";
+import { useJoinRound } from "../../lib/useJoinRound";
+import { ConfirmJoinModal } from "./ConfirmJoinModal";
 import type { PreferenceMatchContext } from "../../lib/preferenceMatch";
 import { useLocale } from "../../i18n/LocaleContext";
 
@@ -28,8 +29,7 @@ interface GolfCallCardProps {
 }
 
 export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
-  const { currentUser, getGolfer, joinGolfCall, followingGolfers, circleGolfers, playedWithIds } = useData();
-  const { showToast } = useToast();
+  const { currentUser, getGolfer, followingGolfers, circleGolfers, playedWithIds } = useData();
   const { t, locale } = useLocale();
   const navigate = useNavigate();
 
@@ -61,29 +61,14 @@ export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
     return evaluatePreferenceMatch(currentUser, currentUser.id, call, roster, ctx);
   }, [showMatch, isHost, call, getGolfer, followingGolfers, circleGolfers, playedWithIds, currentUser]);
 
-  // Like GolfCallDetail's join: a quick double tap must not send a second
-  // join request while the first is still going through.
-  const [joining, setJoining] = useState(false);
-  async function handleJoin(e: React.MouseEvent) {
+  // Same confirm sheet and join path as the round page (lib/useJoinRound):
+  // Join opens "You're joining" with who's playing; only its confirm joins.
+  const { joining, join } = useJoinRound(call);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  function handleJoin(e: React.MouseEvent) {
     e.stopPropagation();
     if (joining) return;
-    setJoining(true);
-    try {
-      await joinGolfCall(call.id);
-      track("first_round_joined");
-      showToast(
-        call.joinMode === "instant"
-          ? t("golfCallDetail.joinedInstantToast", { date: formatDate(call.dateISO, locale, t) })
-          : t("golfCallDetail.requestSentToast"),
-        "success",
-      );
-    } catch (err) {
-      // Real, atomic failure (e.g. someone else took the last spot) —
-      // surfaced, never a silent no-op.
-      showToast(err instanceof Error ? err.message : t("golfCallDetail.joinError"), "warning");
-    } finally {
-      setJoining(false);
-    }
+    setConfirmOpen(true);
   }
 
   let cta: React.ReactNode;
@@ -107,12 +92,16 @@ export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
     );
   }
 
+  const canJoin = !isCancelled && !isHost && !isJoined && !isPending && !isPastRound(call) && !isFull;
+
   return (
+    <>
     <div
       role="button"
       tabIndex={0}
       onClick={() => navigate(`/golf-calls/${call.id}`)}
-      onKeyDown={(e) => e.key === "Enter" && navigate(`/golf-calls/${call.id}`)}
+      // Only the card itself: Enter on its Join button is that button's own click.
+      onKeyDown={(e) => e.key === "Enter" && e.target === e.currentTarget && navigate(`/golf-calls/${call.id}`)}
       className={`flex w-full cursor-pointer flex-col gap-3 p-4 text-left ${CLICKABLE_CARD_CLASS} ${isUrgent ? "border-sun-300" : ""}`}
     >
       <div>
@@ -122,7 +111,7 @@ export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
           <span>· {call.timeLabel}</span>
           <span className="text-slate-300">·</span>
           <span>
-            {call.distanceMiles !== undefined && `${t("golfCallCard.miAway", { miles: call.distanceMiles.toFixed(0) })} · `}~
+            {call.distanceMiles !== undefined && `${t("golfCallCard.miAway", { miles: roundedMiles(call.distanceMiles) })} · `}~
             {formatMoney(call.estimatedPricePerPerson)}
           </span>
         </p>
@@ -234,5 +223,19 @@ export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
         {cta}
       </div>
     </div>
+    {/* Outside the card: the sheet is portalled, but React events still
+        bubble through the component tree, and a tap inside it must not
+        also open the round. */}
+    {confirmOpen && canJoin && (
+      <ConfirmJoinModal
+        call={call}
+        onClose={() => setConfirmOpen(false)}
+        onConfirm={() => {
+          setConfirmOpen(false);
+          void join();
+        }}
+      />
+    )}
+    </>
   );
 }

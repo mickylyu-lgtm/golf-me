@@ -14,6 +14,7 @@ import type { PlayingArea } from "../lib/geo";
 import { matchPreferencesFromGolfer } from "../lib/matchPreferences";
 import type { MatchPreferencesValue } from "../lib/matchPreferences";
 import { goBack } from "../lib/goBack";
+import { availabilityLabel } from "../lib/enumLabels";
 
 // Everything on this page is a local draft until "Save Changes" is tapped —
 // no per-field auto-save. Rebuilt this way after live per-field saving
@@ -128,7 +129,7 @@ export function MatchPreferencesDetail() {
         <div className="flex flex-wrap gap-1.5">
           {AVAILABILITY_SLOTS.map((slot) => (
             <Pill key={slot} active={draftAvailability.includes(slot)} onClick={() => toggleAvailability(slot)}>
-              {slot}
+              {availabilityLabel(slot, t)}
             </Pill>
           ))}
         </div>

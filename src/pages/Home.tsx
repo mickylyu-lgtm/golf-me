@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
+import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, CalendarClock, Plus, Search, Sparkles, UserPlus } from "lucide-react";
+import { ArrowRight, CalendarClock, Plus, Search, Share2, Sparkles, UserPlus, Users } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
 import { useLocale } from "../i18n/LocaleContext";
@@ -22,6 +23,8 @@ import { NearbyCoursesHomeCard } from "../components/courses/NearbyCoursesHomeCa
 import { HostReminderCard } from "../components/onboarding/HostReminderCard";
 import { useFirstRoundPrompt } from "../context/FirstRoundPromptContext";
 import { clubLabel } from "../lib/clubLabel";
+import { useShareActions } from "../lib/useShareActions";
+import { homeFocus, readOnboardingIntents } from "../lib/onboardingIntent";
 
 const HOME_RADIUS_MILES = 25;
 const NEARBY_ROUNDS_SHOWN = 3;
@@ -40,14 +43,50 @@ const HOME_POSTS_SHOWN = 6;
 const PRIMARY_ACTION_CLASS =
   "rounded-2xl bg-gradient-to-br from-brand-forest to-brand-forest-deep shadow-sm shadow-fairway-900/10 transition-all duration-200 ease-out hover:-translate-y-0.5 hover:brightness-110 hover:shadow-md active:translate-y-0 active:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:hover:translate-y-0";
 
+// One of the big top-of-Home actions: the primary one (green gradient) or a
+// plain card.
+function HomeActionCard({
+  primary = false,
+  icon,
+  title,
+  subtitle,
+  onClick,
+}: {
+  primary?: boolean;
+  icon: ReactNode;
+  title: string;
+  subtitle: string;
+  onClick: () => void;
+}) {
+  return (
+    <button type="button" onClick={onClick} className={`flex w-full items-center gap-3 p-4 text-left ${primary ? PRIMARY_ACTION_CLASS : CLICKABLE_CARD_CLASS}`}>
+      <span
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${primary ? "bg-white/15 text-white" : "bg-fairway-50 text-fairway-700"}`}
+      >
+        {icon}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className={`block text-base font-bold ${primary ? "text-white" : "text-slate-900"}`}>{title}</span>
+        <span className={`block text-sm ${primary ? "text-fairway-50" : "text-slate-500"}`}>{subtitle}</span>
+      </span>
+      <ArrowRight size={16} className={`shrink-0 ${primary ? "text-white/80" : "text-slate-400"}`} />
+    </button>
+  );
+}
+
 export function Home() {
   const { currentUser, golfCalls, visiblePosts, caddieAnalyses } = useData();
-  const { isDemo } = useAuth();
+  const { isDemo, authUser } = useAuth();
   const { t, locale } = useLocale();
   const navigate = useNavigate();
   const { start: startTutorial } = useTutorial();
   const { eligible: tutorialEligible } = useTutorialEligibility();
   const { showReminderCard: showHostReminder, startHosting } = useFirstRoundPrompt();
+  const { shareApp } = useShareActions();
+  // What a brand-new golfer told Ready they're here for (first week only,
+  // this device; nothing stored for anyone onboarded before that screen).
+  const intentOwner = isDemo ? "demo" : authUser?.id;
+  const focus = useMemo(() => homeFocus(readOnboardingIntents(intentOwner)), [intentOwner]);
 
   // Home stays mounted for the whole session (RootTabCarousel keeps all 5
   // root panels alive, see its own header comment), so this only ever runs
@@ -176,33 +215,33 @@ export function Home() {
 
         <AddToHomeScreenPrompt />
 
-        <button
-          onClick={() => navigate(findTabPath("rounds"))}
-          className={`flex w-full items-center gap-3 p-4 text-left ${PRIMARY_ACTION_CLASS}`}
-        >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15 text-white">
-            <Search size={18} />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-base font-bold text-white">{t("home.findRound")}</span>
-            <span className="block text-sm text-fairway-50">{t("home.findRoundSubtitle")}</span>
-          </span>
-          <ArrowRight size={16} className="shrink-0 text-white/80" />
-        </button>
+        {/* A new golfer who told Ready they came to find people sees the
+            golfer browser first for their first week (lib/onboardingIntent);
+            everyone else gets Find a Round first, as before. */}
+        {focus === "golfers" && (
+          <HomeActionCard
+            primary
+            icon={<Users size={18} />}
+            title={t("home.findGolfers")}
+            subtitle={t("home.findGolfersSubtitle")}
+            onClick={() => navigate(findTabPath("golfers"))}
+          />
+        )}
 
-        <button
+        <HomeActionCard
+          primary={focus !== "golfers"}
+          icon={<Search size={18} />}
+          title={t("home.findRound")}
+          subtitle={t("home.findRoundSubtitle")}
+          onClick={() => navigate(findTabPath("rounds"))}
+        />
+
+        <HomeActionCard
+          icon={<UserPlus size={18} />}
+          title={t("home.hostRound")}
+          subtitle={t("home.hostRoundSubtitle")}
           onClick={() => navigate("/golf-calls/new")}
-          className={`flex w-full items-center gap-3 p-4 text-left ${CLICKABLE_CARD_CLASS}`}
-        >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-fairway-50 text-fairway-700">
-            <UserPlus size={18} />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-base font-bold text-slate-900">{t("home.hostRound")}</span>
-            <span className="block text-sm text-slate-500">{t("home.hostRoundSubtitle")}</span>
-          </span>
-          <ArrowRight size={16} className="shrink-0 text-slate-400" />
-        </button>
+        />
 
         {/* GolfMe's tee-time integration is deliberately narrow — see
             SUPPORTED_TEE_TIME_COURSES — so this badge is always the real,
@@ -256,14 +295,19 @@ export function Home() {
             ))}
           </div>
         ) : (
-          <div className="flex items-center gap-3 rounded-2xl border border-dashed border-slate-200 bg-white p-4">
-            <span className="min-w-0 flex-1">
+          <div className="flex flex-col gap-3 rounded-2xl border border-dashed border-slate-200 bg-white p-4">
+            <span className="min-w-0">
               <span className="block text-sm font-bold text-slate-900">{t("home.noRoundsYetTitle")}</span>
               <span className="block text-xs text-slate-500">{t("home.noRoundsYetBody")}</span>
             </span>
-            <Button size="sm" icon={<Plus size={14} />} onClick={() => navigate("/golf-calls/new")}>
-              {t("home.hostRound")}
-            </Button>
+            <span className="flex flex-wrap items-center gap-2">
+              <Button size="sm" icon={<Plus size={14} />} onClick={() => navigate("/golf-calls/new")}>
+                {t("home.hostRound")}
+              </Button>
+              <Button size="sm" variant="outline" icon={<Share2 size={14} />} onClick={() => void shareApp()}>
+                {t("common.inviteFriend")}
+              </Button>
+            </span>
           </div>
         )}
       </section>

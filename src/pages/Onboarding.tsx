@@ -22,14 +22,16 @@ export function Onboarding() {
   const isLast = step === SCREENS.length - 1;
   const Icon = screen.icon;
 
-  function goToSignup() {
-    track("onboarding_completed");
+  // The intro carousel only: "onboarding_completed" is Ready's, once the
+  // profile is actually set up (lib/analytics.ts).
+  function goToSignup(skipped: boolean) {
+    track("intro_completed", { skipped });
     navigate("/signup");
   }
 
   function next() {
-    if (step === 0) track("onboarding_started");
-    if (isLast) goToSignup();
+    if (step === 0) track("intro_started");
+    if (isLast) goToSignup(false);
     else setStep((s) => s + 1);
   }
 
@@ -51,7 +53,7 @@ export function Onboarding() {
             <span key={i} className={`h-1.5 w-8 rounded-full transition-colors duration-300 ${i === step ? "bg-fairway-600" : "bg-slate-200"}`} />
           ))}
         </div>
-        <button onClick={goToSignup} className="-my-2 -mr-2 min-h-10 px-2 text-sm font-semibold text-slate-400 transition-colors duration-200 hover:text-slate-600">
+        <button type="button" onClick={() => goToSignup(true)} className="-my-2 -mr-2 min-h-10 px-2 text-sm font-semibold text-slate-400 transition-colors duration-200 hover:text-slate-600">
           {t("common.skip")}
         </button>
       </div>

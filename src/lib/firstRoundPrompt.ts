@@ -11,6 +11,8 @@
 //   * only after the first-run tutorial is over, never while it runs;
 //   * once closed (Maybe Later, X, or acting on it) never again, on any
 //     device (profiles.first_round_prompt_dismissed_at, plus a local copy);
+//   * not in the first week for a golfer who told Ready they came to find
+//     people or join a round, not to host (lib/onboardingIntent.ts);
 //   * only while idle on Home with no other modal/onboarding overlay open;
 //   * only at a session start: the first Home landing after the app opened,
 //     or right after the tutorial finished in this session. Never in the
@@ -34,6 +36,12 @@ export interface FirstRoundPromptInputs {
   /** Still inside the session-start window (see FirstRoundPromptContext). */
   sessionStartWindowOpen: boolean;
   alreadyShownThisSession: boolean;
+  /**
+   * The golfer told Ready they came to find people / join a round (and not
+   * to host), within the first week (lib/onboardingIntent.ts). Optional:
+   * absent means no stated intent, the original behaviour.
+   */
+  hostingDeferred?: boolean;
 }
 
 export type FirstRoundPromptReason =
@@ -45,6 +53,7 @@ export type FirstRoundPromptReason =
   | "hosted_unknown"
   | "already_hosted"
   | "dismissed"
+  | "hosting_deferred"
   | "already_shown"
   | "not_on_home"
   | "overlay_open"
@@ -64,6 +73,7 @@ export function decideFirstRoundPrompt(i: FirstRoundPromptInputs): FirstRoundPro
   if (i.hasHosted === null) return no("hosted_unknown");
   if (i.hasHosted) return no("already_hosted");
   if (i.dismissed) return no("dismissed");
+  if (i.hostingDeferred) return no("hosting_deferred");
   if (i.alreadyShownThisSession) return no("already_shown");
   if (!i.onHome) return no("not_on_home");
   if (i.blockingOverlayOpen) return no("overlay_open");
@@ -76,14 +86,17 @@ export interface HostReminderCardInputs {
   signedIn: boolean;
   hasHosted: boolean | null;
   dismissed: boolean;
+  /** Same as FirstRoundPromptInputs.hostingDeferred. */
+  hostingDeferred?: boolean;
 }
 
 // The small Home card that replaces the popup once it was closed. Stays until
 // the first round is created successfully (hasHosted flips true only after
 // host_golf_call returned and the round list refetched), so starting the
-// wizard and backing out leaves it in place.
+// wizard and backing out leaves it in place. Held back, like the popup,
+// while a find-people / join-a-round intent is being honoured.
 export function shouldShowHostReminderCard(i: HostReminderCardInputs): boolean {
-  return !i.isDemo && i.signedIn && i.dismissed && i.hasHosted === false;
+  return !i.isDemo && i.signedIn && i.dismissed && i.hasHosted === false && !i.hostingDeferred;
 }
 
 // The session-start window closes the first time the golfer is anywhere but

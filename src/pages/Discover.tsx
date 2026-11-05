@@ -1,11 +1,17 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Flag, Search, SlidersHorizontal, Sparkles } from "lucide-react";
+import { ArrowRight, Flag, Search, Share2, SlidersHorizontal, Sparkles } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
 import { useLocale } from "../i18n/LocaleContext";
 import { GolferCard } from "../components/golfer/GolferCard";
 import { EmptyState } from "../components/ui/EmptyState";
+import { Button } from "../components/ui/Button";
+import { LoadErrorState } from "../components/ui/LoadStates";
+import { GolfMeLoader } from "../components/loading/GolfMeLoader";
+import { useRealSocial } from "../context/RealSocialContext";
+import { findTabPath } from "../lib/findTab";
+import { useShareActions } from "../lib/useShareActions";
 import { computeCompatibility, golferDistanceMiles } from "../lib/compatibility";
 import { GOLF_VIBES } from "../types";
 import type { GolfVibe } from "../types";
@@ -33,6 +39,8 @@ export function Discover({ embedded = false }: DiscoverProps) {
   const { isDemo } = useAuth();
   const { t } = useLocale();
   const navigate = useNavigate();
+  const { shareApp } = useShareActions();
+  const social = useRealSocial();
   // Session-persisted (see discoverFilters.ts): Back from a golfer and a
   // Rounds/Golfers switch both unmount this page, which used to reset all three.
   const [storedVibes, setStoredVibes] = useSessionState<string>(DISCOVER_VIBES_KEY, "");
@@ -104,8 +112,11 @@ export function Discover({ embedded = false }: DiscoverProps) {
         </button>
       )}
 
+      {/* Switches Play to its Rounds tab (Find adopts ?tab= and drops it);
+          inside Play that's a tab switch, so it replaces rather than adds a
+          Back step, same as tapping the Rounds tab. */}
       <button
-        onClick={() => navigate("/golf-calls")}
+        onClick={() => navigate(findTabPath("rounds"), { replace: embedded })}
         className="flex items-center justify-between gap-3 rounded-2xl border border-fairway-200 bg-fairway-50 px-4 py-3 text-left transition hover:border-fairway-300"
       >
         <span className="flex items-center gap-2">
@@ -169,10 +180,40 @@ export function Discover({ embedded = false }: DiscoverProps) {
       )}
 
       {results.length === 0 ? (
-        !isDemo && rawCandidates.length === 0 ? (
-          <EmptyState icon={<Sparkles size={20} />} title={t("find.noRealGolfersYet")} />
+        // Still loading, or a failed load, must not read as "no golfers here".
+        !isDemo && rawCandidates.length === 0 && social.loadError && !social.isLoading ? (
+          <LoadErrorState onRetry={social.retry} />
+        ) : !isDemo && rawCandidates.length === 0 && !social.hasLoaded ? (
+          <GolfMeLoader className="py-12" />
+        ) : !isDemo && rawCandidates.length === 0 ? (
+          <EmptyState
+            icon={<Sparkles size={20} />}
+            title={t("find.noRealGolfersYet")}
+            description={t("find.noRealGolfersYetDesc")}
+            action={
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <Button size="sm" icon={<Share2 size={14} />} onClick={() => void shareApp()}>
+                  {t("common.inviteFriend")}
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => navigate(findTabPath("rounds"), { replace: embedded })}>
+                  {t("find.seeOpenRounds")}
+                </Button>
+              </div>
+            }
+          />
         ) : (
-          <EmptyState icon={<SlidersHorizontal size={20} />} title={t("find.noGolfersMatch")} description={t("find.clearFilter")} />
+          <EmptyState
+            icon={<SlidersHorizontal size={20} />}
+            title={t("find.noGolfersMatch")}
+            description={t("find.clearFilter")}
+            action={
+              activeVibes.length > 0 ? (
+                <Button size="sm" variant="outline" onClick={() => setStoredVibes("")}>
+                  {t("find.clearFilters")}
+                </Button>
+              ) : undefined
+            }
+          />
         )
       ) : (
         <div className="flex flex-col gap-3">

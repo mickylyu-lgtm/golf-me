@@ -1,6 +1,7 @@
 import type { GolfCall } from "../types";
 import type { CompatibilityBreakdown } from "./compatibility";
 import { formatDate } from "./format";
+import { roundedMiles } from "./geo";
 import type { Locale } from "../i18n/LocaleContext";
 import type { TranslationKey } from "../i18n/locales/en";
 
@@ -82,7 +83,7 @@ export function callMatchReasons(call: GolfCall, breakdown: CompatibilityBreakdo
       key: "distance",
       score: breakdown.distance,
       positive: breakdown.distance >= 70,
-      text: t("matchReason.milesAway", { miles: call.distanceMiles.toFixed(0) }),
+      text: t("matchReason.milesAway", { miles: roundedMiles(call.distanceMiles) }),
     });
   }
 
@@ -115,37 +116,37 @@ export function callMatchReasons(call: GolfCall, breakdown: CompatibilityBreakdo
   return pickReasons(factors);
 }
 
-export function golferMatchReasons(breakdown: CompatibilityBreakdown): MatchFactor[] {
+export function golferMatchReasons(breakdown: CompatibilityBreakdown, t: TFn): MatchFactor[] {
   const factors: MatchFactor[] = [
     {
       key: "distance",
       score: breakdown.distance,
       positive: breakdown.distance >= 70,
-      text: breakdown.distance >= 70 ? "Nearby" : "A bit of a drive",
+      text: breakdown.distance >= 70 ? t("matchReason.golferNearby") : t("matchReason.golferFar"),
     },
     {
       key: "skill",
       score: breakdown.skill,
       positive: breakdown.skill >= 70,
-      text: breakdown.skill >= 70 ? "Similar handicap" : "Different skill level",
+      text: breakdown.skill >= 70 ? t("matchReason.golferSimilarHandicap") : t("matchReason.golferDifferentSkill"),
     },
     {
       key: "budget",
       score: breakdown.budget,
       positive: breakdown.budget >= 70,
-      text: breakdown.budget >= 70 ? "Within your budget" : "Different budget range",
+      text: breakdown.budget >= 70 ? t("matchReason.withinBudget") : t("matchReason.golferDifferentBudget"),
     },
     {
       key: "vibe",
       score: breakdown.vibe,
       positive: breakdown.vibe >= 70,
-      text: breakdown.vibe >= 70 ? "Same golf vibe" : "Different vibe preference",
+      text: breakdown.vibe >= 70 ? t("matchReason.golferSameVibe") : t("matchReason.golferDifferentVibe"),
     },
     {
       key: "schedule",
       score: breakdown.schedule,
       positive: breakdown.schedule >= 70,
-      text: breakdown.schedule >= 70 ? "Same availability" : "Different schedule",
+      text: breakdown.schedule >= 70 ? t("matchReason.golferSameAvailability") : t("matchReason.golferDifferentSchedule"),
     },
   ];
   return pickReasons(factors);

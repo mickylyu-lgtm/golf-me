@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CalendarDays, Flag, MessageCircle, Search, ShieldCheck, Users } from "lucide-react";
+import { CalendarDays, Flag, MessageCircle, Search, Share2, ShieldCheck, Users } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
 import { useRealSocial } from "../context/RealSocialContext";
@@ -12,6 +12,8 @@ import { EmptyState } from "../components/ui/EmptyState";
 import { LoadErrorState, StaleDataNotice } from "../components/ui/LoadStates";
 import { GolfMeLoader } from "../components/loading/GolfMeLoader";
 import { listView } from "../lib/loadStatus";
+import { findTabPath } from "../lib/findTab";
+import { useShareActions } from "../lib/useShareActions";
 import { CLICKABLE_CARD_CLASS } from "../components/ui/cardStyles";
 import { FounderBadge } from "../components/golfer/TrustBadges";
 import { formatDate, formatRelativeTime } from "../lib/format";
@@ -129,6 +131,7 @@ function DirectList() {
   const view = listView({ count: dmConversations.length, isDemo, hasLoaded: social.hasLoaded, loadError: social.loadError, isLoading: social.isLoading });
   const navigate = useNavigate();
   const { t, locale } = useLocale();
+  const { shareApp } = useShareActions();
   const [query, setQuery] = useState("");
 
   const trimmedQuery = query.trim().toLowerCase();
@@ -162,9 +165,16 @@ function DirectList() {
           title={t("chatInbox.emptyTitle")}
           description={t("chatInbox.emptyDescription")}
           action={
-            <Button size="sm" onClick={() => navigate("/profile/following/find")}>
-              {t("findFriends.entryPoint")}
-            </Button>
+            // The Golfers tab works for real and demo accounts alike (the
+            // name search at /profile/following/find sends demo straight back).
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <Button size="sm" onClick={() => navigate(findTabPath("golfers"))}>
+                {t("findFriends.entryPoint")}
+              </Button>
+              <Button size="sm" variant="outline" icon={<Share2 size={14} />} onClick={() => void shareApp()}>
+                {t("common.inviteFriend")}
+              </Button>
+            </div>
           }
         />
       ) : filtered.length === 0 ? (
@@ -222,6 +232,7 @@ function RoundsList() {
   const { isDemo } = useAuth();
   const rounds = useRealRounds();
   const { t } = useLocale();
+  const navigate = useNavigate();
   const ordered = useMemo(() => orderRoundChats(golfCalls, currentUser.id), [golfCalls, currentUser.id]);
   const view = listView({ count: ordered.length, isDemo, hasLoaded: rounds.hasLoaded, loadError: rounds.loadError, isLoading: rounds.isLoading });
   const now = new Date();
@@ -235,7 +246,16 @@ function RoundsList() {
       ) : view === "error" ? (
         <LoadErrorState onRetry={rounds.retry} />
       ) : ordered.length === 0 ? (
-        <EmptyState icon={<Flag size={20} />} title={t("chatInbox.roundsEmptyTitle")} description={t("chatInbox.roundsEmptyDescription")} />
+        <EmptyState
+          icon={<Flag size={20} />}
+          title={t("chatInbox.roundsEmptyTitle")}
+          description={t("chatInbox.roundsEmptyDescription")}
+          action={
+            <Button size="sm" onClick={() => navigate(findTabPath("rounds"))}>
+              {t("home.findRound")}
+            </Button>
+          }
+        />
       ) : (
         <div className="flex flex-col gap-2">
           {ordered.map((c, i) => (

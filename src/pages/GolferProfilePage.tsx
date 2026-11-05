@@ -38,14 +38,19 @@ import { TrustBadgeRow } from "../components/golfer/TrustBadges";
 import { FoundingGolferBadge, FoundingMark } from "../components/golfer/FoundingGolfer";
 import { ReputationBadge } from "../components/golfer/ReputationBadge";
 import { computeCompatibility, golferDistanceMiles } from "../lib/compatibility";
-import { matchTier, golferMatchReasons } from "../lib/matchReasons";
+import { matchTier, golferMatchReasons, TIER_FOR_YOU_KEYS } from "../lib/matchReasons";
+import { roundedMiles } from "../lib/geo";
+import { firstName } from "../lib/greeting";
+import { dmDraftKey, loadChatDraft, saveChatDraft } from "../lib/chatDraft";
+import { inviteDraftToSeed } from "../lib/inviteToPlay";
+import type { GolferProfile } from "../types";
 import { computeHandicapConfidence } from "../lib/credibility";
 import { useCredibilityStats } from "../lib/useCredibility";
 import { useReputationState } from "../lib/useReputationState";
 import { formatBudgetRange, isNewAccount, paceLabel } from "../lib/format";
 import { formatHandicapNumber, handicapColorClass } from "../lib/handicapColor";
 import { isFounder } from "../lib/founder";
-import { vibeLabel, walkOrCartLabel } from "../lib/enumLabels";
+import { availabilityLabel, vibeLabel, walkOrCartLabel } from "../lib/enumLabels";
 import { VIBE_TONE } from "../lib/theme";
 import { useIsCoachReviewer } from "../lib/useIsCoachReviewer";
 import { goBack } from "../lib/goBack";
@@ -122,10 +127,10 @@ export function GolferProfilePage() {
   if (!golfer) {
     return (
       <div className="py-12 text-center text-slate-500">
-        Golfer not found.
+        {t("golferProfile.notFound")}
         <div className="mt-4">
           <Button variant="outline" onClick={() => goBack(navigate, "/find")}>
-            Go back
+            {t("golfCallDetail.goBack")}
           </Button>
         </div>
       </div>
@@ -136,7 +141,7 @@ export function GolferProfilePage() {
   const following = isFollowing(golfer.id);
   const messagingAllowed = canMessage(golfer.id);
   const tier = compat ? matchTier(compat.overall) : null;
-  const reasons = compat ? golferMatchReasons(compat) : [];
+  const reasons = compat ? golferMatchReasons(compat, t) : [];
   const enrichedGolfer = { ...golfer, reputation: realReputation };
   const isEstablished = !isNewAccount(enrichedGolfer.reputation.completedRounds);
   const golferReviews = reviewsAbout(golfer.id);
@@ -144,11 +149,24 @@ export function GolferProfilePage() {
 
   const feedbackTags = isEstablished
     ? [
-        { label: "Good Pace", count: Math.round((enrichedGolfer.reputation.completedRounds * enrichedGolfer.reputation.goodPacePct) / 100) },
-        { label: "Respectful", count: Math.round((enrichedGolfer.reputation.completedRounds * enrichedGolfer.reputation.respectfulPct) / 100) },
-        { label: "On Time", count: Math.round((enrichedGolfer.reputation.completedRounds * enrichedGolfer.reputation.onTimePct) / 100) },
-      ].filter((t) => t.count > 0)
+        { label: t("golferProfile.feedbackGoodPace"), count: Math.round((enrichedGolfer.reputation.completedRounds * enrichedGolfer.reputation.goodPacePct) / 100) },
+        { label: t("golferProfile.feedbackRespectful"), count: Math.round((enrichedGolfer.reputation.completedRounds * enrichedGolfer.reputation.respectfulPct) / 100) },
+        { label: t("golferProfile.feedbackOnTime"), count: Math.round((enrichedGolfer.reputation.completedRounds * enrichedGolfer.reputation.onTimePct) / 100) },
+      ].filter((tag) => tag.count > 0)
     : [];
+
+  // "Invite to play": opens the DM with a suggested first message in the
+  // composer (an unsent draft there wins). Nothing is sent until the golfer
+  // taps Send themselves (lib/inviteToPlay.ts).
+  function inviteToPlay(target: GolferProfile) {
+    try {
+      const seed = inviteDraftToSeed(loadChatDraft(dmDraftKey(target.id)), t("golferProfile.inviteDraft", { name: firstName(target.name) }));
+      if (seed) saveChatDraft(dmDraftKey(target.id), seed);
+    } catch {
+      // Storage blocked: the thread still opens, just with an empty composer.
+    }
+    navigate(`/messages/${target.id}`);
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -162,7 +180,8 @@ export function GolferProfilePage() {
         <div className="relative">
           <button
             onClick={() => setMenuOpen((v) => !v)}
-            aria-label="More options"
+            aria-label={t("golfCallDetail.moreOptions")}
+            aria-expanded={menuOpen}
             className="rounded-full p-2 text-slate-400 transition-all duration-200 ease-out hover:bg-slate-100 hover:text-slate-700 active:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none"
           >
             <MoreHorizontal size={18} />
@@ -176,15 +195,15 @@ export function GolferProfilePage() {
                 }}
                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-slate-700 transition-colors duration-150 hover:bg-slate-50"
               >
-                <ShieldAlert size={15} /> Report {golfer.name}
+                <ShieldAlert size={15} /> {t("golferProfile.report", { name: golfer.name })}
               </button>
               <button
                 onClick={() => {
                   setMenuOpen(false);
                   if (blocked) {
                     unblockUser(golfer.id).then(
-                      () => showToast(`Unblocked ${golfer.name}.`, "info"),
-                      () => showToast(`Couldn't unblock ${golfer.name}. Check your connection and try again.`, "warning"),
+                      () => showToast(t("golferProfile.unblockedToast", { name: golfer.name }), "info"),
+                      () => showToast(t("golferProfile.unblockFailed", { name: golfer.name }), "warning"),
                     );
                   } else {
                     setBlockConfirmOpen(true);
@@ -192,7 +211,7 @@ export function GolferProfilePage() {
                 }}
                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 transition-colors duration-150 hover:bg-red-50"
               >
-                <ShieldOff size={15} /> {blocked ? `Unblock ${golfer.name}` : `Block ${golfer.name}`}
+                <ShieldOff size={15} /> {blocked ? t("golferProfile.unblock", { name: golfer.name }) : t("golferProfile.block", { name: golfer.name })}
               </button>
             </div>
           )}
@@ -229,63 +248,68 @@ export function GolferProfilePage() {
           </p>
           {distance !== undefined && (
             <p className="flex items-center justify-center gap-1 text-xs text-slate-400">
-              <MapPin size={11} /> {t("golfCallCard.miAway", { miles: distance.toFixed(1) })}
+              <MapPin size={11} /> {t("golfCallCard.miAway", { miles: roundedMiles(distance) })}
             </p>
           )}
         </div>
         <ReputationBadge tier={reputationState?.tierKey ?? null} size="sm" />
         {isCoachReviewer && (
           <Badge tone="fairway" icon={<ShieldCheck size={12} />}>
-            Coach Reviewer
+            {t("golferProfile.coachReviewer")}
           </Badge>
         )}
         <TrustBadgeRow golfer={enrichedGolfer} />
 
         {!blocked && (
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            <Button
-              size="sm"
-              variant={following ? "outline" : "primary"}
-              icon={following ? <UserRoundCheck size={14} /> : <UserRoundPlus size={14} />}
-              onClick={async () => {
-                try {
-                  if (following) {
-                    await unfollowUser(golfer.id);
-                    showToast(`Unfollowed ${golfer.name}.`, "info");
-                  } else {
-                    await followUser(golfer.id);
-                    showToast(`Following ${golfer.name}.`, "success");
-                  }
-                } catch (err) {
-                  showToast(err instanceof Error ? err.message : "Couldn't update follow status. Please try again.", "warning");
-                }
-              }}
-            >
-              {following ? t("common.following") : t("common.follow")}
-            </Button>
-            {/* messagingAllowed is false here only when they've blocked us
-                (self and "we blocked them" are already covered by !blocked
-                above) — silently hide rather than surface their block. */}
+          <div className="flex w-full max-w-sm flex-col items-center gap-2">
+            {/* Message is the main thing to do here; Invite to play opens the
+                same thread with a suggested message the golfer sends (or
+                edits) themselves. messagingAllowed is false here only when
+                they've blocked us (self and "we blocked them" are already
+                covered by !blocked above) — silently hide rather than
+                surface their block. */}
             {messagingAllowed && (
+              <div className="flex w-full items-center gap-2">
+                <Button className="flex-1" icon={<MessageCircle size={15} />} onClick={() => navigate(`/messages/${golfer.id}`)}>
+                  {t("golferProfile.message")}
+                </Button>
+                <Button className="flex-1" variant="outline" icon={<Flag size={15} />} onClick={() => inviteToPlay(golfer)}>
+                  {t("golferProfile.inviteToPlay")}
+                </Button>
+              </div>
+            )}
+            <div className="flex flex-wrap items-center justify-center gap-2">
               <Button
                 size="sm"
-                variant="outline"
-                icon={<MessageCircle size={14} />}
-                onClick={() => navigate(`/messages/${golfer.id}`)}
+                variant={following || messagingAllowed ? "outline" : "primary"}
+                icon={following ? <UserRoundCheck size={14} /> : <UserRoundPlus size={14} />}
+                onClick={async () => {
+                  try {
+                    if (following) {
+                      await unfollowUser(golfer.id);
+                      showToast(t("golferProfile.unfollowedToast", { name: golfer.name }), "info");
+                    } else {
+                      await followUser(golfer.id);
+                      showToast(t("golferProfile.followingToast", { name: golfer.name }), "success");
+                    }
+                  } catch (err) {
+                    showToast(err instanceof Error ? err.message : t("golferProfile.followFailed"), "warning");
+                  }
+                }}
               >
-                {t("golferProfile.message")}
+                {following ? t("common.following") : t("common.follow")}
               </Button>
-            )}
-            <Button size="sm" variant="outline" icon={<Scale size={14} />} onClick={() => setCompareOpen(true)}>
-              {t("golferProfile.compare")}
-            </Button>
+              <Button size="sm" variant="outline" icon={<Scale size={14} />} onClick={() => setCompareOpen(true)}>
+                {t("golferProfile.compare")}
+              </Button>
+            </div>
           </div>
         )}
 
         {hasPlayedWith(golfer.id) &&
           (isInCircle(golfer.id) ? (
             <Badge tone="fairway" icon={<Users size={12} />}>
-              In your Golf Circle
+              {t("golferProfile.inYourCircle")}
             </Badge>
           ) : (
             <Button
@@ -294,24 +318,24 @@ export function GolferProfilePage() {
               icon={<UserPlus size={14} />}
               onClick={() => {
                 addToCircle(golfer.id);
-                showToast(`Added ${golfer.name} to your Golf Circle.`, "success");
+                showToast(t("golferProfile.addedToCircle", { name: golfer.name }), "success");
               }}
             >
-              Add to Golf Circle
+              {t("golferProfile.addToCircle")}
             </Button>
           ))}
       </div>
 
       {blocked && (
         <div className="rounded-xl bg-slate-100 px-4 py-3 text-center text-sm text-slate-600">
-          You've blocked {golfer.name}. You won't see each other's profiles or Golf Calls.
+          {t("golferProfile.blockedNotice", { name: golfer.name })}
         </div>
       )}
 
       {tier && (
         <div className="rounded-2xl bg-fairway-50/70 p-4">
           <p className="flex items-center gap-1.5 text-sm font-bold text-fairway-800">
-            <span aria-hidden>{tier.emoji}</span> {tier.label} for you
+            <span aria-hidden>{tier.emoji}</span> {t(TIER_FOR_YOU_KEYS[tier.tier])}
           </p>
           <MatchReasons reasons={reasons} className="mt-1.5" />
         </div>
@@ -325,20 +349,18 @@ export function GolferProfilePage() {
       )}
 
       <div className="rounded-2xl border border-slate-100 bg-white p-4">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">GolfMe Reputation</p>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{t("golferProfile.reputationTitle")}</p>
         <ReputationRow golfer={enrichedGolfer} />
         {handicapConfidence.level !== "normal" && (
           <p className="mt-2 flex items-center gap-1 text-xs text-slate-500">
             {handicapConfidence.level === "high" && <ShieldCheck size={12} className="text-fairway-600" />}
-            {handicapConfidence.level === "high"
-              ? "Handicap usually confirmed by playing partners"
-              : "Handicap accuracy has been questioned by multiple playing partners"}
+            {handicapConfidence.level === "high" ? t("golferProfile.handicapConfirmed") : t("golferProfile.handicapQuestioned")}
           </p>
         )}
       </div>
 
       <div className="rounded-2xl border border-slate-100 bg-white p-4">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Playing Style</p>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{t("golferProfile.playingStyle")}</p>
         <div className="flex flex-wrap gap-1.5">
           {golfer.vibes.map((v) => (
             <Badge key={v} tone={VIBE_TONE[v]}>
@@ -355,20 +377,24 @@ export function GolferProfilePage() {
       <div className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white p-4">
         <Users size={18} className="text-fairway-600" />
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Golf Circle</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t("golferProfile.circleTitle")}</p>
           <p className="font-bold text-slate-800">
-            {golfer.circleSize} golfer{golfer.circleSize === 1 ? "" : "s"} {golfer.circleSize === 0 ? "(just getting started)" : "would play with them again"}
+            {golfer.circleSize === 0
+              ? t("golferProfile.circleNone")
+              : golfer.circleSize === 1
+                ? t("golferProfile.circleOne")
+                : t("golferProfile.circleMany", { count: golfer.circleSize })}
           </p>
         </div>
       </div>
 
       {feedbackTags.length > 0 && (
         <div className="rounded-2xl border border-slate-100 bg-white p-4">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Common Feedback</p>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{t("golferProfile.commonFeedback")}</p>
           <div className="flex flex-wrap gap-1.5">
-            {feedbackTags.map((t) => (
-              <Badge key={t.label} tone="outline">
-                {t.label} ×{t.count}
+            {feedbackTags.map((tag) => (
+              <Badge key={tag.label} tone="outline">
+                {tag.label} ×{tag.count}
               </Badge>
             ))}
           </div>
@@ -378,41 +404,52 @@ export function GolferProfilePage() {
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-2xl border border-slate-100 bg-white p-4">
           <p className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
-            <Wallet size={12} /> Budget / round
+            <Wallet size={12} /> {t("golferProfile.budgetTitle")}
           </p>
           <p className="mt-1 font-bold text-slate-800">
             {formatBudgetRange(golfer.budgetMin, golfer.budgetMax, golfer.noBudgetPreference, t)}
           </p>
         </div>
         <div className="rounded-2xl border border-slate-100 bg-white p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Availability</p>
-          <p className="mt-1 text-sm font-semibold text-slate-800">{golfer.availability.length} time slots/week</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t("golferProfile.availabilityTitle")}</p>
+          <p className="mt-1 text-sm font-semibold text-slate-800">
+            {golfer.availability.length === 0
+              ? t("golferProfile.availabilityNone")
+              : golfer.availability.length === 1
+                ? t("golferProfile.availabilityOne")
+                : t("golferProfile.availabilityMany", { count: golfer.availability.length })}
+          </p>
         </div>
       </div>
 
-      <div>
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Free</p>
-        <div className="flex flex-wrap gap-1.5">
-          {golfer.availability.map((a) => (
-            <Badge key={a} tone="outline">
-              {a}
-            </Badge>
-          ))}
+      {/* Left out rather than shown as an empty heading for a new golfer. */}
+      {golfer.availability.length > 0 && (
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{t("golferProfile.freeTitle")}</p>
+          <div className="flex flex-wrap gap-1.5">
+            {golfer.availability.map((a) => (
+              <Badge key={a} tone="outline">
+                {availabilityLabel(a, t)}
+              </Badge>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
-      <div>
-        <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
-          <Flag size={12} /> Favorite courses
-        </p>
-        <div className="flex flex-wrap gap-1.5">
-          {golfer.favoriteCourses.map((c) => (
-            <Badge key={c} tone="outline">
-              {c}
-            </Badge>
-          ))}
+      {golfer.favoriteCourses.length > 0 && (
+        <div>
+          <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            <Flag size={12} /> {t("golferProfile.favoriteCourses")}
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {golfer.favoriteCourses.map((c) => (
+              <Badge key={c} tone="outline">
+                {c}
+              </Badge>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {compareOpen && <CompareModal other={golfer} onClose={() => setCompareOpen(false)} />}
 
@@ -421,19 +458,19 @@ export function GolferProfilePage() {
       )}
       {blockConfirmOpen && (
         <ConfirmDialog
-          title={`Block ${golfer.name}?`}
-          message="You won't see each other's profiles or Golf Calls, and they won't be able to message you. You can unblock anytime from this profile."
-          confirmLabel="Block"
+          title={t("golferProfile.blockConfirmTitle", { name: golfer.name })}
+          message={t("golferProfile.blockConfirmMessage")}
+          confirmLabel={t("golferProfile.blockConfirmLabel")}
           danger
           onConfirm={async () => {
             try {
               await blockUser(golfer.id);
             } catch {
-              showToast(`Couldn't block ${golfer.name}. Check your connection and try again.`, "warning");
+              showToast(t("golferProfile.blockFailed", { name: golfer.name }), "warning");
               return;
             }
             setBlockConfirmOpen(false);
-            showToast(`Blocked ${golfer.name}.`, "info");
+            showToast(t("golferProfile.blockedToast", { name: golfer.name }), "info");
           }}
           onCancel={() => setBlockConfirmOpen(false)}
         />

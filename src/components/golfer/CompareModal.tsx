@@ -33,7 +33,7 @@ export function CompareModal({ other, onClose }: { other: GolferProfile; onClose
   const { t } = useLocale();
 
   const compat = useMemo(() => computeCompatibility(currentUser, other), [currentUser, other]);
-  const reasons = useMemo(() => golferMatchReasons(compat), [compat]);
+  const reasons = useMemo(() => golferMatchReasons(compat, t), [compat, t]);
 
   const myCredibility = useMemo(() => computeCredibility(currentUser, reviewsAbout(currentUser.id)), [currentUser, reviewsAbout]);
   const theirCredibility = useMemo(() => computeCredibility(other, reviewsAbout(other.id)), [other, reviewsAbout]);

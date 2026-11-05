@@ -1,4 +1,4 @@
-import type { GolfVibe, PostCategory, SkillFilter, WalkOrCart } from "../types";
+import type { AvailabilitySlot, GolfVibe, PostCategory, SkillFilter, WalkOrCart } from "../types";
 import type { TranslationKey } from "../i18n/locales/en";
 
 // The stored/compared value for these three enums stays the fixed English
@@ -37,6 +37,21 @@ const POST_CATEGORY_KEYS: Record<PostCategory, TranslationKey> = {
   "Round Stories": "postCategory.roundStories",
   "Looking to Play": "postCategory.lookingToPlay",
 };
+
+const AVAILABILITY_KEYS: Record<AvailabilitySlot, TranslationKey> = {
+  "Weekday Mornings": "availability.weekdayMornings",
+  "Weekday Afternoons": "availability.weekdayAfternoons",
+  "Weekday Evenings": "availability.weekdayEvenings",
+  "Weekend Mornings": "availability.weekendMornings",
+  "Weekend Afternoons": "availability.weekendAfternoons",
+  "Weekend Evenings": "availability.weekendEvenings",
+};
+
+// Unknown stored values (older rows) show as stored rather than vanish.
+export function availabilityLabel(slot: string, t: TFn): string {
+  const key = AVAILABILITY_KEYS[slot as AvailabilitySlot];
+  return key ? t(key) : slot;
+}
 
 export function vibeLabel(vibe: GolfVibe, t: TFn): string {
   return t(VIBE_KEYS[vibe]);

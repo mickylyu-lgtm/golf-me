@@ -2,14 +2,29 @@ import { supabase } from "./supabase";
 
 // Typed event interface. Every call site passes a typed event name (+
 // optional properties, which are only ever logged in dev, never sent).
+//
+// Names say exactly what fired them:
+//   intro_started / intro_completed  the signed-out intro carousel (Next on
+//                                    the first screen / its last Next or Skip)
+//   onboarding_completed             Ready's "Start golfing", i.e. after the
+//                                    profile was set up (once per account)
+//   round_viewed / round_joined      every round page view / every
+//                                    successful join, NOT only the first:
+//                                    the client can't reliably know it's the
+//                                    golfer's first (the round list it holds
+//                                    isn't their full history). A true
+//                                    "first join" count would need the server
+//                                    to say so (e.g. from round_participants).
+// None of these leave the device (see SERVER_COUNTED_EVENTS).
 export type AnalyticsEvent =
-  | "onboarding_started"
+  | "intro_started"
+  | "intro_completed"
   | "onboarding_completed"
   | "location_selected"
   | "profile_basic_completed"
   | "first_find_clicked"
-  | "first_round_viewed"
-  | "first_round_joined"
+  | "round_viewed"
+  | "round_joined"
   | "first_round_hosted"
   | "first_round_prompt_shown"
   | "first_round_host_started"

@@ -33,7 +33,16 @@ export function haversineMiles(a: GeoPoint, b: GeoPoint): number {
   return EARTH_RADIUS_MILES * 2 * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
+// The number part of every distance label in the app ("{miles} mi away",
+// course lists, match reasons). Both ends of a golfer-to-golfer distance
+// are coarse (saved areas are rounded to roughly 1 km), so a decimal like
+// "0.3 mi" or "2.4 mi" would claim precision the data doesn't have: whole
+// miles only, and anything under a mile reads "<1". Never negative or NaN.
+export function roundedMiles(mi: number): string {
+  if (!Number.isFinite(mi) || mi < 1) return "<1";
+  return String(Math.round(mi));
+}
+
 export function formatDistanceMiles(mi: number): string {
-  if (mi < 1) return "<1 mi";
-  return `${mi.toFixed(0)} mi`;
+  return `${roundedMiles(mi)} mi`;
 }

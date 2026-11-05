@@ -12,6 +12,7 @@ import { TrustBadgeRow } from "./TrustBadges";
 import { CLICKABLE_CARD_CLASS } from "../ui/cardStyles";
 import type { CompatibilityBreakdown } from "../../lib/compatibility";
 import { golferDistanceMiles } from "../../lib/compatibility";
+import { roundedMiles } from "../../lib/geo";
 import { useData } from "../../context/DataContext";
 import { useCredibilityStats } from "../../lib/useCredibility";
 import { useLocale } from "../../i18n/LocaleContext";
@@ -41,7 +42,7 @@ export function GolferCard({ golfer, compatibility, onClick }: GolferCardProps) 
               {golfer.ageRange && <span className="whitespace-nowrap font-normal text-slate-400"> · {golfer.ageRange}</span>}
             </p>
             <p className="flex items-center gap-1 text-xs text-slate-500">
-              <MapPin size={12} /> {distance !== undefined && `${t("golfCallCard.miAway", { miles: distance.toFixed(1) })} · `}
+              <MapPin size={12} /> {distance !== undefined && `${t("golfCallCard.miAway", { miles: roundedMiles(distance) })} · `}
               {golfer.areaLabel}
             </p>
           </div>

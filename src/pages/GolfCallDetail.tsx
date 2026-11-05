@@ -53,6 +53,8 @@ import { isPastRound } from "../lib/golfCall";
 import { canReadRoundChat, roundChatAccess } from "../lib/roundChat";
 import { goBack } from "../lib/goBack";
 import { findTabPath } from "../lib/findTab";
+import { roundedMiles } from "../lib/geo";
+import { useJoinRound } from "../lib/useJoinRound";
 
 export function GolfCallDetail() {
   const { id } = useParams<{ id: string }>();
@@ -61,7 +63,6 @@ export function GolfCallDetail() {
     currentUser,
     getGolfCall,
     getGolfer,
-    joinGolfCall,
     cancelJoinRequest,
     leaveGolfCall,
     cancelGolfCall,
@@ -88,7 +89,6 @@ export function GolfCallDetail() {
   }, [location.state, location.pathname, navigate]);
   const { showToast } = useToast();
   const { t, locale } = useLocale();
-  const [joining, setJoining] = useState(false);
 
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
@@ -101,9 +101,12 @@ export function GolfCallDetail() {
   const [reportOpen, setReportOpen] = useState(false);
 
   const call = id ? getGolfCall(id) : undefined;
+  const { joining, join: joinRound } = useJoinRound(call);
 
+  // Every round-page view (it used to be named first_round_viewed, but it
+  // never knew whether this was the golfer's first). Dev log only.
   useEffect(() => {
-    if (call) track("first_round_viewed", { callId: call.id });
+    if (call) track("round_viewed", { callId: call.id });
   }, [call?.id]);
 
   // Best-effort, fire-and-forget: on-demand GolfCourseAPI enrichment for the
@@ -161,23 +164,9 @@ export function GolfCallDetail() {
   const isPast = isPastRound(call);
   const canJoin = !isHost && !isJoined && !isPending && !isFull && !isPast;
 
-  async function handleJoin() {
-    if (joining) return;
-    setJoining(true);
-    try {
-      await joinGolfCall(call!.id);
-      showToast(
-        call!.joinMode === "instant" ? t("golfCallDetail.joinedInstantToast", { date: formatDate(call!.dateISO, locale, t) }) : t("golfCallDetail.requestSentToast"),
-        "success",
-      );
-    } catch (err) {
-      // Real, atomic failure — e.g. someone else took the last spot first.
-      // Never silently no-ops; the golfer sees exactly why it didn't work.
-      showToast(err instanceof Error ? err.message : t("golfCallDetail.joinError"), "warning");
-    } finally {
-      setJoining(false);
-    }
-  }
+  // Shared with the round card (lib/useJoinRound): double-tap guard, toast,
+  // and round_joined only after the join succeeded.
+  const handleJoin = joinRound;
 
   return (
     <div className="flex flex-col gap-6 pb-6">
@@ -228,7 +217,7 @@ export function GolfCallDetail() {
         <h1 className="text-2xl font-extrabold text-slate-900">{call.course}</h1>
         <p className="flex items-center gap-1 text-sm text-slate-500">
           <MapPin size={13} />
-          {call.distanceMiles !== undefined && `${t("golfCallCard.miAway", { miles: call.distanceMiles.toFixed(0) })} · `}
+          {call.distanceMiles !== undefined && `${t("golfCallCard.miAway", { miles: roundedMiles(call.distanceMiles) })} · `}
           {call.areaLabel}
         </p>
       </div>
