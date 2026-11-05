@@ -44,6 +44,16 @@ export function isNativeAppleSignInAvailable(): boolean {
   return Capacitor.isNativePlatform() && Capacitor.getPlatform() === "ios" && Capacitor.isPluginAvailable(APPLE_PLUGIN);
 }
 
+// Sign in with Apple on the WEB (Supabase's Apple OAuth redirect). Off
+// unless the build sets VITE_APPLE_WEB_SIGN_IN=true, because it needs an
+// Apple Services ID, a signing key and the Supabase Apple provider's web
+// settings first (DEVELOPMENT_STATUS.md has the checklist). Showing it
+// before then would send people to an Apple error page. The iOS app's
+// native Apple sheet doesn't depend on this.
+export function isWebAppleSignInEnabled(): boolean {
+  return !Capacitor.isNativePlatform() && import.meta.env.VITE_APPLE_WEB_SIGN_IN === "true";
+}
+
 // True when the native app should show Sign in with Apple and Google.
 export function isNativeSocialSignInEnabled(): boolean {
   return isNativeAppleSignInAvailable() && (SOCIAL_SIGN_IN_ENABLED || isSocialSignInTestEnabled());

@@ -52,6 +52,7 @@ import { buildDemoCaddieAnalyses } from "../data/caddie";
 import { canUnsendMessage } from "../lib/unsend";
 import type { UnsendResult } from "../lib/unsend";
 import { withReaction } from "../lib/reactions";
+import { placeholderNameFromEmail } from "../lib/authInput";
 import type { MessageReaction, QuickReaction } from "../lib/reactions";
 
 export interface DraftSwingVideo {
@@ -360,7 +361,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const currentUser = useMemo(() => {
     if (auth.isDemo) return mockCurrentUser;
     if (auth.profile) return auth.profile;
-    if (auth.authUser) return placeholderGolferProfile(auth.authUser.id, auth.authUser.email?.split("@")[0] ?? "Golfer");
+    // Never a Hide My Email relay's random local part as a name.
+    if (auth.authUser) return placeholderGolferProfile(auth.authUser.id, placeholderNameFromEmail(auth.authUser.email));
     return mockCurrentUser;
   }, [auth.isDemo, auth.profile, auth.authUser, mockCurrentUser]);
 

@@ -15,8 +15,24 @@ import { supabase } from "./supabase";
 //                                    isn't their full history). A true
 //                                    "first join" count would need the server
 //                                    to say so (e.g. from round_participants).
+//   login_viewed                     the sign-in screen opened (/login, /signup)
+//   auth_apple_selected / auth_google_selected / auth_email_selected
+//                                    a sign-in method tapped
+//   code_requested                   a sign-in email was sent ({ resend })
+//   auth_completed                   a new session from a sign-in
+//                                    ({ provider }: email / google / apple)
+//   auth_failed                      a sign-in step failed ({ reason }: an
+//                                    error kind, never the raw error)
+// Never with an email address, code or token in the properties.
 // None of these leave the device (see SERVER_COUNTED_EVENTS).
 export type AnalyticsEvent =
+  | "login_viewed"
+  | "auth_apple_selected"
+  | "auth_google_selected"
+  | "auth_email_selected"
+  | "code_requested"
+  | "auth_completed"
+  | "auth_failed"
   | "intro_started"
   | "intro_completed"
   | "onboarding_completed"

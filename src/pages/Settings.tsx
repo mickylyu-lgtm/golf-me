@@ -18,6 +18,7 @@ import { ProfileSwitcher } from "../components/layout/ProfileSwitcher";
 import { AddToHomeScreenPrompt } from "../components/layout/AddToHomeScreenPrompt";
 import { clearOnboardingDraft } from "../lib/onboardingDraft";
 import { clearChatDrafts } from "../lib/chatDraft";
+import { noteIntentionalSignOut } from "../lib/authInput";
 import { goBack } from "../lib/goBack";
 import { discoverableSetting } from "../lib/discoverability";
 
@@ -208,6 +209,7 @@ export function Settings() {
       // The account (and its session) no longer exists server-side — clear
       // local state and land back on Welcome, same destination as a normal
       // logout, not a special "your account is gone" screen.
+      noteIntentionalSignOut();
       await supabase.auth.signOut();
       clearChatDrafts();
       setDeleteConfirmOpen(false);

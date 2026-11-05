@@ -6,10 +6,13 @@ import { App as CapacitorApp } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
 import { supabase } from "../lib/supabase";
 import { unregisterPushNotifications } from "../lib/push";
-import { authorizeWithApple, randomNonce } from "../lib/socialSignIn";
+import { authorizeWithApple, isNativeAppleSignInAvailable, randomNonce } from "../lib/socialSignIn";
 import { profileRowToGolferProfile } from "../lib/profile";
 import type { ProfileRow } from "../lib/profile";
-import { clearEmailDraft } from "../lib/authInput";
+import { clearEmailDraft, noteIntentionalSignOut, wasIntentionalSignOut } from "../lib/authInput";
+import { SESSION_EXPIRED } from "../lib/emailCodeFlow";
+import { track } from "../lib/analytics";
+import { RESTORE_RETRY_MS, browserStorage, hasStoredSession } from "../lib/authSession";
 import { clearChatDrafts } from "../lib/chatDraft";
 import { clearOnboardingDraft } from "../lib/onboardingDraft";
 import type { GolferProfile } from "../types";
@@ -105,6 +108,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // be read as "not onboarded" (that used to route a fully onboarded golfer
   // into /profile-setup, whose submit then overwrote their preferences).
   const [profileFetchFailed, setProfileFetchFailed] = useState(false);
+  // Offline cold start (lib/authSession): auth-js said "no session" only
+  // because the refresh couldn't reach Supabase, and the session is still
+  // stored. Holds the full-screen loader (with its Retry) instead of showing
+  // the sign-in screen, until the refresh succeeds or the session is gone.
+  const [restorePending, setRestorePending] = useState(false);
   const clearAuthError = useCallback(() => setAuthError(null), []);
   // The user id the profile state currently belongs to. Lets the auth
   // listener tell a genuine identity change (sign-in/sign-out/switch) apart
@@ -189,13 +197,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // a repeat SIGNED_IN on refocus — used to do that too, which unmounted
     // the whole router and threw away unsent drafts, attached videos, the
     // swing trimmer and the host wizard mid-use.
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       if (cancelled) return;
       const nextUser = session?.user ?? null;
       const nextId = nextUser?.id ?? null;
-      const sameUser = nextId !== null && nextId === currentUserIdRef.current;
+      const previousId = currentUserIdRef.current;
+      const sameUser = nextId !== null && nextId === previousId;
       currentUserIdRef.current = nextId;
       setSessionChecked(true);
+      if (nextUser || event === "SIGNED_OUT") setRestorePending(false);
+      else if (event === "INITIAL_SESSION" && hasStoredSession(browserStorage())) setRestorePending(true);
+      // Signed out without asking (refresh token revoked/expired, or signed
+      // out in another tab): the sign-in screen says so instead of just
+      // appearing. Log out and account deletion mark themselves first.
+      if (event === "SIGNED_OUT" && previousId && !wasIntentionalSignOut()) setAuthError(SESSION_EXPIRED);
+      if (event === "SIGNED_IN" && nextUser && !sameUser) {
+        const provider = nextUser.app_metadata?.provider;
+        track("auth_completed", { provider: typeof provider === "string" ? provider : "unknown" });
+      }
       // A failed sign-in link means nothing to someone who is signed in
       // (already, or by the code); don't let it resurface after a later sign-out.
       if (nextUser) setAuthError(null);
@@ -235,6 +254,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       listener.subscription.unsubscribe();
     };
   }, [fetchProfile]);
+
+  // While an offline cold start holds the loader: ask Supabase again when the
+  // network comes back, when the app shows again, and every RESTORE_RETRY_MS.
+  // getSession() retries the refresh; on success auth-js emits
+  // TOKEN_REFRESHED and the listener above takes over (user, profile). If
+  // Supabase rejected the refresh token meanwhile, the stored session is gone
+  // (SIGNED_OUT) and the sign-in screen shows.
+  useEffect(() => {
+    if (!restorePending) return;
+    let stopped = false;
+    let inFlight = false;
+    const attempt = async () => {
+      if (stopped || inFlight) return;
+      if (!hasStoredSession(browserStorage())) {
+        setRestorePending(false);
+        return;
+      }
+      inFlight = true;
+      try {
+        await supabase.auth.getSession();
+      } catch {
+        // Still unreachable: the next signal tries again.
+      } finally {
+        inFlight = false;
+      }
+      if (!stopped && !hasStoredSession(browserStorage())) setRestorePending(false);
+    };
+    const onVisible = () => document.visibilityState === "visible" && void attempt();
+    const onSignal = () => void attempt();
+    window.addEventListener("online", onSignal);
+    window.addEventListener("focus", onSignal);
+    document.addEventListener("visibilitychange", onVisible);
+    const native = Capacitor.isNativePlatform() ? CapacitorApp.addListener("appStateChange", ({ isActive }) => isActive && void attempt()) : null;
+    const timer = window.setInterval(onSignal, RESTORE_RETRY_MS);
+    return () => {
+      stopped = true;
+      window.removeEventListener("online", onSignal);
+      window.removeEventListener("focus", onSignal);
+      document.removeEventListener("visibilitychange", onVisible);
+      void native?.then((l) => l.remove());
+      window.clearInterval(timer);
+    };
+  }, [restorePending]);
 
   useEffect(() => {
     // Google refuses to sign in from inside an embedded WKWebView (the
@@ -301,7 +363,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // metadata and, if the profile has no name yet, to profiles.name (which
   // ProfileSetup pre-fills). Both best-effort: a failure there must not undo
   // a successful sign-in, and onboarding still asks for the name.
+  //
+  // On the web (behind VITE_APPLE_WEB_SIGN_IN, see lib/socialSignIn) it is
+  // Supabase's Apple OAuth redirect instead, exactly like Google's web flow:
+  // the page leaves for appleid.apple.com and comes back with the session
+  // in the URL. Cancelling there comes back as an error AuthContext passes
+  // on; the sign-in screen ignores it (classifyAuthNotice "canceled").
   const signInWithApple = useCallback(async () => {
+    if (!isNativeAppleSignInAvailable()) {
+      if (Capacitor.isNativePlatform()) throw new Error("GolfMe: Sign in with Apple needs the native plugin in this build.");
+      const { error } = await supabase.auth.signInWithOAuth({ provider: "apple", options: { redirectTo: window.location.origin } });
+      if (error) throw error;
+      return;
+    }
     const nonce = randomNonce();
     const apple = await authorizeWithApple(nonce);
     const { data, error } = await supabase.auth.signInWithIdToken({ provider: "apple", token: apple.identityToken, nonce });
@@ -366,6 +440,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // user_id, so this device's token has to be removed while the session
     // is still live, not after. A previous account must never keep
     // receiving pushes on a device it's signed out of.
+    noteIntentionalSignOut();
     await unregisterPushNotifications();
     await supabase.auth.signOut();
     // Unsent messages and a half-finished setup aren't stored per account:
@@ -407,7 +482,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const profile = useMemo(() => (profileRow ? profileRowToGolferProfile(profileRow) : null), [profileRow]);
 
   const value: AuthContextValue = {
-    authLoading: !sessionChecked || (Boolean(authUser) && !profileChecked),
+    // restorePending: offline cold start with a stored session (never for
+    // demo, which has no Supabase session to wait for).
+    authLoading: !sessionChecked || (Boolean(authUser) && !profileChecked) || (restorePending && !isDemo),
     profileLoadFailed: Boolean(authUser) && profileChecked && !profileRow && profileFetchFailed,
     isDemo,
     authUser,

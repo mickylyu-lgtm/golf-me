@@ -9,7 +9,7 @@
     "prerender": "node scripts/prerender-landing.mjs",
     "lint": "oxlint",
     "test:courses": "node --test supabase/functions/_shared/courseFilter.test.ts tests/coursePhotoMatch.test.ts tests/geoapifySearch.test.ts tests/minimalReveal.test.ts tests/frameScheduler.test.ts tests/courseMapCamera.test.ts tests/browseArea.test.ts",
-    "test:onboarding": "node --test tests/firstRoundPrompt.test.ts tests/shareLinks.test.ts tests/providerPhoto.test.ts tests/authInput.test.ts tests/onboardingIntent.test.ts",
+    "test:onboarding": "node --test tests/firstRoundPrompt.test.ts tests/shareLinks.test.ts tests/providerPhoto.test.ts tests/authInput.test.ts tests/emailCodeFlow.test.ts tests/authSession.test.tstests/onboardingIntent.test.ts",
     "test:caddie": "node --test tests/calloutLayout.test.ts tests/swingAssessment.test.ts tests/caddieFailure.test.ts tests/coachReplay.test.ts tests/caddieCues.test.ts tests/coachPaging.test.ts tests/caddieVerdicts.test.ts tests/caddieLanguage.test.ts tests/clubLabel.test.ts tests/caddieAutoTranslate.test.ts",
     "test:play": "node --test tests/roundSearchParams.test.ts tests/findTab.test.ts tests/discoverFilters.test.ts tests/navMatch.test.ts tests/distanceLabel.test.ts tests/autoMatchLadder.test.ts",
     "test:chat": "node --test tests/messageTime.test.ts tests/edgeSwipeBack.test.ts tests/chatSwipe.test.ts tests/chatKeyboard.test.ts tests/keyboardStore.test.ts tests/keyboardFields.test.ts tests/dmComposer.test.ts tests/dmFailedSend.test.ts tests/unsend.test.ts tests/reactions.test.ts tests/reactionWrites.test.ts tests/chatFollow.test.ts",
