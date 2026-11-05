@@ -1,7 +1,8 @@
 import type { GolfCall, GolferProfile } from "../types";
 import type { PlayingArea } from "./geo";
 import { haversineMiles } from "./geo";
-import { COURSES, areaForCourse, coordsForCourse } from "./courses";
+import { COURSES, areaForCourse, boundsForCourse, coordsForCourse } from "./courses";
+import type { CourseBounds } from "../../supabase/functions/_shared/courseBounds.ts";
 
 // Real distance from an effective (saved or temporary) playing area to a
 // Golf Call's course, when both have known coordinates — otherwise falls
@@ -30,12 +31,14 @@ export interface CourseResult {
   // course photo / satellite image as real ones.
   lat?: number;
   lng?: number;
+  /** The course's OpenStreetMap outline, so satellite views frame it. */
+  bounds?: CourseBounds | null;
 }
 
 function toResult(name: string, location?: PlayingArea): CourseResult {
   const coords = coordsForCourse(name);
   const distanceMiles = location?.coords && coords ? haversineMiles(location.coords, coords) : undefined;
-  return { name, area: areaForCourse(name), distanceMiles, lat: coords?.lat, lng: coords?.lng };
+  return { name, area: areaForCourse(name), distanceMiles, lat: coords?.lat, lng: coords?.lng, bounds: boundsForCourse(name) };
 }
 
 // The shared course-lookup surface used everywhere a golfer searches for or

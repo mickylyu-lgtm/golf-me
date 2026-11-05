@@ -9,6 +9,8 @@ import { Button } from "../components/ui/Button";
 import { CourseSearchStatus } from "../components/ui/CourseSearchStatus";
 import { LocationPicker } from "../components/location/LocationPicker";
 import { CourseDetailContent } from "../components/courses/CourseDetailContent";
+import { CourseThumb, type ThumbShown } from "../components/courses/CourseThumb";
+import { aerialCredit, courseTileSource } from "../lib/courseImagery";
 import { useNearbyCourses } from "../lib/useCourseSearch";
 import type { DisplayCourseResult } from "../lib/useCourseSearch";
 import { resolveTravelRadiusMiles } from "../lib/matchPreferences";
@@ -47,6 +49,44 @@ const SHEET_CLOSE_DRAG_PX = 90;
 
 const PIN_SVG =
   '<svg viewBox="0 0 24 32" width="100%" height="100%" aria-hidden="true"><path d="M12 0C5.4 0 0 5.3 0 11.9 0 20.8 12 32 12 32s12-11.2 12-20.1C24 5.3 18.6 0 12 0z" fill="currentColor" stroke="white" stroke-width="1.5"/><circle cx="12" cy="11.5" r="4.2" fill="white"/></svg>';
+
+// The map card's thumbnail, name and a credit line that names whatever the
+// thumbnail is really showing (after any load failure): "Google Maps" must
+// be visible wherever a Google photo is shown (the author is on the
+// full-size photo in the sheet).
+const THUMB_CREDIT: Partial<Record<ThumbShown, string>> = {
+  google: "Google Maps",
+  wikimedia: "Wikimedia Commons",
+  static: "© Mapbox © OpenStreetMap © Maxar",
+};
+
+function CardThumbAndName({ course }: { course: DisplayCourseResult }) {
+  const [shown, setShown] = useState<ThumbShown>("waiting");
+  const source = courseTileSource(course);
+  const credit = shown === "tiles" && source ? aerialCredit(source) : (THUMB_CREDIT[shown] ?? null);
+  return (
+    <>
+      <CourseThumb
+        name={course.name}
+        courseId={course.id}
+        imageUrl={matchSupportedTeeTimeCourse(course.name)?.heroImageUrl}
+        lat={course.lat}
+        lng={course.lng}
+        bounds={course.bounds}
+        country={course.country}
+        sizePx={56}
+        className="h-14 w-14"
+        onShown={setShown}
+      />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-base font-bold text-slate-900">{course.name}</span>
+        {course.area && <span className="block truncate text-sm text-slate-500">{course.area}</span>}
+        {/* Always one reserved line, so the card doesn't change height. */}
+        <span className="block h-3.5 truncate text-[10px] leading-[14px] text-slate-400">{credit}</span>
+      </span>
+    </>
+  );
+}
 
 function courseKey(c: DisplayCourseResult): string {
   return c.id ?? `${c.name}@${c.lat},${c.lng}`;
@@ -391,12 +431,9 @@ export function CourseMap() {
           <button
             onClick={() => openSheet(cardCourse)}
             tabIndex={cardShown ? 0 : -1}
-            className="pointer-events-auto flex w-full items-center gap-3 rounded-2xl bg-white p-4 text-left shadow-lg transition active:scale-[0.99]"
+            className="pointer-events-auto flex w-full items-center gap-3 rounded-2xl bg-white p-3 text-left shadow-lg transition active:scale-[0.99]"
           >
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-base font-bold text-slate-900">{cardCourse.name}</span>
-              {cardCourse.area && <span className="block truncate text-sm text-slate-500">{cardCourse.area}</span>}
-            </span>
+            <CardThumbAndName key={courseKey(cardCourse)} course={cardCourse} />
             <span className="shrink-0 text-sm font-semibold text-slate-500">
               {cardCourse.distanceMiles != null ? formatDistanceMiles(cardCourse.distanceMiles) : t("nearbyCourses.distanceUnknown")}
             </span>

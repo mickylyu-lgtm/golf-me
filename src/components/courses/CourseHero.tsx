@@ -100,7 +100,7 @@ export function CourseHero({ courseName, city, state, imageUrl, imageCredit, ima
 // Abstract, on-brand placeholder -- fairway green gradient sky, a soft
 // rolling hill, and a single flag silhouette. Intentionally not detailed
 // enough to be mistaken for a specific real course.
-function GenericCourseIllustration() {
+export function GenericCourseIllustration() {
   return (
     <svg viewBox="0 0 400 225" className="h-full w-full" role="img" aria-label="Golf course illustration" preserveAspectRatio="xMidYMax slice">
       <defs>

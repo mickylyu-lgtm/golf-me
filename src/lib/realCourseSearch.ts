@@ -19,6 +19,7 @@ export interface RealCourseResult {
   name: string;
   city?: string;
   region?: string;
+  country?: string;
   area?: string; // "city, region" for display, mirrors the mock's `area` field
   distanceMiles?: number;
   lat: number;
@@ -30,6 +31,8 @@ interface CourseRow {
   name: string;
   city: string | null;
   region: string | null;
+  /** Geoapify's country (e.g. "United States"); decides the US-only aerial source. */
+  country?: string | null;
   latitude: number;
   longitude: number;
 }
@@ -37,7 +40,17 @@ interface CourseRow {
 function rowToResult(row: CourseRow, location?: PlayingArea): RealCourseResult {
   const area = [row.city, row.region].filter(Boolean).join(", ") || undefined;
   const distanceMiles = location?.coords ? haversineMiles(location.coords, { lat: row.latitude, lng: row.longitude } satisfies GeoPoint) : undefined;
-  return { id: row.id, name: row.name, city: row.city ?? undefined, region: row.region ?? undefined, area, distanceMiles, lat: row.latitude, lng: row.longitude };
+  return {
+    id: row.id,
+    name: row.name,
+    city: row.city ?? undefined,
+    region: row.region ?? undefined,
+    country: row.country ?? undefined,
+    area,
+    distanceMiles,
+    lat: row.latitude,
+    lng: row.longitude,
+  };
 }
 
 function sortByDistance(results: RealCourseResult[]): RealCourseResult[] {
@@ -111,7 +124,7 @@ export function enrichRealCourse(courseId: string): void {
 }
 
 export async function getRealCourseById(id: string): Promise<RealCourseResult | null> {
-  const { data, error } = await supabase.from("courses").select("id, name, city, region, latitude, longitude").eq("id", id).maybeSingle();
+  const { data, error } = await supabase.from("courses").select("id, name, city, region, country, latitude, longitude").eq("id", id).maybeSingle();
   if (error) throw new CourseSearchError(error.message);
   return data ? rowToResult(data as CourseRow) : null;
 }

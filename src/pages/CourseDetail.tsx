@@ -40,7 +40,7 @@ export function CourseDetail() {
     }
     let cancelled = false;
     void Promise.resolve(
-      supabase.from("courses").select("id, name, city, region, latitude, longitude").eq("id", courseId).maybeSingle(),
+      supabase.from("courses").select("id, name, city, region, country, latitude, longitude").eq("id", courseId).maybeSingle(),
     ).then(({ data, error }) => {
       if (cancelled) return;
       if (error || !data) {
@@ -51,6 +51,7 @@ export function CourseDetail() {
         id: data.id,
         name: data.name,
         area: [data.city, data.region].filter(Boolean).join(", ") || undefined,
+        country: data.country ?? undefined,
         lat: data.latitude,
         lng: data.longitude,
       });

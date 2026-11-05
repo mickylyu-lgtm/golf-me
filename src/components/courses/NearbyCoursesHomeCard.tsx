@@ -87,7 +87,7 @@ export function NearbyCoursesHomeCard() {
           const supported = matchSupportedTeeTimeCourse(r.name);
           const content = (
             <>
-              <CourseThumb name={r.name} imageUrl={supported?.heroImageUrl} lat={r.lat} lng={r.lng} className="h-12 w-12" />
+              <CourseThumb name={r.name} courseId={r.id} imageUrl={supported?.heroImageUrl} lat={r.lat} lng={r.lng} bounds={r.bounds} country={r.country} sizePx={48} className="h-12 w-12" />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-semibold text-slate-800">{r.name}</span>
                 {r.area && <span className="block truncate text-xs text-slate-500">{r.area}</span>}

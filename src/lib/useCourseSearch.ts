@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import type { PlayingArea } from "./geo";
+import type { CourseBounds } from "../../supabase/functions/_shared/courseBounds.ts";
 import { getNearbyCourses as getNearbyCoursesMock, searchCourses as searchCoursesMock } from "./courseSearch";
 import { getNearbyRealCourses, searchRealCourses, CourseSearchError } from "./realCourseSearch";
 
@@ -14,6 +15,12 @@ export interface DisplayCourseResult {
   distanceMiles?: number;
   lat?: number;
   lng?: number;
+  /** The course's OSM outline when already known (demo fixtures). Real
+   * courses get theirs from course-photos. */
+  bounds?: CourseBounds | null;
+  /** The course's country when known (real courses), for the US-only
+   * aerial source; demo courses fall back to a coordinate test. */
+  country?: string;
 }
 
 interface CourseSearchState {

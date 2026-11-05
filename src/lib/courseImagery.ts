@@ -14,7 +14,38 @@
 // rows instead. Images are only ever hotlinked, never cached or stored by
 // GolfMe.
 
+import { OSM_CREDIT, maptilerSource, tileSourceFor, type TileSource } from "./satelliteTiles";
+
 const TOKEN = (import.meta.env.VITE_MAPBOX_TOKEN as string | undefined)?.trim() || undefined;
+
+// 2026-11-05 (option A, $0): aerial tiles for thumbnails, still views and
+// the drone overview come from USGS NAIP for US courses (no key). MapTiler
+// is optional (option C): with VITE_MAPTILER_KEY set it's used everywhere.
+// A publishable key (it appears in tile URLs by design), restricted to
+// golfme.app + localhost in the MapTiler dashboard. Outside the US without
+// the key: thumbnails use the Mapbox image above (when its
+// token is set) or the pin.
+const MAPTILER_KEY = (import.meta.env.VITE_MAPTILER_KEY as string | undefined)?.trim() || undefined;
+
+export function maptilerKey(): string | undefined {
+  return MAPTILER_KEY;
+}
+
+/** The course's aerial imagery source (see lib/satelliteTiles.ts): MapTiler
+ * when its key is set, else USGS NAIP for US courses, else null. */
+// One object for the app's lifetime: views depend on the source's identity
+// (a new object per render would rebuild the overview map every render).
+const MAPTILER_SOURCE = MAPTILER_KEY ? maptilerSource(MAPTILER_KEY) : null;
+
+export function courseTileSource(course: { lat?: number; lng?: number; country?: string | null }): TileSource | null {
+  return MAPTILER_SOURCE ?? tileSourceFor(course);
+}
+
+/** Credit line for aerial imagery (+ OSM, for the course outlines that
+ * frame it and MapTiler's own requirement). */
+export function aerialCredit(source: TileSource): string {
+  return `${source.credit} · ${OSM_CREDIT}`;
+}
 
 // ~1.5 km across at the hero's width: a typical 18-hole course plus a
 // little of its surroundings.
@@ -23,7 +54,14 @@ const HERO_ZOOM = 15;
 // "a golf course" rather than a patch of fairway.
 const THUMB_ZOOM = 14;
 
+/** Some satellite source is configured (MapTiler tiles or Mapbox). */
+// Aerial imagery can always show now (USGS needs no key), so lists always
+// carry its credit line.
 export function satelliteImageryEnabled(): boolean {
+  return true;
+}
+
+export function mapboxEnabled(): boolean {
   return Boolean(TOKEN);
 }
 

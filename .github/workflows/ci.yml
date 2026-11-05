@@ -50,7 +50,7 @@ jobs:
       # Every test file, not just the ones a test:* script lists, so a new
       # test can't be skipped by forgetting to add it to package.json.
       - name: Unit tests
-        run: node --test tests/*.test.ts supabase/functions/_shared/*.test.ts
+        run: node --test tests/*.test.ts supabase/functions/_shared/*.test.ts supabase/functions/*/handler.test.ts
 
       - name: Build
         run: npm run build
