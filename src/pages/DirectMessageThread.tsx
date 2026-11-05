@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { AlertCircle, ArrowLeft, Eraser, MoreHorizontal, Reply, ShieldAlert, ShieldCheck, ShieldOff, Trash2, X } from "lucide-react";
 import { useData } from "../context/DataContext";
@@ -23,7 +23,10 @@ import { useSwipeToReply } from "../lib/useSwipeToReply";
 import { useWebKeyboardInset } from "../lib/useWebKeyboardInset";
 import { useMessageLongPress } from "../lib/useMessageLongPress";
 import { MessageActionsMenu } from "../components/chat/MessageActionsMenu";
+import { ReactionPill } from "../components/chat/ReactionPill";
 import { canUnsendMessage, unsendRemainingMs } from "../lib/unsend";
+import { messageActions } from "../lib/messageLongPress";
+import { QUICK_REACTIONS, canReactToMessage, groupReactionsByMessage, myReaction, nextReaction, summarizeReactions, type QuickReaction } from "../lib/reactions";
 import { copyText } from "../lib/share";
 import { goBack } from "../lib/goBack";
 import { type FailedDm, sendDmWithRecovery } from "../lib/dmFailedSend";
@@ -46,6 +49,9 @@ export function DirectMessageThread() {
     canReplyToMessages,
     canUnsendMessages,
     unsendDirectMessage,
+    canReactToMessages,
+    messageReactions,
+    setMessageReaction,
     markConversationRead,
     clearChatHistory,
     deleteConversation,
@@ -150,18 +156,22 @@ export function DirectMessageThread() {
   // Bubbles carry data-reply-bubble only while this is true, so with
   // replying off a right swipe on a bubble does nothing.
   const replyEnabled = Boolean(other) && eligible && !blocked && canReplyToMessages;
-  useSwipeToReply(listRef, replyEnabled, (messageId) => {
+  // Also the menu's Reply (a click, i.e. a user gesture, same as the swipe's
+  // pointerup), so the focus/keyboard path is identical.
+  const startReply = (messageId: string) => {
     setReplyToId(messageId);
     const textarea = boxRef.current?.querySelector("textarea");
     if (textarea && document.activeElement !== textarea) textarea.focus({ preventScroll: true });
-  });
-  // Unsend (lib/unsend.ts): long-press (touch) / right-click (mouse) one of
-  // MY bubbles while it's within 5 minutes of sending opens a small menu
-  // (useMessageLongPress, MessageActionsMenu). Only those bubbles carry
-  // data-actions-bubble, so the gesture is simply absent elsewhere. nowMs
-  // ticks once at the next window expiry so a lapsed message loses the
-  // attribute (and gets its normal text selection back) without a reload;
-  // the server still decides (it answers "expired" if this clock is slow).
+  };
+  useSwipeToReply(listRef, replyEnabled, startReply);
+  // Hold (touch) / right-click (mouse) ANY message bubble that isn't unsent
+  // opens the actions menu (useMessageLongPress, MessageActionsMenu): quick
+  // reactions, Reply, Copy, and Unsend for MY message within 5 minutes
+  // (lib/unsend.ts). nowMs ticks once at the next window expiry so a lapsed
+  // message stops offering Unsend without a reload; the server still
+  // decides (it answers "expired" if this clock is slow).
+  const reactEnabled = Boolean(other) && eligible && !blocked && canReactToMessages;
+  const reactionsByMessage = useMemo(() => groupReactionsByMessage(messageReactions), [messageReactions]);
   const [actionsFor, setActionsFor] = useState<{ id: string; bubble: HTMLElement } | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const unsendEnabled = Boolean(other) && canUnsendMessages;
@@ -176,10 +186,11 @@ export function DirectMessageThread() {
     const t = window.setTimeout(() => setNowMs(Date.now()), nextUnsendExpiry + 50);
     return () => window.clearTimeout(t);
   }, [nextUnsendExpiry]);
-  useMessageLongPress(listRef, unsendEnabled, (messageId, bubble) => {
-    // Re-checked with a fresh clock at the moment of the press.
+  useMessageLongPress(listRef, Boolean(other), (messageId, bubble) => {
     const m = messages.find((x) => x.id === messageId);
-    if (!m || !canUnsendMessage(m, currentUser.id, Date.now())) return;
+    if (!m || m.unsentAt) return;
+    // Unsend is re-checked with a fresh clock at the moment of the press.
+    setNowMs(Date.now());
     setActionsFor({ id: messageId, bubble });
   });
   const closeActions = useCallback(() => setActionsFor(null), []);
@@ -372,6 +383,9 @@ export function DirectMessageThread() {
 
   const messagesById = new Map(messages.map((m) => [m.id, m]));
   const replyTarget = replyToId ? messagesById.get(replyToId) : undefined;
+  // The menu's message; gone (e.g. unsent from the other phone) = no menu.
+  const actionsCandidate = actionsFor ? messagesById.get(actionsFor.id) : undefined;
+  const actionsMessage = actionsCandidate && !actionsCandidate.unsentAt ? actionsCandidate : undefined;
 
   function senderLabel(senderId: string) {
     return senderId === currentUser.id ? t("chat.you") : (other?.name ?? "");
@@ -401,6 +415,13 @@ export function DirectMessageThread() {
       setNowMs(Date.now());
       showToast(t("chat.unsendExpired"), "info");
     } else if (result === "failed") showToast(t("chat.unsendFailed"), "warning");
+  }
+
+  // Tap an emoji in the row: set / replace; the same one again removes it.
+  // Tap my reaction pill: remove. Optimistic (the context rolls back).
+  async function handleReact(messageId: string, emoji: QuickReaction | null) {
+    setActionsFor(null);
+    if (!(await setMessageReaction(messageId, emoji))) showToast(t("chat.reactionFailed"), "warning");
   }
 
   async function handleCopy(messageId: string) {
@@ -612,7 +633,9 @@ export function DirectMessageThread() {
                   </div>
                 );
               }
-              const unsendable = unsendableIds.has(m.id);
+              const messageReactionRows = canReactToMessages && canReactToMessage(m) ? reactionsByMessage.get(m.id) : undefined;
+              const reactionSummary = messageReactionRows ? summarizeReactions(messageReactionRows, m.id, currentUser.id) : [];
+              const mineReacted = reactionSummary.some((s) => s.mine);
               return (
                 // data-reply-row/-arrow/-bubble: the DOM contract
                 // useSwipeToReply drives (only the bubble moves).
@@ -639,14 +662,15 @@ export function DirectMessageThread() {
                   </button>
                   <div
                     data-reply-bubble={replyEnabled ? m.id : undefined}
-                    // Long-press / right-click -> Unsend (useMessageLongPress).
-                    // No iOS selection callout on these (Copy is in the menu).
-                    data-actions-bubble={unsendable ? m.id : undefined}
-                    className={`max-w-[75%] rounded-2xl px-3.5 py-2 text-sm transition-shadow duration-300 [overflow-wrap:anywhere] ${
+                    // Hold / right-click -> actions menu (useMessageLongPress).
+                    // On touch screens no iOS selection callout / text
+                    // selection (Copy is in the menu); a mouse still selects.
+                    data-actions-bubble={m.id}
+                    className={`relative max-w-[75%] rounded-2xl px-3.5 py-2 text-sm transition-shadow duration-300 [overflow-wrap:anywhere] pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none] ${
                       isMe ? "rounded-br-sm bg-fairway-600 text-white" : "rounded-bl-sm bg-slate-100 text-slate-800"
                     } ${highlightId === m.id ? "ring-2 ring-amber-300 ring-offset-2" : ""} ${
-                      unsendable ? "select-none [-webkit-touch-callout:none]" : ""
-                    } ${actionsFor?.id === m.id ? "ring-2 ring-fairway-300 ring-offset-2" : ""}`}
+                      actionsFor?.id === m.id ? "ring-2 ring-fairway-300 ring-offset-2" : ""
+                    } ${reactionSummary.length > 0 ? "mb-4" : ""}`}
                   >
                     {/* Quote of the replied-to message, taken only from
                         messages this reader already has loaded (RLS-visible
@@ -674,6 +698,13 @@ export function DirectMessageThread() {
                         </div>
                       ))}
                     {m.text}
+                    <ReactionPill
+                      summary={reactionSummary}
+                      alignRight={isMe}
+                      label={t("chat.reactionsLabel", { list: reactionSummary.map((s) => (s.count > 1 ? `${s.emoji} ${s.count}` : s.emoji)).join(" ") })}
+                      removeLabel={t("chat.removeReaction")}
+                      onRemoveMine={mineReacted && reactEnabled ? () => handleReact(m.id, null) : null}
+                    />
                   </div>
                   {sent && (
                     <time
@@ -789,13 +820,33 @@ export function DirectMessageThread() {
         </div>
       </div>
 
-      {actionsFor && (
+      {actionsMessage && actionsFor && (
         <MessageActionsMenu
           bubble={actionsFor.bubble}
-          alignRight
-          labels={{ menu: t("chat.messageActions"), unsend: t("chat.unsend"), copy: t("chat.copy") }}
-          onUnsend={() => handleUnsend(actionsFor.id)}
-          onCopy={() => handleCopy(actionsFor.id)}
+          alignRight={actionsMessage.senderId === currentUser.id}
+          reactions={
+            reactEnabled && canReactToMessage(actionsMessage)
+              ? {
+                  emojis: QUICK_REACTIONS,
+                  mine: myReaction(messageReactions, actionsMessage.id, currentUser.id),
+                  onPick: (emoji) => handleReact(actionsMessage.id, nextReaction(myReaction(messageReactions, actionsMessage.id, currentUser.id), emoji)),
+                }
+              : null
+          }
+          actions={messageActions({ canReply: replyEnabled, canUnsend: unsendableIds.has(actionsMessage.id) })}
+          labels={{
+            menu: t("chat.messageActions"),
+            reply: t("chat.reply"),
+            unsend: t("chat.unsend"),
+            copy: t("chat.copy"),
+            reactWith: (emoji) => t("chat.reactWith", { emoji }),
+          }}
+          onReply={() => {
+            setActionsFor(null);
+            startReply(actionsMessage.id);
+          }}
+          onUnsend={() => handleUnsend(actionsMessage.id)}
+          onCopy={() => handleCopy(actionsMessage.id)}
           onClose={closeActions}
         />
       )}

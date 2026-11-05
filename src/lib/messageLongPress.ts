@@ -1,4 +1,5 @@
-// Long-press on a DM bubble (touch / pen) opens its actions menu (Unsend).
+// Long-press on a DM bubble (touch / pen) opens its actions menu
+// (reactions, Reply, Copy, Unsend).
 // Pure rules, no React/DOM imports, so tests/unsend.test.ts runs them under
 // plain node. The hook is lib/useMessageLongPress.ts.
 //
@@ -16,6 +17,31 @@ export const LONG_PRESS_MS = 450;
 
 export function longPressCancelledByMove(dx: number, dy: number): boolean {
   return Math.abs(dx) >= AXIS_SLOP_PX || Math.abs(dy) >= AXIS_SLOP_PX;
+}
+
+// A pointercancel / touchcancel that arrives while the finger is still
+// where it went down is NOT a scroll or a swipe taking over (those move
+// past the slop first, and a real scroll also fires `scroll`, which always
+// cancels). On iOS (WKWebView and Safari) it's typically WebKit's own
+// long-press recogniser (text selection, link preview, callout) claiming
+// the touch, i.e. the user IS holding: the press keeps running. Moved past
+// the slop: a gesture took over, the press is cancelled.
+export function longPressSurvivesCancel(dx: number, dy: number): boolean {
+  return !longPressCancelledByMove(dx, dy);
+}
+
+// What the hold / right-click menu offers for one bubble, in display order.
+// Reactions and Reply only where the thread allows them (not blocked,
+// feature available); Copy always; Unsend only for my own message inside
+// the window (lib/unsend.ts canUnsendMessage decides `canUnsend`).
+export type MessageAction = "reply" | "copy" | "unsend";
+
+export function messageActions(input: { canReply: boolean; canUnsend: boolean }): MessageAction[] {
+  const actions: MessageAction[] = [];
+  if (input.canReply) actions.push("reply");
+  actions.push("copy");
+  if (input.canUnsend) actions.push("unsend");
+  return actions;
 }
 
 // Where the menu goes: above the bubble when there's room, else below;

@@ -51,6 +51,8 @@ import type { CreateAnalysisInput } from "./RealCaddieContext";
 import { buildDemoCaddieAnalyses } from "../data/caddie";
 import { canUnsendMessage } from "../lib/unsend";
 import type { UnsendResult } from "../lib/unsend";
+import { withReaction } from "../lib/reactions";
+import type { MessageReaction, QuickReaction } from "../lib/reactions";
 
 export interface DraftSwingVideo {
   file: File;
@@ -243,6 +245,12 @@ interface DataContextValue {
   // accounts once the unsend migration is applied.
   canUnsendMessages: boolean;
   unsendDirectMessage: (messageId: string) => Promise<UnsendResult>;
+  // Quick reactions (lib/reactions.ts): always in demo (page-local, not
+  // persisted); for real accounts once public.message_reactions exists.
+  canReactToMessages: boolean;
+  messageReactions: MessageReaction[];
+  // Set (or with null remove) my reaction; false = it failed and was rolled back.
+  setMessageReaction: (messageId: string, emoji: QuickReaction | null) => Promise<boolean>;
   markConversationRead: (golferId: string) => Promise<void>;
   clearChatHistory: (golferId: string) => Promise<void>;
   deleteConversation: (golferId: string) => Promise<void>;
@@ -1157,9 +1165,28 @@ export function DataProvider({ children }: { children: ReactNode }) {
         ...prev,
         directMessages: prev.directMessages.map((m) => (m.id === messageId ? { ...m, text: "", unsentAt } : m)),
       }));
+      setDemoReactions((prev) => prev.filter((r) => r.messageId !== messageId));
       return "unsent";
     },
     [auth.isDemo, realSocial, data.directMessages, currentUser.id],
+  );
+
+  // Demo reactions: page-local state, like demoDmCleared (resets on
+  // reload); same rules as the database (not on an unsent message, not
+  // across a block).
+  const [demoReactions, setDemoReactions] = useState<MessageReaction[]>([]);
+  const canReactToMessages = auth.isDemo || realSocial.reactionsSupported;
+  const messageReactions = auth.isDemo ? demoReactions : realSocial.messageReactions;
+  const setMessageReaction = useCallback(
+    async (messageId: string, emoji: QuickReaction | null): Promise<boolean> => {
+      if (!auth.isDemo) return realSocial.setMessageReaction(messageId, emoji);
+      const target = data.directMessages.find((m) => m.id === messageId);
+      if (!target || target.unsentAt) return false;
+      if (emoji && !canMessage(otherParticipant(target.conversationId, currentUser.id))) return false;
+      setDemoReactions((prev) => withReaction(prev, messageId, currentUser.id, emoji));
+      return true;
+    },
+    [auth.isDemo, realSocial, data.directMessages, currentUser.id, canMessage],
   );
 
   // Demo accounts have no real second person who could be typing -- always
@@ -1796,6 +1823,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
       canReplyToMessages,
       canUnsendMessages,
       unsendDirectMessage,
+      canReactToMessages,
+      messageReactions,
+      setMessageReaction,
       markConversationRead,
       clearChatHistory,
       deleteConversation,
@@ -1894,6 +1924,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
       canReplyToMessages,
       canUnsendMessages,
       unsendDirectMessage,
+      canReactToMessages,
+      messageReactions,
+      setMessageReaction,
       markConversationRead,
       clearChatHistory,
       deleteConversation,

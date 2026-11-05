@@ -14,6 +14,8 @@ import type { ReportTarget } from "../lib/reportRow";
 import { reconcilePendingDms } from "../lib/dmPending";
 import { classifyUnsendError } from "../lib/unsend";
 import type { UnsendResult } from "../lib/unsend";
+import { isMissingReactionsTableError, myReaction, overlayPendingReactions, reactionRowsToReactions, withReaction } from "../lib/reactions";
+import type { MessageReaction, QuickReaction } from "../lib/reactions";
 
 interface ConversationParticipantRow {
   conversation_id: string;
@@ -119,6 +121,14 @@ interface RealSocialContextValue {
   // until the unsend migration is applied and a row has proved it.
   unsendSupported: boolean;
   unsendDirectMessage: (messageId: string) => Promise<UnsendResult>;
+  // Quick reactions (lib/reactions.ts, public.message_reactions). False
+  // until a fetch of the table has succeeded, so before the migration is
+  // applied the reaction row and pills are simply not shown.
+  reactionsSupported: boolean;
+  messageReactions: MessageReaction[];
+  // Sets (or with null removes) my reaction. Optimistic; false = the write
+  // failed and the change was rolled back.
+  setMessageReaction: (messageId: string, emoji: QuickReaction | null) => Promise<boolean>;
   markConversationRead: (otherId: string) => Promise<void>;
   clearChatHistory: (otherId: string) => Promise<void>;
   deleteConversation: (otherId: string) => Promise<void>;
@@ -229,6 +239,9 @@ const MESSAGE_OVERLAP_MS = 2 * 60 * 1000;
 // PostgREST's row cap and silently dropped the NEWEST messages instead).
 const MESSAGE_WINDOW = 1000;
 const NOTIFICATION_WINDOW = 200;
+// Reactions in my conversations, newest first. 1:1 DMs: at most two per
+// message, so this comfortably covers the message window.
+const REACTION_WINDOW = 2000;
 
 export function RealSocialProvider({ children }: { children: ReactNode }) {
   const { isDemo, authUser } = useAuth();
@@ -275,6 +288,62 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
   // under the previous account can't write its results into state.
   const generationRef = useRef(0);
   const selfId = authUser?.id;
+
+  // Quick reactions. Loaded separately from messages (and never able to
+  // fail the message load): "unknown" until the first fetch, "no" when the
+  // table doesn't exist yet (migration not applied; then only retried on
+  // full refetches), "yes" once a fetch succeeded.
+  const [reactions, setReactions] = useState<MessageReaction[]>([]);
+  const [reactionsSupport, setReactionsSupport] = useState<"unknown" | "yes" | "no">("unknown");
+  const reactionsSupportRef = useRef<"unknown" | "yes" | "no">("unknown");
+  const reactionsRef = useRef<MessageReaction[]>([]);
+  // The newest fetch wins; an older one that resolves later is dropped.
+  const reactionsFetchSeqRef = useRef(0);
+  // My writes still in flight, by message id: overlaid on fetched rows so a
+  // fetch that started before the write can't flip the pill back.
+  const pendingReactionsRef = useRef<Map<string, { emoji: QuickReaction | null; seq: number }>>(new Map());
+  const reactionWriteSeqRef = useRef(0);
+  const conversationIdsRef = useRef<string[]>([]);
+
+  const applyReactions = useCallback((next: MessageReaction[]) => {
+    const kept = keepIfSame(reactionsRef.current, next);
+    reactionsRef.current = kept;
+    setReactions(kept);
+  }, []);
+
+  const fetchReactions = useCallback(
+    async (conversationIds: string[]) => {
+      if (!selfId) return;
+      const generation = generationRef.current;
+      const seq = ++reactionsFetchSeqRef.current;
+      if (conversationIds.length === 0) {
+        applyReactions([]);
+        return;
+      }
+      const { data, error } = await supabase
+        .from("message_reactions")
+        .select("message_id, user_id, emoji")
+        .in("conversation_id", conversationIds)
+        .order("created_at", { ascending: false })
+        .limit(REACTION_WINDOW);
+      if (generationRef.current !== generation || seq !== reactionsFetchSeqRef.current) return;
+      if (error) {
+        if (isMissingReactionsTableError(error)) {
+          reactionsSupportRef.current = "no";
+          setReactionsSupport("no");
+        } else {
+          // Keep what's shown; the next refetch tries again.
+          console.error("GolfMe: failed to load message reactions.", error);
+        }
+        return;
+      }
+      reactionsSupportRef.current = "yes";
+      setReactionsSupport("yes");
+      const pending = new Map([...pendingReactionsRef.current].map(([messageId, p]) => [messageId, p.emoji]));
+      applyReactions(overlayPendingReactions(reactionRowsToReactions(data ?? []), pending, selfId));
+    },
+    [selfId, applyReactions],
+  );
 
   // Typing indicator -- ephemeral, in-memory, never written to Postgres.
   // conversation_id set of who's currently "typing" per the last broadcast
@@ -395,6 +464,10 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
         setMessages(nextMessages);
         convKeyRef.current = convKey;
         clearedKeyRef.current = clearedKey;
+        // Reactions ride along with every successful refetch (poll, resume,
+        // realtime message event) but never block or fail it.
+        conversationIdsRef.current = conversationIds;
+        if (reactionsSupportRef.current !== "no" || full) void fetchReactions(conversationIds);
 
         // Profiles: the directory (when just fetched) replaces the cache
         // wholesale, which also drops deleted accounts; otherwise only ids
@@ -443,7 +516,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
         }
       }
     },
-    [selfId],
+    [selfId, fetchReactions],
   );
 
   const retry = useCallback(async () => {
@@ -470,6 +543,12 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     // block this account's first fetch.
     fetchingRef.current = false;
     pendingRefetchRef.current = false;
+    reactionsRef.current = [];
+    reactionsSupportRef.current = "unknown";
+    pendingReactionsRef.current = new Map();
+    conversationIdsRef.current = [];
+    setReactions([]);
+    setReactionsSupport("unknown");
 
     if (isDemo || !selfId) {
       setParticipants([]);
@@ -605,6 +684,29 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       setTypingConversationIds(new Set());
     };
   }, [isDemo, selfId, refetch]);
+
+  // Reactions realtime, on its OWN channel and only once the table is known
+  // to exist: a postgres_changes subscription naming a missing table makes
+  // the server refuse the whole channel join, which on the shared
+  // "social-realtime" channel would also take down message delivery.
+  // RLS filters INSERT/UPDATE per subscriber; a DELETE carries only the
+  // row's random id. Any event: reload the reactions (cheap, one query).
+  const reactionsLive = !isDemo && Boolean(selfId) && reactionsSupport === "yes";
+  useEffect(() => {
+    if (!reactionsLive) return;
+    const channel = supabase
+      .channel("social-reactions")
+      .on("postgres_changes", { event: "*", schema: "public", table: "message_reactions" }, () => {
+        void fetchReactions(conversationIdsRef.current);
+      })
+      .subscribe((status) => {
+        // (Re)connected: catch up on anything missed while it was down.
+        if (status === "SUBSCRIBED") void fetchReactions(conversationIdsRef.current);
+      });
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [reactionsLive, fetchReactions]);
 
   const profilesById = useMemo(() => {
     const map = new Map<string, GolferProfile>();
@@ -843,9 +945,47 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       const next = messagesRef.current.map((m) => (m.id === messageId ? { ...m, text: "", unsent_at: m.unsent_at ?? unsentAt } : m));
       messagesRef.current = next;
       setMessages(next);
+      // The database dropped its reactions in the same transaction.
+      applyReactions(reactionsRef.current.filter((r) => r.messageId !== messageId));
       return "unsent";
     },
-    [selfId],
+    [selfId, applyReactions],
+  );
+
+  // Optimistic: the pill changes now; a refused write puts my previous
+  // reaction back (unless a newer tap on the same message superseded it)
+  // and returns false so the page can say so. Then a fetch reconciles with
+  // whatever the server actually has.
+  const setMessageReaction = useCallback(
+    async (messageId: string, emoji: QuickReaction | null): Promise<boolean> => {
+      if (!selfId || reactionsSupportRef.current !== "yes") return false;
+      const message = messagesRef.current.find((m) => m.id === messageId);
+      if (!message || message.unsent_at) return false;
+      const before = myReaction(reactionsRef.current, messageId, selfId);
+      const seq = ++reactionWriteSeqRef.current;
+      pendingReactionsRef.current.set(messageId, { emoji, seq });
+      applyReactions(withReaction(reactionsRef.current, messageId, selfId, emoji));
+
+      const { error } = emoji
+        ? await supabase
+            .from("message_reactions")
+            .upsert({ message_id: messageId, user_id: selfId, emoji }, { onConflict: "message_id,user_id" })
+        : await supabase.from("message_reactions").delete().eq("message_id", messageId).eq("user_id", selfId);
+
+      const latest = pendingReactionsRef.current.get(messageId)?.seq === seq;
+      if (latest) pendingReactionsRef.current.delete(messageId);
+      if (error) {
+        console.error("GolfMe: failed to update message reaction.", error);
+        if (isMissingReactionsTableError(error)) {
+          reactionsSupportRef.current = "no";
+          setReactionsSupport("no");
+        }
+        if (latest) applyReactions(withReaction(reactionsRef.current, messageId, selfId, before));
+      }
+      void fetchReactions(conversationIdsRef.current);
+      return !error;
+    },
+    [selfId, applyReactions, fetchReactions],
   );
 
   const markConversationRead = useCallback(
@@ -1034,6 +1174,9 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       repliesSupported,
       unsendSupported,
       unsendDirectMessage,
+      reactionsSupported: reactionsLive,
+      messageReactions: reactions,
+      setMessageReaction,
       markConversationRead,
       clearChatHistory,
       deleteConversation,
@@ -1070,6 +1213,9 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       repliesSupported,
       unsendSupported,
       unsendDirectMessage,
+      reactionsLive,
+      reactions,
+      setMessageReaction,
       markConversationRead,
       clearChatHistory,
       deleteConversation,

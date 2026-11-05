@@ -6,6 +6,13 @@ Last updated: 2026-11-04 (**"New to GolfMe" badge** — sprout icon instead of t
 
 Note: Phases between Phase 20/21 (see below) and Phase 22 span roughly 31 commits (2026-09-16 through 2026-09-21) that also never got a numbered write-up as they landed — Phase 22 below reconstructs them from `git log`/code review (that session's own commit messages are unusually detailed, so this is a faithful summary, not a guess) rather than live session narration. Older gap, still not backfilled: Phases between Phase 6 and Phase 20 (chat keyboard/Capacitor Keyboard native linking, floating swipeable BottomNav + auto-collapse + centering fixes, tee-time booking fallback hero image, and everything else through 2026-09-15) — see `git log` for that range (commits from "Prefer GolfCourseAPI v1.1 coordinates..." through "Floating pill bottom nav with press-and-slide tab selection, haptics, Caddie unify").
 
+## DM hold menu + quick reactions — 2026-11-05 (client LIVE 2026-11-05 on Micky's "ship reactions"; migration NOT APPLIED until Micky runs it)
+
+- Hold (touch) / right-click on ANY non-unsent DM bubble opens `MessageActionsMenu`: ❤️ 😂 😮 😢 😡 👍 row, Reply, Copy, Unsend (own, 5 min). Root cause of "hold doesn't work" on iPhone: only my own <5-min bubbles were targets; others got WebKit's selection callout. Touch bubbles are `select-none` + no callout (Copy in the menu); mouse still selects. `useMessageLongPress` keeps a still hold through WebKit's pointercancel and ends on touchend.
+- Reactions: `public.message_reactions` (migration `20261105150000_add_dm_message_reactions`, RLS via message visibility + both-way block rule, unsend trigger clears them, in `supabase_realtime`, random uuid PK so DELETE events leak nothing). One per user per message (upsert replaces). No notifications/push. Client feature-detects the table (PGRST205/42P01 → hidden); separate realtime channel only once the table exists. Demo: page-local state.
+- Micky 2026-11-05: OK that touch users can only Copy whole messages; OK that blocks refuse new reactions both ways and keep old ones visible.
+- Tests: `tests/reactions.test.ts`; PGlite RLS 51/51; headless demo 28/28; 368 node tests, tsc, lint, build. Needs iPhone: no callout on hold, haptic, swipes still fine, two-phone realtime once applied.
+
 ## New-user experience fixes — 2026-11-05 (LIVE 2026-11-05 on Micky's "ship nux")
 
 From the new-user audit (items 2–6, app side only; the golfer directory / profile visibility is separate work). No migration.
