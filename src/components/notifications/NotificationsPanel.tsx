@@ -1,50 +1,30 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, UserPlus, UserMinus, Users, Ban, MessageCircle, ShieldCheck, ShieldOff, Sparkles, Trophy, Clock, MapPin, Newspaper } from "lucide-react";
-import type { AppNotification, NotificationType } from "../../types";
+import { Bell, CheckCheck, ChevronDown } from "lucide-react";
+import type { AppNotification, GolferProfile } from "../../types";
 import { useData } from "../../context/DataContext";
 import { Modal } from "../ui/Modal";
 import { EmptyState } from "../ui/EmptyState";
 import { formatRelativeTime } from "../../lib/format";
 import { useLocale } from "../../i18n/LocaleContext";
-import { CaddieNavIcon } from "../icons/CaddieNavIcon";
+import { groupNotifications } from "../../lib/notificationInbox";
+import type { ActorLookup } from "../../lib/notificationInbox";
+import { NotificationAvatar } from "./NotificationAvatar";
+import { useNotificationActorLookup } from "./useNotificationActorLookup";
 
-// Icon type is the common shape actually invoked below (just `size`), not
-// `typeof Bell` — that would reject CaddieNavIcon, a hand-built SVG rather
-// than a lucide-react ForwardRefExoticComponent (same reasoning as
-// lib/nav.ts's NavIconComponent for the bottom nav's own Caddie icon).
-type NotificationIconComponent = (props: { size?: number | string }) => React.ReactNode;
-
-const ICONS: Record<NotificationType, NotificationIconComponent> = {
-  post_reply: MessageCircle,
-  comment_reply: MessageCircle,
-  new_follower: UserPlus,
-  round_created_from_post: Sparkles,
-  post_became_round: Trophy,
-  round_joined: Users,
-  round_left: UserMinus,
-  round_cancelled: Ban,
-  new_message: MessageCircle,
-  booking_proof_attached: ShieldCheck,
-  tee_time_updated: Clock,
-  booking_proof_removed: ShieldOff,
-  caddie_analysis_complete: CaddieNavIcon,
-  new_round_nearby: MapPin,
-  circle_post: Newspaper,
-};
-
+// Unread notifications are the list; once read (tapped here, "Mark all
+// read", or by opening what they point at, see NotificationRouteClearer)
+// they move into a collapsed "Earlier" section, so the bell never stacks up.
 export function NotificationsPanel({ onClose }: { onClose: () => void }) {
-  const { notifications: allNotifications, markNotificationRead, markAllNotificationsRead } = useData();
+  const { notifications, markNotificationRead, markAllNotificationsRead } = useData();
   const navigate = useNavigate();
-  const { t, locale } = useLocale();
-
-  // A read notification drops out of the panel immediately rather than
-  // lingering — keeps the inbox from stacking up with things you've
-  // already seen. Purely a display filter: the underlying row (and its
-  // read state) is untouched.
-  const notifications = allNotifications.filter((n) => !n.read);
+  const { t } = useLocale();
+  const lookup = useNotificationActorLookup();
+  const [showEarlier, setShowEarlier] = useState(false);
+  const { unread, earlier } = groupNotifications(notifications);
 
   function open(n: AppNotification) {
-    markNotificationRead(n.id);
+    if (!n.read) markNotificationRead(n.id);
     onClose();
     navigate(n.linkTo);
   }
@@ -55,34 +35,75 @@ export function NotificationsPanel({ onClose }: { onClose: () => void }) {
         <EmptyState icon={<Bell size={20} />} title={t("notifications.empty")} description={t("notifications.emptyDescription")} />
       ) : (
         <div className="flex flex-col gap-1">
-          <div className="mb-1 flex justify-end">
-            <button onClick={markAllNotificationsRead} className="text-xs font-semibold text-fairway-700 hover:underline">
-              {t("notifications.markAllRead")}
-            </button>
-          </div>
-          {notifications.map((n) => {
-            const Icon = ICONS[n.type];
-            return (
+          {unread.length > 0 ? (
+            <>
+              <div className="mb-1 flex justify-end">
+                <button onClick={markAllNotificationsRead} className="text-xs font-semibold text-fairway-700 hover:underline">
+                  {t("notifications.markAllRead")}
+                </button>
+              </div>
+              {unread.map((n) => (
+                <NotificationRow key={n.id} n={n} lookup={lookup} onOpen={open} />
+              ))}
+            </>
+          ) : (
+            <div className="flex items-center gap-2 rounded-xl bg-fairway-50/70 px-3 py-3 text-sm font-medium text-fairway-800">
+              <CheckCheck size={16} className="shrink-0 text-fairway-600" />
+              {t("notifications.caughtUp")}
+            </div>
+          )}
+
+          {earlier.length > 0 && (
+            <div className="mt-2 border-t border-slate-100 pt-2">
               <button
-                key={n.id}
-                onClick={() => open(n)}
-                className={`flex items-start gap-3 rounded-xl px-2.5 py-2.5 text-left transition-colors duration-150 ${
-                  n.read ? "hover:bg-slate-50" : "bg-fairway-50/70 hover:bg-fairway-50"
-                }`}
+                onClick={() => setShowEarlier((v) => !v)}
+                aria-expanded={showEarlier}
+                className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 hover:bg-slate-50"
               >
-                <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-fairway-600 shadow-sm">
-                  <Icon size={15} />
+                <span>
+                  {t("notifications.earlier")} <span className="ml-1 rounded-full bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500">{earlier.length}</span>
                 </span>
-                <div className="min-w-0 flex-1">
-                  <p className={`text-sm ${n.read ? "text-slate-600" : "font-semibold text-slate-900"}`}>{n.text}</p>
-                  <p className="text-xs text-slate-400">{formatRelativeTime(n.createdAt, locale, t)}</p>
-                </div>
-                {!n.read && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-fairway-500" aria-label="Unread" />}
+                <ChevronDown size={16} className={`transition-transform duration-200 motion-reduce:transition-none ${showEarlier ? "rotate-180" : ""}`} />
               </button>
-            );
-          })}
+              {showEarlier && (
+                <div className="mt-1 flex flex-col gap-1">
+                  {earlier.map((n) => (
+                    <NotificationRow key={n.id} n={n} lookup={lookup} onOpen={open} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </Modal>
+  );
+}
+
+function NotificationRow({
+  n,
+  lookup,
+  onOpen,
+}: {
+  n: AppNotification;
+  lookup: ActorLookup<GolferProfile>;
+  onOpen: (n: AppNotification) => void;
+}) {
+  const { t, locale } = useLocale();
+  return (
+    <button
+      onClick={() => onOpen(n)}
+      data-notification-row={n.read ? "read" : "unread"}
+      className={`flex items-center gap-3 rounded-xl px-2.5 py-2.5 text-left transition-colors duration-150 ${
+        n.read ? "hover:bg-slate-50" : "bg-fairway-50/70 hover:bg-fairway-50"
+      }`}
+    >
+      <NotificationAvatar notification={n} lookup={lookup} />
+      <div className="min-w-0 flex-1">
+        <p className={`text-sm ${n.read ? "text-slate-500" : "font-semibold text-slate-900"}`}>{n.text}</p>
+        <p className="text-xs text-slate-400">{formatRelativeTime(n.createdAt, locale, t)}</p>
+      </div>
+      {!n.read && <span className="h-2 w-2 shrink-0 rounded-full bg-fairway-500" aria-label={t("notifications.unread")} />}
+    </button>
   );
 }

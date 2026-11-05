@@ -54,6 +54,8 @@ export const ko: Record<TranslationKey, string> = {
   "notifications.empty": "아직 알림이 없습니다.",
   "notifications.emptyDescription": "댓글, 팔로우, 라운드 업데이트가 여기에 표시됩니다.",
   "notifications.markAllRead": "모두 읽음으로 표시",
+  "notifications.earlier": "이전 알림",
+  "notifications.caughtUp": "모두 확인했어요.",  "notifications.unread": "읽지 않음",
 
   "vibe.casualSocial": "캐주얼 & 소셜",
   "vibe.competitive": "경쟁적",

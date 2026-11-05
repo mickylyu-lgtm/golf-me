@@ -312,6 +312,8 @@ interface DataContextValue {
   notifications: AppNotification[];
   unreadNotificationCount: number;
   markNotificationRead: (id: string) => void;
+  /** Batched: one update for all of them (real), one state change (demo). */
+  markNotificationsRead: (ids: readonly string[]) => void;
   markAllNotificationsRead: () => void;
 
   resetDemoData: () => void;
@@ -1771,6 +1773,22 @@ export function DataProvider({ children }: { children: ReactNode }) {
     },
     [auth.isDemo, realSocial],
   );
+  const markNotificationsRead = useCallback(
+    (ids: readonly string[]) => {
+      if (ids.length === 0) return;
+      if (!auth.isDemo) {
+        realSocial.markNotificationsRead(ids).catch((err) => console.error("GolfMe: failed to mark notifications read.", err));
+        return;
+      }
+      const wanted = new Set(ids);
+      setData((prev) => {
+        if (!prev.notifications.some((n) => wanted.has(n.id) && !n.read)) return prev;
+        const readAt = new Date().toISOString();
+        return { ...prev, notifications: prev.notifications.map((n) => (wanted.has(n.id) && !n.read ? { ...n, read: true, readAt } : n)) };
+      });
+    },
+    [auth.isDemo, realSocial],
+  );
   const markAllNotificationsRead = useCallback(() => {
     if (!auth.isDemo) {
       realSocial.markAllNotificationsRead().catch((err) => console.error("GolfMe: failed to mark all notifications read.", err));
@@ -1890,6 +1908,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       notifications,
       unreadNotificationCount,
       markNotificationRead,
+      markNotificationsRead,
       markAllNotificationsRead,
       resetDemoData,
     }),
@@ -1992,6 +2011,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       notifications,
       unreadNotificationCount,
       markNotificationRead,
+      markNotificationsRead,
       markAllNotificationsRead,
       resetDemoData,
     ],

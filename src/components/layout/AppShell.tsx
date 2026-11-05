@@ -5,6 +5,7 @@ import { BottomNav } from "./BottomNav";
 import { TopBar } from "./TopBar";
 import { RootTabCarousel } from "./RootTabCarousel";
 import { NotificationPopupHost } from "../notifications/NotificationPopupHost";
+import { NotificationRouteClearer } from "../notifications/NotificationRouteClearer";
 import { FoundingRevealHost } from "../golfer/FoundingRevealHost";
 import { MOBILE_NAV_ITEMS } from "../../lib/nav";
 
@@ -22,6 +23,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-[#faf9f6]">
       <NotificationPopupHost />
+      <NotificationRouteClearer />
       <FoundingRevealHost />
       <SideNav />
       <div className="flex min-h-screen flex-col sm:pl-20 lg:pl-60">

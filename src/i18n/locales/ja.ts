@@ -54,6 +54,8 @@ export const ja: Record<TranslationKey, string> = {
   "notifications.empty": "まだ通知はありません。",
   "notifications.emptyDescription": "返信、フォロー、ラウンドの更新がここに表示されます。",
   "notifications.markAllRead": "すべて既読にする",
+  "notifications.earlier": "以前",
+  "notifications.caughtUp": "新しい通知はありません。",  "notifications.unread": "未読",
 
   "vibe.casualSocial": "カジュアル・社交的",
   "vibe.competitive": "競技志向",

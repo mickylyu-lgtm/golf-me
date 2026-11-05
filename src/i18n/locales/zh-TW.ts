@@ -54,6 +54,8 @@ export const zhTW: Record<TranslationKey, string> = {
   "notifications.empty": "暫時沒有通知。",
   "notifications.emptyDescription": "回覆、追蹤和球局動態會顯示在這裡。",
   "notifications.markAllRead": "全部標記為已讀",
+  "notifications.earlier": "較早",
+  "notifications.caughtUp": "沒有新的通知。",  "notifications.unread": "未讀",
 
   "vibe.casualSocial": "休閒社交",
   "vibe.competitive": "競技型",

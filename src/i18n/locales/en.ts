@@ -61,6 +61,8 @@ export const en = {
   "notifications.empty": "No notifications yet.",
   "notifications.emptyDescription": "Replies, follows, and round updates will show up here.",
   "notifications.markAllRead": "Mark all as read",
+  "notifications.earlier": "Earlier",
+  "notifications.caughtUp": "You're all caught up.",  "notifications.unread": "Unread",
 
   // Enum display labels (GolfVibe/SkillFilter/WalkOrCart) — the underlying
   // stored/compared values stay the fixed English literals from types.ts;

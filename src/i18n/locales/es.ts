@@ -54,6 +54,8 @@ export const es: Record<TranslationKey, string> = {
   "notifications.empty": "Aún no hay notificaciones.",
   "notifications.emptyDescription": "Las respuestas, seguidores y novedades de rondas aparecerán aquí.",
   "notifications.markAllRead": "Marcar todo como leído",
+  "notifications.earlier": "Anteriores",
+  "notifications.caughtUp": "Estás al día.",  "notifications.unread": "No leída",
 
   "vibe.casualSocial": "Casual y Social",
   "vibe.competitive": "Competitivo",

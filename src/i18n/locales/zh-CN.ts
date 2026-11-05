@@ -54,6 +54,8 @@ export const zhCN: Record<TranslationKey, string> = {
   "notifications.empty": "暂时没有通知。",
   "notifications.emptyDescription": "回复、关注和球局动态会显示在这里。",
   "notifications.markAllRead": "全部标记为已读",
+  "notifications.earlier": "更早",
+  "notifications.caughtUp": "没有新的通知。",  "notifications.unread": "未读",
 
   "vibe.casualSocial": "休闲社交",
   "vibe.competitive": "竞技型",

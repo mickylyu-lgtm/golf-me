@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Bell, X } from "lucide-react";
+import { X } from "lucide-react";
 import { useData } from "../../context/DataContext";
 import { useTutorial } from "../../context/TutorialContext";
-import { Avatar } from "../ui/Avatar";
+import { NotificationAvatar } from "./NotificationAvatar";
+import { useNotificationActorLookup } from "./useNotificationActorLookup";
 import { isFreshForPopup } from "../../lib/notificationPopups";
 import type { AppNotification, NotificationType } from "../../types";
 
@@ -43,7 +44,8 @@ const BASELINE_GRACE_MS = 1200;
 // gets demo-mode parity for free since demo notifications flow through
 // the same field. Never invents an event the backend didn't produce.
 export function NotificationPopupHost() {
-  const { notifications, getGolfer } = useData();
+  const { notifications, markNotificationRead } = useData();
+  const actorLookup = useNotificationActorLookup();
   const { active: tutorialActive } = useTutorial();
   const navigate = useNavigate();
   const location = useLocation();
@@ -145,6 +147,9 @@ export function NotificationPopupHost() {
   }
 
   function handleTap() {
+    // Opening the link clears it too (NotificationRouteClearer); this also
+    // covers a link the route rules don't recognise.
+    markNotificationRead(current.id);
     navigate(current.linkTo);
     dismissNow();
   }
@@ -188,8 +193,6 @@ export function NotificationPopupHost() {
     }
   }
 
-  const actor = current.actorId ? getGolfer(current.actorId) : undefined;
-
   return (
     <div
       className="fixed inset-x-0 top-0 z-[110] flex justify-center px-3"
@@ -212,17 +215,9 @@ export function NotificationPopupHost() {
           onClick={handleTap}
           className="flex w-full items-center gap-2.5 rounded-2xl border border-slate-200/80 bg-slate-100/90 p-3 text-left shadow-lg shadow-slate-900/15 backdrop-blur-xl"
         >
-          <span className="shrink-0">
-            {actor ? (
-              <Avatar golfer={actor} size="sm" showVerified={false} />
-            ) : (
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900/5 text-slate-600">
-                <Bell size={16} />
-              </span>
-            )}
-          </span>
+          <NotificationAvatar notification={current} lookup={actorLookup} size="sm" />
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-medium text-slate-800">{current.text}</span>
+            <span className="line-clamp-2 text-sm font-medium text-slate-800">{current.text}</span>
           </span>
           <button
             onClick={(e) => {

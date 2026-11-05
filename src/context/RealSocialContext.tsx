@@ -19,6 +19,7 @@ import type { UnsendResult } from "../lib/unsend";
 import { isMissingReactionsTableError, myReaction, overlayPendingReactions, reactionRowsToReactions, withReaction } from "../lib/reactions";
 import type { MessageReaction, QuickReaction } from "../lib/reactions";
 import { createReactionWriteQueue } from "../lib/reactionWrites";
+import { withLocallyRead } from "../lib/notificationInbox";
 
 interface ConversationParticipantRow {
   conversation_id: string;
@@ -166,6 +167,8 @@ interface RealSocialContextValue {
   notifications: AppNotification[];
   unreadNotificationCount: number;
   markNotificationRead: (id: string) => Promise<void>;
+  /** One filtered update for all of `ids` (own unread rows only); shown read at once. */
+  markNotificationsRead: (ids: readonly string[]) => Promise<void>;
   markAllNotificationsRead: () => Promise<void>;
 }
 
@@ -266,6 +269,13 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
   const [follows, setFollows] = useState<FollowRow[]>([]);
   const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
   const [notificationRows, setNotificationRows] = useState<NotificationRow[]>([]);
+  // Notification ids this device marked read (in flight or confirmed),
+  // shown read right away so the bell and badge don't wait for the
+  // update + refetch, and a refetch that started before the update can't
+  // flip them back. Read rows never become unread again, so keeping a
+  // confirmed id here is harmless; a failed update takes its ids back out.
+  const [locallyReadIds, setLocallyReadIds] = useState<ReadonlySet<string>>(() => new Set());
+  const locallyReadRef = useRef<Set<string>>(new Set());
   // Every real profile this client knows about: the discovery directory
   // (refreshed on full refetches) plus any profile a conversation,
   // notification or follow needed before the next directory refresh.
@@ -609,6 +619,8 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     conversationIdsRef.current = [];
     setReactions([]);
     setReactionsSupport("unknown");
+    locallyReadRef.current = new Set();
+    setLocallyReadIds(new Set());
 
     if (isDemo || !selfId) {
       setParticipants([]);
@@ -1218,28 +1230,77 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     [selfId],
   );
 
-  const notifications = useMemo(() => notificationRows.map(notificationRowToAppNotification), [notificationRows]);
-  const unreadNotificationCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
-
-  const markNotificationRead = useCallback(
-    async (id: string) => {
-      const { error } = await supabase.from("notifications").update({ read: true, read_at: new Date().toISOString() }).eq("id", id);
-      if (error) console.error("GolfMe: failed to mark notification read.", error);
-      else await refetch();
-    },
-    [refetch],
+  const notifications = useMemo(
+    () => withLocallyRead(notificationRows.map(notificationRowToAppNotification), locallyReadIds),
+    [notificationRows, locallyReadIds],
   );
+  const unreadNotificationCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
+  const notificationsRef = useRef(notifications);
+  notificationsRef.current = notifications;
+
+  const setLocallyRead = useCallback((ids: readonly string[], read: boolean) => {
+    const next = new Set(locallyReadRef.current);
+    for (const id of ids) {
+      if (read) next.add(id);
+      else next.delete(id);
+    }
+    locallyReadRef.current = next;
+    setLocallyReadIds(next);
+  }, []);
+
+  // One request per call however many ids (chunked only to keep the URL
+  // short; the window is 200 rows). notifications_update_own already
+  // limits it to this account's rows; read = false skips rows another
+  // device already marked, so their read_at isn't moved.
+  const markNotificationsRead = useCallback(
+    async (ids: readonly string[]) => {
+      if (!selfId) return;
+      const fresh = [...new Set(ids)].filter((id) => !locallyReadRef.current.has(id));
+      if (fresh.length === 0) return;
+      const generation = generationRef.current;
+      setLocallyRead(fresh, true);
+      const readAt = new Date().toISOString();
+      const failed: string[] = [];
+      for (let i = 0; i < fresh.length; i += 100) {
+        const part = fresh.slice(i, i + 100);
+        const { error } = await supabase
+          .from("notifications")
+          .update({ read: true, read_at: readAt })
+          .eq("user_id", selfId)
+          .eq("read", false)
+          .in("id", part);
+        if (error) {
+          console.error("GolfMe: failed to mark notifications read.", error);
+          failed.push(...part);
+        }
+      }
+      if (generationRef.current !== generation) return;
+      if (failed.length > 0) setLocallyRead(failed, false);
+      if (failed.length < fresh.length) await refetch();
+    },
+    [selfId, setLocallyRead, refetch],
+  );
+
+  const markNotificationRead = useCallback((id: string) => markNotificationsRead([id]), [markNotificationsRead]);
 
   const markAllNotificationsRead = useCallback(async () => {
     if (!selfId) return;
+    const generation = generationRef.current;
+    // Shown read at once; the update itself covers every unread row,
+    // including any outside the fetched window.
+    const shown = notificationsRef.current.filter((n) => !n.read).map((n) => n.id);
+    setLocallyRead(shown, true);
     const { error } = await supabase
       .from("notifications")
       .update({ read: true, read_at: new Date().toISOString() })
       .eq("user_id", selfId)
       .eq("read", false);
-    if (error) console.error("GolfMe: failed to mark all notifications read.", error);
-    else await refetch();
-  }, [selfId, refetch]);
+    if (generationRef.current !== generation) return;
+    if (error) {
+      console.error("GolfMe: failed to mark all notifications read.", error);
+      setLocallyRead(shown, false);
+    } else await refetch();
+  }, [selfId, setLocallyRead, refetch]);
 
   // Memoized so an unchanged refetch (every piece of state kept by
   // reference, see keepIfSame) doesn't re-render every consumer.
@@ -1284,6 +1345,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       notifications,
       unreadNotificationCount,
       markNotificationRead,
+      markNotificationsRead,
       markAllNotificationsRead,
     }),
     [
@@ -1325,6 +1387,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       notifications,
       unreadNotificationCount,
       markNotificationRead,
+      markNotificationsRead,
       markAllNotificationsRead,
     ],
   );
