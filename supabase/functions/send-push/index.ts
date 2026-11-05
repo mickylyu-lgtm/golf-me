@@ -1,7 +1,8 @@
 // Sends a real APNs push to every device registered for a user. Never
-// called directly by the app -- the only callers are the notify_new_message,
-// notify_round_joined and notify_caddie_analysis_complete Postgres triggers
-// (via pg_net), authenticated with a shared secret from
+// called directly by the app -- the only callers are Postgres triggers via
+// pg_net (notify_new_message, notify_caddie_analysis_complete, and the round
+// triggers through private.send_round_push: notify_round_joined,
+// notify_tee_time_updated, notify_round_cancelled), authenticated with a shared secret from
 // Vault rather than a normal user JWT, so this function is deployed with
 // verify_jwt disabled and does its own check instead (see PUSH_INTERNAL_SECRET
 // below). That's a deliberate exception to "always verify_jwt": there is no
@@ -143,7 +144,7 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: "Unauthorized" }, 401);
   }
 
-  let payloadIn: { user_id?: string; title?: string; body?: string; link_to?: string };
+  let payloadIn: { user_id?: string; title?: string; body?: string; link_to?: string; collapse_id?: unknown };
   try {
     const parsed: unknown = await req.json();
     // JSON can legally be null, an array or a scalar; only a plain object is a valid request.
@@ -158,6 +159,14 @@ Deno.serve(async (req: Request) => {
     logOutcome({ ...EMPTY_OUTCOME, outcome: "bad_request" });
     return jsonResponse({ error: "user_id and body are required" }, 400);
   }
+  // Optional. A later push with the same id replaces the earlier one on the
+  // phone instead of stacking (round updates use 'round-<id>', so a second
+  // edit or a cancel replaces a stale "new tee time"). APNs caps it at 64
+  // bytes; anything else is ignored rather than failing the push.
+  const collapseId =
+    typeof payloadIn.collapse_id === "string" && /^[A-Za-z0-9_.:-]{1,64}$/.test(payloadIn.collapse_id)
+      ? payloadIn.collapse_id
+      : null;
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -234,6 +243,7 @@ Deno.serve(async (req: Request) => {
             "apns-topic": topic,
             "apns-push-type": "alert",
             "apns-priority": "10",
+            ...(collapseId ? { "apns-collapse-id": collapseId } : {}),
           },
           body: payload,
         });
