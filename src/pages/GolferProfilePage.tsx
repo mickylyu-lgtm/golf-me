@@ -40,10 +40,7 @@ import { ReputationBadge } from "../components/golfer/ReputationBadge";
 import { computeCompatibility, golferDistanceMiles } from "../lib/compatibility";
 import { matchTier, golferMatchReasons, TIER_FOR_YOU_KEYS } from "../lib/matchReasons";
 import { golferDistanceLabel } from "../lib/publicDirectory";
-import { firstName } from "../lib/greeting";
-import { dmDraftKey, loadChatDraft, saveChatDraft } from "../lib/chatDraft";
-import { inviteDraftToSeed } from "../lib/inviteToPlay";
-import type { GolferProfile } from "../types";
+import { useInviteToPlay } from "../lib/useInviteToPlay";
 import { computeHandicapConfidence } from "../lib/credibility";
 import { useCredibilityStats } from "../lib/useCredibility";
 import { useReputationState } from "../lib/useReputationState";
@@ -64,6 +61,7 @@ const EMPTY_REPUTATION = { completedRounds: 0, showUpRatePct: 0, wouldPlayAgainP
 export function GolferProfilePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const inviteToPlay = useInviteToPlay();
   const {
     currentUser,
     getGolfer,
@@ -155,19 +153,6 @@ export function GolferProfilePage() {
         { label: t("golferProfile.feedbackOnTime"), count: Math.round((enrichedGolfer.reputation.completedRounds * enrichedGolfer.reputation.onTimePct) / 100) },
       ].filter((tag) => tag.count > 0)
     : [];
-
-  // "Invite to play": opens the DM with a suggested first message in the
-  // composer (an unsent draft there wins). Nothing is sent until the golfer
-  // taps Send themselves (lib/inviteToPlay.ts).
-  function inviteToPlay(target: GolferProfile) {
-    try {
-      const seed = inviteDraftToSeed(loadChatDraft(dmDraftKey(target.id)), t("golferProfile.inviteDraft", { name: firstName(target.name) }));
-      if (seed) saveChatDraft(dmDraftKey(target.id), seed);
-    } catch {
-      // Storage blocked: the thread still opens, just with an empty composer.
-    }
-    navigate(`/messages/${target.id}`);
-  }
 
   return (
     <div className="flex flex-col gap-6">

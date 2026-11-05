@@ -29,6 +29,7 @@ import { track } from "../lib/analytics";
 import { attachBookingProofDirect } from "../lib/useBookingProof";
 import { clearHostRoundDraft, loadHostRoundDraft, saveHostRoundDraft } from "../lib/hostRoundDraft";
 import type { LookingFor, WhenChoice } from "../lib/hostRoundDraft";
+import { parseHostPrefill } from "../lib/hostPrefill";
 import { isObjectionableContentError } from "../lib/objectionableContent";
 
 const BOOKING_SOURCES = ["Course Website", "GolfNow", "Lightspeed / Chronogolf", "Phone Reservation", "Other"] as const;
@@ -164,11 +165,14 @@ export function CreateGolfCall() {
   const [totalSpots, setTotalSpots] = useState(initial?.totalSpots ?? 4);
   const [joinMode, setJoinMode] = useState<JoinMode>(initial?.joinMode ?? "instant");
   const [lookingFor, setLookingFor] = useState<LookingFor>(initial?.lookingFor ?? "anyone");
-  const [skillLevel, setSkillLevel] = useState<SkillFilter>(initial?.skillLevel ?? "Any Skill Level");
-  const [vibe, setVibe] = useState<GolfVibe>(initial?.vibe ?? "Casual & Social");
-  const [walkOrCart, setWalkOrCart] = useState<WalkOrCart>(initial?.walkOrCart ?? "Either");
-  const [holes, setHoles] = useState<Holes>(initial?.holes ?? 18);
-  const [gameFormat, setGameFormat] = useState<GameFormat>(initial?.gameFormat ?? "Standard Stroke Play");
+  // Auto-Match's "Host a round" passes the golfer's preferences
+  // (lib/hostPrefill.ts); a resumed draft still wins, like when/date above.
+  const [prefill] = useState(() => parseHostPrefill(searchParams));
+  const [skillLevel, setSkillLevel] = useState<SkillFilter>(initial?.skillLevel ?? prefill.skillLevel ?? "Any Skill Level");
+  const [vibe, setVibe] = useState<GolfVibe>(initial?.vibe ?? prefill.vibe ?? "Casual & Social");
+  const [walkOrCart, setWalkOrCart] = useState<WalkOrCart>(initial?.walkOrCart ?? prefill.walkOrCart ?? "Either");
+  const [holes, setHoles] = useState<Holes>(initial?.holes ?? prefill.holes ?? 18);
+  const [gameFormat, setGameFormat] = useState<GameFormat>(initial?.gameFormat ?? prefill.gameFormat ?? "Standard Stroke Play");
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [friendIds, setFriendIds] = useState<string[]>(initial?.friendIds ?? []);
   const [showAdvanced, setShowAdvanced] = useState(false);

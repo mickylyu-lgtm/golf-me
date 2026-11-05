@@ -18,6 +18,7 @@ import { formatShortDate } from "../lib/format";
 import { isPastRound } from "../lib/golfCall";
 import { COMMUNITY_TUTORIAL_ID } from "../lib/tutorialSteps";
 import { findTabPath } from "../lib/findTab";
+import { quickAutoMatchSearch } from "../lib/roundSearchParams";
 import { SUPPORTED_TEE_TIME_COURSES, TEE_TIMES_VISIBLE } from "../services/teeTimes/types";
 import { NearbyCoursesHomeCard } from "../components/courses/NearbyCoursesHomeCard";
 import { HostReminderCard } from "../components/onboarding/HostReminderCard";
@@ -234,6 +235,15 @@ export function Home() {
           title={t("home.findRound")}
           subtitle={t("home.findRoundSubtitle")}
           onClick={() => navigate(findTabPath("rounds"))}
+        />
+
+        {/* One tap, no form: saved preferences, area and travel radius
+            (same link as the Rounds tab's Auto-Match button). */}
+        <HomeActionCard
+          icon={<Sparkles size={18} />}
+          title={t("filters.autoMatchMe")}
+          subtitle={t("autoMatch.oneTapSubtitle")}
+          onClick={() => navigate(`/auto-match?${quickAutoMatchSearch(currentUser.travelRadiusMiles).toString()}`)}
         />
 
         <HomeActionCard
