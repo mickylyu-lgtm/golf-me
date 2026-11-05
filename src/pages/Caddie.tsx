@@ -14,6 +14,8 @@ import { clubLabel } from "../lib/clubLabel";
 import { useAuth } from "../context/AuthContext";
 import { claimAutoTranslateAttempt, feedbackSampleText, isTooSoonError, needsAutoTranslate, releaseAutoTranslateAttempt } from "../lib/caddieLanguage";
 import { PICKER_TRANSLATE_COUNT, PICKER_TRANSLATE_DELAY_MS, markExplicitCaddieLocale, queueAutoTranslation } from "../lib/caddieAutoTranslate";
+import { setCaddieFeedbackLanguage } from "../lib/caddieFeedbackLanguage";
+import { useCaddieFeedbackLanguage } from "../lib/useCaddieFeedbackLanguage";
 
 // Caddie's own destination — kept deliberately uncrowded (per brief: the
 // most obvious action is always "Analyze a Swing"). Reuses the same
@@ -56,7 +58,9 @@ export function Caddie() {
   const { caddieAnalyses, translateCaddieAnalysis } = useData();
   const { isDemo } = useAuth();
   const { refreshMediaUrls } = useRealCaddie();
-  const { t, locale, setLocale } = useLocale();
+  const { t, locale } = useLocale();
+  // Caddie's own feedback language, not the app's (lib/caddieFeedbackLanguage).
+  const feedbackLanguage = useCaddieFeedbackLanguage();
   const navigate = useNavigate();
   const [visibleCount, setVisibleCount] = useState(loadHistoryCount);
 
@@ -74,9 +78,9 @@ export function Caddie() {
   // translation backend); a failure just leaves the analysis page to try.
   const [pickedLocale, setPickedLocale] = useState<string | null>(null);
   const analysesRef = useRef(sorted);
-  // The app's language right now, for queued jobs deciding whether they're stale.
-  const localeRef = useRef(locale);
-  localeRef.current = locale;
+  // The feedback language right now, for queued jobs deciding whether they're stale.
+  const localeRef = useRef(feedbackLanguage);
+  localeRef.current = feedbackLanguage;
   analysesRef.current = sorted;
   useEffect(() => {
     if (isDemo || pickedLocale === null) return;
@@ -108,8 +112,9 @@ export function Caddie() {
           <h1 className="text-xl font-bold text-slate-900">{t("caddie.title")}</h1>
           <p className="text-sm text-slate-500">{t("caddie.tagline")}</p>
         </div>
-        {/* Feedback language, right here — new analyses use whatever this is
-            set to at the moment "Ask Caddie" is tapped. A plain native
+        {/* Caddie feedback language, right here — new analyses use whatever
+            this is set to at the moment "Ask Caddie" is tapped. Only Caddie's
+            feedback: the app's language stays in Settings > Language. A plain native
             <select> rather than a custom dropdown: full accessibility/mobile
             picker behavior for free, no positioning logic to get wrong. */}
         {/* Focus indicator is a real border-color change, not a box-shadow
@@ -125,17 +130,21 @@ export function Caddie() {
             on focus never shifts layout by growing the box. */}
         <label className="flex shrink-0 items-center gap-1 rounded-full border-2 border-slate-200 py-1.5 pl-2.5 pr-1.5 text-xs font-semibold text-slate-600 focus-within:border-fairway-400">
           <Globe size={13} className="text-slate-400" />
+          <span aria-hidden className="text-slate-400">
+            {t("caddie.feedbackLanguageShort")}
+          </span>
           <select
-            value={locale}
+            value={feedbackLanguage}
             onChange={(e) => {
               const next = e.target.value as (typeof LOCALES)[number]["value"];
               // An explicit "my Caddie feedback in this language": see the
               // pre-translation effect above and lib/caddieAutoTranslate.
               markExplicitCaddieLocale(next);
               setPickedLocale(next);
-              setLocale(next);
+              setCaddieFeedbackLanguage(next);
             }}
-            aria-label={t("language.title")}
+            aria-label={t("caddie.feedbackLanguageLabel")}
+            title={t("caddie.feedbackLanguageLabel")}
             className="appearance-none bg-transparent pr-1 text-xs font-semibold text-slate-700 !outline-none"
           >
             {LOCALES.map((l) => (

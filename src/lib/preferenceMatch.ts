@@ -126,25 +126,9 @@ export function selectedPreferenceCount(prefs: NewPreferenceSelections): number 
   return count;
 }
 
-export type PreferenceTier = "excellent" | "great" | "good" | "none";
-
-const TIER_LABEL: Record<PreferenceTier, string> = {
-  excellent: "Excellent Match",
-  great: "Great Match",
-  good: "Good Match",
-  none: "",
-};
-
-export function preferenceTier(matchedCount: number): PreferenceTier {
-  if (matchedCount >= 5) return "excellent";
-  if (matchedCount === 4) return "great";
-  if (matchedCount === 3) return "good";
-  return "none";
-}
-
-export function preferenceTierLabel(tier: PreferenceTier): string {
-  return TIER_LABEL[tier];
-}
+// The tier and its translated, dimension-naming label: matchTiers.ts.
+export { preferenceTier, preferenceTierKey } from "./matchTiers.ts";
+export type { PreferenceTier } from "./matchTiers.ts";
 
 export const MIN_PREFERENCES_FOR_AUTO_MATCH = 3;
 

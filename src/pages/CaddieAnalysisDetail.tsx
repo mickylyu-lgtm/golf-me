@@ -19,6 +19,7 @@ import { postFeedbackThenMark } from "../lib/caddieShare";
 import { isStaleProcessing, usePeriodicRerender } from "../lib/caddieAnalysis";
 import { AUTO_TRANSLATE_RETRY_MS, claimAutoTranslateAttempt, feedbackSampleText, isTooSoonError, needsAutoTranslate, releaseAutoTranslateAttempt, showsLanguageNotice } from "../lib/caddieLanguage";
 import { isExplicitCaddieLocale, isTranslationRunning, queueAutoTranslation, queueTranslation, whenTranslationSettled } from "../lib/caddieAutoTranslate";
+import { useCaddieFeedbackLanguage } from "../lib/useCaddieFeedbackLanguage";
 import { FAILURE_BODY_KEYS, FAILURE_TITLE_KEYS, analysisFailure } from "../lib/caddieFailure";
 import type { CaddieConfidence, CaddieCameraAngle, CaddieScoreCriterionKey } from "../types";
 import type { CreatePostSwingPrefill } from "./CreatePost";
@@ -66,7 +67,10 @@ export function CaddieAnalysisDetail() {
   const { hasLoaded: caddieHasLoaded, loadPoseData, refreshMediaUrls } = useRealCaddie();
   const { isDemo } = useAuth();
   const coachEnabled = useCoachReplayEnabled();
-  const { t, locale } = useLocale();
+  const { t, locale: appLocale } = useLocale();
+  // `locale` below is Caddie's feedback language (lib/caddieFeedbackLanguage):
+  // translation, the language notice and Translate use it; dates use appLocale.
+  const locale = useCaddieFeedbackLanguage();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const [retrying, setRetrying] = useState(false);
@@ -339,7 +343,7 @@ export function CaddieAnalysisDetail() {
 
       <div>
         <h1 className="text-xl font-bold text-slate-900">{clubLabel(analysis.swingType, t) || t("caddie.title")}</h1>
-        <p className="text-sm text-slate-500">{formatShortDate(analysis.createdAt, locale)}</p>
+        <p className="text-sm text-slate-500">{formatShortDate(analysis.createdAt, appLocale)}</p>
         {sourcePost && (
           <button
             onClick={() => navigate(`/community/${sourcePost.id}`)}
@@ -391,6 +395,29 @@ export function CaddieAnalysisDetail() {
               {translateButton}
             </div>
           )}
+          {/* What to practise first: the analysis's own focus and drill,
+              exactly as Caddie wrote them (nothing added, no rep counts:
+              the pipeline has none). The score and the explanation follow. */}
+          {(details.focus.title || details.drill.name) && (
+            <div className="rounded-xl border border-fairway-200 bg-white p-3" data-testid="caddie-work-on-next">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-forest">{t("caddie.workOnNext")}</p>
+              {details.focus.title && <p className="mt-1 text-base font-bold text-slate-900">{details.focus.title}</p>}
+              {details.focus.instruction && <p className="mt-0.5 text-sm text-slate-600">{details.focus.instruction}</p>}
+              {details.drill.name && (
+                <div className="mt-3 border-t border-slate-100 pt-2.5">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t("caddie.drill")}</p>
+                  <p className="mt-0.5 text-sm font-semibold text-slate-800">{details.drill.name}</p>
+                  {details.drill.steps.length > 0 && (
+                    <ol className="mt-1.5 flex list-decimal flex-col gap-1 pl-4 text-sm text-slate-600">
+                      {details.drill.steps.map((step, i) => (
+                        <li key={i}>{step}</li>
+                      ))}
+                    </ol>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           {details.score && (
             <div>
               <p className="text-3xl font-bold text-brand-forest">{t("caddie.scoreOutOf100", { score: details.score.total })}</p>
@@ -427,24 +454,6 @@ export function CaddieAnalysisDetail() {
                   </div>
                 ))}
               </div>
-            </div>
-          )}
-          <div className="rounded-xl border border-fairway-200 bg-white p-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-forest">{t("caddie.focus")}</p>
-            <p className="mt-1 text-sm font-semibold text-slate-800">{details.focus.title}</p>
-            <p className="mt-0.5 text-sm text-slate-600">{details.focus.instruction}</p>
-          </div>
-          {details.drill.name && (
-            <div className="rounded-xl border border-slate-100 bg-white p-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t("caddie.drill")}</p>
-              <p className="mt-1 text-sm font-semibold text-slate-800">{details.drill.name}</p>
-              {details.drill.steps.length > 0 && (
-                <ol className="mt-1.5 flex list-decimal flex-col gap-1 pl-4 text-sm text-slate-600">
-                  {details.drill.steps.map((step, i) => (
-                    <li key={i}>{step}</li>
-                  ))}
-                </ol>
-              )}
             </div>
           )}
           {details.limitations.length > 0 && (

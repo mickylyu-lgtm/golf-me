@@ -12,6 +12,7 @@ import { sanitizeWorkOnCheckpoint } from "../../supabase/functions/_shared/caddi
 import { phasesFromJson, poseDataFromJson } from "../../supabase/functions/_shared/caddieVerdicts.ts";
 import { useAuth } from "./AuthContext";
 import { useLocale } from "../i18n/LocaleContext";
+import { caddieFeedbackLanguage } from "../lib/caddieFeedbackLanguage";
 import type { CaddieAnalysis, CaddieAnalysisDetails, CaddieAnalysisStatus, CaddiePoseData, CaddieScore, CaddieScoreCriterionKey, CaddieSourceType } from "../types";
 
 interface CaddieAnalysisRow {
@@ -509,7 +510,8 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
           swingType: input.swingType,
           startSeconds: input.startSeconds,
           endSeconds: input.endSeconds,
-          locale,
+          // Caddie's feedback language (the Caddie screen's picker, else the app's).
+          locale: caddieFeedbackLanguage(locale),
         },
       });
       if (error) {

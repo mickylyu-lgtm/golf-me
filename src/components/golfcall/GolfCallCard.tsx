@@ -11,7 +11,7 @@ import { SharedPreferencesBadge } from "./SharedPreferencesBadge";
 import { TeeTimeTrustBadge } from "./TeeTimeTrustBadge";
 import { CLICKABLE_CARD_CLASS } from "../ui/cardStyles";
 import { formatCompactDay, formatDate, formatMoney } from "../../lib/format";
-import { vibeLabel } from "../../lib/enumLabels";
+import { skillLabel, vibeLabel, walkOrCartLabel } from "../../lib/enumLabels";
 import { VIBE_TONE } from "../../lib/theme";
 import { computeCallCompatibility } from "../../lib/compatibility";
 import { matchTier, callMatchReasons, TIER_FOR_YOU_KEYS } from "../../lib/matchReasons";
@@ -26,9 +26,11 @@ import { useLocale } from "../../i18n/LocaleContext";
 interface GolfCallCardProps {
   call: GolfCall;
   showMatch?: boolean;
+  // Off where the page shows the same shared preferences itself (Auto-Match).
+  showSharedPreferences?: boolean;
 }
 
-export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
+export function GolfCallCard({ call, showMatch = true, showSharedPreferences = true }: GolfCallCardProps) {
   const { currentUser, getGolfer, followingGolfers, circleGolfers, playedWithIds } = useData();
   const { t, locale } = useLocale();
   const navigate = useNavigate();
@@ -48,10 +50,11 @@ export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
 
   const breakdown = showMatch && !isHost ? computeCallCompatibility(currentUser, call) : null;
   const tier = breakdown ? matchTier(breakdown.overall) : null;
-  const reasons = breakdown ? callMatchReasons(call, breakdown, locale, t) : [];
+  // The distance is already in the card's first line; the round page keeps it as a reason.
+  const reasons = breakdown ? callMatchReasons(call, breakdown, locale, t).filter((r) => r.key !== "distance") : [];
 
   const preferenceChecks = useMemo(() => {
-    if (!showMatch || isHost) return [];
+    if (!showMatch || !showSharedPreferences || isHost) return [];
     const roster = call.joinedGolferIds.map(getGolfer).filter((g): g is GolferProfile => Boolean(g));
     const ctx: PreferenceMatchContext = {
       followingIds: new Set(followingGolfers.map((g) => g.id)),
@@ -59,7 +62,7 @@ export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
       playedWithIds,
     };
     return evaluatePreferenceMatch(currentUser, currentUser.id, call, roster, ctx);
-  }, [showMatch, isHost, call, getGolfer, followingGolfers, circleGolfers, playedWithIds, currentUser]);
+  }, [showMatch, showSharedPreferences, isHost, call, getGolfer, followingGolfers, circleGolfers, playedWithIds, currentUser]);
 
   // Same confirm sheet and join path as the round page (lib/useJoinRound):
   // Join opens "You're joining" with who's playing; only its confirm joins.
@@ -92,7 +95,13 @@ export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
     );
   }
 
-  const canJoin = !isCancelled && !isHost && !isJoined && !isPending && !isPastRound(call) && !isFull;
+  // Skill and walk/cart only when they restrict who fits ("Any skill level" / "Either" say nothing).
+  const constraints = [
+    call.skillLevel !== "Any Skill Level" ? skillLabel(call.skillLevel, t) : null,
+    call.walkOrCart !== "Either" ? walkOrCartLabel(call.walkOrCart, t) : null,
+  ].filter((s): s is string => Boolean(s));
+
+  const canJoin =!isCancelled && !isHost && !isJoined && !isPending && !isPastRound(call) && !isFull;
 
   return (
     <>
@@ -117,13 +126,13 @@ export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
         </p>
       </div>
 
+      {/* One row: open spots, booking proof, then what the round asks for
+          (vibe, plus skill and walk/cart only when they restrict anything).
+          Cancelled/full is said once, by the action on the right. The one-
+          spot-left badge keeps its colour but no longer pulses. */}
       <div className="flex flex-wrap items-center gap-1.5">
-        {isCancelled ? (
-          <Badge tone="rose">{t("golfCallDetail.statusCancelled")}</Badge>
-        ) : isFull ? (
-          <Badge tone="slate">{t("golfCallDetail.foursomeFull")}</Badge>
-        ) : isUrgent ? (
-          <Badge tone="sun" className="animate-pulse font-bold tracking-wide uppercase">
+        {isCancelled || isFull ? null : isUrgent ? (
+          <Badge tone="sun" className="font-bold tracking-wide uppercase">
             {t("golfCallDetail.oneSpotLeft")}
           </Badge>
         ) : (
@@ -136,6 +145,13 @@ export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
         {/* Cancelled rounds keep verification metadata in the DB but never
             show an active badge — see TeeTimeTrustBadge's own gating too. */}
         {!isCancelled && <TeeTimeTrustBadge source={call.teeTimeSource} />}
+        {/* Medium weight so the vibe reads as a descriptor, not the
+            headline; Competitive also gets a lighter rose wash. Text colors
+            are unchanged, so contrast stays at the tone's AA level. */}
+        <Badge tone={VIBE_TONE[call.vibe]} className={`font-medium ${VIBE_TONE[call.vibe] === "rose" ? "bg-rose-50/60" : ""}`}>
+          {vibeLabel(call.vibe, t)}
+        </Badge>
+        {constraints.length > 0 && <span className="whitespace-nowrap text-xs font-medium text-slate-500">{constraints.join(" · ")}</span>}
       </div>
 
       {/* Mobile: compact overlapping avatars of the OTHER golfers who joined —
@@ -157,9 +173,10 @@ export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
         </div>
       )}
 
-      {/* Desktop/tablet: full roster chips with handicap + host tag. */}
-      <div className="hidden flex-wrap gap-1.5 sm:flex">
-        {call.joinedGolferIds.map((id) => {
+      {/* Desktop/tablet: roster chips with handicap for the OTHER golfers;
+          the host is the "hosted by" line in the footer, as on mobile. */}
+      <div className={`hidden flex-wrap gap-1.5 ${otherJoinedIds.length > 0 ? "sm:flex" : ""}`}>
+        {otherJoinedIds.map((id) => {
           const g = getGolfer(id);
           if (!g) return null;
           return (
@@ -168,21 +185,10 @@ export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
               <span className="font-semibold text-slate-700">{g.name.split(" ")[0]}</span>
               {g.verification.verifiedGolfer && <span className="text-fairway-500">✓</span>}
               <span className="text-slate-400">· {g.handicap !== null ? `${g.handicap} HCP` : t("golfCallCard.newGolfer")}</span>
-              {g.id === call.hostId && <span className="font-semibold text-sun-600">· {t("golfCallDetail.hostTag")}</span>}
             </div>
           );
         })}
       </div>
-
-      {/* Medium weight (was semibold) so the vibe reads as a descriptor, not
-          the headline; Competitive also gets a lighter rose wash. Text colors
-          are unchanged, so contrast stays at the tone's AA level. */}
-      <Badge
-        tone={VIBE_TONE[call.vibe]}
-        className={`self-start font-medium ${VIBE_TONE[call.vibe] === "rose" ? "bg-rose-50/60" : ""}`}
-      >
-        {vibeLabel(call.vibe, t)}
-      </Badge>
 
       {tier && (
         <div className="hidden rounded-xl bg-fairway-50/70 p-2.5 sm:block">
@@ -195,7 +201,8 @@ export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
               <span aria-hidden className="font-bold">✓</span> {t("golfCallDetail.bookingProofMatchReason")}
             </p>
           )}
-          {preferenceChecks.length > 0 && (
+          {/* "0 Shared Preferences" said nothing a card needs; the round page has the full breakdown. */}
+          {preferenceChecks.some((c) => c.matched) && (
             <div className="mt-1.5 border-t border-fairway-100 pt-1.5">
               <SharedPreferencesBadge checks={preferenceChecks} />
             </div>
@@ -205,12 +212,10 @@ export function GolfCallCard({ call, showMatch = true }: GolfCallCardProps) {
 
       <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-2.5">
         <div className="min-w-0">
-          <p className="text-xs font-medium text-slate-500">
-            {t("golfCallCard.joinedOfTotal", { joined: call.joinedGolferIds.length, total: call.totalSpots })}
-          </p>
-          {/* Host avatar grouped directly with the "hosted by" text, at every width, so they never wrap apart. */}
+          {/* "N of M joined" repeated the open-spots badge; the host stays.
+              Host avatar grouped directly with the "hosted by" text, at every width, so they never wrap apart. */}
           {host && (
-            <div className="mt-1 flex min-w-0 items-center gap-1.5">
+            <div className="flex min-w-0 items-center gap-1.5">
               <span className="shrink-0">
                 <Avatar golfer={host} size="xs" showVerified={false} />
               </span>

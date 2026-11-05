@@ -27,7 +27,7 @@ import type { CompatibilityBreakdown } from "../lib/compatibility";
 import { haversineMiles } from "../lib/geo";
 import type { PlayingArea } from "../lib/geo";
 import { coarsenOptionalGeoPoint } from "../lib/coarseLocation";
-import { MIN_PREFERENCES_FOR_AUTO_MATCH, preferenceTierLabel, selectedPreferenceCount } from "../lib/preferenceMatch";
+import { MIN_PREFERENCES_FOR_AUTO_MATCH, preferenceTierKey, selectedPreferenceCount } from "../lib/preferenceMatch";
 import type { PreferenceMatchContext } from "../lib/preferenceMatch";
 import type { GolferProfile } from "../types";
 import { browseAllSearch, defaultSearchRadius, parseRoundSearch } from "../lib/roundSearchParams";
@@ -216,6 +216,9 @@ export function AutoMatch() {
   const results = plan.kind === "rounds" ? plan.rounds : [];
   const current = results[Math.min(resultIndex, Math.max(results.length - 1, 0))];
   const currentIsStrong = Boolean(current) && current.preferenceMatchedCount >= MIN_PREFERENCES_FOR_AUTO_MATCH;
+  // A preference match (how many Match Preferences the round meets), named
+  // as such: the round's own match rating is the compatibility score.
+  const preferenceHeaderKey = current && currentIsStrong ? preferenceTierKey(current.preferenceTier) : null;
   // Real golfers load separately from rounds; don't call it empty early.
   const golfersPending = (!isDemo && !social.hasLoaded) || golferSource === "pending";
   // Why no golfers are suggested for a "Playing Somewhere Else?" area.
@@ -376,8 +379,9 @@ export function AutoMatch() {
 
           <div>
             <p className="text-xs font-bold tracking-wide text-fairway-700 uppercase">
-              {currentIsStrong ? preferenceTierLabel(current.preferenceTier) : t("autoMatch.closestAvailable")}
+              {preferenceHeaderKey ? t(preferenceHeaderKey) : t("autoMatch.closestAvailable")}
             </p>
+            {preferenceHeaderKey && <p className="mt-0.5 text-xs text-slate-500">{t("autoMatch.preferenceTierHint")}</p>}
             {results.length > 1 && (
               <p className="mt-0.5 text-xs font-semibold text-slate-400">
                 {t("autoMatch.position", { n: Math.min(resultIndex, results.length - 1) + 1, total: results.length })}
@@ -385,7 +389,9 @@ export function AutoMatch() {
             )}
           </div>
 
-          <GolfCallCard call={current.call} />
+          {/* The shared preferences are the row below (from the search's own
+              preferences); the card's copy would repeat them. */}
+          <GolfCallCard call={current.call} showSharedPreferences={false} />
           {current.preferenceChecks.length > 0 && (
             <div className="flex items-center justify-between gap-2 rounded-2xl border border-slate-100 bg-white px-4 py-3">
               <SharedPreferencesBadge checks={current.preferenceChecks} />
