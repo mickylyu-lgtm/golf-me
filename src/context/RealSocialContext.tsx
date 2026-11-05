@@ -16,6 +16,7 @@ import { classifyUnsendError } from "../lib/unsend";
 import type { UnsendResult } from "../lib/unsend";
 import { isMissingReactionsTableError, myReaction, overlayPendingReactions, reactionRowsToReactions, withReaction } from "../lib/reactions";
 import type { MessageReaction, QuickReaction } from "../lib/reactions";
+import { createReactionWriteQueue } from "../lib/reactionWrites";
 
 interface ConversationParticipantRow {
   conversation_id: string;
@@ -126,8 +127,9 @@ interface RealSocialContextValue {
   // applied the reaction row and pills are simply not shown.
   reactionsSupported: boolean;
   messageReactions: MessageReaction[];
-  // Sets (or with null removes) my reaction. Optimistic; false = the write
-  // failed and the change was rolled back.
+  // Sets (or with null removes) my reaction. Optimistic; writes per message
+  // are serialized and the latest tap wins (lib/reactionWrites.ts). false =
+  // my latest tap failed (rolled back); superseded failures stay quiet.
   setMessageReaction: (messageId: string, emoji: QuickReaction | null) => Promise<boolean>;
   markConversationRead: (otherId: string) => Promise<void>;
   clearChatHistory: (otherId: string) => Promise<void>;
@@ -299,10 +301,11 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
   const reactionsRef = useRef<MessageReaction[]>([]);
   // The newest fetch wins; an older one that resolves later is dropped.
   const reactionsFetchSeqRef = useRef(0);
-  // My writes still in flight, by message id: overlaid on fetched rows so a
-  // fetch that started before the write can't flip the pill back.
-  const pendingReactionsRef = useRef<Map<string, { emoji: QuickReaction | null; seq: number }>>(new Map());
-  const reactionWriteSeqRef = useRef(0);
+  // My writes, one in flight per message with the latest tap queued behind
+  // it (lib/reactionWrites.ts). Its pending() states are overlaid on fetched
+  // rows so a fetch or realtime echo can't flip the pill back mid-way.
+  // Reset (everything dropped) on account switch, below.
+  const [reactionWrites] = useState(createReactionWriteQueue);
   const conversationIdsRef = useRef<string[]>([]);
 
   const applyReactions = useCallback((next: MessageReaction[]) => {
@@ -339,10 +342,9 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       }
       reactionsSupportRef.current = "yes";
       setReactionsSupport("yes");
-      const pending = new Map([...pendingReactionsRef.current].map(([messageId, p]) => [messageId, p.emoji]));
-      applyReactions(overlayPendingReactions(reactionRowsToReactions(data ?? []), pending, selfId));
+      applyReactions(overlayPendingReactions(reactionRowsToReactions(data ?? []), reactionWrites.pending(), selfId));
     },
-    [selfId, applyReactions],
+    [selfId, applyReactions, reactionWrites],
   );
 
   // Typing indicator -- ephemeral, in-memory, never written to Postgres.
@@ -545,7 +547,9 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     pendingRefetchRef.current = false;
     reactionsRef.current = [];
     reactionsSupportRef.current = "unknown";
-    pendingReactionsRef.current = new Map();
+    // The previous account's pending reaction writes: nothing queued is
+    // sent, late results are ignored, no toast from them.
+    reactionWrites.reset();
     conversationIdsRef.current = [];
     setReactions([]);
     setReactionsSupport("unknown");
@@ -683,7 +687,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       typingTimeouts.clear();
       setTypingConversationIds(new Set());
     };
-  }, [isDemo, selfId, refetch]);
+  }, [isDemo, selfId, refetch, reactionWrites]);
 
   // Reactions realtime, on its OWN channel and only once the table is known
   // to exist: a postgres_changes subscription naming a missing table makes
@@ -952,40 +956,62 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     [selfId, applyReactions],
   );
 
-  // Optimistic: the pill changes now; a refused write puts my previous
-  // reaction back (unless a newer tap on the same message superseded it)
-  // and returns false so the page can say so. Then a fetch reconciles with
-  // whatever the server actually has.
+  // Optimistic: the pill shows the latest tap now. Writes go through
+  // reactionWrites (one in flight per message, the latest tap queued, no
+  // duplicate writes), so a quick A-then-B can't end as A on the server.
+  // false = this tap was my latest intent and the write carrying it failed
+  // or timed out (any error, including the database's uniform
+  // reaction_not_allowed), so the page shows its toast; a failed tap that a
+  // newer tap superseded stays quiet.
+  // When nothing is pending any more the pill settles on what the server
+  // confirmed (a rollback only if no newer tap exists) and a fetch
+  // reconciles.
   const setMessageReaction = useCallback(
     async (messageId: string, emoji: QuickReaction | null): Promise<boolean> => {
       if (!selfId || reactionsSupportRef.current !== "yes") return false;
       const message = messagesRef.current.find((m) => m.id === messageId);
       if (!message || message.unsent_at) return false;
-      const before = myReaction(reactionsRef.current, messageId, selfId);
-      const seq = ++reactionWriteSeqRef.current;
-      pendingReactionsRef.current.set(messageId, { emoji, seq });
+      const generation = generationRef.current;
+      const done = reactionWrites.set(messageId, emoji, {
+        // Ignored while a write for this message is pending; otherwise the
+        // shown state is the last fetched (server) state.
+        saved: myReaction(reactionsRef.current, messageId, selfId),
+        // Bounded by the queue (REACTION_WRITE_TIMEOUT_MS): `signal` aborts
+        // the request on timeout or account switch.
+        write: async (id, next, signal) => {
+          const { error } = next
+            ? await supabase
+                .from("message_reactions")
+                .upsert({ message_id: id, user_id: selfId, emoji: next }, { onConflict: "message_id,user_id" })
+                .abortSignal(signal)
+            : await supabase.from("message_reactions").delete().eq("message_id", id).eq("user_id", selfId).abortSignal(signal);
+          if (error && !signal.aborted) {
+            console.error("GolfMe: failed to update message reaction.", error);
+            if (generationRef.current === generation && isMissingReactionsTableError(error)) {
+              reactionsSupportRef.current = "no";
+              setReactionsSupport("no");
+            }
+          }
+          return error;
+        },
+        // Settles on the last confirmed state, then refetches. After a
+        // timeout (`uncertain`) the server may have applied the write
+        // anyway: the refetch's rows replace this rollback, so the pill ends
+        // on what the server really holds, not on an assumption.
+        onSettled: (id, saved) => {
+          if (generationRef.current !== generation) return;
+          applyReactions(withReaction(reactionsRef.current, id, selfId, saved));
+          void fetchReactions(conversationIdsRef.current);
+        },
+        onLateSuccess: () => {
+          if (generationRef.current !== generation) return;
+          void fetchReactions(conversationIdsRef.current);
+        },
+      });
       applyReactions(withReaction(reactionsRef.current, messageId, selfId, emoji));
-
-      const { error } = emoji
-        ? await supabase
-            .from("message_reactions")
-            .upsert({ message_id: messageId, user_id: selfId, emoji }, { onConflict: "message_id,user_id" })
-        : await supabase.from("message_reactions").delete().eq("message_id", messageId).eq("user_id", selfId);
-
-      const latest = pendingReactionsRef.current.get(messageId)?.seq === seq;
-      if (latest) pendingReactionsRef.current.delete(messageId);
-      if (error) {
-        console.error("GolfMe: failed to update message reaction.", error);
-        if (isMissingReactionsTableError(error)) {
-          reactionsSupportRef.current = "no";
-          setReactionsSupport("no");
-        }
-        if (latest) applyReactions(withReaction(reactionsRef.current, messageId, selfId, before));
-      }
-      void fetchReactions(conversationIdsRef.current);
-      return !error;
+      return done;
     },
-    [selfId, applyReactions, fetchReactions],
+    [selfId, applyReactions, fetchReactions, reactionWrites],
   );
 
   const markConversationRead = useCallback(

@@ -1173,8 +1173,15 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   // Demo reactions: page-local state, like demoDmCleared (resets on
   // reload); same rules as the database (not on an unsent message, not
-  // across a block).
+  // across a block). No request, so nothing can resolve out of order: each
+  // tap is applied synchronously, in tap order, as a functional update (the
+  // latest tap always wins). Cleared when the signed-in identity changes
+  // (sign-out, demo <-> real, another account), so nothing carries over.
   const [demoReactions, setDemoReactions] = useState<MessageReaction[]>([]);
+  const demoReactionsOwner = auth.isDemo ? `demo:${currentUser.id}` : `real:${auth.authUser?.id ?? ""}`;
+  useEffect(() => {
+    setDemoReactions((prev) => (prev.length === 0 ? prev : []));
+  }, [demoReactionsOwner]);
   const canReactToMessages = auth.isDemo || realSocial.reactionsSupported;
   const messageReactions = auth.isDemo ? demoReactions : realSocial.messageReactions;
   const setMessageReaction = useCallback(
