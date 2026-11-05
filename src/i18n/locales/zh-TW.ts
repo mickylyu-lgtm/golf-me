@@ -1277,6 +1277,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "notFound.cta": "前往 GolfMe",
 
   "community.title": "社群",
+  "community.seeAllPosts": "在社群查看所有貼文",
   "community.subtitle": "球場閒聊、趣味內容，以及正在招募球友的球局。",
   "community.tabForYou": "推薦",
   "community.tabFollowing": "關注",

@@ -1277,6 +1277,7 @@ export const ko: Record<TranslationKey, string> = {
   "notFound.cta": "GolfMe로 이동",
 
   "community.title": "커뮤니티",
+  "community.seeAllPosts": "커뮤니티에서 모든 게시물 보기",
   "community.subtitle": "골프 이야기, 밈, 골프장 잡담, 그리고 플레이어를 찾는 라운드.",
   "community.tabForYou": "추천",
   "community.tabFollowing": "팔로잉",

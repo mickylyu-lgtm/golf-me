@@ -1193,6 +1193,7 @@ export const en = {
 
   // Community
   "community.title": "Community",
+  "community.seeAllPosts": "See all posts in Community",
   "community.subtitle": "Golf talk, memes, course chat, and rounds looking for players.",
   "community.tabForYou": "For You",
   "community.tabFollowing": "Following",

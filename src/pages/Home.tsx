@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, CalendarClock, Plus, Search, Share2, Sparkles, UserPlus, Users } from "lucide-react";
@@ -29,7 +29,10 @@ import { homeFocus, readOnboardingIntents } from "../lib/onboardingIntent";
 
 const HOME_RADIUS_MILES = 25;
 const NEARBY_ROUNDS_SHOWN = 3;
-const HOME_POSTS_SHOWN = 6;
+// Home's Community feed keeps going as you scroll (Micky, 2026-11-05: "so
+// people don't just scroll to the end"): this many at first, this many more
+// each time the end of the list comes near, until every loaded post is shown.
+const HOME_POSTS_STEP = 6;
 
 // A standalone class list (rather than layering overrides onto
 // CLICKABLE_CARD_CLASS) — Tailwind's generated stylesheet order doesn't
@@ -170,12 +173,29 @@ export function Home() {
   );
 
   // Same underlying data + PostCard component as the full Community page —
-  // just the newest slice, so Home never carries a duplicate feed implementation.
-  const recentPosts = useMemo(
-    () =>
-      [...visiblePosts()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, HOME_POSTS_SHOWN),
+  // the newest first, revealed in steps, so Home never carries a duplicate
+  // feed implementation.
+  const allPosts = useMemo(
+    () => [...visiblePosts()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     [visiblePosts],
   );
+  const [postsShown, setPostsShown] = useState(HOME_POSTS_STEP);
+  const recentPosts = useMemo(() => allPosts.slice(0, postsShown), [allPosts, postsShown]);
+  const morePosts = postsShown < allPosts.length;
+  const postsEndRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const end = postsEndRef.current;
+    if (!end || !morePosts || typeof IntersectionObserver === "undefined") return;
+    // Starts loading the next step a little before the end is on screen.
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) setPostsShown((n) => n + HOME_POSTS_STEP);
+      },
+      { rootMargin: "0px 0px 600px 0px" },
+    );
+    observer.observe(end);
+    return () => observer.disconnect();
+  }, [morePosts, postsShown]);
 
   // Self-resolving nudge — only shows while under the same 3-of-5 threshold
   // Auto-Match itself gates on, so it disappears the moment it's no longer
@@ -383,6 +403,16 @@ export function Home() {
             {recentPosts.map((post) => (
               <PostCard key={post.id} post={post} />
             ))}
+            {morePosts ? (
+              <div ref={postsEndRef} aria-hidden="true" className="h-px" />
+            ) : (
+              <button
+                onClick={() => navigate("/community")}
+                className="mt-1 flex min-h-11 items-center justify-center gap-1.5 self-center rounded-full px-4 text-sm font-semibold text-fairway-700 transition-colors duration-200 hover:bg-fairway-50 hover:text-fairway-800"
+              >
+                {t("community.seeAllPosts")} <ArrowRight size={14} aria-hidden="true" />
+              </button>
+            )}
           </div>
         ) : (
           <button

@@ -1277,6 +1277,7 @@ export const ja: Record<TranslationKey, string> = {
   "notFound.cta": "GolfMeへ移動",
 
   "community.title": "コミュニティ",
+  "community.seeAllPosts": "コミュニティですべての投稿を見る",
   "community.subtitle": "ゴルフ談義、ミーム、コースの話題、そしてメンバー募集中のラウンド。",
   "community.tabForYou": "おすすめ",
   "community.tabFollowing": "フォロー中",

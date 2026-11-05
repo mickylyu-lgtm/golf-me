@@ -1277,6 +1277,7 @@ export const es: Record<TranslationKey, string> = {
   "notFound.cta": "Ir a GolfMe",
 
   "community.title": "Comunidad",
+  "community.seeAllPosts": "Ver todas las publicaciones en Comunidad",
   "community.subtitle": "Charla de golf, memes, conversación de campos y rondas que buscan jugadores.",
   "community.tabForYou": "Para Ti",
   "community.tabFollowing": "Siguiendo",
