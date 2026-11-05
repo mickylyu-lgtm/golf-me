@@ -146,6 +146,11 @@ export interface GolferProfile {
   // leave it undefined; read distance through golferDistanceMiles()
   // (compatibility.ts), which falls back to real playing-area coordinates.
   distanceMiles?: number;
+  // Real profiles read through the server directory RPCs (lib/publicDirectory,
+  // migration 20261106120000): a coarse distance range computed server-side
+  // between ~5 km cells, never coordinates. When set, distanceMiles holds the
+  // bucket's upper edge (for scoring/sorting only); labels should read this.
+  distanceBucket?: "within_5" | "5_to_10" | "10_to_15" | "15_to_25" | "25_to_50" | "over_50";
   handicap: number | null; // null = no handicap / brand new
   favoriteCourses: string[];
   budgetMin: number;

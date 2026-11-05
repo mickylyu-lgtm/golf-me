@@ -5,8 +5,7 @@ import { refetchOnResume } from "../lib/resumeRefetch";
 import { useAuth } from "./AuthContext";
 import { realRoundToGolfCall } from "../lib/golfCall";
 import type { RoundRow, ParticipantRow } from "../lib/golfCall";
-import { profileRowToGolferProfile } from "../lib/profile";
-import type { ProfileRow } from "../lib/profile";
+import { fetchPublicProfiles } from "../lib/publicProfilesFetch";
 import { INITIAL_LOAD_STATUS, applyLoadOutcome, isFirstLoadError, isRefreshError } from "../lib/loadStatus";
 import { isObjectionableContentError } from "../lib/objectionableContent";
 import type { SendMessageResult } from "../lib/objectionableContent";
@@ -155,11 +154,14 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
       for (const r of nextRounds) ids.add(r.host_user_id);
       for (const p of nextParticipants) ids.add(p.user_id);
       if (ids.size > 0) {
-        const { data: profileRows, error: profilesError } = await supabase.from("profiles").select("*").in("id", Array.from(ids));
+        // Hosts and rosters by id (golfer_public_profiles, lib/
+        // publicProfilesFetch): includes gender/age range for roster
+        // preference matching; no coordinates; blocked-either-way absent.
+        const { profiles, error: profilesError } = await fetchPublicProfiles(Array.from(ids));
         if (profilesError) throw profilesError;
         if (stale()) return;
         const map = new Map<string, GolferProfile>();
-        for (const row of (profileRows ?? []) as ProfileRow[]) map.set(row.id, profileRowToGolferProfile(row));
+        for (const g of profiles) map.set(g.id, g);
         setProfilesById(map);
       } else {
         setProfilesById(new Map());

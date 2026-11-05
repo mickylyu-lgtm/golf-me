@@ -25,6 +25,11 @@ export interface ProfileRow {
   // 20261030120000). Optional: absent until that migration is applied.
   notify_new_rounds?: boolean;
   notify_circle_posts?: boolean;
+  // Settings -> Privacy -> Discoverable (migration 20261106120000). false =
+  // left out of the Golfers list, search, suggestions and new-round alerts
+  // (server-side, see lib/discoverability). Optional: absent until that
+  // migration is applied, which reads as discoverable.
+  discoverable?: boolean;
   favorite_courses: string[];
   walk_or_cart: string | null;
   vibes: string[];

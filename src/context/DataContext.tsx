@@ -375,7 +375,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   // batch profile fetches instead. currentUser itself is checked first
   // since it's always known even before either cache has loaded anyone.
   const allGolfCalls = auth.isDemo ? data.golfCalls : realRounds.golfCalls;
-  const { isBlocked: realIsBlocked, isBlockedBy: realIsBlockedBy } = realSocial;
+  const { isBlocked: realIsBlocked, isBlockedBy: realIsBlockedBy, getKnownProfile: realGetKnownProfile } = realSocial;
   // Blocking hides the other side's rounds in both directions (product
   // decision, health audit Batch C P1-5) -- a round hosted by someone you
   // blocked, or who blocked you, never appears in browse/Home/Auto-Match or
@@ -399,18 +399,20 @@ export function DataProvider({ children }: { children: ReactNode }) {
     (id: string) => {
       if (auth.isDemo) return data.golfers.find((g) => g.id === id);
       if (id === currentUser.id) return currentUser;
-      // discoverableGolfers covers someone found via Discover/Find
-      // Friends who isn't (yet) a round participant or DM/notification
-      // contact — without it, tapping a search result or a Discover card
-      // for a not-yet-connected real golfer would incorrectly resolve to
-      // "not found" on their profile page.
+      // getKnownProfile covers someone found via Discover/Find Friends who
+      // isn't (yet) a round participant or DM/notification contact, and a
+      // follower/followee who turned Discoverable off; community profiles
+      // cover a post or comment author (hidden or not, their posts stay
+      // visible). Without these, tapping such a golfer would incorrectly
+      // resolve to "not found" on their profile page.
       return (
         realRounds.profilesById.get(id) ??
         realSocial.profilesById.get(id) ??
-        realSocial.discoverableGolfers.find((g) => g.id === id)
+        realGetKnownProfile(id) ??
+        realCommunity.profilesById.get(id)
       );
     },
-    [auth.isDemo, data.golfers, currentUser, realRounds.profilesById, realSocial.profilesById, realSocial.discoverableGolfers],
+    [auth.isDemo, data.golfers, currentUser, realRounds.profilesById, realSocial.profilesById, realGetKnownProfile, realCommunity.profilesById],
   );
   const getGolfCall = useCallback((id: string) => golfCalls.find((c) => c.id === id), [golfCalls]);
   // Same either-way check the golfCalls filter above uses.

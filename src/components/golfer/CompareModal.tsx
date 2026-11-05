@@ -4,8 +4,9 @@ import { useData } from "../../context/DataContext";
 import { Modal } from "../ui/Modal";
 import { Avatar } from "../ui/Avatar";
 import { MatchReasons } from "./MatchReasons";
-import { computeCompatibility } from "../../lib/compatibility";
+import { computeCompatibility, golferDistanceMiles } from "../../lib/compatibility";
 import { golferMatchReasons } from "../../lib/matchReasons";
+import { golferDistanceLabel } from "../../lib/publicDirectory";
 import { computeCredibility, credibilityLabel } from "../../lib/credibility";
 import { formatBudgetRange, handicapLabel, paceLabel } from "../../lib/format";
 import { vibeLabel, walkOrCartLabel } from "../../lib/enumLabels";
@@ -33,7 +34,10 @@ export function CompareModal({ other, onClose }: { other: GolferProfile; onClose
   const { t } = useLocale();
 
   const compat = useMemo(() => computeCompatibility(currentUser, other), [currentUser, other]);
-  const reasons = useMemo(() => golferMatchReasons(compat, t), [compat, t]);
+  const reasons = useMemo(
+    () => golferMatchReasons(compat, t, golferDistanceLabel(other, golferDistanceMiles(currentUser, other), t)),
+    [compat, t, other, currentUser],
+  );
 
   const myCredibility = useMemo(() => computeCredibility(currentUser, reviewsAbout(currentUser.id)), [currentUser, reviewsAbout]);
   const theirCredibility = useMemo(() => computeCredibility(other, reviewsAbout(other.id)), [other, reviewsAbout]);

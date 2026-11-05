@@ -116,14 +116,22 @@ export function callMatchReasons(call: GolfCall, breakdown: CompatibilityBreakdo
   return pickReasons(factors);
 }
 
-export function golferMatchReasons(breakdown: CompatibilityBreakdown, t: TFn): MatchFactor[] {
+// distanceLabel: from lib/publicDirectory golferDistanceLabel (a range for
+// a server bucket, whole miles for a real distance). Unknown distance drops
+// the distance reason entirely: distanceScore scores it a neutral 50, which
+// used to read as "A bit of a drive" for someone whose distance nobody knew.
+export function golferMatchReasons(breakdown: CompatibilityBreakdown, t: TFn, distanceLabel?: string): MatchFactor[] {
   const factors: MatchFactor[] = [
-    {
-      key: "distance",
-      score: breakdown.distance,
-      positive: breakdown.distance >= 70,
-      text: breakdown.distance >= 70 ? t("matchReason.golferNearby") : t("matchReason.golferFar"),
-    },
+    ...(distanceLabel === undefined
+      ? []
+      : [
+          {
+            key: "distance" as const,
+            score: breakdown.distance,
+            positive: breakdown.distance >= 70,
+            text: distanceLabel,
+          },
+        ]),
     {
       key: "skill",
       score: breakdown.skill,

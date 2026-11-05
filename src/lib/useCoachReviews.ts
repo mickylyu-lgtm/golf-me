@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "./supabase";
 import { useAuth } from "../context/AuthContext";
-import { profileRowToGolferProfile } from "./profile";
-import type { ProfileRow } from "./profile";
+import { fetchPublicProfiles } from "./publicProfilesFetch";
 import type { GolferProfile } from "../types";
 
 export interface CoachReview {
@@ -83,12 +82,12 @@ export function useCoachReviews(postId: string | undefined) {
     setReviews(rows.map(rowToReview));
     const ids = Array.from(new Set(rows.map((r) => r.reviewer_user_id)));
     if (ids.length > 0) {
-      const { data: profileRows, error: profErr } = await supabase.from("profiles").select("*").in("id", ids);
+      const { profiles, error: profErr } = await fetchPublicProfiles(ids);
       if (profErr) {
         console.error("GolfMe: failed to load Coach Review reviewer profiles.", profErr);
       } else {
         const map = new Map<string, GolferProfile>();
-        for (const row of (profileRows ?? []) as ProfileRow[]) map.set(row.id, profileRowToGolferProfile(row));
+        for (const g of profiles) map.set(g.id, g);
         setProfilesById(map);
       }
     } else {

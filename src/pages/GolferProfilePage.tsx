@@ -39,7 +39,7 @@ import { FoundingGolferBadge, FoundingMark } from "../components/golfer/Founding
 import { ReputationBadge } from "../components/golfer/ReputationBadge";
 import { computeCompatibility, golferDistanceMiles } from "../lib/compatibility";
 import { matchTier, golferMatchReasons, TIER_FOR_YOU_KEYS } from "../lib/matchReasons";
-import { roundedMiles } from "../lib/geo";
+import { golferDistanceLabel } from "../lib/publicDirectory";
 import { firstName } from "../lib/greeting";
 import { dmDraftKey, loadChatDraft, saveChatDraft } from "../lib/chatDraft";
 import { inviteDraftToSeed } from "../lib/inviteToPlay";
@@ -95,7 +95,8 @@ export function GolferProfilePage() {
 
   const golfer = id ? getGolfer(id) : undefined;
   const compat = useMemo(() => (golfer ? computeCompatibility(currentUser, golfer) : null), [currentUser, golfer]);
-  const distance = golfer ? golferDistanceMiles(currentUser, golfer) : undefined;
+  // Range for a server bucket, whole miles for a real distance, nothing if unknown.
+  const distanceLabel = golfer ? golferDistanceLabel(golfer, golferDistanceMiles(currentUser, golfer), t) : undefined;
   // Real accounts: golfer.reputation and the review corpus come from a live
   // server aggregate (get_credibility_stats) — round_reviews' raw rows are
   // reviewer-only, so `reviewsAbout(golfer.id)` is correctly always empty
@@ -141,7 +142,7 @@ export function GolferProfilePage() {
   const following = isFollowing(golfer.id);
   const messagingAllowed = canMessage(golfer.id);
   const tier = compat ? matchTier(compat.overall) : null;
-  const reasons = compat ? golferMatchReasons(compat, t) : [];
+  const reasons = compat ? golferMatchReasons(compat, t, distanceLabel) : [];
   const enrichedGolfer = { ...golfer, reputation: realReputation };
   const isEstablished = !isNewAccount(enrichedGolfer.reputation.completedRounds);
   const golferReviews = reviewsAbout(golfer.id);
@@ -246,9 +247,9 @@ export function GolferProfilePage() {
             )}{" "}
             · {golfer.areaLabel}
           </p>
-          {distance !== undefined && (
+          {distanceLabel !== undefined && (
             <p className="flex items-center justify-center gap-1 text-xs text-slate-400">
-              <MapPin size={11} /> {t("golfCallCard.miAway", { miles: roundedMiles(distance) })}
+              <MapPin size={11} /> {distanceLabel}
             </p>
           )}
         </div>

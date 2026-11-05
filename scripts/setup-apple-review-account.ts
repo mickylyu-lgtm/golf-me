@@ -100,6 +100,17 @@ async function main() {
 
   console.log(`Auth user id: ${userId}`);
 
+  // Mark it as the App Store reviewer BEFORE the profile is marked
+  // onboarded: user_roles 'app_reviewer' keeps it out of the Golfers
+  // directory, search and suggestions (private.is_directory_excluded,
+  // migration 20261106120000) and out of the Founding Golfer cohort. It can
+  // still browse, message and join like any account. Idempotent.
+  const { error: roleError } = await admin
+    .from("user_roles")
+    .upsert({ user_id: userId, role: "app_reviewer", active: true, revoked_at: null }, { onConflict: "user_id,role" });
+  if (roleError) throw roleError;
+  console.log("Role: app_reviewer (hidden from the directory and Founding).");
+
   const { error: profileError } = await admin.from("profiles").upsert({
     id: userId,
     name: "Apple Review",

@@ -12,7 +12,7 @@ import { TrustBadgeRow } from "./TrustBadges";
 import { CLICKABLE_CARD_CLASS } from "../ui/cardStyles";
 import type { CompatibilityBreakdown } from "../../lib/compatibility";
 import { golferDistanceMiles } from "../../lib/compatibility";
-import { roundedMiles } from "../../lib/geo";
+import { golferDistanceLabel } from "../../lib/publicDirectory";
 import { useData } from "../../context/DataContext";
 import { useCredibilityStats } from "../../lib/useCredibility";
 import { useLocale } from "../../i18n/LocaleContext";
@@ -26,7 +26,9 @@ interface GolferCardProps {
 export function GolferCard({ golfer, compatibility, onClick }: GolferCardProps) {
   const { t } = useLocale();
   const { currentUser } = useData();
-  const distance = golferDistanceMiles(currentUser, golfer);
+  // A server bucket reads as a range ("5–10 mi"); a real distance as whole
+  // miles; unknown shows nothing.
+  const distanceLabel = golferDistanceLabel(golfer, golferDistanceMiles(currentUser, golfer), t);
   // Real accounts: live server stats, not the never-updated profile
   // counters (demo falls through to the fixture's own numbers).
   const { reputation } = useCredibilityStats(golfer.id, golfer.reputation);
@@ -42,7 +44,7 @@ export function GolferCard({ golfer, compatibility, onClick }: GolferCardProps) 
               {golfer.ageRange && <span className="whitespace-nowrap font-normal text-slate-400"> · {golfer.ageRange}</span>}
             </p>
             <p className="flex items-center gap-1 text-xs text-slate-500">
-              <MapPin size={12} /> {distance !== undefined && `${t("golfCallCard.miAway", { miles: roundedMiles(distance) })} · `}
+              <MapPin size={12} /> {distanceLabel !== undefined && `${distanceLabel} · `}
               {golfer.areaLabel}
             </p>
           </div>

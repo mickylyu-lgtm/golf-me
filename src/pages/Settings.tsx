@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, ArrowLeft, Bell, ChevronRight, CircleHelp, Globe, Info, Lock, LogOut, MapPin, RotateCcw, ShieldCheck, ShieldOff, Sparkles, User, Users } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Bell, ChevronRight, CircleHelp, Eye, EyeOff, Globe, Info, Lock, LogOut, MapPin, RotateCcw, ShieldCheck, ShieldOff, Sparkles, User, Users } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
@@ -19,6 +19,7 @@ import { AddToHomeScreenPrompt } from "../components/layout/AddToHomeScreenPromp
 import { clearOnboardingDraft } from "../lib/onboardingDraft";
 import { clearChatDrafts } from "../lib/chatDraft";
 import { goBack } from "../lib/goBack";
+import { discoverableSetting } from "../lib/discoverability";
 
 // Plain-language push status for THIS phone, from what it knows locally:
 // iOS permission, whether Apple issued a device token, and whether GolfMe
@@ -88,7 +89,7 @@ function PushStatusLine({ userId, pushEnabled }: { userId: string; pushEnabled: 
 
 export function Settings() {
   const { currentUser, golfers, blockedIds, getGolfer, unblockUser, logOut, resetDemoData } = useData();
-  const { isDemo, authUser, pushEnabled: realPushEnabled, notifyNewRounds: realNotifyNewRounds, notifyCirclePosts: realNotifyCirclePosts, saveProfile } = useAuth();
+  const { isDemo, authUser, profileRow, pushEnabled: realPushEnabled, notifyNewRounds: realNotifyNewRounds, notifyCirclePosts: realNotifyCirclePosts, saveProfile } = useAuth();
   const { showToast } = useToast();
   const { locale, t } = useLocale();
   const navigate = useNavigate();
@@ -101,10 +102,9 @@ export function Settings() {
   // Demo accounts never had a real profiles.push_enabled row to persist
   // against, so they keep the old local-only toggle; real accounts persist
   // through AuthContext (see push_enabled's own migration comment for why
-  // this actually gates anything). The old "Email updates" and
-  // "Discoverable" switches were removed (Micky, 2026-11-04): neither was
-  // saved or enforced anywhere, so they promised a digest and a hidden
-  // profile that didn't exist.
+  // this actually gates anything). The old "Email updates" switch was
+  // removed (Micky, 2026-11-04): nothing saved it and no digest exists.
+  // "Discoverable" came back as a real, server-enforced setting (below).
   const [demoPushEnabled, setDemoPushEnabled] = useState(true);
   const pushEnabled = isDemo ? demoPushEnabled : realPushEnabled;
   // Which real switch is saving: it stays put (disabled) until the write
@@ -149,6 +149,35 @@ export function Settings() {
       await saveProfile({ [column]: value });
     } catch (err) {
       showToast(err instanceof Error ? err.message : t("auth.authError"), "warning");
+    } finally {
+      setSavingSwitch(null);
+    }
+  }
+
+  // Settings -> Privacy -> Discoverable (profiles.discoverable). Real
+  // accounts: saved through saveProfile and enforced server-side
+  // (golfer_directory, search + suggestion RPCs, new-round alert trigger;
+  // migration 20261106120000). The switch shows the SAVED value: it only
+  // moves once the write succeeds, and a failed write leaves it where it was
+  // with an inline error. Hidden ("unavailable") when the database has no
+  // column yet, so it can never claim to hide anyone. Demo: local only.
+  const discoverableSaved = discoverableSetting(profileRow as Record<string, unknown> | null);
+  const [demoDiscoverable, setDemoDiscoverable] = useState(true);
+  const [discoverableError, setDiscoverableError] = useState(false);
+  const discoverableOn = isDemo ? demoDiscoverable : discoverableSaved === "on";
+  const showDiscoverable = isDemo || discoverableSaved !== "unavailable";
+  async function handleDiscoverableToggle(value: boolean) {
+    if (isDemo) {
+      setDemoDiscoverable(value);
+      return;
+    }
+    if (savingSwitch) return;
+    setSavingSwitch("discoverable");
+    setDiscoverableError(false);
+    try {
+      await saveProfile({ discoverable: value });
+    } catch {
+      setDiscoverableError(true);
     } finally {
       setSavingSwitch(null);
     }
@@ -259,9 +288,33 @@ export function Settings() {
               <MapPin size={16} className="text-slate-400" />
               <p className="flex-1 text-xs text-slate-600">{t("settings.locationNote")}</p>
             </div>
-            {/* What's true today, instead of a visibility switch nothing
-                enforced: every signed-in golfer can see a profile; blocking is
-                the real control. */}
+            {showDiscoverable && (
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-3">
+                  {discoverableOn ? <Eye size={16} className="text-slate-400" /> : <EyeOff size={16} className="text-slate-400" />}
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-slate-800">{t("settings.discoverable")}</p>
+                    <p className="text-xs text-slate-500">{t("settings.discoverableDesc")}</p>
+                  </div>
+                  <Toggle checked={discoverableOn} onChange={handleDiscoverableToggle} label={t("settings.discoverable")} disabled={savingSwitch !== null} />
+                </div>
+                {savingSwitch === "discoverable" && (
+                  <p className="ml-7 text-xs text-slate-500" aria-live="polite">
+                    {t("settings.discoverableSaving")}
+                  </p>
+                )}
+                {discoverableError && savingSwitch !== "discoverable" && (
+                  <p className="ml-7 text-xs font-medium text-amber-700" role="alert">
+                    {t("settings.discoverableSaveFailed")}
+                  </p>
+                )}
+                {!discoverableOn && <p className="ml-7 text-xs text-slate-600">{t("settings.discoverableOffNote")}</p>}
+                {isDemo && <p className="ml-7 text-xs text-slate-500">{t("settings.discoverableDemoNote")}</p>}
+              </div>
+            )}
+            {/* Still true with Discoverable off: the setting keeps a golfer
+                out of discovery, it doesn't make the profile private; blocking
+                is the control for a specific person. */}
             <div className="flex items-center gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
               <Users size={16} className="text-slate-400" />
               <p className="flex-1 text-xs text-slate-600">{t("settings.profileVisibilityNote")}</p>

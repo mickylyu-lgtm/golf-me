@@ -2,8 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { ReactNode } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "./AuthContext";
-import { profileRowToGolferProfile } from "../lib/profile";
-import type { ProfileRow } from "../lib/profile";
+import { fetchGolferDirectory, fetchPublicProfiles } from "../lib/publicProfilesFetch";
+import { discoverableCandidates } from "../lib/discoverability";
 import { INITIAL_LOAD_STATUS, applyLoadOutcome, isFirstLoadError, isRefreshError } from "../lib/loadStatus";
 import { isObjectionableContentError } from "../lib/objectionableContent";
 import type { SendMessageResult } from "../lib/objectionableContent";
@@ -92,11 +92,17 @@ interface RealSocialContextValue {
   refreshFailed: boolean;
   /** Re-runs a full fetch (isLoading is true while it runs). */
   retry: () => Promise<void>;
-  // Every other real profile (minus self, minus blocked either direction) —
-  // the real-mode data source for Discover/Find, distinct from profilesById
-  // above (which only ever holds people already connected via a round/DM/
-  // notification, not a broad discovery list).
+  // The Golfers list for real accounts: the server directory
+  // (golfer_directory: onboarded, named, Discoverable, unblocked either way,
+  // not a test/reviewer account; lib/publicDirectory), minus self and
+  // blocks. Distinct from profilesById above (which only ever holds people
+  // already connected via a round/DM/notification). Shape unchanged
+  // (GolferProfile[]); entries carry distanceBucket instead of coordinates.
   discoverableGolfers: GolferProfile[];
+  // Resolves an id against every profile this client holds, including
+  // hidden golfers it is connected to (follows either way, DMs,
+  // notifications). For looking up a known person, never for listing.
+  getKnownProfile: (id: string) => GolferProfile | undefined;
 
   canMessage: (otherId: string) => boolean;
   isBlocked: (id: string) => boolean;
@@ -246,7 +252,7 @@ const NOTIFICATION_WINDOW = 200;
 const REACTION_WINDOW = 2000;
 
 export function RealSocialProvider({ children }: { children: ReactNode }) {
-  const { isDemo, authUser } = useAuth();
+  const { isDemo, authUser, profile: ownProfile } = useAuth();
   const [participants, setParticipants] = useState<ConversationParticipantRow[]>([]);
   const [messages, setMessages] = useState<MessageRow[]>([]);
   const [blocks, setBlocks] = useState<BlockRow[]>([]);
@@ -260,6 +266,10 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
   // Ids of people this user is connected to (conversation participants,
   // notification actors) -- profilesById is exactly these, as before.
   const [connectedIds, setConnectedIds] = useState<string[]>([]);
+  // Ids from the last directory fetch -- the only ids the Golfers list may
+  // offer. The cache above holds more than these (people this account is
+  // connected to, hidden from the directory or not).
+  const [directoryIds, setDirectoryIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [loadStatus, setLoadStatus] = useState(INITIAL_LOAD_STATUS);
   const fetchingRef = useRef(false);
@@ -381,16 +391,13 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       const full = forceFullRef.current || Date.now() - lastFullAtRef.current >= FULL_REFRESH_INTERVAL_MS;
       forceFullRef.current = false;
       try {
-        // Discover/Find's real-mode candidate pool — every registered real
-        // golfer, RLS already allows any authenticated user to read every
-        // profile row (mirrors the old mock world's fully-open
-        // visibleGolfers()). Self/blocked filtering happens in the
-        // discoverableGolfers memo below, not here. Only on full refetches:
-        // it used to be re-downloaded on every poll tick and every realtime
-        // event.
-        // Promise.resolve() starts the (lazy) query now, in parallel with
-        // the batch below, rather than only when it is awaited.
-        const directoryPromise = full ? Promise.resolve(supabase.from("profiles").select("*")) : null;
+        // Discover/Find's real-mode candidate pool: the server-filtered
+        // directory (lib/publicProfilesFetch; the old whole-table read only
+        // on a database without the RPC). Only on full refetches: it used
+        // to be re-downloaded on every poll tick and every realtime event.
+        // Started now, in parallel with the batch below; it resolves with
+        // its error rather than rejecting, so it's safe if never awaited.
+        const directoryPromise = full ? fetchGolferDirectory(selfId) : null;
         const [
           { data: myConvIds, error: convErr },
           { data: blockRows, error: blockErr },
@@ -406,11 +413,11 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
         if (blockErr) throw blockErr;
         if (notifErr) throw notifErr;
         if (followErr) throw followErr;
-        let directoryRows: ProfileRow[] | null = null;
+        let directoryProfiles: GolferProfile[] | null = null;
         if (directoryPromise) {
-          const { data, error } = await directoryPromise;
+          const { profiles, error } = await directoryPromise;
           if (error) throw error;
-          directoryRows = (data ?? []) as ProfileRow[];
+          directoryProfiles = profiles;
         }
         if (!isCurrent()) return;
 
@@ -483,18 +490,25 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
           needed.add(f.following_id);
         }
         let cache = profileCacheRef.current;
-        if (directoryRows) cache = new Map(directoryRows.map((row) => [row.id, profileRowToGolferProfile(row)]));
+        if (directoryProfiles) cache = new Map(directoryProfiles.map((g) => [g.id, g]));
         const missing = [...needed].filter((id) => !cache.has(id));
         if (missing.length > 0) {
-          const { data: profileRows, error: profErr } = await supabase.from("profiles").select("*").in("id", missing);
+          // By id (golfer_public_profiles): connected people resolve even
+          // when hidden from the directory; anyone blocked either way, and
+          // deleted accounts, simply don't come back.
+          const { profiles, error: profErr } = await fetchPublicProfiles(missing);
           if (profErr) throw profErr;
           if (!isCurrent()) return;
           cache = new Map(cache);
-          for (const row of (profileRows ?? []) as ProfileRow[]) cache.set(row.id, profileRowToGolferProfile(row));
+          for (const g of profiles) cache.set(g.id, g);
         }
         if (cache !== profileCacheRef.current) {
           profileCacheRef.current = cache;
           setProfileCache((prev) => (sameProfileMap(prev, cache) ? prev : cache));
+        }
+        if (directoryProfiles) {
+          const ids = directoryProfiles.map((g) => g.id);
+          setDirectoryIds((prev) => keepIfSame(prev, ids));
         }
         setConnectedIds((prev) => keepIfSame(prev, [...connected].sort()));
         if (full) lastFullAtRef.current = Date.now();
@@ -520,6 +534,21 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     },
     [selfId, fetchReactions],
   );
+
+  // Directory distances are computed server-side from this account's saved
+  // playing area, so a location change re-runs the full fetch instead of
+  // waiting up to FULL_REFRESH_INTERVAL_MS with distances from the old one.
+  const ownCoords = ownProfile?.playingAreaCoords;
+  const ownLocationKey = `${selfId ?? ""}|${ownCoords ? `${ownCoords.lat},${ownCoords.lng}` : ""}`;
+  const lastLocationKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    const prev = lastLocationKeyRef.current;
+    lastLocationKeyRef.current = ownLocationKey;
+    if (isDemo || !selfId || prev === null) return;
+    // Same account, different saved area (an account switch is handled by
+    // the account effect below).
+    if (prev !== ownLocationKey && prev.split("|")[0] === selfId) void refetch({ full: true });
+  }, [isDemo, selfId, ownLocationKey, refetch]);
 
   const retry = useCallback(async () => {
     setIsLoading(true);
@@ -560,6 +589,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       setBlocks([]);
       setNotificationRows([]);
       setProfileCache(new Map());
+      setDirectoryIds([]);
       setConnectedIds([]);
       setFollows([]);
       setPendingMessages([]);
@@ -1132,9 +1162,12 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
   const hasUnreadMessages = useMemo(() => dmConversations.some((c) => c.unread), [dmConversations]);
 
   const discoverableGolfers = useMemo(
-    () => allProfiles.filter((g) => g.id !== selfId && !blockedIds.includes(g.id) && !blockedByIds.includes(g.id)),
-    [allProfiles, selfId, blockedIds, blockedByIds],
+    () => discoverableCandidates(directoryIds, profileCache, selfId, new Set([...blockedIds, ...blockedByIds])),
+    [directoryIds, profileCache, selfId, blockedIds, blockedByIds],
   );
+  // Any profile this client already holds (directory + connected people),
+  // for resolving a known id -- never a list to browse.
+  const getKnownProfile = useCallback((id: string) => profileCache.get(id), [profileCache]);
 
   const reportUser = useCallback(
     async (reportedId: string, category: ReportCategory, details: string, context: Report["context"], meta?: ReportTarget) => {
@@ -1183,6 +1216,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       refreshFailed: !isDemo && isRefreshError(loadStatus),
       retry,
       discoverableGolfers,
+      getKnownProfile,
       canMessage,
       isBlocked,
       isBlockedBy,
@@ -1222,6 +1256,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       loadStatus,
       retry,
       discoverableGolfers,
+      getKnownProfile,
       canMessage,
       isBlocked,
       isBlockedBy,

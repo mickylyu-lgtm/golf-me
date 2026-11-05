@@ -4,8 +4,7 @@ import { supabase } from "../lib/supabase";
 import { refetchOnResume } from "../lib/resumeRefetch";
 import { privatizeAnalysesOfPost } from "../lib/caddieMedia";
 import { useAuth } from "./AuthContext";
-import { profileRowToGolferProfile } from "../lib/profile";
-import type { ProfileRow } from "../lib/profile";
+import { fetchPublicProfiles } from "../lib/publicProfilesFetch";
 import { INITIAL_LOAD_STATUS, applyLoadOutcome, isFirstLoadError, isRefreshError } from "../lib/loadStatus";
 import type { CommunityPost, PostComment, GolferProfile, PostMediaItem, PostType, PostCategory, SwingAnalysisStatus } from "../types";
 
@@ -207,10 +206,13 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
       for (const p of nextPosts) ids.add(p.author_id);
       for (const c of nextComments) ids.add(c.author_id);
       if (ids.size > 0) {
-        const { data: profileRows, error: profErr } = await supabase.from("profiles").select("*").in("id", Array.from(ids));
+        // Authors by id (golfer_public_profiles): a hidden golfer's posts
+        // still show their name; blocked either way is absent (their posts
+        // are filtered out in DataContext.visiblePosts anyway).
+        const { profiles, error: profErr } = await fetchPublicProfiles(Array.from(ids));
         if (profErr) throw profErr;
         const map = new Map<string, GolferProfile>();
-        for (const row of (profileRows ?? []) as ProfileRow[]) map.set(row.id, profileRowToGolferProfile(row));
+        for (const g of profiles) map.set(g.id, g);
         setProfilesById(map);
       }
       setLoadStatus((prev) => applyLoadOutcome(prev, true));
