@@ -9,6 +9,7 @@ import {
   MessageCircle,
   MoreHorizontal,
   Scale,
+  Send,
   ShieldAlert,
   ShieldCheck,
   ShieldOff,
@@ -259,7 +260,7 @@ export function GolferProfilePage() {
                 <Button className="flex-1" icon={<MessageCircle size={15} />} onClick={() => navigate(`/messages/${golfer.id}`)}>
                   {t("golferProfile.message")}
                 </Button>
-                <Button className="flex-1" variant="outline" icon={<Flag size={15} />} onClick={() => inviteToPlay(golfer)}>
+                <Button className="flex-1" variant="outline" icon={<Send size={15} />} onClick={() => inviteToPlay(golfer)}>
                   {t("golferProfile.inviteToPlay")}
                 </Button>
               </div>

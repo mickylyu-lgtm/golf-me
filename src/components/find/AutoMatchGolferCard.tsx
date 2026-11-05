@@ -1,4 +1,4 @@
-import { Flag, MapPin, UserRound } from "lucide-react";
+import { MapPin, Send, UserRound } from "lucide-react";
 import type { GolferProfile } from "../../types";
 import type { CompatibilityBreakdown } from "../../lib/compatibility";
 import { golferMatchReasons } from "../../lib/matchReasons";
@@ -48,7 +48,7 @@ export function AutoMatchGolferCard({ golfer, compatibility, distanceMiles, canI
       <MatchReasons reasons={reasons} />
       <div className="flex items-center gap-2">
         {canInvite && (
-          <Button size="sm" className="min-h-11 flex-1" icon={<Flag size={14} />} onClick={onInvite}>
+          <Button size="sm" className="min-h-11 flex-1" icon={<Send size={14} />} onClick={onInvite}>
             {t("golferProfile.inviteToPlay")}
           </Button>
         )}
