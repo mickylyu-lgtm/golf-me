@@ -69,7 +69,7 @@ import { chatImageUrls } from "../lib/chatImageClient";
 import { DEMO_VOICE_PREFIX, clampDuration } from "../lib/chatVoice";
 import type { ChatVoiceRef } from "../lib/chatVoice";
 import type { VoiceClip } from "../lib/voiceRecorder";
-import { claimVoiceClip } from "../lib/voiceSession";
+import { claimVoiceSend, type SentVoiceClip } from "../lib/voiceSession";
 import { withReaction } from "../lib/reactions";
 import { placeholderNameFromEmail } from "../lib/authInput";
 import type { MessageReaction, QuickReaction } from "../lib/reactions";
@@ -228,7 +228,10 @@ interface DataContextValue {
   sendRoundImage: (callId: string, photo: ProcessedChatImage, text: string, replyToId?: string | null) => Promise<SendMessageResult>;
   // Voice messages in round chat (lib/chatVoice.ts, migration 20261107180000).
   canSendRoundVoice: boolean;
-  sendRoundVoice: (callId: string, clip: VoiceClip, replyToId?: string | null) => Promise<SendMessageResult>;
+  // The round is clip.origin (captured when the recording started), never a
+  // page argument: a clip can only ever go to the conversation it was
+  // recorded in (lib/voiceSession.ts claimVoiceSend).
+  sendRoundVoice: (clip: SentVoiceClip, replyToId?: string | null) => Promise<SendMessageResult>;
   roundMessageReactions: MessageReaction[];
   setRoundMessageReaction: (messageId: string, emoji: QuickReaction | null) => Promise<boolean>;
   /** The current golfer was in this round and left it. */
@@ -295,7 +298,8 @@ interface DataContextValue {
   discardDirectImage: (tempId: string) => void;
   // Voice messages in DMs: same retry / discard as photos.
   canSendDirectVoice: boolean;
-  sendDirectVoice: (golferId: string, clip: VoiceClip, replyToId?: string) => Promise<SendMessageResult>;
+  // The recipient is clip.origin, as sendRoundVoice.
+  sendDirectVoice: (clip: SentVoiceClip, replyToId?: string) => Promise<SendMessageResult>;
   // Quick reactions (lib/reactions.ts): always in demo (page-local, not
   // persisted); for real accounts once public.message_reactions exists.
   canReactToMessages: boolean;
@@ -890,10 +894,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, []);
   const canSendRoundVoice = auth.isDemo || realRounds.voiceSupported;
   const sendRoundVoice = useCallback(
-    async (callId: string, clip: VoiceClip, replyToId?: string | null): Promise<SendMessageResult> => {
+    async (clip: SentVoiceClip, replyToId?: string | null): Promise<SendMessageResult> => {
       // Send-once (lib/voiceSession.ts): the first hand-over owns the
       // message and its bubble shows its real state; a repeat is dropped.
-      if (!claimVoiceClip(clip)) return "sent";
+      // The round is the clip's own origin; a clip without one is refused.
+      const claim = claimVoiceSend(clip, "round");
+      if (!claim.ok) return claim.reason === "duplicate" ? "sent" : "failed";
+      const callId = claim.to;
       if (!auth.isDemo) return realRounds.sendRoundVoice(callId, clip, replyToId);
       const voice = demoVoice(clip);
       setData((prev) => ({
@@ -1357,9 +1364,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
   );
   const canSendDirectVoice = auth.isDemo || realSocial.voiceSupported;
   const sendDirectVoice = useCallback(
-    async (golferId: string, clip: VoiceClip, replyToId?: string): Promise<SendMessageResult> => {
-      // Send-once, as sendRoundVoice.
-      if (!claimVoiceClip(clip)) return "sent";
+    async (clip: SentVoiceClip, replyToId?: string): Promise<SendMessageResult> => {
+      // Send-once and the recipient from the clip's origin, as sendRoundVoice.
+      const claim = claimVoiceSend(clip, "dm");
+      if (!claim.ok) return claim.reason === "duplicate" ? "sent" : "failed";
+      const golferId = claim.to;
       if (!auth.isDemo) return realSocial.sendDirectVoice(golferId, clip, replyToId);
       if (!canMessage(golferId) || !canSendMessageNow()) return "failed";
       const convId = dmConversationId(currentUser.id, golferId);

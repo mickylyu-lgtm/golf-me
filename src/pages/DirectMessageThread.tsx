@@ -44,7 +44,7 @@ import { canCopyImages, copyChatImage } from "../lib/chatImageClient";
 import type { DirectMessage } from "../types";
 import { VoiceMessage } from "../components/chat/VoiceMessage";
 import { useVoiceComposerProps } from "../lib/useVoiceComposerProps";
-import type { VoiceClip } from "../lib/voiceRecorder";
+import { voiceSendPlan, type SentVoiceClip } from "../lib/voiceSession";
 
 const IS_NATIVE = Capacitor.isNativePlatform();
 
@@ -85,10 +85,13 @@ export function DirectMessageThread() {
   // send only: nothing here touches the box / keyboard / scroll code below.
   const photo = useChatImageAttachment((reason) => showToast(t(reason === "tooLarge" ? "chat.photoTooLarge" : "chat.photoUnreadable"), "warning"));
   // Voice (lib/chatVoice.ts): the composer's hold-to-talk sends through
-  // handleVoiceClip (set below, after the thread is known).
-  const voiceClipRef = useRef<(clip: VoiceClip) => void>(() => {});
+  // handleVoiceClip (set below, after the thread is known). Each clip goes
+  // to the thread it was recorded in (clip.origin), never to this page's
+  // current id.
+  const voiceClipRef = useRef<(clip: SentVoiceClip) => void>(() => {});
   const voiceProps = useVoiceComposerProps(
     canSendDirectVoice && Boolean(id && getGolfer(id)) && (id ? canMessage(id) && !isBlocked(id) : false),
+    id ? { kind: "dm", id } : null,
     (clip) => voiceClipRef.current(clip),
   );
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
@@ -535,11 +538,13 @@ export function DirectMessageThread() {
 
   // A voice message (with the picked quote, like a text). Shows at once with
   // upload progress; a failure stays as a Not sent bubble.
-  voiceClipRef.current = (clip: VoiceClip) => {
-    if (!other) return;
-    const replyTo = replyTarget?.id;
-    setReplyToId(null);
-    void sendDirectVoice(other.id, clip, replyTo).then((result) => {
+  // The recipient is the clip's origin; the quote / reply bar only if this
+  // page still shows that thread (lib/voiceSession.ts voiceSendPlan).
+  voiceClipRef.current = (clip: SentVoiceClip) => {
+    const plan = voiceSendPlan(clip, "dm", { id, replyToId: replyTarget?.id });
+    if (!plan) return;
+    if (plan.here) setReplyToId(null);
+    void sendDirectVoice(clip, plan.replyToId ?? undefined).then((result) => {
       if (result === "failed") showToast(t("chat.voiceNotSent"), "info");
     });
   };

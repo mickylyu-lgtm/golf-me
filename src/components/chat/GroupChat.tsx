@@ -37,7 +37,7 @@ import { messagePreviewText } from "../../lib/chatImages";
 import { canCopyImages, copyChatImage } from "../../lib/chatImageClient";
 import { VoiceMessage } from "./VoiceMessage";
 import { useVoiceComposerProps } from "../../lib/useVoiceComposerProps";
-import type { VoiceClip } from "../../lib/voiceRecorder";
+import { voiceSendPlan, type SentVoiceClip } from "../../lib/voiceSession";
 
 // layout "card" (default): the inline card on the round page, list capped
 // at max-h-96, composer docked over the keyboard while typing (below).
@@ -91,9 +91,16 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
   const photo = useChatImageAttachment((reason) => showToast(t(reason === "tooLarge" ? "chat.photoTooLarge" : "chat.photoUnreadable"), "warning"));
   // Voice (lib/chatVoice.ts): hold-to-talk sends through voiceClipRef (set
   // below, where the reply target is known). Only while the chat is open.
-  const voiceClipRef = useRef<(clip: VoiceClip) => void>(() => {});
+  // Each clip carries the round it was recorded in (clip.origin); that is
+  // where it goes, even if this component has since been reused for another
+  // round.
+  const voiceClipRef = useRef<(clip: SentVoiceClip) => void>(() => {});
   const roundStatus = getGolfCall(callId)?.status;
-  const voiceProps = useVoiceComposerProps(canSendRoundVoice && roundStatus !== "completed" && roundStatus !== "cancelled", (clip) => voiceClipRef.current(clip));
+  const voiceProps = useVoiceComposerProps(
+    canSendRoundVoice && roundStatus !== "completed" && roundStatus !== "cancelled",
+    { kind: "round", id: callId },
+    (clip) => voiceClipRef.current(clip),
+  );
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
   const [text, setText] = useState(() => loadChatDraft(groupChatDraftKey(callId)));
   // The composer's text as of the last render, for a send that settles later.
@@ -435,11 +442,19 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
   const previewOf = (m: ChatMessage) => messagePreviewText(m, t("chat.photo"), t("chat.voice"));
 
   // A voice message (with the picked quote), like handleSend's photo path.
-  voiceClipRef.current = (clip: VoiceClip) => {
-    if (readOnly) return;
-    const replyTo = replyEnabled && replyTarget && isActionableRoundMessage(replyTarget) ? replyTarget.id : null;
-    setReplyToId(null);
-    void sendRoundVoice(callId, clip, replyTo);
+  // The round is the clip's origin (lib/voiceSession.ts voiceSendPlan); the
+  // quote and the reply bar are this page's only when it still shows that
+  // round.
+  voiceClipRef.current = (clip: SentVoiceClip) => {
+    const plan = voiceSendPlan(clip, "round", {
+      id: callId,
+      replyToId: replyEnabled && replyTarget && isActionableRoundMessage(replyTarget) ? replyTarget.id : null,
+    });
+    if (!plan) return;
+    const originStatus = getGolfCall(plan.to)?.status;
+    if (originStatus === "completed" || originStatus === "cancelled") return;
+    if (plan.here) setReplyToId(null);
+    void sendRoundVoice(clip, plan.replyToId);
   };
   const voiceLabels = { play: t("chat.voicePlay"), pause: t("chat.voicePause"), unavailable: t("chat.voiceUnavailable"), unsupported: t("chat.voiceUnsupported") };
 

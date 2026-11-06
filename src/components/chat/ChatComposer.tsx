@@ -1,8 +1,8 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { ImagePlus, Keyboard, Mic, Send, Smile } from "lucide-react";
-import { HoldToTalk, type HoldToTalkLabels, type VoiceNotice } from "./HoldToTalk";
-import { voiceRecordingAvailable, type VoiceClip } from "../../lib/voiceRecorder";
+import { HoldToTalk, type HoldToTalkLabels, type SentVoiceClip, type VoiceNotice, type VoiceOrigin } from "./HoldToTalk";
+import { voiceRecordingAvailable } from "../../lib/voiceRecorder";
 import { EmojiPicker } from "./EmojiPicker";
 import { isSendEnter } from "../../lib/isImeComposing";
 import { composerTextareaHeight } from "../../lib/composerAutosize";
@@ -32,7 +32,9 @@ interface ChatComposerProps {
   // Voice messages (lib/chatVoice.ts): passed once the page can send them;
   // the toggle then shows where this browser can record.
   voice?: {
-    onClip: (clip: VoiceClip) => void;
+    /** The conversation this composer sends to; each recording keeps the one it started in. */
+    origin: VoiceOrigin;
+    onClip: (clip: SentVoiceClip) => void;
     onNotice: (notice: VoiceNotice) => void;
     labels: HoldToTalkLabels & { toVoice: string; toKeyboard: string };
   };
@@ -259,7 +261,7 @@ export function ChatComposer({
           tabIndex={voiceMode ? -1 : undefined}
           className={`flex-1 resize-none overflow-y-auto rounded-2xl bg-slate-100 outline-none focus:bg-slate-50 focus:ring-2 focus:ring-fairway-100 ${TEXTAREA_METRICS} ${voiceMode ? "invisible" : ""}`}
         />
-        {voiceMode && voice && <HoldToTalk onClip={voice.onClip} onNotice={voice.onNotice} labels={voice.labels} />}
+        {voiceMode && voice && <HoldToTalk origin={voice.origin} onClip={voice.onClip} onNotice={voice.onNotice} labels={voice.labels} />}
       </div>
       {/* Measuring mirror (see the layout effect): same metrics, out of
           flow, invisible, unfocusable and hidden from assistive tech. */}

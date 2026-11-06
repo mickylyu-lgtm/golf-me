@@ -3,11 +3,11 @@ import { Mic, X } from "lucide-react";
 import { App as CapacitorApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { formatVoiceDuration, voiceSecondsLeft, type VoiceEvent, type VoiceState } from "../../lib/chatVoice";
-import { startVoiceRecording, type VoiceClip } from "../../lib/voiceRecorder";
-import { createVoiceSession, type VoiceNotice, type VoiceSession } from "../../lib/voiceSession";
+import { startVoiceRecording } from "../../lib/voiceRecorder";
+import { createVoiceSession, type SentVoiceClip, type VoiceNotice, type VoiceOrigin, type VoiceSession } from "../../lib/voiceSession";
 import { tapHaptic } from "../../lib/tapFeedback";
 
-export type { VoiceNotice };
+export type { VoiceNotice, VoiceOrigin, SentVoiceClip };
 
 export interface HoldToTalkLabels {
   hold: string;
@@ -29,7 +29,23 @@ export interface HoldToTalkLabels {
 // Fills the textarea's box exactly (the composer keeps its layout); the
 // timer, level meter and hints are inside the bar, nothing overlays the
 // thread.
-export function HoldToTalk({ onClip, onNotice, labels }: { onClip: (clip: VoiceClip) => void; onNotice: (n: VoiceNotice) => void; labels: HoldToTalkLabels }) {
+//
+// `origin` is the conversation on screen. Each press keeps the origin it
+// started in (lib/voiceSession.ts), and the clip it delivers carries it, so
+// the page sends to that conversation even if a notification / deep link
+// has since reused this thread for another one. A hold still in progress
+// when the origin changes is cancelled.
+export function HoldToTalk({
+  origin,
+  onClip,
+  onNotice,
+  labels,
+}: {
+  origin: VoiceOrigin;
+  onClip: (clip: SentVoiceClip) => void;
+  onNotice: (n: VoiceNotice) => void;
+  labels: HoldToTalkLabels;
+}) {
   const barRef = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<VoiceState>({ kind: "idle" });
   // One session per mount (made in the effect below, so StrictMode's
@@ -39,6 +55,8 @@ export function HoldToTalk({ onClip, onNotice, labels }: { onClip: (clip: VoiceC
   const [level, setLevel] = useState(0);
   const cbRef = useRef({ onClip, onNotice });
   cbRef.current = { onClip, onNotice };
+  const originRef = useRef<VoiceOrigin>(origin);
+  originRef.current = origin;
 
   // While recording: the timer, the meter and the 60 s limit.
   const recording = state.kind === "recording";
@@ -64,6 +82,7 @@ export function HoldToTalk({ onClip, onNotice, labels }: { onClip: (clip: VoiceC
     if (!bar) return;
     const session = createVoiceSession({
       start: (signal) => startVoiceRecording({ signal }),
+      origin: () => originRef.current,
       onState: (next) => {
         if (next.kind === "starting") {
           setElapsed(0);
@@ -135,6 +154,13 @@ export function HoldToTalk({ onClip, onNotice, labels }: { onClip: (clip: VoiceC
       if (sessionRef.current === session) sessionRef.current = null;
     };
   }, []);
+
+  // The thread was reused for another conversation: a hold still in
+  // progress for the old one is cancelled (released clips keep going to
+  // their own origin).
+  useEffect(() => {
+    sessionRef.current?.originChanged();
+  }, [origin.kind, origin.id]);
 
   const active = state.kind !== "idle";
   const recordingNow = state.kind === "recording";

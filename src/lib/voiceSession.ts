@@ -16,17 +16,52 @@
 //
 // A released recording (the "stop" effect) is the one way to send: its clip
 // is delivered at most once, even if the recorder reports twice.
+//
+// Privacy (where a clip goes): every attempt captures its conversation (its
+// VoiceOrigin) and a recording id AT PRESS TIME, and the delivered clip
+// carries both, frozen. The send paths take the destination only from
+// clip.origin (claimVoiceSend), never from whichever thread is on screen
+// when the recorder finally answers: a page reused for B (a notification /
+// deep link while A's stop(), upload or send is pending) can't receive A's
+// clip. Policy (Micky, 2026-11-06): a released clip finishes in ITS OWN
+// conversation even if the golfer has left it; a clip still being recorded
+// when the conversation changes is cancelled (originChanged / dispose).
 import { voiceStep, type VoiceEvent, type VoiceState } from "./chatVoice.ts";
 import type { ActiveRecording, VoiceClip, VoiceRecorderErrorReason } from "./voiceRecorder.ts";
 
 export type VoiceNotice = "denied" | "unavailable" | "tooShort" | "failed";
 export type VoiceHaptic = "medium" | "success" | "tap";
 
+/** The conversation a recording belongs to: a DM (the other golfer's id) or a round chat (the round id). */
+export interface VoiceOrigin {
+  readonly kind: "dm" | "round";
+  readonly id: string;
+}
+
+/** A delivered clip, bound to the conversation and recording it came from. */
+export type SentVoiceClip = VoiceClip & {
+  /** null only when the session was made without an origin (tests); the send paths refuse it. */
+  readonly origin: VoiceOrigin | null;
+  readonly recordingId: string;
+};
+
+export function sameVoiceOrigin(a: VoiceOrigin | null | undefined, b: VoiceOrigin | null | undefined): boolean {
+  return Boolean(a && b && a.kind === b.kind && a.id === b.id);
+}
+
+let recordingSeq = 0;
+const newRecordingId = () => {
+  const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
+  return typeof c?.randomUUID === "function" ? c.randomUUID() : `rec-${Date.now()}-${++recordingSeq}`;
+};
+
 export interface VoiceSessionDeps {
   /** Acquire the microphone + recorder for one attempt (lib/voiceRecorder.ts startVoiceRecording). */
   start(signal: AbortSignal): Promise<ActiveRecording>;
+  /** The conversation on screen; read once per press and kept by that attempt. */
+  origin?(): VoiceOrigin | null;
   onState(state: VoiceState): void;
-  onClip(clip: VoiceClip): void;
+  onClip(clip: SentVoiceClip): void;
   onNotice(notice: VoiceNotice): void;
   haptic?(kind: VoiceHaptic): void;
   now(): number;
@@ -39,6 +74,12 @@ export interface VoiceSession {
   state(): VoiceState;
   /** The current recording's loudness (0 when none). */
   level(): number;
+  /**
+   * The conversation on screen changed (deps.origin() now answers another
+   * one): a recording still being held for the old one is cancelled, never
+   * sent. Released clips are untouched; they finish in their own origin.
+   */
+  originChanged(): void;
   /** Unmount: ends any attempt (never sends one still being held); later events are ignored. */
   dispose(): void;
 }
@@ -48,6 +89,8 @@ interface Attempt {
   abort: AbortController;
   live: boolean;
   rec: ActiveRecording | null;
+  readonly origin: VoiceOrigin | null;
+  readonly recordingId: string;
 }
 
 function reasonOf(err: unknown): VoiceRecorderErrorReason {
@@ -88,7 +131,15 @@ export function createVoiceSession(deps: VoiceSessionDeps): VoiceSession {
 
   const begin = () => {
     end(current);
-    const attempt: Attempt = { id: ++nextId, abort: new AbortController(), live: true, rec: null };
+    const o = deps.origin?.() ?? null;
+    const attempt: Attempt = {
+      id: ++nextId,
+      abort: new AbortController(),
+      live: true,
+      rec: null,
+      origin: o ? Object.freeze({ kind: o.kind, id: o.id }) : null,
+      recordingId: newRecordingId(),
+    };
     current = attempt;
     let pending: Promise<ActiveRecording>;
     try {
@@ -130,7 +181,10 @@ export function createVoiceSession(deps: VoiceSessionDeps): VoiceSession {
     const rec = a?.rec ?? null;
     if (a) a.rec = null;
     end(a, true);
-    if (!rec) return;
+    if (!rec || !a) return;
+    // Bound now, from the attempt (captured at its press), never re-read.
+    const origin = a.origin;
+    const recordingId = a.recordingId;
     deps.haptic?.("success");
     let delivered = false;
     rec.stop(durationMs).then(
@@ -140,7 +194,7 @@ export function createVoiceSession(deps: VoiceSessionDeps): VoiceSession {
           return;
         }
         delivered = true;
-        if (clip) deps.onClip(clip);
+        if (clip) deps.onClip(Object.freeze({ ...clip, origin, recordingId }));
         else deps.onNotice("failed");
       },
       () => {
@@ -187,6 +241,15 @@ export function createVoiceSession(deps: VoiceSessionDeps): VoiceSession {
         return 0;
       }
     },
+    originChanged() {
+      if (disposed || !current || !current.live) return;
+      if (sameVoiceOrigin(current.origin, deps.origin?.() ?? null)) return;
+      // Held (or still waiting for the microphone) for the conversation the
+      // golfer just left: cancelled, exactly like the app going to the
+      // background.
+      dispatch({ type: "interrupt" });
+      end(current);
+    },
     dispose() {
       if (disposed) return;
       // Leaving (thread switch, back to the keyboard) never sends.
@@ -205,4 +268,38 @@ export function claimVoiceClip(clip: VoiceClip): boolean {
   if (claimed.has(clip)) return false;
   claimed.add(clip);
   return true;
+}
+
+export type VoiceSendClaim = { ok: true; to: string } | { ok: false; reason: "duplicate" | "noOrigin" };
+
+/**
+ * The send boundary (DataContext sendDirectVoice / sendRoundVoice): the
+ * destination is the clip's own origin, of the expected kind, or nothing.
+ * A clip without an origin (or a DM clip handed to the round path) is
+ * refused without being claimed; a repeat of an already-claimed clip is a
+ * duplicate.
+ */
+export function claimVoiceSend(clip: SentVoiceClip, kind: VoiceOrigin["kind"]): VoiceSendClaim {
+  const origin = clip.origin;
+  if (!origin || origin.kind !== kind || !origin.id) return { ok: false, reason: "noOrigin" };
+  if (!claimVoiceClip(clip)) return { ok: false, reason: "duplicate" };
+  return { ok: true, to: origin.id };
+}
+
+/**
+ * How a thread page sends a delivered clip. The destination is always the
+ * clip's origin. The reply quote (and clearing the reply bar) is taken from
+ * the page only when the page still shows that same conversation; a clip
+ * from A finishing while B is on screen goes to A without a quote and
+ * leaves B's composer alone. null = not this page's kind (never sent).
+ */
+export function voiceSendPlan(
+  clip: SentVoiceClip,
+  kind: VoiceOrigin["kind"],
+  page: { id: string | null | undefined; replyToId: string | null | undefined },
+): { to: string; here: boolean; replyToId: string | null } | null {
+  const origin = clip.origin;
+  if (!origin || origin.kind !== kind || !origin.id) return null;
+  const here = Boolean(page.id) && page.id === origin.id;
+  return { to: origin.id, here, replyToId: here ? (page.replyToId ?? null) : null };
 }
