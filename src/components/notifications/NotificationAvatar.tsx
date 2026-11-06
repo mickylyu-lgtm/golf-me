@@ -15,6 +15,7 @@ import {
   Newspaper,
   TriangleAlert,
   FileCheck2,
+  ThumbsUp,
 } from "lucide-react";
 import type { AppNotification, GolferProfile, NotificationType } from "../../types";
 import { Avatar } from "../ui/Avatar";
@@ -47,11 +48,14 @@ const ICONS: Record<NotificationType, NotificationIconComponent> = {
   circle_post: Newspaper,
   booking_status_changed: TriangleAlert,
   booking_evidence_reviewed: FileCheck2,
+  // Same glyph as the post's like button.
+  post_liked: ThumbsUp,
 };
 
 const BADGE_CLASSES: Record<NotificationBadgeKind, string> = {
   message: "bg-sky-500 text-white",
   comment: "bg-indigo-500 text-white",
+  like: "bg-fairway-500 text-white",
   round: "bg-fairway-600 text-white",
   roundAlert: "bg-emerald-500 text-white",
   follow: "bg-amber-500 text-white",

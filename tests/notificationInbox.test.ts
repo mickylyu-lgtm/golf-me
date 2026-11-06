@@ -121,10 +121,12 @@ test("opening a round clears that round's notifications, and its chat clears the
 
 test("post, Caddie analysis and profile screens clear what links to them", () => {
   const reply = n({ type: "post_reply", actorId: "g1", linkTo: "/community/p1" });
+  const liked = n({ type: "post_liked", actorId: "g2", linkTo: "/community/p1" });
+  const likedOther = n({ type: "post_liked", actorId: "g2", linkTo: "/community/p2" });
   const caddie = n({ type: "caddie_analysis_complete", linkTo: "/caddie/a1" });
   const follow = n({ type: "new_follower", actorId: "g3", linkTo: "/golfer/g3" });
-  const list = [reply, caddie, follow];
-  assert.deepEqual(notificationIdsClearedByRoute("/community/p1", list), [reply.id]);
+  const list = [reply, liked, likedOther, caddie, follow];
+  assert.deepEqual(notificationIdsClearedByRoute("/community/p1", list), [reply.id, liked.id]);
   assert.deepEqual(notificationIdsClearedByRoute("/caddie/a1", list), [caddie.id]);
   assert.deepEqual(notificationIdsClearedByRoute("/golfer/g3", list), [follow.id]);
 });
@@ -220,8 +222,10 @@ test("every known type has a badge; unknown types fall back", () => {
     "circle_post",
     "booking_status_changed",
     "booking_evidence_reviewed",
+    "post_liked",
   ];
   for (const type of known) assert.notEqual(notificationBadgeKind(type), "other", type);
+  assert.equal(notificationBadgeKind("post_liked"), "like");
   assert.equal(notificationBadgeKind("booking_status_changed"), "booking");
   assert.equal(notificationBadgeKind("booking_evidence_reviewed"), "booking");
   assert.equal(notificationBadgeKind("new_message"), "message");

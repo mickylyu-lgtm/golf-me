@@ -141,12 +141,13 @@ export function resolveNotificationActor<P>(n: Pick<InboxNotification, "type" | 
   return { kind: "person", profile, showPhoto: !lookup.isBlockedEitherWay(id) };
 }
 
-export type NotificationBadgeKind = "message" | "comment" | "round" | "roundAlert" | "follow" | "caddie" | "post" | "booking" | "other";
+export type NotificationBadgeKind = "message" | "comment" | "like" | "round" | "roundAlert" | "follow" | "caddie" | "post" | "booking" | "other";
 
 const BADGE_BY_TYPE: Record<string, NotificationBadgeKind> = {
   new_message: "message",
   post_reply: "comment",
   comment_reply: "comment",
+  post_liked: "like",
   new_follower: "follow",
   round_joined: "round",
   round_left: "round",

@@ -1724,14 +1724,28 @@ export function DataProvider({ children }: { children: ReactNode }) {
     (postId: string) => (auth.isDemo ? demoPostUpvoteCount(postId) : realCommunity.postUpvoteCount(postId)),
     [auth.isDemo, demoPostUpvoteCount, realCommunity],
   );
-  const demoTogglePostUpvote = useCallback((postId: string) => {
-    setData((prev) => {
-      const existing = prev.postVotes.find((v) => v.postId === postId && v.voterId === prev.currentUserId);
-      if (existing) return { ...prev, postVotes: prev.postVotes.filter((v) => v !== existing) };
-      const vote: PostVote = { id: generateId("pv"), postId, voterId: prev.currentUserId, createdAt: new Date().toISOString() };
-      return { ...prev, postVotes: [...prev.postVotes, vote] };
-    });
-  }, []);
+  const demoTogglePostUpvote = useCallback(
+    (postId: string) => {
+      const actorId = data.currentUserId;
+      const liking = !data.postVotes.some((v) => v.postId === postId && v.voterId === actorId);
+      setData((prev) => {
+        const existing = prev.postVotes.find((v) => v.postId === postId && v.voterId === prev.currentUserId);
+        if (existing) return { ...prev, postVotes: prev.postVotes.filter((v) => v !== existing) };
+        const vote: PostVote = { id: generateId("pv"), postId, voterId: prev.currentUserId, createdAt: new Date().toISOString() };
+        return { ...prev, postVotes: [...prev.postVotes, vote] };
+      });
+      // Same rule as the server (20261107200000): once per liker per post,
+      // ever, never across a block; unliking keeps it. pushNotification
+      // already skips your own post.
+      if (!liking) return;
+      const post = demoGetPost(postId);
+      if (!post || isBlockedEitherWay(post.authorId)) return;
+      const link = `/community/${postId}`;
+      const already = data.notifications.some((n) => n.type === "post_liked" && n.actorId === actorId && n.linkTo === link);
+      if (!already) pushNotification(post.authorId, "post_liked", `${currentUser.name} liked your post.`, link, actorId);
+    },
+    [data.currentUserId, data.postVotes, data.notifications, demoGetPost, isBlockedEitherWay, currentUser.name, pushNotification],
+  );
   const togglePostUpvote = useCallback(
     async (postId: string) => {
       if (auth.isDemo) {

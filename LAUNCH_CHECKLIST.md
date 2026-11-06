@@ -68,6 +68,7 @@ On the 1.1 App Store build: blocker 1 items. Still-open device checks from earli
 | [x] | Round join notification | Delivered to APNs on real accounts 2026-10-02 23:34:25 UTC (section 9). |
 | [ ] | Round update / cancel push | Not implemented (V1 was joins only). In-app notifications only. (C unless you decide otherwise) |
 | [ ] | Round (group) chat push | Not implemented; separate decision. (C) |
+| [~] | Community comment + like notifications | (B) Before: comments wrote a bell row only (no push, English, even across a block); likes wrote nothing. Migration `20261107200000_post_like_and_comment_pushes` (PREPARED, NOT APPLIED, 2026-11-06): comments + replies push, localized, never across a block; new `post_liked` ("<name> liked your post.", once per liker per post, collapse id per post). PGlite 113/113. Needs: apply, then a two-account test on a real iPhone. |
 | [x] | Caddie completion push | Analysis `c25c8379` → push delivered to APNs 2026-10-02 23:41:28 UTC (section 9). |
 
 ## 3. CADDIE

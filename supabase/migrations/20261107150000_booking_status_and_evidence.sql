@@ -873,6 +873,9 @@ $$;
 -- ===========================================================================
 -- 10. Notifications
 -- ===========================================================================
+-- 'post_liked' belongs to 20261107200000 (likes). Listed here as well so
+-- applying this file after that one doesn't drop it (allowing a type that
+-- nothing writes yet is harmless).
 alter table public.notifications drop constraint notifications_type_check;
 alter table public.notifications
   add constraint notifications_type_check check (
@@ -882,7 +885,8 @@ alter table public.notifications
       'booking_proof_attached', 'tee_time_updated', 'booking_proof_removed',
       'caddie_analysis_complete',
       'new_round_nearby', 'circle_post',
-      'booking_status_changed', 'booking_evidence_reviewed'
+      'booking_status_changed', 'booking_evidence_reviewed',
+      'post_liked'
     ])
   );
 

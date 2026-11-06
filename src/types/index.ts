@@ -727,7 +727,10 @@ export type NotificationType =
   // Migration 20261107150000: the host marked the course booking changed or
   // cancelled (joined players), and a review outcome (the host only).
   | "booking_status_changed"
-  | "booking_evidence_reviewed";
+  | "booking_evidence_reviewed"
+  // Migration 20261107200000: someone liked your post (once per liker per
+  // post, ever; not across a block).
+  | "post_liked";
 
 export interface AppNotification {
   id: string;
