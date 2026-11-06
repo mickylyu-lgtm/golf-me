@@ -1364,6 +1364,11 @@ export const en = {
   "loading.gettingReady": "Getting GolfMe ready...",
   "loading.profileLoadFailed": "Couldn't load your profile. Check your connection and try again.",
   "loading.retry": "Try again",
+  // Community video playback states (VideoStatusOverlay)
+  "media.videoLoading": "Loading video…",
+  "media.videoNetworkError": "Couldn't load this video. Check your connection and try again.",
+  "media.videoUnavailable": "This video is unavailable.",
+  "media.videoUnsupported": "This video can't be played on this device.",
   "loading.slow": "Taking longer than usual.",
   "loading.unreachable": "Can't reach GolfMe. Check your connection and try again.",
   "loading.refreshFailed": "Couldn't refresh. Showing what loaded earlier.",

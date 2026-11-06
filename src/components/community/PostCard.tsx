@@ -8,6 +8,7 @@ import {
   MapPin,
   MessageCircle,
   MoreHorizontal,
+  Play,
   ShieldAlert,
   ShieldCheck,
   ShieldOff,
@@ -32,6 +33,9 @@ import { CLICKABLE_CARD_CLASS } from "../ui/cardStyles";
 import { GolfCallCard } from "../golfcall/GolfCallCard";
 import { SwingAnalysisPanel } from "./SwingAnalysisPanel";
 import { MediaCarousel } from "./MediaCarousel";
+import { VideoStatusOverlay } from "./VideoStatusOverlay";
+import { useVideoPlayback } from "./useVideoPlayback";
+import { resolveCommunityMediaUrl, withFirstFrameHint } from "../../lib/videoPlayback";
 import { FullscreenMediaViewer } from "./FullscreenMediaViewer";
 import { formatRelativeTime } from "../../lib/format";
 import { postCategoryLabel } from "../../lib/enumLabels";
@@ -104,6 +108,19 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const thumbBackdrop = useBlurredBackdrop(post.type === "swing" ? post.videoThumbnailUrl : undefined);
   const blackThumb = thumbIsDark(post.videoThumbnailUrl);
+  // No thumbnail, or one that failed to load: the poster would be blank, so
+  // the video is asked to paint its own first frame instead (otherwise
+  // WebKit shows a black box until it plays — and it never plays when
+  // autoplay is refused, e.g. Low Power Mode).
+  const thumbUnusable = !post.videoThumbnailUrl || thumbResults.get(post.videoThumbnailUrl) === "load-error";
+  // Same permanent public URL for every viewer (never a stored, expiring
+  // signed link); see lib/videoPlayback.ts.
+  const videoSrc = resolveCommunityMediaUrl(post.videoUrl);
+  // playOnRetry: the feed video autoplays (muted) whenever it's on screen.
+  const playback = useVideoPlayback(post.type === "swing" ? videoSrc : undefined, { playOnRetry: true });
+  // Feed autoplay was refused: show a play badge so the paused video reads
+  // as tappable rather than broken.
+  const [autoplayBlocked, setAutoplayBlocked] = useState(false);
   const [framePoster, setFramePoster] = useState<string | undefined>(undefined);
   // For a black thumbnail: the first decoded frame that isn't black, as a
   // JPEG, so the card shows the swing before anyone plays it.
@@ -265,7 +282,9 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
           el.play().catch(() => {
             // Autoplay can still be blocked in some embedded contexts even
             // when muted — not an error state, just leaves it paused with
-            // its poster frame showing until the golfer taps play.
+            // its poster frame (and a play badge) showing until the golfer
+            // taps play.
+            setAutoplayBlocked(true);
           });
         } else {
           el.pause();
@@ -501,25 +520,42 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
           >
             {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
             <video
-              ref={videoRef}
+              ref={(el) => {
+                videoRef.current = el;
+                playback.ref(el);
+              }}
               // A thumbnail captured on a black frame (older iPhone uploads)
               // is skipped: the video loads a second in (preload "auto", or
               // WebKit decodes nothing until play) and a real frame from it
               // becomes the poster (capturePoster).
-              src={blackThumb ? `${post.videoUrl}#t=1` : post.videoUrl}
-              poster={blackThumb ? framePoster : post.videoThumbnailUrl}
+              src={blackThumb ? `${videoSrc}#t=1` : withFirstFrameHint(videoSrc, !thumbUnusable)}
+              poster={blackThumb ? framePoster : thumbUnusable ? undefined : post.videoThumbnailUrl}
               preload={blackThumb ? "auto" : "metadata"}
               onSeeked={capturePoster}
-              onCanPlay={capturePoster}
+              onCanPlay={(e) => {
+                capturePoster(e);
+                playback.handlers.onCanPlay(e);
+              }}
               // CORS so a frame can be read for the bar scan (Storage sends
               // the header); the poster is a plain image load either way.
               crossOrigin="anonymous"
-              onLoadedMetadata={(e) => setVideoSize({ w: e.currentTarget.videoWidth, h: e.currentTarget.videoHeight })}
+              onLoadedMetadata={(e) => {
+                setVideoSize({ w: e.currentTarget.videoWidth, h: e.currentTarget.videoHeight });
+                playback.handlers.onLoadedMetadata(e);
+              }}
               onLoadedData={(e) => {
                 capturePoster(e);
                 scanVideoFrame(e);
               }}
-              onPlaying={scanVideoFrame}
+              onError={playback.handlers.onError}
+              onPlay={playback.handlers.onPlay}
+              onWaiting={playback.handlers.onWaiting}
+              onPause={playback.handlers.onPause}
+              onPlaying={(e) => {
+                setAutoplayBlocked(false);
+                playback.handlers.onPlaying();
+                scanVideoFrame(e);
+              }}
               onTimeUpdate={scanVideoFrame}
               muted={feedMuted}
               loop
@@ -536,6 +572,14 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
                 bars={videoBackdrop?.bars ?? null}
               />
             )}
+            {autoplayBlocked && playback.status.phase === "ok" && (
+              <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/40 text-white">
+                  <Play size={20} fill="currentColor" />
+                </span>
+              </span>
+            )}
+            <VideoStatusOverlay status={playback.status} onRetry={playback.retry} />
             {/* A real button, not a decorative overlay — it sits above the
                 video in stacking order and stops its own click from
                 bubbling, so tapping it toggles feed sound in place instead

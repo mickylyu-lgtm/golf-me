@@ -3,8 +3,11 @@ import type React from "react";
 import { Play, Volume2, VolumeX } from "lucide-react";
 import type { PostMediaItem } from "../../types";
 import { enterNativeVideoFullscreen } from "../../lib/video";
-import { barsCoverStyle, safeFindBars, useBlurredBackdrop, type BarInsets } from "../../lib/blurredBackdrop";
+import { barsCoverStyle, safeFindBars, thumbResults, useBlurredBackdrop, type BarInsets } from "../../lib/blurredBackdrop";
 import { ZoomableImage } from "./ZoomableImage";
+import { resolveCommunityMediaUrl, withFirstFrameHint } from "../../lib/videoPlayback";
+import { VideoStatusOverlay } from "./VideoStatusOverlay";
+import { useVideoPlayback } from "./useVideoPlayback";
 
 interface MediaCarouselProps {
   media: PostMediaItem[];
@@ -190,7 +193,7 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
             variant === "card" ? (
               <CardVideo
                 key={item.id}
-                src={item.url}
+                src={resolveCommunityMediaUrl(item.url) ?? item.url}
                 poster={item.thumbnailUrl}
                 className={itemClass}
                 fit={wide ? "contain" : "cover"}
@@ -224,18 +227,13 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
               // those was otherwise nudging the whole viewer's drag state
               // too, producing a visible snap-back jitter on every touch.
               <div key={item.id} className="relative h-full w-full shrink-0 snap-center overflow-hidden bg-black" data-video-controls>
-                {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-                <video
-                  ref={(el) => {
+                <LightboxVideo
+                  src={resolveCommunityMediaUrl(item.url)}
+                  poster={item.thumbnailUrl}
+                  elRef={(el) => {
                     if (el) videoElsRef.current.set(item.id, el);
                     else videoElsRef.current.delete(item.id);
                   }}
-                  src={item.url}
-                  poster={item.thumbnailUrl}
-                  playsInline
-                  loop
-                  preload="metadata"
-                  className="h-full w-full object-contain"
                   onClick={(e) => togglePlay(item, e.currentTarget)}
                 />
                 {/* Right-half hold-for-2x zone, layered over the video —
@@ -378,6 +376,22 @@ function CardVideo({ src, poster, className, fit, onClick }: {
   onClick: (e: React.MouseEvent<HTMLVideoElement>) => void;
 }) {
   const scan = useBlurredBackdrop(poster);
+  const playback = useVideoPlayback(src);
+  // A missing or unloadable thumbnail leaves the poster blank; let the video
+  // paint its own first frame instead of a black box (lib/videoPlayback.ts).
+  const posterUsable = !!poster && thumbResults.get(poster) !== "load-error";
+  const videoSrc = withFirstFrameHint(src, posterUsable);
+  const videoPoster = posterUsable ? poster : undefined;
+  const events = {
+    ref: playback.ref,
+    onError: playback.handlers.onError,
+    onPlay: playback.handlers.onPlay,
+    onWaiting: playback.handlers.onWaiting,
+    onPlaying: playback.handlers.onPlaying,
+    onPause: playback.handlers.onPause,
+    onCanPlay: playback.handlers.onCanPlay,
+    onLoadedMetadata: playback.handlers.onLoadedMetadata,
+  };
   return (
     <BarCropBox className={className} bars={fit === "cover" ? (scan?.bars ?? null) : null} aspect={scan?.aspect ?? null}>
       {(style, cls) =>
@@ -387,18 +401,72 @@ function CardVideo({ src, poster, className, fit, onClick }: {
           // a tap opens the native fullscreen player either way.
           <>
             {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-            <video src={src} poster={poster} playsInline preload="metadata" style={style} className="cursor-pointer bg-black" onClick={onClick} />
-            <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/40 text-white">
-                <Play size={20} fill="currentColor" />
+            <video src={videoSrc} poster={videoPoster} playsInline preload="metadata" style={style} className="cursor-pointer bg-black" onClick={onClick} {...events} />
+            {playback.status.phase === "ok" && (
+              <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/40 text-white">
+                  <Play size={20} fill="currentColor" />
+                </span>
               </span>
-            </span>
+            )}
+            <VideoStatusOverlay status={playback.status} onRetry={playback.retry} />
           </>
         ) : (
-          // eslint-disable-next-line jsx-a11y/media-has-caption
-          <video src={src} poster={poster} controls playsInline preload="metadata" className={`${cls} bg-black`} onClick={onClick} />
+          // Wrapped so the status overlay can sit over the video.
+          <div className={`${cls} relative`}>
+            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+            <video
+              src={videoSrc}
+              poster={videoPoster}
+              controls
+              playsInline
+              preload="metadata"
+              className={`h-full w-full ${fit === "cover" ? "object-cover" : "object-contain"} bg-black`}
+              onClick={onClick}
+              {...events}
+            />
+            <VideoStatusOverlay status={playback.status} onRetry={playback.retry} />
+          </div>
         )
       }
     </BarCropBox>
+  );
+}
+
+// The fullscreen viewer's video, with the same loading / error / retry
+// states as the card. Fills its (relative) slide.
+function LightboxVideo({ src, poster, elRef, onClick }: {
+  src: string | undefined;
+  poster?: string;
+  elRef: (el: HTMLVideoElement | null) => void;
+  onClick: (e: React.MouseEvent<HTMLVideoElement>) => void;
+}) {
+  const playback = useVideoPlayback(src);
+  const posterUsable = !!poster && thumbResults.get(poster) !== "load-error";
+  return (
+    <>
+      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+      <video
+        ref={(el) => {
+          elRef(el);
+          playback.ref(el);
+        }}
+        src={withFirstFrameHint(src, posterUsable)}
+        poster={posterUsable ? poster : undefined}
+        playsInline
+        loop
+        preload="metadata"
+        className="h-full w-full object-contain"
+        onClick={onClick}
+        onError={playback.handlers.onError}
+        onPlay={playback.handlers.onPlay}
+        onWaiting={playback.handlers.onWaiting}
+        onPlaying={playback.handlers.onPlaying}
+        onPause={playback.handlers.onPause}
+        onCanPlay={playback.handlers.onCanPlay}
+        onLoadedMetadata={playback.handlers.onLoadedMetadata}
+      />
+      <VideoStatusOverlay status={playback.status} onRetry={playback.retry} />
+    </>
   );
 }
