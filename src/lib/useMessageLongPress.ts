@@ -3,6 +3,7 @@ import { Capacitor } from "@capacitor/core";
 import { Haptics, ImpactStyle } from "@capacitor/haptics";
 import { LONG_PRESS_MS, longPressCancelledByMove, longPressSurvivesCancel } from "./messageLongPress";
 import { PRESS_FEEDBACK_DELAY_MS } from "./messageFocus";
+import { lockHoldSelection } from "./holdSelectionLock";
 
 // Opens a DM bubble's actions menu (reactions, Reply, Copy, Unsend) by:
 //   - touch / pen: holding the bubble still for LONG_PRESS_MS (iPhone app
@@ -66,6 +67,12 @@ export function useMessageLongPress(
     let firedAt = 0;
     let pressTimer = 0;
     let pressed: HTMLElement | null = null;
+    // Page text selection is locked for the whole hold (lib/holdSelectionLock).
+    let unlockSelection: (() => void) | null = null;
+    const unlockNow = () => {
+      unlockSelection?.();
+      unlockSelection = null;
+    };
 
     const bubbleOf = (target: EventTarget | null) =>
       target instanceof Element ? target.closest<HTMLElement>("[data-actions-bubble]") : null;
@@ -83,6 +90,7 @@ export function useMessageLongPress(
       pointerId = null;
       touchId = null;
       release();
+      unlockNow();
     };
 
     const open = (bubble: HTMLElement) => {
@@ -97,11 +105,18 @@ export function useMessageLongPress(
       }
       onOpenRef.current(id, bubble);
       release();
+      // The overlay takes its own lock when it mounts; hand over a moment
+      // later so there's no gap for WebKit to start a selection in.
+      const handOver = unlockSelection;
+      unlockSelection = null;
+      if (handOver) window.setTimeout(handOver, 400);
     };
 
     const start = (bubble: HTMLElement, x: number, y: number) => {
       window.clearTimeout(timer);
       release();
+      unlockNow();
+      unlockSelection = lockHoldSelection();
       startX = lastX = x;
       startY = lastY = y;
       if (!prefersReducedMotion()) {

@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { lockHoldSelection } from "../../lib/holdSelectionLock";
 import { Copy, Reply, Undo2 } from "lucide-react";
 import type { MessageAction } from "../../lib/messageLongPress";
 import { FOCUS_EXIT_MS, currentPressScale, focusLayout, overhangBelow, type FocusLayout, type Rect } from "../../lib/messageFocus";
@@ -223,6 +224,10 @@ export function MessageActionsMenu({ bubble, alignRight, closing, reactions, act
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [closing]);
+
+  // No page text selection while the overlay is up, and none left behind
+  // after it closes (lib/holdSelectionLock).
+  useEffect(() => lockHoldSelection(), []);
 
   useEffect(() => {
     if (closing) return;

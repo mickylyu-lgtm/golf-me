@@ -941,6 +941,19 @@ select {
 .gm-slider-overlay::-moz-range-thumb {
   pointer-events: auto;
 }
+/* Holding a DM bubble / its focus overlay: no page text selection or iOS
+   callout anywhere (lib/holdSelectionLock.ts). Text fields stay normal. */
+html.gm-hold-lock,
+html.gm-hold-lock * {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  -webkit-touch-callout: none !important;
+}
+html.gm-hold-lock input,
+html.gm-hold-lock textarea {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+}
 @media (pointer: coarse) {
   .gm-slider::-webkit-slider-thumb {
     width: 24px;
