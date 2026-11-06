@@ -14,7 +14,7 @@ import { goBack } from "../lib/goBack";
 // integrations (see APP_STORE_PRIVACY.md for the evidence and the App Store
 // privacy answers) — update this file, the date, and APP_STORE_PRIVACY.md if
 // the data collected or the third parties involved change.
-const LAST_UPDATED = "October 17, 2026";
+const LAST_UPDATED = "November 6, 2026";
 const CONTACT_EMAIL = "support@golfme.app";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -59,7 +59,8 @@ export function PrivacyPolicy() {
       <Section title="The short version">
         <p>
           GolfMe is a social app for finding golf rounds and golfers to play with. We collect what's needed to run that — your profile,
-          the rounds, messages and posts you're part of, and your location only when you choose to share it. We don't sell your data, we
+          the rounds, messages (including photos and voice messages) and posts you're part of, and your location only when you choose to
+          share it. We don't sell your data, we
           don't show ads, and we don't track you across other apps or websites. We use privacy-friendly page-view analytics that aren't
           linked to your account.
         </p>
@@ -81,7 +82,8 @@ export function PrivacyPolicy() {
 
       <Section title="Information we collect">
         <Item label="Account">
-          Your email address and sign-in details. If you sign in with Google, we receive your name, email and profile picture from Google —
+          Your email address and sign-in details. You can sign in with Apple, with Google, or with a 6-digit code we email you; a few
+          accounts, such as the demo account we give Apple's app reviewers, sign in with an email and password. If you sign in with Google, we receive your name, email and profile picture from Google —
           nothing else. Your Google picture is suggested as your GolfMe profile photo when you set up your profile; you can remove or
           change it then or at any time on your profile. If you sign in with Apple, we receive the name and email you choose to share; if you choose Hide My Email, we only
           see Apple's private relay address.
@@ -94,17 +96,31 @@ export function PrivacyPolicy() {
         <Item label="Location">
           If you allow it, your device location is used to show nearby courses, rounds and golfers. It's rounded on your device to about
           1 km (under a mile) before it's sent or saved, so we only ever store an approximate playing area — never your exact position —
-          and you can enter an area manually instead. When you search for courses, that approximate location is sent to our
-          course-search provider.
+          and you can enter an area manually instead. When you search for courses or places, that approximate location and what you type
+          are sent to our course-search provider. When you look at the course map or a course page, the map area on screen is used to load
+          map images (see "Course maps and imagery" below).
         </Item>
         <Item label="Content you create">
-          Golf Calls you host or join, direct messages and round group chats, Community posts, comments, likes, saved and hidden posts,
-          photos and videos you upload, follows, reviews you leave about golfers you've played with (including optional private notes),
-          reports you file, blocks, booking-proof screenshots you attach to a round, and swing reviews if you're a coach reviewer.
+          Golf Calls you host or join, direct messages and round group chats (including photos and voice messages you send in them),
+          Community posts, comments, likes, saved and hidden posts, photos and videos you upload, follows, reviews you leave about golfers
+          you've played with (including optional private notes), reports you file, blocks, booking-proof screenshots you attach to a round,
+          and swing reviews if you're a coach reviewer.
+        </Item>
+        <Item label="Chat photos and voice messages">
+          Before a photo you send in a direct message or round chat is uploaded, your device re-encodes it, which removes hidden metadata
+          such as the location where it was taken (GPS) and other camera (EXIF) data. Voice messages are recorded on your device. Both are
+          stored privately and can only be opened by the people in that chat. If you unsend one (within 5 minutes of sending), it's removed
+          from the chat and its file is deleted; we don't keep a copy. Photos and voice messages aren't automatically scanned or moderated.
+          If someone reports a chat, GolfMe admins can view the photos and voice messages the reported person sent in that chat so they can
+          review the report.
         </Item>
         <Item label="Caddie swing videos">
           Swing videos you upload to Caddie and the AI-generated analysis produced from them (score, feedback and body-position data).
-          Caddie videos are private to you unless you choose to share one to the Community.
+          Caddie videos are private to you unless you choose to share one to the Community. Your video is analyzed by our own server, which
+          sends still frames from the clip to Roboflow to detect your body position and the clip itself to Google Gemini to write your
+          feedback (see "Service providers" below). If an analysis fails, we keep a technical record of what went wrong (numbers only, such
+          as how many frames showed a usable body; never images or video) so we can make Caddie more reliable, and we keep a record that
+          each analysis ran so daily limits work, even after you delete that analysis.
         </Item>
         <Item label="Activity and reputation">
           Rounds you've completed and the ratings other golfers give you (show-up, on-time, pace, respect, would play again), which we
@@ -112,7 +128,9 @@ export function PrivacyPolicy() {
         </Item>
         <Item label="Notifications">
           If you turn on push notifications, a device token from Apple that lets us send notifications to your phone, and your
-          notification setting.
+          notification settings. We send push notifications for messages, people joining your rounds and changes to rounds you've joined,
+          finished Caddie analyses, likes and comments on your posts, replies to your comments, and, if you switch them on in Settings, new
+          rounds near you and posts from your Golf Circle.
         </Item>
         <Item label="Waitlist">
           If you joined our waitlist, your email address, home golf area and how you heard about us.
@@ -142,13 +160,15 @@ export function PrivacyPolicy() {
         <p>
           GolfMe is a social app. Other signed-in GolfMe members can see your profile (including the profile details and approximate
           playing area listed above, and your reputation), your posts and comments, who you follow, and the Golf Calls you host or have
-          joined. Direct messages and round group chats are visible only to the people in them. Reviews you write, their private notes,
+          joined. Direct messages and round group chats, including their photos and voice messages, are visible only to the people in
+          them (GolfMe admins can view a reported chat's photos and voice messages, as described above). Reviews you write, their private notes,
           your reports and your booking proofs are not shown to other members (GolfMe admins can see reports and booking proofs to keep
           the community safe). Photos and videos you post to the Community can be viewed by anyone who has their link.
         </p>
         <p>
-          Push notifications for messages show the sender's name and a short preview of the message on your lock screen. You can hide
-          previews in your iPhone's notification settings.
+          Push notifications for messages show the sender's name and a short preview of the message on your lock screen (for a photo, its
+          caption if it has one; the photo itself and voice messages are never shown). Comment notifications show the commenter's name and a short preview of the comment, and
+          like notifications show who liked your post. You can hide previews in your iPhone's notification settings.
         </p>
       </Section>
 
@@ -160,12 +180,13 @@ export function PrivacyPolicy() {
             Nearly everything described above is stored here, on servers in Canada.
           </li>
           <li>
-            <span className="font-semibold text-slate-800">Vercel</span> — hosts the GolfMe website and app, and provides the page-view
-            analytics described above.
+            <span className="font-semibold text-slate-800">Vercel</span> — hosts the GolfMe website and app, runs the part of our server
+            that prepares Caddie videos for analysis (cutting the section you chose and extracting still frames), and provides the
+            page-view analytics described above.
           </li>
           <li>
             <span className="font-semibold text-slate-800">Apple Push Notification service</span> — delivers push notifications to your
-            iPhone, including the sender's name and message preview.
+            iPhone, including the sender's or commenter's name and the message or comment preview.
           </li>
           <li>
             <span className="font-semibold text-slate-800">Google (sign-in)</span> — only if you choose "Continue with Google".
@@ -175,17 +196,17 @@ export function PrivacyPolicy() {
             delete your GolfMe account, we also revoke GolfMe's access to your Apple ID.
           </li>
           <li>
-            <span className="font-semibold text-slate-800">Google Gemini API</span> — used only if you use Caddie: your swing video is
-            temporarily uploaded to generate your written feedback (deleted from Google's side right after), and if you translate
+            <span className="font-semibold text-slate-800">Google Gemini API</span> — used only if you use Caddie: our server temporarily
+            uploads your swing video to generate your written feedback (we delete it from Google's side right after), and if you translate
             feedback into another language, that text is sent to be translated.
           </li>
           <li>
-            <span className="font-semibold text-slate-800">Roboflow</span> — used only if you use Caddie: frames from your swing video are
-            sent to detect your body position for the analysis.
+            <span className="font-semibold text-slate-800">Roboflow</span> — used only if you use Caddie: our server sends still frames
+            from your swing video to detect your body position for the analysis.
           </li>
           <li>
-            <span className="font-semibold text-slate-800">Geoapify</span> — powers course search; your search location is sent to find
-            nearby courses.
+            <span className="font-semibold text-slate-800">Geoapify</span> — powers course and place search; your approximate search
+            location and what you type are sent to find nearby courses and places.
           </li>
           <li>
             <span className="font-semibold text-slate-800">GolfCourseAPI</span> — provides course details; only course names are sent,
@@ -193,6 +214,16 @@ export function PrivacyPolicy() {
           </li>
           <li>
             <span className="font-semibold text-slate-800">Resend</span> — sends our emails, such as sign-in codes and waitlist notices.
+          </li>
+          <li>
+            <span className="font-semibold text-slate-800">Course maps and imagery</span> — when you view the course map or a course
+            page, your device loads map tiles from OpenFreeMap (built on OpenStreetMap data), aerial imagery from the U.S. Geological Survey
+            (USGS, including NAIP aerial photos) and course photos from Wikimedia Commons. As with any image a website loads, these
+            providers see your device's IP address and the map area being shown; no account information is sent. Our server also looks up
+            course outlines and hole layouts from OpenStreetMap's Overpass API and course photos from Wikimedia, sending only the course's
+            name and location, never information about you (with the demo account, or if our server can't answer, your device may ask the
+            Overpass API directly). If enabled, course photos can also come from Google Places: our server sends only the course's name and
+            location, and your device then loads the photo from Google.
           </li>
         </ul>
         <p>We may also disclose information if the law requires it, or to protect the safety of our members or others.</p>
@@ -202,8 +233,8 @@ export function PrivacyPolicy() {
         <p>
           You can edit your profile and remove most of your content directly in the app, change your location or enter it manually, and
           turn notifications off. You can delete your account entirely from Me → Settings → Account — this permanently deletes your
-          profile and virtually everything tied to it (posts, comments, messages, Golf Call history, reviews, follows, Caddie history,
-          booking proofs, device tokens). A small amount of information may be kept in anonymized form for safety records — for example,
+          profile and virtually everything tied to it (posts, comments, messages including the photos and voice messages you sent, Golf
+          Call history, reviews, follows, Caddie videos, analyses and their technical records, booking proofs, device tokens). A small amount of information may be kept in anonymized form for safety records — for example,
           a report that named you stays on file with your identity removed from it. To ask about, correct or delete your data (including
           a waitlist entry), email us at the address above.
         </p>
@@ -212,8 +243,11 @@ export function PrivacyPolicy() {
       <Section title="How long we keep it">
         <p>
           We keep your information for as long as your account is active, and delete it when you delete your account (except the
-          anonymized safety records described above). Waitlist entries are kept until you ask us to remove them. Technical logs kept by
-          our providers are deleted on their standard schedules.
+          anonymized safety records described above). When you unsend a text message, it disappears from the chat for everyone, but we
+          keep a hidden copy of its text, which only GolfMe's operator can access, for up to 90 days for safety (longer if the message was
+          reported); unsent photos and voice messages are deleted, with no copy kept. Swing videos sent to Google Gemini for Caddie are
+          deleted from Google's side right after the analysis. Waitlist entries are kept until you ask us to remove them. Technical logs
+          kept by our providers are deleted on their standard schedules.
         </p>
       </Section>
 
