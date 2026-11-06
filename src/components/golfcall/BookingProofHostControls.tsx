@@ -1,15 +1,15 @@
 import { useState } from "react";
-import { ShieldCheck } from "lucide-react";
+import { Paperclip } from "lucide-react";
 import { useLocale } from "../../i18n/LocaleContext";
 import type { TranslationKey } from "../../i18n/locales/en";
 import { useToast } from "../../context/ToastContext";
 
 type TFn = (key: TranslationKey, vars?: Record<string, string | number>) => string;
-import { useBookingProof } from "../../lib/useBookingProof";
+import { BookingProofFileError, useBookingProof } from "../../lib/useBookingProof";
 import { Button } from "../ui/Button";
 import { Modal } from "../ui/Modal";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
-import { inputClass, labelClass } from "../ui/FormControls";
+import { labelClass } from "../ui/FormControls";
 
 const BOOKING_SOURCES = ["Course Website", "GolfNow", "Lightspeed / Chronogolf", "Phone Reservation", "Other"] as const;
 
@@ -40,20 +40,25 @@ export function BookingProofHostControls({ golfCallId }: { golfCallId: string })
   const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [source, setSource] = useState<string>(BOOKING_SOURCES[0]);
-  const [reference, setReference] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit() {
     if (!file || submitting) return;
     setSubmitting(true);
     try {
-      await attach(file, source, reference);
+      await attach(file, source);
       showToast(t("golfCallDetail.bookingProofAddedToast"), "success");
       setFormOpen(false);
       setFile(null);
-      setReference("");
     } catch (err) {
-      showToast(err instanceof Error ? err.message : t("golfCallDetail.bookingProofSaveError"), "warning");
+      showToast(
+        err instanceof BookingProofFileError
+          ? t(err.key)
+          : err instanceof Error
+            ? err.message
+            : t("golfCallDetail.bookingProofSaveError"),
+        "warning",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -82,7 +87,7 @@ export function BookingProofHostControls({ golfCallId }: { golfCallId: string })
           </Button>
         </div>
       ) : (
-        <Button size="sm" variant="outline" icon={<ShieldCheck size={14} />} onClick={() => setFormOpen(true)}>
+        <Button size="sm" variant="outline" icon={<Paperclip size={14} />} onClick={() => setFormOpen(true)}>
           {t("golfCallDetail.addBookingProof")}
         </Button>
       )}
@@ -104,7 +109,7 @@ export function BookingProofHostControls({ golfCallId }: { golfCallId: string })
               <label className={labelClass}>{t("golfCallDetail.uploadImageOrPdf")}</label>
               <input
                 type="file"
-                accept="image/*,application/pdf"
+                accept="image/*"
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                 className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-full file:border-0 file:bg-fairway-50 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-fairway-700"
               />
@@ -126,10 +131,6 @@ export function BookingProofHostControls({ golfCallId }: { golfCallId: string })
                   </button>
                 ))}
               </div>
-            </div>
-            <div>
-              <label className={labelClass}>{t("golfCallDetail.bookingReferenceLabel")}</label>
-              <input value={reference} onChange={(e) => setReference(e.target.value)} className={inputClass} />
             </div>
           </div>
         </Modal>

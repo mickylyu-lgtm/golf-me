@@ -84,13 +84,10 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
     return list
       .map((call) => ({
         call,
-        // A small trust nudge, never a real ranking factor — enough to
-        // break a near-tie between two otherwise-similar rounds, never
-        // enough to override a genuine compatibility difference (max
-        // realistic gap here is a small fraction of the 0-100 scale
-        // computeCallCompatibility produces). Unverified rounds are never
-        // hidden or excluded, just not the tiebreak winner.
-        matchScore: computeCallCompatibility(currentUser, call).overall + (call.teeTimeSource === "user_verified" ? 2 : 0),
+        // Compatibility only. The old +2 for an attached booking
+        // confirmation is gone: nobody reviews those, so an unreviewed
+        // upload (or a forged attach) must not rank a round higher.
+        matchScore: computeCallCompatibility(currentUser, call).overall,
       }))
       .sort((a, b) => b.matchScore - a.matchScore);
   }, [isMatched, baseResults, radius, when, customDate, intent, budgetMax, skill, vibeFilter, walk, currentUser, effectiveLoc]);

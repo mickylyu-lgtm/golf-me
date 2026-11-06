@@ -13,6 +13,8 @@ import {
   Clock,
   MapPin,
   Newspaper,
+  TriangleAlert,
+  FileCheck2,
 } from "lucide-react";
 import type { AppNotification, GolferProfile, NotificationType } from "../../types";
 import { Avatar } from "../ui/Avatar";
@@ -43,6 +45,8 @@ const ICONS: Record<NotificationType, NotificationIconComponent> = {
   caddie_analysis_complete: CaddieNavIcon,
   new_round_nearby: MapPin,
   circle_post: Newspaper,
+  booking_status_changed: TriangleAlert,
+  booking_evidence_reviewed: FileCheck2,
 };
 
 const BADGE_CLASSES: Record<NotificationBadgeKind, string> = {

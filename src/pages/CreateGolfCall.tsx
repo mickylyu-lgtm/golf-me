@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, ArrowRight, ChevronDown, MapPin, ShieldCheck, Users } from "lucide-react";
+import { ArrowLeft, ArrowRight, ChevronDown, MapPin, Paperclip, Users } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
 import { useRealRounds } from "../context/RealRoundsContext";
@@ -26,7 +26,8 @@ import { skillTierFromHandicap } from "../lib/format";
 import { coordsForCourse } from "../lib/courses";
 import { haversineMiles } from "../lib/geo";
 import { track } from "../lib/analytics";
-import { attachBookingProofDirect } from "../lib/useBookingProof";
+import { attachBookingProofDirect, BookingProofFileError } from "../lib/useBookingProof";
+import { BookingActionError, bookAndSubmitAtCreation } from "../lib/useBookingEvidence";
 import { clearHostRoundDraft, loadHostRoundDraft, saveHostRoundDraft } from "../lib/hostRoundDraft";
 import type { LookingFor, WhenChoice } from "../lib/hostRoundDraft";
 import { parseHostPrefill } from "../lib/hostPrefill";
@@ -188,7 +189,6 @@ export function CreateGolfCall() {
   // photo-picker round trip was clobbering the REST of the form over.
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [proofSource, setProofSource] = useState<string>(initial?.proofSource ?? BOOKING_SOURCES[0]);
-  const [proofReference, setProofReference] = useState(initial?.proofReference ?? "");
 
   // Persist a resumable draft on every change (not proofFile — see its own
   // state comment above) so a native photo-picker round trip, an
@@ -222,7 +222,6 @@ export function CreateGolfCall() {
       friendIds,
       proofExpanded,
       proofSource,
-      proofReference,
     });
   }, [
     draftOwner,
@@ -250,7 +249,6 @@ export function CreateGolfCall() {
     friendIds,
     proofExpanded,
     proofSource,
-    proofReference,
   ]);
 
   const maxFriends = Math.max(0, totalSpots - 2); // leave room for host + at least 1 open spot
@@ -425,10 +423,16 @@ export function CreateGolfCall() {
       // page (see BookingProofHostControls).
       if (proofFile && authUser) {
         try {
-          await attachBookingProofDirect(authUser.id, call.id, proofFile, proofSource, proofReference);
+          // Server model (migration 20261107150000) when the new round row
+          // carries booking_status; else the Stage 1 attach.
+          if (call.bookingStatus !== undefined) await bookAndSubmitAtCreation(authUser.id, call.id, proofFile, proofSource);
+          else await attachBookingProofDirect(authUser.id, call.id, proofFile, proofSource);
         } catch (err) {
           console.error("GolfMe: failed to attach booking proof at creation time.", err);
-          showToast(t("golfCallDetail.bookingProofSaveError"), "warning");
+          showToast(
+            err instanceof BookingProofFileError || err instanceof BookingActionError ? t(err.key) : t("golfCallDetail.bookingProofSaveError"),
+            "warning",
+          );
         }
       }
       showToast(t("host.postedFreshToast"), "success");
@@ -583,7 +587,7 @@ export function CreateGolfCall() {
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
-                      <ShieldCheck size={14} className="text-fairway-600" /> {t("host.verifyYourTeeTime")}
+                      <Paperclip size={14} className="text-slate-500" aria-hidden /> {t("host.verifyYourTeeTime")}
                     </p>
                     <p className="mt-0.5 text-xs text-slate-500">{t("host.verifyYourTeeTimeBody")}</p>
                   </div>
@@ -594,14 +598,14 @@ export function CreateGolfCall() {
               ) : (
                 <div className="flex flex-col gap-3">
                   <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
-                    <ShieldCheck size={14} className="text-fairway-600" /> {t("host.verifyYourTeeTime")}
+                    <Paperclip size={14} className="text-slate-500" aria-hidden /> {t("host.verifyYourTeeTime")}
                   </p>
                   <p className="rounded-lg bg-amber-50 p-2.5 text-xs leading-relaxed text-amber-700">{t("golfCallDetail.sensitiveInfoWarning")}</p>
                   <div>
                     <label className={labelClass}>{t("golfCallDetail.uploadImageOrPdf")}</label>
                     <input
                       type="file"
-                      accept="image/*,application/pdf"
+                      accept="image/*"
                       onChange={(e) => setProofFile(e.target.files?.[0] ?? null)}
                       className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-full file:border-0 file:bg-fairway-50 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-fairway-700"
                     />
@@ -624,26 +628,11 @@ export function CreateGolfCall() {
                       ))}
                     </div>
                   </div>
-                  <div>
-                    <label className={labelClass}>{t("golfCallDetail.bookingReferenceLabel")}</label>
-                    <input
-                      value={proofReference}
-                      onChange={(e) => setProofReference(e.target.value)}
-                      className={inputClass}
-                      maxLength={60}
-                      autoCapitalize="characters"
-                      autoComplete="off"
-                      autoCorrect="off"
-                      spellCheck={false}
-                      enterKeyHint="done"
-                    />
-                  </div>
                   <button
                     type="button"
                     onClick={() => {
                       setProofExpanded(false);
                       setProofFile(null);
-                      setProofReference("");
                     }}
                     className="self-start text-xs font-semibold text-slate-400 hover:text-slate-600"
                   >

@@ -242,7 +242,18 @@ export interface GolfCall {
   teeTimeSource: TeeTimeSource;
   bookingSource?: string; // e.g. "Course Website", "GolfNow" — set only when teeTimeSource is user_verified
   verificationCreatedAt?: string;
+  // Host-reported booking + evidence review (migration 20261107150000).
+  // Undefined when the server doesn't have those columns yet (and on demo
+  // rounds): lib/bookingStatus.ts then falls back to teeTimeSource.
+  bookingStatus?: BookingStatus;
+  evidenceStatus?: EvidenceStatus;
+  evidenceReviewedAt?: string;
+  bookingPartySize?: number;
+  bookingVersion?: number;
 }
+
+export type BookingStatus = "unknown" | "not_needed" | "needed" | "pending" | "booked" | "changed" | "cancelled";
+export type EvidenceStatus = "none" | "submitted" | "reviewed" | "needs_correction";
 
 export interface ChatMessage {
   id: string;
@@ -309,6 +320,10 @@ export type ReportCategory =
   | "Impersonation"
   | "Dangerous behavior"
   | "No-show"
+  // Round reports only: a booking claim or evidence that looks misleading
+  // or out of date. Goes to the admin Reports list like any report; it
+  // never changes a round's booking status by itself.
+  | "Misleading or outdated booking info"
   | "Other";
 
 export const REPORT_CATEGORIES: ReportCategory[] = [
@@ -320,8 +335,11 @@ export const REPORT_CATEGORIES: ReportCategory[] = [
   "Impersonation",
   "Dangerous behavior",
   "No-show",
+  "Misleading or outdated booking info",
   "Other",
 ];
+
+export const ROUND_ONLY_REPORT_CATEGORIES: ReportCategory[] = ["Misleading or outdated booking info"];
 
 export interface Report {
   id: string;
@@ -667,7 +685,11 @@ export type NotificationType =
   // Server fan-out (migration 20261030120000): a new open round inside the
   // recipient's travel radius, and a new post from someone they follow.
   | "new_round_nearby"
-  | "circle_post";
+  | "circle_post"
+  // Migration 20261107150000: the host marked the course booking changed or
+  // cancelled (joined players), and a review outcome (the host only).
+  | "booking_status_changed"
+  | "booking_evidence_reviewed";
 
 export interface AppNotification {
   id: string;

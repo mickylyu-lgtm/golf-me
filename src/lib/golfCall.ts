@@ -163,6 +163,12 @@ export interface RoundRow {
   tee_time_source: string;
   booking_source: string | null;
   verification_created_at: string | null;
+  // Absent until migration 20261107150000 is applied.
+  booking_status?: string;
+  evidence_status?: string;
+  evidence_reviewed_at?: string | null;
+  booking_party_size?: number | null;
+  booking_version?: number;
 }
 
 export interface ParticipantRow {
@@ -220,5 +226,10 @@ export function realRoundToGolfCall(round: RoundRow, participants: ParticipantRo
     teeTimeSource: round.tee_time_source as GolfCall["teeTimeSource"],
     bookingSource: round.booking_source ?? undefined,
     verificationCreatedAt: round.verification_created_at ?? undefined,
+    bookingStatus: round.booking_status as GolfCall["bookingStatus"],
+    evidenceStatus: round.evidence_status as GolfCall["evidenceStatus"],
+    evidenceReviewedAt: round.evidence_reviewed_at ?? undefined,
+    bookingPartySize: round.booking_party_size ?? undefined,
+    bookingVersion: round.booking_version,
   };
 }

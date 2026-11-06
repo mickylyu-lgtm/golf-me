@@ -6,6 +6,7 @@ import {
   Car,
   Check,
   ChevronRight,
+  ClipboardList,
   Footprints,
   Lock,
   MapPin,
@@ -39,8 +40,10 @@ import { TrustBadgeRow } from "../components/golfer/TrustBadges";
 import { MatchReasons } from "../components/golfer/MatchReasons";
 import { ConfirmJoinModal } from "../components/golfcall/ConfirmJoinModal";
 import { TeeTimeTrustBadge } from "../components/golfcall/TeeTimeTrustBadge";
+import { bookingStatusView } from "../lib/bookingStatus";
 import { BookingProofExplainer } from "../components/golfcall/BookingProofExplainer";
 import { BookingProofHostControls } from "../components/golfcall/BookingProofHostControls";
+import { BookingHostPanel } from "../components/golfcall/BookingHostPanel";
 import { EditTeeTimeModal } from "../components/golfcall/EditTeeTimeModal";
 import { formatDate, formatMoney } from "../lib/format";
 import { skillLabel, vibeLabel, walkOrCartLabel } from "../lib/enumLabels";
@@ -147,6 +150,7 @@ export function GolfCallDetail() {
   const isCompleted = call.status === "completed";
   const isCancelled = call.status === "cancelled";
   const isUrgent = !isFull && !isCompleted && !isCancelled && openSpots === 1;
+  const booking = bookingStatusView(call);
   // Same rule as the full-screen thread (/messages/round/:id): members only,
   // and not across a block with the host.
   const chatAccess = roundChatAccess({
@@ -209,7 +213,13 @@ export function GolfCallDetail() {
               tone={isFull ? "slate" : isUrgent ? "sun" : "fairway"}
               className={isUrgent ? "animate-pulse font-bold tracking-wide uppercase" : ""}
             >
-              {isFull ? t("golfCallDetail.full") : isUrgent ? t("golfCallDetail.oneSpotLeft") : t("golfCallDetail.spotsOpen", { count: openSpots, plural: openSpots === 1 ? "" : "s" })}
+              {isFull
+                ? t("golfCallDetail.full")
+                : isUrgent
+                  ? t("golfCallDetail.oneSpotLeft")
+                  : openSpots === 1
+                    ? t("golfCallCard.spotsRemainingSingular", { count: openSpots })
+                    : t("golfCallCard.spotsRemainingPlural", { count: openSpots })}
             </Badge>
           )}
           <Badge tone="outline">{call.joinMode === "instant" ? t("golfCallDetail.instantJoin") : t("golfCallDetail.requestToJoinBadge")}</Badge>
@@ -228,15 +238,6 @@ export function GolfCallDetail() {
             <span aria-hidden>{tier.emoji}</span> {t(TIER_FOR_YOU_KEYS[tier.tier])}
           </p>
           <MatchReasons reasons={reasons} className="mt-1.5" />
-          {/* A trust signal, never one of the compatibility factors above —
-              always appended after them, not competing for one of their
-              slots (see callMatchReasons/pickReasons, which never sees or
-              scores this). */}
-          {call.teeTimeSource === "user_verified" && (
-            <p className="mt-0.5 flex items-center gap-1.5 text-xs text-fairway-700">
-              <span aria-hidden className="font-bold">✓</span> {t("golfCallDetail.bookingProofMatchReason")}
-            </p>
-          )}
         </div>
       )}
 
@@ -247,14 +248,7 @@ export function GolfCallDetail() {
           </p>
           <p className="mt-1 font-bold text-slate-800">{formatDate(call.dateISO, locale, t)}</p>
           <p className="text-sm text-slate-500">{call.timeLabel}</p>
-          {/* Cancelled/completed rounds keep their verification metadata in
-              the DB (never deleted) but never show an active badge — a
-              tee time that's over or off is never still "usable." */}
-          {!isDemo && !isCancelled && !isCompleted && call.teeTimeSource === "user_verified" ? (
-            <TeeTimeTrustBadge source={call.teeTimeSource} onClick={() => setProofExplainerOpen(true)} className="mt-1.5" />
-          ) : (
-            !isDemo && <p className="mt-1 text-[11px] leading-tight text-slate-400">{t("golfCallDetail.teeTimeDisclaimer")}</p>
-          )}
+          {!isDemo && <p className="mt-1 text-[11px] leading-tight text-slate-400">{t("golfCallDetail.teeTimeDisclaimer")}</p>}
         </div>
         <div className="rounded-2xl border border-slate-100 bg-white p-4">
           <p className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -266,6 +260,29 @@ export function GolfCallDetail() {
           <p className="text-sm text-slate-500">{t("golfCallDetail.payAtCourse")}</p>
         </div>
       </div>
+
+      {/* Booking status, separate from the GolfMe group above: only a host
+          claim ("Booked · Host reported") or "not provided"; never shown on
+          cancelled, completed or past rounds (lib/bookingStatus.ts). */}
+      {booking.visible && (
+        <section aria-label={t("booking.label")} className="rounded-2xl border border-slate-100 bg-white p-4">
+          <p className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            <ClipboardList size={12} aria-hidden /> {t("booking.label")}
+          </p>
+          {booking.showClaim ? (
+            <TeeTimeTrustBadge call={call} onClick={() => setProofExplainerOpen(true)} className="mt-1.5" />
+          ) : (
+            <p className="mt-1 text-sm font-semibold text-slate-700">{t("booking.notProvided")}</p>
+          )}
+          {booking.evidence === "reviewed" && booking.reviewedAt && (
+            <p className="mt-1.5 text-xs leading-relaxed text-slate-600">{t("booking.evidenceReviewed", { date: formatDate(booking.reviewedAt, locale, t) })}</p>
+          )}
+          {booking.evidence === "submitted" && <p className="mt-1.5 text-xs font-medium text-slate-600">{t("booking.evidenceSubmitted")}</p>}
+          {booking.evidence === "needs_correction" && <p className="mt-1.5 text-xs font-medium text-slate-600">{t("booking.evidenceNeedsCorrection")}</p>}
+          {booking.partySize !== undefined && <p className="mt-1 text-xs text-slate-600">{t("booking.partySize", { count: booking.partySize })}</p>}
+          <p className="mt-1.5 text-xs leading-relaxed text-slate-500">{t("booking.availabilityNotConnected")}</p>
+        </section>
+      )}
 
       <div className="flex flex-wrap gap-1.5">
         <Badge tone="outline">{skillLabel(call.skillLevel, t)}</Badge>
@@ -303,9 +320,13 @@ export function GolfCallDetail() {
           <Button size="sm" variant="outline" icon={<Pencil size={13} />} onClick={() => setEditTeeTimeOpen(true)}>
             {t("golfCallDetail.editTeeTime")}
           </Button>
-          <BookingProofHostControls golfCallId={call.id} />
+          {/* Before migration 20261107150000 the round row has no
+              booking_status: keep the Stage 1 controls. */}
+          {booking.model === "legacy" && <BookingProofHostControls golfCallId={call.id} />}
         </div>
       )}
+
+      {!isDemo && isHost && booking.model === "server" && booking.visible && <BookingHostPanel call={call} />}
 
       {call.notes && (
         <div className="rounded-2xl border border-slate-100 bg-white p-4">

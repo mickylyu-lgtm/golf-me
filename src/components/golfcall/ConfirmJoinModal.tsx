@@ -6,6 +6,7 @@ import { ReputationBadge } from "../golfer/ReputationBadge";
 import { useData } from "../../context/DataContext";
 import type { GolfCall, GolferProfile } from "../../types";
 import { formatDate } from "../../lib/format";
+import { bookingStatusView } from "../../lib/bookingStatus";
 import { useCredibilityForGolfers } from "../../lib/useCredibility";
 import { useReputationState } from "../../lib/useReputationState";
 import { useLocale } from "../../i18n/LocaleContext";
@@ -37,6 +38,7 @@ export function ConfirmJoinModal({ call, onClose, onConfirm }: ConfirmJoinModalP
   const { getGolfer } = useData();
   const { t, locale } = useLocale();
   const roster = call.joinedGolferIds.map((id) => getGolfer(id)).filter((g): g is NonNullable<typeof g> => Boolean(g));
+  const booking = bookingStatusView(call);
 
   // Real accounts: live server stats (get_credibility_stats), not the
   // never-updated profile counters. Demo: the fixtures' own numbers.
@@ -91,7 +93,15 @@ export function ConfirmJoinModal({ call, onClose, onConfirm }: ConfirmJoinModalP
           <p className="text-sm text-slate-500">
             {formatDate(call.dateISO, locale, t)} · {call.timeLabel}
           </p>
+          <p className="mt-1 text-sm font-semibold text-slate-700">
+            {t("booking.label")}: {booking.showClaim ? t(booking.labelKey) : t("booking.notProvided")}
+          </p>
         </div>
+
+        {/* Joining is GolfMe-group membership only (join_golf_call touches
+            round_participants, nothing at the course). Plain text, right
+            above the confirm button, so it is read before joining. */}
+        <p className="rounded-xl bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">{t("booking.joinDisclaimer")}</p>
       </div>
     </Modal>
   );

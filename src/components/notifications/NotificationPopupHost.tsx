@@ -23,6 +23,8 @@ const POPUP_TYPES = new Set<NotificationType>([
   "tee_time_updated",
   "booking_proof_removed",
   "caddie_analysis_complete",
+  "booking_status_changed",
+  "booking_evidence_reviewed",
 ]);
 
 const AUTO_DISMISS_MS = 4500;

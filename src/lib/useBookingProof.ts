@@ -2,9 +2,23 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "./supabase";
 import { useAuth } from "../context/AuthContext";
 import { resizeImageToBlob } from "./image";
+import type { TranslationKey } from "../i18n/locales/en";
 
 const BOOKING_PROOFS_BUCKET = "booking-proofs";
-export const MAX_PROOF_FILE_BYTES = 15 * 1024 * 1024; // matches the bucket's own file_size_limit
+// Micky's decision (2026-11-05): screenshots/photos only, re-encoded on the
+// device (JPEG, 1600 px, which also drops EXIF/location), at most 5 MB as
+// uploaded. No PDFs. A raw pick far over that is refused before decoding.
+export const MAX_PROOF_UPLOAD_BYTES = 5 * 1024 * 1024;
+const MAX_PROOF_PICK_BYTES = 40 * 1024 * 1024;
+
+// A file the host picked that can't be used; `key` is the message to show.
+export class BookingProofFileError extends Error {
+  key: TranslationKey;
+  constructor(key: TranslationKey) {
+    super(key);
+    this.key = key;
+  }
+}
 
 export interface BookingProofInfo {
   proofType: "image" | "pdf";
@@ -26,26 +40,37 @@ interface ProofRow {
 // useBookingProof's hook lifecycle to attach to; this gets called
 // imperatively right after hostRound() returns the new round's real id.
 // The useBookingProof hook's own `attach` below just wraps this.
-export async function attachBookingProofDirect(authUserId: string, golfCallId: string, file: File, bookingSource: string, bookingReference: string) {
-  if (file.size > MAX_PROOF_FILE_BYTES) throw new Error("That file is too large (15MB max).");
-  const isPdf = file.type === "application/pdf";
-  if (!isPdf && !file.type.startsWith("image/")) throw new Error("Please choose an image or PDF.");
+// No booking reference / confirmation number is collected any more (Micky,
+// 2026-11-05): p_booking_reference is always null.
+// The one image pipeline for booking evidence (legacy attach and the
+// Stage 2 submit): images only, re-encoded to JPEG at 1600 px on the device
+// (drops EXIF/location metadata), at most 5 MB as uploaded.
+export async function prepareBookingImage(file: File): Promise<Blob> {
+  if (!file.type.startsWith("image/")) throw new BookingProofFileError("booking.errorNotImage");
+  if (file.size > MAX_PROOF_PICK_BYTES) throw new BookingProofFileError("booking.errorTooLarge");
+  let blob: Blob;
+  try {
+    blob = await resizeImageToBlob(file, 1600);
+  } catch {
+    throw new BookingProofFileError("booking.errorNotImage");
+  }
+  if (blob.size > MAX_PROOF_UPLOAD_BYTES) throw new BookingProofFileError("booking.errorTooLarge");
+  return blob;
+}
 
-  const proofType: "image" | "pdf" = isPdf ? "pdf" : "image";
-  const blob: Blob = isPdf ? file : await resizeImageToBlob(file, 1600);
-  const path = `${authUserId}/${golfCallId}/${crypto.randomUUID()}.${isPdf ? "pdf" : "jpg"}`;
+export async function attachBookingProofDirect(authUserId: string, golfCallId: string, file: File, bookingSource: string) {
+  const blob = await prepareBookingImage(file);
+  const path = `${authUserId}/${golfCallId}/${crypto.randomUUID()}.jpg`;
 
-  const { error: uploadError } = await supabase.storage
-    .from(BOOKING_PROOFS_BUCKET)
-    .upload(path, blob, { contentType: isPdf ? "application/pdf" : "image/jpeg" });
+  const { error: uploadError } = await supabase.storage.from(BOOKING_PROOFS_BUCKET).upload(path, blob, { contentType: "image/jpeg" });
   if (uploadError) throw new Error(uploadError.message);
 
   const { data: oldPath, error } = await supabase.rpc("attach_booking_proof", {
     p_golf_call_id: golfCallId,
     p_storage_path: path,
-    p_proof_type: proofType,
+    p_proof_type: "image",
     p_booking_source: bookingSource.trim() || null,
-    p_booking_reference: bookingReference.trim() || null,
+    p_booking_reference: null,
   });
   if (error) {
     // Roll back the just-uploaded file so a rejected attach never leaves an
@@ -107,9 +132,9 @@ export function useBookingProof(golfCallId: string | undefined) {
   }, [proof]);
 
   const attach = useCallback(
-    async (file: File, bookingSource: string, bookingReference: string) => {
+    async (file: File, bookingSource: string) => {
       if (!authUser || !golfCallId) throw new Error("Not signed in.");
-      await attachBookingProofDirect(authUser.id, golfCallId, file, bookingSource, bookingReference);
+      await attachBookingProofDirect(authUser.id, golfCallId, file, bookingSource);
       await refetch();
     },
     [authUser, golfCallId, refetch],

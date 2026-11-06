@@ -38,7 +38,8 @@ export interface HostRoundDraft {
   friendIds: string[];
   proofExpanded: boolean;
   proofSource: string;
-  proofReference: string;
+  // proofReference (a booking confirmation number) is no longer collected
+  // or stored on the device; an older draft's value is dropped on load.
 }
 
 const DRAFT_KEY = "golfme:hostRoundDraft";
@@ -58,7 +59,7 @@ export function loadHostRoundDraft(owner: string): HostRoundDraft | null {
   try {
     const raw = window.localStorage.getItem(DRAFT_KEY);
     if (!raw) return null;
-    const { owner: draftOwner, savedAt, ...draft } = JSON.parse(raw) as StoredDraft;
+    const { owner: draftOwner, savedAt, proofReference: _legacyReference, ...draft } = JSON.parse(raw) as StoredDraft & { proofReference?: unknown };
     // Drafts saved before owners were recorded can't be told apart: drop them.
     if (draftOwner !== owner || !savedAt || Date.now() - savedAt > DRAFT_MAX_AGE_MS) {
       window.localStorage.removeItem(DRAFT_KEY);

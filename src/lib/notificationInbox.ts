@@ -157,6 +157,8 @@ const BADGE_BY_TYPE: Record<string, NotificationBadgeKind> = {
   new_round_nearby: "roundAlert",
   booking_proof_attached: "booking",
   booking_proof_removed: "booking",
+  booking_status_changed: "booking",
+  booking_evidence_reviewed: "booking",
   caddie_analysis_complete: "caddie",
   circle_post: "post",
 };

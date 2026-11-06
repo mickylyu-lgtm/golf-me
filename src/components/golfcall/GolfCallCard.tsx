@@ -142,9 +142,9 @@ export function GolfCallCard({ call, showMatch = true, showSharedPreferences = t
               : t("golfCallCard.spotsRemainingPlural", { count: openSpots })}
           </Badge>
         )}
-        {/* Cancelled rounds keep verification metadata in the DB but never
-            show an active badge — see TeeTimeTrustBadge's own gating too. */}
-        {!isCancelled && <TeeTimeTrustBadge source={call.teeTimeSource} />}
+        {/* "Booked · Host reported" only while the round is still to be
+            played (cancelled, completed and past rounds show no claim). */}
+        <TeeTimeTrustBadge call={call} />
         {/* Medium weight so the vibe reads as a descriptor, not the
             headline; Competitive also gets a lighter rose wash. Text colors
             are unchanged, so contrast stays at the tone's AA level. */}
@@ -196,11 +196,6 @@ export function GolfCallCard({ call, showMatch = true, showSharedPreferences = t
             <span aria-hidden>{tier.emoji}</span> {t(TIER_FOR_YOU_KEYS[tier.tier])}
           </p>
           <MatchReasons reasons={reasons} className="mt-1" />
-          {call.teeTimeSource === "user_verified" && (
-            <p className="mt-0.5 flex items-center gap-1.5 text-xs text-fairway-700">
-              <span aria-hidden className="font-bold">✓</span> {t("golfCallDetail.bookingProofMatchReason")}
-            </p>
-          )}
           {/* "0 Shared Preferences" said nothing a card needs; the round page has the full breakdown. */}
           {preferenceChecks.some((c) => c.matched) && (
             <div className="mt-1.5 border-t border-fairway-100 pt-1.5">

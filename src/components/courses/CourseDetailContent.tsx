@@ -67,7 +67,8 @@ export function CourseDetailContent({ course }: { course: DisplayCourseResult })
             {t("coursePage.findTeeTimes")}
           </Button>
         </div>
-        <p className="text-center text-xs text-slate-400">{t("coursePage.teeTimesNote")}</p>
+        <p className="text-center text-xs text-slate-500">{t("coursePage.teeTimesNote")}</p>
+        <p className="text-center text-xs text-slate-500">{t("booking.availabilityNotConnected")}</p>
       </div>
     </>
   );

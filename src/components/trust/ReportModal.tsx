@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
-import { REPORT_CATEGORIES } from "../../types";
+import { REPORT_CATEGORIES, ROUND_ONLY_REPORT_CATEGORIES } from "../../types";
 import type { Report, ReportCategory } from "../../types";
 import { useData } from "../../context/DataContext";
 import { useToast } from "../../context/ToastContext";
@@ -53,7 +53,7 @@ export function ReportModal({ reportedId, reportedName, context, golfCallId, pos
       <div className="flex flex-col gap-3">
         <p className="text-xs text-slate-500">Reports are confidential. {reportedName} will not be notified.</p>
         <div className="flex flex-col gap-1.5">
-          {REPORT_CATEGORIES.map((c) => (
+          {REPORT_CATEGORIES.filter((c) => context === "round" || !ROUND_ONLY_REPORT_CATEGORIES.includes(c)).map((c) => (
             <label
               key={c}
               className={`flex cursor-pointer items-center gap-2.5 rounded-xl border px-3 py-2.5 text-sm transition ${

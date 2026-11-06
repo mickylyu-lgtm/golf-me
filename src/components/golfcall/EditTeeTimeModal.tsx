@@ -40,6 +40,8 @@ export function EditTeeTimeModal({ call, onClose }: EditTeeTimeModalProps) {
   const [saving, setSaving] = useState(false);
 
   const hasProof = call.teeTimeSource === "user_verified";
+  // Server model: a booked round's booking becomes "changed" on a real edit.
+  const marksChanged = call.bookingStatus === "booked";
   // Moving a round into the past would make it instantly unjoinable.
   const startsInPast = isPastRoundStart(date, timeLabel);
   const canSave = Boolean(course.trim() && areaLabel.trim() && date && timeLabel.trim()) && !startsInPast;
@@ -85,7 +87,11 @@ export function EditTeeTimeModal({ call, onClose }: EditTeeTimeModalProps) {
       }
     >
       <div className="flex flex-col gap-4">
-        {hasProof && <p className="rounded-xl bg-amber-50 p-3 text-xs leading-relaxed text-amber-700">{t("golfCallDetail.editTeeTimeWarning")}</p>}
+        {marksChanged ? (
+          <p className="rounded-xl bg-amber-50 p-3 text-xs leading-relaxed text-amber-700">{t("booking.editChangesBooking")}</p>
+        ) : (
+          hasProof && <p className="rounded-xl bg-amber-50 p-3 text-xs leading-relaxed text-amber-700">{t("golfCallDetail.editTeeTimeWarning")}</p>
+        )}
         <div>
           <label className={labelClass}>{t("host.step1Title")}</label>
           <CourseAutocomplete

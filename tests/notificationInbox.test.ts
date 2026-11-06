@@ -218,8 +218,12 @@ test("every known type has a badge; unknown types fall back", () => {
     "caddie_analysis_complete",
     "new_round_nearby",
     "circle_post",
+    "booking_status_changed",
+    "booking_evidence_reviewed",
   ];
   for (const type of known) assert.notEqual(notificationBadgeKind(type), "other", type);
+  assert.equal(notificationBadgeKind("booking_status_changed"), "booking");
+  assert.equal(notificationBadgeKind("booking_evidence_reviewed"), "booking");
   assert.equal(notificationBadgeKind("new_message"), "message");
   assert.equal(notificationBadgeKind("caddie_analysis_complete"), "caddie");
   assert.equal(notificationBadgeKind("new_follower"), "follow");
