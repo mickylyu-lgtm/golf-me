@@ -790,6 +790,7 @@ export const ja: Record<TranslationKey, string> = {
   "avatarUpload.loadError": "画像を読み込めませんでした — 別の画像をお試しください。",
   "avatarUpload.saveError": "写真を保存できませんでした。もう一度お試しください。",
   "avatarUpload.changePhoto": "写真を変更",
+  "avatarUpload.viewPhoto": "写真を表示",
   "avatarUpload.addPhoto": "プロフィール写真を追加",
   "avatarUpload.remove": "削除",
   "avatarUpload.hasPhotoHelp": "プロフィールが表示される場所すべてに丸型で表示されます。",

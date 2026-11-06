@@ -790,6 +790,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "avatarUpload.loadError": "图片加载失败——换一张试试。",
   "avatarUpload.saveError": "无法保存你的照片,请重试。",
   "avatarUpload.changePhoto": "更换照片",
+  "avatarUpload.viewPhoto": "查看你的照片",
   "avatarUpload.addPhoto": "添加头像照片",
   "avatarUpload.remove": "移除",
   "avatarUpload.hasPhotoHelp": "将以圆形显示在你的资料出现的任何位置。",

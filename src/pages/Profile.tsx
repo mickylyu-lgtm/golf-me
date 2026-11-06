@@ -24,6 +24,8 @@ import { Modal } from "../components/ui/Modal";
 import { CLICKABLE_CARD_CLASS } from "../components/ui/cardStyles";
 import { inputClass, labelClass } from "../components/ui/FormControls";
 import { AvatarUpload } from "../components/profile/AvatarUpload";
+import { FullscreenMediaViewer } from "../components/community/FullscreenMediaViewer";
+import { largestPhotoUrl } from "../lib/providerPhoto";
 import { ReputationBadge } from "../components/golfer/ReputationBadge";
 import { FoundingGolferBadge, FoundingMark } from "../components/golfer/FoundingGolfer";
 import { Pill } from "../components/ui/Pill";
@@ -73,6 +75,7 @@ export function Profile() {
 
   const [editing, setEditing] = useState(false);
   const [avatarModalOpen, setAvatarModalOpen] = useState(false);
+  const [photoViewerOpen, setPhotoViewerOpen] = useState(false);
   const [savingUsername, setSavingUsername] = useState(false);
   // The main profile write: Save stays disabled until it answers, so a
   // double tap can't send it twice.
@@ -171,9 +174,11 @@ export function Profile() {
   return (
     <div className="flex flex-col gap-6 pb-6">
       <div className="flex items-center gap-3">
+        {/* Your photo opens fullscreen and zoomable first ("Change photo"
+            from there opens the photo sheet); no photo yet opens the sheet. */}
         <button
-          onClick={() => setAvatarModalOpen(true)}
-          aria-label={t("profile.changePhoto")}
+          onClick={() => (currentUser.photoUrl ? setPhotoViewerOpen(true) : setAvatarModalOpen(true))}
+          aria-label={currentUser.photoUrl ? t("avatarUpload.viewPhoto") : t("profile.changePhoto")}
           className="rounded-full transition-transform duration-200 ease-out hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2"
         >
           <Avatar golfer={currentUser} size="lg" />
@@ -282,6 +287,20 @@ export function Profile() {
           </ProfileSection>
         )}
       </div>
+
+      {photoViewerOpen && currentUser.photoUrl && (
+        <FullscreenMediaViewer
+          media={[{ id: "own-avatar", type: "image", url: largestPhotoUrl(currentUser.photoUrl) }]}
+          onClose={() => setPhotoViewerOpen(false)}
+          action={{
+            label: t("avatarUpload.changePhoto"),
+            onClick: () => {
+              setPhotoViewerOpen(false);
+              setAvatarModalOpen(true);
+            },
+          }}
+        />
+      )}
 
       {avatarModalOpen && (
         <Modal title={t("profile.profilePhoto")} onClose={() => setAvatarModalOpen(false)}>

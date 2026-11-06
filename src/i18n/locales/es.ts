@@ -790,6 +790,7 @@ export const es: Record<TranslationKey, string> = {
   "avatarUpload.loadError": "No se pudo cargar esa imagen — prueba con otra.",
   "avatarUpload.saveError": "No se pudo guardar tu foto. Inténtalo de nuevo.",
   "avatarUpload.changePhoto": "Cambiar foto",
+  "avatarUpload.viewPhoto": "Ver tu foto",
   "avatarUpload.addPhoto": "Añadir foto de perfil",
   "avatarUpload.remove": "Quitar",
   "avatarUpload.hasPhotoHelp": "Se muestra en círculo donde sea que aparezca tu perfil.",

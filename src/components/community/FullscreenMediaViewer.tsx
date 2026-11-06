@@ -6,11 +6,14 @@ import { useLocale } from "../../i18n/LocaleContext";
 import { MediaCarousel } from "./MediaCarousel";
 import { perfHudViewer } from "../../lib/perfHud";
 import { lockPageScroll } from "../../lib/scrollLock";
+import { pushModal } from "../../lib/modalStack";
 
 interface FullscreenMediaViewerProps {
   media: PostMediaItem[];
   initialIndex?: number;
   onClose: () => void;
+  /** Optional bottom action (e.g. "Change photo" on your own avatar). */
+  action?: { label: string; onClick: () => void };
 }
 
 const DISMISS_DISTANCE_PX = 120;
@@ -42,12 +45,16 @@ const INTERACTIVE_AXIS_LOCK_PX = 45;
 // take real user reaction time, well past this window.
 const IGNORE_DISMISS_MS = 300;
 
+function isZoomOwned(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest("[data-zoom-active]") !== null;
+}
+
 // The fullscreen home for both a swing post's single video and a
 // multi-photo/video post's carousel — same drag-down-to-dismiss gesture
 // either way (opened via double-tap on the feed card). Vertical drags are
 // intercepted here; horizontal ones are left alone so MediaCarousel's own
 // native scroll-snap still swipes between items normally.
-export function FullscreenMediaViewer({ media, initialIndex = 0, onClose }: FullscreenMediaViewerProps) {
+export function FullscreenMediaViewer({ media, initialIndex = 0, onClose, action }: FullscreenMediaViewerProps) {
   const [dragY, setDragY] = useState(0);
   const [dragging, setDragging] = useState(false);
   const mountedAtRef = useRef(Date.now());
@@ -65,12 +72,18 @@ export function FullscreenMediaViewer({ media, initialIndex = 0, onClose }: Full
 
   // Drag-to-dismiss is touch only: on a computer, Esc and the close button
   // are the way out.
+  // Registered on the modal stack so, opened over a sheet (your own photo
+  // from the Profile photo sheet), one Escape closes only this viewer.
   useEffect(() => {
+    const entry = pushModal();
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && entry.isTop()) onClose();
     };
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      entry.release();
+    };
   }, [onClose]);
 
   useEffect(() => {
@@ -111,6 +124,11 @@ export function FullscreenMediaViewer({ media, initialIndex = 0, onClose }: Full
     // gesture that opened this viewer leaking in, not a real new touch —
     // never start tracking it as a potential dismiss.
     if (Date.now() - mountedAtRef.current < IGNORE_DISMISS_MS) return;
+    // A zoomed photo (ZoomableImage) owns its touches: a drag pans it.
+    if (e.touches.length > 1 || isZoomOwned(e.target)) {
+      dragStateRef.current = null;
+      return;
+    }
     const startedOnInteractive = e.target instanceof Element && e.target.closest("[data-video-controls]") !== null;
     const t = e.touches[0];
     dragStateRef.current = { startX: t.clientX, startY: t.clientY, startTime: Date.now(), lastY: t.clientY, axis: "none", startedOnInteractive };
@@ -119,6 +137,11 @@ export function FullscreenMediaViewer({ media, initialIndex = 0, onClose }: Full
   function onTouchMove(e: React.TouchEvent) {
     const state = dragStateRef.current;
     if (!state) return;
+    // A second finger (pinch) or a zoom that began mid-press: no dismiss.
+    if (e.touches.length > 1 || isZoomOwned(e.target)) {
+      onTouchCancel();
+      return;
+    }
     const t = e.touches[0];
     const dx = t.clientX - state.startX;
     const dy = t.clientY - state.startY;
@@ -199,6 +222,16 @@ export function FullscreenMediaViewer({ media, initialIndex = 0, onClose }: Full
       >
         <X size={18} />
       </button>
+      {action && (
+        <button
+          type="button"
+          onClick={action.onClick}
+          className="absolute bottom-[calc(env(safe-area-inset-bottom)+1.5rem)] left-1/2 -translate-x-1/2 rounded-full bg-white/90 px-5 py-2.5 text-sm font-semibold text-slate-900 shadow-lg transition-colors duration-150 hover:bg-white"
+          style={{ opacity: backdropOpacity }}
+        >
+          {action.label}
+        </button>
+      )}
     </div>,
     document.body,
   );

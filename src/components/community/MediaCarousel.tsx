@@ -4,6 +4,7 @@ import { Play, Volume2, VolumeX } from "lucide-react";
 import type { PostMediaItem } from "../../types";
 import { enterNativeVideoFullscreen } from "../../lib/video";
 import { barsCoverStyle, safeFindBars, useBlurredBackdrop, type BarInsets } from "../../lib/blurredBackdrop";
+import { ZoomableImage } from "./ZoomableImage";
 
 interface MediaCarouselProps {
   media: PostMediaItem[];
@@ -294,9 +295,9 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
           ) : variant === "card" ? (
             <CardImage key={item.id} src={item.url} className={itemClass} fit={wide ? "contain" : "cover"} onClick={() => onItemClick?.(i)} />
           ) : (
-            <div key={item.id} className="h-full w-full shrink-0 snap-center overflow-hidden bg-black">
-              <img src={item.url} alt="" loading="lazy" className="h-full w-full object-contain" />
-            </div>
+            // Pinch / double-tap zoom and pan (ZoomableImage); resets when
+            // swiped away from.
+            <ZoomableImage key={item.id} src={item.url} active={i === activeIndex} />
           ),
         )}
       </div>

@@ -7,6 +7,8 @@ import { useAuth } from "../../context/AuthContext";
 import { supabase } from "../../lib/supabase";
 import { AVATAR_BUCKET, avatarPath, resizeImageToSquareBlob, uploadAvatarBlob } from "../../lib/avatarStorage";
 import type { GolferProfile } from "../../types";
+import { FullscreenMediaViewer } from "../community/FullscreenMediaViewer";
+import { largestPhotoUrl } from "../../lib/providerPhoto";
 
 // Client-side only: reads the file, center-crops it to a square, downsizes
 // it, and re-encodes as a JPEG data URL. Keeps localStorage lean without
@@ -56,6 +58,7 @@ export function AvatarUpload({ golfer, onChange, onBusyChange, size = "xl" }: Av
   const inputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
   const { t } = useLocale();
   const { isDemo, authUser } = useAuth();
 
@@ -118,14 +121,35 @@ export function AvatarUpload({ golfer, onChange, onBusyChange, size = "xl" }: Av
 
   return (
     <div className="flex items-center gap-3.5">
-      <div className="relative">
+      {/* Tap your photo: see it fullscreen (pinch / double-tap zoom) before
+          deciding to change it. No photo yet: the tap opens the picker. */}
+      <button
+        type="button"
+        onClick={() => (golfer.photoUrl ? setViewerOpen(true) : inputRef.current?.click())}
+        disabled={loading}
+        aria-label={golfer.photoUrl ? t("avatarUpload.viewPhoto") : t("avatarUpload.addPhoto")}
+        className={`relative rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 ${golfer.photoUrl ? "cursor-zoom-in" : ""}`}
+      >
         <Avatar golfer={golfer} size={size} showVerified={false} />
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40">
             <Loader2 size={18} className="animate-spin text-white" />
           </div>
         )}
-      </div>
+      </button>
+      {viewerOpen && golfer.photoUrl && (
+        <FullscreenMediaViewer
+          media={[{ id: "own-avatar", type: "image", url: largestPhotoUrl(golfer.photoUrl) }]}
+          onClose={() => setViewerOpen(false)}
+          action={{
+            label: t("avatarUpload.changePhoto"),
+            onClick: () => {
+              setViewerOpen(false);
+              inputRef.current?.click();
+            },
+          }}
+        />
+      )}
       <div className="flex flex-col gap-1.5">
         <div className="flex flex-wrap gap-2">
           <button

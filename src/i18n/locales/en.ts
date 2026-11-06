@@ -809,6 +809,7 @@ export const en = {
   "avatarUpload.loadError": "Couldn't load that image — try another.",
   "avatarUpload.saveError": "Couldn't save your photo. Please try again.",
   "avatarUpload.changePhoto": "Change photo",
+  "avatarUpload.viewPhoto": "View your photo",
   "avatarUpload.addPhoto": "Add a profile photo",
   "avatarUpload.remove": "Remove",
   "avatarUpload.hasPhotoHelp": "Displayed as a circle wherever your profile appears.",

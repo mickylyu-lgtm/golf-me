@@ -790,6 +790,7 @@ export const ko: Record<TranslationKey, string> = {
   "avatarUpload.loadError": "이미지를 불러올 수 없어요 — 다른 이미지를 시도해보세요.",
   "avatarUpload.saveError": "사진을 저장하지 못했어요. 다시 시도해 주세요.",
   "avatarUpload.changePhoto": "사진 변경",
+  "avatarUpload.viewPhoto": "내 사진 보기",
   "avatarUpload.addPhoto": "프로필 사진 추가",
   "avatarUpload.remove": "제거",
   "avatarUpload.hasPhotoHelp": "프로필이 표시되는 모든 곳에 원형으로 나타나요.",

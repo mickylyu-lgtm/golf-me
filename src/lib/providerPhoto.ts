@@ -37,6 +37,15 @@ export function sizedGooglePhotoUrl(url: string, size = PROVIDER_PHOTO_SIZE): st
   return `${url}=s${size}-c`;
 }
 
+// The biggest version of a profile photo there is, for the fullscreen
+// zoomable viewer (your own avatar). A Google photo can be asked for at any
+// size; a GolfMe-stored avatar only exists at the size it was uploaded at.
+export const FULLSCREEN_PHOTO_SIZE = 1024;
+
+export function largestPhotoUrl(url: string): string {
+  return isGooglePhotoUrl(url) ? sizedGooglePhotoUrl(url, FULLSCREEN_PHOTO_SIZE) : url;
+}
+
 export function providerPhotoUrl(user: ProviderUser | null | undefined): string | undefined {
   if (!user || !isGoogleAccount(user)) return undefined;
   const meta = user.user_metadata ?? {};
