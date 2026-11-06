@@ -9,8 +9,9 @@ import { CLUB_ART, ClubArtDefs } from "./clubSketches";
 
 // Caddie's "I'm hitting..." club choice (replaced a <select>, 2026-11-06):
 // a scrollable row of category cards, each with an illustration of that
-// club head (clubSketches.tsx), then chips for the exact club. Optional,
-// like before: "Not sure" (the default) sends no club. Both rows are
+// club head (clubSketches.tsx), then chips for the exact club. Required:
+// Ask Caddie stays disabled until a club is picked (no "Not sure", Micky
+// 2026-11-06: the club can't be detected reliably yet). Both rows are
 // radiogroups of role="radio" buttons, which also gives each pick the app's
 // light selection haptic (lib/tapFeedback).
 // Motion: a card lifts slightly on hover/press; picking one tilts and
@@ -39,7 +40,6 @@ export function ClubPicker({ value, onChange, disabled = false }: { value: strin
   const [open, setOpen] = useState<ClubCategory | null>(() => clubCategoryOf(value));
   // Bumped on every card tap; keys the art so its settle + shine replay.
   const [picks, setPicks] = useState(0);
-  const notSure = open === null && value === "";
 
   return (
     <div
@@ -81,19 +81,6 @@ export function ClubPicker({ value, onChange, disabled = false }: { value: strin
             </button>
           );
         })}
-        <button
-          type="button"
-          role="radio"
-          aria-checked={notSure}
-          disabled={disabled}
-          onClick={() => {
-            setOpen(null);
-            onChange("");
-          }}
-          className={`${cardClass(notSure)} justify-center border-dashed px-1 pb-0 text-center leading-tight`}
-        >
-          {t("caddie.club.notSure")}
-        </button>
       </div>
 
       {open && (

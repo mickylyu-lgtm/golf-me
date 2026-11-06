@@ -98,7 +98,7 @@ test("analysis started (draft cleared on success) before the length arrives: sta
   const d = deferred<number>();
   const run = resolveTrimReopen({ gate: s.gate, draft: s.draftA, getDraft: s.getDraft, previewDuration: undefined, readDuration: () => d.promise });
   // The page refuses to analyze while reopening...
-  assert.equal(canStartAnalysis({ hasVideo: true, submitting: false, selectorOpen: false, reopening: s.gate.pending }), false);
+  assert.equal(canStartAnalysis({ hasVideo: true, hasClub: true, submitting: false, selectorOpen: false, reopening: s.gate.pending }), false);
   // ...and even if it had, the draft it started from is gone by the time the length lands.
   s.setDraft(undefined);
   d.resolve(30);
@@ -167,10 +167,11 @@ test("a failed read after the draft changed stays silent (stale, no toast)", asy
   assert.deepEqual(await run, { kind: "stale" });
 });
 
-test("canStartAnalysis: needs a video, no submit, no open or reopening selector", () => {
-  const ok = { hasVideo: true, submitting: false, selectorOpen: false, reopening: false };
+test("canStartAnalysis: needs a video and a club, no submit, no open or reopening selector", () => {
+  const ok = { hasVideo: true, hasClub: true, submitting: false, selectorOpen: false, reopening: false };
   assert.equal(canStartAnalysis(ok), true);
   assert.equal(canStartAnalysis({ ...ok, hasVideo: false }), false);
+  assert.equal(canStartAnalysis({ ...ok, hasClub: false }), false);
   assert.equal(canStartAnalysis({ ...ok, submitting: true }), false);
   assert.equal(canStartAnalysis({ ...ok, selectorOpen: true }), false);
   assert.equal(canStartAnalysis({ ...ok, reopening: true }), false);

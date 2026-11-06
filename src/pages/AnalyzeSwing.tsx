@@ -246,7 +246,7 @@ export function AnalyzeSwing() {
   }
 
   async function handleAnalyze() {
-    if (!authUser || !canStartAnalysis({ hasVideo: !!videoFile, submitting, selectorOpen: !!pendingTrim, reopening: trimReopening || trimReopenGate.pending })) return;
+    if (!authUser || !canStartAnalysis({ hasVideo: !!videoFile, hasClub: !!swingType.trim(), submitting, selectorOpen: !!pendingTrim, reopening: trimReopening || trimReopenGate.pending })) return;
     if (!videoFile) return;
     setSubmitting(true);
     // Brackets the one real gap where an app exit could genuinely lose a
@@ -406,7 +406,7 @@ export function AnalyzeSwing() {
       <Button
         size="lg"
         fullWidth
-        disabled={!canStartAnalysis({ hasVideo: !!videoFile, submitting, selectorOpen: !!pendingTrim, reopening: trimReopening })}
+        disabled={!canStartAnalysis({ hasVideo: !!videoFile, hasClub: !!swingType.trim(), submitting, selectorOpen: !!pendingTrim, reopening: trimReopening })}
         onClick={handleAnalyze}
         icon={submitting ? <Loader2 size={16} className="animate-spin" /> : <ScanLine size={16} />}
       >

@@ -97,12 +97,13 @@ export async function resolveTrimReopen(opts: {
   }
 }
 
-/** Ask Caddie may only start with a video and no selector open or reopening. */
+/** Ask Caddie may only start with a video, a picked club, and no selector open or reopening. */
 export function canStartAnalysis(state: {
   hasVideo: boolean;
+  hasClub: boolean;
   submitting: boolean;
   selectorOpen: boolean;
   reopening: boolean;
 }): boolean {
-  return state.hasVideo && !state.submitting && !state.selectorOpen && !state.reopening;
+  return state.hasVideo && state.hasClub && !state.submitting && !state.selectorOpen && !state.reopening;
 }
