@@ -4,6 +4,7 @@ import { useLocale } from "../../i18n/LocaleContext";
 import { Button } from "../ui/Button";
 import { formatClock } from "../../lib/format";
 import { generateVideoFilmstrip } from "../../lib/image";
+import { initialTrimWindow } from "../../lib/trimWindow";
 
 const MIN_WINDOW_SECONDS = 2; // a full swing (address through follow-through) rarely fits under this -- prevents dragging both handles down to a near-zero, useless selection
 const FILMSTRIP_FRAME_COUNT = 10;
@@ -29,6 +30,8 @@ export function VideoTrimSelector({
   previewUrl,
   duration,
   maxSeconds,
+  initialStart,
+  initialEnd,
   onConfirm,
   onCancel,
 }: {
@@ -36,16 +39,21 @@ export function VideoTrimSelector({
   previewUrl: string;
   duration: number;
   maxSeconds: number;
+  /** "Change section" reopens on the window picked before. */
+  initialStart?: number;
+  initialEnd?: number;
   onConfirm: (startSeconds: number, endSeconds: number) => void;
   onCancel: () => void;
 }) {
   const { t } = useLocale();
   const videoRef = useRef<HTMLVideoElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
-  const initialLength = Math.min(maxSeconds, duration);
-  const [start, setStart] = useState(0);
-  const [end, setEnd] = useState(initialLength);
-  const [previewTime, setPreviewTime] = useState(0);
+  const [initialWindow] = useState(() =>
+    initialTrimWindow(duration, maxSeconds, MIN_WINDOW_SECONDS, { start: initialStart, end: initialEnd }),
+  );
+  const [start, setStart] = useState(initialWindow.start);
+  const [end, setEnd] = useState(initialWindow.end);
+  const [previewTime, setPreviewTime] = useState(initialWindow.start);
   const [thumbnails, setThumbnails] = useState<string[] | undefined>(undefined);
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
   // Real footage from a phone is often 60fps/high-resolution — seeking to

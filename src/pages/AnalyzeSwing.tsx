@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Info, Loader2, Sparkles, Video, X } from "lucide-react";
+import { ArrowLeft, Info, Loader2, Scissors, Sparkles, Video, X } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
@@ -110,7 +110,11 @@ export function AnalyzeSwing() {
   // (not directly in draftSwingVideo) so VideoTrimSelector has something to
   // show without yet committing to an analyzed window — confirming it is
   // what actually writes the trim range into the real draft.
-  const [pendingTrim, setPendingTrim] = useState<{ file: File; previewUrl: string; duration: number } | undefined>(undefined);
+  // `editing`: reopened by "Change section" on the window already in the
+  // draft, whose previewUrl the draft still owns (never revoked here).
+  const [pendingTrim, setPendingTrim] = useState<
+    { file: File; previewUrl: string; duration: number; editing?: { start: number; end: number } } | undefined
+  >(undefined);
 
   useEffect(() => {
     if (localStorage.getItem(UPLOAD_IN_PROGRESS_KEY)) {
@@ -209,7 +213,7 @@ export function AnalyzeSwing() {
     }
     const previewUrl = URL.createObjectURL(stableFile);
 
-    if (pendingTrim) URL.revokeObjectURL(pendingTrim.previewUrl);
+    if (pendingTrim && !pendingTrim.editing) URL.revokeObjectURL(pendingTrim.previewUrl);
     if (duration !== undefined && duration > MAX_SWING_VIDEO_SECONDS) {
       setPendingTrim({ file: stableFile, previewUrl, duration });
       return;
@@ -225,8 +229,30 @@ export function AnalyzeSwing() {
   }
 
   function cancelTrim() {
-    if (pendingTrim) URL.revokeObjectURL(pendingTrim.previewUrl);
+    if (pendingTrim && !pendingTrim.editing) URL.revokeObjectURL(pendingTrim.previewUrl);
     setPendingTrim(undefined);
+  }
+
+  // Reopens the selector on the current window; cancelling keeps it. The
+  // draft doesn't store the clip's length, so it's read again (the preview
+  // element usually has it already).
+  async function changeTrim() {
+    const start = draftSwingVideo?.trimStartSeconds;
+    const end = draftSwingVideo?.trimEndSeconds;
+    if (!videoFile || !videoPreviewUrl || start === undefined || end === undefined || submitting) return;
+    let duration = previewVideoRef.current?.duration;
+    if (duration === undefined || !Number.isFinite(duration) || duration <= 0) {
+      try {
+        duration = await readVideoDuration(videoFile);
+      } catch {
+        duration = undefined;
+      }
+    }
+    if (duration === undefined || !Number.isFinite(duration) || duration <= 0) {
+      showToast(t("caddie.trimChangeError"), "warning");
+      return;
+    }
+    setPendingTrim({ file: videoFile, previewUrl: videoPreviewUrl, duration, editing: { start, end } });
   }
 
   function removeVideo() {
@@ -322,6 +348,8 @@ export function AnalyzeSwing() {
           previewUrl={pendingTrim.previewUrl}
           duration={pendingTrim.duration}
           maxSeconds={MAX_SWING_VIDEO_SECONDS}
+          initialStart={pendingTrim.editing?.start}
+          initialEnd={pendingTrim.editing?.end}
           onConfirm={confirmTrim}
           onCancel={cancelTrim}
         />
@@ -342,12 +370,22 @@ export function AnalyzeSwing() {
             </button>
           </div>
           {draftSwingVideo?.trimStartSeconds !== undefined && draftSwingVideo?.trimEndSeconds !== undefined && (
-            <p className="text-center text-xs font-semibold text-fairway-700">
-              {t("caddie.trimSelectedLabel", {
-                start: formatClock(draftSwingVideo.trimStartSeconds),
-                end: formatClock(draftSwingVideo.trimEndSeconds),
-              })}
-            </p>
+            <div className="flex flex-wrap items-center justify-center gap-x-2">
+              <p className="text-center text-xs font-semibold text-fairway-700">
+                {t("caddie.trimSelectedLabel", {
+                  start: formatClock(draftSwingVideo.trimStartSeconds),
+                  end: formatClock(draftSwingVideo.trimEndSeconds),
+                })}
+              </p>
+              <button
+                type="button"
+                onClick={changeTrim}
+                disabled={submitting}
+                className="-my-1.5 flex min-h-11 items-center gap-1 px-3 text-xs font-semibold text-fairway-700 underline-offset-2 hover:underline disabled:opacity-40 motion-safe:transition-opacity"
+              >
+                <Scissors size={12} aria-hidden="true" /> {t("caddie.trimChange")}
+              </button>
+            </div>
           )}
         </div>
       ) : (
@@ -379,7 +417,7 @@ export function AnalyzeSwing() {
       <Button
         size="lg"
         fullWidth
-        disabled={!videoFile || submitting}
+        disabled={!videoFile || submitting || !!pendingTrim}
         onClick={handleAnalyze}
         icon={submitting ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
       >

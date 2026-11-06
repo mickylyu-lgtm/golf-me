@@ -49,6 +49,14 @@ Micky: "buttons like inbox should have haptic feedback when I click too, make it
 - **Checks**: `tests/tapFeedback.test.ts` (9: mapping, web no-op, throttle windows, no throw, element resolution, capture swallow, detail 0); tsc, lint (0 errors), node tests 594/594, build OK. Headless (prod build + `vite preview`, demo, 390x844 touch): 30/30 incl. one haptic per tap, none on the open tab / selected segment / scroll / keyboard Enter / hold-menu lift, Join = tap, tap, success, send = medium with the textarea still focused, scale 0.97/0.92/0.985 while pressed with zero layout change, no scale under reduced motion. Existing suites: reactions 28/28, hold-lift 39/39.
 - **Needs a physical iPhone**: the actual feel (Light vs selection strength, success after Join/Host/Post, Medium per send), whether `:active` scale shows on quick taps in WKWebView and doesn't flicker when a scroll starts on an Inbox row.
 
+## Caddie upload: "Change section" for trimmed clips — 2026-11-05 (LIVE on Micky's "ship"; no migration, no backend change)
+
+- Micky: "after selecting the section of a long video they should have the option to go back and change it." Under the video on Caddie > Upload a swing video, the "0:07 – 0:17 selected" line now has a **Change section** button (scissors icon, 44 px tall). It shows only for clips that were trimmed (longer than 10 s) and is disabled while uploading/analyzing.
+- It reopens `VideoTrimSelector` on the window already chosen (new optional `initialStart`/`initialEnd` props). **Use This Clip** writes the new window into the draft. **Cancel** keeps the old one. In this "editing" mode the preview URL belongs to the draft, so cancel never revokes it. Ask Caddie is disabled while the selector is open. The draft doesn't store the clip length, so it is read from the preview `<video>` (or `readVideoDuration` as a fallback). If neither gives a length, a toast says so (`caddie.trimChangeError`).
+- `src/lib/trimWindow.ts` `initialTrimWindow()` clamps the reopened window to the clip: at most 10 s, at least 2 s, inside [0, duration], with no NaN. Tests: `tests/trimWindow.test.ts`. New keys `caddie.trimChange` and `caddie.trimChangeError` in all 6 locales. These are plain `t()` keys, so they also work under the pending Caddie `LocaleScope`.
+- How the window reaches analyze-swing (`startSeconds`/`endSeconds`) and the persisted-job flow are unchanged.
+- Checked headless on the production build (390 px, reduced motion; demo gate patched out in flight for the test only, nothing uploaded). Steps: 25 s clip, picked 0:07–0:17, Change section reopened on 0:07–0:17, Cancel kept it, picked 0:00–0:10 and the label updated.
+
 ## Bell cleanup + notification avatars — 2026-11-05 (LIVE on Micky's "ship bell after"; no migration, no backend change)
 
 Micky: "a tapped notification should clear out of the bell so it doesn't stack up" and "internal notifications should include the person's profile picture, it looks preliminary".

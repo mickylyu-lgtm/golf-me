@@ -377,6 +377,8 @@ export const zhCN: Record<TranslationKey, string> = {
   "caddie.trimEndLabel": "结束",
   "caddie.trimPreview": "预览裁剪",
   "caddie.trimPause": "暂停预览",
+  "caddie.trimChange": "更改片段",
+  "caddie.trimChangeError": "无法重新打开此视频。请移除后重新选择。",
   "caddie.needsRealAccount": "分析挥杆需要真实的 GolfMe 账号。",
   "caddie.cameraAngleFaceOn": "正面视角",
   "caddie.cameraAngleDownTheLine": "沿线视角",

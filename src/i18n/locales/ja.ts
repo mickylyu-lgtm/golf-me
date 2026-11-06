@@ -377,6 +377,8 @@ export const ja: Record<TranslationKey, string> = {
   "caddie.trimEndLabel": "終了",
   "caddie.trimPreview": "切り抜きをプレビュー",
   "caddie.trimPause": "プレビューを一時停止",
+  "caddie.trimChange": "区間を変更",
+  "caddie.trimChangeError": "この動画を開き直せませんでした。削除してもう一度選んでください。",
   "caddie.needsRealAccount": "スイングを分析するには実際のGolfMeアカウントが必要です。",
   "caddie.cameraAngleFaceOn": "正面アングル",
   "caddie.cameraAngleDownTheLine": "後方アングル",

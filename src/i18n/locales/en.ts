@@ -389,6 +389,8 @@ export const en = {
   "caddie.trimEndLabel": "End",
   "caddie.trimPreview": "Preview crop",
   "caddie.trimPause": "Pause preview",
+  "caddie.trimChange": "Change section",
+  "caddie.trimChangeError": "Couldn't reopen this video. Remove it and pick it again.",
   "caddie.needsRealAccount": "Analyzing a swing needs a real GolfMe account.",
   "caddie.cameraAngleFaceOn": "Face-on",
   "caddie.cameraAngleDownTheLine": "Down-the-line",

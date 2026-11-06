@@ -377,6 +377,8 @@ export const es: Record<TranslationKey, string> = {
   "caddie.trimEndLabel": "Fin",
   "caddie.trimPreview": "Previsualizar recorte",
   "caddie.trimPause": "Pausar vista previa",
+  "caddie.trimChange": "Cambiar sección",
+  "caddie.trimChangeError": "No se pudo volver a abrir este video. Quítalo y elígelo de nuevo.",
   "caddie.needsRealAccount": "Analizar un swing requiere una cuenta real de GolfMe.",
   "caddie.cameraAngleFaceOn": "De frente",
   "caddie.cameraAngleDownTheLine": "En línea con el swing",
