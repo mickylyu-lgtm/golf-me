@@ -100,6 +100,9 @@ test("hold: a second press while busy is ignored; a failed start returns to idle
   assert.deepEqual(run([{ type: "press", y: 1 }, { type: "press", y: 2 }]).effects, ["start"]);
   const f = run([{ type: "press", y: 1 }, { type: "failed" }]);
   assert.equal(f.state.kind, "idle");
+  // A failure report never resets a recording (a stale attempt's failure).
+  const r = run([{ type: "press", y: 1 }, { type: "started", at: 0 }, { type: "failed" }]);
+  assert.equal(r.state.kind, "recording");
 });
 
 test("countdown: the last 10 seconds are counted down", () => {

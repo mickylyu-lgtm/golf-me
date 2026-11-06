@@ -59,6 +59,7 @@ import { chatImageUrls } from "../lib/chatImageClient";
 import { DEMO_VOICE_PREFIX, clampDuration } from "../lib/chatVoice";
 import type { ChatVoiceRef } from "../lib/chatVoice";
 import type { VoiceClip } from "../lib/voiceRecorder";
+import { claimVoiceClip } from "../lib/voiceSession";
 import { withReaction } from "../lib/reactions";
 import { placeholderNameFromEmail } from "../lib/authInput";
 import type { MessageReaction, QuickReaction } from "../lib/reactions";
@@ -887,6 +888,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const canSendRoundVoice = auth.isDemo || realRounds.voiceSupported;
   const sendRoundVoice = useCallback(
     async (callId: string, clip: VoiceClip, replyToId?: string | null): Promise<SendMessageResult> => {
+      // Send-once (lib/voiceSession.ts): the first hand-over owns the
+      // message and its bubble shows its real state; a repeat is dropped.
+      if (!claimVoiceClip(clip)) return "sent";
       if (!auth.isDemo) return realRounds.sendRoundVoice(callId, clip, replyToId);
       const voice = demoVoice(clip);
       setData((prev) => ({
@@ -1351,6 +1355,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const canSendDirectVoice = auth.isDemo || realSocial.voiceSupported;
   const sendDirectVoice = useCallback(
     async (golferId: string, clip: VoiceClip, replyToId?: string): Promise<SendMessageResult> => {
+      // Send-once, as sendRoundVoice.
+      if (!claimVoiceClip(clip)) return "sent";
       if (!auth.isDemo) return realSocial.sendDirectVoice(golferId, clip, replyToId);
       if (!canMessage(golferId) || !canSendMessageNow()) return "failed";
       const convId = dmConversationId(currentUser.id, golferId);

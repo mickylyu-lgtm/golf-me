@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Mic, X } from "lucide-react";
-import { formatVoiceDuration, voiceSecondsLeft, voiceStep, type VoiceEvent, type VoiceState } from "../../lib/chatVoice";
-import { startVoiceRecording, VoiceRecorderError, type ActiveRecording, type VoiceClip } from "../../lib/voiceRecorder";
+import { App as CapacitorApp } from "@capacitor/app";
+import { Capacitor } from "@capacitor/core";
+import { formatVoiceDuration, voiceSecondsLeft, type VoiceEvent, type VoiceState } from "../../lib/chatVoice";
+import { startVoiceRecording, type VoiceClip } from "../../lib/voiceRecorder";
+import { createVoiceSession, type VoiceNotice, type VoiceSession } from "../../lib/voiceSession";
 import { tapHaptic } from "../../lib/tapFeedback";
 
-export type VoiceNotice = "denied" | "unavailable" | "tooShort" | "failed";
+export type { VoiceNotice };
 
 export interface HoldToTalkLabels {
   hold: string;
@@ -29,75 +32,29 @@ export interface HoldToTalkLabels {
 export function HoldToTalk({ onClip, onNotice, labels }: { onClip: (clip: VoiceClip) => void; onNotice: (n: VoiceNotice) => void; labels: HoldToTalkLabels }) {
   const barRef = useRef<HTMLDivElement>(null);
   const [state, setState] = useState<VoiceState>({ kind: "idle" });
-  const stateRef = useRef<VoiceState>({ kind: "idle" });
-  const recRef = useRef<ActiveRecording | null>(null);
+  // One session per mount (made in the effect below, so StrictMode's
+  // mount / unmount / mount gets a fresh one): it owns every attempt.
+  const sessionRef = useRef<VoiceSession | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [level, setLevel] = useState(0);
   const cbRef = useRef({ onClip, onNotice });
   cbRef.current = { onClip, onNotice };
-
-  const dispatch = useCallback((event: VoiceEvent) => {
-    const { state: next, effect } = voiceStep(stateRef.current, event);
-    stateRef.current = next;
-    setState(next);
-    switch (effect.type) {
-      case "start":
-        setElapsed(0);
-        setLevel(0);
-        startVoiceRecording().then(
-          (rec) => {
-            // Released (or interrupted) before the microphone answered.
-            if (stateRef.current.kind !== "starting") {
-              rec.discard();
-              return;
-            }
-            recRef.current = rec;
-            tapHaptic("medium");
-            dispatch({ type: "started", at: performance.now() });
-          },
-          (err) => {
-            const wasHolding = stateRef.current.kind === "starting";
-            dispatch({ type: "failed" });
-            if (wasHolding || (err instanceof VoiceRecorderError && err.reason === "denied")) {
-              cbRef.current.onNotice(err instanceof VoiceRecorderError ? err.reason : "unavailable");
-            }
-          },
-        );
-        break;
-      case "stop": {
-        const rec = recRef.current;
-        recRef.current = null;
-        if (!rec) break;
-        tapHaptic("success");
-        void rec.stop(effect.durationMs).then((clip) => (clip ? cbRef.current.onClip(clip) : cbRef.current.onNotice("failed")));
-        break;
-      }
-      case "discard":
-        recRef.current?.discard();
-        recRef.current = null;
-        if (effect.reason === "tooShort") cbRef.current.onNotice("tooShort");
-        else tapHaptic("tap");
-        break;
-      case "abort":
-      case "none":
-        break;
-    }
-  }, []);
 
   // While recording: the timer, the meter and the 60 s limit.
   const recording = state.kind === "recording";
   useEffect(() => {
     if (!recording) return;
     const timer = window.setInterval(() => {
-      const s = stateRef.current;
-      if (s.kind !== "recording") return;
+      const session = sessionRef.current;
+      const s = session?.state();
+      if (!session || s?.kind !== "recording") return;
       const now = performance.now();
       setElapsed(now - s.startedAt);
-      setLevel(recRef.current?.level() ?? 0);
-      dispatch({ type: "tick", at: now });
+      setLevel(session.level());
+      session.dispatch({ type: "tick", at: now });
     }, 100);
     return () => window.clearInterval(timer);
-  }, [recording, dispatch]);
+  }, [recording]);
 
   // Input. Touch: native listeners (touchstart must be non-passive to stop
   // the callout / text selection / emulated mouse events). Mouse: down on
@@ -105,6 +62,23 @@ export function HoldToTalk({ onClip, onNotice, labels }: { onClip: (clip: VoiceC
   useEffect(() => {
     const bar = barRef.current;
     if (!bar) return;
+    const session = createVoiceSession({
+      start: (signal) => startVoiceRecording({ signal }),
+      onState: (next) => {
+        if (next.kind === "starting") {
+          setElapsed(0);
+          setLevel(0);
+        }
+        setState(next);
+      },
+      onClip: (clip) => cbRef.current.onClip(clip),
+      onNotice: (n) => cbRef.current.onNotice(n),
+      haptic: (kind) => tapHaptic(kind),
+      now: () => performance.now(),
+      revokeUrl: (url) => URL.revokeObjectURL(url),
+    });
+    sessionRef.current = session;
+    const dispatch = (event: VoiceEvent) => session.dispatch(event);
     const y = (e: TouchEvent) => e.touches[0]?.clientY ?? e.changedTouches[0]?.clientY ?? 0;
     const onTouchStart = (e: TouchEvent) => {
       e.preventDefault();
@@ -132,12 +106,18 @@ export function HoldToTalk({ onClip, onNotice, labels }: { onClip: (clip: VoiceC
     const onHidden = () => {
       if (document.visibilityState === "hidden") dispatch({ type: "interrupt" });
     };
+    const onPageHide = () => dispatch({ type: "interrupt" });
     bar.addEventListener("touchstart", onTouchStart, { passive: false });
     bar.addEventListener("touchmove", onTouchMove, { passive: false });
     bar.addEventListener("touchend", onTouchEnd);
     bar.addEventListener("touchcancel", onTouchCancel);
     bar.addEventListener("mousedown", onMouseDown);
     document.addEventListener("visibilitychange", onHidden);
+    window.addEventListener("pagehide", onPageHide);
+    // The iOS app going to the background ("pause" = didEnterBackground,
+    // not the resign-active of a system alert such as the microphone
+    // permission prompt, which must not end the first hold).
+    const native = Capacitor.isNativePlatform() ? CapacitorApp.addListener("pause", onPageHide) : null;
     return () => {
       bar.removeEventListener("touchstart", onTouchStart);
       bar.removeEventListener("touchmove", onTouchMove);
@@ -147,10 +127,14 @@ export function HoldToTalk({ onClip, onNotice, labels }: { onClip: (clip: VoiceC
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
       document.removeEventListener("visibilitychange", onHidden);
-      // Leaving (thread switch, back to the keyboard) never sends.
-      dispatch({ type: "interrupt" });
+      window.removeEventListener("pagehide", onPageHide);
+      void native?.then((l) => l.remove()).catch(() => {});
+      // Leaving (thread switch, back to the keyboard) never sends; a
+      // pending microphone request is released when it answers.
+      session.dispose();
+      if (sessionRef.current === session) sessionRef.current = null;
     };
-  }, [dispatch]);
+  }, []);
 
   const active = state.kind !== "idle";
   const recordingNow = state.kind === "recording";

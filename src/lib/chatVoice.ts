@@ -171,7 +171,8 @@ export type VoiceEvent =
 // stop     stop and SEND what was recorded (durationMs)
 // discard  stop and throw the recording away (reason)
 // abort    give up on a start still in progress (no recorder yet / release
-//          before it started): stop it when it arrives
+//          before it started): its microphone is released when it arrives
+//          and it can never become the recording (lib/voiceSession.ts)
 export type VoiceEffect =
   | { type: "none" }
   | { type: "start" }
@@ -190,6 +191,9 @@ export function voiceStep(state: VoiceState, event: VoiceEvent): { state: VoiceS
       if (state.kind !== "starting") return { state, effect: NONE };
       return { state: { kind: "recording", downY: state.downY, startedAt: event.at, cancelArmed: false }, effect: NONE };
     case "failed":
+      // Only a start still waiting can fail; a recording (or idle) is never
+      // reset by a failure report (lib/voiceSession.ts owns which attempt).
+      if (state.kind !== "starting") return { state, effect: NONE };
       return { state: { kind: "idle" }, effect: NONE };
     case "move": {
       if (state.kind !== "recording") return { state, effect: NONE };
