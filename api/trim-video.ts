@@ -32,6 +32,41 @@ export const config = {
 
 const MAX_TRIM_SECONDS = 15; // generous slack over analyze-swing's own 10s cap — a backstop, not the real gate
 
+// Same contract as api/extract-frames.ts (duplicated on purpose — see the
+// comment there): ffmpeg's stderr is never returned or logged, because for a
+// phone video it echoes container metadata (GPS location, device, time).
+export type FfmpegFailureToken = "decode_failed" | "no_video_stream" | "resources_exhausted" | "internal";
+
+export class FfmpegError extends Error {
+  readonly exitCode: number | null;
+  readonly signal: string | null;
+  readonly stderrTail: string;
+  constructor(exitCode: number | null, signal: string | null, stderrTail: string) {
+    super("ffmpeg failed");
+    this.name = "FfmpegError";
+    this.exitCode = exitCode;
+    this.signal = signal;
+    this.stderrTail = stderrTail;
+  }
+}
+
+export function classifyFfmpegFailure(err: unknown): { status: number; token: FfmpegFailureToken } {
+  if (!(err instanceof FfmpegError)) return { status: 500, token: "internal" };
+  const tail = err.stderrTail;
+  if (err.signal === "SIGKILL" || /Cannot allocate memory|ENOMEM|ENOSPC|No space left on device/i.test(tail)) {
+    return { status: 500, token: "resources_exhausted" };
+  }
+  if (/matches no streams|does not contain any stream|no video stream/i.test(tail)) return { status: 422, token: "no_video_stream" };
+  if (
+    /Invalid data found when processing input|moov atom not found|could not find codec parameters|Error while decoding|Invalid NAL|Unknown format|Decoder \(codec [^)]*\) not found|Could not open codec|Error opening input|Unsupported codec|Failed to open codec/i.test(
+      tail,
+    )
+  ) {
+    return { status: 422, token: "decode_failed" };
+  }
+  return { status: 500, token: "internal" };
+}
+
 function runFfmpeg(args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
     if (!ffmpegPath) return reject(new Error("ffmpeg-static did not resolve a binary path"));
@@ -39,11 +74,12 @@ function runFfmpeg(args: string[]): Promise<string> {
     let stderr = "";
     proc.stderr?.on("data", (chunk) => {
       stderr += chunk.toString();
+      if (stderr.length > 64_000) stderr = stderr.slice(-32_000); // only the tail is ever inspected
     });
     proc.on("error", reject);
-    proc.on("close", (code) => {
+    proc.on("close", (code, signal) => {
       if (code === 0) resolve(stderr);
-      else reject(new Error(`ffmpeg exited ${code}: ${stderr.slice(-1500)}`));
+      else reject(new FfmpegError(code, signal, stderr.slice(-4000)));
     });
   });
 }
@@ -85,8 +121,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   let workDir: string | undefined;
   try {
-    const videoRes = await fetch(videoUrl);
-    if (!videoRes.ok) return res.status(502).json({ error: `Failed to fetch source video (${videoRes.status})` });
+    let videoRes: Response;
+    try {
+      videoRes = await fetch(videoUrl);
+    } catch {
+      // The thrown error's message embeds the signed URL: token only.
+      return res.status(502).json({ error: "source_fetch_failed" });
+    }
+    if (!videoRes.ok) return res.status(502).json({ error: "source_fetch_failed", sourceStatus: videoRes.status });
     const videoBytes = new Uint8Array(await videoRes.arrayBuffer());
 
     workDir = await mkdtemp(path.join(tmpdir(), "swing-trim-"));
@@ -124,8 +166,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader("Content-Type", "video/mp4");
     return res.status(200).send(outputBytes);
   } catch (err) {
-    console.error("[trim-video] failed", err);
-    return res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    // A classified token only — never ffmpeg's stderr or a thrown message.
+    const { status, token } = classifyFfmpegFailure(err);
+    console.error("[trim-video] failed", {
+      error: token,
+      exitCode: err instanceof FfmpegError ? err.exitCode : undefined,
+      signal: err instanceof FfmpegError ? err.signal : undefined,
+      errorName: err instanceof Error ? err.name : typeof err,
+    });
+    return res.status(status).json({ error: token });
   } finally {
     if (workDir) await rm(workDir, { recursive: true, force: true }).catch(() => {});
   }

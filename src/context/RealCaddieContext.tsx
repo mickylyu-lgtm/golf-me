@@ -2,10 +2,10 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { ReactNode } from "react";
 import { App as CapacitorApp } from "@capacitor/app";
 import { supabase } from "../lib/supabase";
-import { SIGNED_URL_CHECK_INTERVAL_MS, SIGNED_URL_REFRESH_MARGIN_MS, signCaddieMediaPaths } from "../lib/caddieMedia";
+import { CADDIE_MEDIA_BUCKET, SIGNED_URL_CHECK_INTERVAL_MS, SIGNED_URL_REFRESH_MARGIN_MS, signCaddieMediaPaths } from "../lib/caddieMedia";
 import type { SignedUrlEntry } from "../lib/caddieMedia";
 import { CaddieRequestError, isStaleProcessing } from "../lib/caddieAnalysis";
-import { FAILURE_BODY_KEYS, parseCaddieFailure } from "../lib/caddieFailure";
+import { parseCaddieFailure } from "../lib/caddieFailure";
 import { checkpointCuesFromJson } from "../lib/coachReplay";
 import { analysisLanguageFromJson } from "../lib/caddieLanguage";
 import { sanitizeWorkOnCheckpoint } from "../../supabase/functions/_shared/caddieCues.ts";
@@ -49,6 +49,14 @@ interface CaddieAnalysisRow {
   shared_to_community: boolean;
   created_at: string;
   updated_at: string;
+  // Job bookkeeping (migration 20261107140000). Optional so a row returned
+  // by an older Edge Function build still maps cleanly.
+  attempt?: number | null;
+  attempt_started_at?: string | null;
+  stage?: string | null;
+  failure_stage?: string | null;
+  failure_category?: string | null;
+  finished_at?: string | null;
 }
 
 // analysis_json is stored exactly as Gemini returned it (snake_case field
@@ -134,6 +142,12 @@ function rowToAnalysis(row: CaddieAnalysisRow, poseData: CaddiePoseData | undefi
     score: row.score ?? undefined,
     model: row.model ?? undefined,
     errorMessage: row.error_message ?? undefined,
+    attempt: row.attempt ?? undefined,
+    attemptStartedAt: row.attempt_started_at ?? undefined,
+    stage: row.stage ?? undefined,
+    failureStage: row.failure_stage ?? undefined,
+    failureCategory: row.failure_category ?? undefined,
+    finishedAt: row.finished_at ?? undefined,
     sharedToCommunity: row.shared_to_community,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -166,6 +180,19 @@ interface RealCaddieContextValue {
   hasLoaded: boolean;
   getAnalysis: (id: string) => CaddieAnalysis | undefined;
   createAnalysis: (input: CreateAnalysisInput) => Promise<CaddieAnalysis>;
+  /**
+   * Try again on a failed (or abandoned) analysis: the SAME row is re-run
+   * server-side (attempt + 1, no allowance charge). Idempotent — a double
+   * tap gets the already-running row back.
+   */
+  retryAnalysis: (analysis: CaddieAnalysis) => Promise<CaddieAnalysis>;
+  /**
+   * Deletes one of the caller's analyses (failed, complete or dead; a live
+   * one is refused with code "delete_running") via delete_caddie_analysis(),
+   * then removes the private video/thumbnail/trimmed copies it returns.
+   * Never refunds the daily allowance. Throws CaddieRequestError.
+   */
+  deleteAnalysis: (id: string) => Promise<void>;
   markShared: (id: string) => Promise<void>;
   translateAnalysis: (id: string, locale: string) => Promise<void>;
   /**
@@ -186,8 +213,10 @@ const PROCESSING_POLL_MS = 5000;
 
 // Everything the list, nav ring, PostCard and detail text need -- every
 // column except the heavy roboflow_analysis_json (see CaddieAnalysisRow).
+// The job columns need migration 20261107140000 (apply it before shipping
+// this build). Keep in sync with translate-caddie-analysis's LIST_COLUMNS.
 const LIST_COLUMNS =
-  "id, owner_id, source_type, source_post_id, source_media_url, thumbnail_url, source_media_path, thumbnail_path, swing_type, status, analysis_summary, strengths, issues, recommendations, drills, analysis_json, camera_angle, score, model, error_message, shared_to_community, created_at, updated_at";
+  "id, owner_id, source_type, source_post_id, source_media_url, thumbnail_url, source_media_path, thumbnail_path, swing_type, status, analysis_summary, strengths, issues, recommendations, drills, analysis_json, camera_angle, score, model, error_message, shared_to_community, created_at, updated_at, attempt, attempt_started_at, stage, failure_stage, failure_category, finished_at";
 
 // Pose data per analysis id. `updatedAt` is the row version it was fetched
 // at: a fetched-but-empty result (row still processing, or a pre-Roboflow
@@ -220,7 +249,7 @@ async function ensureFreshSession(): Promise<void> {
 
 export function RealCaddieProvider({ children }: { children: ReactNode }) {
   const { isDemo, authUser } = useAuth();
-  const { locale, t } = useLocale();
+  const { locale } = useLocale();
   const [rows, setRows] = useState<CaddieAnalysisRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   // Which account the first fetch has completed for — lets a deep-linked
@@ -408,7 +437,9 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
     if (isDemo || !selfId || !anyProcessing) return;
     const timer = window.setInterval(() => {
       if (document.visibilityState !== "visible") return;
-      const active = rowsRef.current.some((r) => r.status === "processing" && !isStaleProcessing({ status: r.status, createdAt: r.created_at }));
+      const active = rowsRef.current.some(
+        (r) => r.status === "processing" && !isStaleProcessing({ status: r.status, createdAt: r.created_at, attemptStartedAt: r.attempt_started_at ?? undefined }),
+      );
       if (active) void refetch();
     }, PROCESSING_POLL_MS);
     return () => window.clearInterval(timer);
@@ -485,43 +516,32 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
     [isDemo, selfId],
   );
 
-  const createAnalysis = useCallback(
-    async (input: CreateAnalysisInput): Promise<CaddieAnalysis> => {
+  // One analyze-swing call, new analysis or Try again. The Edge Function
+  // owns the whole row lifecycle (insert or re-run at 'processing', then
+  // 'complete'/'failed') — see supabase/functions/analyze-swing. It reads
+  // GEMINI_API_KEY server-side only and validates ownership via existing
+  // RLS/triggers using this same caller's JWT (supabase.functions.invoke
+  // forwards the current session's Authorization header automatically).
+  const invokeAnalyzeSwing = useCallback(
+    async (requestBody: Record<string, unknown>): Promise<CaddieAnalysis> => {
       if (!selfId) throw new Error("Not signed in.");
-      // The Edge Function owns the whole row lifecycle (insert at
-      // 'processing', then update to 'complete'/'failed') — see
-      // supabase/functions/analyze-swing. It reads GEMINI_API_KEY
-      // server-side only and validates ownership via existing RLS/triggers
-      // using this same caller's JWT (supabase.functions.invoke forwards
-      // the current session's Authorization header automatically).
-      //
       // That same JWT is used for the pipeline's writes after the response
       // (up to the function's 330 s deadline), so a token about to expire
       // would make the final save fail. Refresh first when < 10 min remain.
       await ensureFreshSession();
       const { data, error } = await supabase.functions.invoke("analyze-swing", {
-        body: {
-          sourceType: input.sourceType,
-          sourcePostId: input.sourcePostId,
-          sourceMediaPath: input.sourceMediaPath,
-          thumbnailPath: input.thumbnailPath,
-          sourceMediaUrl: input.sourceMediaUrl,
-          thumbnailUrl: input.thumbnailUrl,
-          swingType: input.swingType,
-          startSeconds: input.startSeconds,
-          endSeconds: input.endSeconds,
-          // Caddie's feedback language (the Caddie screen's picker, else the app's).
-          locale: caddieFeedbackLanguage(locale),
-        },
+        // Caddie's feedback language (the Caddie screen's picker, else the app's).
+        body: { ...requestBody, locale: caddieFeedbackLanguage(locale) },
       });
       if (error) {
         // supabase-js's FunctionsHttpError carries the JSON error body on
-        // `context` for non-2xx responses — surface that message (it's
-        // always one of this function's own safe, user-facing strings,
-        // never a raw provider error) instead of a generic "Edge Function
-        // returned a non-2xx status code."
+        // `context` for non-2xx responses. Every refusal carries a stable
+        // `code`; the screen turns it into copy in the CADDIE language with
+        // caddieErrorText() (this context only knows the app language, so
+        // it never translates here). The server's English sentence rides
+        // along only as that function's fallback input, never shown raw.
         let message = error.message;
-        let code: string | undefined;
+        let code: string | undefined = error.name === "FunctionsFetchError" || error.name === "FunctionsRelayError" ? "network" : undefined;
         const status = typeof error.context?.status === "number" ? (error.context.status as number) : undefined;
         try {
           const body = await error.context?.json();
@@ -530,22 +550,88 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
         } catch {
           // Falls back to error.message below.
         }
-        // A coded refusal (kill switch) gets the localized copy.
-        const bodyKey = code ? FAILURE_BODY_KEYS[parseCaddieFailure(`code:${code}`).code] : undefined;
-        if (bodyKey) message = t(bodyKey);
         throw new CaddieRequestError(message, status, code);
       }
       const row = (data as { analysis: CaddieAnalysisRow }).analysis;
       cachePoseFromFullRow(row);
-      const created = rowToAnalysis(row, row.roboflow_analysis_json ? jsonToPoseData(row.roboflow_analysis_json) : undefined, signedUrlsRef.current);
+      const result = rowToAnalysis(row, row.roboflow_analysis_json ? jsonToPoseData(row.roboflow_analysis_json) : undefined, signedUrlsRef.current);
       setRows((prev) => {
         const withoutDuplicate = prev.filter((r) => r.id !== row.id);
-        return [row, ...withoutDuplicate];
+        // A Try again keeps the row where it was in the (created_at-ordered) list.
+        const existingIndex = prev.findIndex((r) => r.id === row.id);
+        if (existingIndex === -1) return [row, ...withoutDuplicate];
+        const next = [...prev];
+        next[existingIndex] = row;
+        return next;
       });
-      return created;
+      return result;
     },
-    [selfId, locale, t, cachePoseFromFullRow],
+    [selfId, locale, cachePoseFromFullRow],
   );
+
+  const createAnalysis = useCallback(
+    (input: CreateAnalysisInput): Promise<CaddieAnalysis> =>
+      invokeAnalyzeSwing({
+        sourceType: input.sourceType,
+        sourcePostId: input.sourcePostId,
+        sourceMediaPath: input.sourceMediaPath,
+        thumbnailPath: input.thumbnailPath,
+        sourceMediaUrl: input.sourceMediaUrl,
+        thumbnailUrl: input.thumbnailUrl,
+        swingType: input.swingType,
+        startSeconds: input.startSeconds,
+        endSeconds: input.endSeconds,
+      }),
+    [invokeAnalyzeSwing],
+  );
+
+  const retryAnalysis = useCallback(
+    (analysis: CaddieAnalysis): Promise<CaddieAnalysis> => {
+      // The legacy fields ride along so an analyze-swing build from before
+      // retryAnalysisId still works (it creates a new row from them, the old
+      // behavior). A current build ignores them and re-runs this row.
+      const legacyWindow = parseCaddieFailure(analysis.errorMessage).window;
+      return invokeAnalyzeSwing({
+        retryAnalysisId: analysis.id,
+        sourceType: analysis.sourceType,
+        sourcePostId: analysis.sourcePostId,
+        // Never re-send a signed URL: a private upload retries by path.
+        ...(analysis.sourceMediaPath
+          ? { sourceMediaPath: analysis.sourceMediaPath, thumbnailPath: analysis.thumbnailPath }
+          : { sourceMediaUrl: analysis.sourceMediaUrl, thumbnailUrl: analysis.thumbnailUrl }),
+        swingType: analysis.swingType,
+        startSeconds: legacyWindow?.startSeconds,
+        endSeconds: legacyWindow?.endSeconds,
+      });
+    },
+    [invokeAnalyzeSwing],
+  );
+
+  const deleteAnalysis = useCallback(async (id: string) => {
+    if (!selfId) throw new CaddieRequestError("Not signed in.", 401, "not_authenticated");
+    const { data, error } = await supabase.rpc("delete_caddie_analysis", { p_analysis_id: id });
+    if (error) {
+      const code = error.hint === "caddie_delete_running" ? "delete_running" : error.code === "42501" ? "forbidden_delete" : undefined;
+      throw new CaddieRequestError(error.message, undefined, code);
+    }
+    // The row is gone; its private files are removed through the Storage
+    // API (owner-only policy). Best-effort: a leftover object is
+    // unreferenced and private, never visible to anyone else.
+    const paths = Array.isArray(data) ? (data as string[]).filter((p) => typeof p === "string" && p.startsWith(`${selfId}/`)) : [];
+    if (paths.length > 0) {
+      const { error: removeError } = await supabase.storage.from(CADDIE_MEDIA_BUCKET).remove(paths);
+      if (removeError) console.error("GolfMe: couldn't remove a deleted analysis's files.", removeError);
+    }
+    // Realtime DELETE events don't carry owner_id, so the owner-filtered
+    // subscription may not see this one: drop it locally.
+    setRows((prev) => prev.filter((r) => r.id !== id));
+    setPoseCache((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Map(prev);
+      next.delete(id);
+      return next;
+    });
+  }, [selfId]);
 
   const markShared = useCallback(async (id: string) => {
     const { error } = await supabase.from("caddie_analyses").update({ shared_to_community: true }).eq("id", id);
@@ -590,8 +676,8 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
   const hasLoaded = isDemo || (!!selfId && loadedForId === selfId);
 
   const value = useMemo<RealCaddieContextValue>(
-    () => ({ analyses, isLoading, hasLoaded, getAnalysis, createAnalysis, markShared, translateAnalysis, loadPoseData, refreshMediaUrls }),
-    [analyses, isLoading, hasLoaded, getAnalysis, createAnalysis, markShared, translateAnalysis, loadPoseData, refreshMediaUrls],
+    () => ({ analyses, isLoading, hasLoaded, getAnalysis, createAnalysis, retryAnalysis, deleteAnalysis, markShared, translateAnalysis, loadPoseData, refreshMediaUrls }),
+    [analyses, isLoading, hasLoaded, getAnalysis, createAnalysis, retryAnalysis, deleteAnalysis, markShared, translateAnalysis, loadPoseData, refreshMediaUrls],
   );
 
   return <RealCaddieContext.Provider value={value}>{children}</RealCaddieContext.Provider>;

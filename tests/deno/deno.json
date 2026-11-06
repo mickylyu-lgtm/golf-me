@@ -1,0 +1,7 @@
+{
+  "nodeModulesDir": "none",
+  "imports": {
+    "npm:@supabase/supabase-js@2": "./fakeSupabase.ts",
+    "jsr:@supabase/functions-js/edge-runtime.d.ts": "./empty.ts"
+  }
+}

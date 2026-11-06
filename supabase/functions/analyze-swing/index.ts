@@ -42,26 +42,48 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
+  DAILY_LIMIT_PER_USER,
+  MAX_ATTEMPTS,
   POSE_PRESENCE_MIN_RATIO,
+  STALE_PROCESSING_MS,
   backoffMs,
-  formatFailure,
+  classifyGeminiFileState,
+  classifyHttpFailure,
+  classifyThrown,
+  formatStructuredFailure,
   isRetryableStatus,
   poseCoverage,
+  providerErrorHint,
+  redactDetail,
+  safeErrorName,
   scaleKeypoints,
+  stepRetryDelayMs,
 } from "../_shared/caddieReliability.ts";
-import type { CaddieFailureCode } from "../_shared/caddieReliability.ts";
+import type { CaddieStage, StepFailure, TrimWindow } from "../_shared/caddieReliability.ts";
 import { CUE_MAX_CHARS, WORK_ON_CHECKPOINTS, withSanitizedCheckpointCues, withSanitizedWorkOnCheckpoints } from "../_shared/caddieCues.ts";
 import { withMeasuredCueCheck } from "../_shared/caddieVerdicts.ts";
 
 // ---- Centralized config — change these, nothing else, to retune Caddie. ----
 const GEMINI_MODEL = "gemini-3.6-flash"; // gemini-2.5-flash was retired for new API keys/projects (Gemini API started 404ing it with "no longer available to new users" on 2026-08-21); 3.6-flash is Google's named replacement, same video-understanding + structured-JSON-output support
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com";
-const COOLDOWN_SECONDS = 30; // blocks accidental double-taps/rapid re-asks
-const DAILY_LIMIT_PER_USER = 30; // ALSO hard-coded in enforce_caddie_daily_limit() (migration 20260924140000), the authoritative in-DB check — change both together. Caps worst-case per-user Gemini+Roboflow spend for the beta — covers both providers together, not separately; raised from 10 for active beta testing (2026-08-22)
+const COOLDOWN_SECONDS = 30; // blocks accidental double-taps/rapid re-asks (new analyses only; Try again is capped per job instead)
+// DAILY_LIMIT_PER_USER (30 DELIVERED analyses / 24 h), the 60-run ceiling,
+// MAX_ATTEMPTS and STALE_PROCESSING_MS come from _shared/caddieReliability.ts
+// and match migration 20261107140000, whose triggers are the authoritative
+// check (only a 'complete' transition charges a slot).
 const MAX_VIDEO_BYTES = 200 * 1024 * 1024; // matches the community-media Storage bucket's own file_size_limit
-const STALE_PROCESSING_MINUTES = 6; // a 'processing' row older than this is treated as abandoned, not an active duplicate — kept above PIPELINE_DEADLINE_MS (5.5 min) so a run still inside its deadline is never duplicated; must stay below the client's 10 min (src/lib/caddieAnalysis.ts)
-const FILE_ACTIVE_POLL_ATTEMPTS = 6;
-const FILE_ACTIVE_POLL_DELAY_MS = 2000;
+// The whole original is held in this worker's memory only when it is NOT
+// trimmed first (a trimmed run never buffers the original: trim-video
+// fetches it itself). Above this, fail clearly as too large instead of
+// risking the Edge Function memory limit killing the worker silently
+// (which leaves no outcome at all, only the worker_lost sweep).
+const MAX_BUFFERED_VIDEO_BYTES = 120 * 1024 * 1024;
+// Gemini Files API: poll until ACTIVE within this budget (was a fixed 12 s,
+// which a large untrimmed clip routinely exceeded), never past the point
+// where generateContent no longer fits before the deadline.
+const GEMINI_ACTIVE_WAIT_MAX_MS = 90_000;
+const GEMINI_ACTIVE_POLL_MS = 2500;
+const GEMINI_GENERATE_RESERVE_MS = 70_000;
 const MAX_TRIM_WINDOW_SECONDS = 10; // matches AnalyzeSwing.tsx's own MAX_SWING_VIDEO_SECONDS — a client-sent startSeconds/endSeconds window is validated against this, never trusted as-is
 const COMMUNITY_MEDIA_BUCKET = "community-media"; // public Community media — only ever READ here now (Ask Caddie on a post, legacy direct uploads)
 const CADDIE_MEDIA_BUCKET = "caddie-media"; // PRIVATE (migration 20260925090000): direct uploads, their thumbnails and trimmed copies, `<owner uid>/<file>`
@@ -96,13 +118,39 @@ const ROBOFLOW_FRAME_RETRY_ATTEMPTS = 2; // total attempts per frame (1 retry) �
 // Edge Function wall-clock budget so the fail() write itself always lands
 // instead of the platform killing the run and leaving the row 'processing'.
 const PIPELINE_DEADLINE_MS = 330_000;
-// Back-off for transient provider errors (429/5xx): Roboflow per frame
-// (still ROBOFLOW_FRAME_RETRY_ATTEMPTS total) and Gemini generateContent.
+// Back-off for transient provider errors (429/5xx) on one Roboflow frame
+// (still ROBOFLOW_FRAME_RETRY_ATTEMPTS total). Whole steps (trim, frame
+// extraction, the Roboflow pass's failed frames, Gemini upload/generate)
+// are re-run up to 2 more times by runStep() for transient categories only,
+// with stepRetryDelayMs() back-off and only while the deadline allows.
 const ROBOFLOW_BACKOFF_BASE_MS = 1500;
 const ROBOFLOW_BACKOFF_CAP_MS = 6000;
-const GEMINI_GENERATE_ATTEMPTS = 3; // 1 call + 2 retries, only on 429/5xx
-const GEMINI_BACKOFF_BASE_MS = 3000;
-const GEMINI_BACKOFF_CAP_MS = 15000;
+// Per-call fetch timeouts, so a hung provider becomes a classified,
+// retryable failure instead of silently eating the whole deadline.
+const TIMEOUT_MS = {
+  media: 60_000,
+  trim: 150_000,
+  extract: 120_000,
+  roboflowFrame: 25_000,
+  geminiUpload: 90_000,
+  geminiPoll: 15_000,
+  geminiGenerate: 150_000,
+} as const;
+// Rough cost of one more run of each step: a retry only happens when the
+// remaining deadline covers the back-off plus this.
+const STEP_BUDGET_MS: Record<CaddieStage, number> = {
+  queued: 0,
+  media_fetch: 20_000,
+  trim: 60_000,
+  frame_extract: 40_000,
+  pose: 60_000,
+  pose_gate: 0,
+  gemini_upload: 30_000,
+  gemini_processing: 20_000,
+  gemini_generate: 60_000,
+  output_validation: 60_000,
+  save: 5_000,
+};
 // Asks extract-frames to downscale frames to this long side (smaller
 // Roboflow payloads; extract-frames returns coordinateScale so keypoints
 // are mapped back to source pixels for the replay overlay). An older
@@ -343,6 +391,11 @@ interface RequestBody {
   // VideoTrimSelector) — validated/clamped below, never trusted as-is.
   startSeconds?: number;
   endSeconds?: number;
+  // Try again on an existing failed (or abandoned) analysis: the SAME row is
+  // re-run (attempt + 1) instead of a new one being created. Every other
+  // field is ignored then — the row itself is the source of truth. An older
+  // app build doesn't send it and gets the old behavior (a new row).
+  retryAnalysisId?: string;
 }
 
 interface CaddieAnalysisRow {
@@ -357,7 +410,37 @@ interface CaddieAnalysisRow {
   swing_type: string | null;
   status: string;
   created_at: string;
+  attempt: number;
+  attempt_started_at: string | null;
+  error_message: string | null;
+  trim_start_seconds: number | string | null;
+  trim_end_seconds: number | string | null;
 }
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// The trim window a row was (or will be) analyzed with: its own columns,
+// or, for a row from before they existed, the `window:` token analyze-swing
+// used to write into error_message.
+function rowTrimWindow(row: Pick<CaddieAnalysisRow, "trim_start_seconds" | "trim_end_seconds" | "error_message">): TrimWindow | undefined {
+  const start = row.trim_start_seconds === null ? NaN : Number(row.trim_start_seconds);
+  const end = row.trim_end_seconds === null ? NaN : Number(row.trim_end_seconds);
+  if (Number.isFinite(start) && Number.isFinite(end) && end > start) return { startSeconds: start, endSeconds: end };
+  const m = /^code:[a-z_]+ window:(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)(?:\s|$)/.exec(row.error_message ?? "");
+  if (m && Number(m[2]) > Number(m[1])) return { startSeconds: Number(m[1]), endSeconds: Number(m[2]) };
+  return undefined;
+}
+
+// A trigger refusal (migration 20260924140000 / 20261107140000) -> the
+// response the app maps to localized copy. Every one of these happens
+// before any pipeline work, so no row is created/re-run.
+const TRIGGER_REFUSALS: Record<string, { status: number; code: string }> = {
+  caddie_daily_limit: { status: 429, code: "daily_limit" },
+  caddie_attempt_ceiling: { status: 429, code: "attempt_ceiling" },
+  caddie_retry_cap: { status: 429, code: "retry_cap" },
+  caddie_retry_not_allowed: { status: 409, code: "already_running" },
+  caddie_retry_invalid: { status: 409, code: "already_running" },
+};
 
 // P2-9: the pipeline only ever fetches media the caller owns in this
 // project's own Storage — never an arbitrary client-supplied URL (which
@@ -445,11 +528,50 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 class ProviderHttpError extends Error {
   readonly status: number;
   readonly retryAfter: string | null;
-  constructor(status: number, detail: string, retryAfter: string | null) {
-    super(`HTTP ${status}: ${detail}`);
+  // providerErrorHint() of the body — allow-listed tokens only.
+  readonly hint: string;
+  constructor(status: number, hint: string, retryAfter: string | null) {
+    super(`HTTP ${status}: ${hint}`);
     this.status = status;
     this.retryAfter = retryAfter;
+    this.hint = hint;
   }
+}
+
+// A classified failure of one pipeline step, thrown by the step bodies and
+// handled by runStep() (retry or give up) and the pipeline (fail()).
+class StepError extends Error {
+  readonly failure: StepFailure;
+  readonly retryAfter: string | null;
+  // How many times the step ran before giving up (for diagnostics).
+  stepAttempts = 1;
+  constructor(failure: StepFailure, retryAfter: string | null = null) {
+    super(`${failure.category}@${failure.stage}`);
+    this.name = "StepError";
+    this.failure = failure;
+    this.retryAfter = retryAfter;
+  }
+}
+
+function httpStepError(stage: CaddieStage, status: number, body: string, headers?: Headers): StepError {
+  const hint = providerErrorHint(body);
+  // Vercel's own platform errors (timeout, payload too large) name
+  // themselves in this header; it's an uppercase token, safe to keep.
+  const vercelError = headers?.get("x-vercel-error") ?? "";
+  const safeVercel = /^[A-Z_]{3,64}$/.test(vercelError) ? vercelError : "";
+  const { category, retryable } = classifyHttpFailure(stage, status, hint);
+  const detail = [`HTTP ${status}`, hint, safeVercel].filter(Boolean).join(" ");
+  return new StepError({ stage, category, retryable, httpStatus: status, detail }, headers?.get("retry-after") ?? null);
+}
+
+function thrownStepError(stage: CaddieStage, err: unknown): StepError {
+  if (err instanceof StepError) return err;
+  const { category, retryable } = classifyThrown(stage, err);
+  return new StepError({ stage, category, retryable, detail: `threw ${safeErrorName(err)}` });
+}
+
+function hardFailure(stage: CaddieStage, category: StepFailure["category"], detail: string): StepError {
+  return new StepError({ stage, category, retryable: false, detail });
 }
 
 async function mapWithConcurrency<T, R>(items: T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {
@@ -474,7 +596,14 @@ Deno.serve(async (req: Request) => {
   // before auth, any row insert, or any vendor call; `code` lets the client
   // show "Caddie is busy" copy and clean up the files it just uploaded
   // (no row exists to reference them).
+  // CADDIE_DISABLED=unavailable is the longer-outage variant (e.g. Gemini
+  // credits ran out): "temporarily unavailable" copy instead of "try again
+  // in a minute", and no Roboflow credits are spent on runs that can only
+  // fail at Gemini. Neither uses an allowance slot (no row is created).
   const disabled = (Deno.env.get("CADDIE_DISABLED") ?? "").trim().toLowerCase();
+  if (disabled === "unavailable") {
+    return jsonResponse({ error: "Caddie is temporarily unavailable. Please try again.", code: "unavailable" }, 503);
+  }
   if (disabled === "1" || disabled === "true") {
     return jsonResponse({ error: "Caddie is busy right now. Please try again in a minute.", code: "provider_busy" }, 503);
   }
@@ -490,6 +619,8 @@ Deno.serve(async (req: Request) => {
     });
     return jsonResponse({ error: "Caddie isn't configured yet. Please try again later." }, 500);
   }
+  // Gemini auth travels in this header on every call, never in a URL.
+  const geminiAuth: Record<string, string> = { "x-goog-api-key": geminiApiKey };
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -500,21 +631,26 @@ Deno.serve(async (req: Request) => {
     data: { user },
     error: userError,
   } = await supabase.auth.getUser();
-  if (userError || !user) return jsonResponse({ error: "Not authenticated." }, 401);
+  if (userError || !user) return jsonResponse({ error: "Not authenticated.", code: "not_authenticated" }, 401);
 
   let body: RequestBody;
   try {
     body = await req.json();
   } catch {
-    return jsonResponse({ error: "Invalid request body." }, 400);
+    return jsonResponse({ error: "Invalid request body.", code: "bad_request" }, 400);
   }
 
-  if (body.sourceType !== "direct_upload" && body.sourceType !== "community_post") {
-    return jsonResponse({ error: "Invalid sourceType." }, 400);
+  // Dead jobs first: any of this caller's own rows still 'processing' well
+  // past the deadline lost their worker (memory/CPU/platform kill) before it
+  // could write an outcome. The database marks them failed/worker_lost,
+  // keeping the last persisted stage, so they're retryable and countable.
+  // Owner-scoped (invoker RPC + RLS). Best-effort.
+  {
+    const { error: sweepError } = await supabase.rpc("sweep_stale_caddie_jobs");
+    if (sweepError) console.error("[analyze-swing] stale-job sweep failed.", redactDetail(sweepError.message, 160));
   }
-  if (body.sourceType === "community_post" && !body.sourcePostId) {
-    return jsonResponse({ error: "sourcePostId is required for a community_post analysis." }, 400);
-  }
+
+  const locale = body.locale && SUPPORTED_LOCALES.has(body.locale) ? body.locale : "en";
 
   // Resolve WHICH media this analysis uses, server-side (P2-9 + private
   // bucket). Exactly one of mediaPath (private caddie-media) / mediaUrl
@@ -524,6 +660,90 @@ Deno.serve(async (req: Request) => {
   let mediaUrl: string | null = null;
   let thumbPath: string | null = null;
   let thumbUrl: string | null = null;
+  let trimWindow: TrimWindow | undefined;
+  let pipelineVideoUrl: string;
+  let row: CaddieAnalysisRow;
+
+  if (typeof body.retryAnalysisId === "string") {
+    // ---- Try again: re-run the SAME row (no new record, no allowance
+    // charge — only a delivered analysis is ever charged). ----
+    if (!UUID_RE.test(body.retryAnalysisId)) return jsonResponse({ error: "Invalid request body.", code: "bad_request" }, 400);
+    const { data: existing, error: existingError } = await supabase.from("caddie_analyses").select("*").eq("id", body.retryAnalysisId).maybeSingle();
+    if (existingError) {
+      console.error("[analyze-swing] retry lookup failed.", redactDetail(existingError.message, 160));
+      return jsonResponse({ error: "Caddie is temporarily unavailable. Please try again.", code: "unavailable" }, 500);
+    }
+    if (!existing) return jsonResponse({ error: "Analysis not found.", code: "not_found" }, 404);
+    const current = existing as CaddieAnalysisRow;
+    const startedAtMs = new Date(current.attempt_started_at ?? current.created_at).getTime();
+    const staleProcessing = current.status === "processing" && Date.now() - startedAtMs > STALE_PROCESSING_MS;
+    // Idempotent: a double tap, a second device, or a retry of a job that
+    // already finished gets the row as it is now.
+    if (current.status === "complete" || (current.status === "processing" && !staleProcessing)) {
+      return jsonResponse({ analysis: current }, 200);
+    }
+    if (current.status !== "failed" && !staleProcessing) return jsonResponse({ error: "This swing video can't be analyzed.", code: "cant_analyze" }, 400);
+    if (current.attempt >= MAX_ATTEMPTS) {
+      return jsonResponse({ error: "Caddie has tried this swing several times. Please film a new clip.", code: "retry_cap" }, 429);
+    }
+    mediaPath = current.source_media_path ? ownCaddiePath(current.source_media_path, user.id) : null;
+    mediaUrl = !mediaPath && current.source_media_url ? ownPublicCommunityMediaUrl(current.source_media_url, user.id, supabaseUrl) : null;
+    if (!mediaPath && !mediaUrl) return jsonResponse({ error: "This swing video can't be analyzed.", code: "cant_analyze" }, 400);
+    trimWindow = rowTrimWindow(current);
+
+    // Signed BEFORE the flip, so a missing object never burns an attempt.
+    let signedUrl = mediaUrl;
+    if (mediaPath) {
+      const { data: signed, error: signError } = await supabase.storage.from(CADDIE_MEDIA_BUCKET).createSignedUrl(mediaPath, PIPELINE_SIGNED_URL_SECONDS);
+      if (signError || !signed?.signedUrl) return jsonResponse({ error: "This swing video can't be analyzed.", code: "cant_analyze" }, 400);
+      signedUrl = signed.signedUrl;
+    }
+    pipelineVideoUrl = signedUrl!;
+
+    // The atomic flip: conditional on the attempt we read, so of two
+    // concurrent Try agains exactly one wins (the row lock serializes them;
+    // the loser's WHERE no longer matches). The database's guard trigger
+    // (20261107140000) re-checks failed-or-stale, the 3-retry cap, the
+    // allowance and the 60-run ceiling, and stamps attempt_started_at.
+    const { data: flipped, error: flipError } = await supabase
+      .from("caddie_analyses")
+      .update({
+        status: "processing",
+        attempt: current.attempt + 1,
+        stage: "media_fetch",
+        stage_updated_at: new Date().toISOString(),
+        failure_stage: null,
+        failure_category: null,
+        failure_retryable: null,
+        provider_http_status: null,
+        error_message: null,
+        ...(trimWindow ? { trim_start_seconds: trimWindow.startSeconds, trim_end_seconds: trimWindow.endSeconds } : {}),
+      })
+      .eq("id", current.id)
+      .eq("attempt", current.attempt)
+      .in("status", ["failed", "processing"])
+      .select()
+      .maybeSingle();
+    if (flipError) {
+      const refusal = flipError.hint ? TRIGGER_REFUSALS[flipError.hint] : undefined;
+      if (refusal) return jsonResponse({ error: flipError.message, code: refusal.code }, refusal.status);
+      console.error("[analyze-swing] retry flip failed.", redactDetail(flipError.message, 160));
+      return jsonResponse({ error: "Caddie is temporarily unavailable. Please try again.", code: "unavailable" }, 500);
+    }
+    if (!flipped) {
+      // Lost the race to another Try again: hand back whatever is there now.
+      const { data: latest } = await supabase.from("caddie_analyses").select("*").eq("id", current.id).maybeSingle();
+      return jsonResponse({ analysis: latest ?? current }, 200);
+    }
+    row = flipped as CaddieAnalysisRow;
+  } else {
+  if (body.sourceType !== "direct_upload" && body.sourceType !== "community_post") {
+    return jsonResponse({ error: "Invalid sourceType.", code: "bad_request" }, 400);
+  }
+  if (body.sourceType === "community_post" && !body.sourcePostId) {
+    return jsonResponse({ error: "sourcePostId is required for a community_post analysis.", code: "bad_request" }, 400);
+  }
+
   if (body.sourceType === "community_post") {
     // The post's own media, never the client's copy of it. Same messages as
     // the ownership trigger (20260817091500), which still runs on insert.
@@ -532,8 +752,8 @@ Deno.serve(async (req: Request) => {
       .select("author_id, video_url, video_thumbnail_url")
       .eq("id", body.sourcePostId!)
       .maybeSingle();
-    if (!post) return jsonResponse({ error: "Source post not found." }, 403);
-    if (post.author_id !== user.id) return jsonResponse({ error: "Ask Caddie is only available on your own posts." }, 403);
+    if (!post) return jsonResponse({ error: "Source post not found.", code: "forbidden" }, 403);
+    if (post.author_id !== user.id) return jsonResponse({ error: "Ask Caddie is only available on your own posts.", code: "forbidden" }, 403);
     mediaUrl = ownPublicCommunityMediaUrl(post.video_url, user.id, supabaseUrl);
     thumbUrl = ownPublicCommunityMediaUrl(post.video_thumbnail_url, user.id, supabaseUrl);
   } else if (body.sourceMediaPath !== undefined) {
@@ -543,19 +763,19 @@ Deno.serve(async (req: Request) => {
     mediaUrl = ownPublicCommunityMediaUrl(body.sourceMediaUrl, user.id, supabaseUrl);
     thumbUrl = ownPublicCommunityMediaUrl(body.thumbnailUrl, user.id, supabaseUrl);
   }
-  if (!mediaPath && !mediaUrl) return jsonResponse({ error: "This swing video can't be analyzed." }, 400);
+  if (!mediaPath && !mediaUrl) return jsonResponse({ error: "This swing video can't be analyzed.", code: "cant_analyze" }, 400);
 
   // A private object is signed now, with the caller's JWT: caddie-media's
   // owner-only RLS makes this fail for a path that doesn't exist or isn't
   // theirs — before any row (and daily-limit slot) is spent. The pipeline
   // reuses this URL for every fetch; nothing about it is ever stored.
-  let pipelineVideoUrl = mediaUrl;
+  let signedUrl = mediaUrl;
   if (mediaPath) {
     const { data: signed, error: signError } = await supabase.storage.from(CADDIE_MEDIA_BUCKET).createSignedUrl(mediaPath, PIPELINE_SIGNED_URL_SECONDS);
-    if (signError || !signed?.signedUrl) return jsonResponse({ error: "This swing video can't be analyzed." }, 400);
-    pipelineVideoUrl = signed.signedUrl;
+    if (signError || !signed?.signedUrl) return jsonResponse({ error: "This swing video can't be analyzed.", code: "cant_analyze" }, 400);
+    signedUrl = signed.signedUrl;
   }
-  const locale = body.locale && SUPPORTED_LOCALES.has(body.locale) ? body.locale : "en";
+  pipelineVideoUrl = signedUrl!;
 
   // A trimmed window from VideoTrimSelector, re-validated server-side
   // rather than trusted from the client — malformed/out-of-range values
@@ -563,10 +783,10 @@ Deno.serve(async (req: Request) => {
   // rather than failing the request over what's just a cost-control input,
   // not a correctness one.
   const clientWindow =
-    typeof body.startSeconds === "number" && typeof body.endSeconds === "number" && body.endSeconds > body.startSeconds
-      ? { startSeconds: Math.max(0, body.startSeconds), endSeconds: body.endSeconds }
+    typeof body.startSeconds === "number" && typeof body.endSeconds === "number" && Number.isFinite(body.startSeconds) && body.endSeconds > body.startSeconds
+      ? { startSeconds: Math.max(0, Math.round(body.startSeconds * 1000) / 1000), endSeconds: Math.round(body.endSeconds * 1000) / 1000 }
       : undefined;
-  const trimWindow =
+  trimWindow =
     clientWindow && clientWindow.endSeconds - clientWindow.startSeconds <= MAX_TRIM_WINDOW_SECONDS + 0.5 ? clientWindow : undefined;
 
   // Rate limiting — scoped to this user's own rows only, RLS does that for
@@ -577,25 +797,30 @@ Deno.serve(async (req: Request) => {
     .order("created_at", { ascending: false })
     .limit(1);
   if (recentError) {
-    console.error("[analyze-swing] rate-limit lookup failed.", recentError.message);
-    return jsonResponse({ error: "Caddie is temporarily unavailable. Please try again." }, 500);
+    console.error("[analyze-swing] rate-limit lookup failed.", redactDetail(recentError.message, 160));
+    return jsonResponse({ error: "Caddie is temporarily unavailable. Please try again.", code: "unavailable" }, 500);
   }
   const lastRequestAt = recentRows?.[0]?.created_at ? new Date(recentRows[0].created_at).getTime() : 0;
   if (lastRequestAt && Date.now() - lastRequestAt < COOLDOWN_SECONDS * 1000) {
-    return jsonResponse({ error: "Please wait a moment before asking Caddie again." }, 429);
+    return jsonResponse({ error: "Please wait a moment before asking Caddie again.", code: "cooldown" }, 429);
   }
 
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const { count: dailyCount, error: dailyError } = await supabase
-    .from("caddie_analyses")
-    .select("id", { count: "exact", head: true })
-    .gte("created_at", since);
-  if (dailyError) {
-    console.error("[analyze-swing] daily-limit lookup failed.", dailyError.message);
-    return jsonResponse({ error: "Caddie is temporarily unavailable. Please try again." }, 500);
-  }
-  if ((dailyCount ?? 0) >= DAILY_LIMIT_PER_USER) {
-    return jsonResponse({ error: `You've reached today's Caddie analysis limit (${DAILY_LIMIT_PER_USER}). Try again tomorrow.` }, 429);
+  // Friendly pre-check of the allowance (delivered analyses + live jobs) and
+  // the hidden run ceiling. The insert trigger is the authoritative,
+  // race-proof check; if this RPC isn't available it is simply skipped.
+  const { data: allowanceRows, error: allowanceError } = await supabase.rpc("caddie_allowance_status");
+  if (allowanceError) {
+    console.error("[analyze-swing] allowance lookup failed (insert trigger still enforces).", redactDetail(allowanceError.message, 160));
+  } else {
+    const allowance = (Array.isArray(allowanceRows) ? allowanceRows[0] : allowanceRows) as
+      | { used: number; daily_limit: number; starts: number; start_ceiling: number }
+      | undefined;
+    if (allowance && allowance.used >= allowance.daily_limit) {
+      return jsonResponse({ error: `You've reached today's Caddie analysis limit (${DAILY_LIMIT_PER_USER}). Try again tomorrow.`, code: "daily_limit" }, 429);
+    }
+    if (allowance && allowance.starts >= allowance.start_ceiling) {
+      return jsonResponse({ error: "Caddie has had a lot of attempts today. Please try again tomorrow.", code: "attempt_ceiling" }, 429);
+    }
   }
 
   // Duplicate-tap protection: an active (recent, still-processing) request
@@ -603,8 +828,8 @@ Deno.serve(async (req: Request) => {
   // starting a second Roboflow+Gemini run. A stale 'processing' row
   // (crashed mid-request, never reached the update step) doesn't count —
   // it must not permanently block retries.
-  const staleCutoff = new Date(Date.now() - STALE_PROCESSING_MINUTES * 60 * 1000).toISOString();
-  let inFlightQuery = supabase.from("caddie_analyses").select("*").eq("status", "processing").gte("created_at", staleCutoff);
+  const staleCutoff = new Date(Date.now() - STALE_PROCESSING_MS).toISOString();
+  let inFlightQuery = supabase.from("caddie_analyses").select("*").eq("status", "processing").gte("attempt_started_at", staleCutoff);
   inFlightQuery =
     body.sourceType === "community_post"
       ? inFlightQuery.eq("source_post_id", body.sourcePostId!)
@@ -649,6 +874,9 @@ Deno.serve(async (req: Request) => {
       thumbnail_path: thumbPath,
       swing_type: body.swingType ?? null,
       status: "processing",
+      stage: "media_fetch",
+      stage_updated_at: new Date().toISOString(),
+      ...(trimWindow ? { trim_start_seconds: trimWindow.startSeconds, trim_end_seconds: trimWindow.endSeconds } : {}),
     })
     .select()
     .single();
@@ -656,133 +884,235 @@ Deno.serve(async (req: Request) => {
     // The ownership trigger (20260817091500) raises exactly this kind of
     // message for a community_post the caller doesn't own — safe to
     // forward verbatim, it was written to be client-facing.
-    // The daily-limit trigger (20260924140000) is the race-proof backstop
-    // for the pre-check above — concurrent requests that all passed the
-    // count land here, with the same client-facing message.
+    // The allowance/ceiling trigger (20261107140000) is the race-proof
+    // backstop for the pre-check above — concurrent requests that all passed
+    // it land here, identified by the error's hint.
     const message = insertError?.message ?? "Could not start this analysis.";
-    const status =
-      insertError?.hint === "caddie_daily_limit"
-        ? 429
-        : message.includes("only available on your own posts") || message.includes("Source post not found")
-          ? 403
-          : 500;
-    return jsonResponse({ error: message }, status);
+    const refusal = insertError?.hint ? TRIGGER_REFUSALS[insertError.hint] : undefined;
+    if (refusal) return jsonResponse({ error: message, code: refusal.code }, refusal.status);
+    if (message.includes("only available on your own posts") || message.includes("Source post not found")) {
+      return jsonResponse({ error: message, code: "forbidden" }, 403);
+    }
+    console.error("[analyze-swing] insert failed.", redactDetail(message, 160));
+    return jsonResponse({ error: "Caddie is temporarily unavailable. Please try again.", code: "unavailable" }, 500);
   }
-  const row = inserted as CaddieAnalysisRow;
-  const pipelineStart = Date.now(); // credit-budget/latency logging (dev only) — see devLog calls below
+  row = inserted as CaddieAnalysisRow;
+  }
+
+  const attempt = row.attempt ?? 1;
+  const pipelineStart = Date.now();
 
   // Set once the pipeline has reached a terminal state (complete, failed,
   // or timed out) so a run that keeps going after the deadline can't write
-  // a second outcome. The DB writes are also conditional on
-  // status = 'processing', which is the real guard.
+  // a second outcome. Every DB write is also conditional on
+  // status = 'processing' AND attempt = this attempt, the real guard: an
+  // older attempt that wakes up late can never overwrite a newer one.
   let settled = false;
   // The trimmed private copy, once uploaded; removed again on failure.
   let trimmedPath: string | null = null;
+  let currentStage: CaddieStage = "media_fetch";
 
-  // error_message = `code:<code> [window:..] <detail>` (see
-  // _shared/caddieReliability.ts). The client maps the code to re-film /
-  // try-again copy; detail is diagnostic only and never shown.
-  async function fail(code: CaddieFailureCode, detail: string): Promise<void> {
+  // One structured, always-on log line per event: job id, attempt, stage,
+  // timing and classified outcome only — never a URL, body or message.
+  function logEvent(evt: string, fields: Record<string, unknown> = {}, level: "log" | "error" = "log") {
+    const line = JSON.stringify({ fn: "analyze-swing", evt, job: row.id, attempt, ms: Date.now() - pipelineStart, ...fields });
+    if (level === "error") console.error(line);
+    else console.log(line);
+  }
+
+  // Persisted (coarse) stages, so a killed worker still says where it died.
+  const PERSISTED_STAGES = new Set<CaddieStage>(["trim", "frame_extract", "pose", "gemini_upload", "gemini_generate"]);
+  async function enterStage(stage: CaddieStage): Promise<void> {
+    if (settled) return;
+    currentStage = stage;
+    logEvent("stage", { stage });
+    if (!PERSISTED_STAGES.has(stage)) return;
+    const { error } = await supabase
+      .from("caddie_analyses")
+      .update({ stage, stage_updated_at: new Date().toISOString() })
+      .eq("id", row.id)
+      .eq("status", "processing")
+      .eq("attempt", attempt);
+    if (error) logEvent("stage_write_failed", { stage }, "error");
+  }
+
+  // error_message keeps the legacy `code:<code> [window:..]` prefix for older
+  // app builds, followed by `<category>@<stage>` — no free text. The
+  // classified columns carry the structure; the redacted detail goes to
+  // private.caddie_job_diagnostics only (admin-readable).
+  async function fail(failure: StepFailure, stepAttempts = 1): Promise<void> {
     if (settled) return;
     settled = true;
-    const errorMessage = formatFailure(code, detail, trimWindow);
-    console.error("[analyze-swing] analysis failed.", { rowId: row.id, reason: errorMessage, processingSeconds: (Date.now() - pipelineStart) / 1000 });
-    // Marked failed, not deleted — see the header comment above. error_message
-    // is already covered by the same owner-only RLS as every other column on
-    // this table, so this reuses an existing safe-disclosure boundary rather
-    // than introducing a new one.
+    const detail = redactDetail(failure.detail, 300);
+    logEvent(
+      "failed",
+      { stage: failure.stage, category: failure.category, retryable: failure.retryable, http_status: failure.httpStatus ?? null, step_attempts: stepAttempts },
+      "error",
+    );
+    // Marked failed, not deleted — see the header comment above.
     const { error: failUpdateError } = await supabase
       .from("caddie_analyses")
-      .update({ status: "failed", error_message: errorMessage })
+      .update({
+        status: "failed",
+        error_message: formatStructuredFailure(failure, trimWindow),
+        stage: failure.stage,
+        stage_updated_at: new Date().toISOString(),
+        failure_stage: failure.stage,
+        failure_category: failure.category,
+        failure_retryable: failure.retryable,
+        provider_http_status: failure.httpStatus ?? null,
+      })
       .eq("id", row.id)
-      .eq("status", "processing");
+      .eq("status", "processing")
+      .eq("attempt", attempt);
     if (failUpdateError) {
-      console.error("[analyze-swing] failed to mark row as failed.", { rowId: row.id, reason: failUpdateError.message });
+      console.error("[analyze-swing] failed to mark row as failed.", { rowId: row.id, reason: redactDetail(failUpdateError.message, 160) });
     }
+    const { error: diagError } = await supabase.rpc("record_caddie_diagnostic", {
+      p_analysis_id: row.id,
+      p_attempt: attempt,
+      p_stage: failure.stage,
+      p_category: failure.category,
+      p_retryable: failure.retryable,
+      p_http_status: failure.httpStatus ?? null,
+      p_step_attempts: stepAttempts,
+      p_detail: detail,
+    });
+    if (diagError) logEvent("diagnostic_write_failed", {}, "error");
     // The failed row still points at the untrimmed original (Try again
-    // re-trims it from the window in error_message), so the trimmed copy is
-    // unreferenced. Best-effort.
+    // re-trims it from the row's trim window), so this attempt's trimmed
+    // copy is unreferenced. Best-effort.
     if (trimmedPath) {
       const { error: removeError } = await supabase.storage.from(CADDIE_MEDIA_BUCKET).remove([trimmedPath]);
-      if (removeError) console.error("[analyze-swing] couldn't remove the trimmed copy of a failed run.", { rowId: row.id, reason: removeError.message });
+      if (removeError) console.error("[analyze-swing] couldn't remove the trimmed copy of a failed run.", { rowId: row.id, reason: redactDetail(removeError.message, 160) });
+    }
+  }
+
+  // Runs one pipeline step, re-running it up to 2 more times with back-off
+  // for transient failures only (stepRetryDelayMs), while the deadline
+  // allows. Same row, same attempt: a step retry never creates a record.
+  async function runStep<T>(stage: CaddieStage, fn: () => Promise<T>): Promise<T> {
+    for (let stepAttempt = 1; ; stepAttempt++) {
+      if (settled) throw new StepError({ stage, category: "deadline_exceeded", retryable: true, detail: "settled" });
+      try {
+        const value = await fn();
+        if (stepAttempt > 1) logEvent("step_recovered", { stage, step_attempt: stepAttempt });
+        return value;
+      } catch (err) {
+        const stepError = thrownStepError(stage, err);
+        stepError.stepAttempts = stepAttempt;
+        const remainingMs = PIPELINE_DEADLINE_MS - (Date.now() - pipelineStart);
+        const delay = settled ? null : stepRetryDelayMs(stepError.failure, stepAttempt, remainingMs, STEP_BUDGET_MS[stage], stepError.retryAfter);
+        if (delay === null) throw stepError;
+        logEvent("step_retry", {
+          stage: stepError.failure.stage,
+          category: stepError.failure.category,
+          http_status: stepError.failure.httpStatus ?? null,
+          step_attempt: stepAttempt,
+          delay_ms: delay,
+        });
+        await sleep(delay);
+      }
     }
   }
 
   // ---- Everything from here runs AFTER the response below is already
   // sent — this request can't stay open for the full pipeline. The client
   // already has the 'processing' row via the response and via realtime. ----
+  // Any thrown StepError (or unexpected throw) ends the attempt via fail();
+  // a throw after the deadline already settled the row is ignored.
   async function runPipeline(): Promise<void> {
-    // Fetch the swing video: the signed caddie-media URL made above for a
-    // private upload, or the validated public community-media URL. This
-    // function never makes a private video public to satisfy Gemini.
-    let videoBytes: ArrayBuffer;
-    let videoContentType: string;
     try {
-      const videoRes = await fetch(pipelineVideoUrl!);
-      if (!videoRes.ok) return await fail("upload", `video fetch ${videoRes.status}`);
-      videoContentType = videoRes.headers.get("content-type") ?? "video/mp4";
-      videoBytes = await videoRes.arrayBuffer();
+      await pipelineBody();
     } catch (err) {
-      return await fail("upload", `video fetch threw: ${err instanceof Error ? err.message : String(err)}`);
+      if (settled) return;
+      const stepError = err instanceof StepError ? err : new StepError({ stage: currentStage, category: "internal", retryable: false, detail: `threw ${safeErrorName(err)}` });
+      await fail(stepError.failure, stepError.stepAttempts);
     }
-    if (videoBytes.byteLength === 0) return await fail("upload", "video fetch returned 0 bytes");
-    if (videoBytes.byteLength > MAX_VIDEO_BYTES) return await fail("upload", "video too large");
-    devLog("video fetched", { bytes: videoBytes.byteLength, contentType: videoContentType });
+  }
 
-    // If the golfer picked a window (VideoTrimSelector), actually trim the
-    // video server-side and re-upload the result (private caddie-media) as
-    // this row's real video — NOT just a sampling-window hint passed to
-    // frame extraction. That was the original approach, and it left the
-    // untrimmed original as the row's video, reported live as "the crop
-    // isn't applied" once someone replayed the saved analysis and saw the
-    // whole original clip. `effectiveVideoUrl`/`videoBytes` below are what
-    // every later step (frame extraction, Gemini) actually uses, and
-    // trimmedPath becomes the row's saved source_media_path.
-    let effectiveVideoUrl = pipelineVideoUrl!;
-    // trimmedPath (declared above, next to fail()) is set once the trimmed
-    // copy is uploaded to private caddie-media; it then becomes the row's
-    // source_media_path at completion.
-    if (trimWindow) {
-      try {
-        const trimRes = await fetch(TRIM_VIDEO_URL, {
+  async function pipelineBody(): Promise<void> {
+    // The video bytes Gemini gets, and the URL frame extraction reads: the
+    // signed caddie-media URL made above for a private upload, or the
+    // validated public community-media URL. This function never makes a
+    // private video public to satisfy Gemini.
+    let videoBytes: ArrayBuffer;
+    let videoContentType = "video/mp4";
+    let effectiveVideoUrl = pipelineVideoUrl;
+
+    if (!trimWindow) {
+      await enterStage("media_fetch");
+      const media = await runStep("media_fetch", async () => {
+        const res = await fetch(pipelineVideoUrl, { signal: AbortSignal.timeout(TIMEOUT_MS.media) });
+        if (!res.ok) throw httpStepError("media_fetch", res.status, await res.text().catch(() => ""), res.headers);
+        // Refuse to buffer something that would risk the worker's memory
+        // limit (a silent kill) — fail it clearly instead.
+        const declared = Number(res.headers.get("content-length") ?? NaN);
+        if (Number.isFinite(declared) && declared > MAX_BUFFERED_VIDEO_BYTES) {
+          await res.body?.cancel().catch(() => {});
+          throw hardFailure("media_fetch", "video_too_long_or_large", `content-length ${declared}`);
+        }
+        return { bytes: await res.arrayBuffer(), contentType: res.headers.get("content-type") ?? "video/mp4" };
+      });
+      if (media.bytes.byteLength === 0) throw hardFailure("media_fetch", "video_unreadable", "0 bytes");
+      if (media.bytes.byteLength > Math.min(MAX_VIDEO_BYTES, MAX_BUFFERED_VIDEO_BYTES)) {
+        throw hardFailure("media_fetch", "video_too_long_or_large", `${media.bytes.byteLength} bytes`);
+      }
+      videoBytes = media.bytes;
+      videoContentType = media.contentType;
+      logEvent("video_fetched", { bytes: videoBytes.byteLength, content_type: /^[a-z0-9.+/-]{1,64}$/i.test(videoContentType) ? videoContentType : "other" });
+    } else {
+      // The golfer picked a window (VideoTrimSelector): trim server-side and
+      // re-upload the result (private caddie-media) as this row's real video
+      // — NOT just a sampling-window hint (that left the untrimmed original
+      // as the row's video: "the crop isn't applied"). trim-video fetches the
+      // original itself, so the original is never buffered in this worker;
+      // only the (small, re-encoded) trimmed copy is.
+      await enterStage("trim");
+      const window = trimWindow;
+      const trimmedBytes = await runStep("trim", async () => {
+        const res = await fetch(TRIM_VIDEO_URL, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${frameExtractSecret}` },
-          body: JSON.stringify({ videoUrl: pipelineVideoUrl, startSeconds: trimWindow.startSeconds, endSeconds: trimWindow.endSeconds }),
+          body: JSON.stringify({ videoUrl: pipelineVideoUrl, startSeconds: window.startSeconds, endSeconds: window.endSeconds }),
+          signal: AbortSignal.timeout(TIMEOUT_MS.trim),
         });
-        if (!trimRes.ok) {
-          const errBody = await trimRes.text().catch(() => "");
-          return await fail(isRetryableStatus(trimRes.status) && trimRes.status !== 500 ? "provider_busy" : "upload", `video trim ${trimRes.status}: ${errBody.slice(0, 500)}`);
-        }
-        const trimmedBytes = await trimRes.arrayBuffer();
-        if (trimmedBytes.byteLength === 0) return await fail("upload", "video trim returned 0 bytes");
-
-        const newTrimmedPath = `${row.owner_id}/caddie-trimmed-${row.id}.mp4`;
-        const { error: trimUploadError } = await supabase.storage
-          .from(CADDIE_MEDIA_BUCKET)
-          .upload(newTrimmedPath, trimmedBytes, { contentType: "video/mp4" });
-        if (trimUploadError) return await fail("unknown", `trimmed video upload failed: ${trimUploadError.message}`);
-        const { data: trimmedSigned, error: trimmedSignError } = await supabase.storage
-          .from(CADDIE_MEDIA_BUCKET)
-          .createSignedUrl(newTrimmedPath, PIPELINE_SIGNED_URL_SECONDS);
-        trimmedPath = newTrimmedPath;
-        if (trimmedSignError || !trimmedSigned?.signedUrl) return await fail("unknown", "trimmed video sign failed");
-
-        effectiveVideoUrl = trimmedSigned.signedUrl;
-        videoBytes = trimmedBytes;
-        videoContentType = "video/mp4";
-        devLog("video trimmed", { bytes: videoBytes.byteLength, window: trimWindow });
-      } catch (err) {
-        return await fail("upload", `video trim threw: ${err instanceof Error ? err.message : String(err)}`);
+        if (!res.ok) throw httpStepError("trim", res.status, await res.text().catch(() => ""), res.headers);
+        const bytes = await res.arrayBuffer();
+        if (bytes.byteLength === 0) throw new StepError({ stage: "trim", category: "provider_unavailable", retryable: true, detail: "0 bytes" });
+        return bytes;
+      });
+      if (trimmedBytes.byteLength > MAX_BUFFERED_VIDEO_BYTES) {
+        throw hardFailure("trim", "video_too_long_or_large", `trimmed ${trimmedBytes.byteLength} bytes`);
       }
+
+      // Per-attempt name: a Try again on this same row must never collide
+      // with an earlier attempt's copy (the bucket has no update policy, so
+      // an upsert isn't possible).
+      const newTrimmedPath = `${row.owner_id}/caddie-trimmed-${row.id}-a${attempt}.mp4`;
+      await runStep("trim", async () => {
+        const { error } = await supabase.storage.from(CADDIE_MEDIA_BUCKET).upload(newTrimmedPath, trimmedBytes, { contentType: "video/mp4" });
+        // A previous try of THIS step may have landed before its response was lost.
+        if (error && !/already exists|duplicate/i.test(error.message)) {
+          throw new StepError({ stage: "trim", category: "provider_unavailable", retryable: true, detail: `storage upload ${redactDetail(error.message, 80)}` });
+        }
+      });
+      trimmedPath = newTrimmedPath;
+      const trimmedSignedUrl = await runStep("trim", async () => {
+        const { data, error } = await supabase.storage.from(CADDIE_MEDIA_BUCKET).createSignedUrl(newTrimmedPath, PIPELINE_SIGNED_URL_SECONDS);
+        if (error || !data?.signedUrl) throw new StepError({ stage: "trim", category: "provider_unavailable", retryable: true, detail: "storage sign" });
+        return data.signedUrl;
+      });
+      effectiveVideoUrl = trimmedSignedUrl;
+      videoBytes = trimmedBytes;
+      videoContentType = "video/mp4";
+      logEvent("video_trimmed", { bytes: videoBytes.byteLength });
     }
 
     // --- Frame extraction (Vercel/Node — see api/extract-frames.ts). ---
-    let frames: ExtractedFrame[];
-    // Multiply Roboflow keypoints by this to get source-video pixels; set
-    // from extract-frames' response (undefined = frames weren't downscaled).
-    let coordinateScale: unknown;
-    try {
-      const extractRes = await fetch(FRAME_EXTRACT_URL, {
+    await enterStage("frame_extract");
+    const extracted = await runStep("frame_extract", async () => {
+      const res = await fetch(FRAME_EXTRACT_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${frameExtractSecret}` },
         // effectiveVideoUrl is already exactly the analyzed window once
@@ -791,29 +1121,31 @@ Deno.serve(async (req: Request) => {
         // an UNtrimmed video (nothing was picked, or duration was already
         // under the cap), same as before this feature existed.
         body: JSON.stringify({ videoUrl: effectiveVideoUrl, fps: ANALYSIS_FPS, maxLongSide: FRAME_MAX_LONG_SIDE }),
+        signal: AbortSignal.timeout(TIMEOUT_MS.extract),
       });
-      if (!extractRes.ok) {
-        const errBody = await extractRes.text().catch(() => "");
-        // 500 = ffmpeg couldn't decode it (bad/unsupported file); 429/503/504
-        // = the Vercel function itself was overloaded or timed out.
-        const code: CaddieFailureCode = isRetryableStatus(extractRes.status) && extractRes.status !== 500 ? "provider_busy" : "upload";
-        return await fail(code, `frame extraction ${extractRes.status}: ${errBody.slice(0, 500)}`);
-      }
-      const extractBody = await extractRes.json();
-      coordinateScale = extractBody.coordinateScale;
-      frames = (extractBody.frames ?? []).map((f: { frameIndex: number; timestampSeconds: number; base64: string }) => ({
-        frameIndex: f.frameIndex,
-        timestampSeconds: f.timestampSeconds,
-        base64: f.base64,
-      }));
-      if (frames.length === 0) return await fail("upload", "frame extraction returned 0 frames");
-      if (frames.length > MAX_ANALYSIS_FRAMES) {
-        return await fail("upload", `frame extraction returned ${frames.length} frames, exceeding the ${MAX_ANALYSIS_FRAMES} safety cap (misreported video duration?)`);
-      }
-      devLog("frames extracted", { count: frames.length, fps: extractBody.analysisFps });
-    } catch (err) {
-      return await fail("provider_busy", `frame extraction threw: ${err instanceof Error ? err.message : String(err)}`);
+      // 422 = ffmpeg couldn't decode it; 502 = it couldn't fetch the video;
+      // 500 + token = resources/internal; 504 = the Vercel function timed out
+      // (see classifyHttpFailure).
+      if (!res.ok) throw httpStepError("frame_extract", res.status, await res.text().catch(() => ""), res.headers);
+      return (await res.json()) as {
+        coordinateScale?: unknown;
+        analysisFps?: number;
+        frames?: { frameIndex: number; timestampSeconds: number; base64: string }[];
+      };
+    });
+    // Multiply Roboflow keypoints by this to get source-video pixels
+    // (undefined = frames weren't downscaled).
+    const coordinateScale: unknown = extracted.coordinateScale;
+    const frames: ExtractedFrame[] = (extracted.frames ?? []).map((f) => ({
+      frameIndex: f.frameIndex,
+      timestampSeconds: f.timestampSeconds,
+      base64: f.base64,
+    }));
+    if (frames.length === 0) throw hardFailure("frame_extract", "video_unreadable", "0 frames");
+    if (frames.length > MAX_ANALYSIS_FRAMES) {
+      throw hardFailure("frame_extract", "video_too_long_or_large", `${frames.length} frames > cap ${MAX_ANALYSIS_FRAMES}`);
     }
+    logEvent("frames_extracted", { count: frames.length, fps: extracted.analysisFps ?? null });
 
     // --- Roboflow: one call per frame, stateless, moderate concurrency,
     // each frame retried once on failure before being given up on. ---
@@ -833,14 +1165,15 @@ Deno.serve(async (req: Request) => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ api_key: roboflowApiKey, inputs: { image: { type: "base64", value: frame.base64 } } }),
+        signal: AbortSignal.timeout(TIMEOUT_MS.roboflowFrame),
       });
       if (!res.ok) {
         const errBody = await res.text().catch(() => "");
-        throw new ProviderHttpError(res.status, errBody.slice(0, 300), res.headers.get("retry-after"));
+        throw new ProviderHttpError(res.status, providerErrorHint(errBody), res.headers.get("retry-after"));
       }
       const body = await res.json();
       const output = body?.outputs?.[0];
-      if (!output) throw new Error(`no outputs[0] in response: ${JSON.stringify(body).slice(0, 300)}`);
+      if (!output) throw new Error("no outputs[0] in response");
       return filterRoboflowFrame(frame.frameIndex, frame.timestampSeconds, output, coordinateScale);
     }
     // One frame, ROBOFLOW_FRAME_RETRY_ATTEMPTS total attempts. A 429 (rate
@@ -854,47 +1187,77 @@ Deno.serve(async (req: Request) => {
           return { frame: await callRoboflowOnce(frame) };
         } catch (err) {
           lastErr = err;
-          if (attempt < ROBOFLOW_FRAME_RETRY_ATTEMPTS) {
+          // A hard 4xx (auth, credit cap, bad request) fails the same way
+          // every time: don't spend a second call on it.
+          const transient = !(err instanceof ProviderHttpError) || isRetryableStatus(err.status);
+          if (attempt < ROBOFLOW_FRAME_RETRY_ATTEMPTS && transient) {
             onRetry();
-            if (err instanceof ProviderHttpError && isRetryableStatus(err.status)) {
+            if (err instanceof ProviderHttpError) {
               await sleep(backoffMs(attempt, ROBOFLOW_BACKOFF_BASE_MS, ROBOFLOW_BACKOFF_CAP_MS, err.retryAfter));
             }
+          } else {
+            break;
           }
         }
       }
       return { frame: null, error: lastErr };
     }
-    const roboflowResults = await mapWithConcurrency(frames, ROBOFLOW_CONCURRENCY, async (frame) => {
-      const result = await callRoboflowWithRetry(frame, () => roboflowRetryCount++);
-      if (!result.frame && !firstFailureDetail && result.error !== undefined) {
-        firstFailureDetail = result.error instanceof Error ? result.error.message : String(result.error);
+    // The pass, plus up to 2 more passes over ONLY the frames that failed,
+    // when the failures were transient (429/5xx/network) and the deadline
+    // allows — same row, same attempt.
+    await enterStage("pose");
+    const roboflowResults: (TrustedFrame | null)[] = new Array(frames.length).fill(null);
+    for (let pass = 1; ; pass++) {
+      let passError: unknown;
+      const pending = frames.map((frame, index) => ({ frame, index })).filter(({ index }) => roboflowResults[index] === null);
+      await mapWithConcurrency(pending, ROBOFLOW_CONCURRENCY, async ({ frame, index }) => {
+        const result = await callRoboflowWithRetry(frame, () => roboflowRetryCount++);
+        if (result.frame) roboflowResults[index] = result.frame;
+        else if (passError === undefined && result.error !== undefined) passError = result.error;
+      });
+      if (settled) return;
+      const succeeded = roboflowResults.filter((f) => f !== null).length;
+      if (succeeded / frames.length >= ROBOFLOW_MIN_SUCCESS_RATIO) break;
+
+      // ProviderHttpError carries the status + allow-listed hint; any other
+      // throw (fetch/network/timeout) contributes its class name only.
+      firstFailureDetail =
+        passError instanceof ProviderHttpError ? passError.message : passError !== undefined ? `threw ${safeErrorName(passError)}` : "no error recorded";
+      const classified =
+        passError instanceof ProviderHttpError ? classifyHttpFailure("pose", passError.status, passError.hint) : classifyThrown("pose", passError);
+      const failure: StepFailure = {
+        stage: "pose",
+        ...classified,
+        httpStatus: passError instanceof ProviderHttpError ? passError.status : undefined,
+        detail: `ok ${succeeded}/${frames.length} ${firstFailureDetail}`,
+      };
+      const remainingMs = PIPELINE_DEADLINE_MS - (Date.now() - pipelineStart);
+      const delay = stepRetryDelayMs(failure, pass, remainingMs, STEP_BUDGET_MS.pose, passError instanceof ProviderHttpError ? passError.retryAfter : null);
+      if (delay === null) {
+        const stepError = new StepError(failure);
+        stepError.stepAttempts = pass;
+        throw stepError;
       }
-      return result.frame;
-    });
-    if (settled) return;
+      logEvent("step_retry", { stage: "pose", category: failure.category, http_status: failure.httpStatus ?? null, step_attempt: pass, delay_ms: delay, ok: succeeded, total: frames.length });
+      await sleep(delay);
+    }
     const trustedFrames = roboflowResults.filter((f): f is TrustedFrame => f !== null);
-    const successRatio = trustedFrames.length / frames.length;
-    devLog("roboflow pass complete", {
+    logEvent("pose_pass_complete", {
       requested: frames.length,
       succeeded: trustedFrames.length,
-      successRatio,
-      retryCount: roboflowRetryCount,
-      workflowId: ROBOFLOW_WORKFLOW_ID,
-      firstFailureDetail,
+      frame_retries: roboflowRetryCount,
     });
-    if (successRatio < ROBOFLOW_MIN_SUCCESS_RATIO) {
-      return await fail("provider_busy", `roboflow success ratio too low: ${trustedFrames.length}/${frames.length}${firstFailureDetail ? ` (${firstFailureDetail})` : ""}`);
-    }
 
     // Pose-presence gate: Roboflow answering a frame isn't the same as it
     // finding a golfer in it (a frame with zero reliable keypoints still
     // "succeeds" above). Too few frames with a usable body (shoulders, hips,
     // a wrist) means the golfer wasn't fully in frame, so fail with a re-film
     // message before spending a Gemini call on a swing nobody can see.
+    await enterStage("pose_gate");
     const coverage = poseCoverage(trustedFrames);
-    devLog("pose coverage", coverage);
+    logEvent("pose_coverage", { usable: coverage.usable, total: coverage.total });
     if (coverage.ratio < POSE_PRESENCE_MIN_RATIO) {
-      return await fail("pose_not_found", `usable body in ${coverage.usable}/${coverage.total} analyzed frames (min ratio ${POSE_PRESENCE_MIN_RATIO})`);
+      throw hardFailure("pose_gate", "pose_not_found", `usable body in ${coverage.usable}/${coverage.total} (min ratio ${POSE_PRESENCE_MIN_RATIO})`);
     }
 
     // --- Stage 2: dense sampling around the fastest part of the swing.
@@ -948,6 +1311,7 @@ Deno.serve(async (req: Request) => {
               method: "POST",
               headers: { "Content-Type": "application/json", Authorization: `Bearer ${frameExtractSecret}` },
               body: JSON.stringify({ videoUrl: effectiveVideoUrl, fps: DENSE_IMPACT_FPS, startSeconds: denseStart, endSeconds: denseEnd, maxLongSide: FRAME_MAX_LONG_SIDE }),
+              signal: AbortSignal.timeout(TIMEOUT_MS.extract),
             });
             if (denseExtractRes.ok) {
               const denseExtractBody = await denseExtractRes.json();
@@ -964,7 +1328,7 @@ Deno.serve(async (req: Request) => {
               );
               const denseResults = await mapWithConcurrency(denseFrames, ROBOFLOW_CONCURRENCY, async (frame) => {
                 const result = await callRoboflowWithRetry(frame, () => denseRetryCount++);
-                if (!result.frame) devLog("dense frame failed after retries", { error: result.error instanceof Error ? result.error.message : String(result.error) });
+                if (!result.frame) devLog("dense frame failed after retries", { error: result.error instanceof ProviderHttpError ? result.error.message : safeErrorName(result.error) });
                 return result.frame;
               });
               denseTrustedFrames = denseResults.filter((f): f is TrustedFrame => f !== null);
@@ -977,7 +1341,7 @@ Deno.serve(async (req: Request) => {
             }
           } catch (err) {
             devLog("dense impact-window pass failed, continuing with coarse-only data", {
-              error: err instanceof Error ? err.message : String(err),
+              error: safeErrorName(err),
             });
           }
         }
@@ -1001,7 +1365,7 @@ Deno.serve(async (req: Request) => {
     };
 
     // --- Gemini: structured JSON output, now given the trusted pose data too. ---
-    let parsed: {
+    type ParsedAnalysis = {
       summary: string;
       camera_angle: string;
       strengths: string[];
@@ -1015,57 +1379,90 @@ Deno.serve(async (req: Request) => {
       checkpoint_cues?: unknown;
     };
     const genStart = Date.now();
-    let geminiFile: { name: string; uri: string; mimeType: string } | undefined;
+    // Every file uploaded by this attempt (one per upload try), all deleted
+    // in the finally below.
+    const geminiFiles: string[] = [];
+    const safeToken = (v: unknown) => (typeof v === "string" && /^[A-Z_]{1,40}$/.test(v) ? v : "none");
+    let parsed: ParsedAnalysis;
     try {
-      const startRes = await fetch(`${GEMINI_API_BASE}/upload/v1beta/files?key=${geminiApiKey}`, {
-        method: "POST",
-        headers: {
-          "X-Goog-Upload-Protocol": "resumable",
-          "X-Goog-Upload-Command": "start",
-          "X-Goog-Upload-Header-Content-Length": String(videoBytes.byteLength),
-          "X-Goog-Upload-Header-Content-Type": videoContentType,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ file: { display_name: `swing-${row.id}` } }),
+      await enterStage("gemini_upload");
+      const geminiFile = await runStep("gemini_upload", async () => {
+        // The key travels in the x-goog-api-key header, never the URL: a URL
+        // ends up in thrown fetch errors and therefore anywhere they're logged.
+        const startRes = await fetch(`${GEMINI_API_BASE}/upload/v1beta/files`, {
+          method: "POST",
+          headers: {
+            ...geminiAuth,
+            "X-Goog-Upload-Protocol": "resumable",
+            "X-Goog-Upload-Command": "start",
+            "X-Goog-Upload-Header-Content-Length": String(videoBytes.byteLength),
+            "X-Goog-Upload-Header-Content-Type": videoContentType,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ file: { display_name: `swing-${row.id}-a${attempt}` } }),
+          signal: AbortSignal.timeout(TIMEOUT_MS.geminiPoll),
+        });
+        const uploadUrl = startRes.headers.get("x-goog-upload-url");
+        if (!startRes.ok || !uploadUrl) {
+          throw httpStepError("gemini_upload", startRes.ok ? 502 : startRes.status, await startRes.text().catch(() => ""), startRes.headers);
+        }
+        const uploadRes = await fetch(uploadUrl, {
+          method: "POST",
+          headers: {
+            "Content-Length": String(videoBytes.byteLength),
+            "X-Goog-Upload-Offset": "0",
+            "X-Goog-Upload-Command": "upload, finalize",
+          },
+          body: videoBytes,
+          signal: AbortSignal.timeout(TIMEOUT_MS.geminiUpload),
+        });
+        if (!uploadRes.ok) throw httpStepError("gemini_upload", uploadRes.status, await uploadRes.text().catch(() => ""), uploadRes.headers);
+        const file = (await uploadRes.json())?.file;
+        if (!file?.uri || !file?.name) throw new StepError({ stage: "gemini_upload", category: "provider_unavailable", retryable: true, detail: "no file uri" });
+        geminiFiles.push(file.name);
+        return { name: file.name as string, uri: file.uri as string, mimeType: (file.mimeType as string | undefined) ?? videoContentType, state: file.state as string | undefined };
       });
-      if (!startRes.ok || !startRes.headers.get("x-goog-upload-url")) {
-        const errBody = await startRes.text().catch(() => "");
-        return await fail(isRetryableStatus(startRes.status) ? "provider_busy" : "unknown", `Gemini upload start ${startRes.status}: ${errBody.slice(0, 500)}`);
-      }
-      const uploadUrl = startRes.headers.get("x-goog-upload-url")!;
 
-      const uploadRes = await fetch(uploadUrl, {
-        method: "POST",
-        headers: {
-          "Content-Length": String(videoBytes.byteLength),
-          "X-Goog-Upload-Offset": "0",
-          "X-Goog-Upload-Command": "upload, finalize",
-        },
-        body: videoBytes,
-      });
-      if (!uploadRes.ok) {
-        const errBody = await uploadRes.text().catch(() => "");
-        return await fail(isRetryableStatus(uploadRes.status) ? "provider_busy" : "unknown", `Gemini upload finalize ${uploadRes.status}: ${errBody.slice(0, 500)}`);
+      // Wait for ACTIVE within a budget that always leaves room for
+      // generateContent before the deadline. FAILED = Gemini couldn't decode
+      // the video (not "busy"); still PROCESSING at the end = transient.
+      await enterStage("gemini_processing");
+      let state = geminiFile.state;
+      const waitStart = Date.now();
+      const waitBudgetMs = () =>
+        Math.min(GEMINI_ACTIVE_WAIT_MAX_MS, PIPELINE_DEADLINE_MS - (Date.now() - pipelineStart) - GEMINI_GENERATE_RESERVE_MS + (Date.now() - waitStart));
+      let pollFailures = 0;
+      while (state === "PROCESSING" && Date.now() - waitStart < waitBudgetMs()) {
+        if (settled) return;
+        await sleep(GEMINI_ACTIVE_POLL_MS);
+        try {
+          const pollRes = await fetch(`${GEMINI_API_BASE}/v1beta/${geminiFile.name}`, { headers: geminiAuth, signal: AbortSignal.timeout(TIMEOUT_MS.geminiPoll) });
+          if (!pollRes.ok) {
+            const pollBody = await pollRes.text().catch(() => "");
+            if (!isRetryableStatus(pollRes.status)) throw httpStepError("gemini_processing", pollRes.status, pollBody, pollRes.headers);
+            pollFailures++;
+          } else {
+            state = (await pollRes.json())?.state;
+          }
+        } catch (err) {
+          if (err instanceof StepError) throw err;
+          pollFailures++;
+          if (pollFailures >= 5) throw thrownStepError("gemini_processing", err);
+        }
       }
-      const uploadBody = await uploadRes.json();
-      const file = uploadBody.file;
-      if (!file?.uri || !file?.name) return await fail("unknown", "Gemini upload response missing file.uri/name");
-      geminiFile = { name: file.name, uri: file.uri, mimeType: file.mimeType ?? videoContentType };
-
-      let state = file.state as string;
-      for (let attempt = 0; state === "PROCESSING" && attempt < FILE_ACTIVE_POLL_ATTEMPTS; attempt++) {
-        await new Promise((resolve) => setTimeout(resolve, FILE_ACTIVE_POLL_DELAY_MS));
-        const pollRes = await fetch(`${GEMINI_API_BASE}/v1beta/${geminiFile.name}?key=${geminiApiKey}`);
-        if (!pollRes.ok) break;
-        const pollBody = await pollRes.json();
-        state = pollBody.state;
+      const stateFailure = classifyGeminiFileState(state);
+      if (stateFailure) {
+        throw new StepError({
+          stage: "gemini_processing",
+          ...stateFailure,
+          detail: `file state ${safeToken(state)} after ${Math.round((Date.now() - waitStart) / 1000)}s, ${pollFailures} poll errors`,
+        });
       }
-      if (state !== "ACTIVE") return await fail("provider_busy", `Gemini file never reached ACTIVE (last state: ${state})`);
-      devLog("gemini file active", { name: geminiFile.name });
+      logEvent("gemini_file_active", { wait_ms: Date.now() - waitStart });
 
       const localeName = LOCALE_NAMES[locale];
       const userPromptParts = [
-        body.swingType ? `The golfer says this is a: ${body.swingType}.` : "",
+        row.swing_type ? `The golfer says this is a: ${row.swing_type}.` : "",
         `Remember: respond in ${localeName} (see the system instruction's language requirement).`,
         "Analyze this golf swing video and return your structured feedback, using TRUSTED_POSE_DATA below as the authoritative source for body-position claims and phase timestamps.",
         `TRUSTED_POSE_DATA: ${JSON.stringify(trustedPoseData)}`,
@@ -1087,40 +1484,46 @@ Deno.serve(async (req: Request) => {
             responseSchema: buildResponseSchema(localeName),
           },
         });
-      // 429/5xx from Gemini (quota or overload) is usually gone within
-      // seconds: retry with back-off before failing as provider_busy.
-      let genRes: Response | undefined;
-      for (let attempt = 1; attempt <= GEMINI_GENERATE_ATTEMPTS; attempt++) {
-        if (settled) return;
-        genRes = await fetch(`${GEMINI_API_BASE}/v1beta/models/${GEMINI_MODEL}:generateContent?key=${geminiApiKey}`, {
+      // 429/5xx/network from Gemini is usually gone within seconds, and an
+      // empty/unparseable/invalid answer is worth exactly one more try:
+      // runStep re-runs generate + parse + validate together.
+      await enterStage("gemini_generate");
+      parsed = await runStep("gemini_generate", async () => {
+        const genRes = await fetch(`${GEMINI_API_BASE}/v1beta/models/${GEMINI_MODEL}:generateContent`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...geminiAuth },
           body: genRequestBody,
+          signal: AbortSignal.timeout(TIMEOUT_MS.geminiGenerate),
         });
-        if (genRes.ok || !isRetryableStatus(genRes.status) || attempt === GEMINI_GENERATE_ATTEMPTS) break;
-        await genRes.body?.cancel().catch(() => {});
-        devLog("gemini generateContent retry", { status: genRes.status, attempt });
-        await sleep(backoffMs(attempt, GEMINI_BACKOFF_BASE_MS, GEMINI_BACKOFF_CAP_MS, genRes.headers.get("retry-after")));
-      }
-      if (!genRes || !genRes.ok) {
-        const status = genRes?.status ?? 0;
-        const errBody = genRes ? await genRes.text().catch(() => "") : "";
-        return await fail(isRetryableStatus(status) ? "provider_busy" : "unknown", `Gemini generateContent ${status}: ${errBody.slice(0, 500)}`);
-      }
-      const genBody = await genRes.json();
-      const text = genBody?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!text) return await fail("unknown", "Gemini response had no text part");
-      parsed = JSON.parse(text);
-      devLog("gemini responded", { latencyMs: Date.now() - genStart });
-    } catch (err) {
-      return await fail("unknown", `Gemini call threw: ${err instanceof Error ? err.message : String(err)}`);
+        if (!genRes.ok) throw httpStepError("gemini_generate", genRes.status, await genRes.text().catch(() => ""), genRes.headers);
+        const genBody = await genRes.json();
+        const candidate = genBody?.candidates?.[0];
+        const text = candidate?.content?.parts?.[0]?.text;
+        const finish = `finish ${safeToken(candidate?.finishReason)} block ${safeToken(genBody?.promptFeedback?.blockReason)}`;
+        if (!text) throw new StepError({ stage: "gemini_generate", category: "model_output_invalid", retryable: true, detail: `no text part, ${finish}` });
+        let candidateJson: ParsedAnalysis;
+        try {
+          candidateJson = JSON.parse(text);
+        } catch {
+          // Never the SyntaxError's message: it quotes the model's text.
+          throw new StepError({ stage: "output_validation", category: "model_output_invalid", retryable: true, detail: `JSON parse failed, ${finish}` });
+        }
+        if (
+          !candidateJson?.summary ||
+          !Array.isArray(candidateJson.work_on) ||
+          !candidateJson.focus ||
+          !candidateJson.drill ||
+          !candidateJson.phases ||
+          !candidateJson.score
+        ) {
+          throw new StepError({ stage: "output_validation", category: "model_output_invalid", retryable: true, detail: `shape validation, ${finish}` });
+        }
+        return candidateJson;
+      });
+      logEvent("gemini_responded", { latency_ms: Date.now() - genStart });
     } finally {
       // Best-effort cleanup — never blocks either way.
-      if (geminiFile) fetch(`${GEMINI_API_BASE}/v1beta/${geminiFile.name}?key=${geminiApiKey}`, { method: "DELETE" }).catch(() => {});
-    }
-
-    if (!parsed?.summary || !Array.isArray(parsed.work_on) || !parsed.focus || !parsed.drill || !parsed.phases || !parsed.score) {
-      return await fail("unknown", "Gemini response failed shape validation");
+      for (const name of geminiFiles) fetch(`${GEMINI_API_BASE}/v1beta/${name}`, { method: "DELETE", headers: geminiAuth }).catch(() => {});
     }
 
     // The 0-100 total is computed here, not trusted from Gemini's own
@@ -1152,10 +1555,19 @@ Deno.serve(async (req: Request) => {
     devLog("checkpoint cues", { kept: Object.keys((analysisJson.checkpoint_cues as Record<string, string> | undefined) ?? {}), droppedByMeasurement: droppedCues });
 
     if (settled) return;
+    await enterStage("save");
+    const savedRows = await runStep("save", async () => {
     const { data: savedRows, error: updateError } = await supabase
       .from("caddie_analyses")
       .update({
         status: "complete",
+        stage: "save",
+        stage_updated_at: new Date().toISOString(),
+        failure_stage: null,
+        failure_category: null,
+        failure_retryable: null,
+        provider_http_status: null,
+        error_message: null,
         // When the golfer picked a window, the row's video becomes the
         // ACTUALLY trimmed private copy (stored by path; effectiveVideoUrl
         // is only a signed link and is never saved). Otherwise the media
@@ -1173,21 +1585,26 @@ Deno.serve(async (req: Request) => {
         model: GEMINI_MODEL,
       })
       .eq("id", row.id)
-      // Never overwrite a row the deadline already marked failed.
+      // Never overwrite a row the deadline already marked failed, nor a
+      // newer attempt of this row.
       .eq("status", "processing")
+      .eq("attempt", attempt)
       .select("id");
     if (updateError) {
       // Roboflow+Gemini succeeded but the save failed (e.g. the caller's JWT
-      // expired). Mark it failed so it doesn't sit at 'processing' with a
-      // spinner forever; Try again re-runs it.
-      console.error("[analyze-swing] save after successful analysis failed.", { rowId: row.id, reason: updateError.message });
-      return await fail("unknown", `save after successful analysis failed: ${updateError.message}`);
+      // expired). Retried by runStep; if it still fails the row is marked
+      // failed (save_failed, retryable) so it doesn't sit at 'processing'.
+      throw new StepError({ stage: "save", category: "save_failed", retryable: true, detail: redactDetail(updateError.message, 160) });
     }
+    return savedRows;
+    });
     if (!savedRows || savedRows.length === 0) {
-      devLog("row no longer processing at save time (deadline hit?), result discarded", { id: row.id });
+      logEvent("result_discarded", { reason: "row no longer processing for this attempt" });
+      settled = true;
       return;
     }
     settled = true;
+    logEvent("complete", { stage: "save" });
     // The untrimmed private original is now unreferenced (this row points at
     // the trimmed copy) unless another of the caller's rows still uses it —
     // remove it rather than leave a private orphan. Best-effort; never a
@@ -1199,7 +1616,7 @@ Deno.serve(async (req: Request) => {
         .eq("source_media_path", row.source_media_path);
       if (!usedError && stillUsed === 0) {
         const { error: removeError } = await supabase.storage.from(CADDIE_MEDIA_BUCKET).remove([row.source_media_path]);
-        if (removeError) console.error("[analyze-swing] couldn't remove the untrimmed original.", { rowId: row.id, reason: removeError.message });
+        if (removeError) console.error("[analyze-swing] couldn't remove the untrimmed original.", { rowId: row.id, reason: redactDetail(removeError.message, 160) });
       }
     }
     devLog("saved", {
@@ -1227,13 +1644,15 @@ Deno.serve(async (req: Request) => {
     const run = runPipeline().then(
       () => "done" as const,
       async (err) => {
-        await fail("unknown", `pipeline threw: ${err instanceof Error ? err.message : String(err)}`);
+        await fail({ stage: currentStage, category: "internal", retryable: false, detail: `pipeline threw ${safeErrorName(err)}` });
         return "done" as const;
       },
     );
     const outcome = await Promise.race([run, deadline]);
     clearTimeout(timer);
-    if (outcome === "timeout") await fail("timeout", `pipeline exceeded ${PIPELINE_DEADLINE_MS / 1000}s`);
+    if (outcome === "timeout") {
+      await fail({ stage: currentStage, category: "deadline_exceeded", retryable: true, detail: `pipeline exceeded ${PIPELINE_DEADLINE_MS / 1000}s` });
+    }
   }
 
   EdgeRuntime.waitUntil(runWithDeadline());

@@ -23,9 +23,15 @@ import type { CaddieAnalysis } from "../types";
 // Never set this BELOW the server's value, or Try again would be refused.
 const STALE_PROCESSING_MINUTES = 10;
 
-export function isStaleProcessing(analysis: Pick<CaddieAnalysis, "status" | "createdAt">): boolean {
+// Measured from the CURRENT attempt's start (attemptStartedAt, set by the
+// database on insert and on every Try again — migration 20261107140000),
+// not created_at: a retried row keeps its original created_at, so a retry
+// of an hour-old analysis would otherwise read as stale the moment it
+// started. Rows from before that column fall back to created_at.
+export function isStaleProcessing(analysis: Pick<CaddieAnalysis, "status" | "createdAt"> & { attemptStartedAt?: string }): boolean {
   if (analysis.status !== "processing") return false;
-  return Date.now() - new Date(analysis.createdAt).getTime() > STALE_PROCESSING_MINUTES * 60 * 1000;
+  const startedAt = analysis.attemptStartedAt ?? analysis.createdAt;
+  return Date.now() - new Date(startedAt).getTime() > STALE_PROCESSING_MINUTES * 60 * 1000;
 }
 
 // isStaleProcessing is a function of wall-clock time, not just of the

@@ -14,14 +14,17 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { sanitizeCheckpointCues, sanitizeWorkOnCheckpoint, withSanitizedCheckpointCues } from "../_shared/caddieCues.ts";
 import { withMeasuredCueCheck } from "../_shared/caddieVerdicts.ts";
+import { providerErrorHint, redactDetail, safeErrorName } from "../_shared/caddieReliability.ts";
 
 const GEMINI_MODEL = "gemini-3.6-flash";
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com";
 const COOLDOWN_SECONDS = 5; // just enough to absorb an accidental double-tap on the same analysis, not a real rate limit — this is a cheap text-only call, not worth the daily-analysis-limit machinery
 // The columns the app's Caddie list reads: everything except the pose
-// frames (roboflow_analysis_json, often megabytes).
+// frames (roboflow_analysis_json, often megabytes). Keep in sync with
+// LIST_COLUMNS in src/context/RealCaddieContext.tsx (the app replaces its
+// row with this one). The job columns need migration 20261107140000.
 const LIST_COLUMNS =
-  "id, owner_id, source_type, source_post_id, source_media_url, thumbnail_url, source_media_path, thumbnail_path, swing_type, status, analysis_summary, strengths, issues, recommendations, drills, analysis_json, camera_angle, score, model, error_message, shared_to_community, created_at, updated_at";
+  "id, owner_id, source_type, source_post_id, source_media_url, thumbnail_url, source_media_path, thumbnail_path, swing_type, status, analysis_summary, strengths, issues, recommendations, drills, analysis_json, camera_angle, score, model, error_message, shared_to_community, created_at, updated_at, attempt, attempt_started_at, stage, failure_stage, failure_category, finished_at";
 
 const SUPPORTED_LOCALES = new Set(["en", "zh-CN", "zh-TW", "es", "ko", "ja"]);
 const LOCALE_NAMES: Record<string, string> = {
@@ -208,9 +211,11 @@ Deno.serve(async (req: Request) => {
   // than the model's default (medium). If the API ever rejects the setting,
   // retry once without it rather than failing the translation.
   const geminiRequest = (thinking: boolean) =>
-    fetch(`${GEMINI_API_BASE}/v1beta/models/${GEMINI_MODEL}:generateContent?key=${geminiApiKey}`, {
+    // Key in the x-goog-api-key header, never the URL (a URL ends up in
+    // thrown fetch errors and so in logs).
+    fetch(`${GEMINI_API_BASE}/v1beta/models/${GEMINI_MODEL}:generateContent`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-goog-api-key": geminiApiKey },
       body: JSON.stringify({
         systemInstruction: {
           parts: [
@@ -233,12 +238,12 @@ Deno.serve(async (req: Request) => {
     let genRes = await geminiRequest(true);
     if (genRes.status === 400) {
       const errBody = await genRes.text().catch(() => "");
-      console.error("[translate-caddie-analysis] Gemini rejected minimal thinking; retrying without it.", { body: errBody.slice(0, 300) });
+      console.error("[translate-caddie-analysis] Gemini rejected minimal thinking; retrying without it.", { hint: providerErrorHint(errBody) });
       genRes = await geminiRequest(false);
     }
     if (!genRes.ok) {
       const errBody = await genRes.text().catch(() => "");
-      console.error("[translate-caddie-analysis] Gemini call failed.", { status: genRes.status, body: errBody.slice(0, 500) });
+      console.error("[translate-caddie-analysis] Gemini call failed.", { status: genRes.status, hint: providerErrorHint(errBody) });
       return jsonResponse({ error: "Caddie couldn't translate this analysis. Please try again." }, 502);
     }
     const genBody = await genRes.json();
@@ -303,13 +308,14 @@ Deno.serve(async (req: Request) => {
       .select(LIST_COLUMNS)
       .single();
     if (updateError || !updated) {
-      console.error("[translate-caddie-analysis] save failed.", { rowId: row.id, reason: updateError?.message });
+      console.error("[translate-caddie-analysis] save failed.", { rowId: row.id, reason: redactDetail(updateError?.message, 160) });
       return jsonResponse({ error: "Translated, but saving it failed. Please try again." }, 500);
     }
     devLog("translated", { id: row.id, locale: body.locale });
     return jsonResponse({ analysis: updated }, 200);
   } catch (err) {
-    console.error("[translate-caddie-analysis] threw.", err);
+    // Class name only — a fetch error's message embeds the request URL.
+    console.error("[translate-caddie-analysis] threw.", { error: safeErrorName(err) });
     return jsonResponse({ error: "Caddie couldn't translate this analysis. Please try again." }, 500);
   }
 });

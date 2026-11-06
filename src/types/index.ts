@@ -641,6 +641,14 @@ export interface CaddieAnalysis {
   score?: number;
   model?: string;
   errorMessage?: string; // safe, non-sensitive — present only when status is "failed"
+  // Job bookkeeping (migration 20261107140000; undefined on older rows and
+  // in demo). attempt: 1 = first run, +1 per Try again on this same row.
+  attempt?: number;
+  attemptStartedAt?: string;
+  stage?: string;
+  failureStage?: string;
+  failureCategory?: string;
+  finishedAt?: string;
   sharedToCommunity: boolean;
   createdAt: string;
   updatedAt: string;

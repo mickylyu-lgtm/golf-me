@@ -50,6 +50,45 @@ const FREEZE_MIN_DURATION_SECONDS = 0.5; // a stance held even briefly still cou
 const ACTIVE_WINDOW_BUFFER_SECONDS = 0.75; // padding kept on each side of the detected motion so a real backswing start / follow-through end is never clipped
 const MIN_ACTIVE_WINDOW_SECONDS = 1.5; // an address-to-follow-through swing rarely fits under this; a shorter "active" read is more likely bad detection than a real swing, so it isn't trusted
 
+// ffmpeg's stderr is NEVER returned to the caller or logged: for a phone
+// video it echoes the container metadata (QuickTime GPS location, device
+// make/model, creation time). A failure is reduced to one of these tokens
+// (also duplicated in api/trim-video.ts — Vercel's ESM build makes a shared
+// relative import between function files fragile); analyze-swing maps the
+// token + HTTP status to its failure category.
+export type FfmpegFailureToken = "decode_failed" | "no_video_stream" | "resources_exhausted" | "internal";
+
+export class FfmpegError extends Error {
+  readonly exitCode: number | null;
+  readonly signal: string | null;
+  // Kept only in memory for classifyFfmpegFailure(); never serialized.
+  readonly stderrTail: string;
+  constructor(exitCode: number | null, signal: string | null, stderrTail: string) {
+    super("ffmpeg failed");
+    this.name = "FfmpegError";
+    this.exitCode = exitCode;
+    this.signal = signal;
+    this.stderrTail = stderrTail;
+  }
+}
+
+export function classifyFfmpegFailure(err: unknown): { status: number; token: FfmpegFailureToken } {
+  if (!(err instanceof FfmpegError)) return { status: 500, token: "internal" };
+  const tail = err.stderrTail;
+  if (err.signal === "SIGKILL" || /Cannot allocate memory|ENOMEM|ENOSPC|No space left on device/i.test(tail)) {
+    return { status: 500, token: "resources_exhausted" };
+  }
+  if (/matches no streams|does not contain any stream|no video stream/i.test(tail)) return { status: 422, token: "no_video_stream" };
+  if (
+    /Invalid data found when processing input|moov atom not found|could not find codec parameters|Error while decoding|Invalid NAL|Unknown format|Decoder \(codec [^)]*\) not found|Could not open codec|Error opening input|Unsupported codec|Failed to open codec/i.test(
+      tail,
+    )
+  ) {
+    return { status: 422, token: "decode_failed" };
+  }
+  return { status: 500, token: "internal" };
+}
+
 function runFfmpeg(args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
     if (!ffmpegPath) return reject(new Error("ffmpeg-static did not resolve a binary path"));
@@ -57,11 +96,14 @@ function runFfmpeg(args: string[]): Promise<string> {
     let stderr = "";
     proc.stderr?.on("data", (chunk) => {
       stderr += chunk.toString();
+      // freezedetect parsing reads the whole log, so only a runaway one is
+      // cut (keeping its tail).
+      if (stderr.length > 2_000_000) stderr = stderr.slice(-1_000_000);
     });
     proc.on("error", reject);
-    proc.on("close", (code) => {
+    proc.on("close", (code, signal) => {
       if (code === 0) resolve(stderr);
-      else reject(new Error(`ffmpeg exited ${code}: ${stderr.slice(-1500)}`));
+      else reject(new FfmpegError(code, signal, stderr.slice(-4000)));
     });
   });
 }
@@ -225,8 +267,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   let workDir: string | undefined;
   try {
-    const videoRes = await fetch(videoUrl);
-    if (!videoRes.ok) return res.status(502).json({ error: `Failed to fetch source video (${videoRes.status})` });
+    let videoRes: Response;
+    try {
+      videoRes = await fetch(videoUrl);
+    } catch {
+      // The thrown error's message embeds the signed URL: token only.
+      return res.status(502).json({ error: "source_fetch_failed" });
+    }
+    if (!videoRes.ok) return res.status(502).json({ error: "source_fetch_failed", sourceStatus: videoRes.status });
     const videoBytes = new Uint8Array(await videoRes.arrayBuffer());
 
     workDir = await mkdtemp(path.join(tmpdir(), "swing-frames-"));
@@ -242,7 +290,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       try {
         activeWindow = await detectActiveWindow(inputPath);
       } catch (err) {
-        console.error("[extract-frames] active-window detection failed, analyzing the whole clip", err);
+        console.error("[extract-frames] active-window detection failed, analyzing the whole clip", { error: classifyFfmpegFailure(err).token });
       }
     }
 
@@ -301,8 +349,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       activeWindowTrim: activeWindow ? { startSeconds: activeWindow.startSeconds, endSeconds: activeWindow.endSeconds } : null,
     });
   } catch (err) {
-    console.error("[extract-frames] failed", err);
-    return res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    // A classified token only — never ffmpeg's stderr (video metadata) or a
+    // thrown message (may embed the signed URL).
+    const { status, token } = classifyFfmpegFailure(err);
+    console.error("[extract-frames] failed", {
+      error: token,
+      exitCode: err instanceof FfmpegError ? err.exitCode : undefined,
+      signal: err instanceof FfmpegError ? err.signal : undefined,
+      errorName: err instanceof Error ? err.name : typeof err,
+    });
+    return res.status(status).json({ error: token });
   } finally {
     if (workDir) await rm(workDir, { recursive: true, force: true }).catch(() => {});
   }

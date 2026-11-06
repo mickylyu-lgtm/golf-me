@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Clock, Globe, Sparkles, Video } from "lucide-react";
+import { Clock, Globe, Sparkles, Trash2, Video } from "lucide-react";
+import { DeleteAnalysisDialog } from "../components/caddie/DeleteAnalysisDialog";
+import type { CaddieAnalysis } from "../types";
 import { useData } from "../context/DataContext";
 import { useRealCaddie } from "../context/RealCaddieContext";
 import { useLocale, LOCALES } from "../i18n/LocaleContext";
@@ -9,7 +11,7 @@ import { Button } from "../components/ui/Button";
 import { CLICKABLE_CARD_CLASS } from "../components/ui/cardStyles";
 import { formatShortDate } from "../lib/format";
 import { isStaleProcessing, usePeriodicRerender } from "../lib/caddieAnalysis";
-import { FAILURE_SHORT_KEYS, analysisFailure } from "../lib/caddieFailure";
+import { FAILURE_KIND_KEYS, analysisFailure } from "../lib/caddieFailure";
 import { clubLabel } from "../lib/clubLabel";
 import { useAuth } from "../context/AuthContext";
 import { claimAutoTranslateAttempt, feedbackSampleText, isTooSoonError, needsAutoTranslate, releaseAutoTranslateAttempt } from "../lib/caddieLanguage";
@@ -63,6 +65,8 @@ export function Caddie() {
   const feedbackLanguage = useCaddieFeedbackLanguage();
   const navigate = useNavigate();
   const [visibleCount, setVisibleCount] = useState(loadHistoryCount);
+  // The analysis whose delete confirm sheet is open.
+  const [deleting, setDeleting] = useState<CaddieAnalysis | null>(null);
 
   const sorted = useMemo(() => [...caddieAnalyses].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [caddieAnalyses]);
   const visible = sorted.slice(0, visibleCount);
@@ -168,11 +172,14 @@ export function Caddie() {
           <div className="flex flex-col gap-3">
             {visible.map((a) => {
               const issueCount = a.details?.workOn.length ?? a.issues.length;
+              // A live job can't be deleted (its worker is still running);
+              // failed, complete and dead ones can.
+              const deletable = a.status !== "processing" || isStaleProcessing(a);
               return (
+                <div key={a.id} className={`flex w-full items-center ${CLICKABLE_CARD_CLASS}`}>
                 <button
-                  key={a.id}
                   onClick={() => navigate(`/caddie/${a.id}`)}
-                  className={`flex w-full items-center gap-3 p-4 text-left ${CLICKABLE_CARD_CLASS}`}
+                  className="flex min-w-0 flex-1 items-center gap-3 p-4 text-left"
                 >
                   {/* Only when a real captured frame already exists (see
                       CaddieAnalysis.thumbnailUrl) — never generated here,
@@ -200,7 +207,7 @@ export function Caddie() {
                     )
                   ) : a.status === "failed" || isStaleProcessing(a) ? (
                     <span className="shrink-0 text-xs font-semibold text-red-500">
-                      {t(FAILURE_SHORT_KEYS[analysisFailure(a.errorMessage, isStaleProcessing(a)).code])}
+                      {t(FAILURE_KIND_KEYS[analysisFailure(a.errorMessage, isStaleProcessing(a), a.failureCategory, a.attempt).kind].short)}
                     </span>
                   ) : (
                     <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-slate-400">
@@ -208,6 +215,16 @@ export function Caddie() {
                     </span>
                   )}
                 </button>
+                {deletable && (
+                  <button
+                    onClick={() => setDeleting(a)}
+                    aria-label={t("caddie.delete.action")}
+                    className="-ml-2 mr-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-slate-400 transition-colors duration-150 hover:text-red-600"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                )}
+                </div>
               );
             })}
             {hasMore && (
@@ -227,6 +244,7 @@ export function Caddie() {
           </div>
         )}
       </section>
+      {deleting && <DeleteAnalysisDialog analysis={deleting} onClose={() => setDeleting(null)} />}
     </div>
   );
 }

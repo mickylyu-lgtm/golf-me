@@ -270,6 +270,10 @@ export function AnalyzeSwing() {
     // Private uploads made by this attempt — removed again only if the
     // server definitively refused to create the analysis (see below).
     const uploadedPaths: string[] = [];
+    // Which half failed decides the message: the video upload (a storage
+    // error's raw browser text, e.g. "Load failed", is never shown) or the
+    // analyze-swing call (its error is already localized copy).
+    let phase: "upload" | "analyze" = "upload";
     try {
       const rawExt = (videoFile.name.split(".").pop() ?? "").toLowerCase();
       const ext = /^[a-z0-9]{1,8}$/.test(rawExt) ? rawExt : "mp4";
@@ -291,6 +295,7 @@ export function AnalyzeSwing() {
         console.error("GolfMe: failed to capture a video thumbnail.", thumbErr);
       }
 
+      phase = "analyze";
       const created = await createCaddieAnalysis({
         sourceType: "direct_upload",
         sourceMediaPath: path,
@@ -309,8 +314,13 @@ export function AnalyzeSwing() {
       // leaving private orphans (e.g. hitting the daily limit). Any other
       // failure (network drop, gateway timeout) is ambiguous: the row may
       // exist server-side, so the files are kept.
-      // A coded refusal (kill switch, 503) also returns before any insert.
-      const definitelyNoRow = err instanceof CaddieRequestError && ((err.status !== undefined && [400, 401, 403, 429].includes(err.status)) || !!err.code);
+      // Every coded refusal (kill switch, limits, cooldown, ...) also returns
+      // before any insert — except "network", which means no answer at all,
+      // so the row may exist.
+      const definitelyNoRow =
+        err instanceof CaddieRequestError &&
+        err.code !== "network" &&
+        ((err.status !== undefined && [400, 401, 403, 429].includes(err.status)) || !!err.code);
       if (definitelyNoRow && uploadedPaths.length > 0) {
         void supabase.storage
           .from(CADDIE_MEDIA_BUCKET)
@@ -319,7 +329,11 @@ export function AnalyzeSwing() {
             if (error) console.error("GolfMe: couldn't remove an unused Caddie upload.", error);
           });
       }
-      showToast(caddieErrorText(err, t), "warning");
+      if (phase === "upload") console.error("GolfMe: Caddie video upload failed.", err);
+      // In the Caddie language (this screen is inside CaddieLocaleScope):
+      // the upload half gets its own line, an analyze-swing refusal is read
+      // by its stable code (caddieErrorText), never the server's English.
+      showToast(phase === "upload" ? t("caddie.error.uploadFailed") : caddieErrorText(err, t), "warning");
       setSubmitting(false);
     }
   }

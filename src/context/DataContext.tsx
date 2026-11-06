@@ -325,6 +325,10 @@ interface DataContextValue {
   caddieAnalyses: CaddieAnalysis[];
   getCaddieAnalysis: (id: string) => CaddieAnalysis | undefined;
   createCaddieAnalysis: (input: CreateAnalysisInput) => Promise<CaddieAnalysis>;
+  /** Try again on a failed analysis: re-runs the SAME row server-side (no new record). Demo: no-op that returns it unchanged. */
+  retryCaddieAnalysis: (analysis: CaddieAnalysis) => Promise<CaddieAnalysis>;
+  /** Deletes an analysis (not a live one) and its private files; never refunds the allowance. Demo: removes the fixture locally. */
+  deleteCaddieAnalysis: (id: string) => Promise<void>;
   markCaddieAnalysisShared: (id: string) => Promise<void>;
   translateCaddieAnalysis: (id: string, locale: string) => Promise<void>;
   // Lives here (DataProvider is mounted for the whole app session, unlike
@@ -1879,6 +1883,26 @@ export function DataProvider({ children }: { children: ReactNode }) {
     },
     [auth.isDemo, currentUser.id, realCaddie],
   );
+
+  const retryCaddieAnalysis = useCallback(
+    async (analysis: CaddieAnalysis): Promise<CaddieAnalysis> => {
+      // Demo analyses never fail (fixtures only), so there's nothing to re-run.
+      if (auth.isDemo) return analysis;
+      return realCaddie.retryAnalysis(analysis);
+    },
+    [auth.isDemo, realCaddie],
+  );
+
+  const deleteCaddieAnalysis = useCallback(
+    async (id: string): Promise<void> => {
+      if (auth.isDemo) {
+        setDemoCaddieAnalyses((prev) => prev.filter((a) => a.id !== id));
+        return;
+      }
+      await realCaddie.deleteAnalysis(id);
+    },
+    [auth.isDemo, realCaddie],
+  );
   const markCaddieAnalysisShared = useCallback(
     async (id: string) => {
       if (auth.isDemo) {
@@ -2058,6 +2082,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       caddieAnalyses,
       getCaddieAnalysis,
       createCaddieAnalysis,
+      retryCaddieAnalysis,
+      deleteCaddieAnalysis,
       markCaddieAnalysisShared,
       translateCaddieAnalysis,
       draftSwingVideo,
@@ -2173,6 +2199,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       caddieAnalyses,
       getCaddieAnalysis,
       createCaddieAnalysis,
+      retryCaddieAnalysis,
+      deleteCaddieAnalysis,
       markCaddieAnalysisShared,
       translateCaddieAnalysis,
       draftSwingVideo,

@@ -37,7 +37,8 @@ import { postCategoryLabel } from "../../lib/enumLabels";
 import { areaForCourse } from "../../lib/courses";
 import { enterNativeVideoFullscreen, isVideoInNativeFullscreen } from "../../lib/video";
 import { isStaleProcessing, usePeriodicRerender } from "../../lib/caddieAnalysis";
-import { FAILURE_SHORT_KEYS, analysisFailure } from "../../lib/caddieFailure";
+import { FAILURE_KIND_KEYS, analysisFailure } from "../../lib/caddieFailure";
+import { caddieErrorText } from "../../lib/caddieErrorText";
 import { barsCoverStyle, readVideoFrame, thumbIsDark, thumbResults, useBlurredBackdrop, type BlurredBackdrop, type FrameReadResult } from "../../lib/blurredBackdrop";
 import { barsDebugEnabled, buildTag } from "../../lib/barsDebug";
 import { courseFindRoundsSearch } from "../../lib/roundSearchParams";
@@ -87,6 +88,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
     blockUser,
     caddieAnalyses,
     createCaddieAnalysis,
+    retryCaddieAnalysis,
   } = useData();
   const { showToast } = useToast();
   const { t, locale } = useLocale();
@@ -330,25 +332,36 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
   // the early return.)
   const caddieFailed =
     existingCaddieAnalysis?.status === "failed" || (!!existingCaddieAnalysis && isStaleProcessing(existingCaddieAnalysis));
+  const existingCaddieFailure = analysisFailure(
+    existingCaddieAnalysis?.errorMessage,
+    !!existingCaddieAnalysis && isStaleProcessing(existingCaddieAnalysis),
+    existingCaddieAnalysis?.failureCategory,
+    existingCaddieAnalysis?.attempt,
+  );
 
   async function askCaddie(e: React.MouseEvent) {
     stop(e);
     if (askingCaddie || !post.videoUrl) return;
     setAskingCaddie(true);
     try {
-      const created = await createCaddieAnalysis({
-        sourceType: "community_post",
-        sourcePostId: post.id,
-        sourceMediaUrl: post.videoUrl,
-        thumbnailUrl: post.videoThumbnailUrl,
-      });
+      // Try again re-runs the failed analysis row itself (no new record).
+      const created =
+        caddieFailed && existingCaddieAnalysis
+          ? await retryCaddieAnalysis(existingCaddieAnalysis)
+          : await createCaddieAnalysis({
+              sourceType: "community_post",
+              sourcePostId: post.id,
+              sourceMediaUrl: post.videoUrl,
+              thumbnailUrl: post.videoThumbnailUrl,
+            });
       if (created.status === "complete") navigate(`/caddie/${created.id}`);
       // 'processing'/'failed' just falls through — the row now exists in
       // caddieAnalyses (realtime already delivered it), so the render below
       // picks up existingCaddieAnalysis on the next render and shows the
       // right state without a second navigation.
     } catch (err) {
-      showToast(err instanceof Error ? err.message : t("caddie.askCaddieError"), "warning");
+      // By stable code / known message, never the server's raw English.
+      showToast(caddieErrorText(err, t), "warning");
     } finally {
       setAskingCaddie(false);
     }
@@ -552,12 +565,12 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
               </button>
             ) : caddieFailed && !askingCaddie ? (
               <div className="flex items-center justify-between gap-2 rounded-xl border border-red-100 bg-red-50/50 px-3.5 py-2.5" onClick={stop}>
-                <span className="text-xs font-semibold text-red-700">
-                  {t(FAILURE_SHORT_KEYS[analysisFailure(existingCaddieAnalysis?.errorMessage, !!existingCaddieAnalysis && isStaleProcessing(existingCaddieAnalysis)).code])}
-                </span>
-                <Button variant="outline" size="sm" onClick={askCaddie} disabled={askingCaddie}>
-                  {t("caddie.tryAgain")}
-                </Button>
+                <span className="text-xs font-semibold text-red-700">{t(FAILURE_KIND_KEYS[existingCaddieFailure.kind].short)}</span>
+                {existingCaddieFailure.canRetry && (
+                  <Button variant="outline" size="sm" onClick={askCaddie} disabled={askingCaddie}>
+                    {t("caddie.tryAgain")}
+                  </Button>
+                )}
               </div>
             ) : existingCaddieAnalysis?.status === "processing" || askingCaddie ? (
               <div className="flex items-center gap-2 rounded-xl border border-fairway-100 bg-fairway-50/50 px-3.5 py-2.5" onClick={stop}>

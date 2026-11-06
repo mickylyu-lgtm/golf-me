@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
-import { AlertCircle, ArrowLeft, ArrowUpRight, Check, Languages, Loader2, Share2 } from "lucide-react";
+import { AlertCircle, ArrowLeft, ArrowUpRight, Check, Languages, Loader2, Share2, Trash2 } from "lucide-react";
+import { DeleteAnalysisDialog } from "../components/caddie/DeleteAnalysisDialog";
 import { CaddieNavIcon } from "../components/icons/CaddieNavIcon";
 import { CaddieThinking } from "../components/caddie/CaddieThinking";
 import { CaddieSwingReplay } from "../components/caddie/CaddieSwingReplay";
@@ -22,7 +23,7 @@ import { caddieErrorText } from "../lib/caddieErrorText";
 import { demoLegacyFeedback } from "../data/caddie";
 import { isExplicitCaddieLocale, isTranslationRunning, queueAutoTranslation, queueTranslation, whenTranslationSettled } from "../lib/caddieAutoTranslate";
 import { useCaddieFeedbackLanguage } from "../lib/useCaddieFeedbackLanguage";
-import { FAILURE_BODY_KEYS, FAILURE_TITLE_KEYS, analysisFailure } from "../lib/caddieFailure";
+import { FAILURE_KIND_KEYS, analysisFailure } from "../lib/caddieFailure";
 import type { CaddieConfidence, CaddieCameraAngle, CaddieScoreCriterionKey } from "../types";
 import type { CreatePostSwingPrefill } from "./CreatePost";
 import type { TranslationKey } from "../i18n/locales/en";
@@ -64,7 +65,7 @@ const CONFIDENCE_TONE: Record<CaddieConfidence, "fairway" | "outline" | "rose"> 
 // is the "From Community Post" breadcrumb.
 export function CaddieAnalysisDetail() {
   const { analysisId } = useParams<{ analysisId: string }>();
-  const { getCaddieAnalysis, getPost, createCaddieAnalysis, markCaddieAnalysisShared, translateCaddieAnalysis, createPost, notifications, markNotificationRead } =
+  const { getCaddieAnalysis, getPost, retryCaddieAnalysis, markCaddieAnalysisShared, translateCaddieAnalysis, createPost, notifications, markNotificationRead } =
     useData();
   const { hasLoaded: caddieHasLoaded, loadPoseData, refreshMediaUrls } = useRealCaddie();
   const { isDemo } = useAuth();
@@ -76,6 +77,7 @@ export function CaddieAnalysisDetail() {
   const { showToast } = useToast();
   const navigate = useNavigate();
   const [retrying, setRetrying] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [sharingFeedback, setSharingFeedback] = useState(false);
   // Analysis ids whose feedback post already went out on this screen, even
   // if marking shared_to_community then failed: never post them twice.
@@ -200,8 +202,8 @@ export function CaddieAnalysisDetail() {
   const details = analysis.details;
   // Flat legacy feedback; the demo's fixture rows read in the screen's language.
   const legacy = demoLegacyFeedback(analysis, t);
-  const failure = analysisFailure(analysis.errorMessage, isStaleProcessing(analysis));
-  const failureBodyKey = FAILURE_BODY_KEYS[failure.code];
+  const failure = analysisFailure(analysis.errorMessage, isStaleProcessing(analysis), analysis.failureCategory, analysis.attempt);
+  const failureKeys = FAILURE_KIND_KEYS[failure.kind];
 
   function shareToCommunity() {
     if (!analysis) return;
@@ -232,21 +234,11 @@ export function CaddieAnalysisDetail() {
     if (!analysis || retrying) return;
     setRetrying(true);
     try {
-      const created = await createCaddieAnalysis({
-        sourceType: analysis.sourceType,
-        sourcePostId: analysis.sourcePostId,
-        // Never re-send a signed URL: a private upload retries by path.
-        ...(analysis.sourceMediaPath
-          ? { sourceMediaPath: analysis.sourceMediaPath, thumbnailPath: analysis.thumbnailPath }
-          : { sourceMediaUrl: analysis.sourceMediaUrl, thumbnailUrl: analysis.thumbnailUrl }),
-        swingType: analysis.swingType,
-        // The failed row still points at the untrimmed original; resend the
-        // window that attempt analyzed (carried in error_message, see
-        // caddieFailure.ts) so Try again doesn't analyze the whole clip.
-        startSeconds: failure.window?.startSeconds,
-        endSeconds: failure.window?.endSeconds,
-      });
-      navigate(`/caddie/${created.id}`, { replace: true });
+      // Re-runs THIS row server-side (same id, attempt + 1, same trim
+      // window, no allowance charge). Only an analyze-swing build from
+      // before Try-again-in-place hands back a different (new) row.
+      const retried = await retryCaddieAnalysis(analysis);
+      if (retried.id !== analysis.id) navigate(`/caddie/${retried.id}`, { replace: true });
     } catch (err) {
       showToast(caddieErrorText(err, t), "warning");
     } finally {
@@ -487,11 +479,19 @@ export function CaddieAnalysisDetail() {
         </div>
       ) : analysis.status === "failed" || isStaleProcessing(analysis) ? (
         <div className="flex flex-col items-start gap-2.5 rounded-2xl border border-red-100 bg-red-50/60 px-4 py-3.5">
-          <p className="text-sm font-semibold text-red-700">{t(FAILURE_TITLE_KEYS[failure.code])}</p>
-          {failureBodyKey && <p className="text-sm text-red-700/90">{t(failureBodyKey)}</p>}
-          <Button variant="outline" size="sm" onClick={retry} disabled={retrying} icon={retrying ? <Loader2 size={14} className="animate-spin" /> : undefined}>
-            {t("caddie.tryAgain")}
-          </Button>
+          <p className="text-sm font-semibold text-red-700">{t(failureKeys.title)}</p>
+          {failure.canRetry ? (
+            failureKeys.body && <p className="text-sm text-red-700/90">{t(failureKeys.body)}</p>
+          ) : (
+            <p className="text-sm text-red-700/90">{t("caddie.error.retryCap")}</p>
+          )}
+          {/* Only a delivered analysis uses an allowance slot (20261107140000). */}
+          {!isDemo && <p className="text-xs text-red-700/70">{t("caddie.failure.noCharge")}</p>}
+          {failure.canRetry && (
+            <Button variant="outline" size="sm" onClick={retry} disabled={retrying} icon={retrying ? <Loader2 size={14} className="animate-spin" /> : undefined}>
+              {t("caddie.tryAgain")}
+            </Button>
+          )}
         </div>
       ) : (
         <div className="flex flex-col gap-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-3.5">
@@ -515,6 +515,19 @@ export function CaddieAnalysisDetail() {
         <Button variant="outline" icon={<Share2 size={15} />} onClick={shareToCommunity}>
           {t("caddie.shareToCommunity")}
         </Button>
+      )}
+
+      {/* Failed, complete or dead analyses only: a live job is still running server-side. */}
+      {(analysis.status !== "processing" || isStaleProcessing(analysis)) && (
+        <button
+          onClick={() => setDeleteOpen(true)}
+          className="flex min-h-11 items-center justify-center gap-1.5 self-center px-3 text-sm font-semibold text-red-600 transition-colors duration-150 hover:text-red-700"
+        >
+          <Trash2 size={15} /> {t("caddie.delete.action")}
+        </button>
+      )}
+      {deleteOpen && (
+        <DeleteAnalysisDialog analysis={analysis} onClose={() => setDeleteOpen(false)} onDeleted={() => navigate("/caddie", { replace: true })} />
       )}
     </div>
   );

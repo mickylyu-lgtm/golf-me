@@ -9,7 +9,8 @@
 // DEVELOPMENT_STATUS.md); a coded refusal is already read by code first.
 // No React imports, so tests/caddieErrorText.test.ts runs under node.
 import type { TranslationKey } from "../i18n/locales/en";
-import { FAILURE_BODY_KEYS, parseCaddieFailure } from "./caddieFailure.ts";
+import { FAILURE_BODY_KEYS, parseCaddieFailure, requestErrorKey } from "./caddieFailure.ts";
+import { DAILY_LIMIT_PER_USER } from "../../supabase/functions/_shared/caddieReliability.ts";
 
 type T = (key: TranslationKey, vars?: Record<string, string | number>) => string;
 
@@ -26,6 +27,13 @@ const MESSAGE_KEYS: Record<string, TranslationKey> = {
   "Ask Caddie is only available on your own posts.": "caddie.error.ownPostsOnly",
   "This swing video can't be analyzed.": "caddie.error.videoUnusable",
   "Please wait a moment before asking Caddie again.": "caddie.error.tooSoon",
+  // analyze-swing / migration 20261107140000 triggers (also sent with a code)
+  "Caddie has tried this swing several times. Please film a new clip.": "caddie.error.retryCap",
+  "Caddie has had a lot of attempts today. Please try again tomorrow.": "caddie.error.attemptCeiling",
+  "This analysis is already running.": "caddie.error.alreadyRunning",
+  "This analysis can't be restarted that way.": "caddie.error.alreadyRunning",
+  // delete_caddie_analysis()
+  "Caddie is still working on this swing.": "caddie.error.deleteRunning",
   // translate-caddie-analysis
   "Translation isn't configured yet. Please try again later.": "caddie.error.translateFailed",
   "Analysis not found.": "caddie.error.analysisNotFound",
@@ -44,6 +52,9 @@ export function caddieErrorText(err: unknown, t: T, fallback: TranslationKey = "
   if (typeof err !== "object" || err === null) return t(fallback);
   const { code, message, name } = err as { code?: unknown; message?: unknown; name?: unknown };
   if (typeof code === "string" && code) {
+    // analyze-swing's stable refusal codes (2026-11-06) come first.
+    const requestKey = requestErrorKey(code);
+    if (requestKey) return t(requestKey, { limit: DAILY_LIMIT_PER_USER });
     const bodyKey = FAILURE_BODY_KEYS[parseCaddieFailure(`code:${code}`).code];
     if (bodyKey) return t(bodyKey);
   }

@@ -205,6 +205,30 @@ interface CaddieAnalysisRow {
   created_at: string;
 }
 
+// admin_caddie_failure_stats() / admin_list_caddie_failures() (migration
+// 20261107140000): classified categories and stages only — user ids, no
+// names/emails, URLs or paths; detail is already redacted server-side.
+interface CaddieFailureStatRow {
+  failure_category: string;
+  failure_stage: string;
+  last_24h: number;
+  last_7d: number;
+  total: number;
+}
+
+interface CaddieFailureRow {
+  id: string;
+  owner_id: string;
+  status: string;
+  attempt: number;
+  failure_stage: string | null;
+  failure_category: string | null;
+  provider_http_status: number | null;
+  created_at: string;
+  finished_at: string | null;
+  detail: string | null;
+}
+
 const CADDIE_STATUS_STYLES: Record<string, string> = {
   complete: "bg-fairway-50 text-fairway-700",
   processing: "bg-sky-50 text-sky-700",
@@ -267,6 +291,8 @@ export function AdminDashboard() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [caddieStats, setCaddieStats] = useState<CaddieStats | null>(null);
   const [caddieAnalyses, setCaddieAnalyses] = useState<CaddieAnalysisRow[]>([]);
+  const [caddieFailureStats, setCaddieFailureStats] = useState<CaddieFailureStatRow[]>([]);
+  const [caddieFailures, setCaddieFailures] = useState<CaddieFailureRow[]>([]);
   const [overview, setOverview] = useState<PlatformOverview | null>(null);
   const [golfCallStats, setGolfCallStats] = useState<GolfCallStats | null>(null);
   const [communityStats, setCommunityStats] = useState<CommunityStats | null>(null);
@@ -293,6 +319,8 @@ export function AdminDashboard() {
       { data: ms, error: msErr },
       { data: ps, error: psErr },
       { data: rp, error: rpErr },
+      { data: cfs, error: cfsErr },
+      { data: cfl, error: cflErr },
     ] = await Promise.all([
       supabase.rpc("admin_list_users"),
       supabase.rpc("admin_caddie_stats"),
@@ -304,7 +332,13 @@ export function AdminDashboard() {
       supabase.rpc("admin_messaging_stats"),
       supabase.rpc("admin_push_stats"),
       supabase.rpc("admin_list_reports", { p_limit: 100 }),
+      supabase.rpc("admin_caddie_failure_stats"),
+      supabase.rpc("admin_list_caddie_failures", { p_limit: 30 }),
     ]);
+    if (cfsErr) console.error("GolfMe: admin_caddie_failure_stats failed.", cfsErr);
+    if (cflErr) console.error("GolfMe: admin_list_caddie_failures failed.", cflErr);
+    setCaddieFailureStats((cfs ?? []) as CaddieFailureStatRow[]);
+    setCaddieFailures((cfl ?? []) as CaddieFailureRow[]);
     if (uErr) console.error("GolfMe: admin_list_users failed.", uErr);
     if (csErr) console.error("GolfMe: admin_caddie_stats failed.", csErr);
     if (caErr) console.error("GolfMe: admin_list_caddie_analyses failed.", caErr);
@@ -612,6 +646,57 @@ export function AdminDashboard() {
               </div>
             </div>
           </>
+        )}
+
+        {caddieFailureStats.length > 0 && (
+          <div>
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Failures by category and stage</p>
+            <div className="overflow-hidden rounded-xl border border-slate-100 bg-white text-xs">
+              <div className="grid grid-cols-[1fr_1fr_3rem_3rem_3rem] gap-2 border-b border-slate-100 bg-slate-50 px-3 py-1.5 font-semibold text-slate-500">
+                <span>Category</span>
+                <span>Stage</span>
+                <span className="text-right">24h</span>
+                <span className="text-right">7d</span>
+                <span className="text-right">All</span>
+              </div>
+              {caddieFailureStats.map((r) => (
+                <div key={`${r.failure_category}:${r.failure_stage}`} className="grid grid-cols-[1fr_1fr_3rem_3rem_3rem] gap-2 border-b border-slate-50 px-3 py-1.5 text-slate-700 last:border-b-0">
+                  <span className="min-w-0 truncate">{r.failure_category}</span>
+                  <span className="min-w-0 truncate text-slate-500">{r.failure_stage}</span>
+                  <span className="text-right font-semibold">{r.last_24h}</span>
+                  <span className="text-right">{r.last_7d}</span>
+                  <span className="text-right text-slate-500">{r.total}</span>
+                </div>
+              ))}
+            </div>
+            <p className="mt-1 text-[11px] text-slate-400">“unclassified” = failed before categories existed; “stuck_processing” = worker died, not yet swept.</p>
+          </div>
+        )}
+
+        {caddieFailures.length > 0 && (
+          <div>
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Recent failures</p>
+            <div className="flex flex-col gap-1.5">
+              {caddieFailures.map((f) => (
+                <div key={f.id} className="rounded-xl border border-slate-100 bg-white px-3 py-2 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="min-w-0 truncate font-semibold text-slate-800">
+                      {f.failure_category ?? (f.status === "processing" ? "stuck_processing" : "unclassified")}
+                      <span className="font-normal text-slate-500"> @ {f.failure_stage ?? "—"}</span>
+                    </span>
+                    <span className="shrink-0 text-slate-500">
+                      try {f.attempt}
+                      {f.provider_http_status ? ` · HTTP ${f.provider_http_status}` : ""}
+                    </span>
+                  </div>
+                  <p className="truncate text-[11px] text-slate-400">
+                    {fmtDateTime(f.finished_at ?? f.created_at)} · user {f.owner_id.slice(0, 8)}
+                    {f.detail ? ` · ${f.detail}` : ""}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
         {caddieAnalyses.length === 0 ? (
