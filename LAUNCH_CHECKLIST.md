@@ -420,11 +420,16 @@ Thanks for playing with GolfMe. See you on the course!
 
 - **App Privacy label: no new selections needed.** Already declared: Photos or Videos (linked, App Functionality) covers chat photos. Audio Data (linked, App Functionality) covers voice messages. Coarse Location covers the map area. Product Interaction stays as it is. Open App Privacy and confirm that "Photos or Videos" and "Audio Data" are both still ticked and **linked to the user**. If "Audio Data" was ever left out, add it now for voice messages (Collected, Linked, not Tracking, App Functionality).
 - **PrivacyInfo.xcprivacy:** none in the app target. The app's own Swift code uses no required-reason API, and Capacitor ships its own manifest. Only add one if App Store Connect emails an ITMS-91053 warning after the upload.
-- **Privacy Policy (golfme.app/privacy), recommended before submitting 2.4.** This is legal copy, so it isn't edited in this branch.
-  1. Under "Content you create": "photos and voice messages you send in direct messages and round chats (visible only to the people in that chat)".
-  2. A new provider bullet: "**Map and course imagery**: OpenFreeMap/OpenStreetMap map tiles, USGS aerial imagery, Wikimedia Commons photos and the Overpass API (course layouts). When you view a map or course, your device requests images for that area from them; no account information is sent." If `GOOGLE_PLACES_API_KEY` is set for `course-photos`, add "Google Places (course photos; only course names and locations are sent)". The same goes for MapTiler/Mapbox if their keys are set.
-  3. "sign-in links" → "sign-in codes" (How we use it; Resend bullet).
-  4. Consider dropping `maps.mail.ru` from the Overpass mirrors (VK, Russia; it sees the viewer's IP), or name it in the policy.
+- **Privacy Policy (golfme.app/privacy), recommended before submitting 2.4. `[~]` written and backed by code on branch `privacy-promises` (2026-11-06), not merged or deployed.** Goes live with the web deploy; the server promises need the SQL + function deploys below.
+  1. `[x]` (in the branch) Chat photos and voice messages: own item (re-encoded on device, EXIF/GPS removed, private to the chat, unsend deletes the file, admins see a reported chat's media).
+  2. `[x]` (in the branch) Course maps and imagery provider bullet (OpenFreeMap/OSM, USGS/NAIP, Wikimedia, Overpass via our server, Google Places if enabled).
+  3. `[x]` (in the branch) Sign-in codes (Apple, Google, 6-digit code, reviewer password).
+  4. `[x]` (in the branch) `maps.mail.ru` dropped from `course-photos` too (the browser already only used overpass-api.de). Needs a `course-photos` redeploy.
+  5. `[x]` (in the branch) "Unsent text copies kept up to 90 days" is now enforced: migration `20261107240000_privacy_retention_jobs` (pg_cron, daily) deletes copies 90 days after the unsend unless an open report holds them (kept until the report is closed). Not applied.
+  6. `[x]` (in the branch) "Unsent photo / voice file is deleted" has a server backstop: the same migration lists chat-media files no message row points at (older than 24 h) and the new `chat-media-sweep` Edge Function (hourly, pg_cron + pg_net) removes them. Not applied / not deployed.
+  7. `[x]` (in the branch) Gemini wording: "we ask Google to delete it right after the analysis" (analyze-swing fires a DELETE; it can't confirm Google's side).
+  8. `[x]` (in the branch) Verified Golfer badge: how it is derived (confirmed email or Apple/Google sign-in, profile photo, 1 completed round with another golfer), others see only the badge, no phone number collected. Matches `20261107230000_verified_golfer_derived` (separate branch); publish together with or after that migration.
+  Deploy order: `supabase functions deploy chat-media-sweep --no-verify-jwt` → paste `privacy-purge-apply.sql` (after `20261107180000_chat_voice`; check file → true) → `supabase functions deploy course-photos` → web deploy (the policy text). Device check: none (server jobs; watch `cron.job_run_details` and the `chat-media-sweep` logs the next day).
 
 ## 11. MARKETPLACE SEEDING (NYC) — no fake users or activity in production
 | Status | Item | Notes |
