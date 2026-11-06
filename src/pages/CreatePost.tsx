@@ -24,6 +24,7 @@ import type { DraftMediaItem } from "../lib/communityPostDraft";
 import { isObjectionableContentError } from "../lib/objectionableContent";
 import { goBack } from "../lib/goBack";
 import { tapHaptic } from "../lib/tapFeedback";
+import { isInMemoryPick, pickMedia, pickMediaFiles } from "../lib/mediaPicker";
 
 type Attachment = "none" | "photo" | "course" | "round" | "swing";
 
@@ -78,6 +79,8 @@ export function CreatePost() {
   );
   const [mediaItems, setMediaItems] = useState<DraftMediaItem[]>(draft?.mediaItems ?? []);
   const [mediaUploading, setMediaUploading] = useState(false);
+  // A native video pick (one-tap picker) being read into the page.
+  const [readingPick, setReadingPick] = useState(false);
   // Never restored from the draft — a File can't survive localStorage's
   // JSON round trip (see communityPostDraft.ts). A golfer resuming a swing
   // Post draft re-picks the video; everything else about the draft is
@@ -253,6 +256,30 @@ export function CreatePost() {
   function handleFile(e: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     e.target.value = "";
+    attachFiles(files);
+  }
+
+  // Photos and videos, several at once: in the native app (2.5+) the system
+  // picker with up to the remaining slots, in selection order; else the
+  // multi-select file input. Either way they land in attachFiles.
+  function selectMedia() {
+    const remainingSlots = MAX_POST_MEDIA_ITEMS - mediaItems.length;
+    if (remainingSlots <= 0) {
+      showToast(`You can attach up to ${MAX_POST_MEDIA_ITEMS} photos/videos per post.`, "warning");
+      return;
+    }
+    void pickMediaFiles({
+      kinds: ["image", "video"],
+      limit: remainingSlots,
+      openFileInput: () => fileInputRef.current?.click(),
+      onPicked: attachFiles,
+      onLoading: setReadingPick,
+      maxVideoBytes: MAX_SWING_VIDEO_BYTES,
+      onTooLarge: () => showToast("A video was too large — skipped.", "warning"),
+    });
+  }
+
+  function attachFiles(files: File[]) {
     if (files.length === 0) return;
     const remainingSlots = MAX_POST_MEDIA_ITEMS - mediaItems.length;
     if (remainingSlots <= 0) {
@@ -272,10 +299,28 @@ export function CreatePost() {
     setActiveTool("swing");
   }
 
-  async function handleVideoFile(e: ChangeEvent<HTMLInputElement>) {
+  function handleVideoFile(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
-    if (!file) return;
+    if (file) void acceptVideoFile(file);
+  }
+
+  // The swing video: in the native app (2.5+) the one-tap system picker,
+  // else the file input. Either way it lands in acceptVideoFile. The photo
+  // pill's multi-select (photos and videos) stays a file input: the native
+  // picker picks one item.
+  function selectSwingVideo() {
+    void pickMedia({
+      kinds: ["video"],
+      openFileInput: () => videoInputRef.current?.click(),
+      onPicked: (file) => void acceptVideoFile(file),
+      onLoading: setReadingPick,
+      maxVideoBytes: MAX_SWING_VIDEO_BYTES,
+      onTooLarge: () => showToast("That video is too large — please choose a shorter clip.", "warning"),
+    });
+  }
+
+  async function acceptVideoFile(file: File) {
     if (!file.type.startsWith("video/")) {
       showToast("Please choose a video file.", "warning");
       return;
@@ -299,13 +344,16 @@ export function CreatePost() {
 
     // Same iOS/WKWebView file-eviction risk as AnalyzeSwing.tsx's identical
     // fix (see its comment) — this attaches to the draft post, which can
-    // sit around for a while before actually posting.
+    // sit around for a while before actually posting. A native pick already
+    // is an in-memory copy (lib/mediaPicker.ts).
     let stableFile = file;
-    try {
-      const bytes = await file.arrayBuffer();
-      stableFile = new File([bytes], file.name, { type: file.type });
-    } catch (err) {
-      console.error("GolfMe: failed to read the video into memory.", err);
+    if (!isInMemoryPick(file)) {
+      try {
+        const bytes = await file.arrayBuffer();
+        stableFile = new File([bytes], file.name, { type: file.type });
+      } catch (err) {
+        console.error("GolfMe: failed to read the video into memory.", err);
+      }
     }
 
     requestAttach("swing", () => doAttachVideo(stableFile));
@@ -353,12 +401,12 @@ export function CreatePost() {
     // Unlike the single-item swing video pill, this always reopens the
     // picker — repeated use appends more items (up to the cap) rather than
     // replacing, since a post can carry several photos/videos.
-    fileInputRef.current?.click();
+    selectMedia();
   }
 
   function handleSwingPillClick() {
     if (attachedKind() === "swing") return;
-    videoInputRef.current?.click();
+    selectSwingVideo();
   }
 
   function togglePanel(kind: Attachment) {
@@ -366,7 +414,7 @@ export function CreatePost() {
   }
 
   const kind = attachedKind();
-  const canPost = text.trim().length > 0 && !mediaUploading && (kind !== "swing" || Boolean(videoFile) || Boolean(prefilledVideoUrl) || Boolean(privateShare));
+  const canPost = text.trim().length > 0 && !mediaUploading && !readingPick && (kind !== "swing" || Boolean(videoFile) || Boolean(prefilledVideoUrl) || Boolean(privateShare));
 
   async function handlePost() {
     if (!canPost || posting) return;
@@ -534,9 +582,9 @@ export function CreatePost() {
               </button>
             </div>
           ))}
-          {mediaItems.length < MAX_POST_MEDIA_ITEMS && !mediaUploading && (
+          {mediaItems.length < MAX_POST_MEDIA_ITEMS && !mediaUploading && !readingPick && (
             <button
-              onClick={() => fileInputRef.current?.click()}
+              onClick={selectMedia}
               className="flex h-28 w-28 shrink-0 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-slate-200 text-slate-400 transition-colors duration-150 hover:border-fairway-300 hover:text-fairway-600"
             >
               <ImagePlus size={18} />
@@ -545,7 +593,7 @@ export function CreatePost() {
           )}
         </div>
       )}
-      {mediaUploading && (
+      {(mediaUploading || readingPick) && (
         <div className="flex h-28 w-28 items-center justify-center rounded-2xl border border-slate-100 bg-slate-50">
           <Loader2 size={20} className="animate-spin text-fairway-600" />
         </div>
@@ -571,7 +619,7 @@ export function CreatePost() {
               <Check size={13} /> {t("composer.uploaded")}
             </span>
             <div className="flex gap-2">
-              <button onClick={() => videoInputRef.current?.click()} className="text-xs font-semibold text-fairway-700 hover:underline">
+              <button onClick={selectSwingVideo} disabled={readingPick} className="text-xs font-semibold text-fairway-700 hover:underline disabled:opacity-40">
                 {t("composer.replace")}
               </button>
               <button onClick={removeVideo} className="text-xs font-semibold text-red-600 hover:underline">

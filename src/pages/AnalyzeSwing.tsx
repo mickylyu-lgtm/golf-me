@@ -19,6 +19,7 @@ import { CADDIE_MEDIA_BUCKET } from "../lib/caddieMedia";
 import { CaddieRequestError } from "../lib/caddieAnalysis";
 import { ALL_CLUB_VALUES } from "../lib/clubCatalog";
 import { caddieErrorText } from "../lib/caddieErrorText";
+import { isInMemoryPick, pickMedia } from "../lib/mediaPicker";
 const MAX_SWING_VIDEO_BYTES = 200 * 1024 * 1024; // matches the Storage bucket's own file_size_limit
 const MAX_SWING_VIDEO_SECONDS = 10; // max length of the WINDOW actually analyzed (2026-08-22 credit-efficiency pass) — Caddie's Roboflow pass calls once per sampled frame, so a longer clip directly multiplies calls/latency/credit spend; see analyze-swing's ANALYSIS_FPS comment. Was 15s. A source video longer than this is no longer rejected outright — VideoTrimSelector lets the golfer pick which 10s window to analyze instead.
 // Once analyze-swing actually creates the 'processing' row, the real
@@ -78,6 +79,8 @@ export function AnalyzeSwing() {
     }
   }
   const [submitting, setSubmitting] = useState(false);
+  // A native pick (one-tap picker) being read into the page.
+  const [readingPick, setReadingPick] = useState(false);
   // A picked video longer than MAX_SWING_VIDEO_SECONDS lands here first
   // (not directly in draftSwingVideo) so VideoTrimSelector has something to
   // show without yet committing to an analyzed window — confirming it is
@@ -147,10 +150,26 @@ export function AnalyzeSwing() {
     );
   }
 
-  async function handleVideoFile(e: ChangeEvent<HTMLInputElement>) {
+  function handleVideoFile(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
-    if (!file) return;
+    if (file) void acceptVideoFile(file);
+  }
+
+  // Native app (2.5+): the one-tap system picker; else the file input.
+  // Either way the video lands in acceptVideoFile below.
+  function selectVideo() {
+    void pickMedia({
+      kinds: ["video"],
+      openFileInput: () => videoInputRef.current?.click(),
+      onPicked: (file) => void acceptVideoFile(file),
+      onLoading: setReadingPick,
+      maxVideoBytes: MAX_SWING_VIDEO_BYTES,
+      onTooLarge: () => showToast(t("caddie.videoTooLarge"), "warning"),
+    });
+  }
+
+  async function acceptVideoFile(file: File) {
     if (!file.type.startsWith("video/")) {
       showToast(t("caddie.unsupportedVideo"), "warning");
       return;
@@ -183,12 +202,15 @@ export function AnalyzeSwing() {
     // original lazy disk-backed reference, so later eviction of that
     // original reference can't affect it. Falls back to the original file
     // if this itself fails (rare) rather than blocking selection over it.
+    // A native pick already is such an in-memory copy (lib/mediaPicker.ts).
     let stableFile = file;
-    try {
-      const bytes = await file.arrayBuffer();
-      stableFile = new File([bytes], file.name, { type: file.type });
-    } catch (err) {
-      console.error("GolfMe: failed to read the video into memory.", err);
+    if (!isInMemoryPick(file)) {
+      try {
+        const bytes = await file.arrayBuffer();
+        stableFile = new File([bytes], file.name, { type: file.type });
+      } catch (err) {
+        console.error("GolfMe: failed to read the video into memory.", err);
+      }
     }
     const previewUrl = URL.createObjectURL(stableFile);
 
@@ -390,10 +412,12 @@ export function AnalyzeSwing() {
         </div>
       ) : (
         <button
-          onClick={() => videoInputRef.current?.click()}
+          onClick={selectVideo}
+          disabled={readingPick}
+          aria-busy={readingPick}
           className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-200 py-10 text-slate-400 transition-colors duration-150 hover:border-fairway-300 hover:text-fairway-600"
         >
-          <Video size={22} />
+          {readingPick ? <Loader2 size={22} className="animate-spin text-fairway-600" /> : <Video size={22} />}
           <span className="text-sm font-semibold">{t("caddie.selectVideo")}</span>
           <span className="text-xs text-slate-400">{t("caddie.noVideoSelected")}</span>
           <span className="text-xs text-slate-400">{t("caddie.recommendedLength")}</span>
