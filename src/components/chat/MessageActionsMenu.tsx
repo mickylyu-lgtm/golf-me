@@ -258,7 +258,7 @@ export function MessageActionsMenu({ bubble, alignRight, closing, reactions, act
           preventDefault keeps the composer focused. */}
       <div
         ref={backdropRef}
-        className="absolute inset-0 bg-slate-900/25 backdrop-blur-[3px]"
+        className="absolute inset-0 bg-slate-900/25 backdrop-blur-[3px] dark:bg-black/55"
         style={{ opacity: 0 }}
         onPointerDown={() => {
           downOnBackdrop.current = true;
@@ -318,7 +318,7 @@ export function MessageActionsMenu({ bubble, alignRight, closing, reactions, act
         }
       >
         {reactions && (
-          <div className="flex items-center gap-0.5 rounded-full border border-slate-100 bg-white px-1.5 py-1 shadow-lg">
+          <div className="flex items-center gap-0.5 rounded-full border border-slate-100 bg-white px-1.5 py-1 shadow-lg dark:border-slate-200 dark:bg-slate-100">
             {reactions.emojis.map((emoji) => {
               const picked = reactions.mine === emoji;
               return (
@@ -342,7 +342,7 @@ export function MessageActionsMenu({ bubble, alignRight, closing, reactions, act
             })}
           </div>
         )}
-        <div className="min-w-44 overflow-hidden rounded-xl border border-slate-100 bg-white py-1 shadow-lg">
+        <div className="min-w-44 overflow-hidden rounded-xl border border-slate-100 bg-white py-1 shadow-lg dark:border-slate-200 dark:bg-slate-100">
           {actions.includes("reply") && (
             <button type="button" role="menuitem" onMouseDown={(e) => e.preventDefault()} onClick={onReply} className={`${item} text-slate-700 hover:bg-slate-50`}>
               <Reply size={15} aria-hidden="true" /> {labels.reply}

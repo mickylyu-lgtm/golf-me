@@ -217,7 +217,7 @@ export function PostDetail() {
         data-keyboard-reveal="off"
         className={
           composerDocked
-            ? "fixed inset-x-0 z-40 border-t border-slate-200/70 bg-[#faf9f6] py-2 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]"
+            ? "fixed inset-x-0 z-40 border-t border-slate-200/70 bg-page py-2 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]"
             : undefined
         }
         style={composerDocked ? { bottom: `${keyboardHeight}px` } : undefined}

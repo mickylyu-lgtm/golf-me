@@ -1033,7 +1033,7 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
                 {analyzed && (
                   <span
                     aria-hidden="true"
-                    className={`h-1.5 w-1.5 shrink-0 rounded-full ${selectedPhaseKey === b.labelKey ? "bg-white/80" : "bg-fairway-400"}`}
+                    className={`h-1.5 w-1.5 shrink-0 rounded-full ${selectedPhaseKey === b.labelKey ? "bg-fixed-white/80" : "bg-fairway-400"}`}
                   />
                 )}
               </button>

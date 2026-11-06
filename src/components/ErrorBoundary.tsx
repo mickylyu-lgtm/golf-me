@@ -5,9 +5,9 @@ import { GolfMeIcon } from "./brand/GolfMeIcon";
 // shows this screen instead of a blank white page. It sits OUTSIDE every app
 // provider on purpose -- if LocaleContext or DataContext is what crashed, the
 // fallback still has to render -- so it carries its own tiny dictionary and
-// reads the saved language straight from localStorage. Unlike the rest of the
-// (light-only) app it also follows the OS dark setting, since it can appear
-// before any app styling state exists.
+// reads the saved language straight from localStorage. Light or dark follows
+// the Appearance setting through the colour tokens: index.html sets the
+// `dark` class before anything renders, so it needs no provider.
 
 type Copy = { title: string; body: string; reload: string; home: string };
 
@@ -67,12 +67,12 @@ export class ErrorBoundary extends Component<Props, State> {
     return (
       <div
         role="alert"
-        className="flex min-h-screen flex-col items-center justify-center bg-[#faf9f6] px-6 text-center dark:bg-[#0f1612]"
+        className="flex min-h-screen flex-col items-center justify-center bg-page px-6 text-center"
         style={{ paddingTop: "env(safe-area-inset-top)", paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         <GolfMeIcon size={48} variant="gradient" className="mb-5 rounded-2xl" />
-        <h1 className="text-xl font-extrabold text-slate-900 dark:text-slate-50">{copy.title}</h1>
-        <p className="mt-2 max-w-xs text-sm leading-relaxed text-slate-500 dark:text-slate-300">{copy.body}</p>
+        <h1 className="text-xl font-extrabold text-slate-900">{copy.title}</h1>
+        <p className="mt-2 max-w-xs text-sm leading-relaxed text-slate-500">{copy.body}</p>
         <div className="mt-6 flex w-full max-w-xs flex-col gap-2.5">
           <button
             type="button"
@@ -84,7 +84,7 @@ export class ErrorBoundary extends Component<Props, State> {
           <button
             type="button"
             onClick={() => window.location.assign("/")}
-            className="min-h-11 rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 hover:border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+            className="min-h-11 rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 hover:border-slate-300"
           >
             {copy.home}
           </button>

@@ -104,7 +104,7 @@ export function TutorialOverlay() {
     <div className="fixed inset-0 z-[100]" role="dialog" aria-modal="true" aria-label={t(step.titleKey)}>
       {rect ? (
         <div
-          className="pointer-events-none absolute rounded-2xl ring-2 ring-white transition-all duration-300 ease-out"
+          className="pointer-events-none absolute rounded-2xl ring-2 ring-fixed-white transition-all duration-300 ease-out"
           style={{
             top: rect.top - SPOTLIGHT_PADDING,
             left: rect.left - SPOTLIGHT_PADDING,

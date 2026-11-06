@@ -22,7 +22,7 @@ export function TopBar() {
   return (
     // No backdrop-blur-sm here (deliberately) — a backdrop-filter on this
     // header establishes a containing block for descendant `position:
-    // fixed` elements in Chromium. bg-[#faf9f6]/95 makes up the visual
+    // fixed` elements in Chromium. bg-page/95 makes up the visual
     // difference without that side effect. NotificationsPanel's Modal is
     // portaled straight to document.body (see Modal.tsx) rather than
     // rendered here in place — this header's own `position: sticky`
@@ -30,7 +30,7 @@ export function TopBar() {
     // iOS Safari specifically (reported live as the notification sheet
     // only showing its first couple rows), so the panel no longer lives
     // in this DOM subtree at all.
-    <header className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-200/70 bg-[#faf9f6]/95 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-6">
+    <header className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-200/70 bg-page/95 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-6">
       <div className="sm:hidden">
         <GolfMeLogo size={18} />
       </div>

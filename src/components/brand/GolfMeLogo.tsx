@@ -35,7 +35,7 @@ export function GolfMeLogo({
 }: GolfMeLogoProps) {
   const content = (
     <>
-      <GolfMeIcon size={Math.round(size * 1.6)} variant="gradient" className="shrink-0 rounded-lg" />
+      <GolfMeIcon size={Math.round(size * 1.6)} variant="gradient" className="shrink-0 rounded-lg dark:ring-1 dark:ring-fixed-white/10" />
       {showWordmark && <GolfMeWordmark className={wordmarkClassName} />}
     </>
   );

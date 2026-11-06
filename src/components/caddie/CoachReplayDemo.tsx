@@ -149,14 +149,14 @@ export function CoachReplayDemo() {
             </defs>
             <g ref={sceneRef} />
           </svg>
-          <span className="absolute left-3 top-3 rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white/80 backdrop-blur-sm">
+          <span className="absolute left-3 top-3 rounded-full bg-fixed-white/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white/80 backdrop-blur-sm">
             {t("coachReplay.demoBadge")}
           </span>
         </div>
         {/* progress, with a gold tick at each checkpoint */}
         <div className="px-4 pb-3 pt-1">
-          <div className="relative h-1 rounded-full bg-white/15">
-            <div ref={barRef} className="h-full origin-left rounded-full bg-white/60" style={{ transform: "scaleX(0)" }} />
+          <div className="relative h-1 rounded-full bg-fixed-white/15">
+            <div ref={barRef} className="h-full origin-left rounded-full bg-fixed-white/60" style={{ transform: "scaleX(0)" }} />
             {coachOn &&
               marks.map((m, i) => (
                 <span

@@ -361,7 +361,7 @@ function AppGate({ children }: { children: ReactNode }) {
   // a retry instead. Demo never reaches this (it has no real profile fetch).
   if (!isDemo && profileLoadFailed) {
     return (
-      <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 bg-[#faf9f6] px-6 text-center">
+      <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 bg-page px-6 text-center">
         <p className="text-sm text-slate-600">{t("loading.profileLoadFailed")}</p>
         <Button
           onClick={async () => {

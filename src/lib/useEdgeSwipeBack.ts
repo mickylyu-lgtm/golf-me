@@ -32,7 +32,8 @@ const SPRING_BACK = `transform ${SPRING_BACK_MS}ms cubic-bezier(0.22, 1, 0.36, 1
 const SLIDE_OUT = `transform ${SLIDE_OUT_MS}ms cubic-bezier(0.25, 0.8, 0.4, 1)`;
 const BACKDROP_MAX_OPACITY = 0.14;
 const PAGE_SHADOW = "-6px 0 18px rgba(15, 23, 42, 0.12)";
-const PAGE_BACKGROUND = "#faf9f6";
+// The page colour token (index.css), so it follows the Appearance setting.
+const PAGE_BACKGROUND = "var(--color-page)";
 // If onBack() didn't unmount us (navigation refused), put the page back.
 const UNMOUNT_FALLBACK_MS = 700;
 const VELOCITY_WINDOW_MS = 100;

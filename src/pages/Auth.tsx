@@ -483,7 +483,7 @@ export function Auth({ mode }: AuthProps) {
 
   if (step === "welcome") {
     return (
-      <div className="flex min-h-[100svh] flex-col bg-[#faf9f6]">
+      <div className="flex min-h-[100svh] flex-col bg-page">
         <div className="mx-auto flex w-full max-w-md flex-1 flex-col">
           {/* Fixed-height photo band: nothing below moves while it loads. */}
           {/* Takes the height the content below doesn't need: ~170px on an iPhone SE, ~340px on a 6.1" phone. */}
@@ -500,7 +500,7 @@ export function Auth({ mode }: AuthProps) {
               className="absolute inset-0 h-full w-full object-cover saturate-[1.15]"
             />
             {/* Green wash for warmth + a fade into the page so the logo and text below never sit on busy imagery. */}
-            <div className="absolute inset-0 bg-gradient-to-b from-brand-forest-deep/45 via-brand-forest/20 to-[#faf9f6]" aria-hidden />
+            <div className="absolute inset-0 bg-gradient-to-b from-brand-forest-deep/45 via-brand-forest/20 to-page" aria-hidden />
             {!isStandalone() && (
               // No Back on the installed/native app: the marketing Welcome
               // page is mobile-web only, there's nothing to go back to.
@@ -517,7 +517,7 @@ export function Auth({ mode }: AuthProps) {
 
           <div className="relative -mt-12 flex flex-1 flex-col px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
             <div className="flex animate-fade-in flex-col items-center text-center motion-reduce:animate-none">
-              <GolfMeIcon size={64} variant="gradient" className="rounded-[1.1rem] shadow-lg shadow-brand-forest/25 ring-4 ring-[#faf9f6]" />
+              <GolfMeIcon size={64} variant="gradient" className="rounded-[1.1rem] shadow-lg shadow-brand-forest/25 ring-4 ring-page" />
               <GolfMeWordmark className="mt-3 text-[1.7rem] font-extrabold leading-none tracking-tight" />
               <h1 className="mt-4 text-[1.6rem] font-extrabold leading-tight tracking-tight text-brand-forest">{t("auth.welcome.headline")}</h1>
               <p className="mt-1.5 max-w-[18rem] text-[15px] leading-snug text-slate-600">{t("auth.welcome.subheadline")}</p>
@@ -532,7 +532,7 @@ export function Auth({ mode }: AuthProps) {
               )}
               {/* Apple HIG: black button with Apple's logo and title, at least as prominent as the other buttons, so it goes first. */}
               {showApple && (
-                <button type="button" onClick={continueWithApple} disabled={busy} className={`${methodButton} bg-black text-white hover:bg-neutral-800`}>
+                <button type="button" onClick={continueWithApple} disabled={busy} className={`${methodButton} bg-black text-white hover:bg-neutral-800 dark:bg-fixed-white dark:text-black dark:hover:bg-fixed-white/90`}>
                   <AppleIcon size={18} /> {t("auth.continueWithApple")}
                 </button>
               )}
@@ -722,7 +722,7 @@ export function Auth({ mode }: AuthProps) {
   }
 
   return (
-    <div className="flex min-h-[100svh] flex-col bg-[#faf9f6]">
+    <div className="flex min-h-[100svh] flex-col bg-page">
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]" style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}>
         <div className="relative flex h-12 items-center justify-center">
           {onBack && (

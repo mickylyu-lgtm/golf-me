@@ -37,7 +37,7 @@ export function Onboarding() {
 
   return (
     <div
-      className="flex min-h-screen flex-col bg-[#faf9f6] px-6 pb-8"
+      className="flex min-h-screen flex-col bg-page px-6 pb-8"
       style={{ paddingTop: "max(2rem, env(safe-area-inset-top))" }}
     >
       <div className="mb-5 flex items-center gap-2">

@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Capacitor } from "@capacitor/core";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, ArrowLeft, Bell, ChevronRight, CircleHelp, Eye, EyeOff, Globe, Info, Lock, LogOut, MapPin, RotateCcw, ShieldCheck, ShieldOff, Sparkles, User, Users } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Bell, ChevronRight, CircleHelp, Eye, EyeOff, Globe, Info, Lock, LogOut, MapPin, Moon, RotateCcw, ShieldCheck, ShieldOff, Smartphone, Sparkles, Sun, User, Users } from "lucide-react";
+import { setAppearance, useAppearanceSetting } from "../lib/useAppearance";
+import type { AppearanceSetting } from "../lib/appearance";
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
@@ -29,6 +31,48 @@ import { discoverableSetting } from "../lib/discoverability";
 // tokens are shown. "Try again" re-runs registration (it only prompts if iOS
 // permission is still undecided).
 type PushStatus = "web" | "off" | "checking" | "denied" | "prompt" | "unavailable" | "apnsError" | "backendError" | "notLinked" | "ready";
+
+// Settings -> Appearance: Light / Dark / Match iPhone. Per device
+// (localStorage, lib/appearance.ts), applied at once; "Match iPhone" follows
+// the system setting live.
+function AppearancePicker() {
+  const { t } = useLocale();
+  const setting = useAppearanceSetting();
+  const ios = Capacitor.getPlatform() === "ios" || (typeof navigator !== "undefined" && /iPhone|iPad|iPod/.test(navigator.userAgent));
+  const options: { value: AppearanceSetting; label: string; icon: ReactNode }[] = [
+    { value: "light", label: t("settings.appearanceLight"), icon: <Sun size={16} /> },
+    { value: "dark", label: t("settings.appearanceDark"), icon: <Moon size={16} /> },
+    { value: "system", label: ios ? t("settings.appearanceSystem") : t("settings.appearanceSystemDevice"), icon: <Smartphone size={16} /> },
+  ];
+  return (
+    <div className="rounded-2xl border border-slate-100 bg-white p-4">
+      <p id="appearance-label" className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+        {t("settings.appearance")}
+      </p>
+      <div role="radiogroup" aria-labelledby="appearance-label" className="grid grid-cols-3 gap-2">
+        {options.map((o) => {
+          const on = setting === o.value;
+          return (
+            <button
+              key={o.value}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              onClick={() => setAppearance(o.value)}
+              className={`flex min-h-16 flex-col items-center justify-center gap-1.5 rounded-xl border px-2 py-2.5 text-center text-xs font-semibold leading-tight transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 ${
+                on ? "border-fairway-400 bg-fairway-50 text-fairway-800" : "border-slate-200 text-slate-600 hover:border-slate-300"
+              }`}
+            >
+              {o.icon}
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
+      <p className="mt-2.5 text-xs text-slate-500">{t("settings.appearanceNote")}</p>
+    </div>
+  );
+}
 
 function PushStatusLine({ userId, pushEnabled }: { userId: string; pushEnabled: boolean }) {
   const { t } = useLocale();
@@ -339,6 +383,7 @@ export function Settings() {
 
       <section className="flex flex-col gap-3">
         <p className="px-1 text-xs font-bold uppercase tracking-wide text-slate-400">{t("settings.app")}</p>
+        <AppearancePicker />
         <button
           onClick={() => navigate("/settings/language")}
           className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white p-4 text-left transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-fairway-200 hover:shadow-md active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2"

@@ -20,7 +20,7 @@ export function Toggle({ checked, onChange, label, disabled = false }: TogglePro
       }`}
     >
       <span
-        className={`inline-block h-[18px] w-[18px] transform rounded-full bg-white shadow transition-transform duration-200 ease-out ${
+        className={`inline-block h-[18px] w-[18px] transform rounded-full bg-fixed-white shadow transition-transform duration-200 ease-out ${
           checked ? "translate-x-6" : "translate-x-1"
         }`}
       />

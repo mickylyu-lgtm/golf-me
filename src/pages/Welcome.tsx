@@ -12,6 +12,7 @@ import { HighlightGolfMe } from "../components/brand/HighlightGolfMe";
 import { Reveal } from "../components/ui/Reveal";
 import { useLocale } from "../i18n/LocaleContext";
 import { APP_STORE_URL } from "../lib/appStore";
+import { useForceLightAppearance } from "../lib/useAppearance";
 
 // Public / logged-out landing experience at /welcome (and what logged-out
 // visitors to / are sent to). The authenticated app (Home/Play/Caddie/Me,
@@ -68,6 +69,8 @@ function StepCard({ n, title, body, delayMs }: { n: number; title: string; body:
 export function Welcome() {
   const navigate = useNavigate();
   const { t } = useLocale();
+  // The public landing page keeps its light design in every Appearance mode.
+  useForceLightAppearance();
 
   // The build-time prerender ships a static copy of this page in
   // <div id="prerender"> ahead of #root (see index.html + scripts/

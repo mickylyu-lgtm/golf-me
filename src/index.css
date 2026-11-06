@@ -53,6 +53,70 @@
   --color-brand-forest-deep: #0e2717;
   --color-brand-gold: #f0b93f;
 
+  /* ── Appearance tokens (dark mode, 2026-11-05) ─────────────────────────
+     The app's ~1,200 colour classes recolour through these instead of
+     per-file dark: variants. In light mode every value below equals what the
+     class always produced (light is unchanged); `.dark` on <html> (see the
+     block after @theme) swaps them. Tailwind v4 looks a colour up in the
+     utility's own namespace first (--background-color-*, --text-color-*,
+     --border-color-*, --ring-color-*, --box-shadow-color-*), then --color-*,
+     so a shade can flip as a background but not as text, or the reverse.
+       page        bg-page (was bg-[#faf9f6]): the warm page background.
+       fixed-white white that never flips (glass tints on green/video, toggle
+                   thumbs, the tutorial ring); bg-white itself is a surface.
+     Pinned (declared here, never overridden): shades used on always-dark
+     grounds — bg-slate-500..950 (scrims, tooltips, video backdrops, avatar
+     gradients), text-slate-50/100 and text-fairway-50..300 (copy on green or
+     dark panels), slate shadows. */
+  --color-page: #faf9f6;
+  --color-fixed-white: #ffffff;
+  --background-color-white: #ffffff;
+  --ring-color-white: #ffffff;
+  --background-color-slate-500: oklch(55.4% 0.046 257.417);
+  --background-color-slate-600: oklch(44.6% 0.043 257.281);
+  --background-color-slate-700: oklch(37.2% 0.044 257.287);
+  --background-color-slate-800: oklch(27.9% 0.041 260.031);
+  --background-color-slate-900: oklch(20.8% 0.042 265.755);
+  --background-color-slate-950: oklch(12.9% 0.042 264.695);
+  --text-color-slate-50: oklch(98.4% 0.003 247.858);
+  --text-color-slate-100: oklch(96.8% 0.007 247.896);
+  --box-shadow-color-slate-900: oklch(20.8% 0.042 265.755);
+  --box-shadow-color-slate-950: oklch(12.9% 0.042 264.695);
+  --text-color-fairway-50: #f0fdf4;
+  --text-color-fairway-100: #dcfce7;
+  --text-color-fairway-200: #bbf7d0;
+  --text-color-fairway-300: #86efac;
+  /* Flip as text only (dark green text would vanish on a dark surface). */
+  --text-color-fairway-600: #16a34a;
+  --text-color-fairway-700: #15803d;
+  --text-color-fairway-800: #166534;
+  --text-color-fairway-900: #14532d;
+  --text-color-brand-forest: #1b4a2d;
+  /* Primary-button forest gradient: lifted a step in dark (below). */
+  --background-color-brand-forest: #1b4a2d;
+  --background-color-brand-forest-deep: #0e2717;
+  --border-color-fairway-300: #86efac;
+  --border-color-fairway-400: #4ade80;
+  --text-color-sun-600: #b88114;
+  --text-color-sun-700: #8f6614;
+  --border-color-sun-300: #f6c96f;
+  --text-color-red-600: oklch(57.7% 0.245 27.325);
+  --text-color-red-700: oklch(50.5% 0.213 27.518);
+  --border-color-red-300: oklch(80.8% 0.114 19.571);
+  --text-color-rose-600: oklch(58.6% 0.253 17.585);
+  --text-color-rose-700: oklch(51.4% 0.222 16.935);
+  --border-color-rose-300: oklch(81% 0.117 11.638);
+  --text-color-amber-600: oklch(66.6% 0.179 58.318);
+  --text-color-amber-700: oklch(55.5% 0.163 48.998);
+  --text-color-amber-800: oklch(47.3% 0.137 46.201);
+  --text-color-amber-900: oklch(41.4% 0.112 45.904);
+  --text-color-sky-600: oklch(58.8% 0.158 241.966);
+  --text-color-sky-700: oklch(50% 0.134 242.749);
+  --text-color-violet-600: oklch(54.1% 0.281 293.009);
+  --text-color-violet-700: oklch(49.1% 0.27 292.581);
+  --text-color-teal-600: oklch(60% 0.118 184.704);
+  --text-color-teal-700: oklch(51.1% 0.096 186.391);
+
   --animate-fade-in: fade-in 0.25s ease-out;
   --animate-slide-up: slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   /* Same slide-up keyframe, more than double the duration — for the Welcome
@@ -625,8 +689,125 @@
   }
 }
 
+/* `dark:` variants follow the Appearance setting (the class), not only the
+   system: ErrorBoundary and a few hand-tuned spots use them. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   color-scheme: light;
+}
+
+/* ── Dark appearance ────────────────────────────────────────────────────
+   Set on <html> by index.html (before first paint) and lib/useAppearance.
+   Unlayered, so it beats Tailwind's theme layer. Neutrals carry a slight
+   green tint so the app still reads as GolfMe. Text shades are chosen for
+   WCAG AA on the surface (#161d19) and on bg-slate-100: slate-500 ~6.7:1,
+   slate-400 ~4.7:1, fairway-700 ~9:1 (scratchpad dark/contrast.mjs). */
+:root.dark {
+  color-scheme: dark;
+  --gm-dark-surface: #161d19;
+  --color-page: #0d1210;
+  --background-color-white: var(--gm-dark-surface);
+  --ring-color-white: var(--gm-dark-surface);
+
+  /* Neutrals: low shades become dark fills/borders, high shades light text. */
+  --color-slate-50: #1b231f;
+  --color-slate-100: #232c27;
+  --color-slate-200: #2e3832;
+  --color-slate-300: #3d4842;
+  --color-slate-400: #7d8a83;
+  --color-slate-500: #98a59e;
+  --color-slate-600: #b4c0b9;
+  --color-slate-700: #cdd6d1;
+  --color-slate-800: #e2e9e5;
+  --color-slate-900: #eef3f0;
+  --color-slate-950: #f7faf8;
+
+  /* Brand green: tints become deep greens; green text lightens. Solid
+     fairway-400..950 fills (buttons, mine bubbles, badges) stay as they are. */
+  --color-fairway-50: #12271a;
+  --color-fairway-100: #173322;
+  --color-fairway-200: #1f4a30;
+  --text-color-fairway-600: #5ccb85;
+  --text-color-fairway-700: #74d39a;
+  --text-color-fairway-800: #8ddcab;
+  --text-color-fairway-900: #a9e6bf;
+  --text-color-brand-forest: #8fd6a8;
+  /* Forest primary buttons/cards one step lighter so their edge reads on
+     the dark surface; white label stays > 7:1. */
+  --background-color-brand-forest: #22603a;
+  --background-color-brand-forest-deep: #164428;
+  --border-color-fairway-300: #2f6b45;
+  --border-color-fairway-400: #3c8857;
+
+  /* Gold: tints deepen, gold text brightens; solid gold CTAs unchanged. */
+  --color-sun-50: #241f12;
+  --color-sun-100: #2e2714;
+  --color-sun-200: #4a3c17;
+  --text-color-sun-600: #f6c96f;
+  --text-color-sun-700: #f4b942;
+  --border-color-sun-300: #6b5520;
+
+  /* Status colours: 50/100/200 tints mix the hue into the surface; text
+     700 -> its 300, 600 -> its 400 (literal values: the light ones flip). */
+  --color-red-50: color-mix(in oklab, oklch(63.7% 0.237 25.331) 14%, #161d19);
+  --color-red-100: color-mix(in oklab, oklch(63.7% 0.237 25.331) 22%, #161d19);
+  --color-red-200: color-mix(in oklab, oklch(63.7% 0.237 25.331) 32%, #161d19);
+  --border-color-red-300: color-mix(in oklab, oklch(63.7% 0.237 25.331) 45%, #161d19);
+  --text-color-red-600: oklch(70.4% 0.191 22.216);
+  --text-color-red-700: oklch(80.8% 0.114 19.571);
+  --color-rose-50: color-mix(in oklab, oklch(64.5% 0.246 16.439) 14%, #161d19);
+  --color-rose-100: color-mix(in oklab, oklch(64.5% 0.246 16.439) 22%, #161d19);
+  --color-rose-200: color-mix(in oklab, oklch(64.5% 0.246 16.439) 32%, #161d19);
+  --border-color-rose-300: color-mix(in oklab, oklch(64.5% 0.246 16.439) 45%, #161d19);
+  --text-color-rose-600: oklch(71.2% 0.194 13.428);
+  --text-color-rose-700: oklch(81% 0.117 11.638);
+  --color-amber-50: color-mix(in oklab, oklch(76.9% 0.188 70.08) 12%, #161d19);
+  --color-amber-100: color-mix(in oklab, oklch(76.9% 0.188 70.08) 20%, #161d19);
+  --color-amber-200: color-mix(in oklab, oklch(76.9% 0.188 70.08) 30%, #161d19);
+  --text-color-amber-600: oklch(82.8% 0.189 84.429);
+  --text-color-amber-700: oklch(87.9% 0.169 91.605);
+  --text-color-amber-800: oklch(92.4% 0.12 95.746);
+  --text-color-amber-900: oklch(96.2% 0.059 95.617);
+  --color-sky-50: color-mix(in oklab, oklch(68.5% 0.169 237.323) 14%, #161d19);
+  --color-sky-100: color-mix(in oklab, oklch(68.5% 0.169 237.323) 22%, #161d19);
+  --color-sky-200: color-mix(in oklab, oklch(68.5% 0.169 237.323) 32%, #161d19);
+  --text-color-sky-600: oklch(74.6% 0.16 232.661);
+  --text-color-sky-700: oklch(82.8% 0.111 230.318);
+  --color-violet-50: color-mix(in oklab, oklch(60.6% 0.25 292.717) 16%, #161d19);
+  --color-violet-100: color-mix(in oklab, oklch(60.6% 0.25 292.717) 24%, #161d19);
+  --text-color-violet-600: oklch(70.2% 0.183 293.541);
+  --text-color-violet-700: oklch(81.1% 0.111 293.571);
+  --color-teal-50: color-mix(in oklab, oklch(70.4% 0.14 182.503) 14%, #161d19);
+  --color-teal-100: color-mix(in oklab, oklch(70.4% 0.14 182.503) 22%, #161d19);
+  --text-color-teal-600: oklch(77.7% 0.152 181.912);
+  --text-color-teal-700: oklch(85.5% 0.138 181.071);
+}
+
+/* MapLibre's own controls (attribution, zoom) in dark mode: dark chrome
+   only, the map imagery itself is left as it is. */
+:root.dark .maplibregl-ctrl-attrib,
+:root.dark .maplibregl-ctrl-attrib.maplibregl-compact,
+:root.dark .maplibregl-ctrl-group {
+  background-color: rgb(22 29 25 / 0.9);
+  color: #cdd6d1;
+}
+:root.dark .maplibregl-ctrl-attrib a {
+  color: #cdd6d1;
+}
+:root.dark .maplibregl-ctrl-attrib-button,
+:root.dark .maplibregl-ctrl-group .maplibregl-ctrl-icon {
+  filter: invert(0.9);
+}
+:root.dark .maplibregl-ctrl-group button + button {
+  border-top-color: #2e3832;
+}
+
+@layer base {
+  /* Focus rings offset with the page colour, not a white halo. */
+  :root.dark * {
+    --tw-ring-offset-color: var(--color-page);
+  }
 }
 
 html,
@@ -648,7 +829,7 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  @apply bg-[#faf9f6] text-slate-900;
+  @apply bg-page text-slate-900;
   background-image: radial-gradient(circle at 15% 0%, rgba(55, 129, 79, 0.06), transparent 45%);
 }
 

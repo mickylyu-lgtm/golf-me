@@ -21,7 +21,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const isRootTab = ROOT_PATHS.has(pathname);
 
   return (
-    <div className="min-h-screen bg-[#faf9f6]">
+    <div className="min-h-screen bg-page">
       <NotificationPopupHost />
       <NotificationRouteClearer />
       <FoundingRevealHost />

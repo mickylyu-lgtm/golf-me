@@ -333,7 +333,7 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
         ref={composerRef}
         className={
           composerDocked
-            ? "fixed inset-x-0 z-40 bg-[#faf9f6] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]"
+            ? "fixed inset-x-0 z-40 bg-page pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]"
             : undefined
         }
         style={composerDocked ? { bottom: `${keyboardHeight}px` } : undefined}

@@ -261,7 +261,7 @@ export function ProfileSetup() {
     // covering). Content scrolls independently in the middle; the button
     // stays a non-shrinking footer, always reachable without hunting for
     // it, however long the content gets on a small screen.
-    <div className="flex h-[100dvh] flex-col bg-[#faf9f6]" style={keyboardHeight > 0 ? { height: `${window.innerHeight - keyboardHeight}px` } : undefined}>
+    <div className="flex h-[100dvh] flex-col bg-page" style={keyboardHeight > 0 ? { height: `${window.innerHeight - keyboardHeight}px` } : undefined}>
       <div className="mx-auto flex w-full max-w-[31rem] items-center px-6" style={{ paddingTop: "max(2rem, env(safe-area-inset-top))" }}>
         {/* Deliberately signs out first, then navigates -- plain
             navigate(-1)/"/login" alone did nothing, because every

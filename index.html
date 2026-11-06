@@ -137,6 +137,8 @@
          bundle arrives, so a launch never flashes white (matches the native
          web view's backgroundColor in capacitor.config.ts). -->
     <style>html { background: #faf9f6; }
+      /* Dark appearance (set by the script after the guards below). */
+      html.dark { background: #0d1210; color-scheme: dark; }
       /* EntryOverlay launch: the iOS launch image's green until the overlay
          itself is up, so there's no cream frame between the two. */
       html.gm-entry-boot, html.gm-entry-boot body { background: #143822 !important; }
@@ -213,6 +215,29 @@
           if (!forced && sessionStorage.getItem("golfme:entryShown")) return;
           sessionStorage.setItem("golfme:entryShown", "1");
           document.documentElement.classList.add("gm-entry-boot");
+        } catch (e) {}
+      })();
+    </script>
+    <!-- Appearance (Settings -> Appearance), before first paint so a dark
+         launch never flashes cream. Same rules as src/lib/appearance.ts:
+         localStorage golfme:appearance = light | dark | system (default
+         system); the signed-out static landing page (gm-static-landing)
+         always stays light. The EntryOverlay's green (gm-entry-boot) wins
+         over either, as before. -->
+    <script>
+      (function () {
+        try {
+          var root = document.documentElement;
+          if (root.classList.contains("gm-static-landing")) return;
+          var s = null;
+          try { s = localStorage.getItem("golfme:appearance"); } catch (e) {}
+          if (s !== "light" && s !== "dark" && s !== "system") s = "system";
+          var dark = s === "dark" || (s === "system" && !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches));
+          if (!dark) return;
+          root.classList.add("dark");
+          root.style.colorScheme = "dark";
+          var m = document.querySelector('meta[name="theme-color"]');
+          if (m) m.setAttribute("content", "#0d1210");
         } catch (e) {}
       })();
     </script>

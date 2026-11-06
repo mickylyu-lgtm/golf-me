@@ -307,7 +307,7 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
             <span
               key={item.id}
               className={`h-1.5 rounded-full transition-all duration-200 ${
-                i === activeIndex ? "w-4 bg-white" : "w-1.5 bg-white/50"
+                i === activeIndex ? "w-4 bg-fixed-white" : "w-1.5 bg-fixed-white/50"
               } ${variant === "card" ? "shadow-[0_0_2px_rgba(0,0,0,0.5)]" : ""}`}
             />
           ))}

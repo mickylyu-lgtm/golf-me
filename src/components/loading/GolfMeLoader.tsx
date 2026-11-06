@@ -60,23 +60,25 @@ function CartGlyph({ animated }: { animated: boolean }) {
 function CourseScene({ animated }: { animated: boolean }) {
   return (
     <svg viewBox="0 0 300 130" className="w-full max-w-xs" role="presentation" aria-hidden="true">
-      <rect width="300" height="92" fill="#f1f8f2" />
-      <ellipse cx="45" cy="96" rx="85" ry="34" fill="#dcece0" opacity="0.8" />
-      <ellipse cx="235" cy="102" rx="100" ry="30" fill="#dcece0" opacity="0.6" />
+      {/* Dark appearance: the same scene at dusk (dark: classes override the
+          fill/stroke attributes), so it isn't a bright card on a dark page. */}
+      <rect width="300" height="92" fill="#f1f8f2" className="dark:fill-[#111c16]" />
+      <ellipse cx="45" cy="96" rx="85" ry="34" fill="#dcece0" opacity="0.8" className="dark:fill-[#18291f]" />
+      <ellipse cx="235" cy="102" rx="100" ry="30" fill="#dcece0" opacity="0.6" className="dark:fill-[#18291f]" />
 
       {[[36, 70], [66, 76], [252, 68]].map(([cx, cy], i) => (
         <g key={i}>
-          <rect x={cx - 1.5} y={cy + 6} width="3" height="9" fill="#1e5232" />
-          <circle cx={cx} cy={cy} r="8" fill="#5aa171" />
+          <rect x={cx - 1.5} y={cy + 6} width="3" height="9" fill="#1e5232" className="dark:fill-[#0e2717]" />
+          <circle cx={cx} cy={cy} r="8" fill="#5aa171" className="dark:fill-[#3a7a50]" />
         </g>
       ))}
 
-      <rect x="0" y="90" width="300" height="40" fill="#8bc09a" />
-      <line x1="18" y1="108" x2="252" y2="108" stroke="#5aa171" strokeWidth="2" strokeDasharray="1 8" strokeLinecap="round" opacity="0.7" />
+      <rect x="0" y="90" width="300" height="40" fill="#8bc09a" className="dark:fill-[#1f3d2a]" />
+      <line x1="18" y1="108" x2="252" y2="108" stroke="#5aa171" strokeWidth="2" strokeDasharray="1 8" strokeLinecap="round" opacity="0.7" className="dark:stroke-[#3f7d55]" />
 
       {/* destination flag, with a small grounding shadow at its base */}
       <ellipse cx="272" cy="108.5" rx="7" ry="2.2" fill="#1e5232" opacity="0.25" />
-      <line x1="272" y1="70" x2="272" y2="108" stroke="#334155" strokeWidth="2" strokeLinecap="round" />
+      <line x1="272" y1="70" x2="272" y2="108" stroke="#334155" strokeWidth="2" strokeLinecap="round" className="dark:stroke-[#94a3b8]" />
       <path d="M272 70 L285 75.5 L272 81 Z" fill="#f2b82c" />
 
       <g transform="translate(18, 80)" style={animated ? ({ "--gm-travel": "210px" } as React.CSSProperties) : undefined}>
@@ -93,7 +95,7 @@ function CourseScene({ animated }: { animated: boolean }) {
 function InlineCart({ animated, px }: { animated: boolean; px: number }) {
   return (
     <svg viewBox="0 0 70 30" width={px} height={(px * 30) / 70} role="presentation" aria-hidden="true">
-      <line x1="4" y1="26" x2="64" y2="26" stroke="#dcece0" strokeWidth="2" strokeLinecap="round" />
+      <line x1="4" y1="26" x2="64" y2="26" stroke="#dcece0" strokeWidth="2" strokeLinecap="round" className="dark:stroke-[#2e3832]" />
       <g style={animated ? ({ "--gm-travel": "26px" } as React.CSSProperties) : undefined} className={animated ? "animate-cart-drive" : ""}>
         <CartGlyph animated={false} />
       </g>
@@ -205,7 +207,7 @@ export function GolfMeLoader({ message, fullScreen = false, slowLoadRetry = fals
       <div
         role="status"
         aria-live="polite"
-        className={`fixed inset-0 z-[100] flex items-center justify-center bg-[#faf9f6]/95 px-6 backdrop-blur-sm ${className}`}
+        className={`fixed inset-0 z-[100] flex items-center justify-center bg-page/95 px-6 backdrop-blur-sm ${className}`}
       >
         <div className="flex w-full max-w-xs flex-col items-center gap-4">
           {/* Continuous hop-and-tumble (Geometry Dash's cube is the

@@ -65,7 +65,7 @@ function HomeActionCard({
   return (
     <button type="button" onClick={onClick} className={`flex w-full items-center gap-3 p-4 text-left ${primary ? PRIMARY_ACTION_CLASS : CLICKABLE_CARD_CLASS}`}>
       <span
-        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${primary ? "bg-white/15 text-white" : "bg-fairway-50 text-fairway-700"}`}
+        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${primary ? "bg-fixed-white/15 text-white" : "bg-fairway-50 text-fairway-700"}`}
       >
         {icon}
       </span>

@@ -298,7 +298,7 @@ export function VideoTrimSelector({
             onPointerUp={endDrag}
             onPointerCancel={endDrag}
           >
-            <div className="h-6 w-1 rounded-full bg-white/80" />
+            <div className="h-6 w-1 rounded-full bg-fixed-white/80" />
           </div>
           <div
             role="slider"
@@ -313,7 +313,7 @@ export function VideoTrimSelector({
             onPointerUp={endDrag}
             onPointerCancel={endDrag}
           >
-            <div className="h-6 w-1 rounded-full bg-white/80" />
+            <div className="h-6 w-1 rounded-full bg-fixed-white/80" />
           </div>
         </div>
         <p className="text-center text-xs font-semibold text-slate-600">

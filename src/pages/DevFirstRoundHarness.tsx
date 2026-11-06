@@ -58,7 +58,7 @@ export function DevFirstRoundHarness() {
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-md flex-col gap-4 bg-[#faf9f6] px-4 py-6">
+    <div className="mx-auto flex min-h-screen max-w-md flex-col gap-4 bg-page px-4 py-6">
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Dev harness · {view} · {locale}</p>
       {view === "card" && <HostReminderCard onHost={() => {}} />}
       {view === "share" && (
