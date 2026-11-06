@@ -1312,6 +1312,8 @@ export const ja: Record<TranslationKey, string> = {
   "tutorial.community.text": "ラウンドや写真、スイング動画を投稿して、GolfMeコミュニティとつながりましょう。",
   "tutorial.caddie.title": "Caddieを紹介します",
   "tutorial.caddie.text": "スイング動画をアップロードするとAIによるフィードバックが受けられ、上達の記録として分析結果を保存できます。",
+  "tutorial.appearance.title": "ライトとダーク",
+  "tutorial.appearance.text": "ライト、ダーク、またはスマートフォンの設定に合わせるかを選べます。この設定画面からいつでも変更できます。",
   "tutorial.done.title": "準備完了です",
   "tutorial.done.text": "ゴルファーを見つけて、もっとラウンドをプレーし、GolfMeでゴルフを上達させましょう。",
   "settings.logOut": "ログアウト",

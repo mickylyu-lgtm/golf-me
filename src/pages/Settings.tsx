@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { AlertTriangle, ArrowLeft, Bell, ChevronRight, CircleHelp, Eye, EyeOff, Globe, Info, Lock, LogOut, MapPin, Moon, RotateCcw, ShieldCheck, ShieldOff, Smartphone, Sparkles, Sun, User, Users } from "lucide-react";
 import { setAppearance, useAppearanceSetting } from "../lib/useAppearance";
 import type { AppearanceSetting } from "../lib/appearance";
+import { APPEARANCE_TUTORIAL_ID } from "../lib/tutorialSteps";
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
@@ -45,7 +46,7 @@ function AppearancePicker() {
     { value: "system", label: ios ? t("settings.appearanceSystem") : t("settings.appearanceSystemDevice"), icon: <Smartphone size={16} /> },
   ];
   return (
-    <div className="rounded-2xl border border-slate-100 bg-white p-4">
+    <div data-tutorial-id={APPEARANCE_TUTORIAL_ID} className="rounded-2xl border border-slate-100 bg-white p-4">
       <p id="appearance-label" className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
         {t("settings.appearance")}
       </p>

@@ -4,7 +4,8 @@
 // Sources (Micky, 2026-11-05, option A: $0):
 //   * USGS NAIP orthoimagery (The National Map, USGSImageryOnly), the
 //     default for US courses: public domain, no key, no cost. Cached tiles
-//     go to z16 only (404 above), so closer views scale z16 tiles up.
+//     go to z16 only (404 above), so closer views scale z16 tiles up (at
+//     most 1.4x in thumbnails, 1.23x in the drone overview).
 //     Attribution requested by USGS: "USGS The National Map: Orthoimagery".
 //   * MapTiler satellite, only when VITE_MAPTILER_KEY is set (option C):
 //     then it's used everywhere (sharper, worldwide). A publishable key,
@@ -183,10 +184,17 @@ export function tileMosaic(opts: { lat: number; lng: number; zoom: number; width
 // Highest tile zoom asked for; closer views scale these tiles up.
 export const MAX_TILE_ZOOM = 18;
 
+// Past the source's deepest zoom, tiles are drawn at most this much larger
+// than their own size (USGS z16 -> at most 358 px wide). A view framed
+// closer than that shows a little more ground around the course instead of
+// blurrier tiles.
+export const MAX_TILE_UPSCALE = 1.4;
+
 /** A fractional view zoom as whole-zoom tiles drawn larger or smaller:
- * zoom 15.6 -> z15 tiles drawn 256 * 2^0.6 = 388 px wide. */
+ * zoom 15.6 -> z15 tiles drawn 256 * 2^0.6 = 388 px wide. Beyond `maxZ` the
+ * zoom is held at maxZ + log2(MAX_TILE_UPSCALE). */
 export function tileZoomFor(zoom: number, maxZ = MAX_TILE_ZOOM): { z: number; tilePx: number } {
-  const zc = Number.isFinite(zoom) ? Math.max(0, zoom) : 0;
+  const zc = Math.min(Number.isFinite(zoom) ? Math.max(0, zoom) : 0, maxZ + Math.log2(MAX_TILE_UPSCALE));
   const z = Math.min(maxZ, Math.floor(zc));
   return { z, tilePx: 256 * 2 ** (zc - z) };
 }

@@ -1312,6 +1312,8 @@ export const es: Record<TranslationKey, string> = {
   "tutorial.community.text": "Publica rondas, fotos y videos de swing, y conéctate con la comunidad de GolfMe.",
   "tutorial.caddie.title": "Conoce a Caddie",
   "tutorial.caddie.text": "Sube un video de tu swing para recibir comentarios con IA y guarda tus análisis a medida que mejoras.",
+  "tutorial.appearance.title": "Claro u oscuro",
+  "tutorial.appearance.text": "Elige Claro, Oscuro o el mismo ajuste que tu teléfono. Puedes cambiarlo aquí en Configuración cuando quieras.",
   "tutorial.done.title": "Ya estás listo",
   "tutorial.done.text": "Encuentra golfistas, juega más rondas y mejora tu juego, todo en GolfMe.",
   "settings.logOut": "Cerrar sesión",

@@ -2,7 +2,17 @@ import { useEffect, useRef, useState } from "react";
 import type { Map as MaplibreMap } from "maplibre-gl";
 import { useLocale } from "../../i18n/LocaleContext";
 import { OSM_CREDIT_HTML, type TileSource } from "../../lib/satelliteTiles";
-import { OVERVIEW_PITCH, STILL_BEARING, orbitRunning, orbitStep, overviewMotion, type OverviewMotion } from "../../lib/droneOrbit";
+import {
+  OVERVIEW_PITCH,
+  STILL_BEARING,
+  maplibreZoom,
+  orbitRunning,
+  orbitStep,
+  overviewMotion,
+  overviewTileSize,
+  overviewZoomCap,
+  type OverviewMotion,
+} from "../../lib/droneOrbit";
 import { overviewFraming, type CourseBounds } from "../../../supabase/functions/_shared/courseBounds.ts";
 
 interface CourseOverviewMapProps {
@@ -22,7 +32,10 @@ interface CourseOverviewMapProps {
 
 // The "drone shot" (Micky, 2026-11-05): aerial imagery (USGS NAIP for US
 // courses, MapTiler when keyed) in
-// MapLibre, tilted to pitch 60 and slowly circling the course. Drag or
+// MapLibre, tilted to pitch 45 (was 60 until 2026-11-06) and slowly
+// circling the course. The camera never goes more than 0.3 zoom past the
+// source's deepest tiles (USGS: 16) and retina screens get USGS tiles at
+// native density (lib/droneOrbit overviewZoomCap / overviewTileSize). Drag or
 // pinch to look around; that pauses the circling, which carries on from
 // there after a few seconds. Reduced motion: the same tilted view, still.
 // It is the real satellite picture, only the camera moves. It circles the
@@ -46,15 +59,16 @@ function prefersReducedMotion(): boolean {
   return typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
 }
 
-function cameraFor(lat: number, lng: number, bounds: CourseBounds | null | undefined, el: HTMLElement) {
+function cameraFor(lat: number, lng: number, bounds: CourseBounds | null | undefined, el: HTMLElement, sourceMaxZoom: number) {
   const r = el.getBoundingClientRect();
-  const f = overviewFraming({ lat, lng }, bounds, r.width || 360, r.height || 225);
+  const f = overviewFraming({ lat, lng }, bounds, r.width || 360, r.height || 225, overviewZoomCap(sourceMaxZoom));
   // The camera may wander a little beyond the course, never far.
   const padLat = Math.max(BOUNDS_PAD_DEG, bounds ? (bounds.north - bounds.south) : 0);
   const padLng = Math.max(BOUNDS_PAD_DEG * 1.5, bounds ? (bounds.east - bounds.west) : 0);
   return {
     center: [f.lng, f.lat] as [number, number],
-    zoom: f.zoom,
+    // overviewFraming speaks tile (256 px) zoom; MapLibre's is one less.
+    zoom: maplibreZoom(f.zoom),
     maxBounds: [
       [f.lng - padLng, f.lat - padLat],
       [f.lng + padLng, f.lat + padLat],
@@ -160,14 +174,15 @@ export function CourseOverviewMap({ lat, lng, bounds, name, source, onFail }: Co
       .then(([mod]) => {
         if (cancelled) return;
         const maplibregl = mod.default;
-        const camera = cameraFor(lat, lng, boundsRef.current, container);
+        const camera = cameraFor(lat, lng, boundsRef.current, container, source.maxZoom);
+        const tileSize = overviewTileSize(source.id, window.devicePixelRatio || 1);
         try {
           map = new maplibregl.Map({
             container,
             style: {
               version: 8,
               sources: {
-                satellite: { type: "raster", tiles: [source.template], tileSize: 256, maxzoom: source.maxZoom, attribution: `${source.creditHtml} ${OSM_CREDIT_HTML}` },
+                satellite: { type: "raster", tiles: [source.template], tileSize, maxzoom: source.maxZoom, attribution: `${source.creditHtml} ${OSM_CREDIT_HTML}` },
               },
               layers: [{ id: "satellite", type: "raster", source: "satellite" }],
             },
@@ -175,8 +190,10 @@ export function CourseOverviewMap({ lat, lng, bounds, name, source, onFail }: Co
             zoom: camera.zoom,
             pitch: OVERVIEW_PITCH,
             bearing: motion === "still" ? STILL_BEARING : 0,
-            minZoom: 13.5,
-            maxZoom: 18.5,
+            minZoom: 12.5,
+            // Pinching in stops where the imagery would only get blurrier:
+            // tile zoom 16.3 on USGS (MapLibre 15.3), 17.5 on MapTiler.
+            maxZoom: maplibreZoom(overviewZoomCap(source.maxZoom)),
             maxPitch: 70,
             maxBounds: camera.maxBounds,
             // A page scrolls past this box: the mouse wheel scrolls the page;
@@ -252,10 +269,10 @@ export function CourseOverviewMap({ lat, lng, bounds, name, source, onFail }: Co
     const map = mapRef.current;
     const container = containerRef.current;
     if (!map || !container || !boundsKey) return;
-    const camera = cameraFor(lat, lng, boundsRef.current, container);
+    const camera = cameraFor(lat, lng, boundsRef.current, container, source.maxZoom);
     map.setMaxBounds(camera.maxBounds);
     map.jumpTo({ center: camera.center, zoom: camera.zoom });
-  }, [boundsKey, lat, lng]);
+  }, [boundsKey, lat, lng, source.maxZoom]);
 
   return (
     <div ref={boxRef} className="absolute inset-0">

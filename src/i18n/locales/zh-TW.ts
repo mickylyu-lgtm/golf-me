@@ -1312,6 +1312,8 @@ export const zhTW: Record<TranslationKey, string> = {
   "tutorial.community.text": "發布球局、照片和揮桿影片，與 GolfMe 社群互動。",
   "tutorial.caddie.title": "認識 Caddie",
   "tutorial.caddie.text": "上傳揮桿影片即可獲得 AI 回饋，並保存分析紀錄，見證自己的進步。",
+  "tutorial.appearance.title": "淺色或深色",
+  "tutorial.appearance.text": "可選擇淺色、深色，或跟隨手機設定。隨時都能在設定的這裡更改。",
   "tutorial.done.title": "一切就緒",
   "tutorial.done.text": "在 GolfMe 尋找球友、打更多球局、提升你的球技。",
   "settings.logOut": "登出",

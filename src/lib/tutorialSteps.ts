@@ -15,6 +15,8 @@ export const NAV_TUTORIAL_ID_BY_PATH: Record<string, string> = {
 export const COMMUNITY_TUTORIAL_ID = "tutorial-community";
 // The course map button beside Play's search bar (Rounds tab).
 export const COURSE_MAP_TUTORIAL_ID = "tutorial-course-map";
+// Settings -> App -> Appearance (Light / Dark / Match iPhone).
+export const APPEARANCE_TUTORIAL_ID = "tutorial-appearance";
 
 export interface TutorialStep {
   route: string;
@@ -41,6 +43,10 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   { route: "/find?tab=rounds", targetId: COURSE_MAP_TUTORIAL_ID, titleKey: "tutorial.courseMap.title", textKey: "tutorial.courseMap.text" },
   { route: "/messages", targetId: "nav-messages", titleKey: "tutorial.chat.title", textKey: "tutorial.chat.text" },
   { route: "/caddie", targetId: "nav-caddie", titleKey: "tutorial.caddie.title", textKey: "tutorial.caddie.text" },
+  // Micky, 2026-11-06: show light/dark mode in the tour. Opens Settings
+  // (lazy page, so TutorialOverlay keeps re-measuring a little longer while
+  // a target is missing) and scrolls the Appearance card into view.
+  { route: "/settings", targetId: APPEARANCE_TUTORIAL_ID, titleKey: "tutorial.appearance.title", textKey: "tutorial.appearance.text" },
 ];
 
 // The last index is the closing screen -- no spotlight, no progress

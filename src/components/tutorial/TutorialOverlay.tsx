@@ -65,12 +65,14 @@ export function TutorialOverlay() {
     // target is a normal in-flow element that can sit well below the fold
     // depending on how much Home content is above it -- scrollIntoView
     // covers that case too (a no-op for anything already visible).
+    let found = false;
     const measure = () => {
       const el = findVisibleTarget(targetId);
       if (!el) {
         setRect(null);
         return;
       }
+      found = true;
       el.scrollIntoView({ block: "center", behavior: "auto" });
       setRect(el.getBoundingClientRect());
     };
@@ -83,11 +85,21 @@ export function TutorialOverlay() {
     // post-slide) either way without an open-ended poll.
     const t1 = window.setTimeout(measure, 80);
     const t2 = window.setTimeout(measure, 320);
+    // A lazy route (the Settings/Appearance step) may still be loading its
+    // chunk at 320ms: two more tries, only while nothing was found yet, so
+    // an already-placed spotlight is never re-scrolled. Still bounded.
+    const late = () => {
+      if (!found) measure();
+    };
+    const t3 = window.setTimeout(late, 800);
+    const t4 = window.setTimeout(late, 1600);
     window.addEventListener("resize", measure);
     window.addEventListener("orientationchange", measure);
     return () => {
       window.clearTimeout(t1);
       window.clearTimeout(t2);
+      window.clearTimeout(t3);
+      window.clearTimeout(t4);
       window.removeEventListener("resize", measure);
       window.removeEventListener("orientationchange", measure);
     };

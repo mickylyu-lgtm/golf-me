@@ -169,12 +169,20 @@ export function stillFraming(point: { lat: number; lng: number }, bounds: Course
   return { lat: point.lat, lng: point.lng, zoom: fallbackZoom };
 }
 
-/** The drone overview's orbit centre and zoom. A tilted camera shows more
- * ground behind the centre, so it sits a little closer than a flat fit. */
-export function overviewFraming(point: { lat: number; lng: number }, bounds: CourseBounds | null | undefined, width: number, height: number): Framing {
+// A tilted camera shows more ground behind the centre, so the overview sits
+// a little closer than a flat fit.
+export const OVERVIEW_TILT_ZOOM = 0.35;
+
+/** The drone overview's orbit centre and zoom, in tile (256 px) zoom like
+ * fitZoom; MapLibre's zoom is one less (lib/droneOrbit maplibreZoom).
+ * `maxZoom` is the source's cap (lib/droneOrbit overviewZoomCap: USGS
+ * 16.3), so a small course is framed as close as the imagery stays sharp,
+ * never closer. */
+export function overviewFraming(point: { lat: number; lng: number }, bounds: CourseBounds | null | undefined, width: number, height: number, maxZoom = 17.5): Framing {
+  const cap = Math.max(13.5, Math.min(17.5, maxZoom));
   if (validBounds(bounds)) {
     const c = boundsCenter(bounds);
-    return { ...c, zoom: Math.min(17.5, Math.max(13.5, fitZoom(bounds, width, height, 0) + 0.35)) };
+    return { ...c, zoom: Math.min(cap, Math.max(13.5, fitZoom(bounds, width, height, 0) + OVERVIEW_TILT_ZOOM)) };
   }
-  return { lat: point.lat, lng: point.lng, zoom: POINT_OVERVIEW_ZOOM };
+  return { lat: point.lat, lng: point.lng, zoom: Math.min(cap, POINT_OVERVIEW_ZOOM) };
 }

@@ -1312,6 +1312,8 @@ export const ko: Record<TranslationKey, string> = {
   "tutorial.community.text": "라운드, 사진, 스윙 영상을 게시하고 GolfMe 커뮤니티와 소통해 보세요.",
   "tutorial.caddie.title": "Caddie를 만나보세요",
   "tutorial.caddie.text": "스윙 영상을 업로드하면 AI 기반 피드백을 받고, 실력이 느는 과정을 분석 기록으로 저장할 수 있습니다.",
+  "tutorial.appearance.title": "라이트 또는 다크",
+  "tutorial.appearance.text": "라이트, 다크 또는 휴대폰 설정에 맞추기 중에서 고르세요. 설정의 이 화면에서 언제든 바꿀 수 있어요.",
   "tutorial.done.title": "이제 준비됐어요",
   "tutorial.done.text": "골퍼를 찾고, 더 많은 라운드를 플레이하고, GolfMe에서 실력을 키워보세요.",
   "settings.logOut": "로그아웃",

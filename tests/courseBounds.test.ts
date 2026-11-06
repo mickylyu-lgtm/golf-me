@@ -98,7 +98,10 @@ test("fractional zooms become whole-zoom tiles drawn to scale", () => {
   const t = tileZoomFor(15.5);
   assert.equal(t.z, 15);
   assert.ok(Math.abs(t.tilePx - 256 * Math.SQRT2) < 1e-9);
-  assert.deepEqual(tileZoomFor(20, 18), { z: 18, tilePx: 1024 });
+  // Past the source's deepest zoom tiles grow at most 1.4x (was 4x here).
+  const deep = tileZoomFor(20, 18);
+  assert.equal(deep.z, 18);
+  assert.ok(Math.abs(deep.tilePx - 256 * 1.4) < 1e-9, String(deep.tilePx));
   assert.deepEqual(tileZoomFor(NaN), { z: 0, tilePx: 256 });
 });
 

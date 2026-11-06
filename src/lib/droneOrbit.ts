@@ -6,8 +6,45 @@
 // One full circle a minute: slow enough to read the holes, fast enough to
 // look alive.
 export const ORBIT_DEG_PER_SEC = 6;
-export const OVERVIEW_PITCH = 60;
-export const OVERVIEW_ZOOM = 15.6;
+// 45, not 60 (Micky, 2026-11-06: "make the drone shot clearer"): a steeper
+// tilt stretches the near ground across more pixels and fills the far half
+// with lower-zoom tiles, both of which read as blur on NAIP imagery.
+export const OVERVIEW_PITCH = 45;
+
+// ---- Zoom units ----
+// Two conventions meet here. courseBounds' fitZoom, the tile sources'
+// maxZoom and SatelliteTiles use 256 px tiles ("tile zoom": z16 = a USGS
+// z16 tile drawn 256 CSS px wide). MapLibre's zoom is one less for the same
+// scale (its world is 512 px at zoom 0). The overview used to hand the tile
+// zoom straight to MapLibre, so it sat a whole zoom level closer than its
+// framing meant: Forest Park ended up at tile zoom ~16.7, z16 NAIP scaled up
+// 1.6x (3-5x on a retina screen).
+
+/** MapLibre zoom for a tile (256 px) zoom. */
+export function maplibreZoom(tileZoom: number): number {
+  return tileZoom - 1;
+}
+
+// How far past the source's deepest tiles the camera may go (tile zoom):
+// 0.3 = tiles drawn at most 1.23x their size. USGS NAIP stops at 16, so its
+// overview never goes past 16.3; MapTiler (19) keeps the old 17.5 limit.
+export const OVERZOOM_ALLOWANCE = 0.3;
+const OVERVIEW_MAX_TILE_ZOOM = 17.5;
+
+/** Deepest tile zoom the overview camera may use for this source. */
+export function overviewZoomCap(sourceMaxZoom: number): number {
+  const max = Number.isFinite(sourceMaxZoom) ? sourceMaxZoom : 16;
+  return Math.min(OVERVIEW_MAX_TILE_ZOOM, max + OVERZOOM_ALLOWANCE);
+}
+
+/** The raster source's tileSize. On a retina screen USGS tiles are declared
+ * 128 px, so MapLibre asks for the next zoom up and draws each 256 px tile
+ * at the screen's own density instead of scaling it 2x (up to z16, where
+ * NAIP stops). MapTiler stays at 256: it bills per tile and is sharp
+ * already. */
+export function overviewTileSize(sourceId: string, devicePixelRatio: number): 128 | 256 {
+  return sourceId === "usgs" && Number.isFinite(devicePixelRatio) && devicePixelRatio >= 1.5 ? 128 : 256;
+}
 // The still view under reduced motion: same tilt, a fixed heading.
 export const STILL_BEARING = 30;
 // After the golfer drags/pinches, the orbit waits this long before it

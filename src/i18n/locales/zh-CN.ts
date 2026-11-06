@@ -1312,6 +1312,8 @@ export const zhCN: Record<TranslationKey, string> = {
   "tutorial.community.text": "发布球局、照片和挥杆视频，与 GolfMe 社区互动。",
   "tutorial.caddie.title": "认识 Caddie",
   "tutorial.caddie.text": "上传挥杆视频即可获得 AI 反馈，并保存分析记录，见证自己的进步。",
+  "tutorial.appearance.title": "浅色或深色",
+  "tutorial.appearance.text": "可选择浅色、深色，或跟随手机设置。随时都能在设置的这里更改。",
   "tutorial.done.title": "一切就绪",
   "tutorial.done.text": "在 GolfMe 寻找球友、打更多球局、提升你的球技。",
   "settings.logOut": "退出登录",

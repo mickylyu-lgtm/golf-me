@@ -1227,6 +1227,8 @@ export const en = {
   "tutorial.community.text": "Post rounds, photos and swing videos, and connect with the GolfMe community.",
   "tutorial.caddie.title": "Meet Caddie",
   "tutorial.caddie.text": "Upload a swing video to get AI-powered feedback and save your analyses as you improve.",
+  "tutorial.appearance.title": "Light or Dark",
+  "tutorial.appearance.text": "Choose Light, Dark, or match your phone's setting. You can change it here in Settings anytime.",
   "tutorial.done.title": "You're Ready",
   "tutorial.done.text": "Find golfers, play more rounds, and improve your game — all in GolfMe.",
   "settings.logOut": "Log out",
