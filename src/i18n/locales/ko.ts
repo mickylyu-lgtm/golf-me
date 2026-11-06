@@ -1484,6 +1484,8 @@ export const ko: Record<TranslationKey, string> = {
   "tutorial.courseMap.text": "내 주변 골프장을 지도에서 확인하세요. 핀을 누르면 상세 정보와 길찾기를 보거나 그곳에서 라운드를 열 수 있어요.",
   "tutorial.chat.title": "연락을 이어가세요",
   "tutorial.chat.text": "골퍼에게 메시지를 보내고, 라운드 일정을 조율하고, 다시 함께 플레이하고 싶은 사람과 연락을 유지하세요.",
+  "tutorial.verified.title": "인증 받기",
+  "tutorial.verified.text": "이메일을 인증하고, 사진을 추가하고, 라운드를 한 번 해보세요. 골퍼들은 이 배지가 있는 플레이어를 믿어요.",
   "tutorial.community.title": "골프를 공유하세요",
   "tutorial.community.text": "라운드, 사진, 스윙 영상을 게시하고 GolfMe 커뮤니티와 소통해 보세요.",
   "tutorial.caddie.title": "Caddie를 만나보세요",

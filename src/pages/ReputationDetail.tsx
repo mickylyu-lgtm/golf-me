@@ -18,6 +18,7 @@ import { useVerifiedGolferChecklist } from "../lib/useVerifiedGolferChecklist";
 import { TIER_DEFS, tierDisplayName } from "../lib/reputationTiers";
 import { supabase } from "../lib/supabase";
 import { goBack } from "../lib/goBack";
+import { VERIFIED_TUTORIAL_ID } from "../lib/tutorialSteps";
 
 export function ReputationDetail() {
   const { currentUser, reviewsAbout, setEmailVerified, syncDemoVerifiedGolfer, updateCurrentUserProfile } = useData();
@@ -164,7 +165,7 @@ export function ReputationDetail() {
         )}
       </div>
 
-      <div className="rounded-2xl border border-slate-100 bg-white p-5">
+      <div data-tutorial-id={VERIFIED_TUTORIAL_ID} className="rounded-2xl border border-slate-100 bg-white p-5">
         <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-slate-400">{t("reputation.trustVerification")}</p>
         {verified.status === "ready" ? (
           <VerifiedGolferCard

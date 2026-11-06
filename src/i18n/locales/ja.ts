@@ -1484,6 +1484,8 @@ export const ja: Record<TranslationKey, string> = {
   "tutorial.courseMap.text": "近くのゴルフコースを地図で確認できます。ピンをタップすると詳細や道順を見たり、そこでラウンドを主催したりできます。",
   "tutorial.chat.title": "つながりを保とう",
   "tutorial.chat.text": "ゴルファーとメッセージをやり取りし、ラウンドを調整し、また一緒にプレーしたい人と連絡を取り合えます。",
+  "tutorial.verified.title": "認証を受けよう",
+  "tutorial.verified.text": "メールを確認し、写真を追加して、1ラウンドプレーしましょう。このバッジのあるプレーヤーはゴルファーから信頼されます。",
   "tutorial.community.title": "ゴルフをシェアしよう",
   "tutorial.community.text": "ラウンドや写真、スイング動画を投稿して、GolfMeコミュニティとつながりましょう。",
   "tutorial.caddie.title": "Caddieを紹介します",

@@ -1484,6 +1484,8 @@ export const zhTW: Record<TranslationKey, string> = {
   "tutorial.courseMap.text": "在地圖上查看附近的高爾夫球場。點一下圖釘即可查看詳情、導航，或在那裡發起球局。",
   "tutorial.chat.title": "保持聯繫",
   "tutorial.chat.text": "傳訊息給球友，安排球局，並與想再次一起打球的人保持聯繫。",
+  "tutorial.verified.title": "取得認證",
+  "tutorial.verified.text": "驗證電子郵件、新增照片並打一場球。球友更信任帶有這枚徽章的球員。",
   "tutorial.community.title": "分享你的高爾夫",
   "tutorial.community.text": "發布球局、照片和揮桿影片，與 GolfMe 社群互動。",
   "tutorial.caddie.title": "認識 Caddie",

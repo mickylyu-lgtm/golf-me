@@ -1348,6 +1348,8 @@ export const en = {
   "tutorial.courseMap.text": "See golf courses near you on a map. Tap a pin for details, directions, or to host a round there.",
   "tutorial.chat.title": "Stay Connected",
   "tutorial.chat.text": "Message golfers, coordinate rounds, and keep in touch with people you want to play with again.",
+  "tutorial.verified.title": "Get verified",
+  "tutorial.verified.text": "Confirm your email, add a photo and play one round. Golfers trust players with this badge.",
   "tutorial.community.title": "Share Your Golf",
   "tutorial.community.text": "Post rounds, photos and swing videos, and connect with the GolfMe community.",
   "tutorial.caddie.title": "Meet Caddie",

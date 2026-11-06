@@ -1484,6 +1484,8 @@ export const es: Record<TranslationKey, string> = {
   "tutorial.courseMap.text": "Mira los campos de golf cerca de ti en un mapa. Toca un pin para ver detalles, cómo llegar u organizar una ronda allí.",
   "tutorial.chat.title": "Mantente conectado",
   "tutorial.chat.text": "Escribe a golfistas, coordina rondas y mantente en contacto con quienes quieras volver a jugar.",
+  "tutorial.verified.title": "Verifícate",
+  "tutorial.verified.text": "Confirma tu correo, añade una foto y juega una ronda. Los golfistas confían en quien lleva esta insignia.",
   "tutorial.community.title": "Comparte tu golf",
   "tutorial.community.text": "Publica rondas, fotos y videos de swing, y conéctate con la comunidad de GolfMe.",
   "tutorial.caddie.title": "Conoce a Caddie",

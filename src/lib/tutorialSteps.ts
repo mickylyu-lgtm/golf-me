@@ -15,6 +15,8 @@ export const NAV_TUTORIAL_ID_BY_PATH: Record<string, string> = {
 export const COMMUNITY_TUTORIAL_ID = "tutorial-community";
 // The course map button beside Play's search bar (Rounds tab).
 export const COURSE_MAP_TUTORIAL_ID = "tutorial-course-map";
+// Me -> Reputation -> the Trust & verification card (Verified Golfer badge).
+export const VERIFIED_TUTORIAL_ID = "tutorial-verified-golfer";
 // Settings -> App -> Appearance (Light / Dark / Match iPhone).
 export const APPEARANCE_TUTORIAL_ID = "tutorial-appearance";
 
@@ -42,6 +44,11 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   // found the card just centres.
   { route: "/find?tab=rounds", targetId: COURSE_MAP_TUTORIAL_ID, titleKey: "tutorial.courseMap.title", textKey: "tutorial.courseMap.text" },
   { route: "/messages", targetId: "nav-messages", titleKey: "tutorial.chat.title", textKey: "tutorial.chat.text" },
+  // Micky, 2026-11-06: the Verified Golfer badge belongs in the tour. Opens
+  // Reputation (lazy page, same late re-measure as Settings) and spotlights
+  // the whole Trust & verification card, which always renders (also the
+  // pre-migration email-only fallback), so the target can't go missing.
+  { route: "/profile/reputation", targetId: VERIFIED_TUTORIAL_ID, titleKey: "tutorial.verified.title", textKey: "tutorial.verified.text" },
   { route: "/caddie", targetId: "nav-caddie", titleKey: "tutorial.caddie.title", textKey: "tutorial.caddie.text" },
   // Micky, 2026-11-06: show light/dark mode in the tour. Opens Settings
   // (lazy page, so TutorialOverlay keeps re-measuring a little longer while

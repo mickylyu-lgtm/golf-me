@@ -9,6 +9,7 @@ import {
   NAV_TUTORIAL_ID_BY_PATH,
   TUTORIAL_LAST_INDEX,
   TUTORIAL_STEPS,
+  VERIFIED_TUTORIAL_ID,
 } from "../src/lib/tutorialSteps.ts";
 import { en } from "../src/i18n/locales/en.ts";
 import { zhCN } from "../src/i18n/locales/zh-CN.ts";
@@ -27,10 +28,10 @@ function srcFiles(dir: string): string[] {
   });
 }
 
-test("the tour ends on Settings -> Appearance, after Play, the course map, Chat and Caddie", () => {
+test("the tour ends on Settings -> Appearance, after Play, the course map, Chat, Verified Golfer and Caddie", () => {
   assert.deepEqual(
     TUTORIAL_STEPS.map((s) => s.targetId),
-    ["nav-play", COURSE_MAP_TUTORIAL_ID, "nav-messages", "nav-caddie", APPEARANCE_TUTORIAL_ID],
+    ["nav-play", COURSE_MAP_TUTORIAL_ID, "nav-messages", VERIFIED_TUTORIAL_ID, "nav-caddie", APPEARANCE_TUTORIAL_ID],
   );
   const last = TUTORIAL_STEPS[TUTORIAL_LAST_INDEX];
   assert.equal(last.route, "/settings");
@@ -55,6 +56,7 @@ test("every non-nav target id is put on an element by some screen", () => {
   const constName: Record<string, string> = {
     [COURSE_MAP_TUTORIAL_ID]: "COURSE_MAP_TUTORIAL_ID",
     [APPEARANCE_TUTORIAL_ID]: "APPEARANCE_TUTORIAL_ID",
+    [VERIFIED_TUTORIAL_ID]: "VERIFIED_TUTORIAL_ID",
   };
   for (const { targetId } of TUTORIAL_STEPS) {
     if (!targetId || navIds.has(targetId)) continue;
@@ -64,6 +66,19 @@ test("every non-nav target id is put on an element by some screen", () => {
       sources.some((s) => s.includes(`data-tutorial-id={${name}}`)),
       `no element carries data-tutorial-id={${name}}`,
     );
+  }
+});
+
+test("the Verified Golfer step targets the always-rendered Trust & verification card", () => {
+  const step = TUTORIAL_STEPS.find((s) => s.targetId === VERIFIED_TUTORIAL_ID);
+  assert.ok(step);
+  assert.equal(step.route, "/profile/reputation");
+  const page = fs.readFileSync(path.join(import.meta.dirname, "..", "src", "pages", "ReputationDetail.tsx"), "utf8");
+  const card = page.slice(page.indexOf("data-tutorial-id={VERIFIED_TUTORIAL_ID}"));
+  // the id sits on the card wrapper, outside the "migration applied?" branch
+  assert.ok(card.indexOf('t("reputation.trustVerification")') < card.indexOf('verified.status === "ready"'));
+  for (const [name, dict] of Object.entries(LOCALES)) {
+    assert.doesNotMatch(dict["tutorial.verified.text"], /[\u{1F300}-\u{1FAFF}✨]/u, `${name}: no emojis`);
   }
 });
 

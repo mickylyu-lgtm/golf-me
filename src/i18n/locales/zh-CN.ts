@@ -1484,6 +1484,8 @@ export const zhCN: Record<TranslationKey, string> = {
   "tutorial.courseMap.text": "在地图上查看附近的高尔夫球场。点一下图钉即可查看详情、导航，或在那里发起球局。",
   "tutorial.chat.title": "保持联系",
   "tutorial.chat.text": "给球友发消息，安排球局，并与想再次一起打球的人保持联系。",
+  "tutorial.verified.title": "获得认证",
+  "tutorial.verified.text": "验证邮箱、添加照片并打一场球。球友更信任带有这枚徽章的球员。",
   "tutorial.community.title": "分享你的高尔夫",
   "tutorial.community.text": "发布球局、照片和挥杆视频，与 GolfMe 社区互动。",
   "tutorial.caddie.title": "认识 Caddie",
