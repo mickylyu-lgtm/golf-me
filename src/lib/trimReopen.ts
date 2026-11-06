@@ -97,13 +97,32 @@ export async function resolveTrimReopen(opts: {
   }
 }
 
-/** Ask Caddie may only start with a video, a picked club, and no selector open or reopening. */
-export function canStartAnalysis(state: {
+export interface AnalysisStartState {
   hasVideo: boolean;
   hasClub: boolean;
   submitting: boolean;
   selectorOpen: boolean;
   reopening: boolean;
-}): boolean {
-  return state.hasVideo && state.hasClub && !state.submitting && !state.selectorOpen && !state.reopening;
+}
+
+export type AnalysisBlocker = "submitting" | "selectorOpen" | "reopening" | "noVideo" | "noClub";
+
+/**
+ * Why Ask Caddie is disabled, or null when it may start. "noClub" is
+ * checked last on purpose: it is only the answer when a video is present
+ * and nothing else is blocking, which is exactly when the page shows
+ * "Choose a club to continue".
+ */
+export function analysisBlocker(state: AnalysisStartState): AnalysisBlocker | null {
+  if (state.submitting) return "submitting";
+  if (state.selectorOpen) return "selectorOpen";
+  if (state.reopening) return "reopening";
+  if (!state.hasVideo) return "noVideo";
+  if (!state.hasClub) return "noClub";
+  return null;
+}
+
+/** Ask Caddie may only start with a video, a picked club, and no selector open or reopening. */
+export function canStartAnalysis(state: AnalysisStartState): boolean {
+  return analysisBlocker(state) === null;
 }

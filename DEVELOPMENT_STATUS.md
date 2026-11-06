@@ -14,6 +14,7 @@ Note: Phases between Phase 20/21 (see below) and Phase 22 span roughly 31 commit
 
 **Not shipped yet (exact next actions):**
 - In progress (local worktrees, not shipped): chat video messages (60 s, server transcode, 180-day retention, one picker), native one-tap video picker for build 2.5, Caddie saved swings. Smooth keyboard motion is built and committed locally on `feat/keyboard-motion` (see its section below; not pushed or deployed). Club picker with vector art, scan fixes and the video can't-play overlay are LIVE (main).
+- Caddie club picker "required" UX (see its section): SHIPPED 2026-11-06; Micky reviews scratchpad `club-required-ux/` screenshots, then ship (client only).
 - Booking stage 2/3 migration `20261107150000` still NOT applied (client dormant). It now also lists `post_liked`.
 - iOS 2.5 (1) one-tap video + multi-select picker (see its section below): local commit, not pushed; web part is safe on 2.4 (falls back), the native part needs an Xcode build + iPhone check.
 - Photo-with-caption push text still starts with "📷 " (server function `notify_new_message`): fold into the next migration.
@@ -87,6 +88,13 @@ Checks: `npm run check` green (919/919 incl. `tests/verifiedGolfer.test.ts`); PG
 **Tutorial step (Micky approved v2, "much better"):** "Get verified" after Chat and before Caddie (`VERIFIED_TUTORIAL_ID`, route `/profile/reputation`), spotlighting the whole Trust & verification card, which always renders (so also before the migration). Strings ×6 `tutorial.verified.*`; `tests/tutorialSteps.test.ts` updated. Headless on demo (tour started via the fiber tree, since it only auto-starts for real accounts): step 4 of 5, spotlight on the card, light + dark (scratchpad `verified-badge-v2/tutorial-verified-*.png`).
 
 Next: Micky applies `verified-badge-apply.sql` (check false → true). Then on a real account: Reputation shows the checklist; add/remove a photo and complete a two-person round to see the badge flip on another account's view. Privacy Policy: mention that the badge is computed from email confirmation / sign-in provider, photo presence and completed rounds, and that only the yes/no badge is shown to others.
+## Caddie club picker: requirement made explicit — 2026-11-06 (local commit, not pushed/deployed; client only, no migration, no Edge Function change)
+- Reported "Driver needs a second selection": traced, not a state bug. Driver has two clubs (Driver, Mini Driver), so the card opens chips and the first chip tap picks (headless: one chip tap enables Ask Caddie; re-tapping the card keeps it). Nothing clears or delays the first pick (card tap only clears a club from ANOTHER category; draft restore and the draft write keep it).
+- Card tap picks a club by itself only when its category has exactly one (`onlyClubIn` / `clubAfterCardTap` in `lib/clubCatalog.ts`); no category qualifies today, so behaviour is unchanged. Never a default in a multi-option category.
+- Label "Club (required)" (`caddie.club.requiredLabel`); an opened category with no chip shows "Pick your exact club" (`caddie.club.pickExact`, aria-describedby on the chip group); when the club is the only thing blocking Ask Caddie (video present, nothing else), "Choose a club to continue" under the button (`caddie.club.chooseToContinue`, aria-describedby on the button). Reason logic: `analysisBlocker()` in `lib/trimReopen.ts` (`canStartAnalysis` = no blocker). All 6 locales.
+- Only a catalog value counts as a club (`isCatalogClub`, `restoredDraftClub`): a stale draft value reads as missing. Server checks unchanged.
+- A11y: both radiogroups `aria-required`; arrow keys/Home/End move focus within a row (Space/Enter picks); inset focus ring on cards (the row scrolls and would clip an outline).
+- Needs a real iPhone: VoiceOver reading the hint on the disabled button; the first tap on a card/chip registering as a click (not a hover) in WKWebView.
 
 ## Community video: black screen on another account — 2026-11-06 (branch `fix/video-playback-accounts`, first made off 7a22d01, rebased onto origin/main b0621c7 on 2026-11-06; one local commit, not pushed/deployed; golfme-architect; no migration, no backend, no native change)
 

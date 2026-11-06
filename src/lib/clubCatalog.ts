@@ -27,6 +27,52 @@ export const CLUBS_BY_CATEGORY: Record<ClubCategory, readonly string[]> = {
 
 export const ALL_CLUB_VALUES: readonly string[] = CLUB_CATEGORIES.flatMap((c) => CLUBS_BY_CATEGORY[c]);
 
+/**
+ * True only for a value the picker offers today. What satisfies "a club is
+ * picked" on the upload screen: a stale draft value (Putter, an older typed
+ * string, anything not in the catalog) counts as no club. Client-side only;
+ * analyze-swing's own checks are unchanged.
+ */
+export function isCatalogClub(value: string | null | undefined): value is string {
+  return typeof value === "string" && ALL_CLUB_VALUES.includes(value);
+}
+
+/**
+ * The club a category card picks by itself: only when that category offers
+ * EXACTLY ONE club (nothing to choose between, so no default is invented).
+ * Null for every multi-option category. No category qualifies today
+ * (Driver has Driver and Mini Driver), so a card tap only opens its chips.
+ */
+export function onlyClubIn(
+  category: ClubCategory,
+  catalog: Record<ClubCategory, readonly string[]> = CLUBS_BY_CATEGORY,
+): string | null {
+  const clubs = catalog[category];
+  return clubs && clubs.length === 1 ? clubs[0] : null;
+}
+
+/**
+ * The picked club after a category card tap: that category's only club when
+ * it has exactly one; "" when the current club belongs to another category
+ * (it is no longer what was picked); otherwise unchanged (re-tapping the
+ * card of the club already picked keeps it). Never a default otherwise:
+ * with several clubs the card only opens its chips, and one chip tap picks.
+ */
+export function clubAfterCardTap(
+  category: ClubCategory,
+  value: string,
+  catalog: Record<ClubCategory, readonly string[]> = CLUBS_BY_CATEGORY,
+): string {
+  const only = onlyClubIn(category, catalog);
+  if (only) return only;
+  return value && clubCategoryOf(value) !== category ? "" : value;
+}
+
+/** The club a saved upload draft brings back: only a catalog value, else none. */
+export function restoredDraftClub(saved: string | null | undefined): string {
+  return isCatalogClub(saved) ? saved : "";
+}
+
 /** The category card a stored value belongs to (also for older typed values), or null. */
 export function clubCategoryOf(value: string | null | undefined): ClubCategory | null {
   const club = parseClub(value);

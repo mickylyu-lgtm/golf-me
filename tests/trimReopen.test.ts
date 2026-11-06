@@ -1,7 +1,7 @@
 // Run: node --test tests/trimReopen.test.ts  (built-in type stripping)
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { canStartAnalysis, createTrimReopenGate, resolveTrimReopen, type TrimDraftIdentity } from "../src/lib/trimReopen.ts";
+import { analysisBlocker, canStartAnalysis, createTrimReopenGate, resolveTrimReopen, type TrimDraftIdentity } from "../src/lib/trimReopen.ts";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -175,4 +175,25 @@ test("canStartAnalysis: needs a video and a club, no submit, no open or reopenin
   assert.equal(canStartAnalysis({ ...ok, submitting: true }), false);
   assert.equal(canStartAnalysis({ ...ok, selectorOpen: true }), false);
   assert.equal(canStartAnalysis({ ...ok, reopening: true }), false);
+});
+
+test("analysisBlocker: names why Ask Caddie is disabled; noClub only when it is the one thing missing", () => {
+  const ok = { hasVideo: true, hasClub: true, submitting: false, selectorOpen: false, reopening: false };
+  assert.equal(analysisBlocker(ok), null);
+  assert.equal(analysisBlocker({ ...ok, hasClub: false }), "noClub");
+  assert.equal(analysisBlocker({ ...ok, hasVideo: false }), "noVideo");
+  assert.equal(analysisBlocker({ ...ok, submitting: true }), "submitting");
+  assert.equal(analysisBlocker({ ...ok, selectorOpen: true }), "selectorOpen");
+  assert.equal(analysisBlocker({ ...ok, reopening: true }), "reopening");
+  // No club AND something else: the other reason wins, so "Choose a club to continue" stays hidden.
+  assert.equal(analysisBlocker({ ...ok, hasClub: false, hasVideo: false }), "noVideo");
+  assert.equal(analysisBlocker({ ...ok, hasClub: false, submitting: true }), "submitting");
+  assert.equal(analysisBlocker({ ...ok, hasClub: false, selectorOpen: true }), "selectorOpen");
+  assert.equal(analysisBlocker({ ...ok, hasClub: false, reopening: true }), "reopening");
+  // Same rule as canStartAnalysis for every combination.
+  const keys = ["hasVideo", "hasClub", "submitting", "selectorOpen", "reopening"] as const;
+  for (let mask = 0; mask < 1 << keys.length; mask++) {
+    const s = Object.fromEntries(keys.map((k, i) => [k, Boolean(mask & (1 << i))])) as unknown as typeof ok;
+    assert.equal(canStartAnalysis(s), analysisBlocker(s) === null, JSON.stringify(s));
+  }
 });

@@ -12,12 +12,12 @@ import { ClubPicker } from "../components/caddie/ClubPicker";
 import { VideoTrimSelector } from "../components/caddie/VideoTrimSelector";
 import { FilmingTips } from "../components/caddie/FilmingTips";
 import { captureVideoThumbnail, readVideoDuration } from "../lib/image";
-import { canStartAnalysis, createTrimReopenGate, resolveTrimReopen } from "../lib/trimReopen";
+import { analysisBlocker, canStartAnalysis, createTrimReopenGate, resolveTrimReopen } from "../lib/trimReopen";
 import { formatClock } from "../lib/format";
 import { supabase } from "../lib/supabase";
 import { CADDIE_MEDIA_BUCKET } from "../lib/caddieMedia";
 import { CaddieRequestError } from "../lib/caddieAnalysis";
-import { ALL_CLUB_VALUES } from "../lib/clubCatalog";
+import { isCatalogClub, restoredDraftClub } from "../lib/clubCatalog";
 import { caddieErrorText } from "../lib/caddieErrorText";
 import { isInMemoryPick, pickMedia } from "../lib/mediaPicker";
 const MAX_SWING_VIDEO_BYTES = 200 * 1024 * 1024; // matches the Storage bucket's own file_size_limit
@@ -32,6 +32,9 @@ const MAX_SWING_VIDEO_SECONDS = 10; // max length of the WINDOW actually analyze
 // the app after an interruption gets an honest "that didn't finish, try
 // again" instead of silence that reads as data loss.
 const UPLOAD_IN_PROGRESS_KEY = "golfme:caddieUploadInProgress";
+
+// "Choose a club to continue" under Ask Caddie, tied to it by aria-describedby.
+const CLUB_REQUIRED_HINT_ID = "caddie-club-required-hint";
 
 // The club choice: a fixed set (ClubPicker over lib/clubCatalog.ts), not
 // free typing. English values (caddie_analyses.swing_type), translated for
@@ -60,12 +63,12 @@ export function AnalyzeSwing() {
   // before a video has even been picked to attach it to.
   const videoFile = draftSwingVideo?.file;
   const videoPreviewUrl = draftSwingVideo?.previewUrl;
-  // Every older picker value is still in ALL_CLUB_VALUES; a draft holding
-  // anything else (Putter, from before it was removed) falls back to "".
-  const [swingType, setSwingTypeState] = useState(() => {
-    const saved = draftSwingVideo?.swingType ?? "";
-    return ALL_CLUB_VALUES.includes(saved) ? saved : "";
-  });
+  // Every older picker value is still in the catalog (isCatalogClub); a
+  // draft holding anything else (Putter, from before it was removed, or any
+  // unknown string) falls back to "" and so reads as "no club yet".
+  const [swingType, setSwingTypeState] = useState(() => restoredDraftClub(draftSwingVideo?.swingType));
+  // Only a club the picker offers counts as picked (never a stale value).
+  const hasClub = isCatalogClub(swingType);
   function setSwingType(next: string) {
     setSwingTypeState(next);
     if (videoFile && videoPreviewUrl) {
@@ -268,7 +271,7 @@ export function AnalyzeSwing() {
   }
 
   async function handleAnalyze() {
-    if (!authUser || !canStartAnalysis({ hasVideo: !!videoFile, hasClub: !!swingType.trim(), submitting, selectorOpen: !!pendingTrim, reopening: trimReopening || trimReopenGate.pending })) return;
+    if (!authUser || !canStartAnalysis({ hasVideo: !!videoFile, hasClub, submitting, selectorOpen: !!pendingTrim, reopening: trimReopening || trimReopenGate.pending })) return;
     if (!videoFile) return;
     setSubmitting(true);
     // Brackets the one real gap where an app exit could genuinely lose a
@@ -346,6 +349,9 @@ export function AnalyzeSwing() {
       setSubmitting(false);
     }
   }
+
+  // Why Ask Caddie is disabled (null: it isn't). Same rule as canStartAnalysis.
+  const blocker = analysisBlocker({ hasVideo: !!videoFile, hasClub, submitting, selectorOpen: !!pendingTrim, reopening: trimReopening });
 
   return (
     <div className="flex flex-col gap-5 pb-6">
@@ -427,15 +433,24 @@ export function AnalyzeSwing() {
 
       <ClubPicker value={swingType} onChange={setSwingType} disabled={submitting} />
 
-      <Button
-        size="lg"
-        fullWidth
-        disabled={!canStartAnalysis({ hasVideo: !!videoFile, hasClub: !!swingType.trim(), submitting, selectorOpen: !!pendingTrim, reopening: trimReopening })}
-        onClick={handleAnalyze}
-        icon={submitting ? <Loader2 size={16} className="animate-spin" /> : <ScanLine size={16} />}
-      >
-        {submitting ? t("caddie.analyzing") : t("caddie.askCaddie")}
-      </Button>
+      <div className="flex flex-col gap-2">
+        <Button
+          size="lg"
+          fullWidth
+          disabled={blocker !== null}
+          aria-describedby={blocker === "noClub" ? CLUB_REQUIRED_HINT_ID : undefined}
+          onClick={handleAnalyze}
+          icon={submitting ? <Loader2 size={16} className="animate-spin" /> : <ScanLine size={16} />}
+        >
+          {submitting ? t("caddie.analyzing") : t("caddie.askCaddie")}
+        </Button>
+        {/* Only when the club is the one thing missing (a video is there, nothing else blocks). */}
+        {blocker === "noClub" && (
+          <p id={CLUB_REQUIRED_HINT_ID} className="text-center text-xs font-medium text-slate-500">
+            {t("caddie.club.chooseToContinue")}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
