@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Info, Loader2, Scissors, ScanLine, Video, X } from "lucide-react";
+import { ArrowLeft, Loader2, Scissors, ScanLine, Video, X } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
@@ -10,6 +10,7 @@ import { Button } from "../components/ui/Button";
 import { EmptyState } from "../components/ui/EmptyState";
 import { inputClass, labelClass } from "../components/ui/FormControls";
 import { VideoTrimSelector } from "../components/caddie/VideoTrimSelector";
+import { FilmingTips } from "../components/caddie/FilmingTips";
 import { captureVideoThumbnail, readVideoDuration } from "../lib/image";
 import { formatClock } from "../lib/format";
 import { supabase } from "../lib/supabase";
@@ -351,10 +352,8 @@ export function AnalyzeSwing() {
         <h1 className="text-xl font-bold text-slate-900">{t("caddie.uploadSwing")}</h1>
       </div>
 
-      <div className="flex items-start gap-2 rounded-xl bg-fairway-50/60 px-3 py-2.5 text-xs text-fairway-800">
-        <Info size={14} className="mt-0.5 shrink-0" />
-        <span>{t("caddie.cameraAngleTip")}</span>
-      </div>
+      {/* Replaces the single camera-angle line (its face-on advice is the last tip). */}
+      <FilmingTips />
 
       {pendingTrim ? (
         <VideoTrimSelector

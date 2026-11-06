@@ -60,10 +60,11 @@ import {
   redactDetail,
   safeErrorName,
   scaleKeypoints,
+  shouldRunFullResPoseRetry,
   stepRetryDelayMs,
   tallyRoboflowOutput,
 } from "../_shared/caddieReliability.ts";
-import type { CaddieStage, StepFailure, TrimWindow } from "../_shared/caddieReliability.ts";
+import type { CaddieStage, PosePassName, PoseSignalTally, StepFailure, TrimWindow } from "../_shared/caddieReliability.ts";
 import { CUE_MAX_CHARS, WORK_ON_CHECKPOINTS, withSanitizedCheckpointCues, withSanitizedWorkOnCheckpoints } from "../_shared/caddieCues.ts";
 import { withMeasuredCueCheck } from "../_shared/caddieVerdicts.ts";
 
@@ -160,6 +161,15 @@ const STEP_BUDGET_MS: Record<CaddieStage, number> = {
 // are mapped back to source pixels for the replay overlay). An older
 // extract-frames ignores the field and sends full-size frames, scale 1.
 const FRAME_MAX_LONG_SIDE = 720;
+// Pose-gate safety net (2026-11-06): when the 720 px pass finds too few
+// usable bodies on a downscaled clip, ONE more extraction + coarse pass at
+// this long side before failing pose_not_found. 1920 = a 1080p source at
+// full size; a 4K source is still halved, keeping each JPEG well under a
+// megabyte for Roboflow's hosted API. Never runs on a successful clip.
+const FULL_RES_RETRY_LONG_SIDE = 1920;
+// The retry only starts when the deadline still covers it AND everything
+// after the gate (Gemini upload/processing/generate + save).
+const FULL_RES_RETRY_BUDGET_MS = 215_000; // = STEP_BUDGET_MS frame_extract + pose + gemini_upload + gemini_processing + gemini_generate + save
 const MAX_ANALYSIS_FRAMES = 150; // hard ceiling, independent of the 10s upload-time limit — a defense against a misreported video duration slipping past that client-side check and generating an unexpectedly large, expensive frame set
 
 // --- Adaptive two-stage sampling (2026-08-22 credit-efficiency pass). ---
@@ -1114,42 +1124,51 @@ Deno.serve(async (req: Request) => {
     }
 
     // --- Frame extraction (Vercel/Node — see api/extract-frames.ts). ---
-    await enterStage("frame_extract");
-    const extracted = await runStep("frame_extract", async () => {
-      const res = await fetch(FRAME_EXTRACT_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${frameExtractSecret}` },
-        // effectiveVideoUrl is already exactly the analyzed window once
-        // trimmed above, so no explicit startSeconds/endSeconds needed here
-        // — extract-frames' own freezedetect-based auto-trim still runs for
-        // an UNtrimmed video (nothing was picked, or duration was already
-        // under the cap), same as before this feature existed.
-        body: JSON.stringify({ videoUrl: effectiveVideoUrl, fps: ANALYSIS_FPS, maxLongSide: FRAME_MAX_LONG_SIDE }),
-        signal: AbortSignal.timeout(TIMEOUT_MS.extract),
+    // A function because the pose gate's full-resolution safety net (below)
+    // runs it a second time with a larger long side.
+    async function extractCoarseFrames(maxLongSide: number): Promise<{ frames: ExtractedFrame[]; coordinateScale: unknown }> {
+      const extracted = await runStep("frame_extract", async () => {
+        const res = await fetch(FRAME_EXTRACT_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${frameExtractSecret}` },
+          // effectiveVideoUrl is already exactly the analyzed window once
+          // trimmed above, so no explicit startSeconds/endSeconds needed here
+          // — extract-frames' own freezedetect-based auto-trim still runs for
+          // an UNtrimmed video (nothing was picked, or duration was already
+          // under the cap), same as before this feature existed.
+          body: JSON.stringify({ videoUrl: effectiveVideoUrl, fps: ANALYSIS_FPS, maxLongSide }),
+          signal: AbortSignal.timeout(TIMEOUT_MS.extract),
+        });
+        // 422 = ffmpeg couldn't decode it; 502 = it couldn't fetch the video;
+        // 500 + token = resources/internal; 504 = the Vercel function timed out
+        // (see classifyHttpFailure).
+        if (!res.ok) throw httpStepError("frame_extract", res.status, await res.text().catch(() => ""), res.headers);
+        return (await res.json()) as {
+          coordinateScale?: unknown;
+          analysisFps?: number;
+          frames?: { frameIndex: number; timestampSeconds: number; base64: string }[];
+        };
       });
-      // 422 = ffmpeg couldn't decode it; 502 = it couldn't fetch the video;
-      // 500 + token = resources/internal; 504 = the Vercel function timed out
-      // (see classifyHttpFailure).
-      if (!res.ok) throw httpStepError("frame_extract", res.status, await res.text().catch(() => ""), res.headers);
-      return (await res.json()) as {
-        coordinateScale?: unknown;
-        analysisFps?: number;
-        frames?: { frameIndex: number; timestampSeconds: number; base64: string }[];
-      };
-    });
-    // Multiply Roboflow keypoints by this to get source-video pixels
-    // (undefined = frames weren't downscaled).
-    const coordinateScale: unknown = extracted.coordinateScale;
-    const frames: ExtractedFrame[] = (extracted.frames ?? []).map((f) => ({
-      frameIndex: f.frameIndex,
-      timestampSeconds: f.timestampSeconds,
-      base64: f.base64,
-    }));
-    if (frames.length === 0) throw hardFailure("frame_extract", "video_unreadable", "0 frames");
-    if (frames.length > MAX_ANALYSIS_FRAMES) {
-      throw hardFailure("frame_extract", "video_too_long_or_large", `${frames.length} frames > cap ${MAX_ANALYSIS_FRAMES}`);
+      const extractedFrames: ExtractedFrame[] = (extracted.frames ?? []).map((f) => ({
+        frameIndex: f.frameIndex,
+        timestampSeconds: f.timestampSeconds,
+        base64: f.base64,
+      }));
+      if (extractedFrames.length === 0) throw hardFailure("frame_extract", "video_unreadable", "0 frames");
+      if (extractedFrames.length > MAX_ANALYSIS_FRAMES) {
+        throw hardFailure("frame_extract", "video_too_long_or_large", `${extractedFrames.length} frames > cap ${MAX_ANALYSIS_FRAMES}`);
+      }
+      logEvent("frames_extracted", { count: extractedFrames.length, fps: extracted.analysisFps ?? null, max_long_side: maxLongSide });
+      return { frames: extractedFrames, coordinateScale: extracted.coordinateScale };
     }
-    logEvent("frames_extracted", { count: frames.length, fps: extracted.analysisFps ?? null });
+    await enterStage("frame_extract");
+    const firstExtract = await extractCoarseFrames(FRAME_MAX_LONG_SIDE);
+    // Multiply Roboflow keypoints by this to get source-video pixels
+    // (undefined = frames weren't downscaled). Replaced, together with
+    // frames, when the full-resolution safety net rescues the clip.
+    let coordinateScale: unknown = firstExtract.coordinateScale;
+    let frames: ExtractedFrame[] = firstExtract.frames;
+    let frameLongSide = FRAME_MAX_LONG_SIDE;
 
     // --- Roboflow: one call per frame, stateless, moderate concurrency,
     // each frame retried once on failure before being given up on. ---
@@ -1164,10 +1183,11 @@ Deno.serve(async (req: Request) => {
     // behind two attempts per frame.
     let firstFailureDetail: string | undefined;
     let roboflowRetryCount = 0;
-    // Raw (pre-filter) counts of the coarse pass, read only by the pose gate's
-    // failure detail. Dense-pass calls also add to it, after the gate.
-    const poseSignal = emptyPoseSignalTally();
-    async function callRoboflowOnce(frame: ExtractedFrame): Promise<TrustedFrame | null> {
+    // scale: the coordinateScale of the extraction this frame came from.
+    // tally: raw (pre-filter) counts for the pose gate's diagnostics; only
+    // the coarse passes pass one.
+    type RoboflowCallContext = { scale: unknown; tally?: PoseSignalTally };
+    async function callRoboflowOnce(frame: ExtractedFrame, ctx: RoboflowCallContext): Promise<TrustedFrame | null> {
       const res = await fetch(ROBOFLOW_ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1181,18 +1201,22 @@ Deno.serve(async (req: Request) => {
       const body = await res.json();
       const output = body?.outputs?.[0];
       if (!output) throw new Error("no outputs[0] in response");
-      tallyRoboflowOutput(poseSignal, output);
-      return filterRoboflowFrame(frame.frameIndex, frame.timestampSeconds, output, coordinateScale);
+      if (ctx.tally) tallyRoboflowOutput(ctx.tally, output);
+      return filterRoboflowFrame(frame.frameIndex, frame.timestampSeconds, output, ctx.scale);
     }
     // One frame, ROBOFLOW_FRAME_RETRY_ATTEMPTS total attempts. A 429 (rate
     // limit) or 5xx backs off before retrying — retrying a 429 immediately
     // from 8 parallel workers just gets rate-limited again.
-    async function callRoboflowWithRetry(frame: ExtractedFrame, onRetry: () => void): Promise<{ frame: TrustedFrame | null; error?: unknown }> {
+    async function callRoboflowWithRetry(
+      frame: ExtractedFrame,
+      ctx: RoboflowCallContext,
+      onRetry: () => void,
+    ): Promise<{ frame: TrustedFrame | null; error?: unknown }> {
       let lastErr: unknown;
       for (let attempt = 1; attempt <= ROBOFLOW_FRAME_RETRY_ATTEMPTS; attempt++) {
         if (settled) return { frame: null, error: lastErr };
         try {
-          return { frame: await callRoboflowOnce(frame) };
+          return { frame: await callRoboflowOnce(frame, ctx) };
         } catch (err) {
           lastErr = err;
           // A hard 4xx (auth, credit cap, bad request) fails the same way
@@ -1213,19 +1237,20 @@ Deno.serve(async (req: Request) => {
     // The pass, plus up to 2 more passes over ONLY the frames that failed,
     // when the failures were transient (429/5xx/network) and the deadline
     // allows — same row, same attempt.
-    await enterStage("pose");
-    const roboflowResults: (TrustedFrame | null)[] = new Array(frames.length).fill(null);
+    // Returns null once the deadline has settled the row.
+    async function runCoarsePosePass(passFrames: ExtractedFrame[], ctx: RoboflowCallContext): Promise<TrustedFrame[] | null> {
+    const roboflowResults: (TrustedFrame | null)[] = new Array(passFrames.length).fill(null);
     for (let pass = 1; ; pass++) {
       let passError: unknown;
-      const pending = frames.map((frame, index) => ({ frame, index })).filter(({ index }) => roboflowResults[index] === null);
+      const pending = passFrames.map((frame, index) => ({ frame, index })).filter(({ index }) => roboflowResults[index] === null);
       await mapWithConcurrency(pending, ROBOFLOW_CONCURRENCY, async ({ frame, index }) => {
-        const result = await callRoboflowWithRetry(frame, () => roboflowRetryCount++);
+        const result = await callRoboflowWithRetry(frame, ctx, () => roboflowRetryCount++);
         if (result.frame) roboflowResults[index] = result.frame;
         else if (passError === undefined && result.error !== undefined) passError = result.error;
       });
-      if (settled) return;
+      if (settled) return null;
       const succeeded = roboflowResults.filter((f) => f !== null).length;
-      if (succeeded / frames.length >= ROBOFLOW_MIN_SUCCESS_RATIO) break;
+      if (succeeded / passFrames.length >= ROBOFLOW_MIN_SUCCESS_RATIO) break;
 
       // ProviderHttpError carries the status + allow-listed hint; any other
       // throw (fetch/network/timeout) contributes its class name only.
@@ -1237,7 +1262,7 @@ Deno.serve(async (req: Request) => {
         stage: "pose",
         ...classified,
         httpStatus: passError instanceof ProviderHttpError ? passError.status : undefined,
-        detail: `ok ${succeeded}/${frames.length} ${firstFailureDetail}`,
+        detail: `ok ${succeeded}/${passFrames.length} ${firstFailureDetail}`,
       };
       const remainingMs = PIPELINE_DEADLINE_MS - (Date.now() - pipelineStart);
       const delay = stepRetryDelayMs(failure, pass, remainingMs, STEP_BUDGET_MS.pose, passError instanceof ProviderHttpError ? passError.retryAfter : null);
@@ -1246,38 +1271,89 @@ Deno.serve(async (req: Request) => {
         stepError.stepAttempts = pass;
         throw stepError;
       }
-      logEvent("step_retry", { stage: "pose", category: failure.category, http_status: failure.httpStatus ?? null, step_attempt: pass, delay_ms: delay, ok: succeeded, total: frames.length });
+      logEvent("step_retry", { stage: "pose", category: failure.category, http_status: failure.httpStatus ?? null, step_attempt: pass, delay_ms: delay, ok: succeeded, total: passFrames.length });
       await sleep(delay);
     }
-    const trustedFrames = roboflowResults.filter((f): f is TrustedFrame => f !== null);
+    const passTrusted = roboflowResults.filter((f): f is TrustedFrame => f !== null);
     logEvent("pose_pass_complete", {
-      requested: frames.length,
-      succeeded: trustedFrames.length,
+      requested: passFrames.length,
+      succeeded: passTrusted.length,
       frame_retries: roboflowRetryCount,
     });
+    return passTrusted;
+    }
 
     // Pose-presence gate: Roboflow answering a frame isn't the same as it
     // finding a golfer in it (a frame with zero reliable keypoints still
     // "succeeds" above). Too few frames with a usable body (shoulders, hips,
     // a wrist) means the golfer wasn't fully in frame, so fail with a re-film
     // message before spending a Gemini call on a swing nobody can see.
+    function logCoverage(pass: PosePassName, coverage: { usable: number; total: number }, tally: PoseSignalTally, frameSize: { width: number; height: number } | undefined, scale: unknown) {
+      logEvent("pose_coverage", {
+        pass,
+        usable: coverage.usable,
+        total: coverage.total,
+        kp_obj: tally.withKeypointsObject,
+        kp_any: tally.withAnyKeypoint,
+        kp_reliable: tally.withReliableKeypoint,
+        max_kp_conf: tally.maxKeypointConfidence,
+        max_person_conf: tally.maxPersonConfidence,
+        frame_w: frameSize?.width ?? null,
+        frame_h: frameSize?.height ?? null,
+        scale: typeof scale === "number" ? scale : null,
+      });
+    }
+    await enterStage("pose");
+    const poseSignal = emptyPoseSignalTally();
+    const firstTrusted = await runCoarsePosePass(frames, { scale: coordinateScale, tally: poseSignal });
+    if (firstTrusted === null) return;
+    let trustedFrames: TrustedFrame[] = firstTrusted;
+    let posePass: PosePassName = "standard";
     await enterStage("pose_gate");
     const coverage = poseCoverage(trustedFrames);
     const frameSize = jpegSizeFromBase64(frames[0].base64);
-    logEvent("pose_coverage", {
-      usable: coverage.usable,
-      total: coverage.total,
-      kp_obj: poseSignal.withKeypointsObject,
-      kp_any: poseSignal.withAnyKeypoint,
-      kp_reliable: poseSignal.withReliableKeypoint,
-      max_kp_conf: poseSignal.maxKeypointConfidence,
-      max_person_conf: poseSignal.maxPersonConfidence,
-      frame_w: frameSize?.width ?? null,
-      frame_h: frameSize?.height ?? null,
-      scale: typeof coordinateScale === "number" ? coordinateScale : null,
-    });
+    logCoverage("standard", coverage, poseSignal, frameSize, coordinateScale);
     if (coverage.ratio < POSE_PRESENCE_MIN_RATIO) {
-      throw hardFailure("pose_gate", "pose_not_found", formatPoseGateDetail(coverage, poseSignal, frameSize, coordinateScale));
+      const firstDetail = formatPoseGateDetail(coverage, poseSignal, frameSize, coordinateScale);
+      // Full-resolution safety net: ONE more extraction + coarse pass at a
+      // larger long side, only on this failure and only when the first pass
+      // was actually downscaled (scale > 1) and the deadline still covers it
+      // plus everything after the gate. Same row, same attempt. Any failure
+      // in the safety net falls back to the original pose_not_found.
+      const remainingMs = PIPELINE_DEADLINE_MS - (Date.now() - pipelineStart);
+      if (!shouldRunFullResPoseRetry(coordinateScale, remainingMs, FULL_RES_RETRY_BUDGET_MS)) {
+        throw hardFailure("pose_gate", "pose_not_found", firstDetail);
+      }
+      logEvent("pose_fullres_retry", { first_usable: coverage.usable, first_total: coverage.total, max_long_side: FULL_RES_RETRY_LONG_SIDE });
+      let retryOutcome: string;
+      try {
+        await enterStage("pose");
+        const retryExtract = await extractCoarseFrames(FULL_RES_RETRY_LONG_SIDE);
+        const retryTally = emptyPoseSignalTally();
+        const retryTrusted = await runCoarsePosePass(retryExtract.frames, { scale: retryExtract.coordinateScale, tally: retryTally });
+        if (retryTrusted === null) return;
+        await enterStage("pose_gate");
+        const retryCoverage = poseCoverage(retryTrusted);
+        const retryFrameSize = jpegSizeFromBase64(retryExtract.frames[0].base64);
+        logCoverage("full_resolution_retry", retryCoverage, retryTally, retryFrameSize, retryExtract.coordinateScale);
+        if (retryCoverage.ratio >= POSE_PRESENCE_MIN_RATIO) {
+          frames = retryExtract.frames;
+          coordinateScale = retryExtract.coordinateScale;
+          frameLongSide = FULL_RES_RETRY_LONG_SIDE;
+          trustedFrames = retryTrusted;
+          posePass = "full_resolution_retry";
+          retryOutcome = "rescued";
+        } else {
+          retryOutcome = `usable ${retryCoverage.usable}/${retryCoverage.total} kp_reliable ${retryTally.withReliableKeypoint}/${retryTally.frames} frame ${retryFrameSize ? `${retryFrameSize.width}x${retryFrameSize.height}` : "unknown"}`;
+        }
+      } catch (err) {
+        if (settled) return;
+        retryOutcome = `error ${err instanceof StepError ? `${err.failure.category}@${err.failure.stage}` : safeErrorName(err)}`;
+      }
+      logEvent("pose_fullres_retry_result", { result: retryOutcome === "rescued" ? "rescued" : "not_rescued" });
+      if (posePass !== "full_resolution_retry") {
+        throw hardFailure("pose_gate", "pose_not_found", `${firstDetail} | fullres ${retryOutcome}`);
+      }
     }
 
     // --- Stage 2: dense sampling around the fastest part of the swing.
@@ -1330,7 +1406,7 @@ Deno.serve(async (req: Request) => {
             const denseExtractRes = await fetch(FRAME_EXTRACT_URL, {
               method: "POST",
               headers: { "Content-Type": "application/json", Authorization: `Bearer ${frameExtractSecret}` },
-              body: JSON.stringify({ videoUrl: effectiveVideoUrl, fps: DENSE_IMPACT_FPS, startSeconds: denseStart, endSeconds: denseEnd, maxLongSide: FRAME_MAX_LONG_SIDE }),
+              body: JSON.stringify({ videoUrl: effectiveVideoUrl, fps: DENSE_IMPACT_FPS, startSeconds: denseStart, endSeconds: denseEnd, maxLongSide: frameLongSide }),
               signal: AbortSignal.timeout(TIMEOUT_MS.extract),
             });
             if (denseExtractRes.ok) {
@@ -1347,7 +1423,7 @@ Deno.serve(async (req: Request) => {
                 }),
               );
               const denseResults = await mapWithConcurrency(denseFrames, ROBOFLOW_CONCURRENCY, async (frame) => {
-                const result = await callRoboflowWithRetry(frame, () => denseRetryCount++);
+                const result = await callRoboflowWithRetry(frame, { scale: coordinateScale }, () => denseRetryCount++);
                 if (!result.frame) devLog("dense frame failed after retries", { error: result.error instanceof ProviderHttpError ? result.error.message : safeErrorName(result.error) });
                 return result.frame;
               });
@@ -1376,6 +1452,7 @@ Deno.serve(async (req: Request) => {
         frames_requested: frames.length,
         frames_analyzed: trustedFrames.length,
         dense_impact_window_frames_analyzed: denseTrustedFrames.length,
+        pose_pass: posePass,
       },
       frames: allTrustedFrames,
       limitations:

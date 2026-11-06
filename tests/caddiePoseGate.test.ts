@@ -11,6 +11,7 @@ import {
   jpegSizeFromBase64,
   poseCoverage,
   redactDetail,
+  shouldRunFullResPoseRetry,
   tallyRoboflowOutput,
 } from "../supabase/functions/_shared/caddieReliability.ts";
 
@@ -65,4 +66,13 @@ test("formatPoseGateDetail is one short line that survives redaction", () => {
   );
   assert.equal(redactDetail(detail, 300), detail);
   assert.match(formatPoseGateDetail({ usable: 0, total: 0 }, emptyPoseSignalTally(), undefined, undefined), /frame unknown scale 1$/);
+});
+
+test("shouldRunFullResPoseRetry: only for a downscaled pass with enough deadline left", () => {
+  assert.equal(shouldRunFullResPoseRetry(2.666667, 250_000, 215_000), true);
+  assert.equal(shouldRunFullResPoseRetry(2.666667, 200_000, 215_000), false, "deadline too close");
+  assert.equal(shouldRunFullResPoseRetry(1, 250_000, 215_000), false, "already full size");
+  assert.equal(shouldRunFullResPoseRetry(1.005, 250_000, 215_000), false, "rounding, not a real downscale");
+  assert.equal(shouldRunFullResPoseRetry(undefined, 250_000, 215_000), false, "old extract-frames, no scale");
+  assert.equal(shouldRunFullResPoseRetry(Number.NaN, 250_000, 215_000), false);
 });

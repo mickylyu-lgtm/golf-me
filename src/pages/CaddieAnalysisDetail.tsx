@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
-import { AlertCircle, ArrowLeft, ArrowUpRight, Check, Languages, Loader2, Share2, Trash2 } from "lucide-react";
+import { AlertCircle, ArrowLeft, ArrowUpRight, Check, Languages, Loader2, Share2, Trash2, Video } from "lucide-react";
+import { TipList } from "../components/caddie/FilmingTips";
 import { DeleteAnalysisDialog } from "../components/caddie/DeleteAnalysisDialog";
 import { CaddieNavIcon } from "../components/icons/CaddieNavIcon";
 import { CaddieThinking } from "../components/caddie/CaddieThinking";
@@ -485,13 +486,27 @@ export function CaddieAnalysisDetail() {
           ) : (
             <p className="text-sm text-red-700/90">{t("caddie.error.retryCap")}</p>
           )}
+          {/* No whole body seen: the same filming tips as the upload screen. */}
+          {failure.kind === "poseNotFound" && (
+            <div className="w-full rounded-xl bg-white/70 px-3 py-2.5 text-slate-700">
+              <p className="mb-1.5 text-xs font-semibold text-slate-800">{t("caddie.tips.title")}</p>
+              <TipList />
+            </div>
+          )}
           {/* Only a delivered analysis uses an allowance slot (20261107140000). */}
           {!isDemo && <p className="text-xs text-red-700/70">{t("caddie.failure.noCharge")}</p>}
-          {failure.canRetry && (
-            <Button variant="outline" size="sm" onClick={retry} disabled={retrying} icon={retrying ? <Loader2 size={14} className="animate-spin" /> : undefined}>
-              {t("caddie.tryAgain")}
-            </Button>
-          )}
+          <div className="flex flex-wrap gap-2">
+            {failure.canRetry && (
+              <Button variant="outline" size="sm" onClick={retry} disabled={retrying} icon={retrying ? <Loader2 size={14} className="animate-spin" /> : undefined}>
+                {t("caddie.tryAgain")}
+              </Button>
+            )}
+            {failure.kind === "poseNotFound" && (
+              <Button variant="outline" size="sm" onClick={() => navigate("/caddie/analyze")} icon={<Video size={14} />}>
+                {t("caddie.failure.pickAnother")}
+              </Button>
+            )}
+          </div>
         </div>
       ) : (
         <div className="flex flex-col gap-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-3.5">

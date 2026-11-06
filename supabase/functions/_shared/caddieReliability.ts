@@ -399,6 +399,17 @@ export function jpegSizeFromBase64(base64: string): { width: number; height: num
   return undefined;
 }
 
+// Which coarse pose pass an analysis ended up using (stored as
+// roboflow_analysis_json.video.pose_pass, logged with pose_coverage).
+export type PosePassName = "standard" | "full_resolution_retry";
+
+// The pose gate's full-resolution safety net runs only when the failed pass
+// was really downscaled (a frame at source size would just be re-sent as
+// is) and the remaining deadline covers the retry plus the rest.
+export function shouldRunFullResPoseRetry(coordinateScale: unknown, remainingMs: number, budgetMs: number): boolean {
+  return finiteNumber(coordinateScale) && coordinateScale > 1.01 && remainingMs >= budgetMs;
+}
+
 // One line for private.caddie_job_diagnostics (well under its 300 chars).
 export function formatPoseGateDetail(
   coverage: { usable: number; total: number },

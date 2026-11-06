@@ -61,7 +61,34 @@ test("every code has copy in the English locale", () => {
     const body = FAILURE_BODY_KEYS[code];
     if (body) assert.ok(en[body], code);
   }
-  assert.match(en["caddie.failure.poseNotFound.body"], /whole body in frame/);
+  assert.match(en["caddie.failure.poseNotFound.title"], /whole body/);
+  assert.match(en["caddie.failure.poseNotFound.body"], /head to feet/);
+});
+
+test("filming tips and the pose_not_found copy exist in every locale, without emoji", async () => {
+  const keys = [
+    "caddie.failure.poseNotFound.title",
+    "caddie.failure.poseNotFound.body",
+    "caddie.failure.pickAnother",
+    "caddie.tips.title",
+    "caddie.tips.show",
+    "caddie.tips.hide",
+    "caddie.tips.wholeBody",
+    "caddie.tips.distance",
+    "caddie.tips.phone",
+    "caddie.tips.light",
+    "caddie.tips.angle",
+  ] as const;
+  for (const name of ["en", "es", "ja", "ko", "zh-CN", "zh-TW"]) {
+    const mod = (await import(`../src/i18n/locales/${name}.ts`)) as Record<string, Record<string, string>>;
+    const dict = Object.values(mod).find((v) => v && typeof v === "object" && "caddie.tips.title" in v);
+    assert.ok(dict, `${name}: locale table`);
+    for (const key of keys) {
+      assert.ok(dict[key]?.trim(), `${name}: ${key}`);
+      assert.doesNotMatch(dict[key], /\p{Extended_Pictographic}/u, `${name}: ${key} has an emoji`);
+    }
+    if (name !== "en") assert.notEqual(dict["caddie.tips.wholeBody"], en["caddie.tips.wholeBody"], `${name}: translated`);
+  }
 });
 
 test("retryable statuses", () => {

@@ -249,6 +249,72 @@ Deno.test("no usable body: pose_not_found before Gemini, with the raw pose count
   assertNoSecretsAnywhere();
 });
 
+// The pose gate's full-resolution safety net. extract-frames answers per
+// requested maxLongSide (720 -> downscaled "LOW" frames, scale 2.667; 1920 ->
+// "FULL" frames, scale 1), and Roboflow only finds a body in FULL frames
+// when `fullFinds` is set.
+function sizedExtractAndRoboflow(fullFinds: boolean): Record<string, Responder> {
+  const weak = { x: 100, y: 200, confidence: 0.2, metric_reliable: false };
+  return {
+    extract: (call) => {
+      const req = JSON.parse(call.body ?? "{}");
+      const full = req.maxLongSide === 1920;
+      const n = typeof req.startSeconds === "number" ? 4 : 12;
+      return json({
+        analysisFps: 8,
+        coordinateScale: full ? 1 : 2.666667,
+        frames: Array.from({ length: n }, (_, i) => ({ frameIndex: i, timestampSeconds: i / 8, base64: full ? "FULL" : "LOW" })),
+      });
+    },
+    roboflow: (call) => {
+      const full = String(call.body).includes('"value":"FULL"');
+      if (full && fullFinds) return roboflowOk();
+      return json({ outputs: [{ body_keypoints: { left_shoulder: weak }, body_metrics: {} }] });
+    },
+  };
+}
+
+Deno.test("pose gate safety net: a downscaled miss is re-run ONCE at full resolution and rescued", async () => {
+  reset(sizedExtractAndRoboflow(true));
+  await newJob();
+  const row = onlyRow();
+  assertEquals(row.status, "complete", "rescued by the full-resolution pass");
+  const coarseExtracts = calls.filter((c) => routeOf(c.url, c.method) === "extract" && !String(c.body).includes("startSeconds"));
+  assertEquals(coarseExtracts.map((c) => JSON.parse(c.body!).maxLongSide), [720, 1920], "one standard + one full-resolution extraction");
+  assertEquals(count("roboflow"), 24, "12 frames per coarse pass, no dense pass (12 frames span < 2 s)");
+  const pose = row.roboflow_analysis_json as { video: { pose_pass: string; frames_analyzed: number } };
+  assertEquals([pose.video.pose_pass, pose.video.frames_analyzed], ["full_resolution_retry", 12], "stored pose data says which pass");
+  assert(logs.some((l) => l.includes('"evt":"pose_fullres_retry_result"') && l.includes('"result":"rescued"')), "rescue logged");
+  assertEquals(fake.charges.length, 1, "charged once");
+  assertEquals(fake.diagnostics.length, 0, "no failure diagnostic");
+});
+
+Deno.test("pose gate safety net: still no body at full resolution = pose_not_found with both passes in the diagnostic", async () => {
+  reset(sizedExtractAndRoboflow(false));
+  await newJob();
+  const row = onlyRow();
+  assertEquals([row.status, row.failure_category, row.failure_stage], ["failed", "pose_not_found", "pose_gate"], "row");
+  assertEquals(count("extract"), 2, "exactly one retry");
+  assertEquals(count("roboflow"), 24, "one more coarse pass, nothing else");
+  assertEquals(count("gemini-start"), 0, "Gemini never called");
+  assertEquals(fake.charges.length, 0, "failure not charged");
+  const detail = String(fake.diagnostics[0]?.p_detail);
+  assert(detail.startsWith("usable body in 0/12 (min ratio 0.1) kp_obj 12/12"), `first pass detail: ${detail}`);
+  assert(detail.includes("scale 2.667 | fullres usable 0/12 kp_reliable 0/12 frame unknown"), `retry detail: ${detail}`);
+  assertNoSecretsAnywhere();
+});
+
+Deno.test("pose gate safety net: a full-resolution extraction failure falls back to the original pose_not_found", async () => {
+  const routes = sizedExtractAndRoboflow(true);
+  const sized = routes.extract;
+  routes.extract = (call, nth) => (JSON.parse(call.body ?? "{}").maxLongSide === 1920 ? json({ error: "decode_failed" }, 422) : sized(call, nth));
+  reset(routes);
+  await newJob();
+  const row = onlyRow();
+  assertEquals([row.status, row.failure_category], ["failed", "pose_not_found"], "original failure kept");
+  assert(String(fake.diagnostics[0]?.p_detail).endsWith("| fullres error video_unreadable@frame_extract"), `detail: ${fake.diagnostics[0]?.p_detail}`);
+});
+
 Deno.test("Roboflow 429 burst: the failed frames are re-run and the job recovers", async () => {
   reset({ roboflow: (_c, nth) => (nth <= 24 ? json({ message: "rate limit" }, 429) : roboflowOk()) });
   await newJob();
