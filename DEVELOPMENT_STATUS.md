@@ -13,7 +13,7 @@ Note: Phases between Phase 20/21 (see below) and Phase 22 span roughly 31 commit
 **Caddie failure finding (Nov 4–6):** all failures were `pose_not_found` with 0 usable frames, from 2 golfers; one later succeeded with another clip. Not Gemini, not HEVC/rotation/trim (ruled out with synthetic fixtures). Likely content (no full body visible). Watch `pose_fullres_retry_result` and `private.caddie_job_diagnostics` (query Q6 in the session scratchpad `caddie-pose-diagnose.sql`) to see if the full-res retry rescues anything.
 
 **Not shipped yet (exact next actions):**
-- In progress (local worktrees, not shipped): chat video messages (60 s, server transcode, 180-day retention, one picker), native one-tap video picker for build 2.5, Caddie saved swings, keyboard-motion audit (plan only). Club picker with vector art, scan fixes and the video can't-play overlay are LIVE (main).
+- In progress (local worktrees, not shipped): chat video messages (60 s, server transcode, 180-day retention, one picker), native one-tap video picker for build 2.5, Caddie saved swings. Smooth keyboard motion is built and committed locally on `feat/keyboard-motion` (see its section below; not pushed or deployed). Club picker with vector art, scan fixes and the video can't-play overlay are LIVE (main).
 - Booking stage 2/3 migration `20261107150000` still NOT applied (client dormant). It now also lists `post_liked`.
 - iOS 2.5 (1) one-tap video + multi-select picker (see its section below): local commit, not pushed; web part is safe on 2.4 (falls back), the native part needs an Xcode build + iPhone check.
 - Photo-with-caption push text still starts with "📷 " (server function `notify_new_message`): fold into the next migration.
@@ -22,6 +22,43 @@ Note: Phases between Phase 20/21 (see below) and Phase 22 span roughly 31 commit
 **Open questions for Micky:** chat video plan (60 s vs 30 s, server transcode OK, retention period, one picker); save a large avatar copy for the zoom viewer (stored avatars are 320 px); hide "Share to Community" on a FAILED Caddie analysis; "AI-generated preview" pill wording on course videos.
 
 **Needs a real iPhone / two accounts:** 2.4 one-tap picker + dark status bar/keyboard; voice (test plan in scratchpad `GolfMe-voice-iPhone-test-plan.md`); like/comment pushes; pinch-zoom feel; club picker scroll; Caddie bad-clip flow.
+
+## Smooth keyboard motion (field reveal) — 2026-11-06 (branch `feat/keyboard-motion` off origin/main 1c032e1; one local commit, not pushed/deployed; golfme-architect; web-bundle only, no migration, no backend, no native change)
+
+Micky's brief: tapping a text field moves the screen abruptly. The audit and plan were approved, with Micky's answers: Q1 yes (smooth closing move), Q2 no (sheet lift stays instant), Q3 yes (GroupChat card and PostDetail docking stay instant), Q4 yes (hidden toggle).
+
+**Root cause (native app only).** `keyboardWillShow` arrives as the keyboard starts its slide of about 250 ms. Our reveal code then jumped to the final position on the next frame, ahead of the keyboard. The plugin itself (resize Body, `Keyboard.m`) only sets `body.style.height` about 0.45 s later; the app shell is `min-h-screen`, so that moves nothing. On close, removing the reveal's spacer let the browser snap the page back into range in one frame. On the web (Safari/PWA), none of this code runs, because the keyboard height is always 0 there; that path is unchanged.
+
+**What changed.** `src/lib/keyboard/smoothScroll.ts` is a short scroll animation driven by requestAnimationFrame, with the target updated as things change.
+- Timing: 140–260 ms depending on distance, ease-out cubic, never past the target, hard deadline.
+- It ends exactly where the old code jumped to.
+- One window animator is shared by every caller; scrollers get one each.
+- Each frame does one scroll read and one write; no React state.
+- A repeat call for the same target (within 1 px) joins the running motion. A new target continues from the current position.
+- Stops when: the field loses focus, the keyboard state changes, the route changes, the scroller leaves the page, or a touch or wheel arrives (listeners exist only while it runs). Typing never stops it.
+- A WebKit pan of the window is ridden through, not fought. Inside a scroller, another write stops it, so KeyboardAwareModal's close-restore wins.
+- Reduced motion or the switch off: the old one-frame write.
+
+Used in three places:
+- `useRevealFocusedFieldAboveKeyboard`: the open reveal, with the same distance via `minimalReveal.pageRevealDelta`. Plus the closing glide: on the frame after willHide (after React has committed the closed layout), if the page sits past `#root.scrollHeight - innerHeight`, it glides there and only then drops the spacer. Skipped after a drag-dismiss, with reduced motion, or with the switch off; a reopening keyboard keeps the spacer.
+- `revealFocusedField`, used by KeyboardAwareModal and ProfileSetup: same distance via `scrollerRevealDelta`.
+- CourseAutocomplete's minimal reveal: one call.
+
+**Not touched:** DirectMessageThread, useChatViewportBox, useWebKeyboardInset, GroupChat, PostDetail, Modal.tsx (the sheet lift and close-restore stay instant), ProfileSetup.tsx, the keyboard store, Capacitor config, CSS.
+
+**Kill switch.** `SMOOTH_KEYBOARD_MOTION` in `smoothScroll.ts`. On the phone, per device: About, then tap the description line 7 times (founder account only, like the other test switches). It toggles localStorage `golfme:kbMotion` between "on" and "off", with a toast, and takes effect on the next field tap.
+
+**Tests.** `tests/smoothScroll.test.ts` (18: duration and easing bounds, frames, no overshoot, exact end, deadline, instant/reduced, no-op, coalescing, retarget, guard, touch cancel, listener cleanup, external scroll, yield, clamped write terminates). `tests/minimalReveal.test.ts` gains page/scroller reveal maths, checked against the old inline expressions.
+
+**Harness.** New screens in `scripts/dev/fake-keyboard.mjs`: `host-area-motion`, `host-area-reduced`, `host-touch-during`, `host-nav-during`, `host-field-switch`, `sheet-motion`; also a `--motion` flag and per-frame trace summaries in `--diff`. Before/after results: see the commit message.
+
+**Needs a physical iPhone (native app).** The brief's matrix:
+- Feel against the real keyboard spring (only the duration and curve constants would change).
+- Field switching; a finger during the reveal; navigating during the reveal.
+- Rotation; hardware keyboard; emoji keyboard; VoiceOver; Reduce Motion; IME/dictation during a reveal.
+- Sheets (Report, Review, Location picker).
+- GroupChat card and full-screen round chat, and DMs: should be unchanged.
+- Mobile Safari: should be unchanged.
 
 ## Community video: black screen on another account — 2026-11-06 (branch `fix/video-playback-accounts`, first made off 7a22d01, rebased onto origin/main b0621c7 on 2026-11-06; one local commit, not pushed/deployed; golfme-architect; no migration, no backend, no native change)
 

@@ -1,7 +1,10 @@
 import { useEffect } from "react";
 import { Capacitor } from "@capacitor/core";
 import { KEYBOARD_GAP_PX, KEYBOARD_REVEAL_OPT_OUT_SELECTOR, isDmThreadPath, textEntryElement } from "./keyboard/fields";
+import { animateWindowTo, cancelWindowAnimation, keyboardMotionActive } from "./keyboard/smoothScroll";
+import { pageRevealDelta } from "./minimalReveal";
 import { getKeyboardHeight, subscribeKeyboardEvents } from "./useKeyboardHeight";
+import { wasKeyboardDismissedByDrag } from "./useDismissKeyboardOnDrag";
 
 // iOS app: keep a focused text field on a normal page above the keyboard
 // (Micky, 2026-10-23: Host a Round's Notes textarea opened the keyboard but
@@ -29,6 +32,20 @@ import { getKeyboardHeight, subscribeKeyboardEvents } from "./useKeyboardHeight"
 //   app header.
 // - When the keyboard closes, the spacer is removed and the page keeps
 //   whatever position is still valid (like Safari; nothing is yanked back).
+//
+// Motion (lib/keyboard/smoothScroll.ts, Micky 2026-11-06 "feels abrupt"):
+// both moves end exactly where they always did, but travel there in
+// 140-260 ms instead of one frame, alongside the keyboard's own slide.
+// - Opening: the same smallest scroll as before (lib/minimalReveal
+//   pageRevealDelta). It stops if focus leaves the field, the keyboard
+//   closes, the route changes, or the golfer touches the screen; a repeat
+//   reveal for the same field coalesces into the running motion.
+// - Closing: if the page sits beyond its natural end (it used the spacer's
+//   room), it glides back to that end -- the very position the browser used
+//   to snap it to when the spacer went -- and only then drops the spacer.
+//   Not after a drag-dismiss (the finger is driving) and not with the
+//   motion switched off; a keyboard reopening meanwhile keeps the spacer.
+// Reduced motion / switch off: one-frame writes, as before.
 //
 // Skipped (they own their keyboard layout already, or the window isn't
 // what scrolls them):
@@ -69,6 +86,8 @@ export function useRevealFocusedFieldAboveKeyboard() {
     let keyboardHeight = getKeyboardHeight();
     let spacer: HTMLDivElement | null = null;
     let frame = 0;
+    // The closing glide still needs the spacer's room until it ends.
+    let settling = false;
 
     function ensureRoom(field: HTMLElement) {
       // Enough for the field's bottom to reach the top of the screen, which
@@ -88,16 +107,66 @@ export function useRevealFocusedFieldAboveKeyboard() {
       spacer = null;
     }
 
+    // Keyboard closed (willHide). Without motion (switched off, reduced
+    // motion) or after a drag-dismiss: drop the spacer now, as always.
+    // Otherwise measure on the next frame -- after React has committed the
+    // closed-keyboard layout (CourseAutocomplete's own scroll room inside
+    // #root goes then), while this spacer still holds the page -- and glide
+    // back to the page's own end before dropping it.
+    function onKeyboardClosed() {
+      if (!spacer || !keyboardMotionActive() || wasKeyboardDismissedByDrag()) {
+        settling = false;
+        cancelWindowAnimation();
+        removeRoom();
+        return;
+      }
+      settling = true;
+      frame = requestAnimationFrame(settleThenRemoveRoom);
+    }
+
+    function settleThenRemoveRoom() {
+      if (keyboardHeight > 0 || !spacer) {
+        settling = false;
+        return;
+      }
+      const root = document.getElementById("root");
+      // The page's own height: everything but the spacer (a child of body)
+      // renders inside #root; sheets are portaled but position:fixed.
+      const naturalMax = root ? Math.max(0, root.scrollHeight - window.innerHeight) : null;
+      if (naturalMax === null || window.scrollY <= naturalMax + 1 || document.body.style.overflow === "hidden") {
+        settling = false;
+        cancelWindowAnimation();
+        removeRoom();
+        return;
+      }
+      const room = spacer;
+      animateWindowTo(naturalMax, {
+        guard: () => keyboardHeight === 0,
+        onDone: () => {
+          settling = false;
+          // Reopened meanwhile: that keyboard's reveal needs the room.
+          if (spacer === room && keyboardHeight === 0) removeRoom();
+        },
+      });
+    }
+
     function reveal() {
       const field = textField(document.activeElement);
       if (!field || keyboardHeight <= 0 || !scrollsWithWindow(field)) return;
       ensureRoom(field);
       const rect = field.getBoundingClientRect();
-      const visibleBottom = window.innerHeight - keyboardHeight - GAP_PX;
-      if (rect.bottom <= visibleBottom) return;
       const headerBottom = Math.max(document.querySelector("header")?.getBoundingClientRect().bottom ?? 0, 0);
-      const delta = Math.min(rect.bottom - visibleBottom, rect.top - (headerBottom + GAP_PX));
-      if (delta > 0) window.scrollTo(0, Math.round(window.scrollY + delta));
+      const delta = pageRevealDelta({
+        fieldTop: rect.top,
+        fieldBottom: rect.bottom,
+        visibleTop: headerBottom + GAP_PX,
+        visibleBottom: window.innerHeight - keyboardHeight - GAP_PX,
+      });
+      if (delta > 0) {
+        animateWindowTo(Math.round(window.scrollY + delta), {
+          guard: () => keyboardHeight > 0 && document.activeElement === field,
+        });
+      }
     }
 
     function scheduleReveal() {
@@ -119,11 +188,14 @@ export function useRevealFocusedFieldAboveKeyboard() {
     const unsubscribeKeyboard = subscribeKeyboardEvents((event) => {
       if (event.type === "willShow") {
         keyboardHeight = event.height;
+        // Reopened before a closing glide began: it never will (its frame is
+        // replaced below); a running one stops on its own guard.
+        settling = false;
         scheduleReveal();
       } else {
         keyboardHeight = 0;
         cancelAnimationFrame(frame);
-        removeRoom();
+        onKeyboardClosed();
       }
     });
 
@@ -131,7 +203,7 @@ export function useRevealFocusedFieldAboveKeyboard() {
     // drops the room once focus has really left every text field.
     const onFocusOut = () => {
       window.setTimeout(() => {
-        if (keyboardHeight === 0 && !textField(document.activeElement)) removeRoom();
+        if (keyboardHeight === 0 && !settling && !textField(document.activeElement)) removeRoom();
       }, 0);
     };
 
@@ -142,6 +214,7 @@ export function useRevealFocusedFieldAboveKeyboard() {
       document.removeEventListener("focusin", onFocusIn);
       document.removeEventListener("focusout", onFocusOut);
       cancelAnimationFrame(frame);
+      cancelWindowAnimation();
       removeRoom();
     };
   }, []);

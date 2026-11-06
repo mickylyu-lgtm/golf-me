@@ -9,6 +9,7 @@ import { isFounder } from "../lib/founder";
 import { isEntryTestEnabled, setEntryTestEnabled } from "../components/loading/entryFlag";
 import { isNativeAppleSignInAvailable, isSocialSignInTestEnabled, setSocialSignInTestEnabled } from "../lib/socialSignIn";
 import { goBack } from "../lib/goBack";
+import { keyboardMotionEnabled, setKeyboardMotionOverride } from "../lib/keyboard/smoothScroll";
 
 // Private per-device test switch for the branded launch entry (entryFlag.ts):
 // 7 taps on the version line within a few seconds, and only while signed in
@@ -55,6 +56,21 @@ export function About() {
     showToast(on ? "Apple + Google sign-in test ON. Sign out to see it." : "Apple + Google sign-in test OFF.", "info");
   }
 
+  // Same gesture on the description: the per-device before/after switch for
+  // the smooth keyboard reveal (lib/keyboard/smoothScroll.ts). Takes effect
+  // on the next field tap, no restart.
+  const descriptionTaps = useRef<number[]>([]);
+  function onDescriptionTap() {
+    if (!canToggleEntry) return;
+    const now = Date.now();
+    descriptionTaps.current = [...descriptionTaps.current.filter((at) => now - at < ENTRY_TOGGLE_WINDOW_MS), now];
+    if (descriptionTaps.current.length < ENTRY_TOGGLE_TAPS) return;
+    descriptionTaps.current = [];
+    const on = !keyboardMotionEnabled();
+    setKeyboardMotionOverride(on ? "on" : "off");
+    showToast(on ? "Smooth keyboard motion ON (new)." : "Smooth keyboard motion OFF (old instant jumps).", "info");
+  }
+
   return (
     <div className="flex flex-col gap-6 pb-6">
       <button
@@ -68,7 +84,9 @@ export function About() {
         <div className="select-none" onClick={onLogoTap}>
           <GolfMeLogo interactive={false} size={22} />
         </div>
-        <p className="text-sm text-slate-600">{t("about.description")}</p>
+        <p className="select-none text-sm text-slate-600" onClick={onDescriptionTap}>
+          {t("about.description")}
+        </p>
         <p className="select-none text-xs text-slate-400" onClick={onVersionTap}>
           {t("about.version")}
         </p>

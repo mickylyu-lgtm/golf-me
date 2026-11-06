@@ -34,6 +34,8 @@
 //       [--root DIR] [--port 5288] [--screens dm,report-over-keyboard]
 //       [--viewports 375x667,390x844] [--kb 300]
 //   node scripts/dev/fake-keyboard.mjs --diff before.json after.json
+//   --motion: run every screen with motion allowed (the default context
+//   prefers reduced motion; the *-motion screens allow it themselves).
 //
 //   Results go to DIR/<label>.json (+ DIR/<label>-<screen>-<viewport>.png).
 //   DIR defaults to $TMPDIR/golfme-fake-keyboard. --kb overrides the
@@ -507,6 +509,54 @@ async function composerScenario(page, kb, shot, cfg) {
   return results;
 }
 
+// ---------------------------------------------------------------------------
+// Motion traces (the *-motion screens, lib/keyboard/smoothScroll.ts): every
+// frame's window.scrollY (or a scroller's scrollTop) from a step's start
+// until it has been still for a while. Summarised as: how many frames
+// actually moved, the largest single-frame step, whether it only ever went
+// one way, and where it ended. "Before" (instant) = 1 moving frame.
+async function traceStart(page, selector) {
+  await page.evaluate((sel) => {
+    const values = [];
+    const read = () => {
+      const el = sel ? window.__kbPick(sel) : null;
+      return Math.round(sel ? (el ? el.scrollTop : NaN) : window.scrollY);
+    };
+    let raf = 0;
+    const loop = () => {
+      values.push(read());
+      raf = requestAnimationFrame(loop);
+    };
+    values.push(read());
+    raf = requestAnimationFrame(loop);
+    window.__trace = {
+      stop() {
+        cancelAnimationFrame(raf);
+        return values;
+      },
+    };
+  }, selector ?? null);
+}
+function summarise(values) {
+  const steps = [];
+  for (let i = 1; i < values.length; i++) steps.push(values[i] - values[i - 1]);
+  const moving = steps.filter((d) => d !== 0);
+  const ups = moving.filter((d) => d > 0).length;
+  const downs = moving.filter((d) => d < 0).length;
+  return {
+    from: values[0],
+    to: values[values.length - 1],
+    movingFrames: moving.length,
+    maxStep: moving.length ? Math.max(...moving.map(Math.abs)) : 0,
+    oneDirection: ups === 0 || downs === 0,
+    path: values.filter((v, i) => i === 0 || v !== values[i - 1]),
+  };
+}
+const traceStop = async (page) => summarise(await page.evaluate(() => window.__trace.stop()));
+const setReducedMotion = (page, on) => page.emulateMedia({ reducedMotion: on ? "reduce" : "no-preference" });
+// Every context runs with reduced motion unless --motion (set in main).
+let contextReducedMotion = true;
+
 // Demo seed ids (src/data): g11 = Ethan Park (has a DM thread with the
 // demo user), call-7 = a round the demo user hosts, post-2 = a post with a
 // comment by someone else.
@@ -736,6 +786,199 @@ const SCREENS = {
     return { route: "/golf-calls/new", closed, open, after };
   },
 
+  // The same field with motion allowed (the context default is reduced
+  // motion): per-frame scrollY while the keyboard opens and closes. Before
+  // the smooth motion: 1 moving frame each way; after: several, one way,
+  // ending at the same scrollY.
+  async "host-area-motion"(page, base, kb, shot) {
+    await setReducedMotion(page, false);
+    try {
+      await openHostForm(page, base);
+      const subject = 'input[maxlength="80"]';
+      await focus(page, subject);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await frames(page, 2);
+      const closed = await probe(page, subject);
+      await traceStart(page);
+      await kbShow(page, kb);
+      await settle(page, 600);
+      const openTrace = await traceStop(page);
+      const open = await probe(page, subject);
+      await shot("open");
+      // A repeated keyboardWillShow, same height (iOS sends one per focus):
+      // nothing should move.
+      await traceStart(page);
+      await kbShow(page, kb);
+      await settle(page, 400);
+      const repeatTrace = await traceStop(page);
+      await traceStart(page);
+      await kbHide(page);
+      await settle(page, 600);
+      const closeTrace = await traceStop(page);
+      const after = await probe(page, subject);
+      return { route: "/golf-calls/new", closed, open, after, openTrace, repeatTrace, closeTrace };
+    } finally {
+      await setReducedMotion(page, contextReducedMotion);
+    }
+  },
+
+  // Reduced motion (the context default): the same field moves in one frame.
+  async "host-area-reduced"(page, base, kb) {
+    await setReducedMotion(page, true);
+    try {
+      await openHostForm(page, base);
+      const subject = 'input[maxlength="80"]';
+      await focus(page, subject);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await frames(page, 2);
+      await traceStart(page);
+      await kbShow(page, kb);
+      await settle(page, 600);
+      const openTrace = await traceStop(page);
+      const open = await probe(page, subject);
+      await traceStart(page);
+      await kbHide(page);
+      await settle(page, 600);
+      const closeTrace = await traceStop(page);
+      const after = await probe(page, subject);
+      return { route: "/golf-calls/new", open, after, openTrace, closeTrace };
+    } finally {
+      await setReducedMotion(page, contextReducedMotion);
+    }
+  },
+
+  // A finger on the screen two frames into the reveal: the page must stop
+  // moving at once and stay where the finger left it.
+  async "host-touch-during"(page, base, kb) {
+    await setReducedMotion(page, false);
+    try {
+      await openHostForm(page, base);
+      const subject = 'input[maxlength="80"]';
+      await focus(page, subject);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await frames(page, 2);
+      await kbShow(page, kb);
+      await frames(page, 3);
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: 20, y: 120 }] });
+      const atTouch = await page.evaluate(() => Math.round(window.scrollY));
+      await traceStart(page);
+      await settle(page, 400);
+      const afterTouch = await traceStop(page);
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchCancel", touchPoints: [] });
+      await cdp.detach();
+      const open = await probe(page, subject);
+      await kbHide(page);
+      await settle(page, 600);
+      return { route: "/golf-calls/new", atTouch, afterTouch, open };
+    } finally {
+      await setReducedMotion(page, contextReducedMotion);
+    }
+  },
+
+  // Navigating away two frames into the reveal: the new page must sit at
+  // the top with no stray scroll writes afterwards.
+  async "host-nav-during"(page, base, kb) {
+    await setReducedMotion(page, false);
+    try {
+      await openHostForm(page, base);
+      const subject = 'input[maxlength="80"]';
+      await focus(page, subject);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await frames(page, 2);
+      await kbShow(page, kb);
+      await frames(page, 3);
+      await page.evaluate(() => {
+        window.history.pushState({}, "", "/find");
+        window.dispatchEvent(new PopStateEvent("popstate"));
+      });
+      await frames(page, 1);
+      await traceStart(page);
+      await settle(page, 500);
+      const afterNav = await traceStop(page);
+      const landed = await probe(page);
+      await kbHide(page);
+      await settle(page, 400);
+      return { route: "/find", afterNav, landed };
+    } finally {
+      await setReducedMotion(page, contextReducedMotion);
+    }
+  },
+
+  // Field to field with the keyboard up: area field (global reveal) ->
+  // course field (CourseAutocomplete's own reveal) -> back to the area
+  // field. A field that's already visible must not move the page.
+  async "host-field-switch"(page, base, kb) {
+    await setReducedMotion(page, false);
+    try {
+      await openHostForm(page, base);
+      const area = 'input[maxlength="80"]';
+      const course = 'input[placeholder^="e.g."]';
+      await focus(page, area);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await frames(page, 2);
+      await kbShow(page, kb);
+      await settle(page, 600);
+      const areaOpen = await probe(page, area);
+      await traceStart(page);
+      await focus(page, course);
+      await kbShow(page, kb);
+      await settle(page, 600);
+      const toCourse = await traceStop(page);
+      const courseOpen = await probe(page, course);
+      await traceStart(page);
+      await focus(page, area);
+      await kbShow(page, kb);
+      await settle(page, 600);
+      const backToArea = await traceStop(page);
+      const areaAgain = await probe(page, area);
+      await kbHide(page);
+      await settle(page, 600);
+      const after = await probe(page);
+      return { route: "/golf-calls/new", areaOpen, courseOpen, areaAgain, after, toCourse, backToArea };
+    } finally {
+      await setReducedMotion(page, contextReducedMotion);
+    }
+  },
+
+  // A keyboard-aware sheet's own scroller (Report from a comment) with
+  // motion allowed: the focused textarea is revealed inside the sheet.
+  async "sheet-motion"(page, base, kb, shot) {
+    await setReducedMotion(page, false);
+    try {
+      await gotoRoute(page, base, "/community/post-2");
+      await jsClick(page, 'button[aria-label="More options"]');
+      await frames(page, 2);
+      await jsClick(page, "button", "^\\s*report");
+      await settle(page, 500);
+      const scroller = '[role="dialog"] .overflow-y-auto';
+      const field = '[role="dialog"] textarea';
+      await page.evaluate((s) => {
+        const el = window.__kbPick(s);
+        if (el) el.scrollTop = 0;
+      }, scroller);
+      await focus(page, field);
+      await frames(page, 2);
+      const closed = await probe(page, field);
+      await traceStart(page, scroller);
+      await kbShow(page, kb);
+      await settle(page, 600);
+      const openTrace = await traceStop(page);
+      const open = await probe(page, field);
+      await shot("open");
+      await traceStart(page, scroller);
+      await kbHide(page);
+      await settle(page, 600);
+      const closeTrace = await traceStop(page);
+      const after = await probe(page, field);
+      await page.keyboard.press("Escape");
+      await settle(page, 300);
+      return { route: "/community/post-2", closed, open, after, openTrace, closeTrace };
+    } finally {
+      await setReducedMotion(page, contextReducedMotion);
+    }
+  },
+
   // Drag-to-dismiss (useDismissKeyboardOnDrag) on a normal page: a real
   // touch drag outside the focused field blurs it.
   async "drag-dismiss"(page, base, kb) {
@@ -792,6 +1035,14 @@ function printDiff(beforeFile, afterFile) {
     for (const k of Object.keys(a)) {
       if (typeof a[k] !== "object" && a[k] !== b[k]) console.log(`  ${k}: ${JSON.stringify(b[k])} -> ${JSON.stringify(a[k])}`);
     }
+    // Motion traces: frames moved / largest step / end position.
+    for (const k of Object.keys(a)) {
+      const ta = a[k];
+      const tb = b[k];
+      if (!ta || typeof ta !== "object" || !("movingFrames" in ta)) continue;
+      const fmt = (t) => (t ? `${t.from}->${t.to} moving=${t.movingFrames} maxStep=${t.maxStep} oneWay=${t.oneDirection}` : "-");
+      console.log(`  ${k}: ${fmt(tb)}  =>  ${fmt(ta)}`);
+    }
   }
 }
 
@@ -844,7 +1095,8 @@ async function main() {
     for (const vp of viewports) {
       const [width, height] = vp.split("x").map(Number);
       const kb = Number(args.kb ?? DEFAULT_KB[vp] ?? 300);
-      const context = await browser.newContext({ viewport: { width, height }, hasTouch: true, isMobile: true, deviceScaleFactor: 2, reducedMotion: "reduce" });
+      contextReducedMotion = !args.motion;
+      const context = await browser.newContext({ viewport: { width, height }, hasTouch: true, isMobile: true, deviceScaleFactor: 2, reducedMotion: contextReducedMotion ? "reduce" : "no-preference" });
       await context.route("**/*", (route) => {
         const url = new URL(route.request().url());
         if (url.hostname === "127.0.0.1" && url.port === String(port)) return route.continue();

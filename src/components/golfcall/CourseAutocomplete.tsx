@@ -7,6 +7,7 @@ import { useKeyboardHeight } from "../../lib/useKeyboardHeight";
 import { KEYBOARD_GAP_PX } from "../../lib/revealFocusedField";
 import { revealDelta } from "../../lib/minimalReveal";
 import { createFrameScheduler } from "../../lib/frameScheduler";
+import { animateWindowBy } from "../../lib/keyboard/smoothScroll";
 import type { PlayingArea } from "../../lib/geo";
 import { inputClass, labelClass } from "../ui/FormControls";
 import { CourseSearchStatus } from "../ui/CourseSearchStatus";
@@ -115,6 +116,12 @@ export function CourseAutocomplete({ value, onChange, onPickKnownCourse, recentC
 
   useLayoutEffect(() => {
     if (!revealing) return;
+    // The scroll itself is a short motion (lib/keyboard/smoothScroll.ts,
+    // instant with reduced motion) to the same position; a re-check while it
+    // runs measures the rest of the way, i.e. the same target, so it just
+    // continues. It stops once this effect is cleaned up (blur, keyboard
+    // closed or resized, unmount) or the field loses focus.
+    let live = true;
     const keep = () => {
       const input = inputRef.current;
       // Only while this field still has the keyboard: a check that arrives
@@ -129,7 +136,7 @@ export function CourseAutocomplete({ value, onChange, onPickKnownCourse, recentC
         visibleTop: Math.max(headerBottom, 0) + REVEAL_GAP_PX,
         visibleBottom: window.innerHeight - keyboardHeight - KEYBOARD_GAP_PX,
       });
-      if (delta !== 0) window.scrollBy(0, delta);
+      if (delta !== 0) animateWindowBy(delta, { guard: () => live && document.activeElement === input });
     };
     keep();
     // Content above the field resizing (chips, status rows) and the
@@ -142,6 +149,7 @@ export function CourseAutocomplete({ value, onChange, onPickKnownCourse, recentC
     if (rootRef.current) observer.observe(rootRef.current);
     observer.observe(document.body);
     return () => {
+      live = false;
       observer.disconnect();
       scheduler.dispose();
     };
