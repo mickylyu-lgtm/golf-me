@@ -655,6 +655,9 @@ export interface CaddieAnalysis {
   failureStage?: string;
   failureCategory?: string;
   finishedAt?: string;
+  // When the owner saved it to "Saved swings" (migration 20261107210000);
+  // undefined = not saved, or the column isn't there yet.
+  savedAt?: string;
   sharedToCommunity: boolean;
   createdAt: string;
   updatedAt: string;

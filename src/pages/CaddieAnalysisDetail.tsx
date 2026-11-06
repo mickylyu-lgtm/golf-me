@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
-import { AlertCircle, ArrowLeft, ArrowUpRight, Check, Languages, Loader2, Share2, Trash2, Video } from "lucide-react";
+import { AlertCircle, ArrowLeft, ArrowUpRight, Bookmark, BookmarkCheck, Check, Languages, Loader2, Share2, Trash2, Video } from "lucide-react";
+import { canSaveAnalysis } from "../lib/caddieSaved";
 import { TipList } from "../components/caddie/FilmingTips";
 import { DeleteAnalysisDialog } from "../components/caddie/DeleteAnalysisDialog";
 import { CaddieNavIcon } from "../components/icons/CaddieNavIcon";
@@ -66,8 +67,19 @@ const CONFIDENCE_TONE: Record<CaddieConfidence, "fairway" | "outline" | "rose"> 
 // is the "From Community Post" breadcrumb.
 export function CaddieAnalysisDetail() {
   const { analysisId } = useParams<{ analysisId: string }>();
-  const { getCaddieAnalysis, getPost, retryCaddieAnalysis, markCaddieAnalysisShared, translateCaddieAnalysis, createPost, notifications, markNotificationRead } =
-    useData();
+  const {
+    getCaddieAnalysis,
+    getPost,
+    retryCaddieAnalysis,
+    markCaddieAnalysisShared,
+    setCaddieAnalysisSaved,
+    caddieSavedSupported,
+    translateCaddieAnalysis,
+    createPost,
+    notifications,
+    markNotificationRead,
+  } = useData();
+  const savingRef = useRef(false);
   const { hasLoaded: caddieHasLoaded, loadPoseData, refreshMediaUrls } = useRealCaddie();
   const { isDemo } = useAuth();
   const coachEnabled = useCoachReplayEnabled();
@@ -231,6 +243,23 @@ export function CaddieAnalysisDetail() {
     navigate("/community/new", { state: prefill });
   }
 
+  const isSaved = !!analysis.savedAt;
+  // Optimistic in the data layer (the bookmark flips at once and goes back
+  // on failure); this only guards a double tap and says why it went back.
+  async function toggleSaved() {
+    if (!analysis || savingRef.current) return;
+    savingRef.current = true;
+    const next = !analysis.savedAt;
+    try {
+      await setCaddieAnalysisSaved(analysis.id, next);
+    } catch (err) {
+      console.error("GolfMe: couldn't update Saved swings.", err);
+      showToast(next ? t("caddie.saved.saveFailed") : t("caddie.saved.unsaveFailed"), "warning");
+    } finally {
+      savingRef.current = false;
+    }
+  }
+
   async function retry() {
     if (!analysis || retrying) return;
     setRetrying(true);
@@ -341,15 +370,37 @@ export function CaddieAnalysisDetail() {
         <ArrowLeft size={16} /> {t("caddie.back")}
       </button>
 
-      <div>
-        <h1 className="text-xl font-bold text-slate-900">{clubLabel(analysis.swingType, t) || t("caddie.title")}</h1>
-        <p className="text-sm text-slate-500">{formatShortDate(analysis.createdAt, dateLocale)}</p>
-        {sourcePost && (
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold text-slate-900">{clubLabel(analysis.swingType, t) || t("caddie.title")}</h1>
+          <p className="text-sm text-slate-500">{formatShortDate(analysis.createdAt, dateLocale)}</p>
+          {sourcePost && (
+            <button
+              onClick={() => navigate(`/community/${sourcePost.id}`)}
+              className="mt-1 flex items-center gap-1 text-xs font-semibold text-fairway-700 hover:underline"
+            >
+              {t("caddie.fromCommunityPost")} <ArrowUpRight size={12} />
+            </button>
+          )}
+        </div>
+        {/* Saved swings: complete analyses only (the database enforces it
+            too), and only once saved_at exists (or in demo). */}
+        {caddieSavedSupported && canSaveAnalysis(analysis) && (
           <button
-            onClick={() => navigate(`/community/${sourcePost.id}`)}
-            className="mt-1 flex items-center gap-1 text-xs font-semibold text-fairway-700 hover:underline"
+            type="button"
+            onClick={toggleSaved}
+            aria-pressed={isSaved}
+            aria-label={t("caddie.saved.saveLabel")}
+            data-haptic="tap"
+            data-testid="caddie-save-toggle"
+            className={`mt-0.5 flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-sm font-semibold transition-[color,background-color,border-color,transform] duration-200 ease-out active:scale-[0.97] motion-reduce:transition-none ${
+              isSaved
+                ? "border-fairway-200 bg-fairway-50 text-fairway-700"
+                : "border-slate-200 bg-white text-slate-600 hover:border-fairway-300 hover:text-fairway-700"
+            }`}
           >
-            {t("caddie.fromCommunityPost")} <ArrowUpRight size={12} />
+            {isSaved ? <BookmarkCheck size={16} /> : <Bookmark size={16} />}
+            {isSaved ? t("caddie.saved.saved") : t("caddie.saved.save")}
           </button>
         )}
       </div>

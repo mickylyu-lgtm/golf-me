@@ -6,6 +6,7 @@ import { CADDIE_MEDIA_BUCKET, SIGNED_URL_CHECK_INTERVAL_MS, SIGNED_URL_REFRESH_M
 import type { SignedUrlEntry } from "../lib/caddieMedia";
 import { CaddieRequestError, isStaleProcessing } from "../lib/caddieAnalysis";
 import { parseCaddieFailure } from "../lib/caddieFailure";
+import { isMissingSavedColumn } from "../lib/caddieSaved";
 import { checkpointCuesFromJson } from "../lib/coachReplay";
 import { analysisLanguageFromJson } from "../lib/caddieLanguage";
 import { sanitizeWorkOnCheckpoint } from "../../supabase/functions/_shared/caddieCues.ts";
@@ -57,6 +58,9 @@ interface CaddieAnalysisRow {
   failure_stage?: string | null;
   failure_category?: string | null;
   finished_at?: string | null;
+  // Saved swings (migration 20261107210000). Absent when the column isn't
+  // there yet or the row came from an Edge Function that doesn't select it.
+  saved_at?: string | null;
 }
 
 // analysis_json is stored exactly as Gemini returned it (snake_case field
@@ -148,6 +152,7 @@ function rowToAnalysis(row: CaddieAnalysisRow, poseData: CaddiePoseData | undefi
     failureStage: row.failure_stage ?? undefined,
     failureCategory: row.failure_category ?? undefined,
     finishedAt: row.finished_at ?? undefined,
+    savedAt: row.saved_at ?? undefined,
     sharedToCommunity: row.shared_to_community,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -194,6 +199,14 @@ interface RealCaddieContextValue {
    */
   deleteAnalysis: (id: string) => Promise<void>;
   markShared: (id: string) => Promise<void>;
+  /**
+   * Saves (or un-saves) a complete analysis to Saved swings through
+   * set_caddie_analysis_saved(). Optimistic: the list changes at once and
+   * goes back if the call fails (then it throws). Real accounts only.
+   */
+  setSaved: (id: string, saved: boolean) => Promise<void>;
+  /** True once the list was read with saved_at, i.e. migration 20261107210000 is applied. */
+  savedSupported: boolean;
   translateAnalysis: (id: string, locale: string) => Promise<void>;
   /**
    * Fetches this analysis's pose frames (roboflow_analysis_json) if they
@@ -217,6 +230,16 @@ const PROCESSING_POLL_MS = 5000;
 // this build). Keep in sync with translate-caddie-analysis's LIST_COLUMNS.
 const LIST_COLUMNS =
   "id, owner_id, source_type, source_post_id, source_media_url, thumbnail_url, source_media_path, thumbnail_path, swing_type, status, analysis_summary, strengths, issues, recommendations, drills, analysis_json, camera_angle, score, model, error_message, shared_to_community, created_at, updated_at, attempt, attempt_started_at, stage, failure_stage, failure_category, finished_at";
+// Saved swings (migration 20261107210000). Asked for on top of
+// LIST_COLUMNS; a database without the column answers 42703 and the list
+// is read again without it (Save stays hidden for this session).
+const LIST_COLUMNS_WITH_SAVED = `${LIST_COLUMNS}, saved_at`;
+
+// An Edge Function's row (translate / analyze-swing) may not select
+// saved_at: keep the value the list already had for that row.
+function keepSavedAt(row: CaddieAnalysisRow, previous: CaddieAnalysisRow | undefined): CaddieAnalysisRow {
+  return row.saved_at === undefined && previous && previous.saved_at !== undefined ? { ...row, saved_at: previous.saved_at } : row;
+}
 
 // Pose data per analysis id. `updatedAt` is the row version it was fetched
 // at: a fetched-but-empty result (row still processing, or a pre-Roboflow
@@ -257,6 +280,11 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
   // instead of treating "not loaded yet" as "doesn't exist".
   const [loadedForId, setLoadedForId] = useState<string | undefined>(undefined);
   const [poseCache, setPoseCache] = useState<Map<string, PoseCacheEntry>>(new Map());
+  // Whether caddie_analyses has saved_at (migration 20261107210000), found
+  // out by the list fetch itself. Database-wide, so it isn't reset on an
+  // account switch.
+  const savedColumnRef = useRef<"unknown" | "present" | "missing">("unknown");
+  const [savedSupported, setSavedSupported] = useState(false);
   // Signed playback/thumbnail URLs for private caddie-media paths, keyed by
   // path. A derived read-through cache like poseCache -- the row's path is
   // the durable reference; these links are re-made whenever they're missing
@@ -302,14 +330,22 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
     }
     const run: Promise<void> = (async () => {
       try {
-        const { data, error } = await supabase
-          .from("caddie_analyses")
-          .select(LIST_COLUMNS)
-          .eq("owner_id", selfId)
-          .order("created_at", { ascending: false });
+        const listQuery = (columns: string) =>
+          supabase.from("caddie_analyses").select(columns).eq("owner_id", selfId).order("created_at", { ascending: false });
+        const wantSaved = savedColumnRef.current !== "missing";
+        let { data, error } = await listQuery(wantSaved ? LIST_COLUMNS_WITH_SAVED : LIST_COLUMNS);
+        if (error && wantSaved && isMissingSavedColumn(error)) {
+          // Migration 20261107210000 not applied yet: read the list as
+          // before and keep Save hidden until the app is reopened.
+          savedColumnRef.current = "missing";
+          ({ data, error } = await listQuery(LIST_COLUMNS));
+        } else if (!error && wantSaved) {
+          savedColumnRef.current = "present";
+        }
         if (error) throw error;
         if (selfIdRef.current !== selfId) return;
-        setRows((data ?? []) as CaddieAnalysisRow[]);
+        setSavedSupported(savedColumnRef.current === "present");
+        setRows((data ?? []) as unknown as CaddieAnalysisRow[]);
       } catch (err) {
         console.error("GolfMe: failed to load Caddie history.", err);
       }
@@ -561,7 +597,7 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
         const existingIndex = prev.findIndex((r) => r.id === row.id);
         if (existingIndex === -1) return [row, ...withoutDuplicate];
         const next = [...prev];
-        next[existingIndex] = row;
+        next[existingIndex] = keepSavedAt(row, prev[existingIndex]);
         return next;
       });
       return result;
@@ -670,14 +706,38 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
         return cached ? new Map(prev).set(row.id, { ...cached, updatedAt: row.updated_at }) : prev;
       });
     }
-    setRows((prev) => prev.map((r) => (r.id === row.id ? row : r)));
+    setRows((prev) => prev.map((r) => (r.id === row.id ? keepSavedAt(row, r) : r)));
   }, [cachePoseFromFullRow]);
+
+  const setSaved = useCallback(
+    async (id: string, saved: boolean) => {
+      if (!selfId) throw new CaddieRequestError("Not signed in.", 401, "not_authenticated");
+      const before = rowsRef.current.find((r) => r.id === id);
+      if (!before) throw new CaddieRequestError("Analysis not found.", 404, "save_not_found");
+      const previous = before.saved_at ?? null;
+      const optimistic = saved ? (previous ?? new Date().toISOString()) : null;
+      setRows((prev) => prev.map((r) => (r.id === id ? { ...r, saved_at: optimistic } : r)));
+      const { data, error } = await supabase.rpc("set_caddie_analysis_saved", { p_analysis_id: id, p_saved: saved });
+      if (error) {
+        // Put it back, unless something newer (a realtime refetch, another
+        // tap) already replaced the optimistic value.
+        setRows((prev) => prev.map((r) => (r.id === id && (r.saved_at ?? null) === optimistic ? { ...r, saved_at: previous } : r)));
+        const code =
+          error.hint === "caddie_save_not_complete" ? "save_not_complete" : error.hint === "caddie_save_not_found" ? "save_not_found" : undefined;
+        throw new CaddieRequestError(error.message, undefined, code);
+      }
+      // The server's time (first save kept) replaces the optimistic one.
+      const serverValue = typeof data === "string" ? data : null;
+      setRows((prev) => prev.map((r) => (r.id === id && (r.saved_at ?? null) === optimistic ? { ...r, saved_at: serverValue } : r)));
+    },
+    [selfId],
+  );
 
   const hasLoaded = isDemo || (!!selfId && loadedForId === selfId);
 
   const value = useMemo<RealCaddieContextValue>(
-    () => ({ analyses, isLoading, hasLoaded, getAnalysis, createAnalysis, retryAnalysis, deleteAnalysis, markShared, translateAnalysis, loadPoseData, refreshMediaUrls }),
-    [analyses, isLoading, hasLoaded, getAnalysis, createAnalysis, retryAnalysis, deleteAnalysis, markShared, translateAnalysis, loadPoseData, refreshMediaUrls],
+    () => ({ analyses, isLoading, hasLoaded, getAnalysis, createAnalysis, retryAnalysis, deleteAnalysis, markShared, setSaved, savedSupported, translateAnalysis, loadPoseData, refreshMediaUrls }),
+    [analyses, isLoading, hasLoaded, getAnalysis, createAnalysis, retryAnalysis, deleteAnalysis, markShared, setSaved, savedSupported, translateAnalysis, loadPoseData, refreshMediaUrls],
   );
 
   return <RealCaddieContext.Provider value={value}>{children}</RealCaddieContext.Provider>;

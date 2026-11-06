@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Clock, Globe, ScanLine, Trash2, Video } from "lucide-react";
 import { DeleteAnalysisDialog } from "../components/caddie/DeleteAnalysisDialog";
+import { SavedSwings } from "../components/caddie/SavedSwings";
 import type { CaddieAnalysis } from "../types";
 import { useData } from "../context/DataContext";
 import { useRealCaddie } from "../context/RealCaddieContext";
@@ -57,7 +58,7 @@ function saveHistoryCount(n: number): void {
 }
 
 export function Caddie() {
-  const { caddieAnalyses, translateCaddieAnalysis } = useData();
+  const { caddieAnalyses, translateCaddieAnalysis, caddieSavedSupported } = useData();
   const { isDemo } = useAuth();
   const { refreshMediaUrls } = useRealCaddie();
   const { t, locale } = useLocale();
@@ -163,6 +164,12 @@ export function Caddie() {
       <Button size="lg" fullWidth icon={<ScanLine size={16} />} onClick={() => navigate("/caddie/analyze")}>
         {t("caddie.analyzeSwing")}
       </Button>
+
+      {/* Saved swings: once the database has saved_at (or in demo), and only
+          when there's something that could be saved or already is. */}
+      {caddieSavedSupported && sorted.some((a) => a.status === "complete") && (
+        <SavedSwings analyses={sorted} onOpen={(id) => navigate(`/caddie/${id}`)} />
+      )}
 
       <section>
         <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-400">{t("caddie.recent")}</h2>

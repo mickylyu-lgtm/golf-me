@@ -51,6 +51,16 @@ import { useRealCommunity } from "./RealCommunityContext";
 import { useRealCaddie } from "./RealCaddieContext";
 import type { CreateAnalysisInput } from "./RealCaddieContext";
 import { buildDemoCaddieAnalyses } from "../data/caddie";
+import { canSaveAnalysis, loadDemoSaved, storeDemoSaved } from "../lib/caddieSaved";
+
+// localStorage can throw on access (blocked site data, some private modes).
+function safeLocalStorage(): Storage | undefined {
+  try {
+    return window.localStorage;
+  } catch {
+    return undefined;
+  }
+}
 import { canUnsendMessage } from "../lib/unsend";
 import type { UnsendResult } from "../lib/unsend";
 import { DEMO_IMAGE_PREFIX } from "../lib/chatImages";
@@ -340,6 +350,10 @@ interface DataContextValue {
   /** Deletes an analysis (not a live one) and its private files; never refunds the allowance. Demo: removes the fixture locally. */
   deleteCaddieAnalysis: (id: string) => Promise<void>;
   markCaddieAnalysisShared: (id: string) => Promise<void>;
+  /** Saved swings: save / un-save a complete analysis. Optimistic; rejects (after putting it back) on failure. Demo: this device only. */
+  setCaddieAnalysisSaved: (id: string, saved: boolean) => Promise<void>;
+  /** Whether Save can be offered: always in demo; real accounts once migration 20261107210000 is applied. */
+  caddieSavedSupported: boolean;
   translateCaddieAnalysis: (id: string, locale: string) => Promise<void>;
   // Lives here (DataProvider is mounted for the whole app session, unlike
   // AnalyzeSwing itself) so a video someone picked but hasn't submitted yet
@@ -1940,7 +1954,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
   // this genuinely private (see the caddie_analyses migration). Neither
   // path ever fabricates a "complete" result for a real account — see
   // src/lib/swingAnalysis.ts.
-  const caddieAnalyses = auth.isDemo ? demoCaddieAnalyses : realCaddie.analyses;
+  // Demo saves live in localStorage (fixture rows only, nothing personal),
+  // keyed by analysis id; a deleted or re-seeded row simply drops out.
+  const [demoSaved, setDemoSaved] = useState<Record<string, string>>(() =>
+    loadDemoSaved(typeof window === "undefined" ? undefined : safeLocalStorage()),
+  );
+  const demoCaddieWithSaved = useMemo(
+    () => demoCaddieAnalyses.map((a) => (demoSaved[a.id] && a.status === "complete" ? { ...a, savedAt: demoSaved[a.id] } : a)),
+    [demoCaddieAnalyses, demoSaved],
+  );
+  const caddieAnalyses = auth.isDemo ? demoCaddieWithSaved : realCaddie.analyses;
   const getCaddieAnalysis = useCallback((id: string) => caddieAnalyses.find((a) => a.id === id), [caddieAnalyses]);
   const createCaddieAnalysis = useCallback(
     async (input: CreateAnalysisInput): Promise<CaddieAnalysis> => {
@@ -1999,6 +2022,25 @@ export function DataProvider({ children }: { children: ReactNode }) {
     },
     [auth.isDemo, realCaddie],
   );
+  const setCaddieAnalysisSaved = useCallback(
+    async (id: string, saved: boolean) => {
+      if (auth.isDemo) {
+        const target = demoCaddieAnalyses.find((a) => a.id === id);
+        if (saved && (!target || !canSaveAnalysis(target))) throw new Error("Only a finished analysis can be saved.");
+        setDemoSaved((prev) => {
+          const next = { ...prev };
+          if (saved) next[id] = prev[id] ?? new Date().toISOString();
+          else delete next[id];
+          storeDemoSaved(safeLocalStorage(), next);
+          return next;
+        });
+        return;
+      }
+      await realCaddie.setSaved(id, saved);
+    },
+    [auth.isDemo, demoCaddieAnalyses, realCaddie],
+  );
+  const caddieSavedSupported = auth.isDemo || realCaddie.savedSupported;
   const translateCaddieAnalysis = useCallback(
     async (id: string, locale: string) => {
       // Demo's history is static fixture data with no real Gemini pipeline
@@ -2057,6 +2099,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const resetDemoData = useCallback(() => {
     setData(resetToSeedData());
+    setDemoSaved({});
+    storeDemoSaved(safeLocalStorage(), {});
   }, []);
 
   const value = useMemo<DataContextValue>(
@@ -2175,6 +2219,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       retryCaddieAnalysis,
       deleteCaddieAnalysis,
       markCaddieAnalysisShared,
+      setCaddieAnalysisSaved,
+      caddieSavedSupported,
       translateCaddieAnalysis,
       draftSwingVideo,
       setDraftSwingVideo,
@@ -2296,6 +2342,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       retryCaddieAnalysis,
       deleteCaddieAnalysis,
       markCaddieAnalysisShared,
+      setCaddieAnalysisSaved,
+      caddieSavedSupported,
       translateCaddieAnalysis,
       draftSwingVideo,
       setDraftSwingVideo,
