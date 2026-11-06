@@ -45,6 +45,7 @@ export function ReactionPill({ summary, alignRight, label, removeLabel, onRemove
         // Don't take focus off the composer (keyboard stays put).
         onMouseDown={(e) => e.preventDefault()}
         onClick={onRemoveMine}
+        data-haptic="tap"
         className={`${cls} transition-colors duration-150 hover:border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400`}
       >
         {body}

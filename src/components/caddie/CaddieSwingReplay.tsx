@@ -969,6 +969,8 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
             {REPLAY_MODES.map((m) => (
               <button
                 key={m.labelKey}
+                data-haptic="selection"
+                aria-pressed={mode.labelKey === m.labelKey}
                 onClick={() => {
                   pickedModeRef.current = true;
                   setMode(m);

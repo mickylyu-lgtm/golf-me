@@ -31,6 +31,7 @@ import { clearHostRoundDraft, loadHostRoundDraft, saveHostRoundDraft } from "../
 import type { LookingFor, WhenChoice } from "../lib/hostRoundDraft";
 import { parseHostPrefill } from "../lib/hostPrefill";
 import { isObjectionableContentError } from "../lib/objectionableContent";
+import { tapHaptic } from "../lib/tapFeedback";
 
 const BOOKING_SOURCES = ["Course Website", "GolfNow", "Lightspeed / Chronogolf", "Phone Reservation", "Other"] as const;
 
@@ -386,6 +387,7 @@ export function CreateGolfCall() {
         additionalJoinedGolferIds: fillMode ? friendIds : undefined,
       });
       if (fromPostId) attachGolfCallToPost(fromPostId, call.id).catch((err) => console.error("GolfMe: failed to attach round to post.", err));
+      tapHaptic("success");
       track("first_round_hosted");
       clearHostRoundDraft();
       showToast(fillMode ? t("host.postedFillToast") : t("host.postedFreshToast"), "success");
@@ -413,6 +415,7 @@ export function CreateGolfCall() {
         walkOrCart,
         notes: notes.trim() || undefined,
       });
+      tapHaptic("success");
       if (isFirstRound) track("first_round_hosted");
       clearHostRoundDraft();
       // Best-effort: the round itself already exists and is posted either

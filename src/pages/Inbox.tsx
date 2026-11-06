@@ -14,7 +14,7 @@ import { GolfMeLoader } from "../components/loading/GolfMeLoader";
 import { listView } from "../lib/loadStatus";
 import { findTabPath } from "../lib/findTab";
 import { useShareActions } from "../lib/useShareActions";
-import { CLICKABLE_CARD_CLASS } from "../components/ui/cardStyles";
+import { CARD_PRESS_CLASS, CLICKABLE_CARD_CLASS } from "../components/ui/cardStyles";
 import { FounderBadge } from "../components/golfer/TrustBadges";
 import { formatDate, formatRelativeTime } from "../lib/format";
 import { firstName } from "../lib/greeting";
@@ -185,7 +185,8 @@ function DirectList() {
             <button
               key={c.conversationId}
               onClick={() => navigate(`/messages/${c.otherGolfer.id}`, { state: { fromInbox: true } })}
-              className={`flex w-full items-center gap-3 p-3 text-left ${CLICKABLE_CARD_CLASS}`}
+              data-haptic="tap"
+              className={`flex w-full items-center gap-3 p-3 text-left ${CLICKABLE_CARD_CLASS} ${CARD_PRESS_CLASS}`}
             >
               <Avatar golfer={c.otherGolfer} size="md" />
               <div className="min-w-0 flex-1">
@@ -285,7 +286,8 @@ function RoundChatRow({ call }: { call: GolfCall }) {
   return (
     <button
       onClick={() => navigate(`/messages/round/${call.id}`)}
-      className={`flex w-full items-center gap-3 p-3 text-left ${CLICKABLE_CARD_CLASS}`}
+      data-haptic="tap"
+      className={`flex w-full items-center gap-3 p-3 text-left ${CLICKABLE_CARD_CLASS} ${CARD_PRESS_CLASS}`}
     >
       <span
         className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${ended ? "bg-slate-100 text-slate-400" : "bg-fairway-50 text-fairway-600"}`}

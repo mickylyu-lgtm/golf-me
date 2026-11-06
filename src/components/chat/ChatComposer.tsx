@@ -165,6 +165,10 @@ export function ChatComposer({ value, onChange, onSend, placeholder = "Type a me
         onMouseDown={(e) => e.preventDefault()}
         onClick={handleSendClick}
         disabled={!value.trim()}
+        // Medium haptic per send in the native app. Only an attribute read by
+        // lib/tapFeedback's document click listener: no handler, no focus or
+        // keyboard effect.
+        data-haptic="medium"
         aria-label="Send message"
         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-fairway-600 text-white transition-all duration-200 ease-out hover:bg-fairway-700 hover:-translate-y-px active:translate-y-0 active:bg-fairway-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-40 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
       >

@@ -346,6 +346,11 @@ export function BottomNav() {
             to={path}
             end={path === "/"}
             data-tutorial-id={NAV_TUTORIAL_ID_BY_PATH[path]}
+            // Tap feedback only (lib/tapFeedback's delegated listener): the
+            // selection tick on a plain tap to another tab, none on the tab
+            // already open (NavLink marks it aria-current). A drag across the
+            // bar keeps its own per-tab tick above and fires no click.
+            data-haptic="selection"
             aria-label={caddieAriaLabel}
             onClick={(e) => {
               // Same shortcut a drag-release onto Caddie also applies (see

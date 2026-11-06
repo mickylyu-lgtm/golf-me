@@ -4,6 +4,7 @@ import { useToast } from "../context/ToastContext";
 import { useLocale } from "../i18n/LocaleContext";
 import { track } from "./analytics";
 import { formatDate } from "./format";
+import { tapHaptic } from "./tapFeedback";
 import type { GolfCall } from "../types";
 
 // The one join path behind both "Join" buttons (round card and round page),
@@ -29,6 +30,7 @@ export function useJoinRound(call: Pick<GolfCall, "id" | "dateISO" | "joinMode">
     setJoining(true);
     try {
       await joinGolfCall(id);
+      tapHaptic("success");
       track("round_joined");
       showToast(
         joinMode === "instant"

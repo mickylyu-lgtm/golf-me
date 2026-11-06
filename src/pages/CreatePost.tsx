@@ -23,6 +23,7 @@ import { copyCaddieMediaToCommunity, removeCommunityMediaCreatedForFailedPost, s
 import type { DraftMediaItem } from "../lib/communityPostDraft";
 import { isObjectionableContentError } from "../lib/objectionableContent";
 import { goBack } from "../lib/goBack";
+import { tapHaptic } from "../lib/tapFeedback";
 
 type Attachment = "none" | "photo" | "course" | "round" | "swing";
 
@@ -464,6 +465,7 @@ export function CreatePost() {
         coachReviewRequested: kind === "swing" ? requestCoachReview : undefined,
       });
 
+      tapHaptic("success");
       clearCommunityPostDraft();
       showToast("Post published.", "success");
       navigate("/community");

@@ -53,6 +53,8 @@ export function Find() {
             gradient treatment (reported live). */}
         <button
           onClick={() => setTab("rounds")}
+          data-haptic="selection"
+          aria-pressed={tab === "rounds"}
           className={`flex-1 rounded-full py-2 text-sm font-semibold transition ${
             tab === "rounds" ? "bg-gradient-to-br from-brand-forest to-brand-forest-deep text-white" : "text-slate-500"
           }`}
@@ -61,6 +63,8 @@ export function Find() {
         </button>
         <button
           onClick={() => setTab("golfers")}
+          data-haptic="selection"
+          aria-pressed={tab === "golfers"}
           className={`flex-1 rounded-full py-2 text-sm font-semibold transition ${
             tab === "golfers" ? "bg-gradient-to-br from-brand-forest to-brand-forest-deep text-white" : "text-slate-500"
           }`}

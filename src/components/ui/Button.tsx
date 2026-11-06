@@ -1,4 +1,6 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
+import type { HapticKind } from "../../lib/tapFeedback";
+import { PRESS_SCALE_CLASS } from "./cardStyles";
 
 type Variant = "primary" | "secondary" | "ghost" | "danger" | "outline";
 type Size = "sm" | "md" | "lg";
@@ -8,6 +10,9 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   size?: Size;
   icon?: ReactNode;
   fullWidth?: boolean;
+  // Native-app tap haptic (lib/tapFeedback, fired by the one delegated
+  // listener). A light tap by default; "none" for a button that must not buzz.
+  haptic?: HapticKind | "none";
 }
 
 const VARIANT_CLASSES: Record<Variant, string> = {
@@ -40,12 +45,14 @@ export function Button({
   icon,
   fullWidth,
   className = "",
+  haptic = "tap",
   children,
   ...rest
 }: ButtonProps) {
   return (
     <button
-      className={`inline-flex items-center justify-center rounded-full font-semibold transition-all duration-200 ease-out hover:-translate-y-px active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:translate-y-0 ${VARIANT_CLASSES[variant]} ${SIZE_CLASSES[size]} ${fullWidth ? "w-full" : ""} ${className}`}
+      data-haptic={haptic}
+      className={`inline-flex items-center justify-center rounded-full font-semibold transition-all duration-200 ease-out hover:-translate-y-px active:translate-y-0 ${PRESS_SCALE_CLASS} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:translate-y-0 ${VARIANT_CLASSES[variant]} ${SIZE_CLASSES[size]} ${fullWidth ? "w-full" : ""} ${className}`}
       {...rest}
     >
       {icon}
