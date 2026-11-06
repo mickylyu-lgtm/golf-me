@@ -10,6 +10,7 @@ import { matchSupportedTeeTimeCourse } from "../../services/teeTimes/types";
 import { CourseOverviewMap } from "./CourseOverviewMap";
 import { supportsWebGL } from "../../lib/webgl";
 import { FittedSatelliteTiles } from "./SatelliteTiles";
+import { naipExportFor } from "../../lib/naipExport";
 import { GenericCourseIllustration } from "./CourseHero";
 
 // The picture block at the top of a course page (and the course map's
@@ -90,6 +91,12 @@ export function CourseMedia({ course }: { course: DisplayCourseResult }) {
   const useTiles = Boolean(source) && hasCoords && !tilesFailed;
   const tabs = courseMediaTabs({ overviewAvailable: canOverview, hasPhoto: Boolean(shownPhoto), hasStaticSatellite: useTiles || Boolean(mapboxUrl) });
   const tab = pickCourseMediaTab(tabs, chosen);
+  // The one sharp NAIP picture, for the still view (the overview asks for
+  // the same URL itself). USGS only; only once that tab shows.
+  const stillDetail = useMemo(
+    () => (tab === "satellite" && source?.id === "usgs" ? naipExportFor(bounds, { devicePixelRatio: typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1 }) : null),
+    [tab, source?.id, bounds],
+  );
   const label = [course.name, course.area].filter(Boolean).join(", ");
   const tabLabel: Record<MediaTab, string> = {
     overview: t("courseMedia.overview"),
@@ -120,7 +127,7 @@ export function CourseMedia({ course }: { course: DisplayCourseResult }) {
         )}
         {tab === "satellite" &&
           (useTiles && source ? (
-            <FittedSatelliteTiles source={source} lat={course.lat!} lng={course.lng!} bounds={bounds} fallbackZoom={POINT_HERO_ZOOM} onError={() => setTilesFailed(true)} />
+            <FittedSatelliteTiles source={source} lat={course.lat!} lng={course.lng!} bounds={bounds} fallbackZoom={POINT_HERO_ZOOM} onError={() => setTilesFailed(true)} detail={stillDetail} />
           ) : mapboxUrl ? (
             <img src={mapboxUrl} alt={label} decoding="async" className="h-full w-full object-cover" />
           ) : null)}

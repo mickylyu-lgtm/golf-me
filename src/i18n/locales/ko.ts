@@ -155,6 +155,7 @@ export const ko: Record<TranslationKey, string> = {
   "courseMedia.overview": "항공 뷰",
   "courseMedia.overviewLabel": "{name} 위성 항공 뷰. 드래그하거나 핀치해 둘러보세요.",
   "courseMedia.dragHint": "드래그해서 둘러보기",
+  "courseMedia.layout": "코스 배치",
   "courseMedia.photoLabel": "사진:",
   "coursePage.hostHere": "여기서 라운드 열기",
   "coursePage.directions": "길찾기",

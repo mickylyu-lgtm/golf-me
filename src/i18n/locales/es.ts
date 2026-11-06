@@ -155,6 +155,7 @@ export const es: Record<TranslationKey, string> = {
   "courseMedia.overview": "Vista aérea",
   "courseMedia.overviewLabel": "Vista satelital de {name}. Arrastra o pellizca para mirar alrededor.",
   "courseMedia.dragHint": "Arrastra para mirar alrededor",
+  "courseMedia.layout": "Trazado",
   "courseMedia.photoLabel": "Foto:",
   "coursePage.hostHere": "Organiza una ronda aquí",
   "coursePage.directions": "Cómo llegar",

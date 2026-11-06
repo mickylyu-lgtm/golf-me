@@ -155,6 +155,7 @@ export const ja: Record<TranslationKey, string> = {
   "courseMedia.overview": "俯瞰",
   "courseMedia.overviewLabel": "{name}の衛星俯瞰ビュー。ドラッグやピンチで見回せます。",
   "courseMedia.dragHint": "ドラッグで見回す",
+  "courseMedia.layout": "コース図",
   "courseMedia.photoLabel": "写真:",
   "coursePage.hostHere": "ここでラウンドを主催",
   "coursePage.directions": "経路",

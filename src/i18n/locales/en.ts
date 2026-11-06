@@ -167,6 +167,7 @@ export const en = {
   "courseMedia.overview": "Overview",
   "courseMedia.overviewLabel": "Satellite overview of {name}. Drag or pinch to look around.",
   "courseMedia.dragHint": "Drag to look around",
+  "courseMedia.layout": "Layout",
   "courseMedia.photoLabel": "Photo:",
   "coursePage.hostHere": "Host a round here",
   "coursePage.directions": "Directions",

@@ -155,6 +155,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "courseMedia.overview": "俯瞰",
   "courseMedia.overviewLabel": "{name}的衛星俯瞰圖。拖曳或雙指縮放即可環顧。",
   "courseMedia.dragHint": "拖曳環顧四周",
+  "courseMedia.layout": "球場佈局",
   "courseMedia.photoLabel": "照片：",
   "coursePage.hostHere": "在這裡發起球局",
   "coursePage.directions": "路線",

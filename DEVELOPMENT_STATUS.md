@@ -15,7 +15,7 @@ Micky: in round group chats "unsend and hold reaction and every other normal cha
 - **Checks**: tsc, lint (0 errors, pre-existing warnings only), 633/633 node tests (new `tests/roundChatParity.test.ts`, 10, in `test:roundchat`), build ("[prerender] injected"). PGlite on the full migration chain (scratchpad `pglite/_roundchat_parity.mjs`): 59/59 — check false→true→false, rollback = exact pre-migration schema fingerprint, re-apply, the four DM check files still true, uniform authz errors (non-member/missing/left/blocked/spoofed/other round/unsent), ordering + tombstones, unsend + copy + reaction cleanup, replies, realtime, content filter, plus 6 sabotaged-migration negative controls that must fail. Headless demo on a production build: new `roundchat/roundchat.mjs` 41/41 with screenshots in scratchpad `roundchat/`; DM suites unchanged: `reactions.mjs` 28/28 (one run in five 27/28, not reproduced, DM code untouched), `reactions_extra.mjs` 17/17, `hold-lift/holdlift.mjs` 39/39, `mapshots/hold.mjs` phone + desktop OK.
 - **Open for Micky**: apply the migration (after the client deploy); reactions on ended rounds are refused by design (chat is read-only then): say if you want them allowed. **iPhone checks pending (app + Safari)**: hold/swipe on the round page card while the composer is docked over the keyboard, Reply from the menu opening the keyboard and docking with the reply bar, `/messages/round/:id` with the keyboard open (menu placement, header stays), haptics, two real accounts reacting/unsending live.
 
-## Tutorial Appearance step + sharper drone overview (v1) — 2026-11-06 (LIVE on the user's "ship"; v2 high-detail picture + OSM layout parked as scratchpad/drone-v2.patch; no migration, no Edge Function deploy needed)
+## Tutorial Appearance step + sharper drone overview (v1) — 2026-11-06 (LIVE on the user's "ship"; v2 below LIVE 2026-11-06 on Micky's "yes live"; no migration, no Edge Function deploy needed)
 
 - **Tutorial: light/dark mode** (Micky: "include the light and dark mode in tutorial from now on"). It is now step 5 of 5: Play → course map → Chat → Caddie → **Settings → Appearance**. It uses `APPEARANCE_TUTORIAL_ID` on the AppearancePicker card and route `/settings`, the same pattern as 999f548's course-map step. Settings is a lazy page, so TutorialOverlay now makes two more bounded measure attempts (800 and 1600 ms), only while no target has been found. A spotlight already placed is never re-scrolled. Strings `tutorial.appearance.title/text` ×6.
 - **Who sees it**: same as 999f548. Completion is one boolean (`profiles.onboarding_tutorial_completed`), with no step list or version stored. Accounts that already finished or skipped the tour are **not** shown it again. Only accounts that never completed the tour (new real accounts) see the new step. There is no Replay Tutorial entry in Settings, despite the TutorialContext comment saying there is, so demo never runs the tour. Checked headless on demo: the target is on screen after the overlay's scrollIntoView at 375×667, 390×844 and 1280×800.
@@ -33,6 +33,42 @@ Micky: in round group chats "unsend and hold reaction and every other normal cha
   - imagery suite 38/38, with no assertions changed.
   - Before/after on real USGS tiles at 390×844, DPR 3: scratchpad `drone-sharp/` (before: z15/z16 tiles overzoomed; after: same tile zooms covering a wider, sharper view).
 - **Needs an iPhone look**: is the wider framing the right drone feel, or should `OVERVIEW_TILT_ZOOM` go up a little? Also check orbit smoothness with the extra 128 px tile requests.
+
+### v2 (LIVE 2026-11-06): sharp NAIP picture + OSM course layout (Micky: "even more detailed… the layout more visible and authentic"; $0, no keys, no migration applied)
+
+- **Sharp picture** (`src/lib/naipExport.ts`): one `exportImage` from the USGS **NAIP Plus ImageServer** (`https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPPlus/ImageServer/exportImage`).
+  - Terms: public domain (USGS/USDA, "USGS, USDA, The National Map: Orthoimagery"). The existing USGS credit is shown. No key needed and `Access-Control-Allow-Origin: *` is sent.
+  - Service: 0.3 m pixel mosaic, max 4000×4000, Web Mercator. The cached tiles go no deeper than z16 (~1.8 m in NYC).
+  - The request covers the course's outline box plus 15% on each side, in EPSG:3857. The box is grown so its aspect exactly matches the pixel size. The long side is 2048 px at DPR ≥ 2 and 1024 px otherwise (Forest Park ≈ 0.5 m/px).
+  - The URL is deterministic per course and screen class.
+- **Measured 2026-11-06**:
+  - Cold render: **11–44 s** (any size).
+  - Repeat of the same URL: **~0.03–0.2 s**. CloudFront serves it with `max-age=43200`, and the browser caches it too.
+  - Size: 0.3–0.7 MB per picture.
+  - So tiles always show first. The picture is a MapLibre image source over the z16 tiles and under the layout: added at once if it arrives within 3 s, faded in over 700 ms if later, dropped after 60 s (`detailReveal`).
+  - The same picture shows in the still view (`SatelliteTiles` `detail`, course page Satellite tab only), placed with `imageRectInView`.
+  - It is never requested in lists, and at most once per course view (`loadDetailPicture` memo).
+- **OSM layout** (`supabase/functions/_shared/courseLayout.ts`, pure, reusable server-side): golf=fairway/green/bunker/tee/(lateral_)water_hazard ways + multipolygon outers, and golf=hole lines (ref → hole number, "Yellow - 7" → 7).
+  - Multi-course facilities are split by `golf:course:name`. Each area goes to its nearest hole, so Bethpage Black shows only Black's 18.
+  - Shapes are simplified to ~1 m (Bethpage Black 68 KB, Forest Park 18 KB).
+  - Drawing: greens lit, white outlines, dashed hole lines, and 16 px hole-number markers at the tees. A **Layout** toggle (default on, top-right, strings ×6) controls it.
+  - When our course's holes cover < 60% of the outline (multi-course facility), the camera glides onto them over 1.4 s. The orbit holds during the glide and continues the bearing. Under reduced motion the camera jumps instead. It never reframes once the golfer has touched the map.
+- **Layout fetch** (`src/lib/courseDetailImagery.ts`): sent from the browser to both Overpass endpoints at once (overpass-api.de, maps.mail.ru); the first good answer wins and the other is aborted. 50 s timeout.
+  - Cached per device in localStorage for 30 days (max 12 courses). Failures are not cached, and each course is asked once per session.
+  - Measured: 10–35 s per answer, with occasional 502/504 from either endpoint.
+  - **Server-side cache needs a migration** (jsonb `course_imagery.layout`), not applied. Proposed SQL is in the session scratchpad (`drone-sharp/PROPOSED_20261107120000_add_course_imagery_layout.sql`), and it also needs a course-photos change + deploy.
+- **Checks**:
+  - Tests: new `tests/naipExport.test.ts` (9) and `tests/courseLayout.test.ts` (12, including fetch race/cache/storage-failure and picture timeout/retry with stubs), both in test:courses.
+  - node 669/669, tsc, lint 0 errors (21 warnings = main), build, imagery suite 38/38 (no assertion changes).
+  - Real-data before/after (Forest Park, Van Cortlandt, Bethpage Black): scratchpad `drone-sharp/v2-*`.
+- **Risks / open**:
+  - The first viewer of a course per ~12 h waits 10–45 s for the sharp picture (tiles meanwhile).
+  - Overpass is slow and flaky. maps.mail.ru gets the viewer's IP.
+  - Every device fetches the layout itself until the server-side cache exists.
+  - Hole labels can overlap at tight tee clusters (no collision handling).
+  - Bethpage's picture covers the whole facility (1.6 m/px) because it is requested before the layout is known.
+  - Still view: past the 15% pad the blurrier tiles show at the edges.
+  - iPhone: GPU memory for a 2048² texture, and the fade/glide during orbit.
 
 ## Caddie renders entirely in the Caddie feedback language — 2026-11-05 (branch `fix/caddie-language-scope` on 1453a88, uncommitted/not deployed; no migration, no Edge Function change)
 

@@ -155,6 +155,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "courseMedia.overview": "俯瞰",
   "courseMedia.overviewLabel": "{name}的卫星俯瞰图。拖动或双指缩放即可环顾。",
   "courseMedia.dragHint": "拖动环顾四周",
+  "courseMedia.layout": "球场布局",
   "courseMedia.photoLabel": "照片：",
   "coursePage.hostHere": "在这里发起球局",
   "coursePage.directions": "路线",
