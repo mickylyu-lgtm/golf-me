@@ -228,6 +228,27 @@ Deno.test("Roboflow credit cap: quota category, no per-frame retries, no Gemini 
   assertEquals(count("gemini-start"), 0, "Gemini never called");
 });
 
+Deno.test("no usable body: pose_not_found before Gemini, with the raw pose counts in the diagnostic", async () => {
+  // A person Roboflow sees, but every keypoint below its reliability bar.
+  const weak = { x: 100, y: 200, confidence: 0.31, metric_reliable: false };
+  reset({
+    roboflow: () =>
+      json({ outputs: [{ body_keypoints: { left_shoulder: weak, right_shoulder: weak, left_hip: weak, right_hip: weak, left_wrist: weak }, body_metrics: { person_confidence: 0.8 } }] }),
+  });
+  await newJob();
+  const row = onlyRow();
+  assertEquals([row.status, row.failure_category, row.failure_stage, row.failure_retryable], ["failed", "pose_not_found", "pose_gate", false], "row");
+  assertEquals(count("gemini-start"), 0, "Gemini never called");
+  assertEquals(fake.charges.length, 0, "failure not charged");
+  assertEquals(
+    fake.diagnostics[0]?.p_detail,
+    "usable body in 0/12 (min ratio 0.1) kp_obj 12/12 kp_any 12/12 kp_reliable 0/12 max_kp_conf 0.31 max_person_conf 0.80 frame unknown scale 1",
+    "diagnostic detail",
+  );
+  assert(logs.some((l) => l.includes('"evt":"pose_coverage"') && l.includes('"kp_reliable":0')), "pose_coverage log carries the raw counts");
+  assertNoSecretsAnywhere();
+});
+
 Deno.test("Roboflow 429 burst: the failed frames are re-run and the job recovers", async () => {
   reset({ roboflow: (_c, nth) => (nth <= 24 ? json({ message: "rate limit" }, 429) : roboflowOk()) });
   await newJob();

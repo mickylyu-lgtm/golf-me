@@ -325,3 +325,97 @@ export function scaleKeypoints<T extends { x: number; y: number }>(keypoints: Re
   for (const [name, kp] of Object.entries(keypoints)) out[name] = { ...kp, x: kp.x * scale, y: kp.y * scale };
   return out;
 }
+
+// ---- Pose-gate diagnostics (2026-11-06) ----
+// A pose_not_found used to record only "usable body in 0/80", which can't
+// tell apart "no person in the picture" (re-film is right), "a person, but
+// every keypoint below the workflow's reliability bar" (small/far golfer, or
+// our 720 px downscale costing too much detail) and "the response shape
+// changed" (our bug). These counts come from Roboflow's raw answer before
+// filterRoboflowFrame drops unreliable keypoints. Numbers only: no image
+// data, no coordinates, nothing about the user.
+export interface PoseSignalTally {
+  frames: number;
+  /** Frames whose output had a body_keypoints object at all. */
+  withKeypointsObject: number;
+  /** Frames with at least one keypoint carrying numeric x/y. */
+  withAnyKeypoint: number;
+  /** Frames with at least one keypoint Roboflow marked metric_reliable. */
+  withReliableKeypoint: number;
+  maxKeypointConfidence: number | null;
+  maxPersonConfidence: number | null;
+}
+
+export function emptyPoseSignalTally(): PoseSignalTally {
+  return { frames: 0, withKeypointsObject: 0, withAnyKeypoint: 0, withReliableKeypoint: 0, maxKeypointConfidence: null, maxPersonConfidence: null };
+}
+
+const finiteNumber = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+const maxOf = (a: number | null, b: number): number => (a === null || b > a ? b : a);
+
+export function tallyRoboflowOutput(tally: PoseSignalTally, output: unknown): void {
+  tally.frames++;
+  const o = output && typeof output === "object" ? (output as Record<string, unknown>) : {};
+  const metrics = o.body_metrics && typeof o.body_metrics === "object" ? (o.body_metrics as Record<string, unknown>) : {};
+  if (finiteNumber(metrics.person_confidence)) tally.maxPersonConfidence = maxOf(tally.maxPersonConfidence, metrics.person_confidence);
+  const raw = o.body_keypoints;
+  if (!raw || typeof raw !== "object") return;
+  tally.withKeypointsObject++;
+  let any = false;
+  let reliable = false;
+  for (const kp of Object.values(raw as Record<string, unknown>)) {
+    if (!kp || typeof kp !== "object") continue;
+    const k = kp as Record<string, unknown>;
+    if (finiteNumber(k.x) && finiteNumber(k.y)) any = true;
+    if (k.metric_reliable === true) reliable = true;
+    if (finiteNumber(k.confidence)) tally.maxKeypointConfidence = maxOf(tally.maxKeypointConfidence, k.confidence);
+  }
+  if (any) tally.withAnyKeypoint++;
+  if (reliable) tally.withReliableKeypoint++;
+}
+
+// Width/height of a base64 JPEG (ffmpeg's frames: SOF within the first
+// ~1 KB), read from a decoded prefix only. undefined when not found.
+export function jpegSizeFromBase64(base64: string): { width: number; height: number } | undefined {
+  let bytes: Uint8Array;
+  try {
+    // 8192 is a multiple of 4, so the prefix is itself valid base64.
+    const bin = atob(base64.length > 8192 ? base64.slice(0, 8192) : base64);
+    bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+  } catch {
+    return undefined;
+  }
+  if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return undefined;
+  let i = 2;
+  while (i + 8 < bytes.length) {
+    if (bytes[i] !== 0xff) return undefined;
+    const marker = bytes[i + 1];
+    const length = (bytes[i + 2] << 8) | bytes[i + 3];
+    if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+      return { height: (bytes[i + 5] << 8) | bytes[i + 6], width: (bytes[i + 7] << 8) | bytes[i + 8] };
+    }
+    i += 2 + length;
+  }
+  return undefined;
+}
+
+// One line for private.caddie_job_diagnostics (well under its 300 chars).
+export function formatPoseGateDetail(
+  coverage: { usable: number; total: number },
+  tally: PoseSignalTally,
+  frameSize: { width: number; height: number } | undefined,
+  coordinateScale: unknown,
+): string {
+  const conf = (v: number | null) => (v === null ? "none" : v.toFixed(2));
+  const scale = finiteNumber(coordinateScale) && coordinateScale > 0 ? Number(coordinateScale.toFixed(3)) : 1;
+  return [
+    `usable body in ${coverage.usable}/${coverage.total} (min ratio ${POSE_PRESENCE_MIN_RATIO})`,
+    `kp_obj ${tally.withKeypointsObject}/${tally.frames}`,
+    `kp_any ${tally.withAnyKeypoint}/${tally.frames}`,
+    `kp_reliable ${tally.withReliableKeypoint}/${tally.frames}`,
+    `max_kp_conf ${conf(tally.maxKeypointConfidence)}`,
+    `max_person_conf ${conf(tally.maxPersonConfidence)}`,
+    `frame ${frameSize ? `${frameSize.width}x${frameSize.height}` : "unknown"}`,
+    `scale ${scale}`,
+  ].join(" ");
+}

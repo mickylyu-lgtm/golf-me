@@ -50,14 +50,18 @@ import {
   classifyGeminiFileState,
   classifyHttpFailure,
   classifyThrown,
+  emptyPoseSignalTally,
+  formatPoseGateDetail,
   formatStructuredFailure,
   isRetryableStatus,
+  jpegSizeFromBase64,
   poseCoverage,
   providerErrorHint,
   redactDetail,
   safeErrorName,
   scaleKeypoints,
   stepRetryDelayMs,
+  tallyRoboflowOutput,
 } from "../_shared/caddieReliability.ts";
 import type { CaddieStage, StepFailure, TrimWindow } from "../_shared/caddieReliability.ts";
 import { CUE_MAX_CHARS, WORK_ON_CHECKPOINTS, withSanitizedCheckpointCues, withSanitizedWorkOnCheckpoints } from "../_shared/caddieCues.ts";
@@ -1160,6 +1164,9 @@ Deno.serve(async (req: Request) => {
     // behind two attempts per frame.
     let firstFailureDetail: string | undefined;
     let roboflowRetryCount = 0;
+    // Raw (pre-filter) counts of the coarse pass, read only by the pose gate's
+    // failure detail. Dense-pass calls also add to it, after the gate.
+    const poseSignal = emptyPoseSignalTally();
     async function callRoboflowOnce(frame: ExtractedFrame): Promise<TrustedFrame | null> {
       const res = await fetch(ROBOFLOW_ENDPOINT, {
         method: "POST",
@@ -1174,6 +1181,7 @@ Deno.serve(async (req: Request) => {
       const body = await res.json();
       const output = body?.outputs?.[0];
       if (!output) throw new Error("no outputs[0] in response");
+      tallyRoboflowOutput(poseSignal, output);
       return filterRoboflowFrame(frame.frameIndex, frame.timestampSeconds, output, coordinateScale);
     }
     // One frame, ROBOFLOW_FRAME_RETRY_ATTEMPTS total attempts. A 429 (rate
@@ -1255,9 +1263,21 @@ Deno.serve(async (req: Request) => {
     // message before spending a Gemini call on a swing nobody can see.
     await enterStage("pose_gate");
     const coverage = poseCoverage(trustedFrames);
-    logEvent("pose_coverage", { usable: coverage.usable, total: coverage.total });
+    const frameSize = jpegSizeFromBase64(frames[0].base64);
+    logEvent("pose_coverage", {
+      usable: coverage.usable,
+      total: coverage.total,
+      kp_obj: poseSignal.withKeypointsObject,
+      kp_any: poseSignal.withAnyKeypoint,
+      kp_reliable: poseSignal.withReliableKeypoint,
+      max_kp_conf: poseSignal.maxKeypointConfidence,
+      max_person_conf: poseSignal.maxPersonConfidence,
+      frame_w: frameSize?.width ?? null,
+      frame_h: frameSize?.height ?? null,
+      scale: typeof coordinateScale === "number" ? coordinateScale : null,
+    });
     if (coverage.ratio < POSE_PRESENCE_MIN_RATIO) {
-      throw hardFailure("pose_gate", "pose_not_found", `usable body in ${coverage.usable}/${coverage.total} (min ratio ${POSE_PRESENCE_MIN_RATIO})`);
+      throw hardFailure("pose_gate", "pose_not_found", formatPoseGateDetail(coverage, poseSignal, frameSize, coordinateScale));
     }
 
     // --- Stage 2: dense sampling around the fastest part of the swing.
