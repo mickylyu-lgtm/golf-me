@@ -13,8 +13,7 @@ Note: Phases between Phase 20/21 (see below) and Phase 22 span roughly 31 commit
 **Caddie failure finding (Nov 4–6):** all failures were `pose_not_found` with 0 usable frames, from 2 golfers; one later succeeded with another clip. Not Gemini, not HEVC/rotation/trim (ruled out with synthetic fixtures). Likely content (no full body visible). Watch `pose_fullres_retry_result` and `private.caddie_job_diagnostics` (query Q6 in the session scratchpad `caddie-pose-diagnose.sql`) to see if the full-res retry rescues anything.
 
 **Not shipped yet (exact next actions):**
-- Club picker (`c630631`, branch `worktree-agent-ab20d211ec2aec347`): Micky rejected the line sketches; a realistic shaded-vector version is being finished on the same branch. Ship only after Micky approves screenshots. Micky also wants to try Higgsfield renders (claude.ai connector; needs a fresh session to load). Option A (photographing his own clubs) was offered as the most realistic.
-- Scan fixes (`fix/scan-7a22d01`) and the Community video can't-play overlay (`fix/video-playback-accounts`): finished long ago, never approved; being rebased onto main. Ask Micky to approve, then ship.
+- In progress (local worktrees, not shipped): chat video messages (60 s, server transcode, 180-day retention, one picker), native one-tap video picker for build 2.5, Caddie saved swings, keyboard-motion audit (plan only). Club picker with vector art, scan fixes and the video can't-play overlay are LIVE (main).
 - Booking stage 2/3 migration `20261107150000` still NOT applied (client dormant). It now also lists `post_liked`.
 - Photo-with-caption push text still starts with "📷 " (server function `notify_new_message`): fold into the next migration.
 
