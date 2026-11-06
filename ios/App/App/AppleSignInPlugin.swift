@@ -171,9 +171,9 @@ public class GolfMeAppearancePlugin: CAPPlugin, CAPBridgedPlugin {
 }
 
 // Root view controller (created in SceneDelegate). Same as Capacitor's own,
-// plus registering the app-local plugins above before the web view loads,
-// keeping iOS 26+'s top scroll edge effect off the web view, and a page
-// colour behind the web view that follows light/dark.
+// plus registering the app-local plugins (above, and MediaPickerPlugin.swift)
+// before the web view loads, keeping iOS 26+'s top scroll edge effect off the
+// web view, and a page colour behind the web view that follows light/dark.
 class GolfMeBridgeViewController: CAPBridgeViewController {
     private var edgeEffectObservations: [NSKeyValueObservation] = []
 
@@ -200,6 +200,7 @@ class GolfMeBridgeViewController: CAPBridgeViewController {
         super.capacitorDidLoad()
         bridge?.registerPluginInstance(GolfMeAppleSignInPlugin())
         bridge?.registerPluginInstance(GolfMeAppearancePlugin())
+        bridge?.registerPluginInstance(GolfMeMediaPickerPlugin())
         hideTopScrollEdgeEffect()
         guard let webView = webView else { return }
         // Replaces the fixed cream Capacitor set from capacitor.config.ts

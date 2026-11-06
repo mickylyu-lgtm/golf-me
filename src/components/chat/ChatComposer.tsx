@@ -6,6 +6,7 @@ import { isSendEnter } from "../../lib/isImeComposing";
 import { composerTextareaHeight } from "../../lib/composerAutosize";
 import { createSendGuard } from "../../lib/sendGuard";
 import { draftSendKey } from "../../lib/chatImages";
+import { pickChatMedia } from "../../lib/chatMediaPicker";
 
 // Font, line-height and padding shared by the textarea and its hidden
 // measuring mirror: the mirror only measures correctly while these match.
@@ -165,8 +166,9 @@ export function ChatComposer({
         </button>
         {emojiOpen && <EmojiPicker triggerRef={emojiButtonRef} onSelect={insertEmoji} onClose={() => setEmojiOpen(false)} />}
       </div>
-      {/* Photo: library or camera (iOS offers both for a plain image/*
-          input; no `capture`, which would force the camera). One per
+      {/* Photo: in the native app, the one-tap system photo picker
+          (lib/chatMediaPicker.ts); elsewhere the hidden file input below
+          (library or camera; no `capture`, which would force it). One per
           message. Same 36 px as the emoji button and shorter than the
           one-line textarea, so the row's height (and the composer's
           docking) is unchanged; the textarea just gets narrower. */}
@@ -174,7 +176,7 @@ export function ChatComposer({
         <>
           <button
             type="button"
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => void pickChatMedia({ openFileInput: () => fileInputRef.current?.click(), onPicked: onPickImage })}
             aria-label={photoLabel}
             title={photoLabel}
             data-chat-photo-button
