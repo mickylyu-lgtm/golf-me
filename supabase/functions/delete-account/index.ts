@@ -100,6 +100,13 @@ Deno.serve(async (req: Request) => {
   if (storageCleanup.errors.length > 0) {
     console.error("delete-account: storage cleanup incomplete", { userId: user.id, removed: storageCleanup.removed, errors: storageCleanup.errors });
   }
+  // Chat photos (migration 20261107170000) aren't keyed by user id
+  // (chat-media/dm/<conversation>/<message>.jpg), so their paths come from
+  // the database. Their message rows are already gone with the account.
+  const chatCleanup = await purgeChatMedia(adminClient, user.id);
+  if (chatCleanup.errors.length > 0) {
+    console.error("delete-account: chat photo cleanup incomplete", { userId: user.id, removed: chatCleanup.removed, errors: chatCleanup.errors });
+  }
 
   return jsonResponse({ success: true });
 });
@@ -215,6 +222,29 @@ async function listAllPaths(client: AdminClient, bucket: string, prefix: string,
     if (entries.length < LIST_PAGE_SIZE) break;
   }
   return paths;
+}
+
+// The deleted golfer's objects in chat-media, listed by owner through
+// public.chat_media_paths_for_user (service role only). Before that
+// migration is applied the RPC doesn't exist: one logged error, nothing to
+// remove.
+async function purgeChatMedia(client: AdminClient, userId: string): Promise<{ removed: number; errors: string[] }> {
+  const { data, error } = await client.rpc("chat_media_paths_for_user", { p_user_id: userId });
+  if (error) return { removed: 0, errors: [`list chat-media: ${error.message}`] };
+  // A set of text comes back as plain strings; older PostgREST wrapped each
+  // as { chat_media_paths_for_user: "..." }. Accept both.
+  const paths = ((data ?? []) as unknown[])
+    .map((p) => (typeof p === "string" ? p : p && typeof p === "object" ? Object.values(p as Record<string, unknown>)[0] : null))
+    .filter((p): p is string => typeof p === "string" && p.length > 0);
+  let removed = 0;
+  const errors: string[] = [];
+  for (let i = 0; i < paths.length; i += REMOVE_BATCH_SIZE) {
+    const batch = paths.slice(i, i + REMOVE_BATCH_SIZE);
+    const { error: removeError } = await client.storage.from("chat-media").remove(batch);
+    if (removeError) errors.push(`remove chat-media (${batch.length} files): ${removeError.message}`);
+    else removed += batch.length;
+  }
+  return { removed, errors };
 }
 
 async function purgeUserStorage(client: AdminClient, userId: string): Promise<{ removed: number; errors: string[] }> {

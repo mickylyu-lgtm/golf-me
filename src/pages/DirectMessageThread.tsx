@@ -35,6 +35,13 @@ import { followNewMessages, messagesAfter } from "../lib/chatScroll";
 import { NewMessagesPill } from "../components/chat/NewMessagesPill";
 import { type FailedDm, sendDmWithRecovery } from "../lib/dmFailedSend";
 import { Capacitor } from "@capacitor/core";
+import { ChatPhotoBody } from "../components/chat/ChatImage";
+import { ImageAttachmentChip } from "../components/chat/ImageAttachmentChip";
+import { FullscreenMediaViewer } from "../components/community/FullscreenMediaViewer";
+import { useChatImageAttachment } from "../lib/useChatImageAttachment";
+import { messagePreviewText } from "../lib/chatImages";
+import { canCopyImages, copyChatImage } from "../lib/chatImageClient";
+import type { DirectMessage } from "../types";
 
 const IS_NATIVE = Capacitor.isNativePlatform();
 
@@ -61,9 +68,18 @@ export function DirectMessageThread() {
     deleteConversation,
     isOtherTyping,
     sendTypingSignal,
+    canSendDirectImages,
+    sendDirectImage,
+    retryDirectImage,
+    discardDirectImage,
   } = useData();
   const { showToast } = useToast();
   const { t, locale } = useLocale();
+  // Photos (lib/chatImages.ts): the composer's one picked photo (page state,
+  // dropped when the thread changes) and the fullscreen viewer. Render and
+  // send only: nothing here touches the box / keyboard / scroll code below.
+  const photo = useChatImageAttachment((reason) => showToast(t(reason === "tooLarge" ? "chat.photoTooLarge" : "chat.photoUnreadable"), "warning"));
+  const [viewerUrl, setViewerUrl] = useState<string | null>(null);
 
   const [text, setText] = useState(() => (id ? loadChatDraft(dmDraftKey(id)) : ""));
   const [menuOpen, setMenuOpen] = useState(false);
@@ -205,7 +221,8 @@ export function DirectMessageThread() {
   }, [nextUnsendExpiry]);
   useMessageLongPress(listRef, Boolean(other), (messageId, bubble) => {
     const m = messages.find((x) => x.id === messageId);
-    if (!m || m.unsentAt) return;
+    // A photo still sending / not sent isn't a message yet.
+    if (!m || m.unsentAt || m.delivery) return;
     // Unsend is re-checked with a fresh clock at the moment of the press.
     setNowMs(Date.now());
     setActionsFor({ id: messageId, bubble });
@@ -219,6 +236,9 @@ export function DirectMessageThread() {
   // the page.
   useEffect(() => setReplyToId(null), [id]);
   useEffect(() => setActionsFor(null), [id]);
+  // A picked photo belongs to one thread, like the reply target.
+  const removePhoto = photo.remove;
+  useEffect(() => removePhoto(), [id, removePhoto]);
   useEffect(() => () => window.clearTimeout(highlightTimerRef.current), []);
 
   // Ephemeral only -- never a persisted message, never touches unread
@@ -488,8 +508,18 @@ export function DirectMessageThread() {
   async function handleCopy(messageId: string) {
     setActionsFor(null);
     const m = messagesById.get(messageId);
-    if (m && (await copyText(m.text))) showToast(t("chat.copied"), "info");
+    if (!m) return;
+    // A photo: the image itself (with its caption) where the platform can
+    // put images on the clipboard; started inside the tap (WebKit's rule).
+    if (m.image && canCopyImages()) {
+      if (await copyChatImage(m.image.path, m.outgoingPhoto?.localUrl, m.text)) showToast(t("chat.copied"), "info");
+      return;
+    }
+    if (m.text.trim() && (await copyText(m.text))) showToast(t("chat.copied"), "info");
   }
+
+  // One line for a quote / the reply bar: its text, or "📷 Photo".
+  const previewOf = (m: DirectMessage) => messagePreviewText(m, t("chat.photo"));
 
   function showSendFailed(result: "failed" | "objectionable") {
     if (result === "objectionable") showToast(t("moderation.objectionableContent"), "warning");
@@ -500,7 +530,24 @@ export function DirectMessageThread() {
   // text goes back into the composer only if it is still empty with no
   // reply picked; otherwise it stays as a "Not sent" bubble below.
   async function handleSend() {
-    if (!text.trim() || !other) return;
+    if (!other) return;
+    // With a photo: one message (photo + optional text + quote). It shows at
+    // once with upload progress; a failure stays as a "Not sent" photo
+    // bubble with Retry / Discard (the composer is never refilled).
+    if (photo.state.kind === "ready") {
+      const picked = photo.take();
+      if (!picked) return;
+      const body = text;
+      const replyTo = replyTarget?.id;
+      updateText("");
+      setReplyToId(null);
+      stopTyping();
+      const result = await sendDirectImage(other.id, picked, body, replyTo);
+      if (result === "objectionable") showToast(t("moderation.objectionableContent"), "warning");
+      else if (result === "failed") showToast(t("chat.photoNotSent"), "info");
+      return;
+    }
+    if (!text.trim()) return;
     const threadId = other.id;
     const { result } = await sendDmWithRecovery({
       threadId,
@@ -694,6 +741,70 @@ export function DirectMessageThread() {
                   </div>
                 );
               }
+              // My photo still sending, or not sent (Retry / Discard). Same
+              // row shape as a bubble, but not a hold / reply target until
+              // it's stored. Its box is reserved from the photo's size, so
+              // turning into the stored message changes nothing in layout.
+              if (m.delivery && m.image) {
+                const failed = m.delivery === "failed";
+                const failure = m.outgoingPhoto?.failure;
+                return (
+                  <div key={m.id} data-reply-row={m.id} data-photo-pending={m.delivery} className="relative flex items-end gap-2 flex-row-reverse">
+                    <span className="shrink-0 rounded-full">
+                      <Avatar golfer={currentUser} size="xs" showVerified={false} />
+                    </span>
+                    <div className="flex max-w-[75%] flex-col items-end">
+                      <div
+                        className={`rounded-2xl rounded-br-sm p-1 text-sm [overflow-wrap:anywhere] ${
+                          failed ? "border border-rose-300 bg-rose-50 text-slate-800" : "bg-fairway-600 text-white opacity-90"
+                        }`}
+                      >
+                        <ChatPhotoBody
+                          image={m.image}
+                          localUrl={m.outgoingPhoto?.localUrl}
+                          alt={t("chat.photoAlt")}
+                          openLabel={t("chat.photoSending")}
+                          unavailableLabel={t("chat.photoUnavailable")}
+                          progress={failed ? undefined : (m.outgoingPhoto?.progress ?? 0)}
+                          caption={m.text}
+                        />
+                        {!failed && <span className="sr-only">{t("chat.photoSending")}</span>}
+                      </div>
+                      {failed && (
+                        <div className="mt-1 flex items-center gap-3 text-[11px] font-semibold">
+                          {failure === "objectionable" || failure === "rejected" ? (
+                            <span className="flex items-center gap-1 text-rose-600">
+                              <AlertCircle size={12} aria-hidden="true" /> {failure === "objectionable" ? t("moderation.objectionableContent") : t("chat.photoRejected")}
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => {
+                                void retryDirectImage(m.id).then((result) => {
+                                  if (result === "failed") showToast(t("chat.photoNotSent"), "info");
+                                });
+                              }}
+                              aria-label={t("roundChat.retryLabel")}
+                              className="flex items-center gap-1 rounded text-rose-600 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
+                            >
+                              <AlertCircle size={12} aria-hidden="true" /> {t("roundChat.notSentRetry")}
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => discardDirectImage(m.id)}
+                            className="rounded text-slate-400 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+                          >
+                            {t("roundChat.discard")}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              }
               const messageReactionRows = canReactToMessages && canReactToMessage(m) ? reactionsByMessage.get(m.id) : undefined;
               const reactionSummary = messageReactionRows ? summarizeReactions(messageReactionRows, m.id, currentUser.id) : [];
               const mineReacted = reactionSummary.some((s) => s.mine);
@@ -733,7 +844,7 @@ export function DirectMessageThread() {
                     // `transform` useSwipeToReply writes. No layout change.
                     // While the menu is open the bubble is drawn by its
                     // focus copy (MessageActionsMenu), no ring here.
-                    className={`relative max-w-[75%] rounded-2xl px-3.5 py-2 text-sm transition-[box-shadow,scale] duration-300 ease-out data-pressing:scale-[0.97] data-pressing:duration-[350ms] [overflow-wrap:anywhere] pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none] ${
+                    className={`relative max-w-[75%] rounded-2xl ${m.image ? "p-1" : "px-3.5 py-2"} text-sm transition-[box-shadow,scale] duration-300 ease-out data-pressing:scale-[0.97] data-pressing:duration-[350ms] [overflow-wrap:anywhere] pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none] ${
                       isMe ? "rounded-br-sm bg-fairway-600 text-white" : "rounded-bl-sm bg-slate-100 text-slate-800"
                     } ${highlightId === m.id ? "ring-2 ring-amber-300 ring-offset-2" : ""} ${reactionSummary.length > 0 ? "mb-4" : ""}`}
                   >
@@ -751,7 +862,7 @@ export function DirectMessageThread() {
                           }`}
                         >
                           <span className={`block font-semibold ${isMe ? "text-white" : "text-slate-700"}`}>{senderLabel(quoted.senderId)}</span>
-                          <span className={`line-clamp-2 ${quoted.unsentAt ? "italic" : ""}`}>{quoted.unsentAt ? t("chat.messageUnsent") : quoted.text}</span>
+                          <span className={`line-clamp-2 ${quoted.unsentAt ? "italic" : ""}`}>{quoted.unsentAt ? t("chat.messageUnsent") : previewOf(quoted)}</span>
                         </button>
                       ) : (
                         <div
@@ -762,7 +873,19 @@ export function DirectMessageThread() {
                           {t("chat.originalUnavailable")}
                         </div>
                       ))}
-                    {m.text}
+                    {m.image ? (
+                      <ChatPhotoBody
+                        image={m.image}
+                        localUrl={m.outgoingPhoto?.localUrl}
+                        alt={t("chat.photoAlt")}
+                        openLabel={t("chat.openPhoto")}
+                        unavailableLabel={t("chat.photoUnavailable")}
+                        caption={m.text}
+                        onOpen={setViewerUrl}
+                      />
+                    ) : (
+                      m.text
+                    )}
                     <ReactionPill
                       summary={reactionSummary}
                       alignRight={isMe}
@@ -865,7 +988,7 @@ export function DirectMessageThread() {
                     <p className="truncate font-semibold text-slate-700">
                       {replyTarget.senderId === currentUser.id ? t("chat.replyingToSelf") : t("chat.replyingTo", { name: other.name })}
                     </p>
-                    <p className="truncate text-slate-500">{replyTarget.unsentAt ? t("chat.messageUnsent") : replyTarget.text}</p>
+                    <p className="truncate text-slate-500">{replyTarget.unsentAt ? t("chat.messageUnsent") : previewOf(replyTarget)}</p>
                   </div>
                   <button
                     type="button"
@@ -880,11 +1003,28 @@ export function DirectMessageThread() {
                   </button>
                 </div>
               )}
-              <ChatComposer value={text} onChange={handleComposerChange} onSend={handleSend} onBlur={stopTyping} />
+              {/* The picked photo: same container as the reply bar, so the
+                  list's ResizeObserver handles it like the composer growing. */}
+              <ImageAttachmentChip
+                state={photo.state}
+                onRemove={photo.remove}
+                labels={{ remove: t("chat.removePhoto"), processing: t("chat.photoPreparing"), ready: t("chat.photoReady") }}
+              />
+              <ChatComposer
+                value={text}
+                onChange={handleComposerChange}
+                onSend={handleSend}
+                onBlur={stopTyping}
+                onPickImage={canSendDirectImages ? photo.pick : undefined}
+                photoLabel={t("chat.addPhoto")}
+                photoKey={photo.state.kind === "ready" ? photo.state.key : null}
+                photoBusy={photo.state.kind === "processing"}
+              />
             </>
           )}
         </div>
       </div>
+      {viewerUrl && <FullscreenMediaViewer media={[{ id: "chat-photo", type: "image", url: viewerUrl }]} onClose={() => setViewerUrl(null)} />}
 
       {actionsMessage && actionsShown.value && (
         <MessageActionsMenu
@@ -901,7 +1041,12 @@ export function DirectMessageThread() {
                 }
               : null
           }
-          actions={messageActions({ canReply: replyEnabled, canUnsend: unsendableIds.has(actionsMessage.id) })}
+          actions={messageActions({
+            canReply: replyEnabled,
+            canUnsend: unsendableIds.has(actionsMessage.id),
+            // A photo with no text where images can't go on the clipboard: no Copy.
+            canCopy: !(actionsMessage.image && !actionsMessage.text.trim() && !canCopyImages()),
+          })}
           labels={{
             menu: t("chat.messageActions"),
             reply: t("chat.reply"),

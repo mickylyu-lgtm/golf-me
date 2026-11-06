@@ -4,6 +4,7 @@ import { Link, Navigate } from "react-router-dom";
 import { Bell, Calendar, Flag, LayoutGrid, MessageSquare, Smartphone, TrendingDown, TrendingUp, Trophy, Users, Wand2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useRoles } from "../lib/useRoles";
+import { ReportChatImages } from "../components/admin/ReportChatImages";
 import { supabase } from "../lib/supabase";
 import { Avatar } from "../components/ui/Avatar";
 import { Badge } from "../components/ui/Badge";
@@ -474,6 +475,7 @@ export function AdminDashboard() {
                     </p>
                   </div>
                   {r.details && <p className="whitespace-pre-wrap break-words rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-700">{r.details}</p>}
+                  {(r.context === "chat" || r.context === "round") && r.reported_user_id && <ReportChatImages reportId={r.id} />}
                   <p className="break-all text-[11px] text-slate-400">
                     Report {r.id}
                     {r.round_id && <> · Golf Call {r.round_id}</>}

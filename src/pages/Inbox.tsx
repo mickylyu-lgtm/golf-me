@@ -22,6 +22,7 @@ import { isFounder } from "../lib/founder";
 import { isUpcomingRound, nextUpcomingRound, orderRoundChats } from "../lib/golfCall";
 import { useLocale } from "../i18n/LocaleContext";
 import type { GolfCall } from "../types";
+import { messagePreviewText } from "../lib/chatImages";
 
 type InboxTab = "direct" | "rounds";
 const TAB_STORAGE_KEY = "golfme.chatInboxTab";
@@ -208,7 +209,7 @@ function DirectList() {
                   ) : (
                     <>
                       {c.lastMessage.senderId === c.otherGolfer.id ? "" : t("chatInbox.youPrefix")}
-                      {c.lastMessage.unsentAt ? <span className="italic">{t("chat.messageUnsent")}</span> : c.lastMessage.text}
+                      {c.lastMessage.unsentAt ? <span className="italic">{t("chat.messageUnsent")}</span> : messagePreviewText(c.lastMessage, t("chat.photo"))}
                     </>
                   )}
                 </p>
@@ -308,7 +309,7 @@ function RoundChatRow({ call }: { call: GolfCall }) {
           {last ? (
             <>
               {prefix}
-              {last.unsentAt ? <span className="italic">{t("chat.messageUnsent")}</span> : last.text}
+              {last.unsentAt ? <span className="italic">{t("chat.messageUnsent")}</span> : messagePreviewText(last, t("chat.photo"))}
             </>
           ) : (
             t("chatInbox.roundNoMessages")

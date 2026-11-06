@@ -17,10 +17,14 @@ import {
   markRoundMessageRetrying,
   markRoundMessageSent,
   mergeRoundMessages,
+  patchRoundPhoto,
   reconcilePendingRoundMessages,
   roundRowsHaveColumn,
   shouldResendWithoutReply,
 } from "../lib/roundChat";
+import { classifyImageInsertError, imageRowColumns, isMissingImageSupportError, progressStep, roundImagePath, rowsHaveImageColumn } from "../lib/chatImages";
+import type { ImageSendFailure, ImageSupport, ProcessedChatImage } from "../lib/chatImages";
+import { chatImageUrls, removeChatImage, uploadChatImage } from "../lib/chatImageClient";
 import type { PendingRoundMessage, RoundMessageRowLike } from "../lib/roundChat";
 import { classifyUnsendError } from "../lib/unsend";
 import type { UnsendResult } from "../lib/unsend";
@@ -88,6 +92,12 @@ interface RealRoundsContextValue {
   sendRoundMessage: (roundId: string, text: string, replyToId?: string | null) => Promise<SendMessageResult>;
   retryRoundMessage: (message: { clientId: string; roundId: string; text: string; replyToId?: string | null }) => Promise<SendMessageResult>;
   discardRoundMessage: (clientId: string) => void;
+  // Photos (lib/chatImages.ts, migration 20261107170000): offered once the
+  // database is known to have round_messages.image_path. A photo send shows
+  // at once with upload progress; a failure stays as "Not sent" (the same
+  // retry / discard as text, through retryRoundMessage / discardRoundMessage).
+  imagesSupported: boolean;
+  sendRoundImage: (roundId: string, photo: ProcessedChatImage, text: string, replyToId?: string | null) => Promise<SendMessageResult>;
   // Migration 20261107130000_round_chat_parity, each part feature-detected
   // so this ships safely before it: replies / unsend once fetched
   // round_messages rows carry reply_to_message_id / unsent_at; reactions
@@ -552,12 +562,158 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
     [authUser, attemptSend],
   );
 
+  // ---- Photos (lib/chatImages.ts, migration 20261107170000) ----
+  // Probe once per account (and on resume until known), so the photo button
+  // shows even in a round with no messages yet; a fetched row carrying
+  // image_path proves it too.
+  const [imageProbe, setImageProbe] = useState<ImageSupport>("unknown");
+  const imageProbeRef = useRef<ImageSupport>("unknown");
+  const [imageColumnMissing, setImageColumnMissing] = useState(false);
+  const probeImages = useCallback(async () => {
+    const forUser = authUser?.id;
+    if (!forUser || imageProbeRef.current === "yes") return;
+    const { error } = await supabase.from("round_messages").select("image_path").limit(1);
+    if (userIdRef.current !== forUser) return;
+    const next: ImageSupport = !error ? "yes" : isMissingImageSupportError(error) ? "no" : "unknown";
+    imageProbeRef.current = next;
+    setImageProbe(next);
+    if (next === "yes") setImageColumnMissing(false);
+  }, [authUser]);
+  useEffect(() => {
+    imageProbeRef.current = "unknown";
+    setImageProbe("unknown");
+    setImageColumnMissing(false);
+    if (isDemo || !authUser) return;
+    void probeImages();
+    return refetchOnResume(() => void probeImages());
+    // Per account (the id), not per authUser object (token refreshes).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountKey]);
+  const imagesSupported = !imageColumnMissing && (imageProbe === "yes" || rowsHaveImageColumn(messageRows));
+
+  // The bytes and progress of each photo send, by clientId (display state
+  // is in pendingMessages[].photo). A retry resumes where the last attempt
+  // stopped: an uploaded photo isn't uploaded again.
+  const photoJobsRef = useRef(
+    new Map<string, { roundId: string; messageId: string; blob: Blob; localUrl: string; width: number; height: number; thumb: string | null; text: string; replyTo: string | null; uploaded: boolean; user: string }>(),
+  );
+  const photoInFlightRef = useRef(new Map<string, Promise<SendMessageResult>>());
+
+  const attemptPhoto = useCallback(
+    (clientId: string): Promise<SendMessageResult> => {
+      const running = photoInFlightRef.current.get(clientId);
+      if (running) return running;
+      const run = async (): Promise<SendMessageResult> => {
+        const job = photoJobsRef.current.get(clientId);
+        if (!job || !authUser || job.user !== authUser.id) return "failed";
+        const current = () => userIdRef.current === job.user;
+        const fail = (failure: ImageSendFailure): SendMessageResult => {
+          if (current()) {
+            setPendingMessages((prev) =>
+              patchRoundPhoto(markRoundMessageFailed(prev, clientId, failure === "rejected" ? "rejected" : "network"), clientId, { failure }),
+            );
+            // Refused: most likely the round ended, the golfer left, or a block.
+            if (failure === "rejected") void refetch();
+          }
+          return failure === "objectionable" ? "objectionable" : "failed";
+        };
+        const path = roundImagePath(job.roundId, job.messageId);
+        if (!job.uploaded) {
+          let shown = -1;
+          const uploaded = await uploadChatImage(path, job.blob, (fraction) => {
+            const step = progressStep(fraction);
+            if (step !== shown && current()) {
+              shown = step;
+              setPendingMessages((prev) => patchRoundPhoto(prev, clientId, { progress: step }));
+            }
+          });
+          if (uploaded !== "uploaded") return fail(uploaded);
+          job.uploaded = true;
+          if (current()) setPendingMessages((prev) => patchRoundPhoto(prev, clientId, { path, progress: 1 }));
+        }
+        const row = { id: job.messageId, round_id: job.roundId, sender_id: job.user, text: job.text, ...imageRowColumns({ path, width: job.width, height: job.height, thumb: job.thumb }) };
+        const insert = (body: Record<string, unknown>) => supabase.from("round_messages").insert(body).select("id, created_at").single();
+        let { data, error } = await insert(job.replyTo ? { ...row, reply_to_message_id: job.replyTo } : row);
+        if (error && job.replyTo && shouldResendWithoutReply(error)) {
+          if (error.code === "PGRST204" || error.code === "42703") setReplyColumnMissing(true);
+          job.replyTo = null;
+          setPendingMessages((prev) => prev.map((p) => (p.clientId === clientId ? { ...p, replyToId: null } : p)));
+          ({ data, error } = await insert(row));
+        }
+        if (error) {
+          if (isMissingImageSupportError(error)) {
+            setImageColumnMissing(true);
+            return fail("rejected");
+          }
+          const outcome = classifyImageInsertError(error);
+          if (outcome !== "sent") {
+            console.error("GolfMe: failed to send round photo.", error);
+            return fail(outcome);
+          }
+          // 23505: an earlier attempt's insert landed.
+          data = { id: job.messageId, created_at: new Date().toISOString() };
+        }
+        if (!current()) return "sent";
+        chatImageUrls().setLocal(path, job.localUrl);
+        photoJobsRef.current.delete(clientId);
+        setPendingMessages((prev) => patchRoundPhoto(markRoundMessageSent(prev, clientId, data as { id: string; created_at: string } | null), clientId, { path, progress: 1, failure: undefined }));
+        return "sent";
+      };
+      const promise = run().finally(() => photoInFlightRef.current.delete(clientId));
+      photoInFlightRef.current.set(clientId, promise);
+      return promise;
+    },
+    [authUser, refetch],
+  );
+
+  const sendRoundImage = useCallback(
+    async (roundId: string, photo: ProcessedChatImage, text: string, replyToId?: string | null): Promise<SendMessageResult> => {
+      if (!authUser) return "failed";
+      const messageId = crypto.randomUUID();
+      const clientId = `temp-${messageId}`;
+      const trimmed = text.trim();
+      const replyTo = replyToId && repliesSupportedRef.current ? replyToId : null;
+      photoJobsRef.current.set(clientId, {
+        roundId,
+        messageId,
+        blob: photo.blob,
+        localUrl: photo.previewUrl,
+        width: photo.width,
+        height: photo.height,
+        thumb: photo.thumb,
+        text: trimmed,
+        replyTo,
+        uploaded: false,
+        user: authUser.id,
+      });
+      setPendingMessages((prev) => [
+        ...prev,
+        createPendingRoundMessage({
+          clientId,
+          roundId,
+          senderId: authUser.id,
+          text: trimmed,
+          replyToId: replyTo,
+          photo: { messageId, localUrl: photo.previewUrl, width: photo.width, height: photo.height, thumb: photo.thumb, progress: 0 },
+        }),
+      ]);
+      return attemptPhoto(clientId);
+    },
+    [authUser, attemptPhoto],
+  );
+
   const retryRoundMessage = useCallback(
     async (message: { clientId: string; roundId: string; text: string; replyToId?: string | null }): Promise<SendMessageResult> => {
+      if (photoJobsRef.current.has(message.clientId)) {
+        if (!photoInFlightRef.current.has(message.clientId)) {
+          setPendingMessages((prev) => patchRoundPhoto(markRoundMessageRetrying(prev, message.clientId), message.clientId, { failure: undefined }));
+        }
+        return attemptPhoto(message.clientId);
+      }
       setPendingMessages((prev) => markRoundMessageRetrying(prev, message.clientId));
       return attemptSend(message.clientId, message.roundId, message.text, message.replyToId);
     },
-    [attemptSend],
+    [attemptSend, attemptPhoto],
   );
 
   // Unsend (public.unsend_round_message): offered only once fetched rows
@@ -568,6 +724,11 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
   const unsendRoundMessage = useCallback(
     async (messageId: string): Promise<UnsendResult> => {
       if (!authUser) return "failed";
+      // The photo's path, read before the database clears it.
+      const imagePath =
+        messageRowsRef.current.find((m) => m.id === messageId)?.image_path ??
+        pendingMessagesRef.current.find((p) => p.serverId === messageId)?.photo?.path ??
+        null;
       const { error } = await supabase.rpc("unsend_round_message", { p_message_id: messageId });
       if (error) {
         const result = classifyUnsendError(error);
@@ -576,8 +737,17 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
       }
       // Don't wait for the realtime echo to update this device.
       const unsentAt = new Date().toISOString();
-      setMessageRows((prev) => prev.map((m) => (m.id === messageId ? { ...m, text: "", unsent_at: m.unsent_at ?? unsentAt } : m)));
+      setMessageRows((prev) =>
+        prev.map((m) =>
+          m.id === messageId
+            ? { ...m, text: "", unsent_at: m.unsent_at ?? unsentAt, ...(m.image_path !== undefined ? { image_path: null, image_width: null, image_height: null, image_thumb: null } : {}) }
+            : m,
+        ),
+      );
       applyReactions(reactionsRef.current.filter((r) => r.messageId !== messageId));
+      // Nothing points at the photo any more (unsend_round_message cleared
+      // it): remove the file itself, best effort (lib/chatImageClient).
+      if (imagePath) void removeChatImage(imagePath);
       // Still only a "sent" pending bubble here (its row not fetched yet):
       // the refetch brings the wiped row and reconciles it away.
       void refetch();
@@ -637,7 +807,14 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
   );
 
   const discardRoundMessage = useCallback((clientId: string) => {
+    const job = photoJobsRef.current.get(clientId);
+    photoJobsRef.current.delete(clientId);
     setPendingMessages((prev) => discardPending(prev, clientId));
+    if (!job) return;
+    // Uploaded but never stored: remove the orphan (refused by the bucket's
+    // delete policy if a row does point at it after all).
+    if (job.uploaded) void removeChatImage(roundImagePath(job.roundId, job.messageId));
+    URL.revokeObjectURL(job.localUrl);
   }, []);
 
   const hasLeftRound = useCallback(
@@ -692,6 +869,8 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
     sendRoundMessage,
     retryRoundMessage,
     discardRoundMessage,
+    imagesSupported,
+    sendRoundImage,
     repliesSupported,
     unsendSupported,
     unsendRoundMessage,

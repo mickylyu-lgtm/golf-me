@@ -4,6 +4,19 @@
 // the UI layer — components only ever talk to these types + the DataContext.
 
 import type { GeoPoint } from "../lib/geo";
+import type { ChatImageRef, ImageSendFailure } from "../lib/chatImages";
+
+/**
+ * A photo message sent from this device that isn't stored yet (lib/chatImages.ts):
+ * its local preview, upload progress, and why it failed.
+ */
+export interface OutgoingPhotoState {
+  /** Object URL of the re-encoded JPEG on this device. */
+  localUrl: string;
+  /** 0..1 while sending. */
+  progress?: number;
+  failure?: ImageSendFailure;
+}
 
 export type GolfVibe =
   | "Casual & Social"
@@ -272,6 +285,10 @@ export interface ChatMessage {
   replyToId?: string | null;
   /** Unsend (lib/unsend.ts): set when the sender unsent it; the text is then empty. */
   unsentAt?: string | null;
+  /** The photo it carries (migration 20261107170000); the text may then be empty. */
+  image?: ChatImageRef | null;
+  /** This device's photo send in progress / failed. */
+  outgoingPhoto?: OutgoingPhotoState;
 }
 
 export type PaceOfPlay = "Fast" | "Good" | "Slow";
@@ -395,6 +412,13 @@ export interface DirectMessage {
   // Unsend (lib/unsend.ts): set when the sender unsent it; the text is then
   // empty (wiped by the database for real accounts).
   unsentAt?: string | null;
+  // The photo it carries (migration 20261107170000); the text may then be
+  // empty. Cleared by unsend.
+  image?: ChatImageRef | null;
+  // A photo message from this device that isn't stored yet: "sending"
+  // (with upload progress) or "failed" (Retry / Discard). Unset = stored.
+  delivery?: "sending" | "failed";
+  outgoingPhoto?: OutgoingPhotoState;
 }
 
 // Per-user "last read" marker for a conversation, used only to compute

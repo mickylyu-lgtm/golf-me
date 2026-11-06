@@ -3,6 +3,8 @@
 // tests/roundChat.test.ts runs it under node --test; RealRoundsContext,
 // GroupChat, GolfCallDetail and RoundChatThread wire it up.
 import type { ChatMessage, GolfCallStatus } from "../types";
+import { imageFromRow } from "./chatImages.ts";
+import type { ChatImageRef, ImageRowColumns, ImageSendFailure } from "./chatImages.ts";
 
 // ---------------------------------------------------------------------------
 // Access
@@ -86,9 +88,28 @@ export interface PendingRoundMessage {
   failure?: RoundSendFailure;
   /** The message it quotes (swipe-to-reply), kept for a retry. */
   replyToId?: string | null;
+  /**
+   * A photo message (lib/chatImages.ts): the id made on this device (also
+   * the storage file name and the row's id), this device's copy, upload
+   * progress and, when failed, why. The bytes themselves are kept by the
+   * context, not here.
+   */
+  photo?: PendingRoundPhoto;
 }
 
-export interface RoundMessageRowLike {
+export interface PendingRoundPhoto {
+  messageId: string;
+  localUrl: string;
+  width: number;
+  height: number;
+  thumb: string | null;
+  progress: number;
+  failure?: ImageSendFailure;
+  /** Set once uploaded. */
+  path?: string;
+}
+
+export interface RoundMessageRowLike extends ImageRowColumns {
   id: string;
   round_id: string;
   sender_id: string;
@@ -108,6 +129,7 @@ export function createPendingRoundMessage(input: {
   text: string;
   replyToId?: string | null;
   now?: Date;
+  photo?: PendingRoundPhoto;
 }): PendingRoundMessage {
   return {
     clientId: input.clientId,
@@ -117,7 +139,18 @@ export function createPendingRoundMessage(input: {
     createdAt: (input.now ?? new Date()).toISOString(),
     state: "sending",
     replyToId: input.replyToId ?? null,
+    ...(input.photo ? { photo: input.photo } : {}),
   };
+}
+
+/** Updates a pending photo's display state (progress, path, failure). */
+export function patchRoundPhoto(pending: readonly PendingRoundMessage[], clientId: string, patch: Partial<PendingRoundPhoto>): PendingRoundMessage[] {
+  return pending.map((p) => (p.clientId === clientId && p.photo ? { ...p, photo: { ...p.photo, ...patch } } : p));
+}
+
+/** The image a pending message shows: the stored path once uploaded, else a placeholder key (shown from localUrl). */
+function pendingImage(photo: PendingRoundPhoto): ChatImageRef {
+  return { path: photo.path ?? `pending/${photo.messageId}`, width: photo.width, height: photo.height, thumb: photo.thumb };
 }
 
 // ---------------------------------------------------------------------------
@@ -193,6 +226,10 @@ export function reconcilePendingRoundMessages(pending: readonly PendingRoundMess
   if (pending.length === 0) return pending as PendingRoundMessage[];
   const claimed = new Set<string>();
   const next = pending.filter((p) => {
+    // A photo message's id is made on the device: once a row with it is
+    // here, it is stored, whatever this device last heard (the realtime
+    // refetch can beat the insert's own answer).
+    if (p.photo && rows.some((r) => r.id === p.photo!.messageId)) return false;
     if (p.state !== "sent") return true;
     const row = rows.find((r) => !claimed.has(r.id) && rowMatches(p, r));
     if (!row) return true;
@@ -211,21 +248,35 @@ export function reconcilePendingRoundMessages(pending: readonly PendingRoundMess
 export function mergeRoundMessages(rows: readonly RoundMessageRowLike[], pending: readonly PendingRoundMessage[], roundId: string): ChatMessage[] {
   const real: ChatMessage[] = rows
     .filter((r) => r.round_id === roundId)
-    .map((r) => ({
-      id: r.id,
-      golfCallId: r.round_id,
-      senderId: r.sender_id,
-      text: r.text,
-      createdAt: r.created_at,
-      replyToId: r.reply_to_message_id ?? null,
-      unsentAt: r.unsent_at ?? null,
-    }));
+    .map((r) => {
+      const image = imageFromRow(r);
+      return {
+        id: r.id,
+        golfCallId: r.round_id,
+        senderId: r.sender_id,
+        text: r.text,
+        createdAt: r.created_at,
+        replyToId: r.reply_to_message_id ?? null,
+        unsentAt: r.unsent_at ?? null,
+        ...(image ? { image } : {}),
+      };
+    });
   const mine = reconcilePendingRoundMessages(
     pending.filter((p) => p.roundId === roundId),
     rows,
   );
-  const extra: ChatMessage[] = mine.map((p) =>
-    p.state === "sent"
+  const extra: ChatMessage[] = mine.map((p) => {
+    const photo = p.photo
+      ? {
+          image: pendingImage(p.photo),
+          outgoingPhoto: {
+            localUrl: p.photo.localUrl,
+            progress: p.state === "sending" ? p.photo.progress : undefined,
+            failure: p.state === "failed" ? p.photo.failure : undefined,
+          },
+        }
+      : {};
+    return p.state === "sent"
       ? {
           id: p.serverId ?? p.clientId,
           clientId: p.clientId,
@@ -234,6 +285,7 @@ export function mergeRoundMessages(rows: readonly RoundMessageRowLike[], pending
           text: p.text,
           createdAt: p.serverCreatedAt ?? p.createdAt,
           replyToId: p.replyToId ?? null,
+          ...photo,
         }
       : {
           id: p.clientId,
@@ -245,8 +297,9 @@ export function mergeRoundMessages(rows: readonly RoundMessageRowLike[], pending
           delivery: p.state,
           failure: p.failure,
           replyToId: p.replyToId ?? null,
-        },
-  );
+          ...photo,
+        };
+  });
   if (extra.length === 0) return real;
   // Real rows keep server order; this device's unsent ones always sit at the
   // bottom (where the golfer just typed them), in the order they were sent.

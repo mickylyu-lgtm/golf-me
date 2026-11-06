@@ -36,10 +36,13 @@ export function longPressSurvivesCancel(dx: number, dy: number): boolean {
 // the window (lib/unsend.ts canUnsendMessage decides `canUnsend`).
 export type MessageAction = "reply" | "copy" | "unsend";
 
-export function messageActions(input: { canReply: boolean; canUnsend: boolean }): MessageAction[] {
+// canCopy (default true) is false only for a photo with no text on a
+// platform that can't put an image on the clipboard (lib/chatImageClient
+// canCopyImages): there is then nothing Copy could do.
+export function messageActions(input: { canReply: boolean; canUnsend: boolean; canCopy?: boolean }): MessageAction[] {
   const actions: MessageAction[] = [];
   if (input.canReply) actions.push("reply");
-  actions.push("copy");
+  if (input.canCopy !== false) actions.push("copy");
   if (input.canUnsend) actions.push("unsend");
   return actions;
 }

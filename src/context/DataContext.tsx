@@ -53,6 +53,9 @@ import type { CreateAnalysisInput } from "./RealCaddieContext";
 import { buildDemoCaddieAnalyses } from "../data/caddie";
 import { canUnsendMessage } from "../lib/unsend";
 import type { UnsendResult } from "../lib/unsend";
+import { DEMO_IMAGE_PREFIX } from "../lib/chatImages";
+import type { ChatImageRef, ProcessedChatImage } from "../lib/chatImages";
+import { chatImageUrls } from "../lib/chatImageClient";
 import { withReaction } from "../lib/reactions";
 import { placeholderNameFromEmail } from "../lib/authInput";
 import type { MessageReaction, QuickReaction } from "../lib/reactions";
@@ -204,6 +207,12 @@ interface DataContextValue {
   canUnsendRoundMessages: boolean;
   unsendRoundMessage: (messageId: string) => Promise<UnsendResult>;
   canReactToRoundMessages: boolean;
+  // Photos in round chat (lib/chatImages.ts, migration 20261107170000):
+  // always in demo (page-local photos); for real accounts once the database
+  // has the image columns. Failures go through retryRoundMessage /
+  // discardRoundMessage like text.
+  canSendRoundImages: boolean;
+  sendRoundImage: (callId: string, photo: ProcessedChatImage, text: string, replyToId?: string | null) => Promise<SendMessageResult>;
   roundMessageReactions: MessageReaction[];
   setRoundMessageReaction: (messageId: string, emoji: QuickReaction | null) => Promise<boolean>;
   /** The current golfer was in this round and left it. */
@@ -261,6 +270,13 @@ interface DataContextValue {
   // accounts once the unsend migration is applied.
   canUnsendMessages: boolean;
   unsendDirectMessage: (messageId: string) => Promise<UnsendResult>;
+  // Photos in DMs (lib/chatImages.ts): always in demo; for real accounts
+  // once the database has messages.image_path. A failed photo send stays as
+  // a "Not sent" bubble (delivery "failed") until retried or discarded.
+  canSendDirectImages: boolean;
+  sendDirectImage: (golferId: string, photo: ProcessedChatImage, text: string, replyToId?: string) => Promise<SendMessageResult>;
+  retryDirectImage: (tempId: string) => Promise<SendMessageResult>;
+  discardDirectImage: (tempId: string) => void;
   // Quick reactions (lib/reactions.ts): always in demo (page-local, not
   // persisted); for real accounts once public.message_reactions exists.
   canReactToMessages: boolean;
@@ -814,6 +830,41 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [auth.isDemo, realRounds],
   );
 
+  // Demo photos: kept in this page's memory only (an object URL under a
+  // demo-image/ key, lib/chatImageUrlCache); the message (with the tiny
+  // placeholder) is saved like any demo message, so after a reload it shows
+  // "Photo unavailable" over the blurred placeholder.
+  const demoPhoto = useCallback((photo: ProcessedChatImage): ChatImageRef => {
+    const path = `${DEMO_IMAGE_PREFIX}${generateId("photo")}`;
+    chatImageUrls().setLocal(path, photo.previewUrl);
+    return { path, width: photo.width, height: photo.height, thumb: photo.thumb };
+  }, []);
+
+  const canSendRoundImages = auth.isDemo || realRounds.imagesSupported;
+  const sendRoundImage = useCallback(
+    async (callId: string, photo: ProcessedChatImage, text: string, replyToId?: string | null): Promise<SendMessageResult> => {
+      if (!auth.isDemo) return realRounds.sendRoundImage(callId, photo, text, replyToId);
+      const image = demoPhoto(photo);
+      setData((prev) => ({
+        ...prev,
+        messages: [
+          ...prev.messages,
+          {
+            id: generateId("msg"),
+            golfCallId: callId,
+            senderId: prev.currentUserId,
+            text: text.trim(),
+            createdAt: new Date().toISOString(),
+            replyToId: replyToId && prev.messages.some((m) => m.id === replyToId && m.golfCallId === callId && !m.system) ? replyToId : null,
+            image,
+          },
+        ],
+      }));
+      return "sent";
+    },
+    [auth.isDemo, realRounds, demoPhoto],
+  );
+
   const canReplyToRoundMessages = auth.isDemo || realRounds.repliesSupported;
   const canUnsendRoundMessages = auth.isDemo || realRounds.unsendSupported;
   // Demo: same rule as public.unsend_round_message (my own message, within
@@ -828,7 +879,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       const unsentAt = new Date().toISOString();
       setData((prev) => ({
         ...prev,
-        messages: prev.messages.map((m) => (m.id === messageId ? { ...m, text: "", unsentAt } : m)),
+        messages: prev.messages.map((m) => (m.id === messageId ? { ...m, text: "", unsentAt, image: null } : m)),
       }));
       setDemoRoundReactions((prev) => prev.filter((r) => r.messageId !== messageId));
       return "unsent";
@@ -1227,6 +1278,43 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const canReplyToMessages = auth.isDemo || realSocial.repliesSupported;
 
+  const canSendDirectImages = auth.isDemo || realSocial.imagesSupported;
+  const sendDirectImage = useCallback(
+    async (golferId: string, photo: ProcessedChatImage, text: string, replyToId?: string): Promise<SendMessageResult> => {
+      if (!auth.isDemo) return realSocial.sendDirectImage(golferId, photo, text, replyToId);
+      if (!canMessage(golferId) || !canSendMessageNow()) return "failed";
+      const convId = dmConversationId(currentUser.id, golferId);
+      const image = demoPhoto(photo);
+      setData((prev) => ({
+        ...prev,
+        directMessages: [
+          ...prev.directMessages,
+          {
+            id: generateId("dm"),
+            conversationId: convId,
+            senderId: prev.currentUserId,
+            text: text.trim(),
+            createdAt: new Date().toISOString(),
+            replyToId: replyToId && prev.directMessages.some((m) => m.id === replyToId && m.conversationId === convId) ? replyToId : null,
+            image,
+          },
+        ],
+      }));
+      return "sent";
+    },
+    [auth.isDemo, realSocial, canMessage, canSendMessageNow, currentUser.id, demoPhoto],
+  );
+  const retryDirectImage = useCallback(
+    async (tempId: string): Promise<SendMessageResult> => (auth.isDemo ? "failed" : realSocial.retryDirectImage(tempId)),
+    [auth.isDemo, realSocial],
+  );
+  const discardDirectImage = useCallback(
+    (tempId: string) => {
+      if (!auth.isDemo) realSocial.discardDirectImage(tempId);
+    },
+    [auth.isDemo, realSocial],
+  );
+
   const canUnsendMessages = auth.isDemo || realSocial.unsendSupported;
   // Demo: same rule as the database (own message, within the window), on
   // the localStorage copy; the text is wiped there too.
@@ -1240,7 +1328,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       const unsentAt = new Date().toISOString();
       setData((prev) => ({
         ...prev,
-        directMessages: prev.directMessages.map((m) => (m.id === messageId ? { ...m, text: "", unsentAt } : m)),
+        directMessages: prev.directMessages.map((m) => (m.id === messageId ? { ...m, text: "", unsentAt, image: null } : m)),
       }));
       setDemoReactions((prev) => prev.filter((r) => r.messageId !== messageId));
       return "unsent";
@@ -1901,6 +1989,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       canUnsendRoundMessages,
       unsendRoundMessage,
       canReactToRoundMessages,
+      canSendRoundImages,
+      sendRoundImage,
       roundMessageReactions,
       setRoundMessageReaction,
       hasLeftGolfCall,
@@ -1930,6 +2020,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
       canReplyToMessages,
       canUnsendMessages,
       unsendDirectMessage,
+      canSendDirectImages,
+      sendDirectImage,
+      retryDirectImage,
+      discardDirectImage,
       canReactToMessages,
       messageReactions,
       setMessageReaction,
@@ -2010,6 +2104,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       canUnsendRoundMessages,
       unsendRoundMessage,
       canReactToRoundMessages,
+      canSendRoundImages,
+      sendRoundImage,
       roundMessageReactions,
       setRoundMessageReaction,
       hasLeftGolfCall,
@@ -2039,6 +2135,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
       canReplyToMessages,
       canUnsendMessages,
       unsendDirectMessage,
+      canSendDirectImages,
+      sendDirectImage,
+      retryDirectImage,
+      discardDirectImage,
       canReactToMessages,
       messageReactions,
       setMessageReaction,

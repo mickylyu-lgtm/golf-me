@@ -22,6 +22,17 @@ import { createReactionWriteQueue } from "../lib/reactionWrites";
 import { withLocallyRead } from "../lib/notificationInbox";
 import { createReactionSeqClock, reactionSeqFromRow, rowsShowOrdering, sendReactionWrite } from "../lib/reactionOrder";
 import type { OrderingSupport, ReactionTransport } from "../lib/reactionOrder";
+import {
+  classifyImageInsertError,
+  dmImagePath,
+  imageFromRow,
+  imageRowColumns,
+  isMissingImageSupportError,
+  progressStep,
+  rowsHaveImageColumn,
+} from "../lib/chatImages";
+import type { ChatImageRef, ImageRowColumns, ImageSendFailure, ImageSupport, ProcessedChatImage } from "../lib/chatImages";
+import { chatImageUrls, removeChatImage, resetChatImageUrls, uploadChatImage } from "../lib/chatImageClient";
 
 interface ConversationParticipantRow {
   conversation_id: string;
@@ -31,7 +42,7 @@ interface ConversationParticipantRow {
   hidden_at: string | null;
 }
 
-interface MessageRow {
+interface MessageRow extends ImageRowColumns {
   id: string;
   conversation_id: string;
   sender_id: string;
@@ -44,6 +55,8 @@ interface MessageRow {
   // Only present once migration 20261105120000_add_dm_unsend is applied;
   // its presence is how unsendSupported detects the feature.
   unsent_at?: string | null;
+  // image_path / image_width / image_height / image_thumb (ImageRowColumns):
+  // only present once migration 20261107170000_chat_images is applied.
 }
 
 // A message this client just sent, rendered before the server round trip
@@ -62,6 +75,23 @@ interface PendingMessage {
   // then matched to its real row by this id, not by text and clock.
   sent?: boolean;
   serverId?: string;
+  // Photo messages (lib/chatImages.ts): the message id made on this device
+  // (also the storage file name), the photo, and the send's state. A photo
+  // message that fails stays here as "failed" (Retry / Discard); text-only
+  // messages keep their old path (removed on failure, the page keeps them).
+  photo?: {
+    messageId: string;
+    blob: Blob;
+    localUrl: string;
+    width: number;
+    height: number;
+    thumb: string | null;
+    state: "sending" | "failed";
+    progress: number;
+    failure?: ImageSendFailure;
+    uploaded: boolean;
+    path?: string;
+  };
 }
 
 interface BlockRow {
@@ -138,6 +168,16 @@ interface RealSocialContextValue {
   // until the unsend migration is applied and a row has proved it.
   unsendSupported: boolean;
   unsendDirectMessage: (messageId: string) => Promise<UnsendResult>;
+  // Photos (lib/chatImages.ts, migration 20261107170000). False until the
+  // database is known to have the image columns (a fetched row carries them
+  // or a one-row probe succeeded), so the photo button stays hidden before.
+  imagesSupported: boolean;
+  // Uploads the photo, then inserts the message (with optional text and
+  // quote). Shows at once as a sending bubble with progress; a failure stays
+  // on screen as "Not sent" with retry / discard.
+  sendDirectImage: (otherId: string, photo: ProcessedChatImage, text: string, replyToId?: string) => Promise<SendMessageResult>;
+  retryDirectImage: (tempId: string) => Promise<SendMessageResult>;
+  discardDirectImage: (tempId: string) => void;
   // Quick reactions (lib/reactions.ts, public.message_reactions). False
   // until a fetch of the table has succeeded, so before the migration is
   // applied the reaction row and pills are simply not shown.
@@ -185,6 +225,7 @@ function messageRowToDirectMessage(row: MessageRow): DirectMessage {
     createdAt: row.created_at,
     replyToId: row.reply_to_message_id ?? null,
     unsentAt: row.unsent_at ?? null,
+    ...(row.image_path ? { image: imageFromRow(row) } : {}),
   };
 }
 
@@ -346,6 +387,23 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
   const [reactionSeqClock] = useState(createReactionSeqClock);
   const reactionOrderingRef = useRef<{ support: OrderingSupport }>({ support: "unknown" });
   const conversationIdsRef = useRef<string[]>([]);
+
+  // Photos: whether messages has the image columns yet. "unknown" until the
+  // one-row probe answers (retried on full refetches until "yes"); a fetched
+  // row carrying image_path proves it too (imagesSupported below).
+  const [imageProbe, setImageProbe] = useState<ImageSupport>("unknown");
+  const imageProbeRef = useRef<ImageSupport>("unknown");
+  const [imageColumnMissing, setImageColumnMissing] = useState(false);
+  const probeImages = useCallback(async () => {
+    if (!selfId) return;
+    const generation = generationRef.current;
+    const { error } = await supabase.from("messages").select("image_path").limit(1);
+    if (generationRef.current !== generation) return;
+    const next: ImageSupport = !error ? "yes" : isMissingImageSupportError(error) ? "no" : "unknown";
+    imageProbeRef.current = next;
+    setImageProbe(next);
+    if (next === "yes") setImageColumnMissing(false);
+  }, [selfId]);
 
   const applyReactions = useCallback((next: MessageReaction[]) => {
     const kept = keepIfSame(reactionsRef.current, next);
@@ -532,6 +590,8 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
         // realtime message event) but never block or fail it.
         conversationIdsRef.current = conversationIds;
         if (reactionsSupportRef.current !== "no" || full) void fetchReactions(conversationIds);
+        // Photos: probe the column until it's known to exist (never blocks).
+        if (full && imageProbeRef.current !== "yes") void probeImages();
 
         // Profiles: the directory (when just fetched) replaces the cache
         // wholesale, which also drops deleted accounts; otherwise only ids
@@ -587,7 +647,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
         }
       }
     },
-    [selfId, fetchReactions],
+    [selfId, fetchReactions, probeImages],
   );
 
   // Directory distances are computed server-side from this account's saved
@@ -644,6 +704,11 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     setReactionsSupport("unknown");
     locallyReadRef.current = new Set();
     setLocallyReadIds(new Set());
+    // Photos: another account's signed URLs / local photos never carry over.
+    resetChatImageUrls();
+    imageProbeRef.current = "unknown";
+    setImageProbe("unknown");
+    setImageColumnMissing(false);
 
     if (isDemo || !selfId) {
       setParticipants([]);
@@ -913,22 +978,42 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       // -- a brand-new conversation's very first message is sent before
       // conversation_participants has been refetched, so conversationIdWith
       // can't resolve it yet. Matching on otherId works regardless.
+      // A photo message whose row already arrived (the realtime refetch can
+      // beat the insert's own answer): the row wins, no second bubble.
+      const rowIds = new Set(canonical.map((m) => m.id));
       const pending = visiblePending
-        .filter((p) => p.otherId === otherId)
-        .map(
-          (p): MessageRow => ({
-            // The real id once the insert returned it: the bubble keeps its
-            // React key when the real row replaces it, and swipe-to-reply
-            // on a just-sent message quotes a real message id.
-            id: p.serverId ?? p.tempId,
-            conversation_id: p.conversation_id,
-            sender_id: p.sender_id,
-            text: p.text,
-            created_at: p.created_at,
-            reply_to_message_id: p.reply_to_message_id,
-          }),
-        );
-      return [...canonical, ...pending].sort((a, b) => a.created_at.localeCompare(b.created_at)).map(messageRowToDirectMessage);
+        .filter((p) => p.otherId === otherId && !(p.photo && rowIds.has(p.photo.messageId)))
+        .map((p): MessageRow & { photo?: PendingMessage["photo"]; tempId?: string } => ({
+          // The real id once the insert returned it: the bubble keeps its
+          // React key when the real row replaces it, and swipe-to-reply
+          // on a just-sent message quotes a real message id.
+          id: p.serverId ?? p.tempId,
+          conversation_id: p.conversation_id,
+          sender_id: p.sender_id,
+          text: p.text,
+          created_at: p.created_at,
+          reply_to_message_id: p.reply_to_message_id,
+          photo: p.photo,
+          tempId: p.tempId,
+        }));
+      const rows: (MessageRow & { photo?: PendingMessage["photo"]; tempId?: string })[] = [...canonical, ...pending];
+      return rows
+        .sort((a, b) => a.created_at.localeCompare(b.created_at))
+        .map((row) => {
+          const message = messageRowToDirectMessage(row);
+          const photo = row.photo;
+          if (!photo) return message;
+          // This device's photo: its local copy, and (until stored) the
+          // send's state. Sent = a normal message with the real path.
+          const image: ChatImageRef = { path: photo.path ?? `pending/${photo.messageId}`, width: photo.width, height: photo.height, thumb: photo.thumb };
+          const sentOk = message.id !== row.tempId;
+          return {
+            ...message,
+            image,
+            delivery: sentOk ? undefined : photo.state,
+            outgoingPhoto: { localUrl: photo.localUrl, progress: sentOk ? undefined : photo.progress, failure: photo.failure },
+          };
+        });
     },
     [conversationIdWith, messages, visiblePending],
   );
@@ -1033,6 +1118,11 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
   const unsendDirectMessage = useCallback(
     async (messageId: string): Promise<UnsendResult> => {
       if (!selfId) return "failed";
+      // The photo's path, read before the database clears it.
+      const imagePath =
+        messagesRef.current.find((m) => m.id === messageId)?.image_path ??
+        pendingMessages.find((p) => p.serverId === messageId)?.photo?.path ??
+        null;
       const { error } = await supabase.rpc("unsend_message", { p_message_id: messageId });
       if (error) {
         const result = classifyUnsendError(error);
@@ -1041,15 +1131,174 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       }
       // Don't wait for the realtime echo to update this device.
       const unsentAt = new Date().toISOString();
-      const next = messagesRef.current.map((m) => (m.id === messageId ? { ...m, text: "", unsent_at: m.unsent_at ?? unsentAt } : m));
+      const next = messagesRef.current.map((m) =>
+        m.id === messageId
+          ? { ...m, text: "", unsent_at: m.unsent_at ?? unsentAt, ...(m.image_path !== undefined ? { image_path: null, image_width: null, image_height: null, image_thumb: null } : {}) }
+          : m,
+      );
       messagesRef.current = next;
       setMessages(next);
       // The database dropped its reactions in the same transaction.
       applyReactions(reactionsRef.current.filter((r) => r.messageId !== messageId));
+      // The row no longer points at the photo (unsend_message cleared it), so
+      // nobody else can read it any more; remove the file itself (Storage
+      // API only; best effort, see removeChatImage).
+      if (imagePath) void removeChatImage(imagePath);
       return "unsent";
     },
-    [selfId, applyReactions],
+    [selfId, applyReactions, pendingMessages],
   );
+
+  // ---- Photos (lib/chatImages.ts, migration 20261107170000) ----
+  const imagesSupported = useMemo(
+    () => !imageColumnMissing && (imageProbe === "yes" || rowsHaveImageColumn(messages)),
+    [imageColumnMissing, imageProbe, messages],
+  );
+  // What a photo send needs that isn't display state; mutated as it
+  // progresses (conversation resolved, uploaded), so a retry resumes where
+  // the last attempt stopped (an uploaded photo isn't uploaded twice).
+  const photoJobsRef = useRef(
+    new Map<string, { otherId: string; conversationId: string | null; messageId: string; blob: Blob; localUrl: string; width: number; height: number; thumb: string | null; text: string; replyTo: string | null; uploaded: boolean; generation: number }>(),
+  );
+  // One attempt at a time per photo (a double tap on Retry can't send twice).
+  const photoInFlightRef = useRef(new Map<string, Promise<SendMessageResult>>());
+
+  const patchPhoto = useCallback((tempId: string, patch: Partial<NonNullable<PendingMessage["photo"]>>, extra?: Partial<PendingMessage>) => {
+    setPendingMessages((prev) => prev.map((p) => (p.tempId === tempId && p.photo ? { ...p, ...extra, photo: { ...p.photo, ...patch } } : p)));
+  }, []);
+
+  const attemptPhoto = useCallback(
+    (tempId: string): Promise<SendMessageResult> => {
+      const running = photoInFlightRef.current.get(tempId);
+      if (running) return running;
+      const run = async (): Promise<SendMessageResult> => {
+        const job = photoJobsRef.current.get(tempId);
+        if (!job || !selfId || job.generation !== generationRef.current) return "failed";
+        const fail = (failure: ImageSendFailure): SendMessageResult => {
+          if (job.generation === generationRef.current) patchPhoto(tempId, { state: "failed", failure });
+          return failure === "objectionable" ? "objectionable" : "failed";
+        };
+        if (!canMessage(job.otherId)) return fail("rejected");
+        if (!job.conversationId) {
+          const { data: convId, error: convErr } = await supabase.rpc("get_or_create_dm_conversation", { p_other_user_id: job.otherId });
+          if (convErr || !convId) {
+            console.error("GolfMe: failed to open conversation.", convErr);
+            return fail("network");
+          }
+          job.conversationId = convId as string;
+          setPendingMessages((prev) => prev.map((p) => (p.tempId === tempId ? { ...p, conversation_id: convId as string } : p)));
+        }
+        const path = dmImagePath(job.conversationId, job.messageId);
+        if (!job.uploaded) {
+          let shown = -1;
+          const uploaded = await uploadChatImage(path, job.blob, (fraction) => {
+            const step = progressStep(fraction);
+            if (step !== shown) {
+              shown = step;
+              patchPhoto(tempId, { progress: step });
+            }
+          });
+          if (uploaded !== "uploaded") return fail(uploaded);
+          job.uploaded = true;
+          patchPhoto(tempId, { uploaded: true, path, progress: 1 });
+        }
+        const image = imageRowColumns({ path, width: job.width, height: job.height, thumb: job.thumb });
+        const row = { id: job.messageId, conversation_id: job.conversationId, sender_id: selfId, text: job.text, ...image };
+        const insert = (values: Record<string, unknown>) => supabase.from("messages").insert(values).select("id").maybeSingle();
+        let { error } = await insert(job.replyTo ? { ...row, reply_to_message_id: job.replyTo } : row);
+        if (error && job.replyTo && isMissingReplyColumnError(error)) {
+          setReplyColumnMissing(true);
+          job.replyTo = null;
+          setPendingMessages((prev) => prev.map((p) => (p.tempId === tempId ? { ...p, reply_to_message_id: null } : p)));
+          ({ error } = await insert(row));
+        }
+        if (error) {
+          if (isMissingImageSupportError(error)) {
+            // The columns aren't there after all (rolled back / stale
+            // schema cache): hide the button; this one can only be discarded.
+            setImageColumnMissing(true);
+            return fail("rejected");
+          }
+          const outcome = classifyImageInsertError(error);
+          if (outcome !== "sent") {
+            console.error("GolfMe: failed to send photo message.", error);
+            return fail(outcome);
+          }
+          // 23505: an earlier attempt's insert landed; it is sent.
+        }
+        if (job.generation !== generationRef.current) return "sent";
+        // Shown from this device's own copy from now on (never re-downloaded).
+        chatImageUrls().setLocal(path, job.localUrl);
+        photoJobsRef.current.delete(tempId);
+        patchPhoto(tempId, { path, progress: 1, failure: undefined }, { sent: true, serverId: job.messageId });
+        return "sent";
+      };
+      const promise = run().finally(() => photoInFlightRef.current.delete(tempId));
+      photoInFlightRef.current.set(tempId, promise);
+      return promise;
+    },
+    [selfId, canMessage, patchPhoto],
+  );
+
+  const sendDirectImage = useCallback(
+    async (otherId: string, photo: ProcessedChatImage, text: string, replyToId?: string): Promise<SendMessageResult> => {
+      if (!selfId) return "failed";
+      const messageId = crypto.randomUUID();
+      const tempId = `temp-${messageId}`;
+      const trimmed = text.trim();
+      const replyTo = replyToId && repliesSupported ? replyToId : null;
+      const conversationId = conversationIdWith(otherId) ?? null;
+      photoJobsRef.current.set(tempId, {
+        otherId,
+        conversationId,
+        messageId,
+        blob: photo.blob,
+        localUrl: photo.previewUrl,
+        width: photo.width,
+        height: photo.height,
+        thumb: photo.thumb,
+        text: trimmed,
+        replyTo,
+        uploaded: false,
+        generation: generationRef.current,
+      });
+      setPendingMessages((prev) => [
+        ...prev,
+        {
+          tempId,
+          conversation_id: conversationId ?? "",
+          otherId,
+          sender_id: selfId,
+          text: trimmed,
+          created_at: new Date().toISOString(),
+          reply_to_message_id: replyTo,
+          photo: { messageId, blob: photo.blob, localUrl: photo.previewUrl, width: photo.width, height: photo.height, thumb: photo.thumb, state: "sending", progress: 0, uploaded: false },
+        },
+      ]);
+      return attemptPhoto(tempId);
+    },
+    [selfId, repliesSupported, conversationIdWith, attemptPhoto],
+  );
+
+  const retryDirectImage = useCallback(
+    async (tempId: string): Promise<SendMessageResult> => {
+      if (!photoJobsRef.current.has(tempId)) return "failed";
+      if (!photoInFlightRef.current.has(tempId)) patchPhoto(tempId, { state: "sending", failure: undefined });
+      return attemptPhoto(tempId);
+    },
+    [attemptPhoto, patchPhoto],
+  );
+
+  const discardDirectImage = useCallback((tempId: string) => {
+    const job = photoJobsRef.current.get(tempId);
+    photoJobsRef.current.delete(tempId);
+    setPendingMessages((prev) => prev.filter((p) => p.tempId !== tempId));
+    if (!job) return;
+    // Uploaded but never stored: remove the orphan (the bucket's delete
+    // policy refuses if a row does point at it after all).
+    if (job.uploaded && job.conversationId) void removeChatImage(dmImagePath(job.conversationId, job.messageId));
+    URL.revokeObjectURL(job.localUrl);
+  }, []);
 
   // Optimistic: the pill shows the latest tap now. Writes go through
   // reactionWrites (one in flight per message, the latest tap queued, no
@@ -1361,6 +1610,10 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       repliesSupported,
       unsendSupported,
       unsendDirectMessage,
+      imagesSupported,
+      sendDirectImage,
+      retryDirectImage,
+      discardDirectImage,
       reactionsSupported: reactionsLive,
       messageReactions: reactions,
       setMessageReaction,
@@ -1403,6 +1656,10 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       repliesSupported,
       unsendSupported,
       unsendDirectMessage,
+      imagesSupported,
+      sendDirectImage,
+      retryDirectImage,
+      discardDirectImage,
       reactionsLive,
       reactions,
       setMessageReaction,

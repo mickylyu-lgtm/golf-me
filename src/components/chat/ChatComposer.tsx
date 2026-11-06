@@ -1,10 +1,11 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
-import { Send, Smile } from "lucide-react";
+import { ImagePlus, Send, Smile } from "lucide-react";
 import { EmojiPicker } from "./EmojiPicker";
 import { isSendEnter } from "../../lib/isImeComposing";
 import { composerTextareaHeight } from "../../lib/composerAutosize";
 import { createSendGuard } from "../../lib/sendGuard";
+import { draftSendKey } from "../../lib/chatImages";
 
 // Font, line-height and padding shared by the textarea and its hidden
 // measuring mirror: the mirror only measures correctly while these match.
@@ -16,6 +17,15 @@ interface ChatComposerProps {
   onSend: () => void;
   placeholder?: string;
   onBlur?: () => void;
+  // Photos (lib/chatImages.ts). The photo button shows only when the page
+  // passes onPickImage (it does so once the feature is available). A
+  // processed photo's key makes Send work with no text, and is part of what
+  // the one-send-per-draft guard compares; photoBusy (still re-encoding)
+  // holds Send until it's ready.
+  onPickImage?: (file: File) => void;
+  photoLabel?: string;
+  photoKey?: string | null;
+  photoBusy?: boolean;
 }
 
 // Shared by DirectMessageThread and GroupChat. Auto-expanding textarea
@@ -30,11 +40,22 @@ interface ChatComposerProps {
 // GroupChat: a bar fixed above the keyboard), so extra lines push the
 // composer's TOP up. The height is measured on a hidden mirror, never by
 // collapsing the real textarea (lib/composerAutosize.ts says why).
-export function ChatComposer({ value, onChange, onSend, placeholder = "Type a message...", onBlur }: ChatComposerProps) {
+export function ChatComposer({
+  value,
+  onChange,
+  onSend,
+  placeholder = "Type a message...",
+  onBlur,
+  onPickImage,
+  photoLabel = "Add a photo",
+  photoKey = null,
+  photoBusy = false,
+}: ChatComposerProps) {
   const [emojiOpen, setEmojiOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const mirrorRef = useRef<HTMLTextAreaElement>(null);
   const emojiButtonRef = useRef<HTMLButtonElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   // Whether the textarea had focus when the send button was pressed.
   const focusedAtPressRef = useRef(false);
   const sendGuardRef = useRef(createSendGuard());
@@ -75,10 +96,16 @@ export function ChatComposer({ value, onChange, onSend, placeholder = "Type a me
     return () => ro.disconnect();
   }, [value]);
 
+  // A different photo (picked, removed, or taken by a send) is a new draft.
+  useLayoutEffect(() => {
+    sendGuardRef.current.release();
+  }, [photoKey]);
+
   function send() {
     // One send per draft (lib/sendGuard.ts): Enter and the button can't
-    // both send the same text before the page clears it.
-    if (!sendGuardRef.current.claim(value)) return;
+    // both send the same text (or the same photo) before the page clears it.
+    if (photoBusy) return;
+    if (!sendGuardRef.current.claim(draftSendKey(value, photoKey))) return;
     onSend();
   }
 
@@ -138,6 +165,39 @@ export function ChatComposer({ value, onChange, onSend, placeholder = "Type a me
         </button>
         {emojiOpen && <EmojiPicker triggerRef={emojiButtonRef} onSelect={insertEmoji} onClose={() => setEmojiOpen(false)} />}
       </div>
+      {/* Photo: library or camera (iOS offers both for a plain image/*
+          input; no `capture`, which would force the camera). One per
+          message. Same 36 px as the emoji button and shorter than the
+          one-line textarea, so the row's height (and the composer's
+          docking) is unchanged; the textarea just gets narrower. */}
+      {onPickImage && (
+        <>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            aria-label={photoLabel}
+            title={photoLabel}
+            data-chat-photo-button
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-400 transition-all duration-200 ease-out hover:bg-slate-100 hover:text-fairway-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2"
+          >
+            <ImagePlus size={18} />
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            tabIndex={-1}
+            aria-hidden="true"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              // Cleared so picking the same photo again still fires.
+              e.target.value = "";
+              if (file) onPickImage(file);
+            }}
+          />
+        </>
+      )}
       <textarea
         ref={textareaRef}
         value={value}
@@ -164,7 +224,7 @@ export function ChatComposer({ value, onChange, onSend, placeholder = "Type a me
         }}
         onMouseDown={(e) => e.preventDefault()}
         onClick={handleSendClick}
-        disabled={!value.trim()}
+        disabled={photoBusy || (!value.trim() && !photoKey)}
         // Medium haptic per send in the native app. Only an attribute read by
         // lib/tapFeedback's document click listener: no handler, no focus or
         // keyboard effect.

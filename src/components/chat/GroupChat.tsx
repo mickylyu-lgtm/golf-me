@@ -29,6 +29,12 @@ import { isActionableRoundMessage } from "../../lib/roundChat";
 import { formatMessageTime } from "../../lib/messageTime";
 import { copyText } from "../../lib/share";
 import type { ChatMessage } from "../../types";
+import { ChatPhotoBody } from "./ChatImage";
+import { ImageAttachmentChip } from "./ImageAttachmentChip";
+import { FullscreenMediaViewer } from "../community/FullscreenMediaViewer";
+import { useChatImageAttachment } from "../../lib/useChatImageAttachment";
+import { messagePreviewText } from "../../lib/chatImages";
+import { canCopyImages, copyChatImage } from "../../lib/chatImageClient";
 
 // layout "card" (default): the inline card on the round page, list capped
 // at max-h-96, composer docked over the keyboard while typing (below).
@@ -67,10 +73,18 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
     canReactToRoundMessages,
     roundMessageReactions,
     setRoundMessageReaction,
+    canSendRoundImages,
+    sendRoundImage,
   } = useData();
   const { showToast } = useToast();
   const { t, locale } = useLocale();
   const navigate = useNavigate();
+  // Photos (lib/chatImages.ts): the composer's one picked photo (dropped
+  // when the round changes or the chat turns read-only) and the fullscreen
+  // viewer. The chip renders inside the composer wrapper, so docking /
+  // spacer / list ResizeObservers treat it like the reply bar.
+  const photo = useChatImageAttachment((reason) => showToast(t(reason === "tooLarge" ? "chat.photoTooLarge" : "chat.photoUnreadable"), "warning"));
+  const [viewerUrl, setViewerUrl] = useState<string | null>(null);
   const [text, setText] = useState(() => loadChatDraft(groupChatDraftKey(callId)));
   // The composer's text as of the last render, for a send that settles later.
   const textRef = useRef(text);
@@ -283,6 +297,9 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
   useMessageLongPress(listRef, true, (messageId, bubble) => {
     const m = messages.find((x) => x.id === messageId);
     if (!m || m.unsentAt || m.system || m.delivery === "failed") return;
+    // A photo still uploading isn't a message yet (text in flight keeps its
+    // existing Copy-only menu).
+    if (m.image && m.delivery) return;
     setNowMs(Date.now());
     setActionsFor({ id: messageId, bubble });
   });
@@ -297,6 +314,9 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
   useEffect(() => {
     if (!replyEnabled) setReplyToId(null);
   }, [replyEnabled]);
+  // A picked photo belongs to one round's open chat.
+  const removePhoto = photo.remove;
+  useEffect(() => removePhoto(), [callId, readOnly, removePhoto]);
 
   // Same golf call's chat can be revisited across navigations without this
   // component staying mounted the whole time — restore whatever was typed
@@ -328,8 +348,21 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
 
   async function handleSend() {
     const sending = text;
-    if (!sending.trim() || readOnly) return;
+    if (readOnly) return;
     const replyTo = replyEnabled && replyTarget && isActionableRoundMessage(replyTarget) ? replyTarget.id : null;
+    // With a photo: one message (photo + optional text + quote), shown at
+    // once with upload progress; a failure stays as a "Not sent" bubble with
+    // Retry / Discard (the composer is never refilled with it).
+    if (photo.state.kind === "ready") {
+      const picked = photo.take();
+      if (!picked) return;
+      updateText("");
+      setReplyToId(null);
+      const result = await sendRoundImage(callId, picked, sending, replyTo);
+      if (result === "objectionable") showToast(t("moderation.objectionableContent"), "warning");
+      return;
+    }
+    if (!sending.trim()) return;
     // Clear right away: the message shows at once (real accounts: as
     // "sending", then a "Not sent · Tap to retry" bubble if it fails, so the
     // text is never silently lost; demo: delivered instantly).
@@ -342,8 +375,14 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
 
   async function handleRetry(m: ChatMessage) {
     const result = await retryRoundMessage(m);
-    if (result === "objectionable") restoreRejectedText(m.text, m.replyToId ?? null);
+    if (result !== "objectionable") return;
+    // A photo stays as its failed bubble (only its caption was refused).
+    if (m.image) showToast(t("moderation.objectionableContent"), "warning");
+    else restoreRejectedText(m.text, m.replyToId ?? null);
   }
+
+  // One line for a quote / the reply bar: its text, or "📷 Photo".
+  const previewOf = (m: ChatMessage) => messagePreviewText(m, t("chat.photo"));
 
   function senderName(senderId: string) {
     return senderId === currentUser.id ? t("chat.you") : (getGolfer(senderId)?.name ?? t("roundChat.someone"));
@@ -385,7 +424,14 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
   async function handleCopy(messageId: string) {
     setActionsFor(null);
     const m = messagesById.get(messageId);
-    if (m && (await copyText(m.text))) showToast(t("chat.copied"), "info");
+    if (!m) return;
+    // A photo: the image (with its caption) where the platform can put
+    // images on the clipboard; started inside the tap (WebKit's rule).
+    if (m.image && canCopyImages()) {
+      if (await copyChatImage(m.image.path, m.outgoingPhoto?.localUrl, m.text)) showToast(t("chat.copied"), "info");
+      return;
+    }
+    if (m.text.trim() && (await copyText(m.text))) showToast(t("chat.copied"), "info");
   }
 
   // The menu's message; gone (unsent here or on another phone) = no menu.
@@ -494,7 +540,7 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
                   // selects. data-pressing (useMessageLongPress) eases it
                   // down while a hold builds.
                   data-actions-bubble={failed ? undefined : m.id}
-                  className={`relative rounded-2xl px-3.5 py-2 text-sm transition-[box-shadow,scale,opacity] duration-300 ease-out data-pressing:scale-[0.97] data-pressing:duration-[350ms] [overflow-wrap:anywhere] pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none] ${
+                  className={`relative rounded-2xl ${m.image ? "p-1" : "px-3.5 py-2"} text-sm transition-[box-shadow,scale,opacity] duration-300 ease-out data-pressing:scale-[0.97] data-pressing:duration-[350ms] [overflow-wrap:anywhere] pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none] ${
                     failed
                       ? "rounded-br-sm border border-rose-300 bg-rose-50 text-slate-800"
                       : isMe
@@ -510,12 +556,25 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
                   {m.replyToId && (
                     <MessageQuote
                       isMe={isMe && !failed}
-                      quoted={quoted ? { id: quoted.id, sender: senderName(quoted.senderId), text: quoted.text, unsent: Boolean(quoted.unsentAt) } : null}
+                      quoted={quoted ? { id: quoted.id, sender: senderName(quoted.senderId), text: previewOf(quoted), unsent: Boolean(quoted.unsentAt) } : null}
                       onJump={jumpToMessage}
                       labels={{ showOriginal: t("chat.showOriginal"), unavailable: t("chat.originalUnavailable"), unsent: t("chat.messageUnsent") }}
                     />
                   )}
-                  {m.text}
+                  {m.image ? (
+                    <ChatPhotoBody
+                      image={m.image}
+                      localUrl={m.outgoingPhoto?.localUrl}
+                      alt={t("chat.photoAlt")}
+                      openLabel={m.delivery ? t("chat.photoSending") : t("chat.openPhoto")}
+                      unavailableLabel={t("chat.photoUnavailable")}
+                      progress={m.delivery === "sending" ? (m.outgoingPhoto?.progress ?? 0) : undefined}
+                      caption={m.text}
+                      onOpen={m.delivery ? undefined : setViewerUrl}
+                    />
+                  ) : (
+                    m.text
+                  )}
                   {m.delivery === "sending" && <span className="sr-only"> ({t("roundChat.sending")})</span>}
                   <ReactionPill
                     summary={reactionSummary}
@@ -530,6 +589,13 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
                     {readOnly ? (
                       <span className="flex items-center gap-1 text-rose-600">
                         <AlertCircle size={12} aria-hidden="true" /> {failedAfterEndLabel}
+                      </span>
+                    ) : m.outgoingPhoto?.failure === "objectionable" || m.outgoingPhoto?.failure === "rejected" ? (
+                      // A photo retry can't help: its caption was refused, or
+                      // the database refused the photo here.
+                      <span className="flex items-center gap-1 text-rose-600">
+                        <AlertCircle size={12} aria-hidden="true" />{" "}
+                        {m.outgoingPhoto.failure === "objectionable" ? t("moderation.objectionableContent") : t("chat.photoRejected")}
                       </span>
                     ) : (
                       <button
@@ -583,14 +649,29 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
         {replyTarget && replyEnabled && (
           <ReplyBar
             title={replyTarget.senderId === currentUser.id ? t("chat.replyingToSelf") : t("chat.replyingTo", { name: senderName(replyTarget.senderId) })}
-            text={replyTarget.unsentAt ? t("chat.messageUnsent") : replyTarget.text}
+            text={replyTarget.unsentAt ? t("chat.messageUnsent") : previewOf(replyTarget)}
             cancelLabel={t("chat.cancelReply")}
             onCancel={() => setReplyToId(null)}
           />
         )}
-        <ChatComposer value={text} onChange={updateText} onSend={handleSend} placeholder={t("chat.messagePlaceholder")} />
+        <ImageAttachmentChip
+          state={photo.state}
+          onRemove={photo.remove}
+          labels={{ remove: t("chat.removePhoto"), processing: t("chat.photoPreparing"), ready: t("chat.photoReady") }}
+        />
+        <ChatComposer
+          value={text}
+          onChange={updateText}
+          onSend={handleSend}
+          placeholder={t("chat.messagePlaceholder")}
+          onPickImage={canSendRoundImages ? photo.pick : undefined}
+          photoLabel={t("chat.addPhoto")}
+          photoKey={photo.state.kind === "ready" ? photo.state.key : null}
+          photoBusy={photo.state.kind === "processing"}
+        />
       </div>
       )}
+      {viewerUrl && <FullscreenMediaViewer media={[{ id: "chat-photo", type: "image", url: viewerUrl }]} onClose={() => setViewerUrl(null)} />}
       {actionsMessage && actionsShown.value && (
         <MessageActionsMenu
           key={actionsShown.key}
@@ -609,6 +690,8 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
           actions={messageActions({
             canReply: replyEnabled && isActionableRoundMessage(actionsMessage),
             canUnsend: unsendableIds.has(actionsMessage.id),
+            // A photo with no text where images can't go on the clipboard: no Copy.
+            canCopy: !(actionsMessage.image && !actionsMessage.text.trim() && !canCopyImages()),
           })}
           labels={{
             menu: t("chat.messageActions"),
