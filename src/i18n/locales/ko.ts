@@ -606,6 +606,12 @@ export const ko: Record<TranslationKey, string> = {
   "roundChat.notSentCancelled": "전송 안 됨 — 이 라운드는 취소되었습니다",
   "roundChat.retryLabel": "메시지가 전송되지 않았습니다. 탭하여 다시 시도하세요.",
   "roundChat.discard": "삭제",
+  "roundChat.notSentFiltered": "전송되지 않음: GolfMe에서 허용되지 않는 표현이 포함되어 있습니다",
+  "roundChat.edit": "수정",
+  "roundChat.editLabel": "입력창에서 이 메시지 수정",
+  "roundChat.replaceDraftPrompt": "작성 중인 메시지를 바꿀까요?",
+  "roundChat.replaceDraft": "바꾸기",
+  "roundChat.keepDraft": "그대로 두기",
   "roundChat.someone": "골퍼",
   "roundChat.viewProfile": "프로필 보기",
   "myGolf.notCompleted": "완료 표시 안 됨",
@@ -794,7 +800,7 @@ export const ko: Record<TranslationKey, string> = {
   "auth.sessionExpired": "로그아웃되었습니다. 다시 로그인하면 이어서 사용할 수 있습니다.",
   "auth.code.linkExpiredCodeBody": "링크가 만료되었거나 다른 기기 등에서 이미 사용되었습니다. 가장 최근 이메일의 코드를 사용하거나 {email}(으)로 새 코드를 받으세요.",
   "auth.code.linkExpiredTitle": "로그인 링크가 작동하지 않았습니다",
-  "auth.code.linkExpiredBody": "링크가 만료되었거나 다른 기기 등에서 이미 사용되었습니다. 이메일을 입력하면 새 링크를 보내 드립니다. 이메일에 있는 {count}자리 코드를 여기에 입력해도 됩니다.",
+  "auth.code.linkExpiredBody": "링크가 만료되었거나 다른 기기 등에서 이미 사용되었습니다. 이메일을 입력하면 여기에 입력할 새 {count}자리 코드를 보내 드립니다.",
   // <<< Email sign-in code
 
   "avatarUpload.invalidFile": "이미지 파일을 선택해주세요.",

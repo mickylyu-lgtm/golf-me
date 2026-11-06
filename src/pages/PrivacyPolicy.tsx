@@ -134,7 +134,7 @@ export function PrivacyPolicy() {
           To run GolfMe: create your account, show you nearby rounds and golfers and suggest good matches, deliver messages and
           notifications, show your posts to other members, give you Caddie swing feedback, build your reputation from rounds you've
           played, keep the community safe (reviewing reports, enforcing blocks and our Terms), and understand overall usage so we can
-          improve the app. We use your email to send sign-in links and account notices — never marketing without your consent.
+          improve the app. We use your email to send sign-in codes and account notices — never marketing without your consent.
         </p>
       </Section>
 
@@ -192,7 +192,7 @@ export function PrivacyPolicy() {
             never information about you.
           </li>
           <li>
-            <span className="font-semibold text-slate-800">Resend</span> — sends our emails, such as sign-in links and waitlist notices.
+            <span className="font-semibold text-slate-800">Resend</span> — sends our emails, such as sign-in codes and waitlist notices.
           </li>
         </ul>
         <p>We may also disclose information if the law requires it, or to protect the safety of our members or others.</p>

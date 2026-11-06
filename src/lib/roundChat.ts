@@ -1,5 +1,5 @@
 // Round group chat: who can see / post, and the optimistic send state of a
-// real (Supabase) round message. Pure (type-only imports) so
+// real (Supabase) round message. Pure (no React; imports only other pure libs) so
 // tests/roundChat.test.ts runs it under node --test; RealRoundsContext,
 // GroupChat, GolfCallDetail and RoundChatThread wire it up.
 import type { ChatMessage, GolfCallStatus } from "../types";
@@ -7,6 +7,8 @@ import { imageFromRow } from "./chatImages.ts";
 import type { ChatImageRef, ImageRowColumns, ImageSendFailure } from "./chatImages.ts";
 import { voiceFromRow } from "./chatVoice.ts";
 import type { VoiceRowColumns } from "./chatVoice.ts";
+import { failedSendOutcome } from "./dmFailedSend.ts";
+import { isObjectionableContentError, type SendMessageResult } from "./objectionableContent.ts";
 
 // ---------------------------------------------------------------------------
 // Access
@@ -67,7 +69,10 @@ export function canPostRoundChat(access: RoundChatAccess): boolean {
 //   rejected  the server refused it (RLS: no longer a member, a block, or
 //             the round has ended). Retrying won't help until that changes.
 //   network   anything else (offline, timeout, 5xx): retry is worthwhile.
-export type RoundSendFailure = "rejected" | "network";
+//   objectionable  the content filter refused the text (P0001
+//             objectionable_content). Never resent as is: the bubble offers
+//             Edit (back into the composer) and Discard, no Retry.
+export type RoundSendFailure = "rejected" | "network" | "objectionable";
 
 export interface PendingRoundMessage {
   clientId: string;
@@ -198,9 +203,39 @@ export function markRoundMessageFailed(pending: readonly PendingRoundMessage[], 
   return update(pending, clientId, (p) => ({ ...p, state: "failed", failure }));
 }
 
-/** Retry: only a failed message goes back to sending. */
+/** A failed message the golfer may resend unchanged: not one the content filter refused. */
+export function canRetryRoundMessage(m: { state?: PendingRoundMessage["state"]; delivery?: ChatMessage["delivery"]; failure?: RoundSendFailure }): boolean {
+  const failed = m.state === "failed" || m.delivery === "failed";
+  return failed && m.failure !== "objectionable";
+}
+
+/** Retry: only a failed message goes back to sending, and never a content-filter rejection. */
 export function markRoundMessageRetrying(pending: readonly PendingRoundMessage[], clientId: string): PendingRoundMessage[] {
-  return update(pending, clientId, (p) => (p.state === "failed" ? { ...p, state: "sending", failure: undefined } : p));
+  return update(pending, clientId, (p) => (canRetryRoundMessage(p) ? { ...p, state: "sending", failure: undefined } : p));
+}
+
+// ---------------------------------------------------------------------------
+// Edit a rejected message (content filter)
+// ---------------------------------------------------------------------------
+
+// Same rule as a failed DM (lib/dmFailedSend.ts failedSendOutcome): the
+// text goes back into the composer only when that composer is this round's
+// and is empty with no reply picked. Otherwise nothing is overwritten
+// silently: the golfer is asked "Replace your draft?" (or copies the text).
+// A composer showing another round never receives it.
+export interface RoundComposerSnapshot {
+  roundId: string;
+  text: string;
+  replyToId: string | null;
+}
+
+export type EditRejectedOutcome = "restore" | "confirmReplace" | "otherRound";
+
+export function editRejectedOutcome(composer: RoundComposerSnapshot, message: { roundId: string }): EditRejectedOutcome {
+  // "draft" = a different thread: never write into it from here.
+  const outcome = failedSendOutcome({ threadId: composer.roundId, text: composer.text, replyToId: composer.replyToId }, message.roundId, "");
+  if (outcome === "restore") return "restore";
+  return outcome === "keep" ? "confirmReplace" : "otherRound";
 }
 
 export function discardRoundMessage(pending: readonly PendingRoundMessage[], clientId: string): PendingRoundMessage[] {
@@ -320,6 +355,27 @@ export function mergeRoundMessages(rows: readonly RoundMessageRowLike[], pending
 // Postgres insufficient_privilege (RLS rejected the insert). PostgREST passes
 // the SQLSTATE through as `code`.
 export function classifyRoundSendError(err: unknown): RoundSendFailure {
+  if (isObjectionableContentError(err)) return "objectionable";
   const code = err && typeof err === "object" ? (err as { code?: unknown }).code : undefined;
   return code === "42501" ? "rejected" : "network";
+}
+
+/**
+ * What an insert's answer does to the pending list: only the message with
+ * this clientId changes (so a late answer can't touch any other round's or
+ * any newer message), and nothing here ever touches a composer.
+ */
+export function settleRoundSend(
+  clientId: string,
+  answer: { data?: { id: string; created_at: string } | null; error?: unknown },
+): { result: SendMessageResult; failure?: RoundSendFailure; apply: (pending: readonly PendingRoundMessage[]) => PendingRoundMessage[] } {
+  if (!answer.error) {
+    return { result: "sent", apply: (pending) => markRoundMessageSent(pending, clientId, answer.data ?? null) };
+  }
+  const failure = classifyRoundSendError(answer.error);
+  return {
+    result: failure === "objectionable" ? "objectionable" : "failed",
+    failure,
+    apply: (pending) => markRoundMessageFailed(pending, clientId, failure),
+  };
 }

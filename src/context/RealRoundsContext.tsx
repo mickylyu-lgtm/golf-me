@@ -7,10 +7,9 @@ import { realRoundToGolfCall } from "../lib/golfCall";
 import type { RoundRow, ParticipantRow } from "../lib/golfCall";
 import { fetchPublicProfiles } from "../lib/publicProfilesFetch";
 import { INITIAL_LOAD_STATUS, applyLoadOutcome, isFirstLoadError, isRefreshError } from "../lib/loadStatus";
-import { isObjectionableContentError } from "../lib/objectionableContent";
 import type { SendMessageResult } from "../lib/objectionableContent";
 import {
-  classifyRoundSendError,
+  canRetryRoundMessage,
   createPendingRoundMessage,
   discardRoundMessage as discardPending,
   markRoundMessageFailed,
@@ -20,6 +19,7 @@ import {
   patchRoundPhoto,
   reconcilePendingRoundMessages,
   roundRowsHaveColumn,
+  settleRoundSend,
   shouldResendWithoutReply,
 } from "../lib/roundChat";
 import { classifyImageInsertError, imageRowColumns, isMissingImageSupportError, progressStep, roundImagePath, rowsHaveImageColumn } from "../lib/chatImages";
@@ -96,7 +96,7 @@ interface RealRoundsContextValue {
   submitReview: (roundId: string, revieweeId: string, input: ReviewInput) => Promise<void>;
   /** Real rows plus this device's sending/failed messages for the round (lib/roundChat.ts). */
   messagesForCall: (roundId: string) => ChatMessage[];
-  /** Shows the message at once as "sending"; on failure it stays as a failed bubble (retry/discard) — except "objectionable", which is removed so the caller can put the text back. Never throws. */
+  /** Shows the message at once as "sending"; on failure it stays as a failed bubble (retry/discard; "objectionable" = edit/discard, never resent). Never throws. */
   sendRoundMessage: (roundId: string, text: string, replyToId?: string | null) => Promise<SendMessageResult>;
   retryRoundMessage: (message: { clientId: string; roundId: string; text: string; replyToId?: string | null }) => Promise<SendMessageResult>;
   discardRoundMessage: (clientId: string) => void;
@@ -509,9 +509,9 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
   // "sending". On success it's marked sent with the real id; the realtime
   // refetch then replaces it with the row. On failure it stays on screen as
   // "Not sent" with retry/discard, so the text is never silently lost. A
-  // content-filter rejection is the exception: the bubble is removed and the
-  // caller puts the text back in the composer to edit (retrying unchanged
-  // text would fail again).
+  // content-filter rejection stays too, as "Not sent: <reason>" with Edit /
+  // Discard only (retrying unchanged text would fail again; GroupChat's
+  // Edit puts it back into an empty composer, or asks first).
   // Replies are sent only once the column is known to exist (a fetched row
   // carries it): an older database would refuse the unknown column.
   const repliesSupported = useMemo(
@@ -540,22 +540,19 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
         setPendingMessages((prev) => prev.map((p) => (p.clientId === clientId ? { ...p, replyToId: null } : p)));
         ({ data, error } = await insert(row));
       }
-      if (!error) {
-        setPendingMessages((prev) => markRoundMessageSent(prev, clientId, data as { id: string; created_at: string } | null));
-        return "sent";
-      }
-      if (isObjectionableContentError(error)) {
-        setPendingMessages((prev) => discardPending(prev, clientId));
-        return "objectionable";
-      }
-      console.error("GolfMe: failed to send round message.", error);
-      const failure = classifyRoundSendError(error);
-      setPendingMessages((prev) => markRoundMessageFailed(prev, clientId, failure));
+      // lib/roundChat.ts settleRoundSend: sent / failed (network, rejected)
+      // / objectionable, applied to this clientId only. A content-filter
+      // rejection is kept as a failed bubble ("Not sent: ...", Edit /
+      // Discard), never resent and never written into a composer from
+      // here: a late answer can't touch newer input or another round.
+      const settled = settleRoundSend(clientId, { data: data as { id: string; created_at: string } | null, error });
+      setPendingMessages(settled.apply);
+      if (settled.failure === "network" || settled.failure === "rejected") console.error("GolfMe: failed to send round message.", error);
       // Refused by RLS: most likely the round just ended/was cancelled, the
       // golfer left, or a block. Reload so the chat shows the right read-only
       // or locked state instead of an open composer.
-      if (failure === "rejected") void refetch();
-      return "failed";
+      if (settled.failure === "rejected") void refetch();
+      return settled.result;
     },
     [authUser, refetch],
   );
@@ -809,14 +806,21 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
 
   const retryRoundMessage = useCallback(
     async (message: { clientId: string; roundId: string; text: string; replyToId?: string | null }): Promise<SendMessageResult> => {
+      // Photo / voice sends resume through their own job (attemptPhoto dedupes
+      // an in-flight attempt).
       if (photoJobsRef.current.has(message.clientId)) {
         if (!photoInFlightRef.current.has(message.clientId)) {
           setPendingMessages((prev) => patchRoundPhoto(markRoundMessageRetrying(prev, message.clientId), message.clientId, { failure: undefined }));
         }
         return attemptPhoto(message.clientId);
       }
+      // Only a retryable failure goes out again (never a content-filter
+      // rejection, never one already sending: no double send on a double tap).
+      const pending = pendingMessagesRef.current.find((p) => p.clientId === message.clientId);
+      if (!pending || !canRetryRoundMessage(pending)) return pending?.failure === "objectionable" ? "objectionable" : "failed";
+      pendingMessagesRef.current = markRoundMessageRetrying(pendingMessagesRef.current, message.clientId);
       setPendingMessages((prev) => markRoundMessageRetrying(prev, message.clientId));
-      return attemptSend(message.clientId, message.roundId, message.text, message.replyToId);
+      return attemptSend(message.clientId, pending.roundId, pending.text, pending.replyToId);
     },
     [attemptSend, attemptPhoto],
   );

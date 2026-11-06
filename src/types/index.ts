@@ -279,7 +279,7 @@ export interface ChatMessage {
   /** Real round chat only: this device's message that isn't confirmed yet (lib/roundChat.ts). Unset = delivered. */
   delivery?: "sending" | "failed";
   /** Why a `delivery: "failed"` message failed. */
-  failure?: "rejected" | "network";
+  failure?: "rejected" | "network" | "objectionable";
   /** Local id of a message sent from this device, for retry/discard. */
   clientId?: string;
   /** Swipe-to-reply: the round message this one quotes (same round, enforced by the database). */

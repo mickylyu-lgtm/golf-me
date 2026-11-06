@@ -198,7 +198,7 @@ interface DataContextValue {
   approveRequest: (callId: string, golferId: string) => void;
   declineRequest: (callId: string, golferId: string) => void;
 
-  /** Round chat. Real: the message shows at once as sending; "failed" leaves it on screen as a failed bubble (retry/discard); "objectionable" removes it so the caller restores the text. Demo: instant. */
+  /** Round chat. Real: the message shows at once as sending; "failed" leaves it on screen as a failed bubble (retry/discard); "objectionable" leaves it as a "Not sent: ..." bubble (edit/discard, never resent). Demo: instant. */
   sendMessage: (callId: string, text: string, replyToId?: string | null) => Promise<SendMessageResult>;
   /** Re-sends a failed round message (a ChatMessage with delivery "failed"). No-op in demo. */
   retryRoundMessage: (message: ChatMessage) => Promise<SendMessageResult>;

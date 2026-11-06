@@ -25,7 +25,7 @@ import { FOCUS_EXIT_MS } from "../../lib/messageFocus";
 import { messageActions } from "../../lib/messageLongPress";
 import { canUnsendMessage, unsendRemainingMs } from "../../lib/unsend";
 import { QUICK_REACTIONS, groupReactionsByMessage, myReaction, nextReaction, summarizeReactions, type QuickReaction } from "../../lib/reactions";
-import { isActionableRoundMessage } from "../../lib/roundChat";
+import { canRetryRoundMessage, editRejectedOutcome, isActionableRoundMessage } from "../../lib/roundChat";
 import { formatMessageTime } from "../../lib/messageTime";
 import { copyText } from "../../lib/share";
 import type { ChatMessage } from "../../types";
@@ -340,25 +340,28 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
     saveChatDraft(groupChatDraftKey(callId), value);
   }
 
-  // Content filter: the message was removed, so put the text back (unless
-  // the golfer already started typing something new) to edit, with the
-  // quote it had if no other one was picked meanwhile.
-  function restoreRejectedText(sending: string, replyTo: string | null = null) {
-    showToast(t("moderation.objectionableContent"), "warning");
-    setText((current) => {
-      if (current.trim()) return current;
-      saveChatDraft(groupChatDraftKey(callId), sending);
-      return sending;
-    });
-    if (replyTo && !textRef.current.trim()) setReplyToId((picked) => picked ?? replyTo);
-  }
-
   const messagesById = new Map(messages.map((m) => [m.id, m]));
   const replyTarget = replyToId ? messagesById.get(replyToId) : undefined;
+
+  // The round on screen now (this component is reused when the route's
+  // round changes): a send that settles later checks it before saying
+  // anything, and never writes into the composer at all.
+  const callIdRef = useRef(callId);
+  callIdRef.current = callId;
+  const replyToIdRef = useRef(replyToId);
+  replyToIdRef.current = replyToId;
+
+  // Content filter: the message stays as a "Not sent: ..." bubble with
+  // Edit / Discard (RealRoundsContext); the toast is only for the round it
+  // was sent in, if that's still the one on screen.
+  function noteRejected(roundId: string) {
+    if (callIdRef.current === roundId) showToast(t("moderation.objectionableContent"), "warning");
+  }
 
   async function handleSend() {
     const sending = text;
     if (readOnly) return;
+    const roundId = callId;
     const replyTo = replyEnabled && replyTarget && isActionableRoundMessage(replyTarget) ? replyTarget.id : null;
     // With a photo: one message (photo + optional text + quote), shown at
     // once with upload progress; a failure stays as a "Not sent" bubble with
@@ -368,27 +371,64 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
       if (!picked) return;
       updateText("");
       setReplyToId(null);
-      const result = await sendRoundImage(callId, picked, sending, replyTo);
-      if (result === "objectionable") showToast(t("moderation.objectionableContent"), "warning");
+      const result = await sendRoundImage(roundId, picked, sending, replyTo);
+      if (result === "objectionable") noteRejected(roundId);
       return;
     }
     if (!sending.trim()) return;
     // Clear right away: the message shows at once (real accounts: as
-    // "sending", then a "Not sent · Tap to retry" bubble if it fails, so the
-    // text is never silently lost; demo: delivered instantly).
+    // "sending", then a "Not sent" bubble if it fails, so the text is never
+    // silently lost; demo: delivered instantly).
     updateText("");
     setReplyToId(null);
     // The golfer's own bubble pins itself into view (message effect above).
-    const result = await sendMessage(callId, sending, replyTo);
-    if (result === "objectionable") restoreRejectedText(sending, replyTo);
+    const result = await sendMessage(roundId, sending, replyTo);
+    if (result === "objectionable") noteRejected(roundId);
   }
 
+  // Network / refused failures only: a content-filter rejection is never
+  // resent as is (no Retry is shown for it; the context refuses it too).
   async function handleRetry(m: ChatMessage) {
+    if (!canRetryRoundMessage(m)) return;
     const result = await retryRoundMessage(m);
-    if (result !== "objectionable") return;
-    // A photo stays as its failed bubble (only its caption was refused).
-    if (m.image) showToast(t("moderation.objectionableContent"), "warning");
-    else restoreRejectedText(m.text, m.replyToId ?? null);
+    // A photo stays as its failed bubble (only its caption was refused); a
+    // text message stays as a "Not sent: ..." bubble with Edit / Discard.
+    if (result === "objectionable") noteRejected(m.golfCallId);
+  }
+
+  // Edit a rejected message: back into the composer only if it's this
+  // round's and empty with no reply picked (lib/roundChat.ts
+  // editRejectedOutcome, the DM rule); otherwise ask before replacing the
+  // draft, or copy the text instead.
+  const [replaceDraftFor, setReplaceDraftFor] = useState<string | null>(null);
+  useEffect(() => setReplaceDraftFor(null), [callId]);
+  function handleEditRejected(m: ChatMessage) {
+    if (!m.clientId) return;
+    const outcome = editRejectedOutcome({ roundId: callIdRef.current, text: textRef.current, replyToId: replyToIdRef.current }, { roundId: m.golfCallId });
+    if (outcome === "otherRound") return;
+    if (outcome === "confirmReplace") {
+      setReplaceDraftFor(m.clientId);
+      return;
+    }
+    putRejectedBack(m);
+  }
+  function putRejectedBack(m: ChatMessage) {
+    if (!m.clientId || m.golfCallId !== callIdRef.current) return;
+    setReplaceDraftFor(null);
+    updateText(m.text);
+    const quote = m.replyToId && replyEnabled && messagesById.has(m.replyToId) ? m.replyToId : null;
+    setReplyToId(quote);
+    discardRoundMessage(m.clientId);
+    const textarea = composerRef.current?.querySelector("textarea");
+    if (textarea && document.activeElement !== textarea) textarea.focus({ preventScroll: true });
+  }
+  async function copyRejected(m: ChatMessage) {
+    setReplaceDraftFor(null);
+    if (await copyText(m.text)) showToast(t("chat.copied"), "info");
+  }
+  function discardFailed(clientId: string) {
+    if (replaceDraftFor === clientId) setReplaceDraftFor(null);
+    discardRoundMessage(clientId);
   }
 
   // One line for a quote / the reply bar: its text, "[Photo]" or "[Voice message]".
@@ -611,7 +651,68 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
                     onRemoveMine={mineReacted && reactEnabled ? () => handleReact(m.id, null) : null}
                   />
                 </div>
-                {failed && m.clientId && (
+                {failed && m.clientId && m.failure === "objectionable" && (
+                  <div className="mt-1 flex flex-col items-end gap-1 text-[11px] font-semibold" data-rejected-message={m.clientId}>
+                    <span role="status" className="flex items-start gap-1 text-right text-rose-600">
+                      <AlertCircle size={12} aria-hidden="true" className="mt-px shrink-0" /> {t("roundChat.notSentFiltered")}
+                    </span>
+                    {replaceDraftFor === m.clientId && !readOnly ? (
+                      <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1" role="group" aria-label={t("roundChat.replaceDraftPrompt")}>
+                        <span className="text-slate-500">{t("roundChat.replaceDraftPrompt")}</span>
+                        <button
+                          type="button"
+                          onClick={() => putRejectedBack(m)}
+                          className="rounded text-rose-600 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
+                        >
+                          {t("roundChat.replaceDraft")}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => copyRejected(m)}
+                          className="rounded text-slate-500 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+                        >
+                          {t("chat.copy")}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setReplaceDraftFor(null)}
+                          className="rounded text-slate-400 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+                        >
+                          {t("roundChat.keepDraft")}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-3">
+                        {readOnly ? (
+                          <button
+                            type="button"
+                            onClick={() => copyRejected(m)}
+                            className="rounded text-slate-500 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+                          >
+                            {t("chat.copy")}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleEditRejected(m)}
+                            aria-label={t("roundChat.editLabel")}
+                            className="rounded text-rose-600 hover:text-rose-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300"
+                          >
+                            {t("roundChat.edit")}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => discardFailed(m.clientId!)}
+                          className="rounded text-slate-400 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+                        >
+                          {t("roundChat.discard")}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {failed && m.clientId && m.failure !== "objectionable" && (
                   <div className="mt-1 flex items-center gap-3 text-[11px] font-semibold">
                     {readOnly ? (
                       <span className="flex items-center gap-1 text-rose-600">
@@ -636,7 +737,7 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
                     )}
                     <button
                       type="button"
-                      onClick={() => discardRoundMessage(m.clientId!)}
+                      onClick={() => discardFailed(m.clientId!)}
                       className="rounded text-slate-400 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
                     >
                       {t("roundChat.discard")}

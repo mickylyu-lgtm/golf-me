@@ -80,7 +80,7 @@ export function TermsOfService() {
 
       <Section title="Your account">
         <p>
-          You sign in with Google or an email link. Keep access to your account secure — you're responsible for what happens under it. Use
+          You sign in with Apple, Google, or a one-time code we email you. Keep access to your account secure — you're responsible for what happens under it. Use
           your real name or a name people know you by, and keep your profile honest: skill level, handicap, and location help other golfers
           decide whether to play with you.
         </p>

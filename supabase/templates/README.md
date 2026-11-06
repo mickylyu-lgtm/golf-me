@@ -8,7 +8,7 @@ Used for **two** Dashboard templates, because Supabase picks one depending on th
 
 | Dashboard template | Sent when | Subject |
 |---|---|---|
-| **Magic link** | an existing user asks for an email sign-in link | `Sign in to GolfMe` |
+| **Magic link** (Supabase's name for it; the email leads with the 6-digit code, the link is the fallback) | an existing user taps "Send code" on "Continue with Email" | `Sign in to GolfMe` |
 | **Confirm signup** | a new email is used on "Continue with Email" for the first time | `Sign in to GolfMe` |
 
 ### Applying it
@@ -17,7 +17,7 @@ Used for **two** Dashboard templates, because Supabase picks one depending on th
 2. Open **Magic link**. Set **Subject** to `Sign in to GolfMe`, replace the whole **Body** with the contents of `sign-in-email.html`, and save.
 3. Open **Confirm signup** and do the same: same subject, same body.
 4. While in **Authentication**, open **Providers → Email** (or **Sign In / Providers → Email**) and note **Email OTP Length** and **Email OTP Expiration**. The app expects **6** digits (`EMAIL_OTP_LENGTH` in `src/pages/Auth.tsx`); if the dashboard says something else, change that constant to match (the field accepts up to 10 digits either way, but the on-screen copy says the configured count). Don't change either setting just for this.
-5. Test: request a link from the app and check the email arrives with the code; the code typed into the app on a *different* device signs you in there; and, with a fresh email, the button and the fallback link still sign you in. Also check it reads well on your phone.
+5. Test: request a code from the app and check the email arrives with the code; the code typed into the app on a *different* device signs you in there; and, with a fresh email, the button and the fallback link still sign you in. Also check it reads well on your phone.
 
 ### Rules for editing
 

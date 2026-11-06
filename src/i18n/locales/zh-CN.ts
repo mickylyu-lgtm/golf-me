@@ -606,6 +606,12 @@ export const zhCN: Record<TranslationKey, string> = {
   "roundChat.notSentCancelled": "未发送 — 此球局已取消",
   "roundChat.retryLabel": "消息未发送。点按重试。",
   "roundChat.discard": "舍弃",
+  "roundChat.notSentFiltered": "未发送：内容包含 GolfMe 不允许使用的语言",
+  "roundChat.edit": "编辑",
+  "roundChat.editLabel": "在输入框中编辑这条消息",
+  "roundChat.replaceDraftPrompt": "替换你的草稿？",
+  "roundChat.replaceDraft": "替换",
+  "roundChat.keepDraft": "保留草稿",
   "roundChat.someone": "一位球友",
   "roundChat.viewProfile": "查看资料",
   "myGolf.notCompleted": "未标记完成",
@@ -794,7 +800,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "auth.sessionExpired": "你已退出登录。重新登录即可继续。",
   "auth.code.linkExpiredCodeBody": "链接已过期或已被使用(可能是在其他设备上)。请使用最新邮件中的验证码,或向 {email} 发送新的验证码。",
   "auth.code.linkExpiredTitle": "该登录链接无法使用",
-  "auth.code.linkExpiredBody": "链接已过期或已被使用(可能是在其他设备上)。请输入邮箱获取新链接。邮件中还有一个 {count} 位验证码,也可以在此输入。",
+  "auth.code.linkExpiredBody": "链接已过期或已被使用(可能是在其他设备上)。请输入邮箱,我们会发送一个新的 {count} 位验证码,在此输入即可。",
   // <<< Email sign-in code
 
   "avatarUpload.invalidFile": "请选择一张图片文件。",

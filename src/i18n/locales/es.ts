@@ -606,6 +606,12 @@ export const es: Record<TranslationKey, string> = {
   "roundChat.notSentCancelled": "No enviado — esta ronda fue cancelada",
   "roundChat.retryLabel": "Mensaje no enviado. Toca para reintentar.",
   "roundChat.discard": "Descartar",
+  "roundChat.notSentFiltered": "No enviado: contiene lenguaje que no está permitido en GolfMe",
+  "roundChat.edit": "Editar",
+  "roundChat.editLabel": "Editar este mensaje en el cuadro de texto",
+  "roundChat.replaceDraftPrompt": "¿Reemplazar tu borrador?",
+  "roundChat.replaceDraft": "Reemplazar",
+  "roundChat.keepDraft": "Conservar borrador",
   "roundChat.someone": "Un golfista",
   "roundChat.viewProfile": "Ver perfil",
   "myGolf.notCompleted": "Sin marcar como completada",
@@ -794,7 +800,7 @@ export const es: Record<TranslationKey, string> = {
   "auth.sessionExpired": "Se cerró tu sesión. Vuelve a iniciar sesión para continuar donde lo dejaste.",
   "auth.code.linkExpiredCodeBody": "Caducó o ya se usó, quizá en otro dispositivo. Usa el código del correo más reciente o envía un código nuevo a {email}.",
   "auth.code.linkExpiredTitle": "Ese enlace de inicio de sesión no funcionó",
-  "auth.code.linkExpiredBody": "Caducó o ya se usó, quizá en otro dispositivo. Escribe tu correo para recibir uno nuevo. El correo también incluye un código de {count} dígitos que puedes escribir aquí.",
+  "auth.code.linkExpiredBody": "Caducó o ya se usó, quizá en otro dispositivo. Escribe tu correo y te enviaremos un nuevo código de {count} dígitos para escribirlo aquí.",
   // <<< Email sign-in code
 
   "avatarUpload.invalidFile": "Elige un archivo de imagen.",

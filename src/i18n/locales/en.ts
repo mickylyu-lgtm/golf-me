@@ -620,6 +620,12 @@ export const en = {
   "roundChat.notSentCancelled": "Not sent — this round was cancelled",
   "roundChat.retryLabel": "Message not sent. Tap to retry.",
   "roundChat.discard": "Discard",
+  "roundChat.notSentFiltered": "Not sent: it contains language that isn't allowed on GolfMe",
+  "roundChat.edit": "Edit",
+  "roundChat.editLabel": "Edit this message in the message box",
+  "roundChat.replaceDraftPrompt": "Replace your draft?",
+  "roundChat.replaceDraft": "Replace",
+  "roundChat.keepDraft": "Keep draft",
   "roundChat.someone": "A golfer",
   "roundChat.viewProfile": "View profile",
   "myGolf.notCompleted": "Not marked complete",
@@ -812,7 +818,7 @@ export const en = {
   "auth.sessionExpired": "You've been signed out. Sign in again to pick up where you left off.",
   "auth.code.linkExpiredCodeBody": "It expired or was already used, possibly on another device. Use the code from your newest email, or send a new code to {email}.",
   "auth.code.linkExpiredTitle": "That sign-in link didn't work",
-  "auth.code.linkExpiredBody": "It expired or was already used, possibly on another device. Enter your email to get a new one. The email also has a {count}-digit code you can type here instead.",
+  "auth.code.linkExpiredBody": "It expired or was already used, possibly on another device. Enter your email and we'll send you a new {count}-digit code to type here.",
   // <<< Email sign-in code
 
   // Avatar upload (used in onboarding and Profile)

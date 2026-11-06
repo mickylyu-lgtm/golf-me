@@ -606,6 +606,12 @@ export const ja: Record<TranslationKey, string> = {
   "roundChat.notSentCancelled": "未送信 — このラウンドはキャンセルされました",
   "roundChat.retryLabel": "メッセージは送信されていません。タップして再送信します。",
   "roundChat.discard": "破棄",
+  "roundChat.notSentFiltered": "未送信：GolfMeで許可されていない表現が含まれています",
+  "roundChat.edit": "編集",
+  "roundChat.editLabel": "このメッセージを入力欄で編集",
+  "roundChat.replaceDraftPrompt": "下書きを置き換えますか？",
+  "roundChat.replaceDraft": "置き換える",
+  "roundChat.keepDraft": "下書きを残す",
   "roundChat.someone": "ゴルファー",
   "roundChat.viewProfile": "プロフィールを見る",
   "myGolf.notCompleted": "未完了",
@@ -794,7 +800,7 @@ export const ja: Record<TranslationKey, string> = {
   "auth.sessionExpired": "サインアウトされました。もう一度サインインすると続きから使えます。",
   "auth.code.linkExpiredCodeBody": "リンクの有効期限が切れているか、別のデバイスなどですでに使用されています。最新のメールのコードを使うか、{email} に新しいコードを送信してください。",
   "auth.code.linkExpiredTitle": "サインインリンクが使えませんでした",
-  "auth.code.linkExpiredBody": "リンクの有効期限が切れているか、別のデバイスなどですでに使用されています。メールアドレスを入力して新しいリンクを受け取ってください。メールには、ここに入力できる{count}桁のコードも記載されています。",
+  "auth.code.linkExpiredBody": "リンクの有効期限が切れているか、別のデバイスなどですでに使用されています。メールアドレスを入力すると、ここに入力する新しい{count}桁のコードをお送りします。",
   // <<< Email sign-in code
 
   "avatarUpload.invalidFile": "画像ファイルを選択してください。",

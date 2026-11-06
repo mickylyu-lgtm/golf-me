@@ -12,6 +12,7 @@ import { ClubPicker } from "../components/caddie/ClubPicker";
 import { VideoTrimSelector } from "../components/caddie/VideoTrimSelector";
 import { FilmingTips } from "../components/caddie/FilmingTips";
 import { captureVideoThumbnail, readVideoDuration } from "../lib/image";
+import { canStartAnalysis, createTrimReopenGate, resolveTrimReopen } from "../lib/trimReopen";
 import { formatClock } from "../lib/format";
 import { supabase } from "../lib/supabase";
 import { CADDIE_MEDIA_BUCKET } from "../lib/caddieMedia";
@@ -86,6 +87,13 @@ export function AnalyzeSwing() {
   const [pendingTrim, setPendingTrim] = useState<
     { file: File; previewUrl: string; duration: number; editing?: { start: number; end: number } } | undefined
   >(undefined);
+  // "Change section" may wait for the clip length (lib/trimReopen.ts): the
+  // gate drops an answer that arrives after Remove / a new pick / leaving.
+  const trimReopenGate = useRef(createTrimReopenGate()).current;
+  const [trimReopening, setTrimReopening] = useState(false);
+  const currentDraftRef = useRef(draftSwingVideo);
+  currentDraftRef.current = draftSwingVideo;
+  useEffect(() => () => trimReopenGate.cancel(), [trimReopenGate]);
 
   useEffect(() => {
     if (localStorage.getItem(UPLOAD_IN_PROGRESS_KEY)) {
@@ -210,28 +218,36 @@ export function AnalyzeSwing() {
   async function changeTrim() {
     const start = draftSwingVideo?.trimStartSeconds;
     const end = draftSwingVideo?.trimEndSeconds;
-    if (!videoFile || !videoPreviewUrl || start === undefined || end === undefined || submitting) return;
-    let duration = previewVideoRef.current?.duration;
-    if (duration === undefined || !Number.isFinite(duration) || duration <= 0) {
-      try {
-        duration = await readVideoDuration(videoFile);
-      } catch {
-        duration = undefined;
-      }
-    }
-    if (duration === undefined || !Number.isFinite(duration) || duration <= 0) {
+    if (!videoFile || !videoPreviewUrl || start === undefined || end === undefined || submitting || pendingTrim || trimReopenGate.pending) return;
+    const file = videoFile;
+    const previewUrl = videoPreviewUrl;
+    setTrimReopening(true);
+    const outcome = await resolveTrimReopen({
+      gate: trimReopenGate,
+      draft: { file, previewUrl },
+      getDraft: () => currentDraftRef.current,
+      previewDuration: previewVideoRef.current?.duration,
+      readDuration: () => readVideoDuration(file),
+    });
+    // A newer reopen owns the flag; otherwise this one is over.
+    if (!trimReopenGate.pending) setTrimReopening(false);
+    if (outcome.kind === "stale") return;
+    if (outcome.kind === "noDuration") {
       showToast(t("caddie.trimChangeError"), "warning");
       return;
     }
-    setPendingTrim({ file: videoFile, previewUrl: videoPreviewUrl, duration, editing: { start, end } });
+    setPendingTrim({ file, previewUrl, duration: outcome.duration, editing: { start, end } });
   }
 
   function removeVideo() {
+    trimReopenGate.cancel();
+    setTrimReopening(false);
     setDraftSwingVideo(undefined);
   }
 
   async function handleAnalyze() {
-    if (!videoFile || submitting || !authUser) return;
+    if (!authUser || !canStartAnalysis({ hasVideo: !!videoFile, submitting, selectorOpen: !!pendingTrim, reopening: trimReopening || trimReopenGate.pending })) return;
+    if (!videoFile) return;
     setSubmitting(true);
     // Brackets the one real gap where an app exit could genuinely lose a
     // swing with no trace — see UPLOAD_IN_PROGRESS_KEY's own comment.
@@ -346,7 +362,7 @@ export function AnalyzeSwing() {
             <span className="min-w-0 truncate text-xs font-semibold text-fairway-700">{videoFile.name}</span>
             <button
               onClick={removeVideo}
-              disabled={submitting}
+              disabled={submitting || trimReopening}
               className="-my-1.5 flex min-h-9 shrink-0 items-center gap-1 px-2 text-xs font-semibold text-red-600 hover:underline disabled:opacity-40"
             >
               <X size={12} /> {t("composer.remove")}
@@ -363,7 +379,8 @@ export function AnalyzeSwing() {
               <button
                 type="button"
                 onClick={changeTrim}
-                disabled={submitting}
+                disabled={submitting || trimReopening}
+                aria-busy={trimReopening || undefined}
                 className="-my-1.5 flex min-h-11 items-center gap-1 px-3 text-xs font-semibold text-fairway-700 underline-offset-2 hover:underline disabled:opacity-40 motion-safe:transition-opacity"
               >
                 <Scissors size={12} aria-hidden="true" /> {t("caddie.trimChange")}
@@ -389,7 +406,7 @@ export function AnalyzeSwing() {
       <Button
         size="lg"
         fullWidth
-        disabled={!videoFile || submitting || !!pendingTrim}
+        disabled={!canStartAnalysis({ hasVideo: !!videoFile, submitting, selectorOpen: !!pendingTrim, reopening: trimReopening })}
         onClick={handleAnalyze}
         icon={submitting ? <Loader2 size={16} className="animate-spin" /> : <ScanLine size={16} />}
       >
