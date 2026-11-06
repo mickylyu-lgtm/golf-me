@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Flag, Search, Share2, SlidersHorizontal, Sparkles } from "lucide-react";
+import { ArrowRight, Flag, Search, Share2, SlidersHorizontal, Users } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
 import { useLocale } from "../i18n/LocaleContext";
@@ -187,7 +187,7 @@ export function Discover({ embedded = false }: DiscoverProps) {
           <GolfMeLoader className="py-12" />
         ) : !isDemo && rawCandidates.length === 0 ? (
           <EmptyState
-            icon={<Sparkles size={20} />}
+            icon={<Users size={20} />}
             title={t("find.noRealGolfersYet")}
             description={t("find.noRealGolfersYetDesc")}
             action={

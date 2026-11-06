@@ -515,7 +515,7 @@ export const en = {
   "chat.copied": "Copied.",
   "chat.newMessages": "New messages",
   "chat.addPhoto": "Add a photo",
-  "chat.photo": "📷 Photo",
+  "chat.photo": "[Photo]",
   "chat.photoAlt": "Photo",
   "chat.openPhoto": "Open photo",
   "chat.removePhoto": "Remove photo",

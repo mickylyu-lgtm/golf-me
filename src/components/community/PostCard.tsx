@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
 import {
+  Activity,
   Bookmark,
   Loader2,
   MapPin,
@@ -11,7 +12,7 @@ import {
   ShieldCheck,
   ShieldOff,
   ShieldX,
-  Sparkles,
+  ScanLine,
   ThumbsUp,
   Trash2,
   Users,
@@ -559,7 +560,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
                 className="flex items-center justify-between gap-2 rounded-xl border border-fairway-100 bg-fairway-50/50 px-3.5 py-2.5 text-left transition-colors duration-150 hover:border-fairway-300"
               >
                 <span className="flex items-center gap-1.5 text-sm font-semibold text-fairway-800">
-                  <Sparkles size={14} /> {t("caddie.title")} {t("swingAnalysis.title")}
+                  <Activity size={14} /> {t("caddie.title")} {t("swingAnalysis.title")}
                 </span>
                 <span className="text-xs font-semibold text-brand-forest">{t("caddie.viewAnalysis")}</span>
               </button>
@@ -578,7 +579,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
                 <span className="text-sm font-semibold text-fairway-800">{t("caddie.analyzing")}</span>
               </div>
             ) : (
-              <Button variant="outline" size="sm" icon={<Sparkles size={14} />} onClick={askCaddie}>
+              <Button variant="outline" size="sm" icon={<ScanLine size={14} />} onClick={askCaddie}>
                 {t("caddie.askCaddie")}
               </Button>
             ))}

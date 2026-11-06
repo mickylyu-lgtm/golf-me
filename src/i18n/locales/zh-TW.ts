@@ -501,7 +501,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "chat.copied": "已複製。",
   "chat.newMessages": "新訊息",
   "chat.addPhoto": "新增照片",
-  "chat.photo": "📷 照片",
+  "chat.photo": "[照片]",
   "chat.photoAlt": "照片",
   "chat.openPhoto": "開啟照片",
   "chat.removePhoto": "移除照片",

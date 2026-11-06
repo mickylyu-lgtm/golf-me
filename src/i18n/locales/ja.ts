@@ -501,7 +501,7 @@ export const ja: Record<TranslationKey, string> = {
   "chat.copied": "コピーしました。",
   "chat.newMessages": "新着メッセージ",
   "chat.addPhoto": "写真を追加",
-  "chat.photo": "📷 写真",
+  "chat.photo": "[写真]",
   "chat.photoAlt": "写真",
   "chat.openPhoto": "写真を開く",
   "chat.removePhoto": "写真を削除",

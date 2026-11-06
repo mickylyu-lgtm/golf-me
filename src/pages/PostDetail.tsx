@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Sparkles } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useToast } from "../context/ToastContext";
 import { useRealCommunity } from "../context/RealCommunityContext";
@@ -181,7 +181,6 @@ export function PostDetail() {
       {!post.golfCallId && (
         <Button
           variant="outline"
-          icon={<Sparkles size={15} />}
           onClick={() =>
             navigate(`/golf-calls/new?fromPost=${post.id}${post.courseTag ? `&course=${encodeURIComponent(post.courseTag)}` : ""}`)
           }

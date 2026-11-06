@@ -501,7 +501,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "chat.copied": "已复制。",
   "chat.newMessages": "新消息",
   "chat.addPhoto": "添加照片",
-  "chat.photo": "📷 照片",
+  "chat.photo": "[照片]",
   "chat.photoAlt": "照片",
   "chat.openPhoto": "打开照片",
   "chat.removePhoto": "移除照片",

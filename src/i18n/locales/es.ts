@@ -501,7 +501,7 @@ export const es: Record<TranslationKey, string> = {
   "chat.copied": "Copiado.",
   "chat.newMessages": "Mensajes nuevos",
   "chat.addPhoto": "Añadir una foto",
-  "chat.photo": "📷 Foto",
+  "chat.photo": "[Foto]",
   "chat.photoAlt": "Foto",
   "chat.openPhoto": "Abrir foto",
   "chat.removePhoto": "Quitar foto",

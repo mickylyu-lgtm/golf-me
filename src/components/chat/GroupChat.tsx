@@ -381,7 +381,7 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
     else restoreRejectedText(m.text, m.replyToId ?? null);
   }
 
-  // One line for a quote / the reply bar: its text, or "📷 Photo".
+  // One line for a quote / the reply bar: its text, or "[Photo]".
   const previewOf = (m: ChatMessage) => messagePreviewText(m, t("chat.photo"));
 
   function senderName(senderId: string) {

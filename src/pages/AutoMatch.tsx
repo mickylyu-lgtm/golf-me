@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Info, MapPin, Plus, Share2, Sparkles, Users } from "lucide-react";
+import { ArrowLeft, Info, MapPin, Plus, Share2, Target, Users } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
 import { useRealRounds } from "../context/RealRoundsContext";
@@ -340,7 +340,7 @@ export function AutoMatch() {
 
       <div>
         <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
-          <Sparkles size={20} className="text-fairway-600" /> {t("autoMatch.title")}
+          <Target size={20} className="text-fairway-600" /> {t("autoMatch.title")}
         </h1>
         {/* Names the chosen day only when the results are still for it;
             once the date widened (or there are no rounds) it stays neutral. */}

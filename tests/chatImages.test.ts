@@ -233,12 +233,12 @@ test("progress: only 10% steps re-render", () => {
 
 // ---------------------------------------------------------------- previews + menu
 
-test("preview: '📷 Photo' for a photo, '📷 Photo caption' with text, text otherwise", () => {
+test("preview: '[Photo]' for a photo, '[Photo] caption' with text, text otherwise", () => {
   const image = { path: "p", width: 1, height: 1 };
-  assert.equal(messagePreviewText({ text: "", image }, "📷 Photo"), "📷 Photo");
-  assert.equal(messagePreviewText({ text: " nice drive ", image }, "📷 Photo"), "📷 Photo nice drive");
-  assert.equal(messagePreviewText({ text: "plain", image: null }, "📷 Photo"), "plain");
-  assert.equal(messagePreviewText({ text: "plain" }, "📷 Photo"), "plain");
+  assert.equal(messagePreviewText({ text: "", image }, "[Photo]"), "[Photo]");
+  assert.equal(messagePreviewText({ text: " nice drive ", image }, "[Photo]"), "[Photo] nice drive");
+  assert.equal(messagePreviewText({ text: "plain", image: null }, "[Photo]"), "plain");
+  assert.equal(messagePreviewText({ text: "plain" }, "[Photo]"), "plain");
 });
 
 test("menu: Copy hidden only when told (photo, no text, no image clipboard)", () => {

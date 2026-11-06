@@ -501,7 +501,7 @@ export const ko: Record<TranslationKey, string> = {
   "chat.copied": "복사했습니다.",
   "chat.newMessages": "새 메시지",
   "chat.addPhoto": "사진 추가",
-  "chat.photo": "📷 사진",
+  "chat.photo": "[사진]",
   "chat.photoAlt": "사진",
   "chat.openPhoto": "사진 열기",
   "chat.removePhoto": "사진 삭제",

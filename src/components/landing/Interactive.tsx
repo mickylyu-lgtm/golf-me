@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent, ReactNode } from "react";
-import { Check, Play, RotateCcw, Sparkles, Target, Users, Video } from "lucide-react";
+import { Check, Play, RotateCcw, ScanLine, Target, Users, Video } from "lucide-react";
 import { CaddieNavIcon } from "../icons/CaddieNavIcon";
 import { AppStoreButton } from "./AppStoreButton";
 import { DEFAULT_MOCK_GOLFERS, GolfersScreen, PhoneFrame, RoundsScreen, CaddieScreen } from "./PhoneMock";
@@ -565,7 +565,7 @@ export function CaddieDemo({ leftHanded = false }: { leftHanded?: boolean }) {
         <div className="p-4">
           <div className="flex items-center justify-between gap-3">
             <p className="flex items-center gap-2 text-sm font-semibold text-white" aria-live="polite">
-              {phase === "done" ? <Check size={15} className="text-fairway-300" /> : phase === "idle" ? <Sparkles size={15} className="text-sun-300" /> : <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-sun-300 border-t-transparent" />}
+              {phase === "done" ? <Check size={15} className="text-fairway-300" /> : phase === "idle" ? <ScanLine size={15} className="text-sun-300" /> : <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-sun-300 border-t-transparent" />}
               {stepLabel[phase]}
             </p>
             <div className="flex gap-1" aria-hidden="true">

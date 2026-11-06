@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, CalendarClock, Plus, Search, Share2, Sparkles, UserPlus, Users } from "lucide-react";
+import { Activity, ArrowRight, CalendarClock, Plus, Search, Share2, Target, UserPlus, Users } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
 import { useLocale } from "../i18n/LocaleContext";
@@ -260,7 +260,7 @@ export function Home() {
         {/* One tap, no form: saved preferences, area and travel radius
             (same link as the Rounds tab's Auto-Match button). */}
         <HomeActionCard
-          icon={<Sparkles size={18} />}
+          icon={<Target size={18} />}
           title={t("filters.autoMatchMe")}
           subtitle={t("autoMatch.oneTapSubtitle")}
           onClick={() => navigate(`/auto-match?${quickAutoMatchSearch(currentUser.travelRadiusMiles).toString()}`)}
@@ -363,7 +363,7 @@ export function Home() {
           className={`flex w-full items-center gap-3 p-4 text-left ${CLICKABLE_CARD_CLASS}`}
         >
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-fairway-50 text-fairway-700">
-            <Sparkles size={18} />
+            <Activity size={18} />
           </span>
           <span className="min-w-0 flex-1">
             <span className="block text-xs font-bold uppercase tracking-wide text-brand-forest">{t("caddie.title")}</span>

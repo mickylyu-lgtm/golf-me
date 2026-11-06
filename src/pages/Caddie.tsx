@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Clock, Globe, Sparkles, Trash2, Video } from "lucide-react";
+import { Clock, Globe, ScanLine, Trash2, Video } from "lucide-react";
 import { DeleteAnalysisDialog } from "../components/caddie/DeleteAnalysisDialog";
 import type { CaddieAnalysis } from "../types";
 import { useData } from "../context/DataContext";
@@ -160,7 +160,7 @@ export function Caddie() {
         </label>
       </div>
 
-      <Button size="lg" fullWidth icon={<Sparkles size={16} />} onClick={() => navigate("/caddie/analyze")}>
+      <Button size="lg" fullWidth icon={<ScanLine size={16} />} onClick={() => navigate("/caddie/analyze")}>
         {t("caddie.analyzeSwing")}
       </Button>
 

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { MapPin, Sparkles } from "lucide-react";
+import { MapPin, Video } from "lucide-react";
 import { useLocale } from "../../i18n/LocaleContext";
 
 interface CourseHeroProps {
@@ -71,7 +71,7 @@ export function CourseHero({ courseName, city, state, imageUrl, imageCredit, ima
             (deliberately generic) illustration underneath it. */}
         {showVideo && (
           <span className="absolute right-2.5 top-2.5 flex items-center gap-1 rounded-full bg-slate-900/55 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-sm">
-            <Sparkles size={11} className="shrink-0" />
+            <Video size={11} className="shrink-0" />
             {t("courseHero.aiPreview")}
           </span>
         )}

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ChevronRight, MapPinned, Plus, Search, Share2, SlidersHorizontal, Sparkles, X } from "lucide-react";
+import { ChevronRight, MapPinned, Plus, Search, Share2, SlidersHorizontal, Target, X } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
 import { useRealRounds } from "../context/RealRoundsContext";
@@ -142,7 +142,7 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
         className="flex items-center gap-3 rounded-2xl bg-gradient-to-br from-brand-forest to-brand-forest-deep px-4 py-3.5 text-left text-white shadow-sm transition active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2"
       >
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-fixed-white/15">
-          <Sparkles size={18} />
+          <Target size={18} />
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-base font-bold">{t("filters.autoMatchMe")}</span>

@@ -1,4 +1,4 @@
-import { Sparkles } from "lucide-react";
+import { Activity } from "lucide-react";
 import type { SwingAnalysisStatus } from "../../types";
 import type { SwingAnalysisSection } from "../../lib/swingAnalysis";
 import { useLocale } from "../../i18n/LocaleContext";
@@ -52,7 +52,7 @@ export function SwingAnalysisPanel({ status, result }: SwingAnalysisPanelProps) 
   return (
     <div className="flex flex-col gap-3 rounded-2xl border border-fairway-100 bg-fairway-50/40 p-4">
       <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-fairway-700">
-        <Sparkles size={13} /> {t("swingAnalysis.title")}
+        <Activity size={13} /> {t("swingAnalysis.title")}
       </p>
       <Section title={t("swingAnalysis.overall")}>{result.overallFeedback}</Section>
       <Section title={t("swingAnalysis.whatsWorking")}>

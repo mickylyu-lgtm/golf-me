@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Info, Loader2, Scissors, Sparkles, Video, X } from "lucide-react";
+import { ArrowLeft, Info, Loader2, Scissors, ScanLine, Video, X } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
@@ -433,7 +433,7 @@ export function AnalyzeSwing() {
         fullWidth
         disabled={!videoFile || submitting || !!pendingTrim}
         onClick={handleAnalyze}
-        icon={submitting ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+        icon={submitting ? <Loader2 size={16} className="animate-spin" /> : <ScanLine size={16} />}
       >
         {submitting ? t("caddie.analyzing") : t("caddie.askCaddie")}
       </Button>

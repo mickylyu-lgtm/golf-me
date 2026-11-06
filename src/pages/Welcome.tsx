@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, ChevronRight, MessageCircle, Sparkles, Users } from "lucide-react";
+import { Check, ChevronRight, MessageCircle, Video, Users } from "lucide-react";
 import { LandingNav } from "../components/landing/LandingNav";
 import { AppStoreButton } from "../components/landing/AppStoreButton";
 import { FoundingCounter } from "../components/landing/FoundingCounter";
@@ -224,7 +224,7 @@ export function Welcome() {
                 {[
                   { icon: <MessageCircle size={14} />, label: "Chat" },
                   { icon: <Users size={14} />, label: "Golf Circle" },
-                  { icon: <Sparkles size={14} />, label: "Swing Posts" },
+                  { icon: <Video size={14} />, label: "Swing Posts" },
                 ].map((c) => (
                   <div key={c.label} className="flex items-center justify-center gap-1.5 rounded-xl border border-slate-100 bg-white px-2 py-2 text-[11px] font-semibold text-slate-700 shadow-sm">
                     <span className="text-fairway-700">{c.icon}</span> {c.label}

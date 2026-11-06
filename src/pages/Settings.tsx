@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Capacitor } from "@capacitor/core";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, ArrowLeft, Bell, ChevronRight, CircleHelp, Eye, EyeOff, Globe, Info, Lock, LogOut, MapPin, Moon, RotateCcw, ShieldCheck, ShieldOff, Smartphone, Sparkles, Sun, User, Users } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Bell, ChevronRight, CircleHelp, Eye, EyeOff, Globe, Info, Lock, LogOut, MapPin, Moon, RotateCcw, ShieldCheck, ShieldOff, Smartphone, Wrench, Sun, User, Users } from "lucide-react";
 import { setAppearance, useAppearanceSetting } from "../lib/useAppearance";
 import type { AppearanceSetting } from "../lib/appearance";
 import { APPEARANCE_TUTORIAL_ID } from "../lib/tutorialSteps";
@@ -493,7 +493,7 @@ export function Settings() {
       {isDemo && (
       <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 p-4">
         <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
-          <Sparkles size={12} /> Prototype tools
+          <Wrench size={12} /> Prototype tools
         </p>
         <p className="mb-3 text-xs text-slate-500">
           Currently previewing as <strong>{currentUser.name}</strong> ({golfers.length} demo profiles available).
