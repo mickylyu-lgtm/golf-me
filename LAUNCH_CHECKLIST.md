@@ -214,8 +214,8 @@ Record results here with date, device and build number.
 - [ ] Run blocker 1 checks on the 1.1 App Store build.
 - Every later native change ships as a new App Store version: `git pull` + `npx cap sync ios` on the Mac, bump Version/Build in Xcode, archive, upload, submit.
 
-## 10a. NEXT BUILD: 2.4 (1) TESTFLIGHT (prepared 2026-11-06, branch `chore/testflight-next`; NOT ready to archive until `@capacitor/camera` lands)
-Prepared 2026-11-06 on branch `chore/testflight-next` (worktree `.claude/worktrees/testflight-next`, based on origin/main 801fa77; not committed or pushed yet). The last uploaded build was **2.3 (1)**. This one is **2.4 (1)**.
+## 10a. NEXT BUILD: 2.4 (1) TESTFLIGHT (prepared 2026-11-06, branch `chore/testflight-next`, includes the one-tap photo picker)
+Prepared 2026-11-06 on branch `chore/testflight-next` (worktree `.claude/worktrees/testflight-next`, rebased on origin/main 7d0e0d8; ready to archive once merged to main). The last uploaded build was **2.3 (1)**. This one is **2.4 (1)**.
 
 #### 0. What is native in this build (needs the Xcode archive)
 
@@ -225,6 +225,7 @@ Prepared 2026-11-06 on branch `chore/testflight-next` (worktree `.claude/worktre
 | `ios/App/App/AppleSignInPlugin.swift` | New app-local plugin `GolfMeAppearance` (`setAppearance({appearance: light/dark/system})`). It sets the window's interface style, so the status bar text, the photo picker, camera, share and Apple sheets follow the app's Light/Dark setting instead of the iPhone's. The web view and its scroll view get a light/dark page colour (cream `#faf9f6` / `#0d1210`) instead of fixed cream. |
 | `ios/App/App/SceneDelegate.swift` | Window background = the same light/dark page colour (behind the web view while the keyboard animates). |
 | `ios/App/App/Info.plist` | Permission strings rewritten (below), plus a new `NSPhotoLibraryAddUsageDescription` (iOS's "Save Image" on a photo would crash without it). |
+| `ios/App/App/MediaPickerPlugin.swift` (new) | App-local plugin `GolfMeMediaPicker`: Apple's PHPicker with a single selection, so one tap picks the photo and closes the picker (no "1 Photo Selected" screen, no library permission prompt). Returns a metadata-free JPEG; the web still re-encodes it. Registered in `AppleSignInPlugin.swift` and added to `project.pbxproj`. Gallery only (no camera inside this picker). `@capacitor/camera` was evaluated and rejected: its gallery picker needs a "Done" tap and full library access. |
 | `capacitor.config.ts` | Comment only (backgroundColor is now replaced natively). |
 
 Web side (ships with a Vercel deploy and works on old builds too): `src/lib/nativeAppearance.ts` + one line in `useAppearance.ts`. On every appearance change it calls the new plugin (only if the build has it) and `Keyboard.setStyle` (in every build, so **the dark keyboard fix also reaches 2.3 users** after the web deploy). Test: `tests/nativeAppearance.test.ts`.
@@ -240,12 +241,10 @@ Permission strings (English only; the app has no `InfoPlist.strings` translation
 
 #### 1. On the Mac
 
-> **NOT READY TO ARCHIVE YET.** 2.4 (1) will also include `@capacitor/camera` (native one-tap photo pick for the chat image button), which the golfme-architect is building separately. Don't run steps 3–9 until that is merged to main. Then `npm install` brings in the plugin, and `npm run ios:sync` should report **7** Capacitor plugins (adds `@capacitor/camera`) and change `ios/App/CapApp-SPM/Package.swift` (commit that change). The camera and photo-library strings below already cover it. Re-check this list against the merged main before archiving.
-
 1. **Get the branch.** Your local `project.pbxproj` changes (Team, version) will block the pull, so stash them first:
    `git stash` → `git pull` (after this branch is merged to main) → `git stash pop`. If `stash pop` conflicts in `project.pbxproj`, keep **2.4 / 1** for the version lines and keep your `DEVELOPMENT_TEAM` lines.
 2. `npm install` (no new packages, but it keeps node_modules in step with the lockfile).
-3. `npm run ios:sync`. It builds the web app and runs `npx cap sync ios`. Expect "Found 7 Capacitor plugins" once `@capacitor/camera` has landed (6 without it); `Package.swift` then gains CapacitorCamera.
+3. `npm run ios:sync`. It builds the web app and runs `npx cap sync ios`. Expect "Found 6 Capacitor plugins" and no `Package.swift` change (the two new plugins are app-local Swift files, not packages).
 4. `npm run ios:open` (or open `ios/App/App.xcodeproj`).
 5. Xcode: scheme **App**, destination **Any iOS Device (arm64)**.
 6. Target App → General: check **Version 2.4**, **Build 1**. Signing & Capabilities: Team set; capabilities Push Notifications, Sign in with Apple and Associated Domains (`applinks:golfme.app`) all present.
@@ -279,7 +278,7 @@ Permission strings (English only; the app has no `InfoPlist.strings` translation
 - [ ] Haptics: light tap on buttons, tabs, bell and inbox rows; medium on Send; success after Join, Host and Post. Press-down scale doesn't flicker when a scroll starts on an Inbox row.
 - [ ] DMs: hold a message → lifted bubble + reactions menu (also with the keyboard open; the keyboard stays up); reactions, Reply, Copy, Unsend (5 min); swipe left for times; swipe right to reply; Send keeps the keyboard open; long messages grow the box without jumping; a failed send shows Retry/Discard; Back from a push-opened thread lands on Inbox; new-messages pill.
 - [ ] Round chat: the same hold menu, reactions, reply and unsend, on the round page card with the composer docked over the keyboard and on `/messages/round/…`; two accounts reacting and unsending live.
-- [ ] **Native photo pick (new in 2.4, `@capacitor/camera`)**: the chat photo button opens the iOS picker in one tap with no extra confirm screen; Camera and Library both work; cancelling leaves the composer and keyboard as they were; the permission prompts show the new text; denied permission shows a clear message.
+- [ ] **One-tap photo pick (new in 2.4, `MediaPickerPlugin.swift`)**: DM and round chat photo button → Apple's picker with no permission alert → tap one photo → it closes at once (no "1 Photo Selected" / ✓ screen) and the chip appears. Try portrait, HEIC, a screenshot/PNG and an iCloud-only photo (all upright). Cancel and swipe-down attach nothing and the button still works; a quick double tap opens one picker; pick with the keyboard open, then type and send (composer behaves as before). A sent photo downloaded has no location. Demo and real account.
 - [ ] Chat photos (**only after migration `20261107170000_chat_images` is applied**; the button stays hidden until then): library and camera, a HEIC from the camera roll, portrait orientation, the chip with the keyboard open, progress on a slow network, push text "sent a photo", unsend removes it on the other phone.
 - [ ] Reaction "+" emoji picker (after migration `20261107160000`): grid scrolls inside the overlay, search, skin tones.
 - [ ] Voice messages (when shipped): hold to talk, mic prompt, playback with the silent switch on, app backgrounded mid-recording.
@@ -323,7 +322,7 @@ The baseline is 2026-10-29: the last native commit was f1f0db1 on 2026-10-28, an
 - Send keeps the keyboard open; the message box grows smoothly; a failed send shows Retry/Discard and never overwrites what you typed next.
 - Opening a chat from a notification no longer jumps; a "new messages" pill; always scrolls to your newest message after sending.
 - Photos in chat: a photo button next to the emoji button, location data stripped, private to the chat (switches on once the server update is applied).
-- Faster photo picking in chats: one tap opens the native picker, with no extra confirm screen (new native plugin in 2.4).
+- Faster photo picking in chats: tap a photo and it's in the chat, with no extra confirm screen and no permission prompt (new in 2.4).
 - "+" opens the full emoji picker for any reaction (once its server update is applied).
 - Unsent drafts are cleared on sign-out and account deletion.
 
@@ -379,7 +378,7 @@ GolfMe 2.4 (1)
 New in this build (native):
 - Dark mode now reaches the system parts of the app. Try Settings > Appearance > Dark while your iPhone is in Light mode (and the reverse). Check the status bar text, the keyboard, the photo picker, camera and share sheets. There should be no cream edges when the keyboard opens or closes.
 - Match iPhone: switch your iPhone between Light and Dark while GolfMe is open. Everything should follow.
-- Chat photo button: one tap should open the native photo picker (no extra confirm screen). Try Camera and Library, and cancelling.
+- Chat photo button: tap one photo and it should go straight into the chat (no "1 Photo Selected" confirm screen, no permission pop-up). Try portrait, HEIC and iCloud photos, and cancelling.
 - New permission wording for camera, photos and microphone. Long-press a photo and choose Save: it should ask for permission, not crash.
 
 Please also try (shipped recently):
