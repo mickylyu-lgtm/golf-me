@@ -210,6 +210,25 @@
      both to their end frame: level, and no shine. */
   --animate-club-settle: club-settle 360ms cubic-bezier(0.34, 1.45, 0.64, 1);
   --animate-club-shine: club-shine 700ms cubic-bezier(0.45, 0, 0.25, 1) 60ms both;
+  /* Verified Golfer medallion (VerifiedMedallion): one soft specular sweep the
+     first time a golfer sees the earned badge. Under prefers-reduced-motion the
+     global rule collapses it to its end frame: no shine, static medallion. */
+  --animate-medallion-shine: medallion-shine 1100ms cubic-bezier(0.45, 0, 0.25, 1) 300ms both;
+
+  @keyframes medallion-shine {
+    0% {
+      transform: translateX(-130%) rotate(20deg);
+      opacity: 0;
+    }
+    20%,
+    75% {
+      opacity: 1;
+    }
+    100% {
+      transform: translateX(130%) rotate(20deg);
+      opacity: 0;
+    }
+  }
 
   @keyframes club-settle {
     0% {

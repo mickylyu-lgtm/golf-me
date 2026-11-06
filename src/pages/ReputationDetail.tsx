@@ -10,6 +10,7 @@ import { Button } from "../components/ui/Button";
 import { ReputationRow } from "../components/golfer/ReputationRow";
 import { ReputationBadge, ReputationShieldIcon } from "../components/golfer/ReputationBadge";
 import { VerifyStepModal } from "../components/profile/VerifyStepModal";
+import { VerifiedGolferCard } from "../components/golfer/VerifiedGolferCard";
 import { computeHandicapConfidence } from "../lib/credibility";
 import { useCredibilityStats } from "../lib/useCredibility";
 import { useReputationState } from "../lib/useReputationState";
@@ -19,7 +20,7 @@ import { supabase } from "../lib/supabase";
 import { goBack } from "../lib/goBack";
 
 export function ReputationDetail() {
-  const { currentUser, reviewsAbout, setEmailVerified, syncDemoVerifiedGolfer } = useData();
+  const { currentUser, reviewsAbout, setEmailVerified, syncDemoVerifiedGolfer, updateCurrentUserProfile } = useData();
   const { isDemo, authUser } = useAuth();
   const { showToast } = useToast();
   const { t } = useLocale();
@@ -163,9 +164,24 @@ export function ReputationDetail() {
         )}
       </div>
 
-      <div className="rounded-2xl border border-slate-100 bg-white p-4">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">{t("reputation.trustVerification")}</p>
-        <div className="flex flex-col gap-2.5">
+      <div className="rounded-2xl border border-slate-100 bg-white p-5">
+        <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-slate-400">{t("reputation.trustVerification")}</p>
+        {verified.status === "ready" ? (
+          <VerifiedGolferCard
+            userId={currentUser.id}
+            checklist={verified.checklist}
+            onPhotoAdded={(photoUrl) => updateCurrentUserProfile({ photoUrl })}
+            confirmEmail={
+              isDemo
+                ? { onClick: () => setVerifyingEmail(true), busy: false }
+                : authUser?.email
+                  ? { onClick: resendConfirmationEmail, busy: resending }
+                  : null
+            }
+          />
+        ) : (
+          // Real account before migration 20261107230000 is applied (or while
+          // the status loads): the email row only, exactly as before.
           <div className="flex items-center gap-3 rounded-xl border border-slate-100 px-3.5 py-3">
             <Mail size={16} className="text-slate-400" />
             <div className="flex-1">
@@ -190,49 +206,7 @@ export function ReputationDetail() {
               </Button>
             )}
           </div>
-          {verified.status === "ready" && (
-            <div className="rounded-xl border border-slate-100 px-3.5 py-3" data-testid="verified-golfer-checklist">
-              <div className="flex items-center gap-3">
-                <ShieldCheck size={16} className={verified.checklist.verified ? "text-fairway-600" : "text-slate-400"} />
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-slate-800">{t("reputation.verifiedBadge")}</p>
-                  <p className="text-xs text-slate-500">
-                    {verified.checklist.verified ? t("reputation.verifiedBadgeActive") : t("reputation.verifiedBadgeInactive")}
-                  </p>
-                </div>
-                {verified.checklist.verified && (
-                  <Badge tone="fairway" icon={<ShieldCheck size={11} />}>
-                    {t("reputation.active")}
-                  </Badge>
-                )}
-              </div>
-              <ul className="mt-3 flex flex-col gap-2 border-t border-slate-100 pt-3">
-                {(
-                  [
-                    ["identity", verified.checklist.identityConfirmed, t("reputation.verifiedCheck.identity")],
-                    ["photo", verified.checklist.hasPhoto, t("reputation.verifiedCheck.photo")],
-                    ["round", verified.checklist.hasQualifyingRound, t("reputation.verifiedCheck.round")],
-                  ] as const
-                ).map(([key, done, label]) => (
-                  <li key={key} className="flex items-center gap-2.5" data-check={key} data-done={done ? "true" : "false"}>
-                    <span
-                      aria-hidden="true"
-                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
-                        done ? "bg-fairway-600 text-white" : "border-2 border-slate-200"
-                      }`}
-                    >
-                      {done && <Check size={12} strokeWidth={3} />}
-                    </span>
-                    <span className={`flex-1 text-sm ${done ? "text-slate-800" : "text-slate-600"}`}>{label}</span>
-                    <span className={`text-xs font-semibold ${done ? "text-fairway-700" : "text-slate-400"}`}>
-                      {done ? t("reputation.verifiedCheck.done") : t("reputation.verifiedCheck.notYet")}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
+        )}
       </div>
 
       {isDemo && verifyingEmail && (

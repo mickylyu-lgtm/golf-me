@@ -14,7 +14,7 @@ import { largestPhotoUrl } from "../../lib/providerPhoto";
 // it, and re-encodes as a JPEG data URL. Keeps localStorage lean without
 // needing any upload endpoint. Swap for real object storage (e.g. Supabase
 // Storage) later — callers only ever see a string URL either way.
-function resizeImageToSquareDataUrl(file: File, size = 320): Promise<string> {
+export function resizeImageToSquareDataUrl(file: File, size = 320): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {

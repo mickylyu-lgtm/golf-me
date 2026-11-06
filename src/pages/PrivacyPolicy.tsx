@@ -127,6 +127,12 @@ export function PrivacyPolicy() {
           Rounds you've completed and the ratings other golfers give you (show-up, on-time, pace, respect, would play again), which we
           combine into your GolfMe reputation.
         </Item>
+        <Item label="Verified Golfer badge">
+          The badge is worked out automatically from three things: whether your email address is confirmed or you signed in with Apple
+          or Google, whether you have a profile photo, and whether you've completed at least one round with another golfer. You can see
+          your own checklist; other members only see whether the badge is shown, never your email, how you sign in or the individual
+          checklist items. We don't collect or verify a phone number.
+        </Item>
         <Item label="Notifications">
           If you turn on push notifications, a device token from Apple that lets us send notifications to your phone, and your
           notification settings. We send push notifications for messages, people joining your rounds and changes to rounds you've joined,
