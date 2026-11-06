@@ -33,6 +33,7 @@ import type { MessageReaction, QuickReaction } from "../lib/reactions";
 import { createReactionWriteQueue } from "../lib/reactionWrites";
 import { createReactionSeqClock, reactionSeqFromRow, sendReactionWrite } from "../lib/reactionOrder";
 import type { OrderingSupport, ReactionTransport } from "../lib/reactionOrder";
+import { PROBE_EMOJI, customReactionSupport } from "../lib/customReactions";
 import type { ChatMessage, GolfCall, GolferProfile } from "../types";
 import type { ReviewInput } from "./DataContext";
 
@@ -208,6 +209,8 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
     }
     reactionsSupportRef.current = "yes";
     setReactionsSupport("yes");
+    // Custom emoji ("+" in the hold menu): asked once per page load.
+    void customReactionSupport.probe(() => supabase.rpc("is_reaction_emoji", { p_emoji: PROBE_EMOJI }));
     const rows = (data ?? []) as { message_id?: unknown; user_id?: unknown; emoji?: unknown; client_seq?: unknown }[];
     // My stored sequences (any device, tombstones too) keep my next write above them.
     for (const row of rows) {

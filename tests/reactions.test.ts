@@ -9,8 +9,10 @@ import {
   QUICK_REACTIONS,
   canReactToMessage,
   groupReactionsByMessage,
+  isCustomReaction,
   isMissingReactionsTableError,
   isQuickReaction,
+  isReactionEmoji,
   myReaction,
   nextReaction,
   overlayPendingReactions,
@@ -34,14 +36,37 @@ test("reactions: exactly the six Instagram-style emoji, heart with U+FE0F", () =
   for (const e of QUICK_REACTIONS) assert.equal(isQuickReaction(e), true);
 });
 
-test("reactions: the client's list matches the migration's check constraint", () => {
-  const sql = readFileSync(new URL("../supabase/migrations/20261105150000_add_dm_message_reactions.sql", import.meta.url), "utf8");
-  const check = sql.match(/check \(emoji in \(([^)]*)\)\)/);
-  assert.ok(check, "check constraint present");
-  const decoded = [...check[1].matchAll(/U&'((?:\\(?:\+[0-9A-F]{6}|[0-9A-F]{4}))+)'/gi)].map((m) =>
+const decodeSix = (list: string) =>
+  [...list.matchAll(/U&'((?:\\(?:\+[0-9A-F]{6}|[0-9A-F]{4}))+)'/gi)].map((m) =>
     m[1].replace(/\\\+([0-9A-F]{6})|\\([0-9A-F]{4})/gi, (_, six, four) => String.fromCodePoint(parseInt(six ?? four, 16))),
   );
-  assert.deepEqual(decoded, [...QUICK_REACTIONS]);
+
+test("reactions: the quick row is the first migration's six (and its rollback target)", () => {
+  for (const file of ["20261105150000_add_dm_message_reactions.sql", "20261107130000_round_chat_parity.sql"]) {
+    const sql = readFileSync(new URL(`../supabase/migrations/${file}`, import.meta.url), "utf8");
+    const check = sql.match(/check \(emoji in \(([^)]*)\)\)/);
+    assert.ok(check, `${file}: six-emoji check present`);
+    assert.deepEqual(decodeSix(check[1]), [...QUICK_REACTIONS], file);
+  }
+  // The custom-emoji migration's rollback restores exactly these six.
+  const custom = readFileSync(new URL("../supabase/migrations/20261107160000_custom_reaction_emoji.sql", import.meta.url), "utf8");
+  const rollback = custom.match(/emoji not in \(([^)]*)\)/);
+  assert.ok(rollback, "rollback lists the six");
+  assert.deepEqual(decodeSix(rollback[1]), [...QUICK_REACTIONS]);
+});
+
+test("reactions: the current check on both tables is is_reaction_emoji, which takes the six", () => {
+  const sql = readFileSync(new URL("../supabase/migrations/20261107160000_custom_reaction_emoji.sql", import.meta.url), "utf8");
+  for (const table of ["message_reactions", "round_message_reactions"]) {
+    assert.match(sql, new RegExp(`alter table public\\.${table} drop constraint ${table}_emoji_check;`), table);
+    assert.match(
+      sql,
+      new RegExp(`add constraint ${table}_emoji_check check \\(emoji is null or public\\.is_reaction_emoji\\(emoji\\)\\);`),
+      `${table}: same constraint name (refusal detection), NULL = tombstone`,
+    );
+  }
+  for (const e of QUICK_REACTIONS) assert.equal(isReactionEmoji(e), true, e);
+  assert.equal(isReactionEmoji("❤"), false, "bare heart still refused");
 });
 
 test("reactions: tapping the same emoji removes it, another replaces it", () => {
@@ -96,15 +121,45 @@ test("reactions: grouping by message keeps every row once", () => {
   assert.deepEqual(summarizeReactions(g.get("m1") ?? [], "m1", "b"), summarizeReactions(rows, "m1", "b"));
 });
 
-test("reactions: fetched rows are validated, unknown emoji dropped", () => {
+test("reactions: fetched rows are validated: custom emoji kept, text / tombstones dropped", () => {
   assert.deepEqual(
     reactionRowsToReactions([
       { message_id: "m1", user_id: "a", emoji: HEART, conversation_id: "c" } as never,
       { message_id: "m1", user_id: "b", emoji: "🔥" },
+      { message_id: "m1", user_id: "c", emoji: "lol" },
+      { message_id: "m1", user_id: "d", emoji: "🔥🔥" },
+      { message_id: "m1", user_id: "e", emoji: null },
       { message_id: 7, user_id: "b", emoji: HEART },
     ]),
-    [{ messageId: "m1", userId: "a", emoji: HEART }],
+    [
+      { messageId: "m1", userId: "a", emoji: HEART },
+      { messageId: "m1", userId: "b", emoji: "🔥" },
+    ],
   );
+});
+
+test("reactions: custom = a valid emoji outside the quick row", () => {
+  assert.equal(isCustomReaction("🔥"), true);
+  assert.equal(isCustomReaction(HEART), false);
+  assert.equal(isCustomReaction("hi"), false);
+  assert.equal(isCustomReaction(null), false);
+  assert.equal(isQuickReaction("🔥"), false);
+});
+
+test("reactions: custom emoji in the pill sort after the six on ties, first seen first", () => {
+  const rows: MessageReaction[] = [
+    { messageId: "m", userId: "a", emoji: "⛳" },
+    { messageId: "m", userId: "b", emoji: THUMBS },
+    { messageId: "m", userId: "me", emoji: "🔥" },
+    { messageId: "m", userId: "c", emoji: "🔥" },
+  ];
+  assert.deepEqual(summarizeReactions(rows, "m", "me"), [
+    { emoji: "🔥", count: 2, mine: true },
+    { emoji: THUMBS, count: 1, mine: false },
+    { emoji: "⛳", count: 1, mine: false },
+  ]);
+  assert.equal(nextReaction("🔥", "🔥"), null, "picking my custom one again removes it");
+  assert.equal(nextReaction("🔥", HEART), HEART);
 });
 
 test("reactions: writes in flight win over a fetch that started before them", () => {

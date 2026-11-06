@@ -1,9 +1,19 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { lockHoldSelection } from "../../lib/holdSelectionLock";
-import { Copy, Reply, Undo2 } from "lucide-react";
+import { Copy, Plus, Reply, Undo2 } from "lucide-react";
 import type { MessageAction } from "../../lib/messageLongPress";
 import { FOCUS_EXIT_MS, currentPressScale, focusLayout, overhangBelow, type FocusLayout, type Rect } from "../../lib/messageFocus";
-import type { QuickReaction } from "../../lib/reactions";
+import { isCustomReaction, type QuickReaction } from "../../lib/reactions";
+import { customReactionSupport } from "../../lib/customReactions";
+import { defaultStorage, rememberRecentEmoji } from "../../lib/emojiPicker";
+import { textEntryElement } from "../../lib/keyboard/fields";
+import { useAuth } from "../../context/AuthContext";
+import { useLocale } from "../../i18n/LocaleContext";
+
+// The full picker behind "+" (and its emoji data) is its own chunk, loaded
+// on the first tap.
+const ReactionEmojiPicker = lazy(() => import("./ReactionEmojiPicker"));
 
 interface MessageActionsMenuProps {
   // The bubble it was opened on (measured and copied on open).
@@ -97,6 +107,46 @@ export function MessageActionsMenu({ bubble, alignRight, closing, reactions, act
   const downOnMenu = useRef(false);
   const animations = useRef<Animation[]>([]);
   const [layout, setLayout] = useState<{ natural: Rect; focus: FocusLayout; from: number; reduced: boolean } | null>(null);
+  const { isDemo } = useAuth();
+  const { t } = useLocale();
+  // "+" (any emoji) only where the database takes custom emoji (demo: no
+  // database; real: lib/customReactions.ts). Decided once on open, so the
+  // row keeps the width focusLayout measured.
+  const [plusShown] = useState(() => isDemo || customReactionSupport.get() === "yes");
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerOpenRef = useRef(false);
+  const focusBeforePicker = useRef<Element | null>(null);
+
+  // The picker's search field may have the focus: hand it back to the field
+  // that had it before "+" (the composer: its keyboard stays up), or let it
+  // go (the keyboard closes; it was closed before). Called from inside the
+  // tap / key handler that closes, so iOS keeps the keyboard for the
+  // composer. Refs only: stable.
+  const handBackFocus = useRef(() => {
+    if (!pickerOpenRef.current) return;
+    const active = document.activeElement;
+    if (!(active instanceof HTMLElement) || !active.closest("[data-emoji-picker]")) return;
+    const field = textEntryElement(focusBeforePicker.current);
+    if (field && field.isConnected) field.focus({ preventScroll: true });
+    else active.blur();
+  }).current;
+
+  const openPicker = () => {
+    focusBeforePicker.current = document.activeElement;
+    pickerOpenRef.current = true;
+    setPickerOpen(true);
+    const menu = menuRef.current;
+    if (menu) {
+      const fade = play(menu, [{ opacity: getComputedStyle(menu).opacity }, { opacity: 0 }], { duration: layout?.reduced ? 100 : 140, easing: "ease-in" });
+      if (fade) animations.current.push(fade);
+    }
+  };
+
+  const pickFromPicker = (emoji: string) => {
+    handBackFocus();
+    rememberRecentEmoji(defaultStorage(), emoji);
+    reactions?.onPick(emoji);
+  };
 
   // Open: measure, copy, hide the real bubble (opacity only: no layout
   // change, and it stays a hit target, so a new hold during the exit works).
@@ -229,20 +279,28 @@ export function MessageActionsMenu({ bubble, alignRight, closing, reactions, act
   // after it closes (lib/holdSelectionLock).
   useEffect(() => lockHoldSelection(), []);
 
+  // While the picker is open, scrolls (its own grid, the page panning for
+  // its search field) and resizes (the keyboard opening for it) don't
+  // close: the picker re-fits itself to the visible area instead.
   useEffect(() => {
     if (closing) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Escape") return;
+      handBackFocus();
+      onClose();
+    };
+    const onMove = () => {
+      if (!pickerOpenRef.current) onClose();
     };
     document.addEventListener("keydown", onKey);
-    window.addEventListener("scroll", onClose, true);
-    window.addEventListener("resize", onClose);
+    window.addEventListener("scroll", onMove, true);
+    window.addEventListener("resize", onMove);
     return () => {
       document.removeEventListener("keydown", onKey);
-      window.removeEventListener("scroll", onClose, true);
-      window.removeEventListener("resize", onClose);
+      window.removeEventListener("scroll", onMove, true);
+      window.removeEventListener("resize", onMove);
     };
-  }, [onClose, closing]);
+  }, [onClose, closing, handBackFocus]);
 
   const item =
     "flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-sm transition-colors duration-150 focus-visible:outline-none focus-visible:bg-slate-50";
@@ -265,11 +323,15 @@ export function MessageActionsMenu({ bubble, alignRight, closing, reactions, act
         }}
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => {
-          if (downOnBackdrop.current) onClose();
+          if (downOnBackdrop.current) {
+            handBackFocus();
+            onClose();
+          }
           downOnBackdrop.current = false;
         }}
         onContextMenu={(e) => {
           e.preventDefault();
+          handBackFocus();
           onClose();
         }}
       />
@@ -304,9 +366,10 @@ export function MessageActionsMenu({ bubble, alignRight, closing, reactions, act
           }
           downOnMenu.current = false;
         }}
-        role={closing ? undefined : "menu"}
-        aria-label={closing ? undefined : labels.menu}
-        className={`fixed flex flex-col gap-2 ${alignRight ? "items-end" : "items-start"}`}
+        role={closing || pickerOpen ? undefined : "menu"}
+        aria-label={closing || pickerOpen ? undefined : labels.menu}
+        aria-hidden={pickerOpen || undefined}
+        className={`fixed flex flex-col gap-2 ${alignRight ? "items-end" : "items-start"} ${pickerOpen ? "pointer-events-none" : ""}`}
         style={
           focus
             ? {
@@ -340,6 +403,33 @@ export function MessageActionsMenu({ bubble, alignRight, closing, reactions, act
                 </button>
               );
             })}
+            {plusShown && (
+              // Far right: every other emoji. My custom reaction (not one of
+              // the six) shows here, highlighted; the six stay fixed.
+              <button
+                type="button"
+                role="menuitem"
+                aria-haspopup="dialog"
+                aria-expanded={pickerOpen}
+                aria-label={isCustomReaction(reactions.mine) ? `${t("chat.moreReactions")} (${reactions.mine})` : t("chat.moreReactions")}
+                data-more-reactions
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={openPicker}
+                className={`flex h-10 w-10 items-center justify-center rounded-full text-[1.45rem] leading-none transition-transform duration-150 select-none hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 motion-reduce:transition-none motion-reduce:hover:scale-100 ${
+                  isCustomReaction(reactions.mine) ? "bg-fairway-100" : ""
+                }`}
+              >
+                <span aria-hidden="true" data-emoji-glyph>
+                  {isCustomReaction(reactions.mine) ? (
+                    reactions.mine
+                  ) : (
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 dark:bg-slate-200">
+                      <Plus size={18} strokeWidth={2.25} />
+                    </span>
+                  )}
+                </span>
+              </button>
+            )}
           </div>
         )}
         <div className="min-w-44 overflow-hidden rounded-xl border border-slate-100 bg-white py-1 shadow-lg dark:border-slate-200 dark:bg-slate-100">
@@ -360,6 +450,18 @@ export function MessageActionsMenu({ bubble, alignRight, closing, reactions, act
           )}
         </div>
       </div>
+      {/* The picker sits outside this layer (portal): the layer's
+          touch-none would stop its grid from scrolling, and the layer
+          itself stays exactly as it was. Above it in the stacking order
+          (same z-50, later in the document). */}
+      {pickerOpen &&
+        reactions &&
+        createPortal(
+          <Suspense fallback={null}>
+            <ReactionEmojiPicker mine={reactions.mine} onPick={pickFromPicker} closing={closing} reducedMotion={layout?.reduced ?? false} />
+          </Suspense>,
+          document.body,
+        )}
     </div>
   );
 }

@@ -33,6 +33,7 @@ import {
 } from "../lib/chatImages";
 import type { ChatImageRef, ImageRowColumns, ImageSendFailure, ImageSupport, ProcessedChatImage } from "../lib/chatImages";
 import { chatImageUrls, removeChatImage, resetChatImageUrls, uploadChatImage } from "../lib/chatImageClient";
+import { PROBE_EMOJI, customReactionSupport } from "../lib/customReactions";
 
 interface ConversationParticipantRow {
   conversation_id: string;
@@ -441,6 +442,8 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       }
       reactionsSupportRef.current = "yes";
       setReactionsSupport("yes");
+      // Custom emoji ("+" in the hold menu): asked once per page load.
+      void customReactionSupport.probe(() => supabase.rpc("is_reaction_emoji", { p_emoji: PROBE_EMOJI }));
       const rows = (data ?? []) as { message_id?: unknown; user_id?: unknown; emoji?: unknown; client_seq?: unknown }[];
       // Ordering: the rows prove the migration, and my stored sequences
       // (any device, tombstones included) keep the next write above them.

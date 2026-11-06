@@ -46,3 +46,7 @@ export function isDmThreadPath(pathname: string): boolean {
 // Containers that handle their own keyboard reveal / drag behaviour.
 export const KEYBOARD_REVEAL_OPT_OUT_SELECTOR = '[data-keyboard-reveal="off"]';
 export const KEYBOARD_DRAG_DISMISS_OPT_OUT_SELECTOR = '[data-keyboard-drag-dismiss="off"]';
+// A field that borrows the keyboard for a moment over a chat (the reaction
+// emoji picker's search, which hands the focus back when it closes): a
+// docked composer keeps owning the keyboard meanwhile (useComposerFocus).
+export const KEEPS_COMPOSER_FOCUS_SELECTOR = "[data-keeps-composer-focus]";

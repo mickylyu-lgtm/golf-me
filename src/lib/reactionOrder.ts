@@ -26,8 +26,17 @@
 // allowed across a block; a late add is refused there by the same rules.
 // No other retry: anything else is returned to the queue as the failure.
 //
+// Custom emoji (the "+" picker, migration 20261107160000): a value that
+// isn't one reaction emoji is never sent; a custom one isn't sent while the
+// database is known not to take it; one refused by the emoji check marks
+// custom reactions unsupported for the session (lib/customReactions.ts).
+//
 // No React imports, so tests/reactionOrder.test.ts runs under plain node.
-import type { QuickReaction } from "./reactions.ts";
+import { customReactionSupport, isEmojiCheckViolation, type CustomReactionSupportStore } from "./customReactions.ts";
+import { isCustomReaction, isReactionEmoji, type QuickReaction } from "./reactions.ts";
+
+export const INVALID_REACTION_EMOJI_ERROR = Object.freeze({ code: "invalid_reaction_emoji", message: "Not a single reaction emoji." });
+export const CUSTOM_REACTIONS_UNSUPPORTED_ERROR = Object.freeze({ code: "custom_reactions_unsupported", message: "Custom reaction emoji aren't enabled on the server." });
 
 export type OrderingSupport = "unknown" | "yes" | "no";
 
@@ -106,11 +115,23 @@ export interface ReactionWriteContext {
   ordering: { support: OrderingSupport };
   userId: string;
   now: () => number;
+  // Defaults to the app-wide store; tests pass their own.
+  customSupport?: CustomReactionSupportStore;
 }
 
 // One write as the queue sees it: resolves to the error (null = saved). At
 // most two requests (the one fallback above), never a loop.
 export async function sendReactionWrite(ctx: ReactionWriteContext, messageId: string, emoji: QuickReaction | null, signal: AbortSignal): Promise<unknown> {
+  const custom = ctx.customSupport ?? customReactionSupport;
+  if (emoji !== null && !isReactionEmoji(emoji)) return INVALID_REACTION_EMOJI_ERROR;
+  const isCustom = emoji !== null && isCustomReaction(emoji);
+  if (isCustom && custom.get() === "no") return CUSTOM_REACTIONS_UNSUPPORTED_ERROR;
+  const result = await sendOrdered(ctx, messageId, emoji, signal);
+  if (isCustom && isEmojiCheckViolation(result)) custom.markRefused();
+  return result;
+}
+
+async function sendOrdered(ctx: ReactionWriteContext, messageId: string, emoji: QuickReaction | null, signal: AbortSignal): Promise<unknown> {
   const legacy = () =>
     emoji ? ctx.transport.upsert({ message_id: messageId, user_id: ctx.userId, emoji }, signal) : ctx.transport.remove(messageId, signal);
   if (ctx.ordering.support === "no") return (await legacy()) ?? null;
