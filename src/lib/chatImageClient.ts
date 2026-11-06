@@ -132,7 +132,15 @@ export async function processChatImage(file: Blob): Promise<ProcessedChatImage> 
  * upsert: an object can't be replaced). XMLHttpRequest rather than
  * supabase-js, only for upload progress; same endpoint and headers.
  */
-export async function uploadChatImage(path: string, blob: Blob, onProgress: (fraction: number) => void, signal?: AbortSignal): Promise<"uploaded" | ImageSendFailure> {
+// Also uploads voice recordings (lib/chatVoice.ts): contentType "audio/mp4"
+// or "audio/webm", the bucket's other two allowed types.
+export async function uploadChatImage(
+  path: string,
+  blob: Blob,
+  onProgress: (fraction: number) => void,
+  signal?: AbortSignal,
+  contentType: "image/jpeg" | "audio/mp4" | "audio/webm" = "image/jpeg",
+): Promise<"uploaded" | ImageSendFailure> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   if (!token) return "rejected";
@@ -143,7 +151,7 @@ export async function uploadChatImage(path: string, blob: Blob, onProgress: (fra
     xhr.open("POST", url);
     xhr.setRequestHeader("Authorization", `Bearer ${token}`);
     xhr.setRequestHeader("apikey", String(import.meta.env.VITE_SUPABASE_ANON_KEY ?? ""));
-    xhr.setRequestHeader("Content-Type", "image/jpeg");
+    xhr.setRequestHeader("Content-Type", contentType);
     xhr.setRequestHeader("x-upsert", "false");
     xhr.setRequestHeader("cache-control", "max-age=3600");
     xhr.timeout = 60_000;

@@ -34,6 +34,9 @@ import {
 import type { ChatImageRef, ImageRowColumns, ImageSendFailure, ImageSupport, ProcessedChatImage } from "../lib/chatImages";
 import { chatImageUrls, removeChatImage, resetChatImageUrls, uploadChatImage } from "../lib/chatImageClient";
 import { PROBE_EMOJI, customReactionSupport } from "../lib/customReactions";
+import { dmVoicePath, isMissingVoiceSupportError, rowsHaveVoiceColumn, voiceFileType, voiceFromRow, voiceRowColumns } from "../lib/chatVoice";
+import type { ChatVoiceRef, VoiceRowColumns } from "../lib/chatVoice";
+import type { VoiceClip } from "../lib/voiceRecorder";
 
 interface ConversationParticipantRow {
   conversation_id: string;
@@ -43,7 +46,7 @@ interface ConversationParticipantRow {
   hidden_at: string | null;
 }
 
-interface MessageRow extends ImageRowColumns {
+interface MessageRow extends ImageRowColumns, VoiceRowColumns {
   id: string;
   conversation_id: string;
   sender_id: string;
@@ -92,6 +95,9 @@ interface PendingMessage {
     failure?: ImageSendFailure;
     uploaded: boolean;
     path?: string;
+    // Set for a voice message (lib/chatVoice.ts, migration 20261107180000):
+    // the same send machinery, an audio file instead of a JPEG.
+    audio?: { durationMs: number; mime: string };
   };
 }
 
@@ -179,6 +185,10 @@ interface RealSocialContextValue {
   sendDirectImage: (otherId: string, photo: ProcessedChatImage, text: string, replyToId?: string) => Promise<SendMessageResult>;
   retryDirectImage: (tempId: string) => Promise<SendMessageResult>;
   discardDirectImage: (tempId: string) => void;
+  // Voice messages (lib/chatVoice.ts, migration 20261107180000): same send /
+  // retry / discard path as photos (retryDirectImage / discardDirectImage).
+  voiceSupported: boolean;
+  sendDirectVoice: (otherId: string, clip: VoiceClip, replyToId?: string) => Promise<SendMessageResult>;
   // Quick reactions (lib/reactions.ts, public.message_reactions). False
   // until a fetch of the table has succeeded, so before the migration is
   // applied the reaction row and pills are simply not shown.
@@ -217,6 +227,11 @@ interface RealSocialContextValue {
 
 const RealSocialContext = createContext<RealSocialContextValue | null>(null);
 
+// Storage path of a photo / voice send: dm/<conv>/<id>.jpg | .m4a | .webm.
+function jobPath(job: { conversationId: string | null; messageId: string; audio?: { mime: string } }): string {
+  return job.audio ? dmVoicePath(job.conversationId!, job.messageId, voiceFileType(job.audio.mime).ext) : dmImagePath(job.conversationId!, job.messageId);
+}
+
 function messageRowToDirectMessage(row: MessageRow): DirectMessage {
   return {
     id: row.id,
@@ -227,6 +242,7 @@ function messageRowToDirectMessage(row: MessageRow): DirectMessage {
     replyToId: row.reply_to_message_id ?? null,
     unsentAt: row.unsent_at ?? null,
     ...(row.image_path ? { image: imageFromRow(row) } : {}),
+    ...(row.audio_path ? { voice: voiceFromRow(row) } : {}),
   };
 }
 
@@ -404,6 +420,20 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     imageProbeRef.current = next;
     setImageProbe(next);
     if (next === "yes") setImageColumnMissing(false);
+  }, [selfId]);
+  // Voice: same idea, its own migration (20261107180000), its own probe.
+  const [voiceProbe, setVoiceProbe] = useState<ImageSupport>("unknown");
+  const voiceProbeRef = useRef<ImageSupport>("unknown");
+  const [voiceColumnMissing, setVoiceColumnMissing] = useState(false);
+  const probeVoice = useCallback(async () => {
+    if (!selfId) return;
+    const generation = generationRef.current;
+    const { error } = await supabase.from("messages").select("audio_path").limit(1);
+    if (generationRef.current !== generation) return;
+    const next: ImageSupport = !error ? "yes" : isMissingVoiceSupportError(error) ? "no" : "unknown";
+    voiceProbeRef.current = next;
+    setVoiceProbe(next);
+    if (next === "yes") setVoiceColumnMissing(false);
   }, [selfId]);
 
   const applyReactions = useCallback((next: MessageReaction[]) => {
@@ -595,6 +625,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
         if (reactionsSupportRef.current !== "no" || full) void fetchReactions(conversationIds);
         // Photos: probe the column until it's known to exist (never blocks).
         if (full && imageProbeRef.current !== "yes") void probeImages();
+        if (full && voiceProbeRef.current !== "yes") void probeVoice();
 
         // Profiles: the directory (when just fetched) replaces the cache
         // wholesale, which also drops deleted accounts; otherwise only ids
@@ -650,7 +681,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
         }
       }
     },
-    [selfId, fetchReactions, probeImages],
+    [selfId, fetchReactions, probeImages, probeVoice],
   );
 
   // Directory distances are computed server-side from this account's saved
@@ -712,6 +743,9 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     imageProbeRef.current = "unknown";
     setImageProbe("unknown");
     setImageColumnMissing(false);
+    voiceProbeRef.current = "unknown";
+    setVoiceProbe("unknown");
+    setVoiceColumnMissing(false);
 
     if (isDemo || !selfId) {
       setParticipants([]);
@@ -1008,11 +1042,14 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
           if (!photo) return message;
           // This device's photo: its local copy, and (until stored) the
           // send's state. Sent = a normal message with the real path.
-          const image: ChatImageRef = { path: photo.path ?? `pending/${photo.messageId}`, width: photo.width, height: photo.height, thumb: photo.thumb };
+          const pendingPath = photo.path ?? `pending/${photo.messageId}`;
+          const media: { image?: ChatImageRef; voice?: ChatVoiceRef } = photo.audio
+            ? { voice: { path: pendingPath, durationMs: photo.audio.durationMs } }
+            : { image: { path: pendingPath, width: photo.width, height: photo.height, thumb: photo.thumb } };
           const sentOk = message.id !== row.tempId;
           return {
             ...message,
-            image,
+            ...media,
             delivery: sentOk ? undefined : photo.state,
             outgoingPhoto: { localUrl: photo.localUrl, progress: sentOk ? undefined : photo.progress, failure: photo.failure },
           };
@@ -1124,6 +1161,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       // The photo's path, read before the database clears it.
       const imagePath =
         messagesRef.current.find((m) => m.id === messageId)?.image_path ??
+        messagesRef.current.find((m) => m.id === messageId)?.audio_path ??
         pendingMessages.find((p) => p.serverId === messageId)?.photo?.path ??
         null;
       const { error } = await supabase.rpc("unsend_message", { p_message_id: messageId });
@@ -1136,7 +1174,13 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       const unsentAt = new Date().toISOString();
       const next = messagesRef.current.map((m) =>
         m.id === messageId
-          ? { ...m, text: "", unsent_at: m.unsent_at ?? unsentAt, ...(m.image_path !== undefined ? { image_path: null, image_width: null, image_height: null, image_thumb: null } : {}) }
+          ? {
+              ...m,
+              text: "",
+              unsent_at: m.unsent_at ?? unsentAt,
+              ...(m.image_path !== undefined ? { image_path: null, image_width: null, image_height: null, image_thumb: null } : {}),
+              ...(m.audio_path !== undefined ? { audio_path: null, audio_duration_ms: null } : {}),
+            }
           : m,
       );
       messagesRef.current = next;
@@ -1161,7 +1205,25 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
   // progresses (conversation resolved, uploaded), so a retry resumes where
   // the last attempt stopped (an uploaded photo isn't uploaded twice).
   const photoJobsRef = useRef(
-    new Map<string, { otherId: string; conversationId: string | null; messageId: string; blob: Blob; localUrl: string; width: number; height: number; thumb: string | null; text: string; replyTo: string | null; uploaded: boolean; generation: number }>(),
+    new Map<
+      string,
+      {
+        otherId: string;
+        conversationId: string | null;
+        messageId: string;
+        blob: Blob;
+        localUrl: string;
+        width: number;
+        height: number;
+        thumb: string | null;
+        text: string;
+        replyTo: string | null;
+        uploaded: boolean;
+        generation: number;
+        // A voice message instead of a photo (same machinery).
+        audio?: { durationMs: number; mime: string };
+      }
+    >(),
   );
   // One attempt at a time per photo (a double tap on Retry can't send twice).
   const photoInFlightRef = useRef(new Map<string, Promise<SendMessageResult>>());
@@ -1191,22 +1253,30 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
           job.conversationId = convId as string;
           setPendingMessages((prev) => prev.map((p) => (p.tempId === tempId ? { ...p, conversation_id: convId as string } : p)));
         }
-        const path = dmImagePath(job.conversationId, job.messageId);
+        const path = jobPath(job);
         if (!job.uploaded) {
           let shown = -1;
-          const uploaded = await uploadChatImage(path, job.blob, (fraction) => {
-            const step = progressStep(fraction);
-            if (step !== shown) {
-              shown = step;
-              patchPhoto(tempId, { progress: step });
-            }
-          });
+          const uploaded = await uploadChatImage(
+            path,
+            job.blob,
+            (fraction) => {
+              const step = progressStep(fraction);
+              if (step !== shown) {
+                shown = step;
+                patchPhoto(tempId, { progress: step });
+              }
+            },
+            undefined,
+            job.audio ? voiceFileType(job.audio.mime).contentType : "image/jpeg",
+          );
           if (uploaded !== "uploaded") return fail(uploaded);
           job.uploaded = true;
           patchPhoto(tempId, { uploaded: true, path, progress: 1 });
         }
-        const image = imageRowColumns({ path, width: job.width, height: job.height, thumb: job.thumb });
-        const row = { id: job.messageId, conversation_id: job.conversationId, sender_id: selfId, text: job.text, ...image };
+        const media = job.audio
+          ? voiceRowColumns({ path, durationMs: job.audio.durationMs })
+          : imageRowColumns({ path, width: job.width, height: job.height, thumb: job.thumb });
+        const row = { id: job.messageId, conversation_id: job.conversationId, sender_id: selfId, text: job.text, ...media };
         const insert = (values: Record<string, unknown>) => supabase.from("messages").insert(values).select("id").maybeSingle();
         let { error } = await insert(job.replyTo ? { ...row, reply_to_message_id: job.replyTo } : row);
         if (error && job.replyTo && isMissingReplyColumnError(error)) {
@@ -1216,10 +1286,11 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
           ({ error } = await insert(row));
         }
         if (error) {
-          if (isMissingImageSupportError(error)) {
+          if (job.audio ? isMissingVoiceSupportError(error) : isMissingImageSupportError(error)) {
             // The columns aren't there after all (rolled back / stale
             // schema cache): hide the button; this one can only be discarded.
-            setImageColumnMissing(true);
+            if (job.audio) setVoiceColumnMissing(true);
+            else setImageColumnMissing(true);
             return fail("rejected");
           }
           const outcome = classifyImageInsertError(error);
@@ -1299,9 +1370,57 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     if (!job) return;
     // Uploaded but never stored: remove the orphan (the bucket's delete
     // policy refuses if a row does point at it after all).
-    if (job.uploaded && job.conversationId) void removeChatImage(dmImagePath(job.conversationId, job.messageId));
+    if (job.uploaded && job.conversationId) void removeChatImage(jobPath(job));
     URL.revokeObjectURL(job.localUrl);
   }, []);
+
+  // ---- Voice messages (lib/chatVoice.ts, migration 20261107180000) ----
+  // Same send path as photos (upload first, then the row with that id;
+  // Not sent · Retry / Discard through retryDirectImage / discardDirectImage).
+  const voiceSupported = useMemo(
+    () => !voiceColumnMissing && (voiceProbe === "yes" || rowsHaveVoiceColumn(messages)),
+    [voiceColumnMissing, voiceProbe, messages],
+  );
+  const sendDirectVoice = useCallback(
+    async (otherId: string, clip: VoiceClip, replyToId?: string): Promise<SendMessageResult> => {
+      if (!selfId) return "failed";
+      const messageId = crypto.randomUUID();
+      const tempId = `temp-${messageId}`;
+      const replyTo = replyToId && repliesSupported ? replyToId : null;
+      const conversationId = conversationIdWith(otherId) ?? null;
+      const audio = { durationMs: clip.durationMs, mime: clip.mime };
+      photoJobsRef.current.set(tempId, {
+        otherId,
+        conversationId,
+        messageId,
+        blob: clip.blob,
+        localUrl: clip.localUrl,
+        width: 0,
+        height: 0,
+        thumb: null,
+        text: "",
+        replyTo,
+        uploaded: false,
+        generation: generationRef.current,
+        audio,
+      });
+      setPendingMessages((prev) => [
+        ...prev,
+        {
+          tempId,
+          conversation_id: conversationId ?? "",
+          otherId,
+          sender_id: selfId,
+          text: "",
+          created_at: new Date().toISOString(),
+          reply_to_message_id: replyTo,
+          photo: { messageId, blob: clip.blob, localUrl: clip.localUrl, width: 0, height: 0, thumb: null, state: "sending", progress: 0, uploaded: false, audio },
+        },
+      ]);
+      return attemptPhoto(tempId);
+    },
+    [selfId, repliesSupported, conversationIdWith, attemptPhoto],
+  );
 
   // Optimistic: the pill shows the latest tap now. Writes go through
   // reactionWrites (one in flight per message, the latest tap queued, no
@@ -1617,6 +1736,8 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       sendDirectImage,
       retryDirectImage,
       discardDirectImage,
+      voiceSupported,
+      sendDirectVoice,
       reactionsSupported: reactionsLive,
       messageReactions: reactions,
       setMessageReaction,
@@ -1663,6 +1784,8 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       sendDirectImage,
       retryDirectImage,
       discardDirectImage,
+      voiceSupported,
+      sendDirectVoice,
       reactionsLive,
       reactions,
       setMessageReaction,

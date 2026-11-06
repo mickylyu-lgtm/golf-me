@@ -209,7 +209,7 @@ function DirectList() {
                   ) : (
                     <>
                       {c.lastMessage.senderId === c.otherGolfer.id ? "" : t("chatInbox.youPrefix")}
-                      {c.lastMessage.unsentAt ? <span className="italic">{t("chat.messageUnsent")}</span> : messagePreviewText(c.lastMessage, t("chat.photo"))}
+                      {c.lastMessage.unsentAt ? <span className="italic">{t("chat.messageUnsent")}</span> : messagePreviewText(c.lastMessage, t("chat.photo"), t("chat.voice"))}
                     </>
                   )}
                 </p>
@@ -309,7 +309,7 @@ function RoundChatRow({ call }: { call: GolfCall }) {
           {last ? (
             <>
               {prefix}
-              {last.unsentAt ? <span className="italic">{t("chat.messageUnsent")}</span> : messagePreviewText(last, t("chat.photo"))}
+              {last.unsentAt ? <span className="italic">{t("chat.messageUnsent")}</span> : messagePreviewText(last, t("chat.photo"), t("chat.voice"))}
             </>
           ) : (
             t("chatInbox.roundNoMessages")

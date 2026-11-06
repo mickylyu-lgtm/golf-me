@@ -17,10 +17,19 @@ interface ReportPhoto {
   sent_at: string;
 }
 
+interface ReportVoice {
+  message_id: string;
+  chat: string;
+  audio_path: string;
+  duration_ms: number;
+  sent_at: string;
+}
+
 export function ReportChatImages({ reportId }: { reportId: string }) {
   const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [photos, setPhotos] = useState<(ReportPhoto & { url: string | null })[]>([]);
   const [message, setMessage] = useState<string | null>(null);
+  const [clips, setClips] = useState<(ReportVoice & { url: string | null })[]>([]);
 
   async function load() {
     setState("loading");
@@ -33,6 +42,11 @@ export function ReportChatImages({ reportId }: { reportId: string }) {
     const rows = (data ?? []) as ReportPhoto[];
     const urls = await Promise.all(rows.map((r) => chatImageUrls().get(r.image_path)));
     setPhotos(rows.map((r, i) => ({ ...r, url: urls[i] })));
+    // Voice messages (migration 20261107180000); absent before it: none.
+    const voice = await supabase.rpc("admin_list_report_chat_voice", { p_report_id: reportId });
+    const voiceRows = (voice.error ? [] : (voice.data ?? [])) as ReportVoice[];
+    const voiceUrls = await Promise.all(voiceRows.map((r) => chatImageUrls().get(r.audio_path)));
+    setClips(voiceRows.map((r, i) => ({ ...r, url: voiceUrls[i] })));
     setState("done");
   }
 
@@ -51,9 +65,17 @@ export function ReportChatImages({ reportId }: { reportId: string }) {
     );
   }
   if (state === "error") return <p className="text-xs text-rose-600">{message}</p>;
-  if (photos.length === 0) return <p className="text-xs text-slate-500">No photos from the reported golfer in this chat (unsent photos aren't kept).</p>;
+  if (photos.length === 0 && clips.length === 0)
+    return <p className="text-xs text-slate-500">No photos or voice messages from the reported golfer in this chat (unsent ones aren't kept).</p>;
   return (
     <div className="flex flex-wrap gap-2">
+      {clips.map((c) =>
+        c.url ? (
+          <audio key={c.message_id} controls src={c.url} preload="none" className="h-9 max-w-full" aria-label={`Voice message sent ${new Date(c.sent_at).toLocaleString()}`} />
+        ) : (
+          <span key={c.message_id} className="text-[10px] text-slate-400">voice unavailable</span>
+        ),
+      )}
       {photos.map((p) =>
         p.url ? (
           <a key={p.message_id} href={p.url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-lg border border-slate-200">

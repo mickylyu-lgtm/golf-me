@@ -56,6 +56,9 @@ import type { UnsendResult } from "../lib/unsend";
 import { DEMO_IMAGE_PREFIX } from "../lib/chatImages";
 import type { ChatImageRef, ProcessedChatImage } from "../lib/chatImages";
 import { chatImageUrls } from "../lib/chatImageClient";
+import { DEMO_VOICE_PREFIX, clampDuration } from "../lib/chatVoice";
+import type { ChatVoiceRef } from "../lib/chatVoice";
+import type { VoiceClip } from "../lib/voiceRecorder";
 import { withReaction } from "../lib/reactions";
 import { placeholderNameFromEmail } from "../lib/authInput";
 import type { MessageReaction, QuickReaction } from "../lib/reactions";
@@ -213,6 +216,9 @@ interface DataContextValue {
   // discardRoundMessage like text.
   canSendRoundImages: boolean;
   sendRoundImage: (callId: string, photo: ProcessedChatImage, text: string, replyToId?: string | null) => Promise<SendMessageResult>;
+  // Voice messages in round chat (lib/chatVoice.ts, migration 20261107180000).
+  canSendRoundVoice: boolean;
+  sendRoundVoice: (callId: string, clip: VoiceClip, replyToId?: string | null) => Promise<SendMessageResult>;
   roundMessageReactions: MessageReaction[];
   setRoundMessageReaction: (messageId: string, emoji: QuickReaction | null) => Promise<boolean>;
   /** The current golfer was in this round and left it. */
@@ -277,6 +283,9 @@ interface DataContextValue {
   sendDirectImage: (golferId: string, photo: ProcessedChatImage, text: string, replyToId?: string) => Promise<SendMessageResult>;
   retryDirectImage: (tempId: string) => Promise<SendMessageResult>;
   discardDirectImage: (tempId: string) => void;
+  // Voice messages in DMs: same retry / discard as photos.
+  canSendDirectVoice: boolean;
+  sendDirectVoice: (golferId: string, clip: VoiceClip, replyToId?: string) => Promise<SendMessageResult>;
   // Quick reactions (lib/reactions.ts): always in demo (page-local, not
   // persisted); for real accounts once public.message_reactions exists.
   canReactToMessages: boolean;
@@ -869,6 +878,37 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [auth.isDemo, realRounds, demoPhoto],
   );
 
+  // Demo voice: page-local like demo photos (after a reload it can't play).
+  const demoVoice = useCallback((clip: VoiceClip): ChatVoiceRef => {
+    const path = `${DEMO_VOICE_PREFIX}${generateId("voice")}`;
+    chatImageUrls().setLocal(path, clip.localUrl);
+    return { path, durationMs: clampDuration(clip.durationMs) };
+  }, []);
+  const canSendRoundVoice = auth.isDemo || realRounds.voiceSupported;
+  const sendRoundVoice = useCallback(
+    async (callId: string, clip: VoiceClip, replyToId?: string | null): Promise<SendMessageResult> => {
+      if (!auth.isDemo) return realRounds.sendRoundVoice(callId, clip, replyToId);
+      const voice = demoVoice(clip);
+      setData((prev) => ({
+        ...prev,
+        messages: [
+          ...prev.messages,
+          {
+            id: generateId("msg"),
+            golfCallId: callId,
+            senderId: prev.currentUserId,
+            text: "",
+            createdAt: new Date().toISOString(),
+            replyToId: replyToId && prev.messages.some((m) => m.id === replyToId && m.golfCallId === callId && !m.system) ? replyToId : null,
+            voice,
+          },
+        ],
+      }));
+      return "sent";
+    },
+    [auth.isDemo, realRounds, demoVoice],
+  );
+
   const canReplyToRoundMessages = auth.isDemo || realRounds.repliesSupported;
   const canUnsendRoundMessages = auth.isDemo || realRounds.unsendSupported;
   // Demo: same rule as public.unsend_round_message (my own message, within
@@ -883,7 +923,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       const unsentAt = new Date().toISOString();
       setData((prev) => ({
         ...prev,
-        messages: prev.messages.map((m) => (m.id === messageId ? { ...m, text: "", unsentAt, image: null } : m)),
+        messages: prev.messages.map((m) => (m.id === messageId ? { ...m, text: "", unsentAt, image: null, voice: null } : m)),
       }));
       setDemoRoundReactions((prev) => prev.filter((r) => r.messageId !== messageId));
       return "unsent";
@@ -1308,6 +1348,32 @@ export function DataProvider({ children }: { children: ReactNode }) {
     },
     [auth.isDemo, realSocial, canMessage, canSendMessageNow, currentUser.id, demoPhoto],
   );
+  const canSendDirectVoice = auth.isDemo || realSocial.voiceSupported;
+  const sendDirectVoice = useCallback(
+    async (golferId: string, clip: VoiceClip, replyToId?: string): Promise<SendMessageResult> => {
+      if (!auth.isDemo) return realSocial.sendDirectVoice(golferId, clip, replyToId);
+      if (!canMessage(golferId) || !canSendMessageNow()) return "failed";
+      const convId = dmConversationId(currentUser.id, golferId);
+      const voice = demoVoice(clip);
+      setData((prev) => ({
+        ...prev,
+        directMessages: [
+          ...prev.directMessages,
+          {
+            id: generateId("dm"),
+            conversationId: convId,
+            senderId: prev.currentUserId,
+            text: "",
+            createdAt: new Date().toISOString(),
+            replyToId: replyToId && prev.directMessages.some((m) => m.id === replyToId && m.conversationId === convId) ? replyToId : null,
+            voice,
+          },
+        ],
+      }));
+      return "sent";
+    },
+    [auth.isDemo, realSocial, canMessage, canSendMessageNow, currentUser.id, demoVoice],
+  );
   const retryDirectImage = useCallback(
     async (tempId: string): Promise<SendMessageResult> => (auth.isDemo ? "failed" : realSocial.retryDirectImage(tempId)),
     [auth.isDemo, realSocial],
@@ -1332,7 +1398,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       const unsentAt = new Date().toISOString();
       setData((prev) => ({
         ...prev,
-        directMessages: prev.directMessages.map((m) => (m.id === messageId ? { ...m, text: "", unsentAt, image: null } : m)),
+        directMessages: prev.directMessages.map((m) => (m.id === messageId ? { ...m, text: "", unsentAt, image: null, voice: null } : m)),
       }));
       setDemoReactions((prev) => prev.filter((r) => r.messageId !== messageId));
       return "unsent";
@@ -2015,6 +2081,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       canReactToRoundMessages,
       canSendRoundImages,
       sendRoundImage,
+      canSendRoundVoice,
+      sendRoundVoice,
       roundMessageReactions,
       setRoundMessageReaction,
       hasLeftGolfCall,
@@ -2048,6 +2116,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       sendDirectImage,
       retryDirectImage,
       discardDirectImage,
+      canSendDirectVoice,
+      sendDirectVoice,
       canReactToMessages,
       messageReactions,
       setMessageReaction,
@@ -2132,6 +2202,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       canReactToRoundMessages,
       canSendRoundImages,
       sendRoundImage,
+      canSendRoundVoice,
+      sendRoundVoice,
       roundMessageReactions,
       setRoundMessageReaction,
       hasLeftGolfCall,
@@ -2165,6 +2237,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       sendDirectImage,
       retryDirectImage,
       discardDirectImage,
+      canSendDirectVoice,
+      sendDirectVoice,
       canReactToMessages,
       messageReactions,
       setMessageReaction,

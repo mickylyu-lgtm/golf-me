@@ -5,6 +5,7 @@
 
 import type { GeoPoint } from "../lib/geo";
 import type { ChatImageRef, ImageSendFailure } from "../lib/chatImages";
+import type { ChatVoiceRef } from "../lib/chatVoice";
 
 /**
  * A photo message sent from this device that isn't stored yet (lib/chatImages.ts):
@@ -287,7 +288,9 @@ export interface ChatMessage {
   unsentAt?: string | null;
   /** The photo it carries (migration 20261107170000); the text may then be empty. */
   image?: ChatImageRef | null;
-  /** This device's photo send in progress / failed. */
+  /** The voice message it carries (migration 20261107180000). */
+  voice?: ChatVoiceRef | null;
+  /** This device's photo or voice send in progress / failed. */
   outgoingPhoto?: OutgoingPhotoState;
 }
 
@@ -415,8 +418,11 @@ export interface DirectMessage {
   // The photo it carries (migration 20261107170000); the text may then be
   // empty. Cleared by unsend.
   image?: ChatImageRef | null;
-  // A photo message from this device that isn't stored yet: "sending"
-  // (with upload progress) or "failed" (Retry / Discard). Unset = stored.
+  // The voice message it carries (migration 20261107180000). Cleared by unsend.
+  voice?: ChatVoiceRef | null;
+  // A photo / voice message from this device that isn't stored yet:
+  // "sending" (with upload progress) or "failed" (Retry / Discard). Unset =
+  // stored. outgoingPhoto holds its local copy / progress for either kind.
   delivery?: "sending" | "failed";
   outgoingPhoto?: OutgoingPhotoState;
 }

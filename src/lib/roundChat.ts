@@ -5,6 +5,8 @@
 import type { ChatMessage, GolfCallStatus } from "../types";
 import { imageFromRow } from "./chatImages.ts";
 import type { ChatImageRef, ImageRowColumns, ImageSendFailure } from "./chatImages.ts";
+import { voiceFromRow } from "./chatVoice.ts";
+import type { VoiceRowColumns } from "./chatVoice.ts";
 
 // ---------------------------------------------------------------------------
 // Access
@@ -107,9 +109,11 @@ export interface PendingRoundPhoto {
   failure?: ImageSendFailure;
   /** Set once uploaded. */
   path?: string;
+  /** A voice message (lib/chatVoice.ts) instead of a photo: same send machinery. */
+  audio?: { durationMs: number; mime: string };
 }
 
-export interface RoundMessageRowLike extends ImageRowColumns {
+export interface RoundMessageRowLike extends ImageRowColumns, VoiceRowColumns {
   id: string;
   round_id: string;
   sender_id: string;
@@ -250,7 +254,9 @@ export function mergeRoundMessages(rows: readonly RoundMessageRowLike[], pending
     .filter((r) => r.round_id === roundId)
     .map((r) => {
       const image = imageFromRow(r);
+      const voice = voiceFromRow(r);
       return {
+        ...(voice ? { voice } : {}),
         id: r.id,
         golfCallId: r.round_id,
         senderId: r.sender_id,
@@ -268,7 +274,9 @@ export function mergeRoundMessages(rows: readonly RoundMessageRowLike[], pending
   const extra: ChatMessage[] = mine.map((p) => {
     const photo = p.photo
       ? {
-          image: pendingImage(p.photo),
+          ...(p.photo.audio
+            ? { voice: { path: p.photo.path ?? `pending/${p.photo.messageId}`, durationMs: p.photo.audio.durationMs } }
+            : { image: pendingImage(p.photo) }),
           outgoingPhoto: {
             localUrl: p.photo.localUrl,
             progress: p.state === "sending" ? p.photo.progress : undefined,

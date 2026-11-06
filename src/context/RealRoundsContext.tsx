@@ -25,6 +25,13 @@ import {
 import { classifyImageInsertError, imageRowColumns, isMissingImageSupportError, progressStep, roundImagePath, rowsHaveImageColumn } from "../lib/chatImages";
 import type { ImageSendFailure, ImageSupport, ProcessedChatImage } from "../lib/chatImages";
 import { chatImageUrls, removeChatImage, uploadChatImage } from "../lib/chatImageClient";
+import { isMissingVoiceSupportError, roundVoicePath, rowsHaveVoiceColumn, voiceFileType, voiceRowColumns } from "../lib/chatVoice";
+import type { VoiceClip } from "../lib/voiceRecorder";
+
+// Storage path of a photo / voice send: round/<round>/<id>.jpg | .m4a | .webm.
+function roundJobPath(job: { roundId: string; messageId: string; audio?: { mime: string } }): string {
+  return job.audio ? roundVoicePath(job.roundId, job.messageId, voiceFileType(job.audio.mime).ext) : roundImagePath(job.roundId, job.messageId);
+}
 import type { PendingRoundMessage, RoundMessageRowLike } from "../lib/roundChat";
 import { classifyUnsendError } from "../lib/unsend";
 import type { UnsendResult } from "../lib/unsend";
@@ -99,6 +106,9 @@ interface RealRoundsContextValue {
   // retry / discard as text, through retryRoundMessage / discardRoundMessage).
   imagesSupported: boolean;
   sendRoundImage: (roundId: string, photo: ProcessedChatImage, text: string, replyToId?: string | null) => Promise<SendMessageResult>;
+  // Voice messages (lib/chatVoice.ts, migration 20261107180000).
+  voiceSupported: boolean;
+  sendRoundVoice: (roundId: string, clip: VoiceClip, replyToId?: string | null) => Promise<SendMessageResult>;
   // Migration 20261107130000_round_chat_parity, each part feature-detected
   // so this ships safely before it: replies / unsend once fetched
   // round_messages rows carry reply_to_message_id / unsent_at; reactions
@@ -594,11 +604,54 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
   }, [accountKey]);
   const imagesSupported = !imageColumnMissing && (imageProbe === "yes" || rowsHaveImageColumn(messageRows));
 
+  // Voice messages (lib/chatVoice.ts, migration 20261107180000): own probe.
+  const [voiceProbe, setVoiceProbe] = useState<ImageSupport>("unknown");
+  const voiceProbeRef = useRef<ImageSupport>("unknown");
+  const [voiceColumnMissing, setVoiceColumnMissing] = useState(false);
+  const probeVoice = useCallback(async () => {
+    const forUser = authUser?.id;
+    if (!forUser || voiceProbeRef.current === "yes") return;
+    const { error } = await supabase.from("round_messages").select("audio_path").limit(1);
+    if (userIdRef.current !== forUser) return;
+    const next: ImageSupport = !error ? "yes" : isMissingVoiceSupportError(error) ? "no" : "unknown";
+    voiceProbeRef.current = next;
+    setVoiceProbe(next);
+    if (next === "yes") setVoiceColumnMissing(false);
+  }, [authUser]);
+  useEffect(() => {
+    voiceProbeRef.current = "unknown";
+    setVoiceProbe("unknown");
+    setVoiceColumnMissing(false);
+    if (isDemo || !authUser) return;
+    void probeVoice();
+    return refetchOnResume(() => void probeVoice());
+    // Per account (the id), not per authUser object (token refreshes).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountKey]);
+  const voiceSupported = !voiceColumnMissing && (voiceProbe === "yes" || rowsHaveVoiceColumn(messageRows));
+
   // The bytes and progress of each photo send, by clientId (display state
   // is in pendingMessages[].photo). A retry resumes where the last attempt
   // stopped: an uploaded photo isn't uploaded again.
   const photoJobsRef = useRef(
-    new Map<string, { roundId: string; messageId: string; blob: Blob; localUrl: string; width: number; height: number; thumb: string | null; text: string; replyTo: string | null; uploaded: boolean; user: string }>(),
+    new Map<
+      string,
+      {
+        roundId: string;
+        messageId: string;
+        blob: Blob;
+        localUrl: string;
+        width: number;
+        height: number;
+        thumb: string | null;
+        text: string;
+        replyTo: string | null;
+        uploaded: boolean;
+        user: string;
+        // A voice message instead of a photo (same machinery).
+        audio?: { durationMs: number; mime: string };
+      }
+    >(),
   );
   const photoInFlightRef = useRef(new Map<string, Promise<SendMessageResult>>());
 
@@ -620,21 +673,30 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
           }
           return failure === "objectionable" ? "objectionable" : "failed";
         };
-        const path = roundImagePath(job.roundId, job.messageId);
+        const path = roundJobPath(job);
         if (!job.uploaded) {
           let shown = -1;
-          const uploaded = await uploadChatImage(path, job.blob, (fraction) => {
-            const step = progressStep(fraction);
-            if (step !== shown && current()) {
-              shown = step;
-              setPendingMessages((prev) => patchRoundPhoto(prev, clientId, { progress: step }));
-            }
-          });
+          const uploaded = await uploadChatImage(
+            path,
+            job.blob,
+            (fraction) => {
+              const step = progressStep(fraction);
+              if (step !== shown && current()) {
+                shown = step;
+                setPendingMessages((prev) => patchRoundPhoto(prev, clientId, { progress: step }));
+              }
+            },
+            undefined,
+            job.audio ? voiceFileType(job.audio.mime).contentType : "image/jpeg",
+          );
           if (uploaded !== "uploaded") return fail(uploaded);
           job.uploaded = true;
           if (current()) setPendingMessages((prev) => patchRoundPhoto(prev, clientId, { path, progress: 1 }));
         }
-        const row = { id: job.messageId, round_id: job.roundId, sender_id: job.user, text: job.text, ...imageRowColumns({ path, width: job.width, height: job.height, thumb: job.thumb }) };
+        const media = job.audio
+          ? voiceRowColumns({ path, durationMs: job.audio.durationMs })
+          : imageRowColumns({ path, width: job.width, height: job.height, thumb: job.thumb });
+        const row = { id: job.messageId, round_id: job.roundId, sender_id: job.user, text: job.text, ...media };
         const insert = (body: Record<string, unknown>) => supabase.from("round_messages").insert(body).select("id, created_at").single();
         let { data, error } = await insert(job.replyTo ? { ...row, reply_to_message_id: job.replyTo } : row);
         if (error && job.replyTo && shouldResendWithoutReply(error)) {
@@ -644,8 +706,9 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
           ({ data, error } = await insert(row));
         }
         if (error) {
-          if (isMissingImageSupportError(error)) {
-            setImageColumnMissing(true);
+          if (job.audio ? isMissingVoiceSupportError(error) : isMissingImageSupportError(error)) {
+            if (job.audio) setVoiceColumnMissing(true);
+            else setImageColumnMissing(true);
             return fail("rejected");
           }
           const outcome = classifyImageInsertError(error);
@@ -705,6 +768,45 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
     [authUser, attemptPhoto],
   );
 
+  // Voice: the photo path with an audio file (Not sent · Retry / Discard
+  // through retryRoundMessage / discardRoundMessage like any message).
+  const sendRoundVoice = useCallback(
+    async (roundId: string, clip: VoiceClip, replyToId?: string | null): Promise<SendMessageResult> => {
+      if (!authUser) return "failed";
+      const messageId = crypto.randomUUID();
+      const clientId = `temp-${messageId}`;
+      const replyTo = replyToId && repliesSupportedRef.current ? replyToId : null;
+      const audio = { durationMs: clip.durationMs, mime: clip.mime };
+      photoJobsRef.current.set(clientId, {
+        roundId,
+        messageId,
+        blob: clip.blob,
+        localUrl: clip.localUrl,
+        width: 0,
+        height: 0,
+        thumb: null,
+        text: "",
+        replyTo,
+        uploaded: false,
+        user: authUser.id,
+        audio,
+      });
+      setPendingMessages((prev) => [
+        ...prev,
+        createPendingRoundMessage({
+          clientId,
+          roundId,
+          senderId: authUser.id,
+          text: "",
+          replyToId: replyTo,
+          photo: { messageId, localUrl: clip.localUrl, width: 0, height: 0, thumb: null, progress: 0, audio },
+        }),
+      ]);
+      return attemptPhoto(clientId);
+    },
+    [authUser, attemptPhoto],
+  );
+
   const retryRoundMessage = useCallback(
     async (message: { clientId: string; roundId: string; text: string; replyToId?: string | null }): Promise<SendMessageResult> => {
       if (photoJobsRef.current.has(message.clientId)) {
@@ -730,6 +832,7 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
       // The photo's path, read before the database clears it.
       const imagePath =
         messageRowsRef.current.find((m) => m.id === messageId)?.image_path ??
+        messageRowsRef.current.find((m) => m.id === messageId)?.audio_path ??
         pendingMessagesRef.current.find((p) => p.serverId === messageId)?.photo?.path ??
         null;
       const { error } = await supabase.rpc("unsend_round_message", { p_message_id: messageId });
@@ -743,7 +846,13 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
       setMessageRows((prev) =>
         prev.map((m) =>
           m.id === messageId
-            ? { ...m, text: "", unsent_at: m.unsent_at ?? unsentAt, ...(m.image_path !== undefined ? { image_path: null, image_width: null, image_height: null, image_thumb: null } : {}) }
+            ? {
+                ...m,
+                text: "",
+                unsent_at: m.unsent_at ?? unsentAt,
+                ...(m.image_path !== undefined ? { image_path: null, image_width: null, image_height: null, image_thumb: null } : {}),
+                ...(m.audio_path !== undefined ? { audio_path: null, audio_duration_ms: null } : {}),
+              }
             : m,
         ),
       );
@@ -816,7 +925,7 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
     if (!job) return;
     // Uploaded but never stored: remove the orphan (refused by the bucket's
     // delete policy if a row does point at it after all).
-    if (job.uploaded) void removeChatImage(roundImagePath(job.roundId, job.messageId));
+    if (job.uploaded) void removeChatImage(roundJobPath(job));
     URL.revokeObjectURL(job.localUrl);
   }, []);
 
@@ -874,6 +983,8 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
     discardRoundMessage,
     imagesSupported,
     sendRoundImage,
+    voiceSupported,
+    sendRoundVoice,
     repliesSupported,
     unsendSupported,
     unsendRoundMessage,

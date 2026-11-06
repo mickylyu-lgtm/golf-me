@@ -35,6 +35,9 @@ import { FullscreenMediaViewer } from "../community/FullscreenMediaViewer";
 import { useChatImageAttachment } from "../../lib/useChatImageAttachment";
 import { messagePreviewText } from "../../lib/chatImages";
 import { canCopyImages, copyChatImage } from "../../lib/chatImageClient";
+import { VoiceMessage } from "./VoiceMessage";
+import { useVoiceComposerProps } from "../../lib/useVoiceComposerProps";
+import type { VoiceClip } from "../../lib/voiceRecorder";
 
 // layout "card" (default): the inline card on the round page, list capped
 // at max-h-96, composer docked over the keyboard while typing (below).
@@ -75,6 +78,8 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
     setRoundMessageReaction,
     canSendRoundImages,
     sendRoundImage,
+    canSendRoundVoice,
+    sendRoundVoice,
   } = useData();
   const { showToast } = useToast();
   const { t, locale } = useLocale();
@@ -84,6 +89,11 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
   // viewer. The chip renders inside the composer wrapper, so docking /
   // spacer / list ResizeObservers treat it like the reply bar.
   const photo = useChatImageAttachment((reason) => showToast(t(reason === "tooLarge" ? "chat.photoTooLarge" : "chat.photoUnreadable"), "warning"));
+  // Voice (lib/chatVoice.ts): hold-to-talk sends through voiceClipRef (set
+  // below, where the reply target is known). Only while the chat is open.
+  const voiceClipRef = useRef<(clip: VoiceClip) => void>(() => {});
+  const roundStatus = getGolfCall(callId)?.status;
+  const voiceProps = useVoiceComposerProps(canSendRoundVoice && roundStatus !== "completed" && roundStatus !== "cancelled", (clip) => voiceClipRef.current(clip));
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
   const [text, setText] = useState(() => loadChatDraft(groupChatDraftKey(callId)));
   // The composer's text as of the last render, for a send that settles later.
@@ -299,7 +309,7 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
     if (!m || m.unsentAt || m.system || m.delivery === "failed") return;
     // A photo still uploading isn't a message yet (text in flight keeps its
     // existing Copy-only menu).
-    if (m.image && m.delivery) return;
+    if ((m.image || m.voice) && m.delivery) return;
     setNowMs(Date.now());
     setActionsFor({ id: messageId, bubble });
   });
@@ -381,8 +391,17 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
     else restoreRejectedText(m.text, m.replyToId ?? null);
   }
 
-  // One line for a quote / the reply bar: its text, or "[Photo]".
-  const previewOf = (m: ChatMessage) => messagePreviewText(m, t("chat.photo"));
+  // One line for a quote / the reply bar: its text, "[Photo]" or "[Voice message]".
+  const previewOf = (m: ChatMessage) => messagePreviewText(m, t("chat.photo"), t("chat.voice"));
+
+  // A voice message (with the picked quote), like handleSend's photo path.
+  voiceClipRef.current = (clip: VoiceClip) => {
+    if (readOnly) return;
+    const replyTo = replyEnabled && replyTarget && isActionableRoundMessage(replyTarget) ? replyTarget.id : null;
+    setReplyToId(null);
+    void sendRoundVoice(callId, clip, replyTo);
+  };
+  const voiceLabels = { play: t("chat.voicePlay"), pause: t("chat.voicePause"), unavailable: t("chat.voiceUnavailable"), unsupported: t("chat.voiceUnsupported") };
 
   function senderName(senderId: string) {
     return senderId === currentUser.id ? t("chat.you") : (getGolfer(senderId)?.name ?? t("roundChat.someone"));
@@ -540,7 +559,7 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
                   // selects. data-pressing (useMessageLongPress) eases it
                   // down while a hold builds.
                   data-actions-bubble={failed ? undefined : m.id}
-                  className={`relative rounded-2xl ${m.image ? "p-1" : "px-3.5 py-2"} text-sm transition-[box-shadow,scale,opacity] duration-300 ease-out data-pressing:scale-[0.97] data-pressing:duration-[350ms] [overflow-wrap:anywhere] pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none] ${
+                  className={`relative rounded-2xl ${m.image || m.voice ? "p-1" : "px-3.5 py-2"} text-sm transition-[box-shadow,scale,opacity] duration-300 ease-out data-pressing:scale-[0.97] data-pressing:duration-[350ms] [overflow-wrap:anywhere] pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none] ${
                     failed
                       ? "rounded-br-sm border border-rose-300 bg-rose-50 text-slate-800"
                       : isMe
@@ -561,7 +580,15 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
                       labels={{ showOriginal: t("chat.showOriginal"), unavailable: t("chat.originalUnavailable"), unsent: t("chat.messageUnsent") }}
                     />
                   )}
-                  {m.image ? (
+                  {m.voice ? (
+                    <VoiceMessage
+                      voice={m.voice}
+                      localUrl={m.outgoingPhoto?.localUrl}
+                      isMe={isMe && !failed}
+                      progress={m.delivery === "sending" ? (m.outgoingPhoto?.progress ?? 0) : undefined}
+                      labels={voiceLabels}
+                    />
+                  ) : m.image ? (
                     <ChatPhotoBody
                       image={m.image}
                       localUrl={m.outgoingPhoto?.localUrl}
@@ -595,7 +622,7 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
                       // the database refused the photo here.
                       <span className="flex items-center gap-1 text-rose-600">
                         <AlertCircle size={12} aria-hidden="true" />{" "}
-                        {m.outgoingPhoto.failure === "objectionable" ? t("moderation.objectionableContent") : t("chat.photoRejected")}
+                        {m.outgoingPhoto.failure === "objectionable" ? t("moderation.objectionableContent") : m.voice ? t("chat.voiceNotSent") : t("chat.photoRejected")}
                       </span>
                     ) : (
                       <button
@@ -668,6 +695,7 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
           photoLabel={t("chat.addPhoto")}
           photoKey={photo.state.kind === "ready" ? photo.state.key : null}
           photoBusy={photo.state.kind === "processing"}
+          voice={voiceProps}
         />
       </div>
       )}
@@ -691,7 +719,7 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
             canReply: replyEnabled && isActionableRoundMessage(actionsMessage),
             canUnsend: unsendableIds.has(actionsMessage.id),
             // A photo with no text where images can't go on the clipboard: no Copy.
-            canCopy: !(actionsMessage.image && !actionsMessage.text.trim() && !canCopyImages()),
+            canCopy: !(actionsMessage.voice && !actionsMessage.text.trim()) && !(actionsMessage.image && !actionsMessage.text.trim() && !canCopyImages()),
           })}
           labels={{
             menu: t("chat.messageActions"),

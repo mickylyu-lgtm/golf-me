@@ -60,8 +60,9 @@ export function parseChatImagePath(path: string): { scope: ChatImageScope; scope
 
 /** Demo account photos live only in this page's memory (object URLs), under this prefix. */
 export const DEMO_IMAGE_PREFIX = "demo-image/";
+/** Also true for demo voice recordings (lib/chatVoice.ts DEMO_VOICE_PREFIX): never signed. */
 export function isDemoImagePath(path: string): boolean {
-  return path.startsWith(DEMO_IMAGE_PREFIX);
+  return path.startsWith(DEMO_IMAGE_PREFIX) || path.startsWith("demo-voice/");
 }
 
 // ---------------------------------------------------------------------------
@@ -289,7 +290,7 @@ export function classifyImageInsertError(error: unknown): "sent" | ImageSendFail
   const { code, hint, message } = error as { code?: unknown; hint?: unknown; message?: unknown };
   if (code === "23505") return "sent";
   if (hint === "objectionable_content" || (typeof message === "string" && message.includes("objectionable_content"))) return "objectionable";
-  if (code === "42501" || hint === "image_not_uploaded") return "rejected";
+  if (code === "42501" || hint === "image_not_uploaded" || hint === "audio_not_uploaded") return "rejected";
   return "network";
 }
 
@@ -308,8 +309,14 @@ export function progressStep(fraction: number): number {
  * What a message reads as in one line: its text, or the photo label when it
  * is a photo with no text. A photo with a caption reads "<label> <caption>".
  */
-export function messagePreviewText(m: { text: string; image?: ChatImageRef | null }, photoLabel: string): string {
+export function messagePreviewText(
+  m: { text: string; image?: ChatImageRef | null; voice?: { path: string; durationMs: number } | null },
+  photoLabel: string,
+  voiceLabel = "[Voice message]",
+): string {
   const text = m.text.trim();
+  // A voice message (lib/chatVoice.ts) has no caption.
+  if (m.voice) return text ? `${voiceLabel} ${text}` : voiceLabel;
   if (!m.image) return m.text;
   return text ? `${photoLabel} ${text}` : photoLabel;
 }

@@ -1,6 +1,9 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
-import { ImagePlus, Send, Smile } from "lucide-react";
+import { flushSync } from "react-dom";
+import { ImagePlus, Keyboard, Mic, Send, Smile } from "lucide-react";
+import { HoldToTalk, type HoldToTalkLabels, type VoiceNotice } from "./HoldToTalk";
+import { voiceRecordingAvailable, type VoiceClip } from "../../lib/voiceRecorder";
 import { EmojiPicker } from "./EmojiPicker";
 import { isSendEnter } from "../../lib/isImeComposing";
 import { composerTextareaHeight } from "../../lib/composerAutosize";
@@ -27,6 +30,13 @@ interface ChatComposerProps {
   photoLabel?: string;
   photoKey?: string | null;
   photoBusy?: boolean;
+  // Voice messages (lib/chatVoice.ts): passed once the page can send them;
+  // the toggle then shows where this browser can record.
+  voice?: {
+    onClip: (clip: VoiceClip) => void;
+    onNotice: (notice: VoiceNotice) => void;
+    labels: HoldToTalkLabels & { toVoice: string; toKeyboard: string };
+  };
 }
 
 // Shared by DirectMessageThread and GroupChat. Auto-expanding textarea
@@ -51,8 +61,26 @@ export function ChatComposer({
   photoLabel = "Add a photo",
   photoKey = null,
   photoBusy = false,
+  voice,
 }: ChatComposerProps) {
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [canVoice] = useState(voiceRecordingAvailable);
+  const [voiceMode, setVoiceMode] = useState(false);
+  const voiceOn = Boolean(voice && canVoice);
+  if (voiceMode && !voiceOn) setVoiceMode(false);
+  // Into voice: the keyboard goes down (nothing to type). Back to the
+  // keyboard: focus the textarea inside the same tap, so it comes up.
+  function toggleVoice() {
+    const el = textareaRef.current;
+    if (!voiceMode) {
+      setVoiceMode(true);
+      if (el && document.activeElement === el) el.blur();
+    } else {
+      // Rendered visible first: a visibility:hidden textarea can't take focus.
+      flushSync(() => setVoiceMode(false));
+      el?.focus({ preventScroll: true });
+    }
+  }
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const mirrorRef = useRef<HTMLTextAreaElement>(null);
   const emojiButtonRef = useRef<HTMLButtonElement>(null);
@@ -153,6 +181,23 @@ export function ChatComposer({
 
   return (
     <div className="relative flex items-end gap-2 border-t border-slate-100 px-3 py-2.5">
+      {/* Voice (WeChat-style, lib/chatVoice.ts): bottom-left toggle between
+          the keyboard and "Hold to talk". Only where this browser can record
+          (voiceRecordingAvailable) and the page passes `voice`. Same 36 px
+          button as the others: the row's height doesn't change. */}
+      {voice && canVoice && (
+        <button
+          type="button"
+          onClick={toggleVoice}
+          aria-label={voiceMode ? voice.labels.toKeyboard : voice.labels.toVoice}
+          title={voiceMode ? voice.labels.toKeyboard : voice.labels.toVoice}
+          aria-pressed={voiceMode}
+          data-chat-voice-toggle
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-400 transition-all duration-200 ease-out hover:bg-slate-100 hover:text-fairway-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2"
+        >
+          {voiceMode ? <Keyboard size={18} /> : <Mic size={18} />}
+        </button>
+      )}
       <div className="relative hidden shrink-0 sm:block">
         <button
           ref={emojiButtonRef}
@@ -200,16 +245,24 @@ export function ChatComposer({
           />
         </>
       )}
-      <textarea
-        ref={textareaRef}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={handleKeyDown}
-        onBlur={onBlur}
-        placeholder={placeholder}
-        rows={1}
-        className={`flex-1 resize-none overflow-y-auto rounded-2xl bg-slate-100 outline-none focus:bg-slate-50 focus:ring-2 focus:ring-fairway-100 ${TEXTAREA_METRICS}`}
-      />
+      {/* The textarea's flex slot. A plain wrapper (same flex-1, the
+          textarea fills it), so the voice bar can cover exactly the
+          textarea's box without touching its size or the autosize code. */}
+      <div className="relative flex min-w-0 flex-1 items-end">
+        <textarea
+          ref={textareaRef}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onBlur={onBlur}
+          placeholder={placeholder}
+          rows={1}
+          aria-hidden={voiceMode ? true : undefined}
+          tabIndex={voiceMode ? -1 : undefined}
+          className={`flex-1 resize-none overflow-y-auto rounded-2xl bg-slate-100 outline-none focus:bg-slate-50 focus:ring-2 focus:ring-fairway-100 ${TEXTAREA_METRICS} ${voiceMode ? "invisible" : ""}`}
+        />
+        {voiceMode && voice && <HoldToTalk onClip={voice.onClip} onNotice={voice.onNotice} labels={voice.labels} />}
+      </div>
       {/* Measuring mirror (see the layout effect): same metrics, out of
           flow, invisible, unfocusable and hidden from assistive tech. */}
       <textarea
