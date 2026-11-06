@@ -3,7 +3,7 @@ import { Modal } from "../ui/Modal";
 import { Button } from "../ui/Button";
 
 interface VerifyStepModalProps {
-  channel: "phone" | "email";
+  channel: "email";
   target: string;
   onClose: () => void;
   onVerified: () => void;

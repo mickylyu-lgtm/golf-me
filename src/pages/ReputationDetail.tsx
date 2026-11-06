@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Check, Mail, Phone, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Check, Mail, ShieldCheck } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
@@ -13,17 +13,18 @@ import { VerifyStepModal } from "../components/profile/VerifyStepModal";
 import { computeHandicapConfidence } from "../lib/credibility";
 import { useCredibilityStats } from "../lib/useCredibility";
 import { useReputationState } from "../lib/useReputationState";
+import { useVerifiedGolferChecklist } from "../lib/useVerifiedGolferChecklist";
 import { TIER_DEFS, tierDisplayName } from "../lib/reputationTiers";
 import { supabase } from "../lib/supabase";
 import { goBack } from "../lib/goBack";
 
 export function ReputationDetail() {
-  const { currentUser, reviewsAbout, setPhoneVerified, setEmailVerified, requestVerifiedGolfer } = useData();
+  const { currentUser, reviewsAbout, setEmailVerified, syncDemoVerifiedGolfer } = useData();
   const { isDemo, authUser } = useAuth();
   const { showToast } = useToast();
   const { t } = useLocale();
   const navigate = useNavigate();
-  const [verifyChannel, setVerifyChannel] = useState<"phone" | "email" | null>(null);
+  const [verifyingEmail, setVerifyingEmail] = useState(false);
   const [resending, setResending] = useState(false);
 
   // Real accounts: reputation/handicap-confidence come from live server
@@ -45,9 +46,17 @@ export function ReputationDetail() {
   // the existing local-only toggle simulation unchanged; it never touches
   // real Supabase and is clearly labeled as a prototype.
   const emailVerified = isDemo ? currentUser.verification.emailVerified : Boolean(authUser?.email_confirmed_at);
-  const phoneVerified = isDemo ? currentUser.verification.phoneVerified : false;
-  const verifiedGolfer = isDemo ? currentUser.verification.verifiedGolfer : false;
-  const canApplyVerifiedGolfer = phoneVerified && emailVerified && !verifiedGolfer;
+
+  // Verified Golfer (2026-11-06 rule: confirmed email or Apple/Google sign-in
+  // + profile photo + 1 qualifying completed round). Real accounts: derived
+  // in Postgres, checklist from get_my_verified_golfer_status(); until that
+  // migration is applied the block stays hidden, as before. Demo: the same
+  // rule over the demo account's local state, mirrored onto its own badge.
+  const verified = useVerifiedGolferChecklist(currentUser, reputationState?.qualifyingRounds ?? null);
+  const demoVerified = isDemo && verified.status === "ready" ? verified.checklist.verified : null;
+  useEffect(() => {
+    if (demoVerified !== null) syncDemoVerifiedGolfer(demoVerified);
+  }, [demoVerified, syncDemoVerifiedGolfer]);
 
   async function resendConfirmationEmail() {
     if (!authUser?.email) return;
@@ -157,27 +166,6 @@ export function ReputationDetail() {
       <div className="rounded-2xl border border-slate-100 bg-white p-4">
         <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">{t("reputation.trustVerification")}</p>
         <div className="flex flex-col gap-2.5">
-          {/* Phone verification (and the Verified Golfer badge, which needs it) has no real backing yet -- no phone number
-              is collected -- so real accounts don't see either row at all: a disabled "Coming soon" reads as an
-              unfinished feature to App Review (Guideline 2.1). Demo mode keeps its local-only simulation. */}
-          {isDemo && (
-            <div className="flex items-center gap-3 rounded-xl border border-slate-100 px-3.5 py-3">
-              <Phone size={16} className="text-slate-400" />
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-slate-800">{t("reputation.phoneNumber")}</p>
-                <p className="text-xs text-slate-500">{t("reputation.neverShown")}</p>
-              </div>
-              {phoneVerified ? (
-                <Badge tone="fairway" icon={<Check size={11} />}>
-                  {t("reputation.verified")}
-                </Badge>
-              ) : (
-                <Button size="sm" variant="outline" onClick={() => setVerifyChannel("phone")}>
-                  {t("reputation.verify")}
-                </Button>
-              )}
-            </div>
-          )}
           <div className="flex items-center gap-3 rounded-xl border border-slate-100 px-3.5 py-3">
             <Mail size={16} className="text-slate-400" />
             <div className="flex-1">
@@ -189,7 +177,7 @@ export function ReputationDetail() {
                 {t("reputation.verified")}
               </Badge>
             ) : isDemo ? (
-              <Button size="sm" variant="outline" onClick={() => setVerifyChannel("email")}>
+              <Button size="sm" variant="outline" onClick={() => setVerifyingEmail(true)}>
                 {t("reputation.verify")}
               </Button>
             ) : (
@@ -202,47 +190,60 @@ export function ReputationDetail() {
               </Button>
             )}
           </div>
-          {isDemo && (
-            <div className="flex items-center gap-3 rounded-xl border border-slate-100 px-3.5 py-3">
-              <ShieldCheck size={16} className="text-slate-400" />
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-slate-800">{t("reputation.verifiedBadge")}</p>
-                <p className="text-xs text-slate-500">
-                  {verifiedGolfer ? t("reputation.verifiedBadgeActive") : t("reputation.verifiedBadgeInactive")}
-                </p>
+          {verified.status === "ready" && (
+            <div className="rounded-xl border border-slate-100 px-3.5 py-3" data-testid="verified-golfer-checklist">
+              <div className="flex items-center gap-3">
+                <ShieldCheck size={16} className={verified.checklist.verified ? "text-fairway-600" : "text-slate-400"} />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-slate-800">{t("reputation.verifiedBadge")}</p>
+                  <p className="text-xs text-slate-500">
+                    {verified.checklist.verified ? t("reputation.verifiedBadgeActive") : t("reputation.verifiedBadgeInactive")}
+                  </p>
+                </div>
+                {verified.checklist.verified && (
+                  <Badge tone="fairway" icon={<ShieldCheck size={11} />}>
+                    {t("reputation.active")}
+                  </Badge>
+                )}
               </div>
-              {verifiedGolfer ? (
-                <Badge tone="fairway" icon={<ShieldCheck size={11} />}>
-                  {t("reputation.active")}
-                </Badge>
-              ) : (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={!canApplyVerifiedGolfer}
-                  onClick={() => {
-                    requestVerifiedGolfer();
-                    showToast(t("reputation.nowVerifiedToast"), "success");
-                  }}
-                >
-                  {t("reputation.apply")}
-                </Button>
-              )}
+              <ul className="mt-3 flex flex-col gap-2 border-t border-slate-100 pt-3">
+                {(
+                  [
+                    ["identity", verified.checklist.identityConfirmed, t("reputation.verifiedCheck.identity")],
+                    ["photo", verified.checklist.hasPhoto, t("reputation.verifiedCheck.photo")],
+                    ["round", verified.checklist.hasQualifyingRound, t("reputation.verifiedCheck.round")],
+                  ] as const
+                ).map(([key, done, label]) => (
+                  <li key={key} className="flex items-center gap-2.5" data-check={key} data-done={done ? "true" : "false"}>
+                    <span
+                      aria-hidden="true"
+                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
+                        done ? "bg-fairway-600 text-white" : "border-2 border-slate-200"
+                      }`}
+                    >
+                      {done && <Check size={12} strokeWidth={3} />}
+                    </span>
+                    <span className={`flex-1 text-sm ${done ? "text-slate-800" : "text-slate-600"}`}>{label}</span>
+                    <span className={`text-xs font-semibold ${done ? "text-fairway-700" : "text-slate-400"}`}>
+                      {done ? t("reputation.verifiedCheck.done") : t("reputation.verifiedCheck.notYet")}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </div>
       </div>
 
-      {isDemo && verifyChannel && (
+      {isDemo && verifyingEmail && (
         <VerifyStepModal
-          channel={verifyChannel}
-          target={verifyChannel === "phone" ? "(•••) •••-0142" : "you@example.com"}
-          onClose={() => setVerifyChannel(null)}
+          channel="email"
+          target="you@example.com"
+          onClose={() => setVerifyingEmail(false)}
           onVerified={() => {
-            if (verifyChannel === "phone") setPhoneVerified(true);
-            else setEmailVerified(true);
-            showToast(`${verifyChannel === "phone" ? "Phone" : "Email"} verified.`, "success");
-            setVerifyChannel(null);
+            setEmailVerified(true);
+            showToast("Email verified.", "success");
+            setVerifyingEmail(false);
           }}
         />
       )}

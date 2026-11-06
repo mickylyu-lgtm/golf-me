@@ -194,9 +194,8 @@ interface DataContextValue {
 
   switchCurrentUser: (id: string) => void;
   updateCurrentUserProfile: (patch: Partial<GolferProfile>) => Promise<void>;
-  setPhoneVerified: (value: boolean) => void;
   setEmailVerified: (value: boolean) => void;
-  requestVerifiedGolfer: () => void;
+  syncDemoVerifiedGolfer: (value: boolean) => void;
 
   createGolfCall: (input: CreateGolfCallInput) => GolfCall;
   cancelGolfCall: (callId: string) => Promise<void>;
@@ -607,50 +606,40 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [auth],
   );
 
-  const setPhoneVerified = useCallback(
-    (value: boolean) => {
-      if (auth.isDemo) {
-        setData((prev) => ({
-          ...prev,
-          golfers: prev.golfers.map((g) =>
-            g.id === prev.currentUserId ? { ...g, verification: { ...g.verification, phoneVerified: value } } : g,
-          ),
-        }));
-      } else {
-        auth.saveProfile({ phone_verified: value }).catch((err) => console.error("GolfMe: failed to save profile.", err));
-      }
-    },
-    [auth],
-  );
-
+  // Demo only. Real accounts: email confirmation is auth.users.email_confirmed_at
+  // and the Verified Golfer badge is derived in Postgres (20261107230000); the
+  // old profile columns are retired/server-owned, so nothing is written here.
   const setEmailVerified = useCallback(
     (value: boolean) => {
-      if (auth.isDemo) {
-        setData((prev) => ({
-          ...prev,
-          golfers: prev.golfers.map((g) =>
-            g.id === prev.currentUserId ? { ...g, verification: { ...g.verification, emailVerified: value } } : g,
-          ),
-        }));
-      } else {
-        auth.saveProfile({ email_verified: value }).catch((err) => console.error("GolfMe: failed to save profile.", err));
-      }
-    },
-    [auth],
-  );
-
-  const requestVerifiedGolfer = useCallback(() => {
-    if (auth.isDemo) {
+      if (!auth.isDemo) return;
       setData((prev) => ({
         ...prev,
         golfers: prev.golfers.map((g) =>
-          g.id === prev.currentUserId ? { ...g, verification: { ...g.verification, verifiedGolfer: true } } : g,
+          g.id === prev.currentUserId ? { ...g, verification: { ...g.verification, emailVerified: value } } : g,
         ),
       }));
-    } else {
-      auth.saveProfile({ verified_golfer: true }).catch((err) => console.error("GolfMe: failed to save profile.", err));
-    }
-  }, [auth]);
+    },
+    [auth],
+  );
+
+  // Demo only: mirrors the demo checklist onto the demo account so its own
+  // badge shows on cards/profile. Real accounts never set the badge.
+  const syncDemoVerifiedGolfer = useCallback(
+    (value: boolean) => {
+      if (!auth.isDemo) return;
+      setData((prev) => {
+        const me = prev.golfers.find((g) => g.id === prev.currentUserId);
+        if (!me || me.verification.verifiedGolfer === value) return prev;
+        return {
+          ...prev,
+          golfers: prev.golfers.map((g) =>
+            g.id === prev.currentUserId ? { ...g, verification: { ...g.verification, verifiedGolfer: value } } : g,
+          ),
+        };
+      });
+    },
+    [auth],
+  );
 
   const createGolfCall = useCallback(
     (input: CreateGolfCallInput): GolfCall => {
@@ -2124,9 +2113,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       signUpNewGolfer,
       switchCurrentUser,
       updateCurrentUserProfile,
-      setPhoneVerified,
       setEmailVerified,
-      requestVerifiedGolfer,
+      syncDemoVerifiedGolfer,
       createGolfCall,
       cancelGolfCall,
       simulateCallCompletion,
@@ -2247,9 +2235,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       signUpNewGolfer,
       switchCurrentUser,
       updateCurrentUserProfile,
-      setPhoneVerified,
       setEmailVerified,
-      requestVerifiedGolfer,
+      syncDemoVerifiedGolfer,
       createGolfCall,
       cancelGolfCall,
       simulateCallCompletion,
