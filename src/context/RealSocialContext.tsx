@@ -20,6 +20,8 @@ import { isMissingReactionsTableError, myReaction, overlayPendingReactions, reac
 import type { MessageReaction, QuickReaction } from "../lib/reactions";
 import { createReactionWriteQueue } from "../lib/reactionWrites";
 import { withLocallyRead } from "../lib/notificationInbox";
+import { createReactionSeqClock, reactionSeqFromRow, rowsShowOrdering, sendReactionWrite } from "../lib/reactionOrder";
+import type { OrderingSupport, ReactionTransport } from "../lib/reactionOrder";
 
 interface ConversationParticipantRow {
   conversation_id: string;
@@ -337,6 +339,12 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
   // rows so a fetch or realtime echo can't flip the pill back mid-way.
   // Reset (everything dropped) on account switch, below.
   const [reactionWrites] = useState(createReactionWriteQueue);
+  // Server-side ordering (lib/reactionOrder.ts, migration 20261106160000):
+  // each write carries a client sequence the server compares, so a write
+  // that arrives late can't overwrite a newer one. Per account: reset (a
+  // new object) on account switch, below.
+  const [reactionSeqClock] = useState(createReactionSeqClock);
+  const reactionOrderingRef = useRef<{ support: OrderingSupport }>({ support: "unknown" });
   const conversationIdsRef = useRef<string[]>([]);
 
   const applyReactions = useCallback((next: MessageReaction[]) => {
@@ -356,7 +364,9 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       }
       const { data, error } = await supabase
         .from("message_reactions")
-        .select("message_id, user_id, emoji")
+        // "*", not a column list: client_seq only exists once the ordering
+        // migration is applied, and naming it before then fails the fetch.
+        .select("*")
         .in("conversation_id", conversationIds)
         .order("created_at", { ascending: false })
         .limit(REACTION_WINDOW);
@@ -373,9 +383,18 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       }
       reactionsSupportRef.current = "yes";
       setReactionsSupport("yes");
-      applyReactions(overlayPendingReactions(reactionRowsToReactions(data ?? []), reactionWrites.pending(), selfId));
+      const rows = (data ?? []) as { message_id?: unknown; user_id?: unknown; emoji?: unknown; client_seq?: unknown }[];
+      // Ordering: the rows prove the migration, and my stored sequences
+      // (any device, tombstones included) keep the next write above them.
+      if (rowsShowOrdering(rows)) reactionOrderingRef.current.support = "yes";
+      for (const row of rows) {
+        const s = row.user_id === selfId && typeof row.message_id === "string" ? reactionSeqFromRow(row) : null;
+        if (s !== null) reactionSeqClock.observe(row.message_id as string, s);
+      }
+      // Tombstones (emoji NULL) are dropped here: no pill.
+      applyReactions(overlayPendingReactions(reactionRowsToReactions(rows), reactionWrites.pending(), selfId));
     },
-    [selfId, applyReactions, reactionWrites],
+    [selfId, applyReactions, reactionWrites, reactionSeqClock],
   );
 
   // Typing indicator -- ephemeral, in-memory, never written to Postgres.
@@ -616,6 +635,10 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     // The previous account's pending reaction writes: nothing queued is
     // sent, late results are ignored, no toast from them.
     reactionWrites.reset();
+    // A new object: a write still in flight from the previous account keeps
+    // (and may update) the old one only.
+    reactionSeqClock.reset();
+    reactionOrderingRef.current = { support: "unknown" };
     conversationIdsRef.current = [];
     setReactions([]);
     setReactionsSupport("unknown");
@@ -757,7 +780,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       typingTimeouts.clear();
       setTypingConversationIds(new Set());
     };
-  }, [isDemo, selfId, refetch, reactionWrites]);
+  }, [isDemo, selfId, refetch, reactionWrites, reactionSeqClock]);
 
   // Reactions realtime, on its OWN channel and only once the table is known
   // to exist: a postgres_changes subscription naming a missing table makes
@@ -1044,19 +1067,25 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       const message = messagesRef.current.find((m) => m.id === messageId);
       if (!message || message.unsent_at) return false;
       const generation = generationRef.current;
+      // This account's ordering state, captured now: a queued write that
+      // runs after an account switch still uses (and updates) the old one.
+      const ordering = reactionOrderingRef.current;
+      const transport: ReactionTransport = {
+        upsert: async (row, signal) =>
+          (await supabase.from("message_reactions").upsert(row, { onConflict: "message_id,user_id" }).abortSignal(signal)).error,
+        remove: async (id, signal) =>
+          (await supabase.from("message_reactions").delete().eq("message_id", id).eq("user_id", selfId).abortSignal(signal)).error,
+      };
       const done = reactionWrites.set(messageId, emoji, {
         // Ignored while a write for this message is pending; otherwise the
         // shown state is the last fetched (server) state.
         saved: myReaction(reactionsRef.current, messageId, selfId),
         // Bounded by the queue (REACTION_WRITE_TIMEOUT_MS): `signal` aborts
-        // the request on timeout or account switch.
+        // the request on timeout or account switch. Sequenced (a removal is
+        // a tombstone), with one fallback to the old upsert/DELETE when the
+        // ordering migration isn't applied (lib/reactionOrder.ts).
         write: async (id, next, signal) => {
-          const { error } = next
-            ? await supabase
-                .from("message_reactions")
-                .upsert({ message_id: id, user_id: selfId, emoji: next }, { onConflict: "message_id,user_id" })
-                .abortSignal(signal)
-            : await supabase.from("message_reactions").delete().eq("message_id", id).eq("user_id", selfId).abortSignal(signal);
+          const error = await sendReactionWrite({ transport, clock: reactionSeqClock, ordering, userId: selfId, now: Date.now }, id, next, signal);
           if (error && !signal.aborted) {
             console.error("GolfMe: failed to update message reaction.", error);
             if (generationRef.current === generation && isMissingReactionsTableError(error)) {
@@ -1083,7 +1112,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       applyReactions(withReaction(reactionsRef.current, messageId, selfId, emoji));
       return done;
     },
-    [selfId, applyReactions, fetchReactions, reactionWrites],
+    [selfId, applyReactions, fetchReactions, reactionWrites, reactionSeqClock],
   );
 
   const markConversationRead = useCallback(

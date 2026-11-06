@@ -106,6 +106,11 @@ const resolveFailed = (slot: Slot) => {
 export function createReactionWriteQueue(options: ReactionWriteQueueOptions = {}): ReactionWriteQueue {
   const timeoutMs = options.timeoutMs ?? REACTION_WRITE_TIMEOUT_MS;
   let entries = new Map<string, Entry>();
+  // Messages that settled after a timeout with no confirmed write since: a
+  // request may still reach the server, so the next tap is always sent (its
+  // newer sequence then wins over the late one, lib/reactionOrder.ts), even
+  // when it matches what's shown.
+  let uncertainIds = new Set<string>();
   let epoch = 0;
 
   function send(messageId: string, entry: Entry) {
@@ -140,6 +145,8 @@ export function createReactionWriteQueue(options: ReactionWriteQueueOptions = {}
         return;
       }
       entries.delete(messageId);
+      if (entry.uncertain) uncertainIds.add(messageId);
+      else uncertainIds.delete(messageId);
       entry.onSettled?.(messageId, entry.confirmed, { uncertain: entry.uncertain });
       if (ok || next) resolveAll(slot, true);
       else resolveFailed(slot);
@@ -173,14 +180,15 @@ export function createReactionWriteQueue(options: ReactionWriteQueueOptions = {}
       return new Promise<boolean>((resolve) => {
         const entry = entries.get(messageId);
         if (!entry) {
-          if (emoji === request.saved) {
+          const uncertain = uncertainIds.has(messageId);
+          if (emoji === request.saved && !uncertain) {
             resolve(true);
             return;
           }
           const created: Entry = {
             confirmed: request.saved,
-            server: request.saved,
-            uncertain: false,
+            server: uncertain ? UNKNOWN : request.saved,
+            uncertain,
             inFlight: { emoji, waiters: [resolve] },
             abort: new AbortController(),
             queued: null,
@@ -212,6 +220,7 @@ export function createReactionWriteQueue(options: ReactionWriteQueueOptions = {}
       epoch += 1;
       const dropped = entries;
       entries = new Map();
+      uncertainIds = new Set();
       for (const entry of dropped.values()) {
         entry.abort.abort();
         resolveAll(entry.inFlight, true);

@@ -100,11 +100,20 @@ export function overlayPendingReactions(
 // The table isn't there yet (migration not applied): PostgREST PGRST205
 // "Could not find the table ... in the schema cache", Postgres 42P01
 // undefined_table. The client then hides reactions instead of erroring.
+// A missing COLUMN (PGRST204 "Could not find the 'client_seq' column of
+// 'message_reactions' in the schema cache", 42703) is not a missing table:
+// the table is there, only the ordering migration isn't (lib/reactionOrder).
 export function isMissingReactionsTableError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const { code, message } = error as { code?: unknown; message?: unknown };
   if (code === "PGRST205" || code === "42P01") return true;
-  return typeof message === "string" && message.includes("message_reactions") && /does not exist|schema cache/i.test(message);
+  if (code === "PGRST204" || code === "42703") return false;
+  return (
+    typeof message === "string" &&
+    message.includes("message_reactions") &&
+    !/column/i.test(message) &&
+    /does not exist|schema cache/i.test(message)
+  );
 }
 
 // Who may be offered reactions on a bubble (the database decides for real).

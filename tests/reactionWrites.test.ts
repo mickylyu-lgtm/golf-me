@@ -396,7 +396,8 @@ test("timeout with a newer intent queued: the newer one is sent even if it match
   const h = setup(null, 20);
   const a = track(h.tap(HEART)); // hangs
   const b = track(h.tap(null)); // back to none: normally no write needed
-  await sleep(40);
+  while (h.calls.length < 2) await sleep(1);
+  await flush();
   assert.equal(a.value, true, "superseded: no toast");
   assert.equal(h.calls.length, 2, "server state unknown after a timeout: the delete IS sent");
   assert.equal(h.calls[1].emoji, null);
@@ -409,6 +410,21 @@ test("timeout with a newer intent queued: the newer one is sent even if it match
   h.calls[0].ok(); // the hung heart answers very late
   await flush();
   assert.deepEqual(h.late, ["m1"], "caller refetches and shows what the server really has");
+});
+
+test("after an uncertain settle, a tap matching what's shown is still sent (a late request may land); a confirmed write clears it", async () => {
+  const h = setup(null, 20);
+  track(h.tap(HEART)); // hangs, times out
+  await sleep(40);
+  assert.deepEqual(h.uncertain, [true]);
+  assert.equal(h.shown.get("m1"), null);
+  const again = track(h.tap(null)); // same as shown: normally no write
+  assert.equal(h.calls.length, 2, "sent anyway: its newer sequence beats the late heart");
+  h.calls[1].ok();
+  await flush();
+  assert.equal(again.value, true);
+  assert.equal(await h.tap(null), true);
+  assert.equal(h.calls.length, 2, "certain again: no write needed");
 });
 
 test("timeout with a newer intent queued that also fails: one toast, uncertain settle", async () => {

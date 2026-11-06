@@ -72,7 +72,32 @@ Two findings from Micky's review against 411c39f, both **confirmed in source** (
 - Tests: `tests/matchTiers.test.ts` (9, test:play), `tests/caddieFeedbackLanguage.test.ts` (9, test:caddie); 477/477 node tests, tsc, lint (0 errors), build (prerender injected). Headless demo 390x844 + 1280x800 before/after (scratchpad `consistency/`): labels, one shared-preferences row, cards, Caddie layout (with an injected test-fixture `details`, since demo rows have none), picker leaves `golfme:locale` alone and survives an app-language change. **Not tested**: physical iPhone, real accounts (real analyze/translate calls with the new language).
 - Micky 2026-11-05 ("ship", defaults): "N of M joined" removed from cards; "Work on this next" stays below the swing video; rep counts later (needs a feedback schema/prompt change).
 
-## DM reactions: write ordering + trigger authorization — 2026-11-05 (branch `fix/reaction-ordering`, uncommitted/not deployed; golfme-architect; migration `20261105160000` PREPARED, NOT APPLIED)
+## DM reactions: server-side write ordering (late writes) — 2026-11-05 (LIVE on Micky's "ship reaction order"; golfme-architect; migration `20261106160000` APPLIED by Micky 2026-11-06, reactions-order-check.sql true)
+
+- **Authz re-review of the applied `20261105160000`** (Micky applied it 2026-11-05; his screenshot of reactions-authz-check.sql shows true): no gap found. The lock (`for share`, lines 105–113) and the unsent check only run after the user_id / participant + cleared_before / both-way block checks (lines 82–103). The one unlocked read before them (lines 77–80) is unavoidable, because membership is defined by the message's conversation. Its result never leaves the function except through the single `42501 reaction_not_allowed` (lines 115–119). Unsend clearing (`messages_clear_reactions_on_unsend`) is unchanged.
+- **Late writes reproduced** (PGlite on the applied state and in a simulated network): a request that timed out but reaches Postgres after the newer write was applied last, so a late add resurrected a removed reaction and a late replace won. (Writes that reach Postgres concurrently are already ordered by the row lock; the gap is a late arrival.)
+- **Fix: migration `20261106160000_order_message_reaction_writes`.**
+  - **Sequence column:** `client_seq bigint` on the row. A BEFORE UPDATE trigger `message_reactions_sequence` (runs after `_prepare`, so authz comes first) skips, with no error and 0 rows, any write whose seq is lower than the stored one.
+  - **Removal is a tombstone:** an upsert with `emoji` NULL; `emoji` is now nullable and the six-emoji check still applies. A late add can't resurrect a removal. The client drops NULL rows, and so does the live client.
+  - **Unchanged:** the policies, the authz and unsend triggers, and realtime.
+- **Client (`src/lib/reactionOrder.ts`, wired in RealSocialContext).**
+  - **Sequence:** seq = max(now in µs, last issued + 1, my stored seq for that message from the last fetch + 1).
+  - **Fetch:** uses `select("*")` and reads `client_seq` to learn what's stored.
+  - **Migration missing:** the first sequenced write gets PGRST204 client_seq; ordering is then off for the session and that write is retried once the old way. `isMissingReactionsTableError` no longer mistakes a missing column for a missing table.
+  - **Refused tombstone** (block / unsent): falls back once to the old DELETE.
+  - **Queue (`reactionWrites.ts`):** after an uncertain (timed-out) settle, the next tap on that message is always sent, even when it matches what's shown, so its newer seq beats a late request.
+  - **Account switch:** resets the clock and the ordering state.
+- **Trade-off:** two devices of the same user. A device with a slower clock that hasn't fetched the other device's newer write can have its tap ignored (no error, no retry); the refetch shows the server's state. Old clients' writes aren't ordered against sequenced ones during the rollout.
+- **Rollout:** migration first, then the client. Each half is safe alone.
+- **Tests:**
+  - `tests/reactionOrder.test.ts` (18): simulated server + network with late arrivals; the old-table control reproduces the bug.
+  - `tests/reactionWrites.test.ts`: +1 test.
+  - 478/478 node tests; tsc, lint and build pass.
+  - PGlite 162/162 (the prior 96 + 66 ordering; the control reproduces on the applied state).
+  - Headless demo: 28/28 + 17/17 (the demo has no server path).
+  - Not run: real accounts, two devices, iPhone.
+
+## DM reactions: write ordering + trigger authorization — 2026-11-05 (LIVE: queue in 53578e6/f1c08c4; migration `20261105160000` APPLIED by Micky 2026-11-05, reactions-authz-check.sql true per his screenshot)
 
 - Context: `20261105150000_add_dm_message_reactions` was APPLIED to production by Micky on 2026-11-05 (dm-reactions-check.sql returned true; recorded in 4f67dbf on `fix/chat-notif-jump`), and the reactions client is live. Both issues below come from Micky's review of 16bbcc3, not from production reports.
 - **Ordering** (RealSocialContext): every tap sent its own upsert/delete at once, so a quick A-then-B whose older request finished last ended on A, and add-then-remove could bring the reaction back. Now `src/lib/reactionWrites.ts` `createReactionWriteQueue`: per message one write in flight, the latest tap queued (a newer tap replaces the queued one, never sent), no write when the wanted state is what the server has (add → remove → add during the add = one write). Failure: the newer queued tap is still sent; with nothing newer the pill settles on the last state the server confirmed (no stale rollback). Toast (Micky 2026-11-05): only when the latest intent ends up failed; a failed tap that a newer tap superseded stays quiet, and one failed write shared by several taps gives one toast. Timeout (Micky 2026-11-05): each write is bounded at 15 s (`REACTION_WRITE_TIMEOUT_MS`, aborted via supabase-js `.abortSignal()`) and counts as a failure; the server may still have applied it, so its state becomes unknown (the next queued tap is always sent, never skipped as "already there") and a settle after a timeout is flagged `uncertain`; the context rolls back and refetches, and the fetched rows win. A success arriving after its timeout triggers another refetch. Pending states are overlaid on every fetch/realtime refetch; one fetch when a message settles. `reset()` on account switch/sign-out: nothing queued is sent, late answers ignored, no stale toast. Demo (DataContext) has no requests, so taps already apply in order; its page-local reactions are now cleared when the signed-in identity changes.
