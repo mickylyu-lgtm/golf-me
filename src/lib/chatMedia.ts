@@ -241,15 +241,21 @@ export interface PreparedChatVideo {
   trim: { startMs: number; endMs: number } | null;
 }
 
-export type MediaAttachmentItem =
+// `generation`: the conversation visit the item was picked in (the same
+// visit model as lib/chatImageAttachment.ts: the hook bumps it whenever the
+// thread / round changes, so A -> B -> A is three visits). A visit only
+// ever sees, sends or keeps its own items.
+export type MediaAttachmentItem = { generation?: number } & (
   | { key: string; kind: "image"; state: "processing" }
   | { key: string; kind: "image"; state: "ready"; image: ProcessedChatImage }
   | { key: string; kind: "video"; state: "processing" }
   | { key: string; kind: "video"; state: "trimming"; video: PreparedChatVideo }
-  | { key: string; kind: "video"; state: "ready"; video: PreparedChatVideo };
+  | { key: string; kind: "video"; state: "ready"; video: PreparedChatVideo }
+);
 
 export type MediaAttachmentEvent =
-  | { type: "add"; items: { key: string; kind: ChatMediaKind }[]; limit: number }
+  | { type: "add"; items: { key: string; kind: ChatMediaKind }[]; limit: number; generation?: number }
+  | { type: "leave"; generation: number }
   | { type: "imageReady"; key: string; image: ProcessedChatImage }
   | { type: "videoRead"; key: string; video: PreparedChatVideo }
   | { type: "trimmed"; key: string; trim: { startMs: number; endMs: number } }
@@ -277,18 +283,30 @@ export function needsTrim(video: Pick<PreparedChatVideo, "sourceDurationMs" | "t
 export function mediaAttachmentReducer(state: readonly MediaAttachmentItem[], event: MediaAttachmentEvent): readonly MediaAttachmentItem[] {
   switch (event.type) {
     case "add": {
-      const room = Math.max(0, event.limit - state.length);
-      if (room === 0 || event.items.length === 0) return state;
-      return [...state, ...event.items.slice(0, room).map((i) => ({ key: i.key, kind: i.kind, state: "processing" }) as MediaAttachmentItem)];
+      // Items of another visit never stay next to this visit's (see "leave").
+      const own = state.filter((it) => it.generation === event.generation);
+      const room = Math.max(0, event.limit - own.length);
+      if (room === 0 || event.items.length === 0) return own.length === state.length ? state : own;
+      return [...own, ...event.items.slice(0, room).map((i) => ({ key: i.key, kind: i.kind, state: "processing", generation: event.generation }) as MediaAttachmentItem)];
+    }
+    case "leave": {
+      const next = state.filter((it) => it.generation === event.generation);
+      return next.length === state.length ? state : next;
     }
     case "imageReady":
-      return replace(state, event.key, (it) => (it.kind === "image" && it.state === "processing" ? { key: it.key, kind: "image", state: "ready", image: event.image } : it));
+      return replace(state, event.key, (it) =>
+        it.kind === "image" && it.state === "processing" ? { key: it.key, kind: "image", state: "ready", image: event.image, generation: it.generation } : it,
+      );
     case "videoRead":
       return replace(state, event.key, (it) =>
-        it.kind === "video" && it.state === "processing" ? { key: it.key, kind: "video", state: needsTrim(event.video) ? "trimming" : "ready", video: event.video } : it,
+        it.kind === "video" && it.state === "processing"
+          ? { key: it.key, kind: "video", state: needsTrim(event.video) ? "trimming" : "ready", video: event.video, generation: it.generation }
+          : it,
       );
     case "trimmed":
-      return replace(state, event.key, (it) => (it.kind === "video" && it.state === "trimming" ? { key: it.key, kind: "video", state: "ready", video: { ...it.video, trim: event.trim } } : it));
+      return replace(state, event.key, (it) =>
+        it.kind === "video" && it.state === "trimming" ? { key: it.key, kind: "video", state: "ready", video: { ...it.video, trim: event.trim }, generation: it.generation } : it,
+      );
     case "failed":
     case "remove": {
       const next = state.filter((it) => it.key !== event.key);
@@ -308,6 +326,11 @@ function replace(state: readonly MediaAttachmentItem[], key: string, fn: (it: Me
     return r;
   });
   return changed ? next : state;
+}
+
+/** What a visit may show / send: its own items only. */
+export function visitItems(state: readonly MediaAttachmentItem[], generation: number): readonly MediaAttachmentItem[] {
+  return state.every((it) => it.generation === generation) ? state : state.filter((it) => it.generation === generation);
 }
 
 /** Send is possible: at least one item and every item ready (none processing / waiting for a trim). */

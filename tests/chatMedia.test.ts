@@ -32,6 +32,7 @@ import {
   stagedVideoPath,
   toMediaSendItems,
   videoDisplaySize,
+  visitItems,
   type MediaAttachmentItem,
   type PreparedChatVideo,
 } from "../src/lib/chatMedia.ts";
@@ -141,6 +142,31 @@ test("composer: up to the limit, in order; long video waits for a trim; stale re
   s = mediaAttachmentReducer(s, { type: "remove", key: "k1" });
   assert.equal(s.length, 9);
   assert.equal(mediaAttachmentReducer([], { type: "clear" }).length, 0);
+});
+
+test("visits: items belong to the chat visit they were picked in (A -> B, A -> B -> A)", () => {
+  // Visit 0 = chat A, 1 = chat B, 2 = back in A.
+  let s: readonly MediaAttachmentItem[] = [];
+  s = mediaAttachmentReducer(s, { type: "add", items: [{ key: "a1", kind: "image" }, { key: "a2", kind: "video" }], limit: 10, generation: 0 });
+  assert.equal(visitItems(s, 0).length, 2);
+  assert.equal(visitItems(s, 1).length, 0, "B never sees A's items");
+  // Switch to B: A's items leave.
+  s = mediaAttachmentReducer(s, { type: "leave", generation: 1 });
+  assert.equal(s.length, 0);
+  // A's processing finishes late: its key is gone, nothing appears anywhere.
+  const late = mediaAttachmentReducer(s, { type: "imageReady", key: "a1", image });
+  assert.equal(late, s);
+  // A pick in B, then back to A (visit 2): B's items don't follow.
+  s = mediaAttachmentReducer(s, { type: "add", items: [{ key: "b1", kind: "image" }], limit: 10, generation: 1 });
+  assert.equal(visitItems(s, 2).length, 0, "back in A: not B's item, not A's old ones");
+  // An add for visit 2 never keeps another visit's items next to it.
+  s = mediaAttachmentReducer(s, { type: "add", items: [{ key: "a3", kind: "image" }], limit: 10, generation: 2 });
+  assert.deepEqual(s.map((it) => it.key), ["a3"]);
+  // Results keep their visit.
+  s = mediaAttachmentReducer(s, { type: "imageReady", key: "a3", image });
+  assert.equal(s[0].generation, 2);
+  assert.equal(readyDraftItems(visitItems(s, 2)).length, 1);
+  assert.equal(readyDraftItems(visitItems(s, 1)).length, 0, "a send in another visit takes nothing");
 });
 
 test("shape: one photo keeps the single-photo path; one video or several items are media", () => {

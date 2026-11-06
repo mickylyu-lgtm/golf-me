@@ -33,6 +33,7 @@ function outgoingRoundItems(items: readonly MediaSendItem[]) {
   return items.map((it) => ({ localUrl: it.localUrl, posterUrl: it.posterUrl, progress: it.progress, done: it.done, trim: it.trim }));
 }
 import { isMissingVoiceSupportError, roundVoicePath, rowsHaveVoiceColumn, voiceFileType, voiceRowColumns } from "../lib/chatVoice";
+import { ROUND_MESSAGE_PAGE, ROUND_MESSAGE_WINDOW, createRoundMessageStore } from "../lib/roundMessagePages";
 import type { VoiceClip } from "../lib/voiceRecorder";
 
 // Storage path of a photo / voice send: round/<round>/<id>.jpg | .m4a | .webm.
@@ -103,6 +104,8 @@ interface RealRoundsContextValue {
   submitReview: (roundId: string, revieweeId: string, input: ReviewInput) => Promise<void>;
   /** Real rows plus this device's sending/failed messages for the round (lib/roundChat.ts). */
   messagesForCall: (roundId: string) => ChatMessage[];
+  /** A round chat is open: also hold that round's own newest page (lib/roundMessagePages.ts). Returns the unwatch. */
+  watchRoundMessages: (roundId: string) => () => void;
   /** Shows the message at once as "sending"; on failure it stays as a failed bubble (retry/discard; "objectionable" = edit/discard, never resent). Never throws. */
   sendRoundMessage: (roundId: string, text: string, replyToId?: string | null) => Promise<SendMessageResult>;
   retryRoundMessage: (message: { clientId: string; roundId: string; text: string; replyToId?: string | null }) => Promise<SendMessageResult>;
@@ -195,6 +198,14 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
   const reactionOrderingRef = useRef<{ support: OrderingSupport }>({ support: "unknown" });
   const messageRowsRef = useRef<RoundMessageRow[]>([]);
   messageRowsRef.current = messageRows;
+  // messageRows is composed (lib/roundMessagePages.ts): the newest-N window
+  // over all my rounds, plus the own newest page of each round chat that's
+  // open (watchRoundMessages), merged by id in (created_at, id) order. A
+  // page is keyed by its round and holds only that round's rows, so a
+  // response for a round the user already left can't show up in another.
+  const [messageStore] = useState(createRoundMessageStore<RoundMessageRow>);
+  const composeMessageRows = useCallback(() => setMessageRows(messageStore.rows()), [messageStore]);
+  const loadRoundPageRef = useRef<(roundId: string) => Promise<void>>(async () => {});
   const pendingMessagesRef = useRef<PendingRoundMessage[]>([]);
   pendingMessagesRef.current = pendingMessages;
   // The insert was refused for naming reply_to_message_id (migration not
@@ -263,7 +274,14 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
         authUser ? supabase.from("round_reviews").select("round_id, reviewed_user_id").eq("reviewer_user_id", authUser.id) : Promise.resolve({ data: [], error: null }),
         // RLS (private.is_round_member) already scopes this to rounds the
         // caller hosts or has joined — no round_id filter needed here.
-        supabase.from("round_messages").select("*").order("created_at", { ascending: true }),
+        // Newest first, bounded, id as tie-breaker (lib/roundMessagePages):
+        // a row cap can then only cut the oldest history, never the newest.
+        supabase
+          .from("round_messages")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: false })
+          .limit(ROUND_MESSAGE_WINDOW),
       ]);
       if (roundsError) throw roundsError;
       if (participantsError) throw participantsError;
@@ -275,7 +293,11 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
       const nextParticipants = (participantRows ?? []) as ParticipantRow[];
       setRounds(nextRounds);
       setParticipants(nextParticipants);
-      setMessageRows((messageRowsData ?? []) as RoundMessageRow[]);
+      messageStore.setWindow((messageRowsData ?? []) as RoundMessageRow[]);
+      composeMessageRows();
+      // Open round chats refresh their own page too (an edit / unsend of a
+      // message older than the window, a round outside it).
+      for (const roundId of messageStore.watched()) void loadRoundPageRef.current(roundId);
       setMyReviewedKeys(new Set((myReviewRows ?? []).map((r: { round_id: string; reviewed_user_id: string }) => reviewKey(r.round_id, r.reviewed_user_id))));
 
       const ids = new Set<string>();
@@ -309,8 +331,46 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
         void refetchRef.current();
       }
     }
-  }, [authUser]);
+  }, [authUser, messageStore, composeMessageRows]);
   refetchRef.current = refetch;
+
+  // One open round chat's own newest page (same order as the window). The
+  // latest request per round wins; a response for another account, or for
+  // a round no longer open, is dropped.
+  const loadRoundPage = useCallback(
+    async (roundId: string) => {
+      const forUser = authUser?.id;
+      if (!forUser) return;
+      const token = messageStore.beginPage(roundId);
+      const { data, error } = await supabase
+        .from("round_messages")
+        .select("*")
+        .eq("round_id", roundId)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .limit(ROUND_MESSAGE_PAGE);
+      if (userIdRef.current !== forUser) return;
+      if (error) {
+        // Keep what's shown; the next refetch tries again.
+        console.error("GolfMe: failed to load round messages.", error);
+        return;
+      }
+      if (messageStore.acceptPage(roundId, token, (data ?? []) as RoundMessageRow[])) composeMessageRows();
+    },
+    [authUser, messageStore, composeMessageRows],
+  );
+  loadRoundPageRef.current = loadRoundPage;
+
+  const watchRoundMessages = useCallback(
+    (roundId: string) => {
+      const { first, unwatch } = messageStore.watch(roundId);
+      if (first) void loadRoundPageRef.current(roundId);
+      return () => {
+        if (unwatch()) composeMessageRows();
+      };
+    },
+    [messageStore, composeMessageRows],
+  );
 
   // A new account (or demo / signed out): nothing of the previous one's
   // reactions, queued writes or sequences carries over. Keyed on the id, not
@@ -326,7 +386,9 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
     reactionsRef.current = [];
     setRoundReactions([]);
     setReplyColumnMissing(false);
-  }, [accountKey, reactionWrites, reactionSeqClock]);
+    // Another account's rows never compose into this one's.
+    messageStore.reset();
+  }, [accountKey, reactionWrites, reactionSeqClock, messageStore]);
 
   useEffect(() => {
     if (isDemo || !authUser) {
@@ -348,12 +410,19 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
     // this app's data volume doesn't need per-route subscription lifecycle
     // management. A full refetch on any change is a deliberate simplicity
     // choice over patching individual rows in place.
+    let subscribedOnce = false;
     const channel = supabase
       .channel("golf-calls-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "golf_calls" }, () => refetch())
       .on("postgres_changes", { event: "*", schema: "public", table: "round_participants" }, () => refetch())
       .on("postgres_changes", { event: "*", schema: "public", table: "round_messages" }, () => refetch())
-      .subscribe();
+      .subscribe((status) => {
+        // Resubscribed after a drop: catch up on changes missed meanwhile
+        // (the first SUBSCRIBED is covered by the load just above).
+        if (status !== "SUBSCRIBED") return;
+        if (subscribedOnce) void refetch();
+        subscribedOnce = true;
+      });
     const stopResume = refetchOnResume(() => {
       // The reactions migration may have been applied since: look again.
       if (reactionsSupportRef.current === "no") reactionsSupportRef.current = "unknown";
@@ -498,9 +567,10 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
     [refetch],
   );
 
-  // Note: refetch() above still loads every round_messages row the caller
-  // can see (RLS scopes it to their rounds) on every realtime change. Fine
-  // at today's volume; per-round paging is the next step if it grows.
+  // messageRows: the newest-N window over my rounds plus each open round
+  // chat's own newest page (composeMessageRows above), refreshed on every
+  // realtime change. Older history than that isn't loaded (no "load older"
+  // UI yet; lib/roundMessagePages.ts has the keyset cursor for it).
   const messagesForCall = useCallback(
     (roundId: string) => mergeRoundMessages(messageRows, pendingMessages, roundId),
     [messageRows, pendingMessages],
@@ -997,8 +1067,8 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
       }
       // Don't wait for the realtime echo to update this device.
       const unsentAt = new Date().toISOString();
-      setMessageRows((prev) =>
-        prev.map((m) =>
+      const wipe = (rows: RoundMessageRow[]) =>
+        rows.map((m) =>
           m.id === messageId
             ? {
                 ...m,
@@ -1009,8 +1079,11 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
                 ...(m.media !== undefined ? { media: null } : {}),
               }
             : m,
-        ),
-      );
+        );
+      // In every source messageRows is composed from, so a page that lands
+      // before the refetch can't bring the text back.
+      messageStore.patch(wipe);
+      composeMessageRows();
       applyReactions(reactionsRef.current.filter((r) => r.messageId !== messageId));
       // Nothing points at the photo any more (unsend_round_message cleared
       // it): remove the file itself, best effort (lib/chatImageClient).
@@ -1021,7 +1094,7 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
       void refetch();
       return "unsent";
     },
-    [authUser, applyReactions, refetch],
+    [authUser, applyReactions, refetch, messageStore, composeMessageRows],
   );
 
   // Optimistic, queued and ordered exactly like DM reactions
@@ -1142,6 +1215,7 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
     hasReviewed,
     submitReview,
     messagesForCall,
+    watchRoundMessages,
     sendRoundMessage,
     retryRoundMessage,
     discardRoundMessage,

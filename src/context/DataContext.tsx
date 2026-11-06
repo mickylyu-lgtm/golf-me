@@ -187,6 +187,8 @@ interface DataContextValue {
   getGolfer: (id: string) => GolferProfile | undefined;
   getGolfCall: (id: string) => GolfCall | undefined;
   messagesForCall: (callId: string) => ChatMessage[];
+  /** A round chat is open (real accounts: also loads that round's newest page). Returns the unwatch. */
+  watchRoundMessages: (callId: string) => () => void;
   visibleGolfers: (excludeSelf?: boolean) => GolferProfile[];
   reviewsAbout: (golferId: string) => Review[];
 
@@ -514,6 +516,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
       return data.messages.filter((m) => m.golfCallId === callId).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     },
     [auth.isDemo, realRounds, data.messages],
+  );
+  const realWatchRoundMessages = realRounds.watchRoundMessages;
+  const watchRoundMessages = useCallback(
+    (callId: string) => (auth.isDemo ? () => {} : realWatchRoundMessages(callId)),
+    [auth.isDemo, realWatchRoundMessages],
   );
   const reviewsAbout = useCallback((golferId: string) => data.reviews.filter((r) => r.revieweeId === golferId), [data.reviews]);
 
@@ -2192,6 +2199,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       getGolfer,
       getGolfCall,
       messagesForCall,
+      watchRoundMessages,
       visibleGolfers,
       reviewsAbout,
       session,
@@ -2319,6 +2327,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       getGolfer,
       getGolfCall,
       messagesForCall,
+      watchRoundMessages,
       visibleGolfers,
       reviewsAbout,
       logIn,

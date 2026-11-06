@@ -70,6 +70,7 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
     getGolfer,
     getGolfCall,
     messagesForCall,
+    watchRoundMessages,
     sendMessage,
     retryRoundMessage,
     discardRoundMessage,
@@ -94,12 +95,14 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
   // viewer. The chip renders inside the composer wrapper, so docking /
   // spacer / list ResizeObservers treat it like the reply bar.
   // Since 20261107220000 several photos / videos (lib/chatMedia.ts); before
-  // it (feature-detected) exactly one photo, as before.
+  // it (feature-detected) exactly one photo, as before. Scoped to this
+  // round's visit: a picker that answers after a switch is dropped.
   const mediaText = useChatMediaText();
   const photo = useChatMediaAttachment({
     limit: canSendRoundMedia ? MEDIA_MAX_ITEMS : 1,
     allowVideos: canSendRoundMedia,
     onError: (reason) => showToast(mediaText.pickError(reason), "warning"),
+    scope: callId,
   });
   const [mediaViewer, setMediaViewer] = useState<{ items: PostMediaItem[]; index: number } | null>(null);
   const openMediaViewer = (m: ChatMessage, index: number) => {
@@ -127,6 +130,9 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
   textRef.current = text;
   const listRef = useRef<HTMLDivElement>(null);
   const messages = messagesForCall(callId);
+  // While open, this round's own newest page is held too (lib/
+  // roundMessagePages.ts), so it can't fall outside the shared window.
+  useEffect(() => watchRoundMessages(callId), [callId, watchRoundMessages]);
   // Completed / cancelled: history stays, the composer is replaced by a
   // read-only note (the round_messages insert policy refuses posts too).
   const status = getGolfCall(callId)?.status;

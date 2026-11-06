@@ -90,12 +90,14 @@ export function DirectMessageThread() {
   // send only: nothing here touches the box / keyboard / scroll code below.
   // Since 20261107220000 the same button picks several photos and videos
   // (lib/chatMedia.ts); before it (feature-detected) exactly one photo, as
-  // before. One photo alone still goes the single-photo way.
+  // before. One photo alone still goes the single-photo way. Scoped to this
+  // thread's visit: a picker that answers after a switch is dropped.
   const mediaText = useChatMediaText();
   const photo = useChatMediaAttachment({
     limit: canSendDirectMedia ? MEDIA_MAX_ITEMS : 1,
     allowVideos: canSendDirectMedia,
     onError: (reason) => showToast(mediaText.pickError(reason), "warning"),
+    scope: id,
   });
   const [mediaViewer, setMediaViewer] = useState<{ items: PostMediaItem[]; index: number } | null>(null);
   const openMediaViewer = (m: DirectMessage, index: number) => {
