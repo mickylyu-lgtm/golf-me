@@ -308,7 +308,7 @@ function RoundChatRow({ call }: { call: GolfCall }) {
           {last ? (
             <>
               {prefix}
-              {last.text}
+              {last.unsentAt ? <span className="italic">{t("chat.messageUnsent")}</span> : last.text}
             </>
           ) : (
             t("chatInbox.roundNoMessages")

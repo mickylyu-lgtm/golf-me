@@ -528,6 +528,8 @@ export const en = {
   "roundChat.notSentCancelled": "Not sent — this round was cancelled",
   "roundChat.retryLabel": "Message not sent. Tap to retry.",
   "roundChat.discard": "Discard",
+  "roundChat.someone": "A golfer",
+  "roundChat.viewProfile": "View profile",
   "myGolf.notCompleted": "Not marked complete",
   "discover.searchPlaceholder": "Search golfers",
 

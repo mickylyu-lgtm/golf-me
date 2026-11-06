@@ -514,6 +514,8 @@ export const ko: Record<TranslationKey, string> = {
   "roundChat.notSentCancelled": "전송 안 됨 — 이 라운드는 취소되었습니다",
   "roundChat.retryLabel": "메시지가 전송되지 않았습니다. 탭하여 다시 시도하세요.",
   "roundChat.discard": "삭제",
+  "roundChat.someone": "골퍼",
+  "roundChat.viewProfile": "프로필 보기",
   "myGolf.notCompleted": "완료 표시 안 됨",
   "discover.searchPlaceholder": "골퍼 검색",
 

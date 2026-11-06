@@ -514,6 +514,8 @@ export const zhTW: Record<TranslationKey, string> = {
   "roundChat.notSentCancelled": "未傳送 — 此球局已取消",
   "roundChat.retryLabel": "訊息未傳送。點按重試。",
   "roundChat.discard": "捨棄",
+  "roundChat.someone": "一位球友",
+  "roundChat.viewProfile": "查看個人資料",
   "myGolf.notCompleted": "未標記完成",
   "discover.searchPlaceholder": "搜尋球友",
 

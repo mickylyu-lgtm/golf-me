@@ -1,5 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { AlertCircle, Lock } from "lucide-react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { AlertCircle, Lock, Reply } from "lucide-react";
 import { useData } from "../../context/DataContext";
 import { useToast } from "../../context/ToastContext";
 import { Avatar } from "../ui/Avatar";
@@ -13,6 +14,20 @@ import { followNewMessages, isNearBottom, messagesAfter, pinToBottom } from "../
 import { lockPageScroll } from "../../lib/scrollLock";
 import { useChatViewportBox } from "../../lib/useChatViewportBox";
 import { NewMessagesPill } from "./NewMessagesPill";
+import { MessageActionsMenu } from "./MessageActionsMenu";
+import { ReactionPill } from "./ReactionPill";
+import { MessageQuote, ReplyBar, RevealedTime } from "./ChatBubbleParts";
+import { useMessageLongPress } from "../../lib/useMessageLongPress";
+import { useSwipeToReply } from "../../lib/useSwipeToReply";
+import { useSwipeToRevealTimes } from "../../lib/useSwipeToRevealTimes";
+import { useExitPresence } from "../../lib/useExitPresence";
+import { FOCUS_EXIT_MS } from "../../lib/messageFocus";
+import { messageActions } from "../../lib/messageLongPress";
+import { canUnsendMessage, unsendRemainingMs } from "../../lib/unsend";
+import { QUICK_REACTIONS, groupReactionsByMessage, myReaction, nextReaction, summarizeReactions, type QuickReaction } from "../../lib/reactions";
+import { isActionableRoundMessage } from "../../lib/roundChat";
+import { formatMessageTime } from "../../lib/messageTime";
+import { copyText } from "../../lib/share";
 import type { ChatMessage } from "../../types";
 
 // layout "card" (default): the inline card on the round page, list capped
@@ -22,12 +37,44 @@ import type { ChatMessage } from "../../types";
 // thread header and the keyboard / bottom nav, only the list scrolls, and
 // the page itself never moves, so the header and its Back button stay put.
 // Callers only render this for members (lib/roundChat.ts canReadRoundChat).
+//
+// Message interactions are the DM thread's, through the same shared pieces
+// (Micky 2026-11-05: round chat had none of them): hold / right-click a
+// bubble for the focus menu (MessageActionsMenu: quick reactions, Reply,
+// Copy, Unsend on my own message within 5 minutes), reaction pills (tap
+// mine to remove), swipe right to reply with a quote that jumps to the
+// original, swipe the thread left for send times, "unsent" placeholders.
+// Each is offered only where the server allows it (DataContext
+// canReplyToRoundMessages / canUnsendRoundMessages / canReactToRoundMessages:
+// feature-detected for real accounts, migration 20261107130000), and
+// replies / reactions only while the round is open (read-only after).
+// None of it touches the keyboard / docking / viewport code above the
+// render, the list's scroll (only jump-to-quote sets the list's own
+// scrollTop), or ChatComposer.
 
 export function GroupChat({ callId, layout = "card" }: { callId: string; layout?: "card" | "page" }) {
-  const { currentUser, getGolfer, getGolfCall, messagesForCall, sendMessage, retryRoundMessage, discardRoundMessage } = useData();
+  const {
+    currentUser,
+    getGolfer,
+    getGolfCall,
+    messagesForCall,
+    sendMessage,
+    retryRoundMessage,
+    discardRoundMessage,
+    canReplyToRoundMessages,
+    canUnsendRoundMessages,
+    unsendRoundMessage,
+    canReactToRoundMessages,
+    roundMessageReactions,
+    setRoundMessageReaction,
+  } = useData();
   const { showToast } = useToast();
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
+  const navigate = useNavigate();
   const [text, setText] = useState(() => loadChatDraft(groupChatDraftKey(callId)));
+  // The composer's text as of the last render, for a send that settles later.
+  const textRef = useRef(text);
+  textRef.current = text;
   const listRef = useRef<HTMLDivElement>(null);
   const messages = messagesForCall(callId);
   // Completed / cancelled: history stays, the composer is replaced by a
@@ -191,6 +238,66 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
     setUnseenCount(0);
   };
 
+  // ---- DM-parity interactions (see the header comment) ----
+  // Rows sit in their own wrapper so the reveal-times drag moves them with
+  // one transform; it never touches the list's scroll or size.
+  const rowsRef = useRef<HTMLDivElement>(null);
+  useSwipeToRevealTimes(listRef, rowsRef, true);
+
+  const [replyToId, setReplyToId] = useState<string | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const highlightTimerRef = useRef(0);
+  // Replying and reacting are posts: only while the round is open (the
+  // database refuses them after, migration 20261107130000).
+  const replyEnabled = !readOnly && canReplyToRoundMessages;
+  const reactEnabled = !readOnly && canReactToRoundMessages;
+  // Swipe's pointerup / the menu's click are user gestures: focusing the
+  // composer here is the same focus a tap on it makes, so the keyboard (and,
+  // on the round page, the docking above) runs exactly as for a tap.
+  const startReply = (messageId: string) => {
+    setReplyToId(messageId);
+    const textarea = composerRef.current?.querySelector("textarea");
+    if (textarea && document.activeElement !== textarea) textarea.focus({ preventScroll: true });
+  };
+  useSwipeToReply(listRef, replyEnabled, startReply);
+
+  const reactionsByMessage = useMemo(() => groupReactionsByMessage(roundMessageReactions), [roundMessageReactions]);
+  const [actionsFor, setActionsFor] = useState<{ id: string; bubble: HTMLElement } | null>(null);
+  // Unsend is offered for my own stored message inside the 5-minute window
+  // (lib/unsend.ts); nowMs ticks at the next expiry so a lapsed one stops
+  // offering it without a reload. The server decides for real.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const unsendableIds = new Set(
+    canUnsendRoundMessages ? messages.filter((m) => isActionableRoundMessage(m) && canUnsendMessage(m, currentUser.id, nowMs)).map((m) => m.id) : [],
+  );
+  const nextUnsendExpiry = canUnsendRoundMessages
+    ? Math.min(...messages.filter((m) => unsendableIds.has(m.id)).map((m) => unsendRemainingMs(m.createdAt, nowMs)))
+    : Infinity;
+  useEffect(() => {
+    if (!Number.isFinite(nextUnsendExpiry)) return;
+    const timer = window.setTimeout(() => setNowMs(Date.now()), nextUnsendExpiry + 50);
+    return () => window.clearTimeout(timer);
+  }, [nextUnsendExpiry]);
+  // Hold (touch) / right-click (mouse) any bubble that has one (not a system
+  // line, not unsent, not a failed send) -> the focus menu.
+  useMessageLongPress(listRef, true, (messageId, bubble) => {
+    const m = messages.find((x) => x.id === messageId);
+    if (!m || m.unsentAt || m.system || m.delivery === "failed") return;
+    setNowMs(Date.now());
+    setActionsFor({ id: messageId, bubble });
+  });
+  const closeActions = useCallback(() => setActionsFor(null), []);
+  const actionsShown = useExitPresence(actionsFor, FOCUS_EXIT_MS);
+
+  // A reply target / open menu belongs to one round; no timer outlives us.
+  useEffect(() => setReplyToId(null), [callId]);
+  useEffect(() => setActionsFor(null), [callId]);
+  useEffect(() => () => window.clearTimeout(highlightTimerRef.current), []);
+  // The round ended (or reply support went away) while a reply was picked.
+  useEffect(() => {
+    if (!replyEnabled) setReplyToId(null);
+  }, [replyEnabled]);
+
   // Same golf call's chat can be revisited across navigations without this
   // component staying mounted the whole time — restore whatever was typed
   // but never sent, instead of always starting from a blank box.
@@ -204,32 +311,86 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
   }
 
   // Content filter: the message was removed, so put the text back (unless
-  // the golfer already started typing something new) to edit.
-  function restoreRejectedText(sending: string) {
+  // the golfer already started typing something new) to edit, with the
+  // quote it had if no other one was picked meanwhile.
+  function restoreRejectedText(sending: string, replyTo: string | null = null) {
     showToast(t("moderation.objectionableContent"), "warning");
     setText((current) => {
       if (current.trim()) return current;
       saveChatDraft(groupChatDraftKey(callId), sending);
       return sending;
     });
+    if (replyTo && !textRef.current.trim()) setReplyToId((picked) => picked ?? replyTo);
   }
+
+  const messagesById = new Map(messages.map((m) => [m.id, m]));
+  const replyTarget = replyToId ? messagesById.get(replyToId) : undefined;
 
   async function handleSend() {
     const sending = text;
     if (!sending.trim() || readOnly) return;
+    const replyTo = replyEnabled && replyTarget && isActionableRoundMessage(replyTarget) ? replyTarget.id : null;
     // Clear right away: the message shows at once (real accounts: as
     // "sending", then a "Not sent · Tap to retry" bubble if it fails, so the
     // text is never silently lost; demo: delivered instantly).
     updateText("");
+    setReplyToId(null);
     // The golfer's own bubble pins itself into view (message effect above).
-    const result = await sendMessage(callId, sending);
-    if (result === "objectionable") restoreRejectedText(sending);
+    const result = await sendMessage(callId, sending, replyTo);
+    if (result === "objectionable") restoreRejectedText(sending, replyTo);
   }
 
   async function handleRetry(m: ChatMessage) {
     const result = await retryRoundMessage(m);
-    if (result === "objectionable") restoreRejectedText(m.text);
+    if (result === "objectionable") restoreRejectedText(m.text, m.replyToId ?? null);
   }
+
+  function senderName(senderId: string) {
+    return senderId === currentUser.id ? t("chat.you") : (getGolfer(senderId)?.name ?? t("roundChat.someone"));
+  }
+
+  // Tap a quote: scroll the list (only its own scrollTop, like a user
+  // scroll) to the original and flash it. Same as the DM thread.
+  function jumpToMessage(messageId: string) {
+    const list = listRef.current;
+    const row = list?.querySelector<HTMLElement>(`[data-reply-row="${CSS.escape(messageId)}"]`);
+    if (!list || !row) return;
+    const listRect = list.getBoundingClientRect();
+    const rowRect = row.getBoundingClientRect();
+    const top = list.scrollTop + (rowRect.top - listRect.top) - Math.max(0, (listRect.height - rowRect.height) / 2);
+    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+    list.scrollTo({ top: Math.max(0, top), behavior: reduced ? "auto" : "smooth" });
+    setHighlightId(messageId);
+    window.clearTimeout(highlightTimerRef.current);
+    highlightTimerRef.current = window.setTimeout(() => setHighlightId(null), 1400);
+  }
+
+  async function handleUnsend(messageId: string) {
+    setActionsFor(null);
+    if (replyToId === messageId) setReplyToId(null);
+    const result = await unsendRoundMessage(messageId);
+    if (result === "expired") {
+      setNowMs(Date.now());
+      showToast(t("chat.unsendExpired"), "info");
+    } else if (result === "failed") showToast(t("chat.unsendFailed"), "warning");
+  }
+
+  // Tap an emoji in the row: set / replace; the same one again removes it.
+  // Tap my reaction pill: remove. Optimistic (the context rolls back).
+  async function handleReact(messageId: string, emoji: QuickReaction | null) {
+    setActionsFor(null);
+    if (!(await setRoundMessageReaction(messageId, emoji))) showToast(t("chat.reactionFailed"), "warning");
+  }
+
+  async function handleCopy(messageId: string) {
+    setActionsFor(null);
+    const m = messagesById.get(messageId);
+    if (m && (await copyText(m.text))) showToast(t("chat.copied"), "info");
+  }
+
+  // The menu's message; gone (unsent here or on another phone) = no menu.
+  const actionsCandidate = actionsShown.value ? messagesById.get(actionsShown.value.id) : undefined;
+  const actionsMessage = actionsCandidate && !actionsCandidate.unsentAt && !actionsCandidate.system ? actionsCandidate : undefined;
 
   // A failed message once the round is over: retry can't help, so say why
   // (discard is still offered, and the text stays visible to copy).
@@ -254,13 +415,19 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
           clientHeight once the list overflows, so older messages couldn't
           be scrolled to and every scrollTop pin was a no-op (measured
           headless: 17 messages, scrollHeight 384 = clientHeight). */}
+      {/* overflow-x-hidden + touch-pan-y + data-no-swipe: the swipe-to-
+          reveal-times gesture (the rows slide left, each row's time sits
+          just past this list's right clip edge), as in the DM thread.
+          Vertical scrolling stays native. */}
       <div
         ref={listRef}
+        data-no-swipe
         // Page: the list takes whatever the box leaves above the composer.
-        className={`flex flex-col gap-3 overflow-y-auto px-4 py-4 ${layout === "page" ? "min-h-0 flex-1" : "max-h-96"}`}
+        className={`flex touch-pan-y flex-col gap-3 overflow-x-hidden overflow-y-auto px-4 py-4 ${layout === "page" ? "min-h-0 flex-1" : "max-h-96"}`}
       >
         <div className="mt-auto" />
         {messages.length === 0 && <p className="text-center text-sm text-slate-400">{t("chat.noMessagesYet")}</p>}
+        <div ref={rowsRef} className="flex flex-col gap-3">
         {messages.map((m) => {
           if (m.system) {
             return (
@@ -272,22 +439,91 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
           const sender = getGolfer(m.senderId);
           const isMe = m.senderId === currentUser.id;
           const failed = m.delivery === "failed";
+          const sent = formatMessageTime(m.createdAt, locale, t);
+          const avatar = sender && (
+            // Tap: that golfer's profile; a long press magnifies the photo
+            // (Avatar swallows the click after it). Same as the DM thread.
+            <button
+              type="button"
+              aria-label={t("roundChat.viewProfile")}
+              onClick={() => navigate(isMe ? "/profile" : `/golfer/${m.senderId}`)}
+              data-reply-avatar
+              className="shrink-0 rounded-full"
+            >
+              <Avatar golfer={sender} size="xs" showVerified={false} />
+            </button>
+          );
+          // Unsent: a quiet placeholder where the message was (its text is
+          // already gone). Not a hold / reply target; quotes of it say
+          // "Message unsent".
+          if (m.unsentAt) {
+            return (
+              <div key={m.clientId ?? m.id} data-reply-row={m.id} className={`relative flex items-end gap-2 ${isMe ? "flex-row-reverse" : ""}`}>
+                {avatar}
+                <p className="max-w-[75%] rounded-2xl border border-dashed border-slate-200 px-3.5 py-2 text-xs text-slate-400 italic">
+                  {isMe ? t("chat.youUnsent") : t("chat.theyUnsent", { name: senderName(m.senderId) })}
+                </p>
+                <RevealedTime dateTime={m.createdAt} label={sent} />
+              </div>
+            );
+          }
+          const actionable = isActionableRoundMessage(m);
+          const reactionRows = canReactToRoundMessages && actionable ? reactionsByMessage.get(m.id) : undefined;
+          const reactionSummary = reactionRows ? summarizeReactions(reactionRows, m.id, currentUser.id) : [];
+          const mineReacted = reactionSummary.some((s) => s.mine);
+          const quoted = m.replyToId ? messagesById.get(m.replyToId) : undefined;
           return (
-            <div key={m.clientId ?? m.id} className={`flex items-end gap-2 ${isMe ? "flex-row-reverse" : ""}`}>
-              {sender && <Avatar golfer={sender} size="xs" showVerified={false} />}
+            // data-reply-row/-arrow/-avatar/-bubble: useSwipeToReply's DOM
+            // contract (only the bubble moves); data-actions-bubble:
+            // useMessageLongPress's.
+            <div key={m.clientId ?? m.id} data-reply-row={m.id} className={`relative flex items-end gap-2 ${isMe ? "flex-row-reverse" : ""}`}>
+              <span
+                data-reply-arrow
+                aria-hidden="true"
+                className="pointer-events-none absolute top-1/2 left-0 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-slate-100 text-slate-500 opacity-0"
+              >
+                <Reply size={14} />
+              </span>
+              {avatar}
               <div className={`flex max-w-[75%] flex-col ${isMe ? "items-end" : "items-start"}`}>
                 {!isMe && <span className="mb-0.5 text-[11px] font-medium text-slate-400">{sender?.name}</span>}
                 <div
-                  className={`rounded-2xl px-3.5 py-2 text-sm transition-opacity duration-200 ${
+                  data-reply-bubble={replyEnabled && actionable ? m.id : undefined}
+                  // Hold / right-click -> the focus menu. On touch screens no
+                  // iOS selection callout (Copy is in the menu); a mouse still
+                  // selects. data-pressing (useMessageLongPress) eases it
+                  // down while a hold builds.
+                  data-actions-bubble={failed ? undefined : m.id}
+                  className={`relative rounded-2xl px-3.5 py-2 text-sm transition-[box-shadow,scale,opacity] duration-300 ease-out data-pressing:scale-[0.97] data-pressing:duration-[350ms] [overflow-wrap:anywhere] pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none] ${
                     failed
                       ? "rounded-br-sm border border-rose-300 bg-rose-50 text-slate-800"
                       : isMe
                         ? "rounded-br-sm bg-fairway-600 text-white"
                         : "rounded-bl-sm bg-slate-100 text-slate-800"
-                  } ${m.delivery === "sending" ? "opacity-60" : ""}`}
+                  } ${m.delivery === "sending" ? "opacity-60" : ""} ${highlightId === m.id ? "ring-2 ring-amber-300 ring-offset-2" : ""} ${
+                    reactionSummary.length > 0 ? "mb-4" : ""
+                  }`}
                 >
+                  {/* Quote of the replied-to message, only from messages this
+                      member already has loaded (RLS-visible); else
+                      "unavailable". */}
+                  {m.replyToId && (
+                    <MessageQuote
+                      isMe={isMe && !failed}
+                      quoted={quoted ? { id: quoted.id, sender: senderName(quoted.senderId), text: quoted.text, unsent: Boolean(quoted.unsentAt) } : null}
+                      onJump={jumpToMessage}
+                      labels={{ showOriginal: t("chat.showOriginal"), unavailable: t("chat.originalUnavailable"), unsent: t("chat.messageUnsent") }}
+                    />
+                  )}
                   {m.text}
                   {m.delivery === "sending" && <span className="sr-only"> ({t("roundChat.sending")})</span>}
+                  <ReactionPill
+                    summary={reactionSummary}
+                    alignRight={isMe}
+                    label={t("chat.reactionsLabel", { list: reactionSummary.map((s) => (s.count > 1 ? `${s.emoji} ${s.count}` : s.emoji)).join(" ") })}
+                    removeLabel={t("chat.removeReaction")}
+                    onRemoveMine={mineReacted && reactEnabled ? () => handleReact(m.id, null) : null}
+                  />
                 </div>
                 {failed && m.clientId && (
                   <div className="mt-1 flex items-center gap-3 text-[11px] font-semibold">
@@ -315,9 +551,11 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
                   </div>
                 )}
               </div>
+              {!m.delivery && <RevealedTime dateTime={m.createdAt} label={sent} />}
             </div>
           );
         })}
+        </div>
       </div>
       {/* Holds the composer's place, plus the keyboard's height: near the
           bottom of the page there's otherwise no room to scroll the latest
@@ -338,8 +576,55 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
         }
         style={composerDocked ? { bottom: `${keyboardHeight}px` } : undefined}
       >
+        {/* Inside the composer's own wrapper: docked, it rides on the
+            keyboard with the composer (the docked bar's ResizeObserver
+            above grows the spacer); on the page, the list's
+            ResizeObserver re-pins like a composer growing a line. */}
+        {replyTarget && replyEnabled && (
+          <ReplyBar
+            title={replyTarget.senderId === currentUser.id ? t("chat.replyingToSelf") : t("chat.replyingTo", { name: senderName(replyTarget.senderId) })}
+            text={replyTarget.unsentAt ? t("chat.messageUnsent") : replyTarget.text}
+            cancelLabel={t("chat.cancelReply")}
+            onCancel={() => setReplyToId(null)}
+          />
+        )}
         <ChatComposer value={text} onChange={updateText} onSend={handleSend} placeholder={t("chat.messagePlaceholder")} />
       </div>
+      )}
+      {actionsMessage && actionsShown.value && (
+        <MessageActionsMenu
+          key={actionsShown.key}
+          bubble={actionsShown.value.bubble}
+          closing={actionsShown.exiting}
+          alignRight={actionsMessage.senderId === currentUser.id}
+          reactions={
+            reactEnabled && isActionableRoundMessage(actionsMessage)
+              ? {
+                  emojis: QUICK_REACTIONS,
+                  mine: myReaction(roundMessageReactions, actionsMessage.id, currentUser.id),
+                  onPick: (emoji) => handleReact(actionsMessage.id, nextReaction(myReaction(roundMessageReactions, actionsMessage.id, currentUser.id), emoji)),
+                }
+              : null
+          }
+          actions={messageActions({
+            canReply: replyEnabled && isActionableRoundMessage(actionsMessage),
+            canUnsend: unsendableIds.has(actionsMessage.id),
+          })}
+          labels={{
+            menu: t("chat.messageActions"),
+            reply: t("chat.reply"),
+            unsend: t("chat.unsend"),
+            copy: t("chat.copy"),
+            reactWith: (emoji) => t("chat.reactWith", { emoji }),
+          }}
+          onReply={() => {
+            setActionsFor(null);
+            startReply(actionsMessage.id);
+          }}
+          onUnsend={() => handleUnsend(actionsMessage.id)}
+          onCopy={() => handleCopy(actionsMessage.id)}
+          onClose={closeActions}
+        />
       )}
     </div>
   );

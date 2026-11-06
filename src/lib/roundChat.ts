@@ -84,6 +84,8 @@ export interface PendingRoundMessage {
   serverId?: string;
   serverCreatedAt?: string;
   failure?: RoundSendFailure;
+  /** The message it quotes (swipe-to-reply), kept for a retry. */
+  replyToId?: string | null;
 }
 
 export interface RoundMessageRowLike {
@@ -92,9 +94,21 @@ export interface RoundMessageRowLike {
   sender_id: string;
   text: string;
   created_at: string;
+  // Only present once migration 20261107130000_round_chat_parity is
+  // applied; their presence on fetched rows is how the client detects
+  // replies and unsend (roundRowsHaveColumn).
+  reply_to_message_id?: string | null;
+  unsent_at?: string | null;
 }
 
-export function createPendingRoundMessage(input: { clientId: string; roundId: string; senderId: string; text: string; now?: Date }): PendingRoundMessage {
+export function createPendingRoundMessage(input: {
+  clientId: string;
+  roundId: string;
+  senderId: string;
+  text: string;
+  replyToId?: string | null;
+  now?: Date;
+}): PendingRoundMessage {
   return {
     clientId: input.clientId,
     roundId: input.roundId,
@@ -102,7 +116,37 @@ export function createPendingRoundMessage(input: { clientId: string; roundId: st
     text: input.text,
     createdAt: (input.now ?? new Date()).toISOString(),
     state: "sending",
+    replyToId: input.replyToId ?? null,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Feature detection (migration 20261107130000_round_chat_parity)
+// ---------------------------------------------------------------------------
+
+/** A fetched row carries this column (rows are selected with "*"), i.e. the migration is applied. */
+export function roundRowsHaveColumn(rows: readonly object[], column: "reply_to_message_id" | "unsent_at"): boolean {
+  return rows.some((r) => Object.prototype.hasOwnProperty.call(r, column));
+}
+
+/**
+ * The insert named reply_to_message_id before the migration (PostgREST
+ * PGRST204 "Could not find the 'reply_to_message_id' column", Postgres
+ * 42703), or quoted a message the database says isn't in this round
+ * (hint reply_not_in_round). Either way the text is sent again without the
+ * quote rather than failing.
+ */
+export function shouldResendWithoutReply(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const { code, message, hint } = error as { code?: unknown; message?: unknown; hint?: unknown };
+  if (hint === "reply_not_in_round") return true;
+  if (typeof message === "string" && message.includes("reply_not_in_round")) return true;
+  return (code === "PGRST204" || code === "42703") && typeof message === "string" && message.includes("reply_to_message_id");
+}
+
+/** Who can be quoted / reacted to / unsent: a stored (not still-sending, not failed), not-unsent, non-system message. */
+export function isActionableRoundMessage(m: Pick<ChatMessage, "id" | "system" | "delivery" | "unsentAt">): boolean {
+  return !m.system && !m.delivery && !m.unsentAt && !m.id.startsWith("temp-");
 }
 
 function update(pending: readonly PendingRoundMessage[], clientId: string, patch: (p: PendingRoundMessage) => PendingRoundMessage): PendingRoundMessage[] {
@@ -167,15 +211,41 @@ export function reconcilePendingRoundMessages(pending: readonly PendingRoundMess
 export function mergeRoundMessages(rows: readonly RoundMessageRowLike[], pending: readonly PendingRoundMessage[], roundId: string): ChatMessage[] {
   const real: ChatMessage[] = rows
     .filter((r) => r.round_id === roundId)
-    .map((r) => ({ id: r.id, golfCallId: r.round_id, senderId: r.sender_id, text: r.text, createdAt: r.created_at }));
+    .map((r) => ({
+      id: r.id,
+      golfCallId: r.round_id,
+      senderId: r.sender_id,
+      text: r.text,
+      createdAt: r.created_at,
+      replyToId: r.reply_to_message_id ?? null,
+      unsentAt: r.unsent_at ?? null,
+    }));
   const mine = reconcilePendingRoundMessages(
     pending.filter((p) => p.roundId === roundId),
     rows,
   );
   const extra: ChatMessage[] = mine.map((p) =>
     p.state === "sent"
-      ? { id: p.serverId ?? p.clientId, clientId: p.clientId, golfCallId: p.roundId, senderId: p.senderId, text: p.text, createdAt: p.serverCreatedAt ?? p.createdAt }
-      : { id: p.clientId, clientId: p.clientId, golfCallId: p.roundId, senderId: p.senderId, text: p.text, createdAt: p.createdAt, delivery: p.state, failure: p.failure },
+      ? {
+          id: p.serverId ?? p.clientId,
+          clientId: p.clientId,
+          golfCallId: p.roundId,
+          senderId: p.senderId,
+          text: p.text,
+          createdAt: p.serverCreatedAt ?? p.createdAt,
+          replyToId: p.replyToId ?? null,
+        }
+      : {
+          id: p.clientId,
+          clientId: p.clientId,
+          golfCallId: p.roundId,
+          senderId: p.senderId,
+          text: p.text,
+          createdAt: p.createdAt,
+          delivery: p.state,
+          failure: p.failure,
+          replyToId: p.replyToId ?? null,
+        },
   );
   if (extra.length === 0) return real;
   // Real rows keep server order; this device's unsent ones always sit at the

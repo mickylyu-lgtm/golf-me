@@ -257,6 +257,10 @@ export interface ChatMessage {
   failure?: "rejected" | "network";
   /** Local id of a message sent from this device, for retry/discard. */
   clientId?: string;
+  /** Swipe-to-reply: the round message this one quotes (same round, enforced by the database). */
+  replyToId?: string | null;
+  /** Unsend (lib/unsend.ts): set when the sender unsent it; the text is then empty. */
+  unsentAt?: string | null;
 }
 
 export type PaceOfPlay = "Fast" | "Good" | "Slow";

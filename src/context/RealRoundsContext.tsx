@@ -18,8 +18,17 @@ import {
   markRoundMessageSent,
   mergeRoundMessages,
   reconcilePendingRoundMessages,
+  roundRowsHaveColumn,
+  shouldResendWithoutReply,
 } from "../lib/roundChat";
 import type { PendingRoundMessage, RoundMessageRowLike } from "../lib/roundChat";
+import { classifyUnsendError } from "../lib/unsend";
+import type { UnsendResult } from "../lib/unsend";
+import { isMissingReactionsTableError, myReaction, overlayPendingReactions, reactionRowsToReactions, withReaction } from "../lib/reactions";
+import type { MessageReaction, QuickReaction } from "../lib/reactions";
+import { createReactionWriteQueue } from "../lib/reactionWrites";
+import { createReactionSeqClock, reactionSeqFromRow, sendReactionWrite } from "../lib/reactionOrder";
+import type { OrderingSupport, ReactionTransport } from "../lib/reactionOrder";
 import type { ChatMessage, GolfCall, GolferProfile } from "../types";
 import type { ReviewInput } from "./DataContext";
 
@@ -76,15 +85,39 @@ interface RealRoundsContextValue {
   /** Real rows plus this device's sending/failed messages for the round (lib/roundChat.ts). */
   messagesForCall: (roundId: string) => ChatMessage[];
   /** Shows the message at once as "sending"; on failure it stays as a failed bubble (retry/discard) — except "objectionable", which is removed so the caller can put the text back. Never throws. */
-  sendRoundMessage: (roundId: string, text: string) => Promise<SendMessageResult>;
-  retryRoundMessage: (message: { clientId: string; roundId: string; text: string }) => Promise<SendMessageResult>;
+  sendRoundMessage: (roundId: string, text: string, replyToId?: string | null) => Promise<SendMessageResult>;
+  retryRoundMessage: (message: { clientId: string; roundId: string; text: string; replyToId?: string | null }) => Promise<SendMessageResult>;
   discardRoundMessage: (clientId: string) => void;
+  // Migration 20261107130000_round_chat_parity, each part feature-detected
+  // so this ships safely before it: replies / unsend once fetched
+  // round_messages rows carry reply_to_message_id / unsent_at; reactions
+  // once a select on round_message_reactions succeeds. False until then
+  // (and never an error): the UI simply doesn't offer them.
+  repliesSupported: boolean;
+  unsendSupported: boolean;
+  /** Sender only, within 5 minutes by the database clock (public.unsend_round_message). */
+  unsendRoundMessage: (messageId: string) => Promise<UnsendResult>;
+  reactionsSupported: boolean;
+  /** Every reaction this account can see (RLS: rounds it's in), tombstones dropped. */
+  roundReactions: MessageReaction[];
+  /** Same queue + ordering as DMs (lib/reactionWrites, lib/reactionOrder). false = my latest tap failed and was rolled back. */
+  setRoundReaction: (messageId: string, emoji: QuickReaction | null) => Promise<boolean>;
   /** The signed-in golfer was in this round and left it (participant row 'left'). */
   hasLeftRound: (roundId: string) => boolean;
 }
 
 function reviewKey(roundId: string, revieweeId: string): string {
   return `${roundId}:${revieweeId}`;
+}
+
+// Newest reactions loaded per fetch (RLS scopes them to my rounds). Round
+// chats are small (at most four golfers) and recent, so this covers them.
+const ROUND_REACTION_WINDOW = 2000;
+
+type Support = "unknown" | "yes" | "no";
+
+function sameReactions(a: readonly MessageReaction[], b: readonly MessageReaction[]): boolean {
+  return a.length === b.length && a.every((r, i) => r.messageId === b[i].messageId && r.userId === b[i].userId && r.emoji === b[i].emoji);
 }
 
 const RealRoundsContext = createContext<RealRoundsContextValue | null>(null);
@@ -114,6 +147,68 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
   const userIdRef = useRef(authUser?.id);
   userIdRef.current = authUser?.id;
   const refetchRef = useRef<() => Promise<void>>(async () => {});
+
+  // Quick reactions on round messages (public.round_message_reactions).
+  // Loaded separately from the rounds refetch and never able to fail it:
+  // "unknown" until the first fetch, "no" when the table doesn't exist yet
+  // (migration not applied; tried again on resume), "yes" once a fetch
+  // succeeded. Same write queue + server ordering as DMs, one per account
+  // (reset on account switch, below).
+  const [roundReactions, setRoundReactions] = useState<MessageReaction[]>([]);
+  const reactionsRef = useRef<MessageReaction[]>([]);
+  const [reactionsSupport, setReactionsSupport] = useState<Support>("unknown");
+  const reactionsSupportRef = useRef<Support>("unknown");
+  const reactionsFetchSeqRef = useRef(0);
+  const [reactionWrites] = useState(createReactionWriteQueue);
+  const [reactionSeqClock] = useState(createReactionSeqClock);
+  const reactionOrderingRef = useRef<{ support: OrderingSupport }>({ support: "unknown" });
+  const messageRowsRef = useRef<RoundMessageRow[]>([]);
+  messageRowsRef.current = messageRows;
+  const pendingMessagesRef = useRef<PendingRoundMessage[]>([]);
+  pendingMessagesRef.current = pendingMessages;
+  // The insert was refused for naming reply_to_message_id (migration not
+  // applied, yet a row carried the key: shouldn't happen, but never loop).
+  const [replyColumnMissing, setReplyColumnMissing] = useState(false);
+
+  const applyReactions = useCallback((next: MessageReaction[]) => {
+    if (sameReactions(reactionsRef.current, next)) return;
+    reactionsRef.current = next;
+    setRoundReactions(next);
+  }, []);
+
+  const fetchReactions = useCallback(async () => {
+    const forUser = authUser?.id;
+    if (!forUser) return;
+    const seq = ++reactionsFetchSeqRef.current;
+    const { data, error } = await supabase
+      .from("round_message_reactions")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(ROUND_REACTION_WINDOW);
+    if (userIdRef.current !== forUser || seq !== reactionsFetchSeqRef.current) return;
+    if (error) {
+      if (isMissingReactionsTableError(error)) {
+        reactionsSupportRef.current = "no";
+        setReactionsSupport("no");
+      } else {
+        // Keep what's shown; the next refetch tries again.
+        console.error("GolfMe: failed to load round message reactions.", error);
+      }
+      return;
+    }
+    reactionsSupportRef.current = "yes";
+    setReactionsSupport("yes");
+    const rows = (data ?? []) as { message_id?: unknown; user_id?: unknown; emoji?: unknown; client_seq?: unknown }[];
+    // My stored sequences (any device, tombstones too) keep my next write above them.
+    for (const row of rows) {
+      const s = row.user_id === forUser && typeof row.message_id === "string" ? reactionSeqFromRow(row) : null;
+      if (s !== null) reactionSeqClock.observe(row.message_id as string, s);
+    }
+    // Tombstones (emoji NULL) are dropped here: no pill.
+    applyReactions(overlayPendingReactions(reactionRowsToReactions(rows), reactionWrites.pending(), forUser));
+  }, [authUser, applyReactions, reactionWrites, reactionSeqClock]);
+  const fetchReactionsRef = useRef(fetchReactions);
+  fetchReactionsRef.current = fetchReactions;
 
   const refetch = useCallback(async () => {
     if (fetchingRef.current) {
@@ -167,6 +262,9 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
         setProfilesById(new Map());
       }
       setLoadStatus((prev) => applyLoadOutcome(prev, true));
+      // Reactions ride along with every successful refetch (realtime on
+      // round_messages, resume), on their own query.
+      if (reactionsSupportRef.current !== "no") void fetchReactionsRef.current();
     } catch (err) {
       console.error("GolfMe: failed to load real rounds.", err);
       // State is left as it was: a failed refresh keeps the last good data.
@@ -180,6 +278,22 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
     }
   }, [authUser]);
   refetchRef.current = refetch;
+
+  // A new account (or demo / signed out): nothing of the previous one's
+  // reactions, queued writes or sequences carries over. Keyed on the id, not
+  // the authUser object (a token refresh must not drop pending writes).
+  // Declared before the load effect below, so it runs first.
+  const accountKey = isDemo ? "demo" : (authUser?.id ?? "");
+  useEffect(() => {
+    reactionWrites.reset();
+    reactionSeqClock.reset();
+    reactionOrderingRef.current = { support: "unknown" };
+    reactionsSupportRef.current = "unknown";
+    setReactionsSupport("unknown");
+    reactionsRef.current = [];
+    setRoundReactions([]);
+    setReplyColumnMissing(false);
+  }, [accountKey, reactionWrites, reactionSeqClock]);
 
   useEffect(() => {
     if (isDemo || !authUser) {
@@ -207,13 +321,37 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "round_participants" }, () => refetch())
       .on("postgres_changes", { event: "*", schema: "public", table: "round_messages" }, () => refetch())
       .subscribe();
-    const stopResume = refetchOnResume(() => void refetch());
+    const stopResume = refetchOnResume(() => {
+      // The reactions migration may have been applied since: look again.
+      if (reactionsSupportRef.current === "no") reactionsSupportRef.current = "unknown";
+      void refetch();
+    });
 
     return () => {
       supabase.removeChannel(channel);
       stopResume();
     };
   }, [isDemo, authUser, refetch]);
+
+  // Reactions realtime, on its own channel and only once the table is known
+  // to exist (subscribing to a table that isn't published would just fail).
+  // Any event: reload the reactions (one query; RLS scopes it).
+  const reactionsLive = !isDemo && Boolean(authUser) && reactionsSupport === "yes";
+  useEffect(() => {
+    if (!reactionsLive) return;
+    const channel = supabase
+      .channel("round-reactions")
+      .on("postgres_changes", { event: "*", schema: "public", table: "round_message_reactions" }, () => {
+        void fetchReactionsRef.current();
+      })
+      .subscribe((status) => {
+        // (Re)subscribed: catch up on anything missed while disconnected.
+        if (status === "SUBSCRIBED") void fetchReactionsRef.current();
+      });
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [reactionsLive]);
 
   const retry = useCallback(async () => {
     setIsLoading(true);
@@ -351,17 +489,34 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
   // content-filter rejection is the exception: the bubble is removed and the
   // caller puts the text back in the composer to edit (retrying unchanged
   // text would fail again).
+  // Replies are sent only once the column is known to exist (a fetched row
+  // carries it): an older database would refuse the unknown column.
+  const repliesSupported = useMemo(
+    () => !replyColumnMissing && roundRowsHaveColumn(messageRows, "reply_to_message_id"),
+    [replyColumnMissing, messageRows],
+  );
+  const repliesSupportedRef = useRef(repliesSupported);
+  repliesSupportedRef.current = repliesSupported;
+
   const attemptSend = useCallback(
-    async (clientId: string, roundId: string, text: string): Promise<SendMessageResult> => {
+    async (clientId: string, roundId: string, text: string, replyToId?: string | null): Promise<SendMessageResult> => {
       if (!authUser) {
         setPendingMessages((prev) => markRoundMessageFailed(prev, clientId, "network"));
         return "failed";
       }
-      const { data, error } = await supabase
-        .from("round_messages")
-        .insert({ round_id: roundId, sender_id: authUser.id, text })
-        .select("id, created_at")
-        .single();
+      const row = { round_id: roundId, sender_id: authUser.id, text };
+      const insert = (body: typeof row & { reply_to_message_id?: string }) =>
+        supabase.from("round_messages").insert(body).select("id, created_at").single();
+      const replyTo = replyToId && repliesSupportedRef.current ? replyToId : null;
+      let { data, error } = await insert(replyTo ? { ...row, reply_to_message_id: replyTo } : row);
+      // The quote can't be stored (column missing, or the database says the
+      // quoted message isn't in this round): send the text without it
+      // rather than failing the message.
+      if (error && replyTo && shouldResendWithoutReply(error)) {
+        if (error.code === "PGRST204" || error.code === "42703") setReplyColumnMissing(true);
+        setPendingMessages((prev) => prev.map((p) => (p.clientId === clientId ? { ...p, replyToId: null } : p)));
+        ({ data, error } = await insert(row));
+      }
       if (!error) {
         setPendingMessages((prev) => markRoundMessageSent(prev, clientId, data as { id: string; created_at: string } | null));
         return "sent";
@@ -383,22 +538,102 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
   );
 
   const sendRoundMessage = useCallback(
-    async (roundId: string, text: string): Promise<SendMessageResult> => {
+    async (roundId: string, text: string, replyToId?: string | null): Promise<SendMessageResult> => {
       const trimmed = text.trim();
       if (!trimmed) return "failed";
       const clientId = `temp-${crypto.randomUUID()}`;
-      setPendingMessages((prev) => [...prev, createPendingRoundMessage({ clientId, roundId, senderId: authUser?.id ?? "", text: trimmed })]);
-      return attemptSend(clientId, roundId, trimmed);
+      const replyTo = replyToId && repliesSupportedRef.current ? replyToId : null;
+      setPendingMessages((prev) => [
+        ...prev,
+        createPendingRoundMessage({ clientId, roundId, senderId: authUser?.id ?? "", text: trimmed, replyToId: replyTo }),
+      ]);
+      return attemptSend(clientId, roundId, trimmed, replyTo);
     },
     [authUser, attemptSend],
   );
 
   const retryRoundMessage = useCallback(
-    async (message: { clientId: string; roundId: string; text: string }): Promise<SendMessageResult> => {
+    async (message: { clientId: string; roundId: string; text: string; replyToId?: string | null }): Promise<SendMessageResult> => {
       setPendingMessages((prev) => markRoundMessageRetrying(prev, message.clientId));
-      return attemptSend(message.clientId, message.roundId, message.text);
+      return attemptSend(message.clientId, message.roundId, message.text, message.replyToId);
     },
     [attemptSend],
+  );
+
+  // Unsend (public.unsend_round_message): offered only once fetched rows
+  // carry unsent_at. The server enforces sender + still in the round + 5
+  // minutes, wipes the text and drops the message's reactions in the same
+  // transaction; the realtime UPDATE then refetches on every member's device.
+  const unsendSupported = useMemo(() => roundRowsHaveColumn(messageRows, "unsent_at"), [messageRows]);
+  const unsendRoundMessage = useCallback(
+    async (messageId: string): Promise<UnsendResult> => {
+      if (!authUser) return "failed";
+      const { error } = await supabase.rpc("unsend_round_message", { p_message_id: messageId });
+      if (error) {
+        const result = classifyUnsendError(error);
+        if (result === "failed") console.error("GolfMe: failed to unsend round message.", error);
+        return result;
+      }
+      // Don't wait for the realtime echo to update this device.
+      const unsentAt = new Date().toISOString();
+      setMessageRows((prev) => prev.map((m) => (m.id === messageId ? { ...m, text: "", unsent_at: m.unsent_at ?? unsentAt } : m)));
+      applyReactions(reactionsRef.current.filter((r) => r.messageId !== messageId));
+      // Still only a "sent" pending bubble here (its row not fetched yet):
+      // the refetch brings the wiped row and reconciles it away.
+      void refetch();
+      return "unsent";
+    },
+    [authUser, applyReactions, refetch],
+  );
+
+  // Optimistic, queued and ordered exactly like DM reactions
+  // (RealSocialContext.setMessageReaction): one write in flight per message,
+  // the latest tap queued, each write sequenced (a removal is a tombstone,
+  // falling back once to DELETE when the tombstone is refused, e.g. on a
+  // round that has ended). false = this tap was my latest intent and its
+  // write failed; the pill then settles on what the server confirmed.
+  const setRoundReaction = useCallback(
+    async (messageId: string, emoji: QuickReaction | null): Promise<boolean> => {
+      const selfId = authUser?.id;
+      if (!selfId || reactionsSupportRef.current !== "yes") return false;
+      // A stored row, or my just-sent message whose row hasn't been fetched yet.
+      const message = messageRowsRef.current.find((m) => m.id === messageId);
+      if (message ? message.unsent_at : !pendingMessagesRef.current.some((p) => p.serverId === messageId)) return false;
+      const forUser = selfId;
+      const ordering = reactionOrderingRef.current;
+      const transport: ReactionTransport = {
+        upsert: async (row, signal) =>
+          (await supabase.from("round_message_reactions").upsert(row, { onConflict: "message_id,user_id" }).abortSignal(signal)).error,
+        remove: async (id, signal) =>
+          (await supabase.from("round_message_reactions").delete().eq("message_id", id).eq("user_id", selfId).abortSignal(signal)).error,
+      };
+      const done = reactionWrites.set(messageId, emoji, {
+        saved: myReaction(reactionsRef.current, messageId, selfId),
+        write: async (id, next, signal) => {
+          const error = await sendReactionWrite({ transport, clock: reactionSeqClock, ordering, userId: selfId, now: Date.now }, id, next, signal);
+          if (error && !signal.aborted) {
+            console.error("GolfMe: failed to update round message reaction.", error);
+            if (userIdRef.current === forUser && isMissingReactionsTableError(error)) {
+              reactionsSupportRef.current = "no";
+              setReactionsSupport("no");
+            }
+          }
+          return error;
+        },
+        onSettled: (id, saved) => {
+          if (userIdRef.current !== forUser) return;
+          applyReactions(withReaction(reactionsRef.current, id, selfId, saved));
+          void fetchReactionsRef.current();
+        },
+        onLateSuccess: () => {
+          if (userIdRef.current !== forUser) return;
+          void fetchReactionsRef.current();
+        },
+      });
+      applyReactions(withReaction(reactionsRef.current, messageId, selfId, emoji));
+      return done;
+    },
+    [authUser, applyReactions, reactionWrites, reactionSeqClock],
   );
 
   const discardRoundMessage = useCallback((clientId: string) => {
@@ -457,6 +692,12 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
     sendRoundMessage,
     retryRoundMessage,
     discardRoundMessage,
+    repliesSupported,
+    unsendSupported,
+    unsendRoundMessage,
+    reactionsSupported: reactionsSupport === "yes",
+    roundReactions,
+    setRoundReaction,
     hasLeftRound,
   };
   return <RealRoundsContext.Provider value={value}>{children}</RealRoundsContext.Provider>;

@@ -192,11 +192,20 @@ interface DataContextValue {
   declineRequest: (callId: string, golferId: string) => void;
 
   /** Round chat. Real: the message shows at once as sending; "failed" leaves it on screen as a failed bubble (retry/discard); "objectionable" removes it so the caller restores the text. Demo: instant. */
-  sendMessage: (callId: string, text: string) => Promise<SendMessageResult>;
+  sendMessage: (callId: string, text: string, replyToId?: string | null) => Promise<SendMessageResult>;
   /** Re-sends a failed round message (a ChatMessage with delivery "failed"). No-op in demo. */
   retryRoundMessage: (message: ChatMessage) => Promise<SendMessageResult>;
   /** Drops a failed round message from this device. No-op in demo. */
   discardRoundMessage: (clientId: string) => void;
+  // Round chat parity with DMs (migration 20261107130000): always in demo;
+  // for real accounts each one once the database supports it
+  // (RealRoundsContext feature detection).
+  canReplyToRoundMessages: boolean;
+  canUnsendRoundMessages: boolean;
+  unsendRoundMessage: (messageId: string) => Promise<UnsendResult>;
+  canReactToRoundMessages: boolean;
+  roundMessageReactions: MessageReaction[];
+  setRoundMessageReaction: (messageId: string, emoji: QuickReaction | null) => Promise<boolean>;
   /** The current golfer was in this round and left it. */
   hasLeftGolfCall: (callId: string) => boolean;
   /** A block exists either way between the current golfer and this golfer. */
@@ -776,13 +785,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const sendMessage = useCallback(
-    async (callId: string, text: string): Promise<SendMessageResult> => {
+    async (callId: string, text: string, replyToId?: string | null): Promise<SendMessageResult> => {
       const trimmed = text.trim();
       if (!trimmed) return "failed";
       if (!auth.isDemo) {
         // Pending/sent/failed lives in RealRoundsContext (never throws): a
         // failure stays on screen as a "Not sent" bubble instead of vanishing.
-        return realRounds.sendRoundMessage(callId, trimmed);
+        return realRounds.sendRoundMessage(callId, trimmed, replyToId);
       }
       setData((prev) => ({
         ...prev,
@@ -794,6 +803,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
             senderId: prev.currentUserId,
             text: trimmed,
             createdAt: new Date().toISOString(),
+            // Same rule the database enforces for real accounts: only a
+            // message of this same round can be quoted.
+            replyToId: replyToId && prev.messages.some((m) => m.id === replyToId && m.golfCallId === callId && !m.system) ? replyToId : null,
           },
         ],
       }));
@@ -802,10 +814,55 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [auth.isDemo, realRounds],
   );
 
+  const canReplyToRoundMessages = auth.isDemo || realRounds.repliesSupported;
+  const canUnsendRoundMessages = auth.isDemo || realRounds.unsendSupported;
+  // Demo: same rule as public.unsend_round_message (my own message, within
+  // the window), on the localStorage copy; the text is wiped there too.
+  const unsendRoundMessage = useCallback(
+    async (messageId: string): Promise<UnsendResult> => {
+      if (!auth.isDemo) return realRounds.unsendRoundMessage(messageId);
+      const target = data.messages.find((m) => m.id === messageId);
+      if (!target || target.system || target.senderId !== currentUser.id) return "failed";
+      if (target.unsentAt) return "unsent";
+      if (!canUnsendMessage(target, currentUser.id, Date.now())) return "expired";
+      const unsentAt = new Date().toISOString();
+      setData((prev) => ({
+        ...prev,
+        messages: prev.messages.map((m) => (m.id === messageId ? { ...m, text: "", unsentAt } : m)),
+      }));
+      setDemoRoundReactions((prev) => prev.filter((r) => r.messageId !== messageId));
+      return "unsent";
+    },
+    [auth.isDemo, realRounds, data.messages, currentUser.id],
+  );
+
+  // Demo round reactions: page-local like the DM ones (resets on reload),
+  // same rules as the database (not on an unsent message, only while the
+  // round is open/full). Cleared when the signed-in identity changes.
+  const [demoRoundReactions, setDemoRoundReactions] = useState<MessageReaction[]>([]);
+  const demoRoundReactionsOwner = auth.isDemo ? `demo:${currentUser.id}` : `real:${auth.authUser?.id ?? ""}`;
+  useEffect(() => {
+    setDemoRoundReactions((prev) => (prev.length === 0 ? prev : []));
+  }, [demoRoundReactionsOwner]);
+  const canReactToRoundMessages = auth.isDemo || realRounds.reactionsSupported;
+  const roundMessageReactions = auth.isDemo ? demoRoundReactions : realRounds.roundReactions;
+  const setRoundMessageReaction = useCallback(
+    async (messageId: string, emoji: QuickReaction | null): Promise<boolean> => {
+      if (!auth.isDemo) return realRounds.setRoundReaction(messageId, emoji);
+      const target = data.messages.find((m) => m.id === messageId);
+      if (!target || target.system || target.unsentAt) return false;
+      const status = data.golfCalls.find((c) => c.id === target.golfCallId)?.status;
+      if (status !== "open" && status !== "full") return false;
+      setDemoRoundReactions((prev) => withReaction(prev, messageId, currentUser.id, emoji));
+      return true;
+    },
+    [auth.isDemo, realRounds, data.messages, data.golfCalls, currentUser.id],
+  );
+
   const retryRoundMessage = useCallback(
     async (message: ChatMessage): Promise<SendMessageResult> => {
       if (auth.isDemo || !message.clientId) return "failed";
-      return realRounds.retryRoundMessage({ clientId: message.clientId, roundId: message.golfCallId, text: message.text });
+      return realRounds.retryRoundMessage({ clientId: message.clientId, roundId: message.golfCallId, text: message.text, replyToId: message.replyToId });
     },
     [auth.isDemo, realRounds],
   );
@@ -1840,6 +1897,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
       sendMessage,
       retryRoundMessage,
       discardRoundMessage,
+      canReplyToRoundMessages,
+      canUnsendRoundMessages,
+      unsendRoundMessage,
+      canReactToRoundMessages,
+      roundMessageReactions,
+      setRoundMessageReaction,
       hasLeftGolfCall,
       isBlockedEitherWay,
       hasReviewed,
@@ -1943,6 +2006,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
       sendMessage,
       retryRoundMessage,
       discardRoundMessage,
+      canReplyToRoundMessages,
+      canUnsendRoundMessages,
+      unsendRoundMessage,
+      canReactToRoundMessages,
+      roundMessageReactions,
+      setRoundMessageReaction,
       hasLeftGolfCall,
       isBlockedEitherWay,
       hasReviewed,

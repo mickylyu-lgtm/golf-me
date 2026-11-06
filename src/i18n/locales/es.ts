@@ -514,6 +514,8 @@ export const es: Record<TranslationKey, string> = {
   "roundChat.notSentCancelled": "No enviado — esta ronda fue cancelada",
   "roundChat.retryLabel": "Mensaje no enviado. Toca para reintentar.",
   "roundChat.discard": "Descartar",
+  "roundChat.someone": "Un golfista",
+  "roundChat.viewProfile": "Ver perfil",
   "myGolf.notCompleted": "Sin marcar como completada",
   "discover.searchPlaceholder": "Buscar golfistas",
 

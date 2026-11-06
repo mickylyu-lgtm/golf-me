@@ -514,6 +514,8 @@ export const ja: Record<TranslationKey, string> = {
   "roundChat.notSentCancelled": "未送信 — このラウンドはキャンセルされました",
   "roundChat.retryLabel": "メッセージは送信されていません。タップして再送信します。",
   "roundChat.discard": "破棄",
+  "roundChat.someone": "ゴルファー",
+  "roundChat.viewProfile": "プロフィールを見る",
   "myGolf.notCompleted": "未完了",
   "discover.searchPlaceholder": "ゴルファーを検索",
 
