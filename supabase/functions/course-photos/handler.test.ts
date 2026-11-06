@@ -34,10 +34,17 @@ function makeDeps(opts: {
   geoKey?: string;
   /** Extra metadata per Commons file title (description/categories). */
   fileMeta?: Record<string, { description?: string; categories?: string; license?: string }>;
+  /** NAIP export answers: "ok" (a JPEG), "fail" (500), "html" (200 text),
+   * "slow-first" (the un-nudged URL takes 300 ms, the hedge 5 ms). */
+  naip?: "ok" | "fail" | "html" | "slow-first";
+  /** The layout query's Overpass answer (JSON body), or "fail" (504). */
+  layoutAnswer?: unknown | "fail";
 }) {
   const calls: Call[] = [];
   const saved: ImageryRow[] = [];
   const usage = new Map<string, number>();
+  const uploads: { path: string; size: number }[] = [];
+  let naipFirstUrl: string | undefined;
   const rows = new Map((opts.imagery ?? []).map((r) => [r.course_id, { ...r }]));
   const ok = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
   const fetchStub = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -79,6 +86,23 @@ function makeDeps(opts: {
         },
       });
     }
+    if (url.startsWith("https://imagery.nationalmap.gov/")) {
+      if (opts.naip === "fail" || !opts.naip) return new Response("boom", { status: 500 });
+      if (opts.naip === "html") return new Response("<html>error</html>", { status: 200, headers: { "Content-Type": "text/html" } });
+      const jpeg = new Uint8Array(40_000);
+      jpeg.set([0xff, 0xd8, 0xff, 0xe0]);
+      // The first export URL seen is the primary; a different one is the hedge.
+      naipFirstUrl ??= url;
+      const nudged = url !== naipFirstUrl;
+      const delay = opts.naip === "slow-first" ? (nudged ? 5 : 300) : 0;
+      await new Promise((r) => setTimeout(r, delay));
+      if (init?.signal?.aborted) throw new DOMException("aborted", "AbortError");
+      return new Response(jpeg, { status: 200, headers: { "Content-Type": "image/jpeg" } });
+    }
+    if (url.includes("/api/interpreter") && String(init?.body ?? "").includes(encodeURIComponent('"golf"~'))) {
+      if (opts.layoutAnswer === "fail") return new Response("busy", { status: 504 });
+      return ok(opts.layoutAnswer ?? { elements: [] });
+    }
     if (url.includes("/api/interpreter")) {
       if (opts.overpass === "fail") return new Response("busy", { status: 504 });
       return ok({ elements: opts.overpass ?? [] });
@@ -108,9 +132,15 @@ function makeDeps(opts: {
         usage.set(provider, used + cost);
         return true;
       },
+      async uploadPicture(path, bytes) {
+        uploads.push({ path, size: bytes.length });
+      },
+      publicPictureUrl(path) {
+        return `https://proj.supabase.co/storage/v1/object/public/course-imagery/${path}`;
+      },
     },
   };
-  return { deps, calls, saved, usage, rows };
+  return { deps, calls, saved, usage, rows, uploads };
 }
 
 const GOOD_PLACE = {
@@ -346,4 +376,124 @@ test("HTTP: preflight, method, auth and body checks", async () => {
   const ok = await handleRequest(new Request("https://x/", { method: "POST", body: JSON.stringify({ courseIds: [] }) }), yes);
   assert.equal(ok.status, 200);
   assert.deepEqual(await ok.json(), { photos: {}, bounds: {} });
+});
+
+// ---- Course page detail (20261107190000): NAIP picture + OSM layout ----
+
+// Dyker Beach with a stored outline, so no outline lookup runs.
+const DYKER_OUTLINE: ImageryRow = {
+  course_id: DYKER.id,
+  outline_south: 40.61,
+  outline_west: -74.026,
+  outline_north: 40.619,
+  outline_east: -74.016,
+  outline_source: "osm",
+  outline_checked_at: "2026-11-01T00:00:00Z",
+};
+const LONDON: CourseRow = { id: "33333333-3333-4333-8333-333333333333", name: "Richmond Park Golf", latitude: 51.44, longitude: -0.27 };
+const LAYOUT_OK = {
+  elements: [
+    { type: "way", tags: { golf: "hole", ref: "1", par: "4" }, geometry: [{ lat: 40.612, lon: -74.02 }, { lat: 40.613, lon: -74.021 }] },
+    { type: "way", tags: { golf: "green" }, geometry: [{ lat: 40.613, lon: -74.021 }, { lat: 40.613, lon: -74.0205 }, { lat: 40.6132, lon: -74.0205 }, { lat: 40.613, lon: -74.021 }] },
+  ],
+};
+const exportCalls = (calls: Call[]) => calls.filter((c) => c.url.startsWith("https://imagery.nationalmap.gov/"));
+const layoutCalls = (calls: Call[]) => calls.filter((c) => c.url.includes("/api/interpreter") && String(c.body ?? "").includes(encodeURIComponent('"golf"~')));
+
+test("picture: rendered once, stored in the public bucket, then served from Storage without asking USGS again", async () => {
+  const { deps, calls, uploads, rows } = makeDeps({ imagery: [DYKER_OUTLINE], naip: "ok" });
+  const res = await resolveCoursePhotos({ courseIds: [DYKER.id], picture: true }, deps);
+  const pic = res.pictures?.[DYKER.id];
+  assert.ok(pic, "a picture");
+  assert.match(pic.url, /^https:\/\/proj\.supabase\.co\/storage\/v1\/object\/public\/course-imagery\/naip\/v1\/11111111-1111-4111-8111-111111111111\/\d+x\d+-[0-9a-f]{8}\.jpg$/);
+  assert.equal(pic.bbox.length, 4);
+  assert.equal(uploads.length, 1);
+  assert.equal(exportCalls(calls).length, 1);
+  assert.equal(rows.get(DYKER.id)?.naip_path, pic.url.split("/course-imagery/")[1]);
+  assert.equal(res.photos[DYKER.id], undefined, "no photo lookup on a detail request");
+  // Next viewer: straight from the stored row.
+  const again = await resolveCoursePhotos({ courseIds: [DYKER.id], picture: true }, deps);
+  assert.deepEqual(again.pictures?.[DYKER.id], pic);
+  assert.equal(exportCalls(calls).length, 1);
+  assert.equal(uploads.length, 1);
+});
+
+test("picture: a failed or non-JPEG render is not stored (null: the tiles stay), retried next time", async () => {
+  for (const naip of ["fail", "html"] as const) {
+    const { deps, uploads, saved } = makeDeps({ imagery: [DYKER_OUTLINE], naip, caps: { COURSE_PHOTOS_NAIP_HEDGE_MS: "5" } });
+    const res = await resolveCoursePhotos({ courseIds: [DYKER.id], picture: true }, deps);
+    assert.equal(res.pictures?.[DYKER.id], null, naip);
+    assert.equal(uploads.length, 0);
+    assert.ok(!saved.some((r) => r.naip_path), "nothing recorded");
+  }
+});
+
+test("picture: a slow first render is hedged by a second request for the same picture; the fast one wins", async () => {
+  const { deps, calls, usage, uploads } = makeDeps({ imagery: [DYKER_OUTLINE], naip: "slow-first", caps: { COURSE_PHOTOS_NAIP_HEDGE_MS: "20" } });
+  const t = Date.now();
+  const res = await resolveCoursePhotos({ courseIds: [DYKER.id], picture: true }, deps);
+  assert.ok(res.pictures?.[DYKER.id]);
+  assert.ok(Date.now() - t < 250, "did not wait for the slow render");
+  const ex = exportCalls(calls);
+  assert.equal(ex.length, 2);
+  assert.notEqual(ex[0].url, ex[1].url, "the hedge is a different URL (nudged box)");
+  assert.equal(usage.get(QUOTA.usgsExport), 2, "both renders counted against the cap");
+  assert.equal(uploads.length, 1);
+});
+
+test("picture: only US courses, only with an outline, and within the daily cap", async () => {
+  const london = makeDeps({ courses: [LONDON], imagery: [{ ...DYKER_OUTLINE, course_id: LONDON.id, outline_south: 51.43, outline_north: 51.45, outline_west: -0.29, outline_east: -0.25 }], naip: "ok" });
+  const r1 = await resolveCoursePhotos({ courseIds: [LONDON.id], picture: true }, london.deps);
+  assert.equal(r1.pictures?.[LONDON.id], null);
+  assert.equal(exportCalls(london.calls).length, 0);
+  const capped = makeDeps({ imagery: [DYKER_OUTLINE], naip: "ok", caps: { COURSE_PHOTOS_DAILY_USGS_EXPORT_CAP: "0" } });
+  const r2 = await resolveCoursePhotos({ courseIds: [DYKER.id], picture: true }, capped.deps);
+  assert.equal(r2.pictures?.[DYKER.id], null);
+  assert.equal(exportCalls(capped.calls).length, 0);
+});
+
+test("layout: one Overpass query to overpass-api.de only (identified), stored, never asked again", async () => {
+  const { deps, calls, rows } = makeDeps({ imagery: [DYKER_OUTLINE], layoutAnswer: LAYOUT_OK });
+  const res = await resolveCoursePhotos({ courseIds: [DYKER.id], layout: true }, deps);
+  const a = res.layouts?.[DYKER.id];
+  assert.equal(a?.status, "ok");
+  const lc = layoutCalls(calls);
+  assert.equal(lc.length, 1);
+  assert.equal(new URL(lc[0].url).hostname, "overpass-api.de");
+  assert.match(lc[0].headers["User-Agent"] ?? "", /GolfMe/);
+  assert.equal(rows.get(DYKER.id)?.layout_status, "ok");
+  await resolveCoursePhotos({ courseIds: [DYKER.id], layout: true }, deps);
+  assert.equal(layoutCalls(calls).length, 1);
+  assert.equal(calls.some((c) => c.url.includes("mail.ru") && String(c.body ?? "").includes(encodeURIComponent('"golf"~'))), false);
+});
+
+test("layout: an HTTP 200 with an Overpass error remark, HTML or a 504 is transient: no answer, nothing stored", async () => {
+  for (const layoutAnswer of [{ elements: [], remark: "runtime error: Query timed out in \"query\" at line 1 after 26 seconds." }, "fail", { nope: true }]) {
+    const { deps, saved } = makeDeps({ imagery: [DYKER_OUTLINE], layoutAnswer });
+    const res = await resolveCoursePhotos({ courseIds: [DYKER.id], layout: true }, deps);
+    assert.ok(res.layouts, "the server knows layouts");
+    assert.equal(res.layouts![DYKER.id], undefined, JSON.stringify(layoutAnswer));
+    assert.ok(!saved.some((r) => r.layout_status), "not recorded");
+  }
+});
+
+test("layout: a valid empty answer is 'unmapped', kept 7 days, then asked again", async () => {
+  const { deps, calls, rows } = makeDeps({ imagery: [DYKER_OUTLINE], layoutAnswer: { elements: [] } });
+  const res = await resolveCoursePhotos({ courseIds: [DYKER.id], layout: true }, deps);
+  assert.deepEqual(res.layouts?.[DYKER.id], { status: "unmapped" });
+  assert.equal(rows.get(DYKER.id)?.layout_status, "unmapped");
+  await resolveCoursePhotos({ courseIds: [DYKER.id], layout: true }, deps);
+  assert.equal(layoutCalls(calls).length, 1, "within 7 days: from the row");
+  const later = makeDeps({ imagery: [{ ...DYKER_OUTLINE, layout_status: "unmapped", layout_checked_at: "2026-10-28T00:00:00Z" }], layoutAnswer: LAYOUT_OK });
+  const r2 = await resolveCoursePhotos({ courseIds: [DYKER.id], layout: true }, later.deps);
+  assert.equal(r2.layouts?.[DYKER.id]?.status, "ok", "8 days later the course is mapped now");
+});
+
+test("detail requests: one course only, a small layout cap, and no photo lookups", async () => {
+  const { deps, calls } = makeDeps({ imagery: [DYKER_OUTLINE], layoutAnswer: LAYOUT_OK, key: "k", caps: { COURSE_PHOTOS_DAILY_OVERPASS_LAYOUT_CAP: "0" } });
+  const res = await resolveCoursePhotos({ courseIds: [DYKER.id, OTHER.id], layout: true }, deps);
+  assert.deepEqual(Object.keys(res.layouts ?? {}), [], "cap 0: nothing asked, nothing answered");
+  assert.equal(layoutCalls(calls).length, 0);
+  assert.equal(calls.some((c) => c.url.includes("places")), false);
+  assert.equal(DEFAULT_CAPS[QUOTA.overpassLayout], 40);
 });

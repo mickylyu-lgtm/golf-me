@@ -247,6 +247,79 @@ export function reframeOnLayout(outline: CourseBounds, own: CourseBounds | null,
   return inside && area(own) < area(outline) * maxAreaShare;
 }
 
+// ---- Telling a real answer from a broken one ----
+//
+// Overpass can answer HTTP 200 and still have failed: a query that ran out
+// of time or memory comes back as {"elements": [...partial or none],
+// "remark": "runtime error: Query timed out ..."}, and mirrors behind a
+// proxy sometimes return an HTML error page with 200. Before 2026-11-07 such
+// an answer was parsed like any other, gave "no layout", won the race
+// against a slower good answer, cancelled it, and was cached for 30 days.
+
+export type OverpassVerdict =
+  | { kind: "ok"; layout: CourseLayout }
+  /** A complete, valid answer with nothing usable: the course just isn't
+   * mapped in OSM (yet). Worth remembering for a while. */
+  | { kind: "unmapped" }
+  /** Not a usable answer (error remark, wrong shape, not JSON): try another
+   * endpoint / later; never cached as "no layout". */
+  | { kind: "invalid"; reason: string };
+
+const ERROR_REMARK = /error|timed out|timeout|out of memory|too many|rate.?limit|dispatcher/i;
+
+export function classifyOverpassAnswer(json: unknown, courseName: string): OverpassVerdict {
+  if (!json || typeof json !== "object" || Array.isArray(json)) return { kind: "invalid", reason: "not an object" };
+  const j = json as { elements?: unknown; remark?: unknown };
+  if (typeof j.remark === "string" && ERROR_REMARK.test(j.remark)) return { kind: "invalid", reason: `remark: ${j.remark.slice(0, 120)}` };
+  if (!Array.isArray(j.elements)) return { kind: "invalid", reason: "no elements array" };
+  const layout = parseCourseLayout(j as { elements: OsmLayoutElement[] }, courseName);
+  return layout ? { kind: "ok", layout } : { kind: "unmapped" };
+}
+
+/** What course-photos answers for a course's layout (and the client
+ * caches): a layout, or "not mapped". A transient failure is no answer at
+ * all (the field is missing), so it is never cached. */
+export type LayoutAnswer = { status: "ok"; layout: CourseLayout } | { status: "unmapped" };
+
+/** Several endpoints asked at once: the first "ok" wins at once; "unmapped"
+ * only counts once every endpoint has finished (a fast empty answer must
+ * not beat a slower real one); all invalid/failed -> null (transient).
+ * Never rejects. `onWin` lets the caller cancel the others. */
+export async function settleLayoutAttempts(attempts: Promise<OverpassVerdict>[], onWin?: () => void): Promise<LayoutAnswer | null> {
+  if (attempts.length === 0) return null;
+  return new Promise((resolve) => {
+    let left = attempts.length;
+    let unmapped = false;
+    let done = false;
+    const finish = (a: LayoutAnswer | null) => {
+      if (done) return;
+      done = true;
+      onWin?.();
+      resolve(a);
+    };
+    for (const p of attempts) {
+      p.then(
+        (v) => {
+          if (v.kind === "ok") return finish({ status: "ok", layout: v.layout });
+          if (v.kind === "unmapped") unmapped = true;
+        },
+        () => {},
+      ).finally(() => {
+        left--;
+        if (left === 0) finish(unmapped ? { status: "unmapped" } : null);
+      });
+    }
+  });
+}
+
+/** Is this an answer we may trust from the server or the cache? */
+export function isLayoutAnswer(x: unknown): x is LayoutAnswer {
+  const a = x as LayoutAnswer;
+  if (!a || typeof a !== "object") return false;
+  if (a.status === "unmapped") return true;
+  return a.status === "ok" && isCourseLayout(a.layout) && (a.layout.holes.length > 0 || a.layout.areas.length > 0);
+}
+
 /** Is this a layout we wrote (cache entries from an older build, junk)? */
 export function isCourseLayout(x: unknown): x is CourseLayout {
   const l = x as CourseLayout;

@@ -41,6 +41,17 @@ import {
   plainArtist,
 } from "../_shared/coursePhotoMatch.ts";
 import { outlineFromGeoapifyFeature, overpassQuery, pickCourseOutline, validBounds, type CourseBounds } from "../_shared/courseBounds.ts";
+import type { CoursePictureOut } from "../_shared/coursePhotoTypes.ts";
+import {
+  classifyOverpassAnswer,
+  isLayoutAnswer,
+  layoutOverpassQuery,
+  type CourseLayout,
+  type LayoutAnswer,
+  type OverpassVerdict,
+} from "../_shared/courseLayout.ts";
+import { looksLikeJpeg, naipExportFor, naipExportUrl, validMercBox, type MercBox, type NaipExport } from "../_shared/naipExport.ts";
+import { isUsCourse } from "../_shared/usCoverage.ts";
 
 export interface CourseRow {
   id: string;
@@ -70,6 +81,15 @@ export interface ImageryRow {
   outline_east?: number | null;
   outline_source?: string | null;
   outline_checked_at?: string | null;
+  // 20261107190000: the course page's detail.
+  layout?: unknown;
+  layout_status?: "ok" | "unmapped" | null;
+  layout_checked_at?: string | null;
+  naip_path?: string | null;
+  naip_bbox?: MercBox | null;
+  naip_width?: number | null;
+  naip_height?: number | null;
+  naip_checked_at?: string | null;
 }
 
 export interface Store {
@@ -79,6 +99,10 @@ export interface Store {
   saveImagery(row: ImageryRow): Promise<void>;
   /** Takes `cost` units of today's cap for `provider`; false when full. */
   takeQuota(provider: string, cap: number, cost?: number): Promise<boolean>;
+  /** Store a NAIP picture in the public course-imagery bucket. */
+  uploadPicture(path: string, bytes: Uint8Array): Promise<void>;
+  /** The public URL of an object in that bucket. */
+  publicPictureUrl(path: string): string;
 }
 
 export interface Deps {
@@ -96,6 +120,8 @@ export const QUOTA = {
   wikimedia: "wikimedia",
   geoapifyDetails: "geoapify_place_details",
   overpass: "overpass",
+  overpassLayout: "overpass_layout",
+  usgsExport: "usgs_export",
 } as const;
 
 // Per UTC day. Text Search Pro: 5,000 free a month, so 150/day stays inside
@@ -112,6 +138,14 @@ export const DEFAULT_CAPS = {
   // service with a fair-use limit (~10,000 queries a day per user).
   [QUOTA.geoapifyDetails]: 500,
   [QUOTA.overpass]: 500,
+  // Layouts: once per course, then stored. Overpass's policy (OSM wiki,
+  // 2026-11): an app's usage is the sum over all its users, and regular
+  // automated use should stay near ~100 queries / 10 MB a day; a big
+  // facility's answer is up to ~2 MB. So a small cap.
+  [QUOTA.overpassLayout]: 40,
+  // NAIP picture renders (a hedge counts too): free, but a shared public
+  // service; once per course, then stored.
+  [QUOTA.usgsExport]: 300,
 } as const;
 
 const CAP_ENV: Record<string, string> = {
@@ -121,7 +155,22 @@ const CAP_ENV: Record<string, string> = {
   [QUOTA.wikimedia]: "COURSE_PHOTOS_DAILY_WIKIMEDIA_CAP",
   [QUOTA.geoapifyDetails]: "COURSE_PHOTOS_DAILY_GEOAPIFY_DETAILS_CAP",
   [QUOTA.overpass]: "COURSE_PHOTOS_DAILY_OVERPASS_CAP",
+  [QUOTA.overpassLayout]: "COURSE_PHOTOS_DAILY_OVERPASS_LAYOUT_CAP",
+  [QUOTA.usgsExport]: "COURSE_PHOTOS_DAILY_USGS_EXPORT_CAP",
 };
+
+// The layout comes from FOSSGIS's main instance only (no third-party mirror
+// sees which courses GolfMe users look at).
+export const LAYOUT_OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter";
+const LAYOUT_SERVER_TIMEOUT_MS = 40_000;
+export const LAYOUT_OK_RECHECK_MS = 90 * 24 * 60 * 60 * 1000;
+// A course with nothing mapped: OSM volunteers map courses all the time.
+export const LAYOUT_UNMAPPED_RECHECK_MS = 7 * 24 * 60 * 60 * 1000;
+export const NAIP_HEDGE_AFTER_MS = 4000;
+const NAIP_SERVER_TIMEOUT_MS = 45_000;
+const NAIP_MIN_BYTES = 20_000;
+// The bucket's own limit (20261107190000).
+const NAIP_MAX_BYTES = 3 * 1024 * 1024;
 
 // Overpass endpoints, tried in order (the main one is often overloaded;
 // 2026-11-05 most requests to it timed out or answered 502/504).
@@ -552,8 +601,152 @@ async function resolveOne(deps: Deps, course: CourseRow, row: ImageryRow, size: 
   return { photo: null, unresolved };
 }
 
+// ---- The course page's detail: the sharp NAIP picture and the OSM layout ----
+//
+// Both are slow to make (a cold NAIP render 1.5-20 s, Overpass 10-35 s) and
+// identical for every golfer, so they're made once per course here and
+// stored: the picture as a JPEG in the public `course-imagery` bucket, the
+// layout in course_imagery.layout. The browser then never asks Overpass
+// (whose IP-based fair use counts every app user together) or the NAIP
+// ImageServer itself; it gets a warm Storage URL / a stored layout.
+
+function storedPicture(deps: Deps, row: ImageryRow): CoursePictureOut | null {
+  if (!row.naip_path || !validMercBox(row.naip_bbox) || !row.naip_width || !row.naip_height) return null;
+  return { url: deps.store.publicPictureUrl(row.naip_path), bbox: row.naip_bbox, width: row.naip_width, height: row.naip_height };
+}
+
+const sameBox = (a: MercBox, b: MercBox) => a.every((v, i) => Math.abs(v - b[i]) < 1);
+
+// A short stable tag of the box + size, so a new outline gives a new object
+// path (Storage objects are cached as immutable).
+function pictureTag(exp: NaipExport): string {
+  let h = 5381;
+  for (const ch of `${exp.bbox.join(",")}|${exp.width}x${exp.height}`) h = ((h * 33) ^ ch.charCodeAt(0)) >>> 0;
+  return h.toString(16).padStart(8, "0");
+}
+
+/** Fetch the export, hedged: if the first render hasn't answered after
+ * NAIP_HEDGE_AFTER_MS, a second request for the same picture (box nudged by
+ * 5 cm, so it's a different URL) goes out; the first valid JPEG wins and the
+ * other is cancelled. Cold renders are bimodal (~2-6 s or ~12-20 s), so the
+ * hedge mostly turns a slow one into a fast one. Each request costs one unit
+ * of the daily usgs_export cap. Null when nothing valid came back. */
+export async function fetchNaipPicture(deps: Deps, exp: NaipExport): Promise<Uint8Array | null> {
+  const ctrl = new AbortController();
+  const overall = setTimeout(() => ctrl.abort(), NAIP_SERVER_TIMEOUT_MS);
+  const one = async (url: string): Promise<Uint8Array> => {
+    if (!(await deps.store.takeQuota(QUOTA.usgsExport, cap(deps, QUOTA.usgsExport)))) throw new Error("cap");
+    const res = await deps.fetch(url, { headers: { "User-Agent": WIKI_UA }, signal: ctrl.signal });
+    if (!res.ok) throw new ProviderError(`usgs ${res.status}`, res.status);
+    if (!/image\/jpe?g/i.test(res.headers.get("content-type") ?? "")) throw new Error("not a jpeg");
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    if (bytes.length < NAIP_MIN_BYTES || bytes.length > NAIP_MAX_BYTES || !looksLikeJpeg(bytes)) throw new Error("bad picture");
+    return bytes;
+  };
+  let hedgeTimer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const first = one(exp.url);
+    const hedge = new Promise<Uint8Array>((resolve, reject) => {
+      const raw = Number(deps.env("COURSE_PHOTOS_NAIP_HEDGE_MS") ?? "");
+      const after = Number.isFinite(raw) && raw > 0 ? raw : NAIP_HEDGE_AFTER_MS;
+      hedgeTimer = setTimeout(() => one(naipExportUrl(exp.bbox, exp.width, exp.height, 0.05)).then(resolve, reject), after);
+      // The first one finishing (either way) before the hedge starts: no hedge.
+      first.then(
+        () => clearTimeout(hedgeTimer),
+        () => {},
+      );
+    });
+    return await Promise.any([first, hedge]);
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(overall);
+    clearTimeout(hedgeTimer);
+    ctrl.abort();
+  }
+}
+
+async function resolvePicture(deps: Deps, course: CourseRow, row: ImageryRow, bounds: CourseBounds | null): Promise<CoursePictureOut | null> {
+  if (!bounds || !isUsCourse(course.latitude, course.longitude)) return null;
+  const exp = naipExportFor(bounds, { devicePixelRatio: 2 });
+  if (!exp) return null;
+  const stored = storedPicture(deps, row);
+  if (stored && sameBox(stored.bbox, exp.bbox)) return stored;
+  const bytes = await fetchNaipPicture(deps, exp);
+  if (!bytes) {
+    deps.log?.("course-photos: naip picture failed", { courseId: course.id });
+    // An older picture of a previous outline beats none.
+    return stored;
+  }
+  const path = `naip/v1/${course.id}/${exp.width}x${exp.height}-${pictureTag(exp)}.jpg`;
+  await deps.store.uploadPicture(path, bytes);
+  const update: ImageryRow = { course_id: course.id, naip_path: path, naip_bbox: exp.bbox, naip_width: exp.width, naip_height: exp.height, naip_checked_at: deps.now().toISOString() };
+  await deps.store.saveImagery(update);
+  Object.assign(row, update);
+  return storedPicture(deps, row);
+}
+
+/** One Overpass ask for the layout (overpass-api.de only: FOSSGIS's main
+ * instance; identified by User-Agent as its policy asks). */
+async function overpassLayout(deps: Deps, course: CourseRow, bounds: CourseBounds): Promise<OverpassVerdict> {
+  try {
+    const res = await deps.fetch(LAYOUT_OVERPASS_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": WIKI_UA },
+      body: "data=" + encodeURIComponent(layoutOverpassQuery(bounds)),
+      signal: AbortSignal.timeout(LAYOUT_SERVER_TIMEOUT_MS),
+    });
+    if (!res.ok) return { kind: "invalid", reason: `http ${res.status}` };
+    let data: unknown;
+    try {
+      data = await res.json();
+    } catch {
+      return { kind: "invalid", reason: "not json" };
+    }
+    return classifyOverpassAnswer(data, course.name);
+  } catch {
+    return { kind: "invalid", reason: "network/timeout" };
+  }
+}
+
+export function storedLayout(row: ImageryRow, now: Date): LayoutAnswer | null {
+  if (row.layout_status === "ok" && !stale(row.layout_checked_at, LAYOUT_OK_RECHECK_MS, now)) {
+    const a = { status: "ok" as const, layout: row.layout };
+    return isLayoutAnswer(a) ? a : null;
+  }
+  if (row.layout_status === "unmapped" && !stale(row.layout_checked_at, LAYOUT_UNMAPPED_RECHECK_MS, now)) return { status: "unmapped" };
+  return null;
+}
+
+/** The layout: stored, else one Overpass ask. A transient failure (error
+ * remark, HTTP error, timeout, cap) is never stored: null = "not now". */
+async function resolveLayout(deps: Deps, course: CourseRow, row: ImageryRow, bounds: CourseBounds | null): Promise<LayoutAnswer | null> {
+  const known = storedLayout(row, deps.now());
+  if (known) return known;
+  if (!bounds) return null;
+  if (!(await deps.store.takeQuota(QUOTA.overpassLayout, cap(deps, QUOTA.overpassLayout)))) return null;
+  const v = await overpassLayout(deps, course, bounds);
+  if (v.kind === "invalid") {
+    deps.log?.("course-photos: layout lookup failed", { courseId: course.id, reason: v.reason });
+    // An older stored layout beats nothing while Overpass is down.
+    return row.layout_status === "ok" && isLayoutAnswer({ status: "ok", layout: row.layout }) ? { status: "ok", layout: row.layout as CourseLayout } : null;
+  }
+  const update: ImageryRow = {
+    course_id: course.id,
+    layout: v.kind === "ok" ? v.layout : null,
+    layout_status: v.kind,
+    layout_checked_at: deps.now().toISOString(),
+  };
+  await deps.store.saveImagery(update);
+  Object.assign(row, update);
+  return v.kind === "ok" ? { status: "ok", layout: v.layout } : { status: "unmapped" };
+}
+
 export async function resolveCoursePhotos(body: unknown, deps: Deps): Promise<CoursePhotosResponse> {
-  const b = (body ?? {}) as { courseIds?: unknown; size?: unknown; outlineOnly?: unknown };
+  const b = (body ?? {}) as { courseIds?: unknown; size?: unknown; outlineOnly?: unknown; picture?: unknown; layout?: unknown };
+  const wantPicture = b.picture === true;
+  const wantLayout = b.layout === true;
+  if (wantPicture || wantLayout) return resolveCourseDetail(b.courseIds, wantPicture, wantLayout, deps);
   const ids = cleanCourseIds(b.courseIds);
   const size: CoursePhotoSize = b.size === "hero" ? "hero" : "thumb";
   const outlineOnly = b.outlineOnly === true;
@@ -582,6 +775,29 @@ export async function resolveCoursePhotos(body: unknown, deps: Deps): Promise<Co
   }
   await Promise.all(Array.from({ length: Math.min(CONCURRENCY, queue.length) }, worker));
   return { photos, bounds };
+}
+
+/** Course page detail: one course per request (the first valid id), so a
+ * caller can't fan out renders or Overpass queries. */
+async function resolveCourseDetail(rawIds: unknown, wantPicture: boolean, wantLayout: boolean, deps: Deps): Promise<CoursePhotosResponse> {
+  const id = cleanCourseIds(rawIds)[0];
+  const out: CoursePhotosResponse = { photos: {}, bounds: {}, ...(wantPicture ? { pictures: {} } : {}), ...(wantLayout ? { layouts: {} } : {}) };
+  if (!id) return out;
+  const [[course], [stored]] = await Promise.all([deps.store.courses([id]), deps.store.imagery([id])]);
+  if (!course || !Number.isFinite(course.latitude) || !Number.isFinite(course.longitude)) {
+    if (wantPicture) out.pictures![id] = null;
+    return out;
+  }
+  const row: ImageryRow = { ...(stored ?? {}), course_id: id };
+  const o = await resolveOutline(deps, course, row).catch(() => ({ bounds: null, unresolved: true }));
+  if (o.bounds || !o.unresolved) out.bounds![id] = o.bounds;
+  const [picture, layout] = await Promise.all([
+    wantPicture ? resolvePicture(deps, course, row, o.bounds).catch(() => null) : Promise.resolve(undefined),
+    wantLayout ? resolveLayout(deps, course, row, o.bounds).catch(() => null) : Promise.resolve(undefined),
+  ]);
+  if (wantPicture) out.pictures![id] = picture ?? null;
+  if (wantLayout && layout) out.layouts![id] = layout;
+  return out;
 }
 
 // ---- HTTP ----

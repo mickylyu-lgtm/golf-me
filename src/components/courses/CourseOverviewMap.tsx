@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { GeoJSONSourceSpecification, LayerSpecification, Map as MaplibreMap, Marker } from "maplibre-gl";
 import { Flag } from "lucide-react";
 import { useLocale } from "../../i18n/LocaleContext";
-import { detailReveal, naipExportFor } from "../../lib/naipExport";
-import { fetchCourseLayout, loadDetailPicture } from "../../lib/courseDetailImagery";
+import { detailReveal } from "../../lib/naipExport";
+import { courseLayout, coursePicture, loadDetailPicture, type DetailLoad, type DetailPicture, type LayoutResult } from "../../lib/courseDetailImagery";
 import { layoutBounds, layoutToGeoJSON, reframeOnLayout } from "../../../supabase/functions/_shared/courseLayout.ts";
 import { OSM_CREDIT_HTML, type TileSource } from "../../lib/satelliteTiles";
 import {
@@ -19,6 +19,7 @@ import {
   type OverviewMotion,
 } from "../../lib/droneOrbit";
 import { overviewFraming, validBounds, type CourseBounds } from "../../../supabase/functions/_shared/courseBounds.ts";
+import { layoutUiStatus, pictureRescueWait, readLayoutPreference, writeLayoutPreference, type LayoutUiStatus } from "../../lib/overviewStatus";
 
 interface CourseOverviewMapProps {
   lat: number;
@@ -27,6 +28,10 @@ interface CourseOverviewMapProps {
    * Without it, our point, a little wide. */
   bounds?: CourseBounds | null;
   name: string;
+  /** public.courses id (real courses): the detail comes from course-photos. */
+  courseId?: string;
+  /** Real account with a real course: ask course-photos, not the providers. */
+  useServer: boolean;
   /** Aerial tiles: USGS NAIP (US, no key, to z16; MapLibre scales them up
    * closer in) or MapTiler when keyed. */
   source: TileSource;
@@ -36,35 +41,33 @@ interface CourseOverviewMapProps {
 }
 
 // The "drone shot" (Micky, 2026-11-05): aerial imagery (USGS NAIP for US
-// courses, MapTiler when keyed) in
-// MapLibre, tilted to pitch 45 (was 60 until 2026-11-06) and slowly
-// circling the course. The camera never goes more than 0.3 zoom past the
-// source's deepest tiles (USGS: 16) and retina screens get USGS tiles at
-// native density (lib/droneOrbit overviewZoomCap / overviewTileSize). Drag or
-// pinch to look around; that pauses the circling, which carries on from
-// there after a few seconds. Reduced motion: the same tilted view, still.
-// It is the real satellite picture, only the camera moves. It circles the
-// centre of the course's OpenStreetMap outline, zoomed to fit it, so the
-// holes fill the view rather than the clubhouse our single point is often
-// on; without an outline it circles that point, a little wider.
+// courses, MapTiler when keyed) in MapLibre, tilted to pitch 45 (was 60
+// until 2026-11-06) and slowly circling the course. The camera never goes
+// more than 0.3 zoom past the source's deepest tiles (USGS: 16) and retina
+// screens get USGS tiles at native density (lib/droneOrbit overviewZoomCap /
+// overviewTileSize). Drag or pinch to look around; that pauses the circling,
+// which carries on from there after a few seconds. Reduced motion: the same
+// tilted view, still. It circles the centre of the course's OpenStreetMap
+// outline, zoomed to fit it; without an outline it circles our point, a
+// little wider.
 //
-// Cost: MapLibre (~800 KB) downloads only when a course page opens (it's
-// already in the course map's chunk); the map is created only once the box
-// is on screen and removed on leave; the camera stops while it's off screen
-// or the app is in the background. Raster tiles only, no vector style.
+// Cost: MapLibre (~800 KB) downloads only when a course page opens; the map
+// is created only once the box is on screen and removed on leave; the camera
+// stops while it's off screen or the app is in the background.
 //
-// Detail (Micky, 2026-11-06: "even more detailed... the layout more visible
-// and authentic"), courses with an outline only:
-//   * USGS (US, no MapTiler key): one sharp NAIP picture of the outline box
-//     (lib/naipExport), laid over
-//     the z16 tiles as an image source once it has loaded: at once within
-//     3 s, faded in after (a cold render takes 10-45 s; repeats are cached);
-//     never arrives -> the tiles are what shows.
-//   * the course's OSM layout (_shared/courseLayout via
-//     lib/courseDetailImagery): fairway/tee/bunker/water outlines, greens
-//     lit, dashed hole lines and hole numbers at the tees. "Layout" toggles
-//     it (default on). Static GeoJSON + 18 DOM markers: the orbit only moves
-//     the camera, so it stays as smooth as before.
+// Detail (2026-11-06, reworked 2026-11-07 for speed and privacy):
+//   * USGS courses: one sharp NAIP picture (lib/courseDetailImagery
+//     coursePicture): asked for when the page opens, in parallel with the
+//     tiles; for real courses a warm Storage URL from course-photos, else
+//     the USGS export. Downloaded once (blob: URL shared with the still
+//     view), at low priority, laid over the tiles when here: at once within
+//     3 s, faded in after. The tiles are always what shows first. If every
+//     tile fails but the picture loads, the overview still shows (it used to
+//     give up).
+//   * The OSM layout: asked for only while this overview shows with Layout
+//     on (no request with Layout off). Ready / "not mapped yet" / "couldn't
+//     load" are shown on a small status line; turning Layout off and on
+//     retries a failure.
 
 const DETAIL_ID = "naip-detail";
 const AREAS_ID = "layout-areas";
@@ -112,7 +115,12 @@ function cameraFor(lat: number, lng: number, bounds: CourseBounds | null | undef
   };
 }
 
-export function CourseOverviewMap({ lat, lng, bounds, name, source, onFail }: CourseOverviewMapProps) {
+interface ShownPicture {
+  pic: DetailPicture;
+  load: DetailLoad;
+}
+
+export function CourseOverviewMap({ lat, lng, bounds, name, courseId, useServer, source, onFail }: CourseOverviewMapProps) {
   const { t } = useLocale();
   const boxRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -130,22 +138,41 @@ export function CourseOverviewMap({ lat, lng, bounds, name, source, onFail }: Co
   const inViewRef = useRef(false);
   const libRef = useRef<{ Marker: typeof import("maplibre-gl").Marker } | null>(null);
   const markersRef = useRef<Marker[]>([]);
-  const [hasLayout, setHasLayout] = useState(false);
-  const [layoutOn, setLayoutOn] = useState(true);
+  // Remembered per device, so "off" really means no layout request on later
+  // course pages too (lib/overviewStatus).
+  const [layoutOn, setLayoutOn] = useState(readLayoutPreference);
   const layoutOnRef = useRef(layoutOn);
   layoutOnRef.current = layoutOn;
+  const [layoutResult, setLayoutResult] = useState<LayoutResult | null>(null);
+  const [layoutAttempt, setLayoutAttempt] = useState(0);
+  const [picture, setPicture] = useState<ShownPicture | null>(null);
+  // Resolves true once the picture is downloaded (false: none / failed): the
+  // map's first draw waits on it when no tile loaded at all.
+  const pictureOkRef = useRef<Promise<boolean> | null>(null);
 
-  // The sharp picture is asked for as soon as the page knows the outline, in
-  // parallel with the tiles (US/USGS only; MapTiler is sharp already).
   const boundsKey = bounds ? `${bounds.south},${bounds.west},${bounds.north},${bounds.east}` : "";
-  const detail = useMemo(
-    () => (source.id === "usgs" && validBounds(bounds) ? naipExportFor(bounds, { devicePixelRatio: typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1 }) : null),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- boundsKey is bounds' identity
-    [source.id, boundsKey],
-  );
+  const canLayout = Boolean((useServer && courseId) || validBounds(bounds));
+
+  // The sharp picture: asked for at once (US/USGS only; MapTiler is sharp
+  // already), downloaded once, at low priority.
   useEffect(() => {
-    if (detail) void loadDetailPicture(detail.url);
-  }, [detail]);
+    if (source.id !== "usgs") {
+      pictureOkRef.current = Promise.resolve(false);
+      return;
+    }
+    let cancelled = false;
+    const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+    const chain = coursePicture({ id: courseId, bounds: boundsRef.current }, { useServer, devicePixelRatio: dpr }).then(async (pic) => {
+      if (!pic) return false;
+      const load = await loadDetailPicture(pic.url);
+      if (!cancelled && load.ok && load.objectUrl) setPicture({ pic, load });
+      return load.ok;
+    });
+    pictureOkRef.current = chain;
+    return () => {
+      cancelled = true;
+    };
+  }, [source.id, boundsKey, courseId, useServer]);
 
   // Mount the map only once the box is (nearly) on screen; keep track of
   // visibility for the orbit afterwards.
@@ -186,30 +213,29 @@ export function CourseOverviewMap({ lat, lng, bounds, name, source, onFail }: Co
     // failed). The orbit only starts after it: a camera that moves while the
     // first tiles load keeps changing what's needed and the map never
     // settles. If no tile at all loaded (source down, tiles refused, a course
-    // outside the source's coverage) the view gives up for the still/
-    // placeholder one; a few missing tiles are just holes.
+    // outside the source's coverage), the sharp picture can still carry the
+    // view: wait for it a little (pictureRescueWait) before giving up for the
+    // still/placeholder view. A few missing tiles are just holes.
     let tilesOk = 0;
     let drawn = false;
     let startOrbit: () => void = () => {};
+    const show = () => {
+      if (cancelled) return;
+      setLoaded(true);
+      startOrbit();
+    };
     const firstDraw = () => {
       if (drawn || cancelled) return;
       drawn = true;
       window.clearTimeout(timeout);
-      // Nothing to show at all: MapLibre stays silent about 404 tiles (sparse
-      // sets, e.g. USGS outside its coverage), so "no tile loaded" decides,
-      // not an error count.
-      if (tilesOk === 0) {
-        fail();
-        return;
-      }
-      setLoaded(true);
-      startOrbit();
+      // MapLibre stays silent about 404 tiles (sparse sets, e.g. USGS outside
+      // its coverage), so "no tile loaded" decides, not an error count.
+      if (tilesOk > 0) return show();
+      const picOk = pictureOkRef.current;
+      if (!picOk) return fail();
+      void Promise.race([picOk, new Promise<boolean>((r) => window.setTimeout(() => r(false), pictureRescueWait()))]).then((ok) => (ok ? show() : fail()));
     };
-    const timeout = window.setTimeout(() => {
-      // Slow network: show what's there if anything loaded, else give up.
-      if (tilesOk > 0) firstDraw();
-      else fail();
-    }, LOAD_TIMEOUT_MS);
+    const timeout = window.setTimeout(firstDraw, LOAD_TIMEOUT_MS);
 
     const down = () => {
       interacting = true;
@@ -337,31 +363,26 @@ export function CourseOverviewMap({ lat, lng, bounds, name, source, onFail }: Co
   // The sharp picture, over the tiles and under the layout, once it's here.
   useEffect(() => {
     const map = mapRef.current;
-    if (!loaded || !map || !detail) return;
-    let cancelled = false;
-    void loadDetailPicture(detail.url).then(({ ok, ms }) => {
-      if (cancelled || !ok || mapRef.current !== map) return;
-      const reveal = detailReveal(ms);
-      if (reveal === "drop") return;
-      try {
-        map.addSource(DETAIL_ID, { type: "image", url: detail.url, coordinates: detail.coordinates });
-        map.addLayer(
-          {
-            id: DETAIL_ID,
-            type: "raster",
-            source: DETAIL_ID,
-            paint: { "raster-opacity": reveal === "now" ? 1 : 0, "raster-opacity-transition": { duration: 700, delay: 0 }, "raster-fade-duration": 0 },
-          },
-          map.getLayer(FIRST_LAYOUT_LAYER) ? FIRST_LAYOUT_LAYER : undefined,
-        );
-        // A late arrival fades in instead of popping mid-orbit.
-        if (reveal === "fade") requestAnimationFrame(() => mapRef.current === map && map.getLayer(DETAIL_ID) && map.setPaintProperty(DETAIL_ID, "raster-opacity", 1));
-      } catch {
-        // Map gone or style not ready: the tiles stay.
-      }
-    });
+    if (!loaded || !map || !picture?.load.objectUrl) return;
+    const reveal = detailReveal(picture.load.ms);
+    if (reveal === "drop") return;
+    try {
+      map.addSource(DETAIL_ID, { type: "image", url: picture.load.objectUrl, coordinates: picture.pic.coordinates });
+      map.addLayer(
+        {
+          id: DETAIL_ID,
+          type: "raster",
+          source: DETAIL_ID,
+          paint: { "raster-opacity": reveal === "now" ? 1 : 0, "raster-opacity-transition": { duration: 700, delay: 0 }, "raster-fade-duration": 0 },
+        },
+        map.getLayer(FIRST_LAYOUT_LAYER) ? FIRST_LAYOUT_LAYER : undefined,
+      );
+      // A late arrival fades in instead of popping mid-orbit.
+      if (reveal === "fade") requestAnimationFrame(() => mapRef.current === map && map.getLayer(DETAIL_ID) && map.setPaintProperty(DETAIL_ID, "raster-opacity", 1));
+    } catch {
+      // Map gone or style not ready: the tiles stay.
+    }
     return () => {
-      cancelled = true;
       try {
         if (map.getLayer(DETAIL_ID)) map.removeLayer(DETAIL_ID);
         if (map.getSource(DETAIL_ID)) map.removeSource(DETAIL_ID);
@@ -369,57 +390,68 @@ export function CourseOverviewMap({ lat, lng, bounds, name, source, onFail }: Co
         // Already removed with the map.
       }
     };
-  }, [loaded, detail]);
+  }, [loaded, picture]);
 
-  // The OSM layout (fetched once per course per device, see
-  // lib/courseDetailImagery), drawn over the picture.
+  // The OSM layout: only while this overview shows with Layout on. Nothing
+  // is asked with Layout off.
   useEffect(() => {
-    const map = mapRef.current;
-    const lib = libRef.current;
-    const b = boundsRef.current;
-    // Any imagery source: the layout is OSM data, not USGS.
-    if (!loaded || !map || !lib || !validBounds(b)) return;
+    if (!loaded || !layoutOn || !canLayout) return;
+    if (layoutResult && layoutResult.status !== "unavailable") return;
+    if (layoutResult?.status === "unavailable" && layoutAttempt === 0) return;
     let cancelled = false;
-    void fetchCourseLayout(name, b).then((layout) => {
-      if (cancelled || !layout || mapRef.current !== map) return;
-      const gj = layoutToGeoJSON(layout);
-      try {
-        map.addSource(AREAS_ID, { type: "geojson", data: gj.areas as GeoJSONSourceSpecification["data"] });
-        map.addSource(HOLES_ID, { type: "geojson", data: gj.holes as GeoJSONSourceSpecification["data"] });
-        const visibility = layoutOnRef.current ? "visible" : "none";
-        for (const layer of LAYOUT_LAYERS) map.addLayer({ ...layer, layout: { visibility } } as LayerSpecification);
-        markersRef.current = gj.labels.map((l) => {
-          const el = document.createElement("span");
-          el.className = HOLE_LABEL_CLASS;
-          el.textContent = l.number;
-          el.setAttribute("aria-hidden", "true");
-          if (!layoutOnRef.current) el.style.display = "none";
-          return new lib.Marker({ element: el, anchor: "center" }).setLngLat([l.lng, l.lat]).addTo(map);
-        });
-        setHasLayout(true);
-        // A multi-course facility (one outline, several courses): glide onto
-        // our course's own holes, unless the golfer already took the camera.
-        const own = layoutBounds(layout);
-        const container = containerRef.current;
-        if (own && container && !touchedRef.current && reframeOnLayout(b, own)) {
-          const g = { lat: (own.north - own.south) * 0.08, lng: (own.east - own.west) * 0.08 };
-          const grown = { south: own.south - g.lat, north: own.north + g.lat, west: own.west - g.lng, east: own.east + g.lng };
-          const camera = cameraFor(lat, lng, grown, container, source.maxZoom);
-          map.setMaxBounds(camera.maxBounds);
-          if (prefersReducedMotion()) {
-            map.jumpTo({ center: camera.center, zoom: camera.zoom });
-          } else {
-            const duration = 1400;
-            easeUntilRef.current = performance.now() + duration + 50;
-            map.easeTo({ center: camera.center, zoom: camera.zoom, bearing: map.getBearing() + (ORBIT_DEG_PER_SEC * duration) / 1000, duration });
-          }
-        }
-      } catch {
-        // Map gone mid-way: nothing to draw on.
-      }
+    setLayoutResult(null);
+    void courseLayout({ id: courseId, name, bounds: boundsRef.current }, { useServer, force: layoutAttempt > 0 }).then((r) => {
+      if (!cancelled) setLayoutResult(r);
     });
     return () => {
       cancelled = true;
+    };
+    // layoutResult is read, not a trigger: a new ask only on load/toggle/retry.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, layoutOn, canLayout, boundsKey, courseId, name, useServer, layoutAttempt]);
+
+  // Draw a ready layout (kept while Layout is off, just hidden).
+  useEffect(() => {
+    const map = mapRef.current;
+    const lib = libRef.current;
+    if (!loaded || !map || !lib || layoutResult?.status !== "ready") return;
+    const layout = layoutResult.layout;
+    const gj = layoutToGeoJSON(layout);
+    try {
+      map.addSource(AREAS_ID, { type: "geojson", data: gj.areas as GeoJSONSourceSpecification["data"] });
+      map.addSource(HOLES_ID, { type: "geojson", data: gj.holes as GeoJSONSourceSpecification["data"] });
+      const visibility = layoutOnRef.current ? "visible" : "none";
+      for (const layer of LAYOUT_LAYERS) map.addLayer({ ...layer, layout: { visibility } } as LayerSpecification);
+      markersRef.current = gj.labels.map((l) => {
+        const el = document.createElement("span");
+        el.className = HOLE_LABEL_CLASS;
+        el.textContent = l.number;
+        el.setAttribute("aria-hidden", "true");
+        if (!layoutOnRef.current) el.style.display = "none";
+        return new lib.Marker({ element: el, anchor: "center" }).setLngLat([l.lng, l.lat]).addTo(map);
+      });
+      // A multi-course facility (one outline, several courses): glide onto
+      // our course's own holes, unless the golfer already took the camera.
+      const b = boundsRef.current;
+      const own = layoutBounds(layout);
+      const container = containerRef.current;
+      if (b && own && container && !touchedRef.current && reframeOnLayout(b, own)) {
+        const g = { lat: (own.north - own.south) * 0.08, lng: (own.east - own.west) * 0.08 };
+        const grown = { south: own.south - g.lat, north: own.north + g.lat, west: own.west - g.lng, east: own.east + g.lng };
+        const camera = cameraFor(lat, lng, grown, container, source.maxZoom);
+        map.setMaxBounds(camera.maxBounds);
+        if (prefersReducedMotion()) {
+          map.jumpTo({ center: camera.center, zoom: camera.zoom });
+        } else {
+          const duration = 1400;
+          easeUntilRef.current = performance.now() + duration + 50;
+          map.easeTo({ center: camera.center, zoom: camera.zoom, bearing: map.getBearing() + (ORBIT_DEG_PER_SEC * duration) / 1000, duration });
+        }
+      }
+    } catch {
+      // Map gone mid-way: nothing to draw on.
+    }
+    return () => {
       for (const m of markersRef.current) m.remove();
       markersRef.current = [];
       try {
@@ -430,18 +462,32 @@ export function CourseOverviewMap({ lat, lng, bounds, name, source, onFail }: Co
         // Already removed with the map.
       }
     };
-  }, [loaded, boundsKey, name, lat, lng, source.maxZoom]);
+  }, [loaded, layoutResult, lat, lng, source.maxZoom]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !hasLayout) return;
+    if (!map || layoutResult?.status !== "ready") return;
     try {
       for (const layer of LAYOUT_LAYERS) if (map.getLayer(layer.id)) map.setLayoutProperty(layer.id, "visibility", layoutOn ? "visible" : "none");
     } catch {
       // Map gone.
     }
     for (const m of markersRef.current) m.getElement().style.display = layoutOn ? "" : "none";
-  }, [layoutOn, hasLayout]);
+  }, [layoutOn, layoutResult]);
+
+  const status: LayoutUiStatus = layoutUiStatus({ loaded, canLayout, layoutOn, result: layoutResult });
+  const toggleLayout = () => {
+    const turningOn = !layoutOn;
+    // Turning it back on after a failure asks again (past the short wait).
+    if (turningOn && layoutResult?.status === "unavailable") setLayoutAttempt((n) => n + 1);
+    setLayoutOn(turningOn);
+    writeLayoutPreference(turningOn);
+  };
+  const statusText: Partial<Record<LayoutUiStatus, string>> = {
+    loading: t("courseMedia.layoutLoading"),
+    unmapped: t("courseMedia.layoutUnmapped"),
+    unavailable: t("courseMedia.layoutUnavailable"),
+  };
 
   return (
     <div ref={boxRef} className="absolute inset-0">
@@ -449,21 +495,26 @@ export function CourseOverviewMap({ lat, lng, bounds, name, source, onFail }: Co
           wrapper that does the absolute fill. */}
       <div ref={containerRef} role="region" aria-label={t("courseMedia.overviewLabel", { name })} className="h-full w-full" />
       {!loaded && <div className="pointer-events-none absolute inset-0 animate-pulse bg-fairway-50 motion-reduce:animate-none" />}
-      {hasLayout && (
+      {loaded && canLayout && (
         // Outside the map container, so a tap here never counts as touching
         // the map (the orbit keeps going).
-        <button
-          type="button"
-          aria-pressed={layoutOn}
-          data-haptic="tap"
-          onClick={() => setLayoutOn((v) => !v)}
-          className={`absolute right-2.5 top-2.5 z-[1] inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold backdrop-blur-sm transition-colors duration-150 ${
-            layoutOn ? "bg-white text-slate-900" : "bg-slate-900/55 text-white/90 hover:text-white"
-          }`}
-        >
-          <Flag size={12} aria-hidden="true" />
-          {t("courseMedia.layout")}
-        </button>
+        <div className="absolute right-2.5 top-2.5 z-[1] flex flex-col items-end gap-1">
+          <button
+            type="button"
+            aria-pressed={layoutOn}
+            data-haptic="tap"
+            onClick={toggleLayout}
+            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold backdrop-blur-sm transition-colors duration-150 ${
+              layoutOn ? "bg-white text-slate-900" : "bg-slate-900/55 text-white/90 hover:text-white"
+            }`}
+          >
+            <Flag size={12} aria-hidden="true" />
+            {t("courseMedia.layout")}
+          </button>
+          <span role="status" aria-live="polite" data-layout-status={status} className={statusText[status] ? "max-w-[210px] rounded-xl bg-slate-900/65 px-2 py-1 text-right text-[10px] font-medium leading-snug text-white backdrop-blur-sm" : "sr-only"}>
+            {statusText[status] ?? ""}
+          </span>
+        </div>
       )}
       {loaded && !touched && (
         // Above the attribution, which can wrap to two lines on a phone.

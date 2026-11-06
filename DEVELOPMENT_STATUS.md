@@ -14,6 +14,44 @@ Note: Phases between Phase 20/21 (see below) and Phase 22 span roughly 31 commit
 - Full Xcode/App Store Connect checklist, changelog, What to Test, What's New, review notes and privacy notes: `LAUNCH_CHECKLIST.md` section 10a.
 - Checks: `npm run check` (tsc, lint 0 errors, 750/750 node tests, build); `npx cap sync ios` runs on Linux (6 plugins; Package.swift unchanged once the worktree's symlinked-node_modules path rewrite is reverted). Swift not compiled here (no Xcode on Linux).
 
+## Course overview: speed, layout fallback bug, privacy — 2026-11-07 (branch `fix/overview-speed-layout` off origin/main 54ca896, uncommitted/not deployed; migration `20261107190000_course_imagery_detail_cache` PREPARED, NOT APPLIED; course-photos change NOT deployed)
+
+A review of 116c441 (drone v2).
+
+- **Measured on main (headless, demo, real data)**:
+  - Tiles are not the slow part: the map shows in ~1.0–1.6 s.
+  - The picture was downloaded **twice** per view (Image preload + MapLibre's own fetch).
+  - A cold NAIP export takes **1.5–20 s, bimodal**. It is independent of size: 512 px is no faster than 2048, PNG is 10× the bytes, and four parallel quadrants finish with the slowest one. A warm export takes ~0.1 s (CloudFront, 12 h, per edge).
+  - Overpass: overpass-api.de answered in 10–37 s or a fast 502. maps.mail.ru sometimes took 18–50 s or returned a 504.
+  - **Bug reproduced** (unit + real browser): a fast HTTP 200 carrying `remark: "runtime error: Query timed out…"` was parsed as "no layout", won `Promise.any`, aborted the slower good answer, and was cached as null for 30 days (localStorage v1 key).
+  - With every tile failing, the overview gave up even though the picture had loaded. The no-WebGL still view did the same.
+- **Fixes (client)**:
+  - `lib/courseDetailImagery.ts` rewritten. The picture is downloaded once (`fetch` → blob: URL shared by the overview and the still view, `priority: "low"` so tiles go first).
+  - `classifyOverpassAnswer` + `settleLayoutAttempts` (`_shared/courseLayout.ts`): an error remark, non-JSON or HTML response, or HTTP error is "invalid" (transient). "unmapped" only counts after every endpoint finished; the first "ok" wins.
+  - Layout cache: ok 30 days, unmapped 7 days. Transient failures are not cached and wait 2 minutes before the next ask, except a Layout off/on, which retries at once. The cache moved to v2 and the old v1 keys are deleted.
+  - **maps.mail.ru removed**: the direct path (demo, or before the function is deployed) uses overpass-api.de only.
+  - The layout is requested only while the overview shows with Layout on. The switch is remembered per device (`golfme:overviewLayout`), so "off" means no request on later course pages too.
+  - The status line shows "Loading…", "Course layout isn't available for this course yet." or "Couldn't load… turn Layout off and on" (×6 locales).
+  - Tiles-all-fail rescue: the overview waits up to 20 s for the picture before falling back. The still view keeps the picture when its tiles fail.
+- **Fixes (server, prepared)**:
+  - course-photos takes `{courseIds:[id], picture:true}` or `{…, layout:true}`, one course per request.
+  - **Picture**: rendered once per course with a hedge (a second, 5 cm-nudged request after 4 s; the first valid JPEG wins). It is checked (content-type, 20 KB–3 MB, JPEG magic) and stored in the public `course-imagery` bucket at `naip/v1/<id>/<w>x<h>-<tag>.jpg` (cache 1 year, path versioned by box). Every later viewer gets it warm from Storage, and the browser never renders it.
+  - **Layout**: overpass-api.de only, with a GolfMe User-Agent. Stored in `course_imagery.layout` (ok re-checked after 90 days, unmapped after 7); transient failures are never stored.
+  - Caps: `overpass_layout` 40/day, `usgs_export` 300/day. Shared code moved to `_shared/naipExport.ts` and `_shared/usCoverage.ts`.
+  - An old function (no `pictures`/`layouts` in its answer), or none at all, falls back to the direct path. A server "none" or "transient" never triggers a direct request behind its back.
+- **Overpass policy** (OSM wiki): usage counts across all of an app's users; regular use should stay ≈100 queries / 10 MB a day; send a User-Agent; pause after 429/406; commercial use should self-host or pay. The server-side once-per-course store keeps GolfMe far below that; the 116c441 per-device, two-endpoint race did not. FairwayMapper (golf-focused Overpass, free tier for OSM contributors) is an option if volume grows.
+- **Migration 20261107190000** (needs 20261106140000 applied first):
+  - Changes: course_imagery `layout`/`layout_status`/`layout_checked_at`/`naip_*` with null-safe shape checks; the public bucket (3 MB, JPEG only) with no storage policies, so only the service role writes. Access to course_imagery is unchanged (service role only).
+  - PGlite: 34/34 after replaying 103 earlier migrations, including apply-guard, check, rollback-exact-schema, re-apply and a negative control. The first run caught NULL-passing checks, fixed with coalesce/num_nonnulls.
+  - Paste files are in the session scratchpad: `overview-speed/imagery-detail-{apply,check,rollback}.sql`.
+- **Checks**:
+  - Tests: new `tests/overviewDetail.test.ts` (17) and 8 new handler tests (picture store/serve, failures, hedge, US/cap, layout store, error-remark transient, unmapped 7-day recheck, one course per request).
+  - tsc, handler strict tsc, lint 0 errors (21 warnings), node 768/768, build, imagery suite 38/38.
+  - Headless behaviour: 9/9 on the fix, while main fails 4 of the same checks.
+  - After the fix: 1 picture request per view (was 2), only overpass-api.de.
+- **Deploy order**: SQL `20261106140000` (already APPLIED by Micky 2026-11-06; course-photos v1 already deployed) → `20261107190000` → deploy course-photos (`deno check` first) → client. The client alone is safe at any point: it falls back to the direct path.
+- **Open / needs iPhone**: GPU memory for a 2048-px picture (≈12–16 MB texture), the fade during orbit, Storage egress (~0.15–0.7 MB per view), and whether the status pill should auto-hide.
+
 ## Photos in chat (DMs + round chats) — 2026-11-06 (branch `feat/chat-images` off origin/main 7a22d01, uncommitted/not deployed; golfme-architect; migration `20261107170000_chat_images` PREPARED, NOT APPLIED; delete-account Edge Function change NOT deployed)
 
 Micky: "add sending images in chat, beside the emoji button". One photo per message (optional text = caption, optional quote), in DMs and round chats.

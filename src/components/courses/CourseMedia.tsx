@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { useLocale } from "../../i18n/LocaleContext";
 import type { DisplayCourseResult } from "../../lib/useCourseSearch";
@@ -9,8 +9,10 @@ import { POINT_HERO_ZOOM } from "../../../supabase/functions/_shared/courseBound
 import { matchSupportedTeeTimeCourse } from "../../services/teeTimes/types";
 import { CourseOverviewMap } from "./CourseOverviewMap";
 import { supportsWebGL } from "../../lib/webgl";
-import { FittedSatelliteTiles } from "./SatelliteTiles";
-import { naipExportFor } from "../../lib/naipExport";
+import { FittedSatelliteTiles, type StillDetail } from "./SatelliteTiles";
+import { detailReveal } from "../../lib/naipExport";
+import { coursePicture, loadDetailPicture } from "../../lib/courseDetailImagery";
+import { useAuth } from "../../context/AuthContext";
 import { GenericCourseIllustration } from "./CourseHero";
 
 // The picture block at the top of a course page (and the course map's
@@ -74,6 +76,10 @@ export function CourseMedia({ course }: { course: DisplayCourseResult }) {
   // MapTiler tiles refused (bad/blocked key, outage): no still tiles either.
   const [tilesFailed, setTilesFailed] = useState(false);
   const [chosen, setChosen] = useState<MediaTab | null>(null);
+  const [stillDetail, setStillDetail] = useState<StillDetail | null>(null);
+  const { isDemo } = useAuth();
+  // Real courses: the detail comes from course-photos (warm, stored once).
+  const useServer = !isDemo && Boolean(course.id);
 
   const handpicked = matchSupportedTeeTimeCourse(course.name);
   const handpickedUrl = handpicked?.heroImageUrl;
@@ -88,15 +94,33 @@ export function CourseMedia({ course }: { course: DisplayCourseResult }) {
         : null;
   const mapboxUrl = courseSatelliteImageUrl(course.lat, course.lng);
   const canOverview = overviewAvailable({ hasSource: Boolean(source), hasCoords, webgl }) && !overviewFailed;
-  const useTiles = Boolean(source) && hasCoords && !tilesFailed;
+  // The tiles failed but the sharp picture is here: the still view stays.
+  const useTiles = Boolean(source) && hasCoords && (!tilesFailed || Boolean(stillDetail));
   const tabs = courseMediaTabs({ overviewAvailable: canOverview, hasPhoto: Boolean(shownPhoto), hasStaticSatellite: useTiles || Boolean(mapboxUrl) });
   const tab = pickCourseMediaTab(tabs, chosen);
-  // The one sharp NAIP picture, for the still view (the overview asks for
-  // the same URL itself). USGS only; only once that tab shows.
-  const stillDetail = useMemo(
-    () => (tab === "satellite" && source?.id === "usgs" ? naipExportFor(bounds, { devicePixelRatio: typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1 }) : null),
-    [tab, source?.id, bounds],
-  );
+  // The one sharp NAIP picture for the still view (the same one the
+  // overview uses: one ask, one download). USGS only; only once that tab
+  // shows.
+  // Also when no overview can run: if every tile then fails, the satellite
+  // tab only survives because the picture is (being) fetched.
+  const wantStill = (tab === "satellite" || !canOverview) && source?.id === "usgs" && hasCoords;
+  const boundsKey = bounds ? `${bounds.south},${bounds.west},${bounds.north},${bounds.east}` : "";
+  useEffect(() => {
+    if (!wantStill) return;
+    let cancelled = false;
+    const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+    void coursePicture({ id: course.id, bounds }, { useServer, devicePixelRatio: dpr }).then(async (pic) => {
+      if (!pic) return;
+      const load = await loadDetailPicture(pic.url);
+      const reveal = detailReveal(load.ms);
+      if (!cancelled && load.ok && load.objectUrl && reveal !== "drop") setStillDetail({ bbox: pic.bbox, objectUrl: load.objectUrl, fade: reveal === "fade" });
+    });
+    return () => {
+      cancelled = true;
+    };
+    // boundsKey stands for bounds.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wantStill, course.id, boundsKey, useServer]);
   const label = [course.name, course.area].filter(Boolean).join(", ");
   const tabLabel: Record<MediaTab, string> = {
     overview: t("courseMedia.overview"),
@@ -118,6 +142,8 @@ export function CourseMedia({ course }: { course: DisplayCourseResult }) {
             lng={course.lng!}
             bounds={bounds}
             name={course.name}
+            courseId={course.id}
+            useServer={useServer}
             source={source}
             onFail={() => setOverviewFailed(true)}
           />
@@ -127,7 +153,7 @@ export function CourseMedia({ course }: { course: DisplayCourseResult }) {
         )}
         {tab === "satellite" &&
           (useTiles && source ? (
-            <FittedSatelliteTiles source={source} lat={course.lat!} lng={course.lng!} bounds={bounds} fallbackZoom={POINT_HERO_ZOOM} onError={() => setTilesFailed(true)} detail={stillDetail} />
+            <FittedSatelliteTiles source={source} lat={course.lat!} lng={course.lng!} bounds={bounds} fallbackZoom={POINT_HERO_ZOOM} onError={() => setTilesFailed(true)} detail={stillDetail} tilesBroken={tilesFailed} />
           ) : mapboxUrl ? (
             <img src={mapboxUrl} alt={label} decoding="async" className="h-full w-full object-cover" />
           ) : null)}

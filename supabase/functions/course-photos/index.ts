@@ -8,6 +8,10 @@
 //   COURSE_PHOTOS_DAILY_TEXT_SEARCH_CAP / _DETAILS_CAP / _PHOTO_CAP /
 //   _WIKIMEDIA_CAP / _GEOAPIFY_DETAILS_CAP / _OVERPASS_CAP
 //                          optional overrides of the daily caps.
+//   COURSE_PHOTOS_DAILY_OVERPASS_LAYOUT_CAP (default 40) /
+//   COURSE_PHOTOS_DAILY_USGS_EXPORT_CAP (default 300)
+//                          caps for the course page detail (layout, NAIP
+//                          picture), each made once per course then stored.
 // SUPABASE_URL / SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY are provided
 // by the platform. The service role is used only for public.course_imagery
 // and the quota function, which no client can reach.
@@ -17,6 +21,7 @@ import { handleRequest, type ImageryRow, type Store } from "./handler.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+const PICTURE_BUCKET = "course-imagery";
 const admin = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 
 const store: Store = {
@@ -43,6 +48,15 @@ const store: Store = {
     const { data, error } = await admin.rpc("course_imagery_take_quota", { p_provider: provider, p_cap: cap, p_cost: cost });
     if (error) throw new Error(error.message);
     return data === true;
+  },
+  async uploadPicture(path, bytes) {
+    // Public bucket (20261107190000), service role only writes. The path is
+    // versioned per outline + size, so the object can be cached as immutable.
+    const { error } = await admin.storage.from(PICTURE_BUCKET).upload(path, bytes, { contentType: "image/jpeg", cacheControl: "31536000", upsert: true });
+    if (error) throw new Error(error.message);
+  },
+  publicPictureUrl(path) {
+    return admin.storage.from(PICTURE_BUCKET).getPublicUrl(path).data.publicUrl;
   },
 };
 

@@ -57,37 +57,9 @@ export function maptilerSource(key: string): TileSource {
 export const OSM_CREDIT = "© OpenStreetMap contributors";
 export const OSM_CREDIT_HTML = '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a>';
 
-// "Is this course in the US?" (where NAIP exists). The course's country,
-// when we have it (real courses: Geoapify's country, stored in
-// public.courses), decides. Without it (demo fixtures, old rows) a coarse
-// box test: the contiguous US, Alaska, Hawaii, Puerto Rico + USVI, Guam +
-// the Northern Marianas, American Samoa. The contiguous box also takes in
-// the strip of Canada south of 49°N and a sliver of northern Mexico; a
-// course there gets no NAIP tiles (they 404), the image fails to load and
-// the view falls back to its placeholder, so a wrong guess costs nothing.
-const US_COUNTRY_NAMES = new Set([
-  "us", "usa", "u.s.", "u.s.a.", "united states", "united states of america",
-  "pr", "puerto rico", "vi", "u.s. virgin islands", "united states virgin islands", "us virgin islands",
-  "gu", "guam", "mp", "northern mariana islands", "as", "american samoa",
-]);
-
-const US_BOXES: [number, number, number, number][] = [
-  // [south, west, north, east]
-  [24.3, -125.0, 49.4, -66.8], // contiguous US
-  [51.0, -180.0, 71.6, -129.9], // Alaska (incl. the Aleutians west of 180 below)
-  [51.0, 172.0, 53.1, 180.0], // western Aleutians
-  [18.8, -160.4, 22.4, -154.7], // Hawaii
-  [17.6, -67.4, 18.6, -64.5], // Puerto Rico + USVI
-  [13.2, 144.5, 20.6, 146.1], // Guam + Northern Marianas
-  [-14.6, -171.2, -11.0, -168.1], // American Samoa
-];
-
-export function isUsCourse(lat: number | undefined, lng: number | undefined, country?: string | null): boolean {
-  const c = country?.trim().toLowerCase();
-  if (c) return US_COUNTRY_NAMES.has(c);
-  if (lat == null || lng == null || !Number.isFinite(lat) || !Number.isFinite(lng)) return false;
-  return US_BOXES.some(([s, w, n, e]) => lat >= s && lat <= n && lng >= w && lng <= e);
-}
+// "Is this course in the US?" (where NAIP exists): shared with course-photos.
+import { isUsCourse } from "../../supabase/functions/_shared/usCoverage.ts";
+export { isUsCourse };
 
 /** Where a course's aerial imagery comes from: MapTiler everywhere when its
  * key is set, else USGS NAIP for US courses, else none. */

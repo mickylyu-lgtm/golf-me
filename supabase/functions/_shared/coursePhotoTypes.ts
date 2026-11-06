@@ -38,6 +38,22 @@ export interface CoursePhotosRequest {
   /** Only the outlines (no photo lookups, so no billable photo calls):
    * for satellite-only views. */
   outlineOnly?: boolean;
+  /** The course page's sharp NAIP picture (US courses with an outline):
+   * rendered once per course and stored, then served from Storage. Course
+   * pages only, one course per request. Implies outlineOnly. */
+  picture?: boolean;
+  /** The course's OSM layout (Overpass, once per course, stored). Course
+   * pages only, when the overview shows with Layout on. Implies outlineOnly. */
+  layout?: boolean;
+}
+
+/** A stored NAIP picture: a public Storage URL and the Web-Mercator box it
+ * covers (the client derives MapLibre corners from it). */
+export interface CoursePictureOut {
+  url: string;
+  bbox: [number, number, number, number];
+  width: number;
+  height: number;
 }
 
 export interface CoursePhotosResponse {
@@ -49,10 +65,17 @@ export interface CoursePhotosResponse {
    * frame the holes rather than our single point (often the clubhouse).
    * null = no outline known; missing = not resolved this time. */
   bounds?: Record<string, CourseBounds | null>;
+  /** With `picture`: the stored picture, or null = none to give (not in the
+   * US, no outline, or it couldn't be rendered this time: the tiles stay). */
+  pictures?: Record<string, CoursePictureOut | null>;
+  /** With `layout`: the layout or "unmapped"; a missing id = not resolved
+   * this time (Overpass down / cap reached): retry later, cache nothing. */
+  layouts?: Record<string, LayoutAnswer>;
 }
 
 export type { CourseBounds } from "./courseBounds.ts";
 import type { CourseBounds } from "./courseBounds.ts";
+import type { LayoutAnswer } from "./courseLayout.ts";
 
 export const MAX_COURSE_IDS_PER_REQUEST = 12;
 export const PHOTO_WIDTH_PX: Record<CoursePhotoSize, number> = { thumb: 240, hero: 1200 };
