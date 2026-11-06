@@ -8,7 +8,7 @@ import { useToast } from "../context/ToastContext";
 import { useLocale } from "../i18n/LocaleContext";
 import { Button } from "../components/ui/Button";
 import { EmptyState } from "../components/ui/EmptyState";
-import { inputClass, labelClass } from "../components/ui/FormControls";
+import { ClubPicker } from "../components/caddie/ClubPicker";
 import { VideoTrimSelector } from "../components/caddie/VideoTrimSelector";
 import { FilmingTips } from "../components/caddie/FilmingTips";
 import { captureVideoThumbnail, readVideoDuration } from "../lib/image";
@@ -16,7 +16,7 @@ import { formatClock } from "../lib/format";
 import { supabase } from "../lib/supabase";
 import { CADDIE_MEDIA_BUCKET } from "../lib/caddieMedia";
 import { CaddieRequestError } from "../lib/caddieAnalysis";
-import { clubLabel } from "../lib/clubLabel";
+import { ALL_CLUB_VALUES } from "../lib/clubCatalog";
 import { caddieErrorText } from "../lib/caddieErrorText";
 const MAX_SWING_VIDEO_BYTES = 200 * 1024 * 1024; // matches the Storage bucket's own file_size_limit
 const MAX_SWING_VIDEO_SECONDS = 10; // max length of the WINDOW actually analyzed (2026-08-22 credit-efficiency pass) — Caddie's Roboflow pass calls once per sampled frame, so a longer clip directly multiplies calls/latency/credit spend; see analyze-swing's ANALYSIS_FPS comment. Was 15s. A source video longer than this is no longer rejected outright — VideoTrimSelector lets the golfer pick which 10s window to analyze instead.
@@ -31,40 +31,9 @@ const MAX_SWING_VIDEO_SECONDS = 10; // max length of the WINDOW actually analyze
 // again" instead of silence that reads as data loss.
 const UPLOAD_IN_PROGRESS_KEY = "golfme:caddieUploadInProgress";
 
-// A fixed dropdown instead of free typing — full-swing clubs, driver
-// through wedges. English club names throughout (not per-locale) matches how
-// real users already entered this field before ("3 wood", "4 hybrid")
-// even on non-English locales, and keeps the stored swing_type value a
-// stable, simple string rather than something locale-dependent.
-const CLUB_OPTIONS = [
-  "Driver",
-  "3 Wood",
-  "5 Wood",
-  "7 Wood",
-  "9 Wood",
-  "2 Hybrid",
-  "3 Hybrid",
-  "4 Hybrid",
-  "5 Hybrid",
-  "1 Iron",
-  "2 Iron",
-  "3 Iron",
-  "4 Iron",
-  "5 Iron",
-  "6 Iron",
-  "7 Iron",
-  "8 Iron",
-  "9 Iron",
-  "Pitching Wedge",
-  "52° Wedge",
-  "54° Wedge",
-  "56° Wedge",
-  "58° Wedge",
-  "60° Wedge",
-  // No "Putter": Caddie's pose checks and scoring (backswing top, hip
-  // sway, weight transfer, finish) only describe a full swing, so a putting
-  // stroke would get confident-looking but meaningless feedback.
-] as const;
+// The club choice: a fixed set (ClubPicker over lib/clubCatalog.ts), not
+// free typing. English values (caddie_analyses.swing_type), translated for
+// display by clubLabel(); no Putter, see clubCatalog.ts.
 
 // Direct-upload Caddie flow: pick a swing video, optionally label the club,
 // get real Gemini feedback. Same upload mechanics as CreatePost.tsx's Swing
@@ -89,10 +58,11 @@ export function AnalyzeSwing() {
   // before a video has even been picked to attach it to.
   const videoFile = draftSwingVideo?.file;
   const videoPreviewUrl = draftSwingVideo?.previewUrl;
-  // A draft saved before Putter was removed from CLUB_OPTIONS falls back to "".
+  // Every older picker value is still in ALL_CLUB_VALUES; a draft holding
+  // anything else (Putter, from before it was removed) falls back to "".
   const [swingType, setSwingTypeState] = useState(() => {
     const saved = draftSwingVideo?.swingType ?? "";
-    return (CLUB_OPTIONS as readonly string[]).includes(saved) ? saved : "";
+    return ALL_CLUB_VALUES.includes(saved) ? saved : "";
   });
   function setSwingType(next: string) {
     setSwingTypeState(next);
@@ -414,18 +384,7 @@ export function AnalyzeSwing() {
       )}
       <input ref={videoInputRef} type="file" accept="video/*" className="hidden" onChange={handleVideoFile} />
 
-      <div>
-        <label className={labelClass}>{t("caddie.swingTypePlaceholder")}</label>
-        <select value={swingType} onChange={(e) => setSwingType(e.target.value)} className={inputClass}>
-          <option value="">{t("caddie.swingTypeSelectPlaceholder")}</option>
-          {CLUB_OPTIONS.map((club) => (
-            // Shown in the app's language; the stored value stays English.
-            <option key={club} value={club}>
-              {clubLabel(club, t)}
-            </option>
-          ))}
-        </select>
-      </div>
+      <ClubPicker value={swingType} onChange={setSwingType} disabled={submitting} />
 
       <Button
         size="lg"

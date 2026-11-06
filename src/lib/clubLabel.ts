@@ -8,16 +8,20 @@
 import type { TranslationKey } from "../i18n/locales/en";
 
 export type ParsedClub =
-  | { kind: "driver" }
+  | { kind: "driver" | "miniDriver" }
   | { kind: "wood" | "hybrid" | "iron"; n: number }
-  | { kind: "pitchingWedge" }
+  | { kind: "pitchingWedge" | "gapWedge" | "sandWedge" | "lobWedge" }
   | { kind: "wedge"; degrees: number };
 
 export function parseClub(raw: string | null | undefined): ParsedClub | null {
   const s = (raw ?? "").trim().toLowerCase().replace(/\s+/g, " ");
   if (!s) return null;
   if (s === "driver") return { kind: "driver" };
+  if (s === "mini driver") return { kind: "miniDriver" };
   if (s === "pitching wedge" || s === "pw") return { kind: "pitchingWedge" };
+  if (s === "gap wedge" || s === "gw") return { kind: "gapWedge" };
+  if (s === "sand wedge" || s === "sw") return { kind: "sandWedge" };
+  if (s === "lob wedge" || s === "lw") return { kind: "lobWedge" };
   const numbered = /^(\d{1,2}) ?(wood|hybrid|iron)$/.exec(s);
   if (numbered) return { kind: numbered[2] as "wood" | "hybrid" | "iron", n: Number(numbered[1]) };
   const wedge = /^(\d{2}) ?°? ?(wedge)$/.exec(s);
@@ -33,8 +37,16 @@ export function clubLabel(raw: string | null | undefined, t: T): string {
   switch (club.kind) {
     case "driver":
       return t("club.driver");
+    case "miniDriver":
+      return t("club.miniDriver");
     case "pitchingWedge":
       return t("club.pitchingWedge");
+    case "gapWedge":
+      return t("club.gapWedge");
+    case "sandWedge":
+      return t("club.sandWedge");
+    case "lobWedge":
+      return t("club.lobWedge");
     case "wedge":
       return t("club.wedge", { degrees: club.degrees });
     case "wood":

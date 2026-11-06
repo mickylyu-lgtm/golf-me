@@ -121,7 +121,7 @@ test("the new Caddie keys are translated in all 6 locales, with the same placeho
 const SAME_AS_ENGLISH_OK = new Set(["caddie.title", "caddie.scoreOutOf100", "coachReplay.title"]);
 // Spanish golf vocabulary that is spelled like the English (standard in
 // Spanish-language golf coaching), and "Original", which is Spanish too.
-const SAME_IN_SPANISH = new Set(["caddie.scoreBackswing", "club.driver", "swingAnalysis.backswing", "swingAnalysis.downswing", "caddie.replayOriginal"]);
+const SAME_IN_SPANISH = new Set(["caddie.scoreBackswing", "club.driver", "club.category.driver", "club.category.wedge", "swingAnalysis.backswing", "swingAnalysis.downswing", "caddie.replayOriginal"]);
 test("every key the Caddie screens use is translated in the 5 other locales", () => {
   const keys = new Set<string>();
   for (const file of caddieFiles()) {
