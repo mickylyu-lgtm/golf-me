@@ -56,6 +56,8 @@ A review of 116c441 (drone v2).
 - **Deploy order**: SQL `20261106140000` (already APPLIED by Micky 2026-11-06; course-photos v1 already deployed) → `20261107190000` → deploy course-photos (`deno check` first) → client. The client alone is safe at any point: it falls back to the direct path.
 - **Open / needs iPhone**: GPU memory for a 2048-px picture (≈12–16 MB texture), the fade during orbit, Storage egress (~0.15–0.7 MB per view), and whether the status pill should auto-hide.
 
+- **Chat voice toggle, 2026-11-06 (client only, not pushed/device-verified)**: tapping the keyboard icon to leave voice mode now just shows the textarea, unfocused, so the keyboard stays down until the user taps the textarea (ChatComposer `toggleVoice`, `flushSync` + `focus()` removed; DM + GroupChat page/card verified headless, chatvoice.mjs 45/45).
+
 ## Voice recording lifecycle fix — 2026-11-06 (local commit on the golfme-architect worktree branch, on top of main 69238aa; not pushed/deployed; client only, no migration; NOT device-verified)
 
 Micky's review brief: at 69238aa a late microphone answer could become the wrong hold's recording.

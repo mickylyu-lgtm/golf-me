@@ -1,6 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
-import { flushSync } from "react-dom";
 import { ImagePlus, Keyboard, Mic, Send, Smile } from "lucide-react";
 import { HoldToTalk, type HoldToTalkLabels, type VoiceNotice } from "./HoldToTalk";
 import { voiceRecordingAvailable, type VoiceClip } from "../../lib/voiceRecorder";
@@ -69,16 +68,15 @@ export function ChatComposer({
   const voiceOn = Boolean(voice && canVoice);
   if (voiceMode && !voiceOn) setVoiceMode(false);
   // Into voice: the keyboard goes down (nothing to type). Back to the
-  // keyboard: focus the textarea inside the same tap, so it comes up.
+  // keyboard: just show the textarea again, unfocused -- the keyboard only
+  // comes up when the user taps the textarea.
   function toggleVoice() {
     const el = textareaRef.current;
     if (!voiceMode) {
       setVoiceMode(true);
       if (el && document.activeElement === el) el.blur();
     } else {
-      // Rendered visible first: a visibility:hidden textarea can't take focus.
-      flushSync(() => setVoiceMode(false));
-      el?.focus({ preventScroll: true });
+      setVoiceMode(false);
     }
   }
   const textareaRef = useRef<HTMLTextAreaElement>(null);
