@@ -133,17 +133,79 @@ public class GolfMeAppleSignInPlugin: CAPPlugin, CAPBridgedPlugin, ASAuthorizati
     }
 }
 
+// The web app's Appearance setting (Settings -> Appearance: Light / Dark /
+// Match iPhone), exposed as the "GolfMeAppearance" Capacitor plugin. The web
+// app can be Dark on a Light iPhone; without this the status bar text, native
+// sheets (photo picker, camera, share, Apple sign-in) and the web view's own
+// backdrop kept following the iPhone. setAppearance overrides the window's
+// interface style, which every native surface in the window follows; the web
+// view's prefers-color-scheme follows it too, which is why the web sends the
+// setting ("system"), never the resolved scheme, for Match iPhone: otherwise
+// the override would feed back into what the web reads as "the iPhone".
+// Web side: src/lib/nativeAppearance.ts (skips the call on builds without
+// this plugin). Not persisted natively: the web sends it at startup while
+// the launch screen is still up.
+@objc(GolfMeAppearancePlugin)
+public class GolfMeAppearancePlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "GolfMeAppearancePlugin"
+    public let jsName = "GolfMeAppearance"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "setAppearance", returnType: CAPPluginReturnPromise)
+    ]
+
+    @objc func setAppearance(_ call: CAPPluginCall) {
+        let style: UIUserInterfaceStyle
+        switch call.getString("appearance") {
+        case "light": style = .light
+        case "dark": style = .dark
+        case "system": style = .unspecified
+        default:
+            call.reject("appearance must be light, dark or system.", "invalid_argument")
+            return
+        }
+        DispatchQueue.main.async {
+            (self.bridge?.viewController as? GolfMeBridgeViewController)?.applyInterfaceStyle(style)
+            call.resolve()
+        }
+    }
+}
+
 // Root view controller (created in SceneDelegate). Same as Capacitor's own,
 // plus registering the app-local plugins above before the web view loads,
-// and keeping iOS 26+'s top scroll edge effect off the web view.
+// keeping iOS 26+'s top scroll edge effect off the web view, and a page
+// colour behind the web view that follows light/dark.
 class GolfMeBridgeViewController: CAPBridgeViewController {
     private var edgeEffectObservations: [NSKeyValueObservation] = []
+
+    // What shows wherever WebKit hasn't painted yet (keyboard open/close,
+    // the rounded keyboard corners, a resize mid-animation): the page's own
+    // colour in each mode, the cream #faf9f6 in light (as capacitor.config.ts
+    // backgroundColor) and html.dark's #0d1210 in dark (index.html), so the
+    // reveal is invisible instead of a cream flash on the dark app.
+    static let pageBackground = UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0x0d / 255.0, green: 0x12 / 255.0, blue: 0x10 / 255.0, alpha: 1)
+            : UIColor(red: 0xfa / 255.0, green: 0xf9 / 255.0, blue: 0xf6 / 255.0, alpha: 1)
+    }
+
+    func applyInterfaceStyle(_ style: UIUserInterfaceStyle) {
+        guard let window = view.window else { return }
+        if window.overrideUserInterfaceStyle != style {
+            window.overrideUserInterfaceStyle = style
+        }
+        setNeedsStatusBarAppearanceUpdate()
+    }
 
     override func capacitorDidLoad() {
         super.capacitorDidLoad()
         bridge?.registerPluginInstance(GolfMeAppleSignInPlugin())
+        bridge?.registerPluginInstance(GolfMeAppearancePlugin())
         hideTopScrollEdgeEffect()
         guard let webView = webView else { return }
+        // Replaces the fixed cream Capacitor set from capacitor.config.ts
+        // backgroundColor (same colour in light mode).
+        webView.backgroundColor = Self.pageBackground
+        webView.scrollView.backgroundColor = Self.pageBackground
         // WebKit manages the scroll view's edge effect itself (iOS 26 scroll
         // pockets) and can turn it back on after a page load or a scroll,
         // which is why setting it once here (89650c0) wasn't enough on

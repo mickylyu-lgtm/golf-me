@@ -71,11 +71,13 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>GolfMe uses your location to show nearby golf courses and rounds.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>GolfMe needs access to your photos to let you share course photos, swing videos, and set your profile picture.</string>
+	<string>GolfMe uses your photo library so you can choose photos and swing videos for posts, chats, Caddie and your profile picture.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>GolfMe saves a photo or video to your library only when you choose to save it.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>GolfMe needs camera access so you can take a photo or record a swing video to share.</string>
+	<string>GolfMe uses the camera so you can take photos and record swing videos for posts, chats, Caddie and your profile picture.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>GolfMe needs microphone access to record audio when you capture a swing video.</string>
+	<string>GolfMe uses the microphone to record swing videos and voice messages.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

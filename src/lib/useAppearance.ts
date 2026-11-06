@@ -1,5 +1,6 @@
 import { useLayoutEffect, useSyncExternalStore } from "react";
 import { effectiveScheme, readAppearance, THEME_COLOR, writeAppearance, APPEARANCE_STORAGE_KEY, type AppearanceSetting, type ColorScheme } from "./appearance";
+import { nativeAppearanceFor, syncNativeAppearance } from "./nativeAppearance";
 
 // Applies the Appearance setting to the page: the `dark` class and
 // color-scheme on <html> (the colour tokens in index.css flip on that class),
@@ -41,6 +42,7 @@ function apply() {
   root.classList.toggle("dark", scheme === "dark");
   root.style.colorScheme = scheme;
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content", THEME_COLOR[scheme]);
+  syncNativeAppearance(nativeAppearanceFor(setting, forcedLight > 0 || landingShowing()));
 }
 
 function emit() {

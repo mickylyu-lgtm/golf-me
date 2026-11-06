@@ -11,6 +11,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // GolfMeBridgeViewController (AppleSignInPlugin.swift) registers the app-local
         // Capacitor plugins; otherwise identical to CAPBridgeViewController.
         window?.rootViewController = GolfMeBridgeViewController()
+        // Behind the web view (e.g. while the keyboard animates): the page
+        // colour in light and dark instead of the window's default.
+        window?.backgroundColor = GolfMeBridgeViewController.pageBackground
         window?.makeKeyAndVisible()
 
         SceneDelegateProxy.shared.scene(scene, willConnectTo: session, options: connectionOptions)

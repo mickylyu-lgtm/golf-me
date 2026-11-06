@@ -30,6 +30,10 @@ const config: CapacitorConfig = {
   // momentary reveal is invisible against the page rather than a black
   // flash. This is a native (Capacitor config) change -- needs `npx cap
   // sync ios` + a fresh Xcode archive, not just a Vercel deploy.
+  // Since dark mode, GolfMeBridgeViewController (ios/App/App/
+  // AppleSignInPlugin.swift) replaces this right after the web view is made
+  // with a light/dark colour (this cream in light, #0d1210 in dark); this
+  // value only covers builds from before that.
   backgroundColor: "#faf9f6",
   // Body resize mode makes WKWebView's own frame shrink to fit above the
   // keyboard (like Android's adjustResize) instead of the default native
