@@ -25,6 +25,13 @@ import {
 import { classifyImageInsertError, imageRowColumns, isMissingImageSupportError, progressStep, roundImagePath, rowsHaveImageColumn } from "../lib/chatImages";
 import type { ImageSendFailure, ImageSupport, ProcessedChatImage } from "../lib/chatImages";
 import { chatImageUrls, removeChatImage, uploadChatImage } from "../lib/chatImageClient";
+import { isMissingMediaSupportError, mediaFromRow, mediaObjectNames, mediaPrefix, mediaRowValue, rowsHaveMediaColumn, sentMediaItems, toMediaSendItems } from "../lib/chatMedia";
+import type { ChatMediaDraftItem, MediaSendItem } from "../lib/chatMedia";
+import { keepLocalMediaCopies, removeChatVideoObjects, removeUnsentMedia, storeMediaItems } from "../lib/chatVideoClient";
+
+function outgoingRoundItems(items: readonly MediaSendItem[]) {
+  return items.map((it) => ({ localUrl: it.localUrl, posterUrl: it.posterUrl, progress: it.progress, done: it.done, trim: it.trim }));
+}
 import { isMissingVoiceSupportError, roundVoicePath, rowsHaveVoiceColumn, voiceFileType, voiceRowColumns } from "../lib/chatVoice";
 import type { VoiceClip } from "../lib/voiceRecorder";
 
@@ -109,6 +116,9 @@ interface RealRoundsContextValue {
   // Voice messages (lib/chatVoice.ts, migration 20261107180000).
   voiceSupported: boolean;
   sendRoundVoice: (roundId: string, clip: VoiceClip, replyToId?: string | null) => Promise<SendMessageResult>;
+  // Videos and albums (lib/chatMedia.ts, migration 20261107220000).
+  mediaSupported: boolean;
+  sendRoundMedia: (roundId: string, items: ChatMediaDraftItem[], text: string, replyToId?: string | null) => Promise<SendMessageResult>;
   // Migration 20261107130000_round_chat_parity, each part feature-detected
   // so this ships safely before it: replies / unsend once fetched
   // round_messages rows carry reply_to_message_id / unsent_at; reactions
@@ -627,6 +637,32 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
   }, [accountKey]);
   const voiceSupported = !voiceColumnMissing && (voiceProbe === "yes" || rowsHaveVoiceColumn(messageRows));
 
+  // Videos / albums (lib/chatMedia.ts, migration 20261107220000): own probe.
+  const [mediaProbe, setMediaProbe] = useState<ImageSupport>("unknown");
+  const mediaProbeRef = useRef<ImageSupport>("unknown");
+  const [mediaColumnMissing, setMediaColumnMissing] = useState(false);
+  const probeMedia = useCallback(async () => {
+    const forUser = authUser?.id;
+    if (!forUser || mediaProbeRef.current === "yes") return;
+    const { error } = await supabase.from("round_messages").select("media").limit(1);
+    if (userIdRef.current !== forUser) return;
+    const next: ImageSupport = !error ? "yes" : isMissingMediaSupportError(error) ? "no" : "unknown";
+    mediaProbeRef.current = next;
+    setMediaProbe(next);
+    if (next === "yes") setMediaColumnMissing(false);
+  }, [authUser]);
+  useEffect(() => {
+    mediaProbeRef.current = "unknown";
+    setMediaProbe("unknown");
+    setMediaColumnMissing(false);
+    if (isDemo || !authUser) return;
+    void probeMedia();
+    return refetchOnResume(() => void probeMedia());
+    // Per account (the id), not per authUser object (token refreshes).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountKey]);
+  const mediaSupported = !mediaColumnMissing && (mediaProbe === "yes" || rowsHaveMediaColumn(messageRows));
+
   // The bytes and progress of each photo send, by clientId (display state
   // is in pendingMessages[].photo). A retry resumes where the last attempt
   // stopped: an uploaded photo isn't uploaded again.
@@ -647,6 +683,8 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
         user: string;
         // A voice message instead of a photo (same machinery).
         audio?: { durationMs: number; mime: string };
+        // A video / album: every item's bytes and state.
+        media?: MediaSendItem[];
       }
     >(),
   );
@@ -670,6 +708,61 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
           }
           return failure === "objectionable" ? "objectionable" : "failed";
         };
+        if (job.media) {
+          // A video / album: every item stored, then ONE row carrying them.
+          const items = job.media;
+          const prefix = mediaPrefix("round", job.roundId, job.messageId);
+          if (!job.uploaded) {
+            const stored = await storeMediaItems(items, { scope: "round", scopeId: job.roundId, messageId: job.messageId, userId: job.user }, () => {
+              if (current()) {
+                setPendingMessages((prev) =>
+                  patchRoundPhoto(prev, clientId, { media: outgoingRoundItems(items), progress: items.reduce((s, it) => s + (it.done ? 1 : it.progress), 0) / items.length }),
+                );
+              }
+            });
+            if (stored !== "uploaded") return fail(stored);
+            job.uploaded = true;
+          }
+          const finalKinds = sentMediaItems(items);
+          if (current()) {
+            setPendingMessages((prev) =>
+              patchRoundPhoto(prev, clientId, {
+                path: prefix,
+                progress: 1,
+                media: outgoingRoundItems(items),
+                mediaKinds: finalKinds.map((k) => ({ kind: k.kind, width: k.width, height: k.height, durationMs: k.durationMs ?? 0, thumb: k.thumb ?? null })),
+              }),
+            );
+          }
+          const mediaRow = { id: job.messageId, round_id: job.roundId, sender_id: job.user, text: job.text, media: mediaRowValue(prefix, finalKinds) };
+          const insertMedia = (body: Record<string, unknown>) => supabase.from("round_messages").insert(body).select("id, created_at").single();
+          let { data: mData, error: mError } = await insertMedia(job.replyTo ? { ...mediaRow, reply_to_message_id: job.replyTo } : mediaRow);
+          if (mError && job.replyTo && shouldResendWithoutReply(mError)) {
+            if (mError.code === "PGRST204" || mError.code === "42703") setReplyColumnMissing(true);
+            job.replyTo = null;
+            setPendingMessages((prev) => prev.map((p) => (p.clientId === clientId ? { ...p, replyToId: null } : p)));
+            ({ data: mData, error: mError } = await insertMedia(mediaRow));
+          }
+          if (mError) {
+            if (isMissingMediaSupportError(mError)) {
+              setMediaColumnMissing(true);
+              return fail("rejected");
+            }
+            const outcome = classifyImageInsertError(mError);
+            if (outcome !== "sent") {
+              console.error("GolfMe: failed to send a round video / album.", mError);
+              return fail(outcome);
+            }
+            mData = { id: job.messageId, created_at: new Date().toISOString() };
+          }
+          if (!current()) return "sent";
+          keepLocalMediaCopies(items, prefix);
+          photoJobsRef.current.delete(clientId);
+          setPendingMessages((prev) =>
+            patchRoundPhoto(markRoundMessageSent(prev, clientId, mData as { id: string; created_at: string } | null), clientId, { path: prefix, progress: 1, failure: undefined }),
+          );
+          return "sent";
+        }
         const path = roundJobPath(job);
         if (!job.uploaded) {
           let shown = -1;
@@ -804,6 +897,55 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
     [authUser, attemptPhoto],
   );
 
+  // Videos / albums: one message, every item stored first (Not sent · Retry /
+  // Discard through retryRoundMessage / discardRoundMessage).
+  const sendRoundMedia = useCallback(
+    async (roundId: string, draft: ChatMediaDraftItem[], text: string, replyToId?: string | null): Promise<SendMessageResult> => {
+      if (!authUser || draft.length === 0) return "failed";
+      const messageId = crypto.randomUUID();
+      const clientId = `temp-${messageId}`;
+      const trimmed = text.trim();
+      const replyTo = replyToId && repliesSupportedRef.current ? replyToId : null;
+      const items = toMediaSendItems(draft);
+      photoJobsRef.current.set(clientId, {
+        roundId,
+        messageId,
+        blob: items[0].blob,
+        localUrl: items[0].localUrl,
+        width: items[0].width,
+        height: items[0].height,
+        thumb: null,
+        text: trimmed,
+        replyTo,
+        uploaded: false,
+        user: authUser.id,
+        media: items,
+      });
+      setPendingMessages((prev) => [
+        ...prev,
+        createPendingRoundMessage({
+          clientId,
+          roundId,
+          senderId: authUser.id,
+          text: trimmed,
+          replyToId: replyTo,
+          photo: {
+            messageId,
+            localUrl: items[0].localUrl,
+            width: items[0].width,
+            height: items[0].height,
+            thumb: null,
+            progress: 0,
+            media: outgoingRoundItems(items),
+            mediaKinds: items.map((it) => ({ kind: it.kind, width: it.width, height: it.height, durationMs: it.durationMs, thumb: it.thumb })),
+          },
+        }),
+      ]);
+      return attemptPhoto(clientId);
+    },
+    [authUser, attemptPhoto],
+  );
+
   const retryRoundMessage = useCallback(
     async (message: { clientId: string; roundId: string; text: string; replyToId?: string | null }): Promise<SendMessageResult> => {
       // Photo / voice sends resume through their own job (attemptPhoto dedupes
@@ -837,8 +979,16 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
       const imagePath =
         messageRowsRef.current.find((m) => m.id === messageId)?.image_path ??
         messageRowsRef.current.find((m) => m.id === messageId)?.audio_path ??
-        pendingMessagesRef.current.find((p) => p.serverId === messageId)?.photo?.path ??
+        (pendingMessagesRef.current.find((p) => p.serverId === messageId)?.photo?.mediaKinds ? null : pendingMessagesRef.current.find((p) => p.serverId === messageId)?.photo?.path) ??
         null;
+      // A video / album: every item's objects, read before the database clears them.
+      const mediaRowNow = messageRowsRef.current.find((m) => m.id === messageId);
+      const pendingPhoto = pendingMessagesRef.current.find((p) => p.serverId === messageId)?.photo;
+      const mediaNames = mediaRowNow?.media
+        ? mediaObjectNames(mediaFromRow(mediaRowNow.media))
+        : pendingPhoto?.mediaKinds && pendingPhoto.path
+          ? pendingPhoto.mediaKinds.flatMap((k, i) => (k.kind === "video" ? [`${pendingPhoto.path}/${i}.mp4`, `${pendingPhoto.path}/${i}.poster.jpg`] : [`${pendingPhoto.path}/${i}.jpg`]))
+          : [];
       const { error } = await supabase.rpc("unsend_round_message", { p_message_id: messageId });
       if (error) {
         const result = classifyUnsendError(error);
@@ -856,6 +1006,7 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
                 unsent_at: m.unsent_at ?? unsentAt,
                 ...(m.image_path !== undefined ? { image_path: null, image_width: null, image_height: null, image_thumb: null } : {}),
                 ...(m.audio_path !== undefined ? { audio_path: null, audio_duration_ms: null } : {}),
+                ...(m.media !== undefined ? { media: null } : {}),
               }
             : m,
         ),
@@ -864,6 +1015,7 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
       // Nothing points at the photo any more (unsend_round_message cleared
       // it): remove the file itself, best effort (lib/chatImageClient).
       if (imagePath) void removeChatImage(imagePath);
+      if (mediaNames.length) void removeChatVideoObjects(mediaNames);
       // Still only a "sent" pending bubble here (its row not fetched yet):
       // the refetch brings the wiped row and reconciles it away.
       void refetch();
@@ -927,6 +1079,14 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
     photoJobsRef.current.delete(clientId);
     setPendingMessages((prev) => discardPending(prev, clientId));
     if (!job) return;
+    if (job.media) {
+      void removeUnsentMedia(job.media, { scope: "round", scopeId: job.roundId, messageId: job.messageId, userId: job.user });
+      for (const it of job.media) {
+        URL.revokeObjectURL(it.localUrl);
+        if (it.posterUrl) URL.revokeObjectURL(it.posterUrl);
+      }
+      return;
+    }
     // Uploaded but never stored: remove the orphan (refused by the bucket's
     // delete policy if a row does point at it after all).
     if (job.uploaded) void removeChatImage(roundJobPath(job));
@@ -989,6 +1149,8 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
     sendRoundImage,
     voiceSupported,
     sendRoundVoice,
+    mediaSupported,
+    sendRoundMedia,
     repliesSupported,
     unsendSupported,
     unsendRoundMessage,

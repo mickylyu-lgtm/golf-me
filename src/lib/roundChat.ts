@@ -9,6 +9,9 @@ import { voiceFromRow } from "./chatVoice.ts";
 import type { VoiceRowColumns } from "./chatVoice.ts";
 import { failedSendOutcome } from "./dmFailedSend.ts";
 import { isObjectionableContentError, type SendMessageResult } from "./objectionableContent.ts";
+import { mediaFromRow } from "./chatMedia.ts";
+import type { ChatMediaItem } from "./chatMedia.ts";
+import type { OutgoingMediaItemState } from "../types";
 
 // ---------------------------------------------------------------------------
 // Access
@@ -116,6 +119,9 @@ export interface PendingRoundPhoto {
   path?: string;
   /** A voice message (lib/chatVoice.ts) instead of a photo: same send machinery. */
   audio?: { durationMs: number; mime: string };
+  /** A video / album (lib/chatMedia.ts): items' shape, and their local copies + progress. `path` is then the items' prefix. */
+  mediaKinds?: { kind: "image" | "video"; width: number; height: number; durationMs: number; thumb: string | null }[];
+  media?: OutgoingMediaItemState[];
 }
 
 export interface RoundMessageRowLike extends ImageRowColumns, VoiceRowColumns {
@@ -129,6 +135,8 @@ export interface RoundMessageRowLike extends ImageRowColumns, VoiceRowColumns {
   // replies and unsend (roundRowsHaveColumn).
   reply_to_message_id?: string | null;
   unsent_at?: string | null;
+  /** A video / album (migration 20261107220000). */
+  media?: unknown;
 }
 
 export function createPendingRoundMessage(input: {
@@ -155,6 +163,19 @@ export function createPendingRoundMessage(input: {
 /** Updates a pending photo's display state (progress, path, failure). */
 export function patchRoundPhoto(pending: readonly PendingRoundMessage[], clientId: string, patch: Partial<PendingRoundPhoto>): PendingRoundMessage[] {
   return pending.map((p) => (p.clientId === clientId && p.photo ? { ...p, photo: { ...p.photo, ...patch } } : p));
+}
+
+/** A pending video / album's items: real paths once stored (prefix in `path`), placeholders before. */
+function pendingMedia(photo: PendingRoundPhoto): ChatMediaItem[] {
+  return (photo.mediaKinds ?? []).map((k, i) => ({
+    kind: k.kind,
+    path: photo.path ? `${photo.path}/${i}.${k.kind === "video" ? "mp4" : "jpg"}` : `pending/${photo.messageId}/${i}`,
+    poster: k.kind === "video" ? (photo.path ? `${photo.path}/${i}.poster.jpg` : null) : undefined,
+    width: k.width,
+    height: k.height,
+    durationMs: k.kind === "video" ? k.durationMs : undefined,
+    thumb: k.thumb,
+  }));
 }
 
 /** The image a pending message shows: the stored path once uploaded, else a placeholder key (shown from localUrl). */
@@ -290,8 +311,10 @@ export function mergeRoundMessages(rows: readonly RoundMessageRowLike[], pending
     .map((r) => {
       const image = imageFromRow(r);
       const voice = voiceFromRow(r);
+      const media = r.media ? mediaFromRow(r.media) : null;
       return {
         ...(voice ? { voice } : {}),
+        ...(media ? { media } : {}),
         id: r.id,
         golfCallId: r.round_id,
         senderId: r.sender_id,
@@ -309,13 +332,16 @@ export function mergeRoundMessages(rows: readonly RoundMessageRowLike[], pending
   const extra: ChatMessage[] = mine.map((p) => {
     const photo = p.photo
       ? {
-          ...(p.photo.audio
-            ? { voice: { path: p.photo.path ?? `pending/${p.photo.messageId}`, durationMs: p.photo.audio.durationMs } }
-            : { image: pendingImage(p.photo) }),
+          ...(p.photo.mediaKinds
+            ? { media: pendingMedia(p.photo) }
+            : p.photo.audio
+              ? { voice: { path: p.photo.path ?? `pending/${p.photo.messageId}`, durationMs: p.photo.audio.durationMs } }
+              : { image: pendingImage(p.photo) }),
           outgoingPhoto: {
             localUrl: p.photo.localUrl,
             progress: p.state === "sending" ? p.photo.progress : undefined,
             failure: p.state === "failed" ? p.photo.failure : undefined,
+            ...(p.photo.media ? { items: p.photo.media } : {}),
           },
         }
       : {};

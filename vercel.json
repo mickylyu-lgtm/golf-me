@@ -1,4 +1,7 @@
 {
+  "functions": {
+    "api/chat-video.ts": { "maxDuration": 300 }
+  },
   "headers": [
     {
       "source": "/.well-known/apple-app-site-association",

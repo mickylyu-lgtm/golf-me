@@ -140,12 +140,14 @@ export async function uploadChatImage(
   onProgress: (fraction: number) => void,
   signal?: AbortSignal,
   contentType: "image/jpeg" | "audio/mp4" | "audio/webm" = "image/jpeg",
+  // Album photos go to chat-video (lib/chatMedia.ts), same rules.
+  bucket: "chat-media" | "chat-video" = CHAT_MEDIA_BUCKET,
 ): Promise<"uploaded" | ImageSendFailure> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   if (!token) return "rejected";
   const base = String(import.meta.env.VITE_SUPABASE_URL ?? "").replace(/\/+$/, "");
-  const url = `${base}/storage/v1/object/${CHAT_MEDIA_BUCKET}/${path}`;
+  const url = `${base}/storage/v1/object/${bucket}/${path}`;
   return new Promise((resolve) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", url);

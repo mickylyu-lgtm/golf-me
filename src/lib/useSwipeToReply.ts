@@ -190,6 +190,8 @@ export function useSwipeToReply(listRef: RefObject<HTMLElement | null>, enabled:
       phase = "idle";
       pointerId = null;
       if (hasTextSelection()) return;
+      // An album deck owns sideways drags that start on it (components/chat/ChatMedia.tsx).
+      if (e.target instanceof Element && e.target.closest("[data-chat-deck]")) return;
       const target = e.target instanceof Element ? e.target.closest<HTMLElement>("[data-reply-bubble]") : null;
       if (!target || !list.contains(target)) return;
       const id = target.dataset.replyBubble;

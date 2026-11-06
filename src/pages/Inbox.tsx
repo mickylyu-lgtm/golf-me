@@ -23,6 +23,7 @@ import { isUpcomingRound, nextUpcomingRound, orderRoundChats } from "../lib/golf
 import { useLocale } from "../i18n/LocaleContext";
 import type { GolfCall } from "../types";
 import { messagePreviewText } from "../lib/chatImages";
+import { useChatMediaText } from "../lib/useChatMediaText";
 
 type InboxTab = "direct" | "rounds";
 const TAB_STORAGE_KEY = "golfme.chatInboxTab";
@@ -132,6 +133,7 @@ function DirectList() {
   const view = listView({ count: dmConversations.length, isDemo, hasLoaded: social.hasLoaded, loadError: social.loadError, isLoading: social.isLoading });
   const navigate = useNavigate();
   const { t, locale } = useLocale();
+  const mediaText = useChatMediaText();
   const { shareApp } = useShareActions();
   const [query, setQuery] = useState("");
 
@@ -209,7 +211,7 @@ function DirectList() {
                   ) : (
                     <>
                       {c.lastMessage.senderId === c.otherGolfer.id ? "" : t("chatInbox.youPrefix")}
-                      {c.lastMessage.unsentAt ? <span className="italic">{t("chat.messageUnsent")}</span> : messagePreviewText(c.lastMessage, t("chat.photo"), t("chat.voice"))}
+                      {c.lastMessage.unsentAt ? <span className="italic">{t("chat.messageUnsent")}</span> : messagePreviewText(c.lastMessage, t("chat.photo"), t("chat.voice"), mediaText.label)}
                     </>
                   )}
                 </p>
@@ -278,6 +280,7 @@ function RoundChatRow({ call }: { call: GolfCall }) {
   const { messagesForCall, getGolfer, currentUser } = useData();
   const navigate = useNavigate();
   const { t, locale } = useLocale();
+  const mediaText = useChatMediaText();
   const messages = messagesForCall(call.id);
   const last = messages[messages.length - 1];
   const sender = last && !last.system ? (last.senderId === currentUser.id ? null : getGolfer(last.senderId)) : null;
@@ -309,7 +312,7 @@ function RoundChatRow({ call }: { call: GolfCall }) {
           {last ? (
             <>
               {prefix}
-              {last.unsentAt ? <span className="italic">{t("chat.messageUnsent")}</span> : messagePreviewText(last, t("chat.photo"), t("chat.voice"))}
+              {last.unsentAt ? <span className="italic">{t("chat.messageUnsent")}</span> : messagePreviewText(last, t("chat.photo"), t("chat.voice"), mediaText.label)}
             </>
           ) : (
             t("chatInbox.roundNoMessages")

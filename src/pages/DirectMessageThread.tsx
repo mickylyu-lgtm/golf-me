@@ -36,12 +36,15 @@ import { NewMessagesPill } from "../components/chat/NewMessagesPill";
 import { type FailedDm, sendDmWithRecovery } from "../lib/dmFailedSend";
 import { Capacitor } from "@capacitor/core";
 import { ChatPhotoBody } from "../components/chat/ChatImage";
-import { ImageAttachmentChip } from "../components/chat/ImageAttachmentChip";
+import { ChatVideoTrimSheet, MediaAttachmentStrip } from "../components/chat/MediaAttachmentStrip";
+import { ChatMediaBody } from "../components/chat/ChatMedia";
+import { useChatMediaAttachment } from "../lib/useChatMediaAttachment";
+import { chatMediaViewerItems, useChatMediaText } from "../lib/useChatMediaText";
+import { MEDIA_MAX_ITEMS } from "../lib/chatMedia";
 import { FullscreenMediaViewer } from "../components/community/FullscreenMediaViewer";
-import { useChatImageAttachment } from "../lib/useChatImageAttachment";
 import { messagePreviewText } from "../lib/chatImages";
 import { canCopyImages, copyChatImage } from "../lib/chatImageClient";
-import type { DirectMessage } from "../types";
+import type { DirectMessage, PostMediaItem } from "../types";
 import { VoiceMessage } from "../components/chat/VoiceMessage";
 import { useVoiceComposerProps } from "../lib/useVoiceComposerProps";
 import { voiceSendPlan, type SentVoiceClip } from "../lib/voiceSession";
@@ -77,13 +80,30 @@ export function DirectMessageThread() {
     discardDirectImage,
     canSendDirectVoice,
     sendDirectVoice,
+    canSendDirectMedia,
+    sendDirectMedia,
   } = useData();
   const { showToast } = useToast();
   const { t, locale } = useLocale();
   // Photos (lib/chatImages.ts): the composer's one picked photo (page state,
   // dropped when the thread changes) and the fullscreen viewer. Render and
   // send only: nothing here touches the box / keyboard / scroll code below.
-  const photo = useChatImageAttachment((reason) => showToast(t(reason === "tooLarge" ? "chat.photoTooLarge" : "chat.photoUnreadable"), "warning"));
+  // Since 20261107220000 the same button picks several photos and videos
+  // (lib/chatMedia.ts); before it (feature-detected) exactly one photo, as
+  // before. One photo alone still goes the single-photo way.
+  const mediaText = useChatMediaText();
+  const photo = useChatMediaAttachment({
+    limit: canSendDirectMedia ? MEDIA_MAX_ITEMS : 1,
+    allowVideos: canSendDirectMedia,
+    onError: (reason) => showToast(mediaText.pickError(reason), "warning"),
+  });
+  const [mediaViewer, setMediaViewer] = useState<{ items: PostMediaItem[]; index: number } | null>(null);
+  const openMediaViewer = (m: DirectMessage, index: number) => {
+    if (!m.media) return;
+    void chatMediaViewerItems(m.media, index, m.outgoingPhoto?.items).then((v) => {
+      if (v.items.length) setMediaViewer(v);
+    });
+  };
   // Voice (lib/chatVoice.ts): the composer's hold-to-talk sends through
   // handleVoiceClip (set below, after the thread is known). Each clip goes
   // to the thread it was recorded in (clip.origin), never to this page's
@@ -252,7 +272,7 @@ export function DirectMessageThread() {
   useEffect(() => setReplyToId(null), [id]);
   useEffect(() => setActionsFor(null), [id]);
   // A picked photo belongs to one thread, like the reply target.
-  const removePhoto = photo.remove;
+  const removePhoto = photo.clear;
   useEffect(() => removePhoto(), [id, removePhoto]);
   useEffect(() => () => window.clearTimeout(highlightTimerRef.current), []);
 
@@ -534,7 +554,7 @@ export function DirectMessageThread() {
   }
 
   // One line for a quote / the reply bar: its text, or "📷 Photo".
-  const previewOf = (m: DirectMessage) => messagePreviewText(m, t("chat.photo"), t("chat.voice"));
+  const previewOf = (m: DirectMessage) => messagePreviewText(m, t("chat.photo"), t("chat.voice"), mediaText.label);
 
   // A voice message (with the picked quote, like a text). Shows at once with
   // upload progress; a failure stays as a Not sent bubble.
@@ -563,17 +583,23 @@ export function DirectMessageThread() {
     // With a photo: one message (photo + optional text + quote). It shows at
     // once with upload progress; a failure stays as a "Not sent" photo
     // bubble with Retry / Discard (the composer is never refilled).
-    if (photo.state.kind === "ready") {
+    if (photo.shape !== "none") {
+      // Photos / videos (one message: one photo the old way, else a video
+      // or an album), shown at once with per-item progress.
+      if (!photo.ready) return;
+      const shape = photo.shape;
       const picked = photo.take();
-      if (!picked) return;
+      if (picked.length === 0) return;
       const body = text;
       const replyTo = replyTarget?.id;
       updateText("");
       setReplyToId(null);
       stopTyping();
-      const result = await sendDirectImage(other.id, picked, body, replyTo);
+      const first = picked[0];
+      const result =
+        shape === "photo" && first.kind === "image" ? await sendDirectImage(other.id, first.image, body, replyTo) : await sendDirectMedia(other.id, picked, body, replyTo);
       if (result === "objectionable") showToast(t("moderation.objectionableContent"), "warning");
-      else if (result === "failed") showToast(t("chat.photoNotSent"), "info");
+      else if (result === "failed") showToast(shape === "photo" ? t("chat.photoNotSent") : mediaText.notSent, "info");
       return;
     }
     if (!text.trim()) return;
@@ -774,10 +800,10 @@ export function DirectMessageThread() {
               // row shape as a bubble, but not a hold / reply target until
               // it's stored. Its box is reserved from the photo's size, so
               // turning into the stored message changes nothing in layout.
-              if (m.delivery && (m.image || m.voice)) {
+              if (m.delivery && (m.image || m.voice || m.media)) {
                 const failed = m.delivery === "failed";
                 const failure = m.outgoingPhoto?.failure;
-                const sendingLabel = m.voice ? t("chat.voiceSending") : t("chat.photoSending");
+                const sendingLabel = m.voice ? t("chat.voiceSending") : m.media ? mediaText.sending : t("chat.photoSending");
                 return (
                   <div key={m.id} data-reply-row={m.id} data-photo-pending={m.delivery} className="relative flex items-end gap-2 flex-row-reverse">
                     <span className="shrink-0 rounded-full">
@@ -797,6 +823,14 @@ export function DirectMessageThread() {
                             progress={failed ? undefined : (m.outgoingPhoto?.progress ?? 0)}
                             labels={voiceLabels}
                           />
+                        ) : m.media ? (
+                          <ChatMediaBody
+                            media={m.media}
+                            locals={m.outgoingPhoto?.items}
+                            labels={mediaText.labels}
+                            progress={failed ? undefined : (m.outgoingPhoto?.progress ?? 0)}
+                            caption={m.text}
+                          />
                         ) : m.image ? (
                           <ChatPhotoBody
                             image={m.image}
@@ -815,7 +849,7 @@ export function DirectMessageThread() {
                           {failure === "objectionable" || failure === "rejected" ? (
                             <span className="flex items-center gap-1 text-rose-600">
                               <AlertCircle size={12} aria-hidden="true" />{" "}
-                              {failure === "objectionable" ? t("moderation.objectionableContent") : m.voice ? t("chat.voiceNotSent") : t("chat.photoRejected")}
+                              {failure === "objectionable" ? t("moderation.objectionableContent") : m.voice ? t("chat.voiceNotSent") : m.media ? mediaText.rejected : t("chat.photoRejected")}
                             </span>
                           ) : (
                             <button
@@ -885,7 +919,7 @@ export function DirectMessageThread() {
                     // `transform` useSwipeToReply writes. No layout change.
                     // While the menu is open the bubble is drawn by its
                     // focus copy (MessageActionsMenu), no ring here.
-                    className={`relative max-w-[75%] rounded-2xl ${m.image || m.voice ? "p-1" : "px-3.5 py-2"} text-sm transition-[box-shadow,scale] duration-300 ease-out data-pressing:scale-[0.97] data-pressing:duration-[350ms] [overflow-wrap:anywhere] pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none] ${
+                    className={`relative max-w-[75%] rounded-2xl ${m.image || m.voice || m.media ? "p-1" : "px-3.5 py-2"} text-sm transition-[box-shadow,scale] duration-300 ease-out data-pressing:scale-[0.97] data-pressing:duration-[350ms] [overflow-wrap:anywhere] pointer-coarse:select-none pointer-coarse:[-webkit-touch-callout:none] ${
                       isMe ? "rounded-br-sm bg-fairway-600 text-white" : "rounded-bl-sm bg-slate-100 text-slate-800"
                     } ${highlightId === m.id ? "ring-2 ring-amber-300 ring-offset-2" : ""} ${reactionSummary.length > 0 ? "mb-4" : ""}`}
                   >
@@ -916,6 +950,8 @@ export function DirectMessageThread() {
                       ))}
                     {m.voice ? (
                       <VoiceMessage voice={m.voice} localUrl={m.outgoingPhoto?.localUrl} isMe={isMe} labels={voiceLabels} />
+                    ) : m.media ? (
+                      <ChatMediaBody media={m.media} locals={m.outgoingPhoto?.items} labels={mediaText.labels} caption={m.text} onOpen={(index) => openMediaViewer(m, index)} />
                     ) : m.image ? (
                       <ChatPhotoBody
                         image={m.image}
@@ -1048,20 +1084,18 @@ export function DirectMessageThread() {
               )}
               {/* The picked photo: same container as the reply bar, so the
                   list's ResizeObserver handles it like the composer growing. */}
-              <ImageAttachmentChip
-                state={photo.state}
-                onRemove={photo.remove}
-                labels={{ remove: t("chat.removePhoto"), processing: t("chat.photoPreparing"), ready: t("chat.photoReady") }}
-              />
+              <MediaAttachmentStrip items={photo.state} onRemove={photo.remove} labels={mediaText.strip} />
               <ChatComposer
                 value={text}
                 onChange={handleComposerChange}
                 onSend={handleSend}
                 onBlur={stopTyping}
-                onPickImage={canSendDirectImages ? photo.pick : undefined}
-                photoLabel={t("chat.addPhoto")}
-                photoKey={photo.state.kind === "ready" ? photo.state.key : null}
-                photoBusy={photo.state.kind === "processing"}
+                onPickFiles={canSendDirectImages ? photo.pick : undefined}
+                mediaAccept={canSendDirectMedia ? "image/*,video/*" : "image/*"}
+                mediaMultiple={canSendDirectMedia}
+                photoLabel={canSendDirectMedia ? mediaText.addLabel : t("chat.addPhoto")}
+                photoKey={photo.sendKey}
+                photoBusy={photo.busy}
                 voice={voiceProps}
               />
             </>
@@ -1069,6 +1103,15 @@ export function DirectMessageThread() {
         </div>
       </div>
       {viewerUrl && <FullscreenMediaViewer media={[{ id: "chat-photo", type: "image", url: viewerUrl }]} onClose={() => setViewerUrl(null)} />}
+      {mediaViewer && <FullscreenMediaViewer media={mediaViewer.items} initialIndex={mediaViewer.index} onClose={() => setMediaViewer(null)} />}
+      {photo.trimming && (
+        <ChatVideoTrimSheet
+          item={photo.trimming}
+          labels={mediaText.trim}
+          onConfirm={(start, end) => photo.trimming && photo.confirmTrim(photo.trimming.key, start, end)}
+          onCancel={() => photo.trimming && photo.remove(photo.trimming.key)}
+        />
+      )}
 
       {actionsMessage && actionsShown.value && (
         <MessageActionsMenu
@@ -1089,7 +1132,8 @@ export function DirectMessageThread() {
             canReply: replyEnabled,
             canUnsend: unsendableIds.has(actionsMessage.id),
             // A photo with no text where images can't go on the clipboard: no Copy.
-            canCopy: !(actionsMessage.voice && !actionsMessage.text.trim()) && !(actionsMessage.image && !actionsMessage.text.trim() && !canCopyImages()),
+            // A video / album: no Copy.
+            canCopy: !actionsMessage.media && !(actionsMessage.voice && !actionsMessage.text.trim()) && !(actionsMessage.image && !actionsMessage.text.trim() && !canCopyImages()),
           })}
           labels={{
             menu: t("chat.messageActions"),

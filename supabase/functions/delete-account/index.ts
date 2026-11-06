@@ -100,12 +100,16 @@ Deno.serve(async (req: Request) => {
   if (storageCleanup.errors.length > 0) {
     console.error("delete-account: storage cleanup incomplete", { userId: user.id, removed: storageCleanup.removed, errors: storageCleanup.errors });
   }
-  // Chat photos (migration 20261107170000) aren't keyed by user id
-  // (chat-media/dm/<conversation>/<message>.jpg), so their paths come from
-  // the database. Their message rows are already gone with the account.
-  const chatCleanup = await purgeChatMedia(adminClient, user.id);
-  if (chatCleanup.errors.length > 0) {
-    console.error("delete-account: chat photo cleanup incomplete", { userId: user.id, removed: chatCleanup.removed, errors: chatCleanup.errors });
+  // Chat photos / voice (migration 20261107170000) and chat videos / albums
+  // (20261107220000) aren't keyed by user id (chat-media/dm/<conversation>/
+  // <message>.jpg, chat-video/dm/<conversation>/<message>/<i>.mp4), so
+  // their paths come from the database, by owner. Their message rows are
+  // already gone with the account.
+  for (const bucket of CHAT_BUCKETS) {
+    const chatCleanup = await purgeChatMedia(adminClient, user.id, bucket);
+    if (chatCleanup.errors.length > 0) {
+      console.error("delete-account: chat media cleanup incomplete", { userId: user.id, bucket, removed: chatCleanup.removed, errors: chatCleanup.errors });
+    }
   }
 
   return jsonResponse({ success: true });
@@ -224,13 +228,21 @@ async function listAllPaths(client: AdminClient, bucket: string, prefix: string,
   return paths;
 }
 
-// The deleted golfer's objects in chat-media, listed by owner through
-// public.chat_media_paths_for_user (service role only). Before that
-// migration is applied the RPC doesn't exist: one logged error, nothing to
-// remove.
-async function purgeChatMedia(client: AdminClient, userId: string): Promise<{ removed: number; errors: string[] }> {
-  const { data, error } = await client.rpc("chat_media_paths_for_user", { p_user_id: userId });
-  if (error) return { removed: 0, errors: [`list chat-media: ${error.message}`] };
+// chat-video-incoming (staged originals, <user id>/...) is user-keyed too,
+// but it goes through the owner listing below like the other chat buckets.
+const CHAT_BUCKETS = ["chat-media", "chat-video", "chat-video-incoming"] as const;
+
+// The deleted golfer's objects in one chat bucket, listed by owner through
+// public.chat_media_paths_for_user (service role only): the one-argument
+// form for chat-media (20261107170000), the (user, bucket) form for the
+// video buckets (20261107220000). Before a migration is applied its RPC
+// doesn't exist: one logged error, nothing to remove.
+async function purgeChatMedia(client: AdminClient, userId: string, bucket: (typeof CHAT_BUCKETS)[number]): Promise<{ removed: number; errors: string[] }> {
+  const { data, error } =
+    bucket === "chat-media"
+      ? await client.rpc("chat_media_paths_for_user", { p_user_id: userId })
+      : await client.rpc("chat_media_paths_for_user", { p_user_id: userId, p_bucket: bucket });
+  if (error) return { removed: 0, errors: [`list ${bucket}: ${error.message}`] };
   // A set of text comes back as plain strings; older PostgREST wrapped each
   // as { chat_media_paths_for_user: "..." }. Accept both.
   const paths = ((data ?? []) as unknown[])
@@ -240,8 +252,8 @@ async function purgeChatMedia(client: AdminClient, userId: string): Promise<{ re
   const errors: string[] = [];
   for (let i = 0; i < paths.length; i += REMOVE_BATCH_SIZE) {
     const batch = paths.slice(i, i + REMOVE_BATCH_SIZE);
-    const { error: removeError } = await client.storage.from("chat-media").remove(batch);
-    if (removeError) errors.push(`remove chat-media (${batch.length} files): ${removeError.message}`);
+    const { error: removeError } = await client.storage.from(bucket).remove(batch);
+    if (removeError) errors.push(`remove ${bucket} (${batch.length} files): ${removeError.message}`);
     else removed += batch.length;
   }
   return { removed, errors };

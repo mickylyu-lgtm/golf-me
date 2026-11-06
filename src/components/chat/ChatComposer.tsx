@@ -29,6 +29,13 @@ interface ChatComposerProps {
   photoLabel?: string;
   photoKey?: string | null;
   photoBusy?: boolean;
+  // Videos and albums (lib/chatMedia.ts): when the page passes onPickFiles,
+  // the same button hands over every picked File (photos and videos, up to
+  // the page's limit) instead of one photo; mediaAccept / mediaMultiple set
+  // the web file input (feature-detected by the page).
+  onPickFiles?: (files: File[]) => void;
+  mediaAccept?: string;
+  mediaMultiple?: boolean;
   // Voice messages (lib/chatVoice.ts): passed once the page can send them;
   // the toggle then shows where this browser can record.
   voice?: {
@@ -62,8 +69,12 @@ export function ChatComposer({
   photoLabel = "Add a photo",
   photoKey = null,
   photoBusy = false,
+  onPickFiles,
+  mediaAccept = "image/*",
+  mediaMultiple = false,
   voice,
 }: ChatComposerProps) {
+  const pickOne = onPickFiles ? (file: File) => onPickFiles([file]) : onPickImage;
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [canVoice] = useState(voiceRecordingAvailable);
   const [voiceMode, setVoiceMode] = useState(false);
@@ -217,11 +228,11 @@ export function ChatComposer({
           message. Same 36 px as the emoji button and shorter than the
           one-line textarea, so the row's height (and the composer's
           docking) is unchanged; the textarea just gets narrower. */}
-      {onPickImage && (
+      {pickOne && (
         <>
           <button
             type="button"
-            onClick={() => void pickChatMedia({ openFileInput: () => fileInputRef.current?.click(), onPicked: onPickImage })}
+            onClick={() => void pickChatMedia({ openFileInput: () => fileInputRef.current?.click(), onPicked: pickOne })}
             aria-label={photoLabel}
             title={photoLabel}
             data-chat-photo-button
@@ -232,15 +243,18 @@ export function ChatComposer({
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept={mediaAccept}
+            multiple={mediaMultiple || undefined}
             tabIndex={-1}
             aria-hidden="true"
             className="hidden"
             onChange={(e) => {
-              const file = e.target.files?.[0];
+              const files = [...(e.target.files ?? [])];
               // Cleared so picking the same photo again still fires.
               e.target.value = "";
-              if (file) onPickImage(file);
+              if (files.length === 0) return;
+              if (onPickFiles) onPickFiles(files);
+              else pickOne(files[0]);
             }}
           />
         </>

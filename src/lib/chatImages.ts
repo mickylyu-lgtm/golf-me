@@ -310,13 +310,19 @@ export function progressStep(fraction: number): number {
  * is a photo with no text. A photo with a caption reads "<label> <caption>".
  */
 export function messagePreviewText(
-  m: { text: string; image?: ChatImageRef | null; voice?: { path: string; durationMs: number } | null },
+  m: { text: string; image?: ChatImageRef | null; voice?: { path: string; durationMs: number } | null; media?: readonly { kind: "image" | "video" }[] | null },
   photoLabel: string,
   voiceLabel = "[Voice message]",
+  // A video / album (lib/chatMedia.ts mediaLabel): "[Video]", "[3 photos]"...
+  mediaLabel?: (media: readonly { kind: "image" | "video" }[]) => string,
 ): string {
   const text = m.text.trim();
   // A voice message (lib/chatVoice.ts) has no caption.
   if (m.voice) return text ? `${voiceLabel} ${text}` : voiceLabel;
+  if (m.media && m.media.length > 0) {
+    const label = mediaLabel ? mediaLabel(m.media) : photoLabel;
+    return text ? `${label} ${text}` : label;
+  }
   if (!m.image) return m.text;
   return text ? `${photoLabel} ${text}` : photoLabel;
 }

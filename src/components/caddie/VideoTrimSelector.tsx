@@ -34,7 +34,10 @@ export function VideoTrimSelector({
   initialEnd,
   onConfirm,
   onCancel,
+  labels,
 }: {
+  /** Chat video reuses this selector with its own wording (Caddie's stays the default). */
+  labels?: { title: string; instructions: string; confirm: string };
   file: File;
   previewUrl: string;
   duration: number;
@@ -228,8 +231,8 @@ export function VideoTrimSelector({
   return (
     <div className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-white p-4">
       <div>
-        <p className="text-sm font-bold text-slate-900">{t("caddie.trimTitle")}</p>
-        <p className="mt-1 text-xs text-slate-500">{t("caddie.trimInstructions", { max: maxSeconds })}</p>
+        <p className="text-sm font-bold text-slate-900">{labels?.title ?? t("caddie.trimTitle")}</p>
+        <p className="mt-1 text-xs text-slate-500">{labels?.instructions ?? t("caddie.trimInstructions", { max: maxSeconds })}</p>
       </div>
 
       <div className="relative overflow-hidden rounded-xl">
@@ -334,7 +337,7 @@ export function VideoTrimSelector({
           {t("common.cancel")}
         </Button>
         <Button size="sm" onClick={() => onConfirm(start, end)} className="flex-1">
-          {t("caddie.trimConfirm")}
+          {labels?.confirm ?? t("caddie.trimConfirm")}
         </Button>
       </div>
     </div>

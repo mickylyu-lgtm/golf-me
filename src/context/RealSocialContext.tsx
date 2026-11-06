@@ -37,6 +37,24 @@ import { PROBE_EMOJI, customReactionSupport } from "../lib/customReactions";
 import { dmVoicePath, isMissingVoiceSupportError, rowsHaveVoiceColumn, voiceFileType, voiceFromRow, voiceRowColumns } from "../lib/chatVoice";
 import type { ChatVoiceRef, VoiceRowColumns } from "../lib/chatVoice";
 import type { VoiceClip } from "../lib/voiceRecorder";
+import {
+  isMissingMediaSupportError,
+  mediaFromRow,
+  mediaObjectNames,
+  mediaPrefix,
+  mediaRowValue,
+  rowsHaveMediaColumn,
+  sentMediaItems,
+  toMediaSendItems,
+} from "../lib/chatMedia";
+import type { ChatMediaDraftItem, ChatMediaItem, MediaSendItem } from "../lib/chatMedia";
+import { keepLocalMediaCopies, removeChatVideoObjects, removeUnsentMedia, resetChatVideoUrls, storeMediaItems } from "../lib/chatVideoClient";
+import type { OutgoingMediaItemState } from "../types";
+
+// Display state of a video / album send's items (the bytes stay in the job).
+function outgoingItems(items: readonly MediaSendItem[]): OutgoingMediaItemState[] {
+  return items.map((it) => ({ localUrl: it.localUrl, posterUrl: it.posterUrl, progress: it.progress, done: it.done, trim: it.trim }));
+}
 
 interface ConversationParticipantRow {
   conversation_id: string;
@@ -61,6 +79,8 @@ interface MessageRow extends ImageRowColumns, VoiceRowColumns {
   unsent_at?: string | null;
   // image_path / image_width / image_height / image_thumb (ImageRowColumns):
   // only present once migration 20261107170000_chat_images is applied.
+  // A video / album (20261107220000): the stored item array.
+  media?: unknown;
 }
 
 // A message this client just sent, rendered before the server round trip
@@ -98,6 +118,10 @@ interface PendingMessage {
     // Set for a voice message (lib/chatVoice.ts, migration 20261107180000):
     // the same send machinery, an audio file instead of a JPEG.
     audio?: { durationMs: number; mime: string };
+    // Set for a video / album (lib/chatMedia.ts, migration 20261107220000):
+    // each item's display state; the bytes are in the job.
+    media?: OutgoingMediaItemState[];
+    mediaKinds?: { kind: "image" | "video"; width: number; height: number; durationMs: number; thumb: string | null }[];
   };
 }
 
@@ -189,6 +213,10 @@ interface RealSocialContextValue {
   // retry / discard path as photos (retryDirectImage / discardDirectImage).
   voiceSupported: boolean;
   sendDirectVoice: (otherId: string, clip: VoiceClip, replyToId?: string) => Promise<SendMessageResult>;
+  // Videos and albums (lib/chatMedia.ts, migration 20261107220000): same
+  // retry / discard as photos (retryDirectImage / discardDirectImage).
+  mediaSupported: boolean;
+  sendDirectMedia: (otherId: string, items: ChatMediaDraftItem[], text: string, replyToId?: string) => Promise<SendMessageResult>;
   // Quick reactions (lib/reactions.ts, public.message_reactions). False
   // until a fetch of the table has succeeded, so before the migration is
   // applied the reaction row and pills are simply not shown.
@@ -243,6 +271,7 @@ function messageRowToDirectMessage(row: MessageRow): DirectMessage {
     unsentAt: row.unsent_at ?? null,
     ...(row.image_path ? { image: imageFromRow(row) } : {}),
     ...(row.audio_path ? { voice: voiceFromRow(row) } : {}),
+    ...(row.media ? { media: mediaFromRow(row.media) } : {}),
   };
 }
 
@@ -435,6 +464,20 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     setVoiceProbe(next);
     if (next === "yes") setVoiceColumnMissing(false);
   }, [selfId]);
+  // Videos / albums: their own migration (20261107220000), their own probe.
+  const [mediaProbe, setMediaProbe] = useState<ImageSupport>("unknown");
+  const mediaProbeRef = useRef<ImageSupport>("unknown");
+  const [mediaColumnMissing, setMediaColumnMissing] = useState(false);
+  const probeMedia = useCallback(async () => {
+    if (!selfId) return;
+    const generation = generationRef.current;
+    const { error } = await supabase.from("messages").select("media").limit(1);
+    if (generationRef.current !== generation) return;
+    const next: ImageSupport = !error ? "yes" : isMissingMediaSupportError(error) ? "no" : "unknown";
+    mediaProbeRef.current = next;
+    setMediaProbe(next);
+    if (next === "yes") setMediaColumnMissing(false);
+  }, [selfId]);
 
   const applyReactions = useCallback((next: MessageReaction[]) => {
     const kept = keepIfSame(reactionsRef.current, next);
@@ -626,6 +669,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
         // Photos: probe the column until it's known to exist (never blocks).
         if (full && imageProbeRef.current !== "yes") void probeImages();
         if (full && voiceProbeRef.current !== "yes") void probeVoice();
+        if (full && mediaProbeRef.current !== "yes") void probeMedia();
 
         // Profiles: the directory (when just fetched) replaces the cache
         // wholesale, which also drops deleted accounts; otherwise only ids
@@ -681,7 +725,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
         }
       }
     },
-    [selfId, fetchReactions, probeImages, probeVoice],
+    [selfId, fetchReactions, probeImages, probeVoice, probeMedia],
   );
 
   // Directory distances are computed server-side from this account's saved
@@ -740,6 +784,10 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     setLocallyReadIds(new Set());
     // Photos: another account's signed URLs / local photos never carry over.
     resetChatImageUrls();
+    resetChatVideoUrls();
+    mediaProbeRef.current = "unknown";
+    setMediaProbe("unknown");
+    setMediaColumnMissing(false);
     imageProbeRef.current = "unknown";
     setImageProbe("unknown");
     setImageColumnMissing(false);
@@ -1043,10 +1091,30 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
           // This device's photo: its local copy, and (until stored) the
           // send's state. Sent = a normal message with the real path.
           const pendingPath = photo.path ?? `pending/${photo.messageId}`;
+          const sentOk = message.id !== row.tempId;
+          if (photo.media && photo.mediaKinds) {
+            // A video / album: real paths once stored (shown from this
+            // device's copies), placeholders while sending.
+            const prefix = photo.path ?? null;
+            const items: ChatMediaItem[] = photo.mediaKinds.map((k, i) => ({
+              kind: k.kind,
+              path: prefix ? `${prefix}/${i}.${k.kind === "video" ? "mp4" : "jpg"}` : `pending/${photo.messageId}/${i}`,
+              poster: k.kind === "video" ? (prefix ? `${prefix}/${i}.poster.jpg` : null) : undefined,
+              width: k.width,
+              height: k.height,
+              durationMs: k.kind === "video" ? k.durationMs : undefined,
+              thumb: k.thumb,
+            }));
+            return {
+              ...message,
+              media: items,
+              delivery: sentOk ? undefined : photo.state,
+              outgoingPhoto: { localUrl: photo.localUrl, progress: sentOk ? undefined : photo.progress, failure: photo.failure, items: photo.media },
+            };
+          }
           const media: { image?: ChatImageRef; voice?: ChatVoiceRef } = photo.audio
             ? { voice: { path: pendingPath, durationMs: photo.audio.durationMs } }
             : { image: { path: pendingPath, width: photo.width, height: photo.height, thumb: photo.thumb } };
-          const sentOk = message.id !== row.tempId;
           return {
             ...message,
             ...media,
@@ -1162,8 +1230,16 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       const imagePath =
         messagesRef.current.find((m) => m.id === messageId)?.image_path ??
         messagesRef.current.find((m) => m.id === messageId)?.audio_path ??
-        pendingMessages.find((p) => p.serverId === messageId)?.photo?.path ??
+        (pendingMessages.find((p) => p.serverId === messageId)?.photo?.media ? null : pendingMessages.find((p) => p.serverId === messageId)?.photo?.path) ??
         null;
+      // A video / album: every item's objects (read before the database clears them).
+      const row = messagesRef.current.find((m) => m.id === messageId);
+      const pendingPhoto = pendingMessages.find((p) => p.serverId === messageId)?.photo;
+      const mediaNames = row?.media
+        ? mediaObjectNames(mediaFromRow(row.media))
+        : pendingPhoto?.media && pendingPhoto.path && pendingPhoto.mediaKinds
+          ? pendingPhoto.mediaKinds.flatMap((k, i) => (k.kind === "video" ? [`${pendingPhoto.path}/${i}.mp4`, `${pendingPhoto.path}/${i}.poster.jpg`] : [`${pendingPhoto.path}/${i}.jpg`]))
+          : [];
       const { error } = await supabase.rpc("unsend_message", { p_message_id: messageId });
       if (error) {
         const result = classifyUnsendError(error);
@@ -1180,6 +1256,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
               unsent_at: m.unsent_at ?? unsentAt,
               ...(m.image_path !== undefined ? { image_path: null, image_width: null, image_height: null, image_thumb: null } : {}),
               ...(m.audio_path !== undefined ? { audio_path: null, audio_duration_ms: null } : {}),
+              ...(m.media !== undefined ? { media: null } : {}),
             }
           : m,
       );
@@ -1191,6 +1268,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       // nobody else can read it any more; remove the file itself (Storage
       // API only; best effort, see removeChatImage).
       if (imagePath) void removeChatImage(imagePath);
+      if (mediaNames.length) void removeChatVideoObjects(mediaNames);
       return "unsent";
     },
     [selfId, applyReactions, pendingMessages],
@@ -1222,6 +1300,8 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
         generation: number;
         // A voice message instead of a photo (same machinery).
         audio?: { durationMs: number; mime: string };
+        // A video / album (lib/chatMedia.ts): every item's bytes and state.
+        media?: MediaSendItem[];
       }
     >(),
   );
@@ -1252,6 +1332,54 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
           }
           job.conversationId = convId as string;
           setPendingMessages((prev) => prev.map((p) => (p.tempId === tempId ? { ...p, conversation_id: convId as string } : p)));
+        }
+        if (job.media) {
+          // A video / album: every item stored (photos uploaded, videos
+          // uploaded + transcoded), then ONE row carrying them all.
+          const items = job.media;
+          const prefix = mediaPrefix("dm", job.conversationId, job.messageId);
+          if (!job.uploaded) {
+            const stored = await storeMediaItems(items, { scope: "dm", scopeId: job.conversationId, messageId: job.messageId, userId: selfId }, () => {
+              if (job.generation === generationRef.current) {
+                patchPhoto(tempId, { media: outgoingItems(items), progress: items.reduce((s, it) => s + (it.done ? 1 : it.progress), 0) / items.length });
+              }
+            });
+            if (stored !== "uploaded") return fail(stored);
+            job.uploaded = true;
+          }
+          const finalKinds = sentMediaItems(items);
+          patchPhoto(tempId, {
+            uploaded: true,
+            path: prefix,
+            progress: 1,
+            media: outgoingItems(items),
+            mediaKinds: finalKinds.map((k) => ({ kind: k.kind, width: k.width, height: k.height, durationMs: k.durationMs ?? 0, thumb: k.thumb ?? null })),
+          });
+          const row = { id: job.messageId, conversation_id: job.conversationId, sender_id: selfId, text: job.text, media: mediaRowValue(prefix, finalKinds) };
+          const insert = (values: Record<string, unknown>) => supabase.from("messages").insert(values).select("id").maybeSingle();
+          let { error } = await insert(job.replyTo ? { ...row, reply_to_message_id: job.replyTo } : row);
+          if (error && job.replyTo && isMissingReplyColumnError(error)) {
+            setReplyColumnMissing(true);
+            job.replyTo = null;
+            setPendingMessages((prev) => prev.map((p) => (p.tempId === tempId ? { ...p, reply_to_message_id: null } : p)));
+            ({ error } = await insert(row));
+          }
+          if (error) {
+            if (isMissingMediaSupportError(error)) {
+              setMediaColumnMissing(true);
+              return fail("rejected");
+            }
+            const outcome = classifyImageInsertError(error);
+            if (outcome !== "sent") {
+              console.error("GolfMe: failed to send a video / album message.", error);
+              return fail(outcome);
+            }
+          }
+          if (job.generation !== generationRef.current) return "sent";
+          keepLocalMediaCopies(items, prefix);
+          photoJobsRef.current.delete(tempId);
+          patchPhoto(tempId, { path: prefix, progress: 1, failure: undefined }, { sent: true, serverId: job.messageId });
+          return "sent";
         }
         const path = jobPath(job);
         if (!job.uploaded) {
@@ -1368,11 +1496,80 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     photoJobsRef.current.delete(tempId);
     setPendingMessages((prev) => prev.filter((p) => p.tempId !== tempId));
     if (!job) return;
+    if (job.media) {
+      // Items already stored (and staged originals) are removed; the
+      // bucket's delete policy refuses if a row points at them after all.
+      if (job.conversationId && selfId) void removeUnsentMedia(job.media, { scope: "dm", scopeId: job.conversationId, messageId: job.messageId, userId: selfId });
+      for (const it of job.media) {
+        URL.revokeObjectURL(it.localUrl);
+        if (it.posterUrl) URL.revokeObjectURL(it.posterUrl);
+      }
+      return;
+    }
     // Uploaded but never stored: remove the orphan (the bucket's delete
     // policy refuses if a row does point at it after all).
     if (job.uploaded && job.conversationId) void removeChatImage(jobPath(job));
     URL.revokeObjectURL(job.localUrl);
-  }, []);
+  }, [selfId]);
+
+  // ---- Videos and albums (lib/chatMedia.ts, migration 20261107220000) ----
+  const mediaSupported = useMemo(
+    () => !mediaColumnMissing && (mediaProbe === "yes" || rowsHaveMediaColumn(messages)),
+    [mediaColumnMissing, mediaProbe, messages],
+  );
+  const sendDirectMedia = useCallback(
+    async (otherId: string, draft: ChatMediaDraftItem[], text: string, replyToId?: string): Promise<SendMessageResult> => {
+      if (!selfId || draft.length === 0) return "failed";
+      const messageId = crypto.randomUUID();
+      const tempId = `temp-${messageId}`;
+      const replyTo = replyToId && repliesSupported ? replyToId : null;
+      const conversationId = conversationIdWith(otherId) ?? null;
+      const items = toMediaSendItems(draft);
+      const kinds = items.map((it) => ({ kind: it.kind, width: it.width, height: it.height, durationMs: it.durationMs, thumb: it.thumb }));
+      photoJobsRef.current.set(tempId, {
+        otherId,
+        conversationId,
+        messageId,
+        blob: items[0].blob,
+        localUrl: items[0].localUrl,
+        width: items[0].width,
+        height: items[0].height,
+        thumb: null,
+        text: text.trim(),
+        replyTo,
+        uploaded: false,
+        generation: generationRef.current,
+        media: items,
+      });
+      setPendingMessages((prev) => [
+        ...prev,
+        {
+          tempId,
+          conversation_id: conversationId ?? "",
+          otherId,
+          sender_id: selfId,
+          text: text.trim(),
+          created_at: new Date().toISOString(),
+          reply_to_message_id: replyTo,
+          photo: {
+            messageId,
+            blob: items[0].blob,
+            localUrl: items[0].localUrl,
+            width: items[0].width,
+            height: items[0].height,
+            thumb: null,
+            state: "sending",
+            progress: 0,
+            uploaded: false,
+            media: outgoingItems(items),
+            mediaKinds: kinds,
+          },
+        },
+      ]);
+      return attemptPhoto(tempId);
+    },
+    [selfId, repliesSupported, conversationIdWith, attemptPhoto],
+  );
 
   // ---- Voice messages (lib/chatVoice.ts, migration 20261107180000) ----
   // Same send path as photos (upload first, then the row with that id;
@@ -1738,6 +1935,8 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       discardDirectImage,
       voiceSupported,
       sendDirectVoice,
+      mediaSupported,
+      sendDirectMedia,
       reactionsSupported: reactionsLive,
       messageReactions: reactions,
       setMessageReaction,
@@ -1786,6 +1985,8 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       discardDirectImage,
       voiceSupported,
       sendDirectVoice,
+      mediaSupported,
+      sendDirectMedia,
       reactionsLive,
       reactions,
       setMessageReaction,

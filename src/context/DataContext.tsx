@@ -68,6 +68,9 @@ import type { ChatImageRef, ProcessedChatImage } from "../lib/chatImages";
 import { chatImageUrls } from "../lib/chatImageClient";
 import { DEMO_VOICE_PREFIX, clampDuration } from "../lib/chatVoice";
 import type { ChatVoiceRef } from "../lib/chatVoice";
+import { DEMO_MEDIA_PREFIX, localWindowUrl, toMediaSendItems } from "../lib/chatMedia";
+import type { ChatMediaDraftItem, ChatMediaItem } from "../lib/chatMedia";
+import { chatVideoUrls } from "../lib/chatVideoClient";
 import type { VoiceClip } from "../lib/voiceRecorder";
 import { claimVoiceSend, type SentVoiceClip } from "../lib/voiceSession";
 import { withReaction } from "../lib/reactions";
@@ -227,6 +230,9 @@ interface DataContextValue {
   canSendRoundImages: boolean;
   sendRoundImage: (callId: string, photo: ProcessedChatImage, text: string, replyToId?: string | null) => Promise<SendMessageResult>;
   // Voice messages in round chat (lib/chatVoice.ts, migration 20261107180000).
+  // Videos and albums in round chat (lib/chatMedia.ts, migration 20261107220000).
+  canSendRoundMedia: boolean;
+  sendRoundMedia: (callId: string, items: ChatMediaDraftItem[], text: string, replyToId?: string | null) => Promise<SendMessageResult>;
   canSendRoundVoice: boolean;
   // The round is clip.origin (captured when the recording started), never a
   // page argument: a clip can only ever go to the conversation it was
@@ -297,6 +303,9 @@ interface DataContextValue {
   retryDirectImage: (tempId: string) => Promise<SendMessageResult>;
   discardDirectImage: (tempId: string) => void;
   // Voice messages in DMs: same retry / discard as photos.
+  // Videos and albums in DMs: same retry / discard as photos.
+  canSendDirectMedia: boolean;
+  sendDirectMedia: (golferId: string, items: ChatMediaDraftItem[], text: string, replyToId?: string) => Promise<SendMessageResult>;
   canSendDirectVoice: boolean;
   // The recipient is clip.origin, as sendRoundVoice.
   sendDirectVoice: (clip: SentVoiceClip, replyToId?: string) => Promise<SendMessageResult>;
@@ -923,6 +932,48 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [auth.isDemo, realRounds, demoVoice],
   );
 
+  // Demo videos / albums: page-local like demo photos (object URLs under
+  // demo-media/ keys in the chat-video URL cache; a video plays only its
+  // trimmed window via a media fragment). After a reload: "unavailable".
+  const demoMedia = useCallback((draft: ChatMediaDraftItem[]): ChatMediaItem[] => {
+    const base = `${DEMO_MEDIA_PREFIX}${generateId("media")}`;
+    const urls = chatVideoUrls();
+    return toMediaSendItems(draft).map((it, i) => {
+      const path = `${base}/${i}`;
+      urls.setLocal(path, it.kind === "video" ? localWindowUrl(it.localUrl, it.trim) : it.localUrl);
+      if (it.kind === "video") {
+        const poster = it.posterUrl ? `${base}/${i}.poster` : null;
+        if (poster && it.posterUrl) urls.setLocal(poster, it.posterUrl);
+        return { kind: "video", path, poster, width: it.width, height: it.height, durationMs: it.durationMs };
+      }
+      return { kind: "image", path, width: it.width, height: it.height, thumb: it.thumb };
+    });
+  }, []);
+  const canSendRoundMedia = auth.isDemo || realRounds.mediaSupported;
+  const sendRoundMedia = useCallback(
+    async (callId: string, draft: ChatMediaDraftItem[], text: string, replyToId?: string | null): Promise<SendMessageResult> => {
+      if (!auth.isDemo) return realRounds.sendRoundMedia(callId, draft, text, replyToId);
+      const media = demoMedia(draft);
+      setData((prev) => ({
+        ...prev,
+        messages: [
+          ...prev.messages,
+          {
+            id: generateId("msg"),
+            golfCallId: callId,
+            senderId: prev.currentUserId,
+            text: text.trim(),
+            createdAt: new Date().toISOString(),
+            replyToId: replyToId && prev.messages.some((m) => m.id === replyToId && m.golfCallId === callId && !m.system) ? replyToId : null,
+            media,
+          },
+        ],
+      }));
+      return "sent";
+    },
+    [auth.isDemo, realRounds, demoMedia],
+  );
+
   const canReplyToRoundMessages = auth.isDemo || realRounds.repliesSupported;
   const canUnsendRoundMessages = auth.isDemo || realRounds.unsendSupported;
   // Demo: same rule as public.unsend_round_message (my own message, within
@@ -937,7 +988,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       const unsentAt = new Date().toISOString();
       setData((prev) => ({
         ...prev,
-        messages: prev.messages.map((m) => (m.id === messageId ? { ...m, text: "", unsentAt, image: null, voice: null } : m)),
+        messages: prev.messages.map((m) => (m.id === messageId ? { ...m, text: "", unsentAt, image: null, voice: null, media: null } : m)),
       }));
       setDemoRoundReactions((prev) => prev.filter((r) => r.messageId !== messageId));
       return "unsent";
@@ -1392,6 +1443,33 @@ export function DataProvider({ children }: { children: ReactNode }) {
     },
     [auth.isDemo, realSocial, canMessage, canSendMessageNow, currentUser.id, demoVoice],
   );
+  // Videos / albums in DMs (migration 20261107220000): same retry / discard as photos.
+  const canSendDirectMedia = auth.isDemo || realSocial.mediaSupported;
+  const sendDirectMedia = useCallback(
+    async (golferId: string, draft: ChatMediaDraftItem[], text: string, replyToId?: string): Promise<SendMessageResult> => {
+      if (!auth.isDemo) return realSocial.sendDirectMedia(golferId, draft, text, replyToId);
+      if (!canMessage(golferId) || !canSendMessageNow()) return "failed";
+      const convId = dmConversationId(currentUser.id, golferId);
+      const media = demoMedia(draft);
+      setData((prev) => ({
+        ...prev,
+        directMessages: [
+          ...prev.directMessages,
+          {
+            id: generateId("dm"),
+            conversationId: convId,
+            senderId: prev.currentUserId,
+            text: text.trim(),
+            createdAt: new Date().toISOString(),
+            replyToId: replyToId && prev.directMessages.some((m) => m.id === replyToId && m.conversationId === convId) ? replyToId : null,
+            media,
+          },
+        ],
+      }));
+      return "sent";
+    },
+    [auth.isDemo, realSocial, canMessage, canSendMessageNow, currentUser.id, demoMedia],
+  );
   const retryDirectImage = useCallback(
     async (tempId: string): Promise<SendMessageResult> => (auth.isDemo ? "failed" : realSocial.retryDirectImage(tempId)),
     [auth.isDemo, realSocial],
@@ -1416,7 +1494,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       const unsentAt = new Date().toISOString();
       setData((prev) => ({
         ...prev,
-        directMessages: prev.directMessages.map((m) => (m.id === messageId ? { ...m, text: "", unsentAt, image: null, voice: null } : m)),
+        directMessages: prev.directMessages.map((m) => (m.id === messageId ? { ...m, text: "", unsentAt, image: null, voice: null, media: null } : m)),
       }));
       setDemoReactions((prev) => prev.filter((r) => r.messageId !== messageId));
       return "unsent";
@@ -2144,6 +2222,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       sendRoundImage,
       canSendRoundVoice,
       sendRoundVoice,
+      canSendRoundMedia,
+      sendRoundMedia,
       roundMessageReactions,
       setRoundMessageReaction,
       hasLeftGolfCall,
@@ -2179,6 +2259,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       discardDirectImage,
       canSendDirectVoice,
       sendDirectVoice,
+      canSendDirectMedia,
+      sendDirectMedia,
       canReactToMessages,
       messageReactions,
       setMessageReaction,
@@ -2266,6 +2348,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       sendRoundImage,
       canSendRoundVoice,
       sendRoundVoice,
+      canSendRoundMedia,
+      sendRoundMedia,
       roundMessageReactions,
       setRoundMessageReaction,
       hasLeftGolfCall,
@@ -2301,6 +2385,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       discardDirectImage,
       canSendDirectVoice,
       sendDirectVoice,
+      canSendDirectMedia,
+      sendDirectMedia,
       canReactToMessages,
       messageReactions,
       setMessageReaction,

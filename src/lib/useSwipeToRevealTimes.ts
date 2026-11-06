@@ -93,6 +93,8 @@ export function useSwipeToRevealTimes(
     const onPointerDown = (e: PointerEvent) => {
       if (e.pointerType === "mouse" || !e.isPrimary) return;
       if (hasTextSelection()) return;
+      // An album deck owns sideways drags that start on it (components/chat/ChatMedia.tsx).
+      if (e.target instanceof Element && e.target.closest("[data-chat-deck]")) return;
       pointerId = e.pointerId;
       startX = e.clientX;
       startY = e.clientY;

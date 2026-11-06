@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { chatImageUrls } from "./chatImageClient";
+import type { ChatImageUrlCache } from "./chatImageUrlCache";
 
 // The URL to show for one chat photo, from the shared in-memory cache
 // (lib/chatImageUrlCache.ts). `onError` (the <img> failed: an expired or
 // refused link, a deleted object) re-signs it a few times, then gives up as
 // unavailable; `onLoad` resets that count. A local URL (sending, demo) wins.
-export function useChatImageUrl(path: string | null | undefined, localUrl?: string | null) {
-  const urls = chatImageUrls();
+// `cache`: chat videos / albums use the chat-video bucket's own cache
+// (lib/chatVideoClient.ts chatVideoUrls); photos and voice the default.
+export function useChatImageUrl(path: string | null | undefined, localUrl?: string | null, cache?: ChatImageUrlCache) {
+  const urls = cache ?? chatImageUrls();
   const [url, setUrl] = useState<string | null>(() => localUrl ?? (path ? urls.peek(path) : null));
   const [unavailable, setUnavailable] = useState(false);
 

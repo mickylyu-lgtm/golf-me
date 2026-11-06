@@ -6,6 +6,7 @@
 import type { GeoPoint } from "../lib/geo";
 import type { ChatImageRef, ImageSendFailure } from "../lib/chatImages";
 import type { ChatVoiceRef } from "../lib/chatVoice";
+import type { ChatMediaItem } from "../lib/chatMedia";
 
 /**
  * A photo message sent from this device that isn't stored yet (lib/chatImages.ts):
@@ -17,6 +18,17 @@ export interface OutgoingPhotoState {
   /** 0..1 while sending. */
   progress?: number;
   failure?: ImageSendFailure;
+  /** A video / album send (lib/chatMedia.ts): each item's local copy and progress, in order. */
+  items?: OutgoingMediaItemState[];
+}
+
+export interface OutgoingMediaItemState {
+  /** Photo: the re-encoded JPEG; video: the original (played with its trim window). */
+  localUrl: string;
+  posterUrl: string | null;
+  progress: number;
+  done: boolean;
+  trim: { startMs: number; endMs: number } | null;
 }
 
 export type GolfVibe =
@@ -290,6 +302,8 @@ export interface ChatMessage {
   image?: ChatImageRef | null;
   /** The voice message it carries (migration 20261107180000). */
   voice?: ChatVoiceRef | null;
+  /** A video or an album (migration 20261107220000, lib/chatMedia.ts). */
+  media?: ChatMediaItem[] | null;
   /** This device's photo or voice send in progress / failed. */
   outgoingPhoto?: OutgoingPhotoState;
 }
@@ -420,6 +434,8 @@ export interface DirectMessage {
   image?: ChatImageRef | null;
   // The voice message it carries (migration 20261107180000). Cleared by unsend.
   voice?: ChatVoiceRef | null;
+  // A video or an album (migration 20261107220000). Cleared by unsend.
+  media?: ChatMediaItem[] | null;
   // A photo / voice message from this device that isn't stored yet:
   // "sending" (with upload progress) or "failed" (Retry / Discard). Unset =
   // stored. outgoingPhoto holds its local copy / progress for either kind.
