@@ -172,9 +172,11 @@ const NAIP_MIN_BYTES = 20_000;
 // The bucket's own limit (20261107190000).
 const NAIP_MAX_BYTES = 3 * 1024 * 1024;
 
-// Overpass endpoints, tried in order (the main one is often overloaded;
-// 2026-11-05 most requests to it timed out or answered 502/504).
-export const OVERPASS_ENDPOINTS = ["https://overpass-api.de/api/interpreter", "https://maps.mail.ru/osm/tools/overpass/api/interpreter"];
+// Overpass endpoints, tried in order. FOSSGIS's main instance only
+// (2026-11-06: maps.mail.ru dropped, so no third-party mirror sees which
+// courses GolfMe users look at). It is often overloaded; a failure isn't
+// recorded, so the outline is simply asked again on a later view.
+export const OVERPASS_ENDPOINTS = ["https://overpass-api.de/api/interpreter"];
 const OVERPASS_TIMEOUT_MS = 8000;
 export const OUTLINE_RECHECK_MS = 180 * 24 * 60 * 60 * 1000;
 

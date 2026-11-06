@@ -4,7 +4,7 @@
 // No network.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULT_CAPS, QUOTA, handleRequest, resolveCoursePhotos, type CourseRow, type Deps, type ImageryRow } from "./handler.ts";
+import { DEFAULT_CAPS, OVERPASS_ENDPOINTS, QUOTA, handleRequest, resolveCoursePhotos, type CourseRow, type Deps, type ImageryRow } from "./handler.ts";
 
 const DYKER: CourseRow = { id: "11111111-1111-4111-8111-111111111111", name: "Dyker Beach Golf Course", latitude: 40.6145, longitude: -74.0216 };
 const OTHER: CourseRow = { id: "22222222-2222-4222-8222-222222222222", name: "Kissena Park Golf Course", latitude: 40.7472, longitude: -73.8075 };
@@ -329,12 +329,15 @@ test("outline from Geoapify Place Details first when the course has a Geoapify i
   assert.equal(calls.filter((c) => c.url.includes("/api/interpreter")).length, 0);
 });
 
-test("Overpass down (every endpoint): no outline this time, not recorded, the other endpoint tried", async () => {
+test("Overpass down: no outline this time, not recorded, overpass-api.de only (never maps.mail.ru)", async () => {
+  assert.deepEqual(OVERPASS_ENDPOINTS, ["https://overpass-api.de/api/interpreter"]);
   const { deps, calls, rows } = makeDeps({ overpass: "fail", wikiArticle: null, geotags: [] });
   const res = await resolveCoursePhotos({ courseIds: [DYKER.id] }, deps);
   assert.ok(!(DYKER.id in (res.bounds ?? {})), "left out: the client keeps the point framing and may ask later");
   assert.equal(rows.get(DYKER.id)?.outline_checked_at, undefined);
-  assert.equal(new Set(calls.filter((c) => c.url.includes("/api/interpreter")).map((c) => new URL(c.url).hostname)).size, 2);
+  const hosts = new Set(calls.filter((c) => c.url.includes("/api/interpreter")).map((c) => new URL(c.url).hostname));
+  assert.deepEqual([...hosts], ["overpass-api.de"]);
+  assert.equal(calls.some((c) => c.url.includes("mail.ru")), false);
   assert.equal(res.photos[DYKER.id], null, "the photo answer is unaffected");
 });
 
