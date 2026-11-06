@@ -18,6 +18,23 @@ export function showsLanguageNotice(analysisLanguage: CaddieAnalysisLanguage | u
   return analysisLanguage !== undefined && analysisLanguage !== currentLocale;
 }
 
+// What the analysis page offers for the feedback's language, given the
+// Caddie feedback language (`target`):
+// - "none": the feedback is recorded as already in it, so no Translate
+//   button (Micky, 2026-11-05: "Translate to 简体中文" showed on feedback
+//   that was already in Chinese). There is no "Show original": a
+//   translation replaces the stored text (translate-caddie-analysis).
+// - "notice": recorded in another language: "This feedback is in X" plus
+//   Translate (or the automatic translation's progress).
+// - "button": an older row with no recorded language: we never guess, so
+//   just the Translate button.
+export type TranslateOffer = "none" | "notice" | "button";
+
+export function translateOffer(analysisLanguage: CaddieAnalysisLanguage | undefined, target: string): TranslateOffer {
+  if (analysisLanguage === undefined) return "button";
+  return analysisLanguage === target ? "none" : "notice";
+}
+
 // ── Automatic translation (Micky, 2026-11-03: "why do i need to manually
 // click translate") ─────────────────────────────────────────────────────
 // The detail page translates the feedback by itself when it is clearly not

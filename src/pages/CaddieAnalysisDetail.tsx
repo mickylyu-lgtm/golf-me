@@ -17,7 +17,9 @@ import { Badge } from "../components/ui/Badge";
 import { formatShortDate } from "../lib/format";
 import { postFeedbackThenMark } from "../lib/caddieShare";
 import { isStaleProcessing, usePeriodicRerender } from "../lib/caddieAnalysis";
-import { AUTO_TRANSLATE_RETRY_MS, claimAutoTranslateAttempt, feedbackSampleText, isTooSoonError, needsAutoTranslate, releaseAutoTranslateAttempt, showsLanguageNotice } from "../lib/caddieLanguage";
+import { AUTO_TRANSLATE_RETRY_MS, claimAutoTranslateAttempt, feedbackSampleText, isTooSoonError, needsAutoTranslate, releaseAutoTranslateAttempt, translateOffer } from "../lib/caddieLanguage";
+import { caddieErrorText } from "../lib/caddieErrorText";
+import { demoLegacyFeedback } from "../data/caddie";
 import { isExplicitCaddieLocale, isTranslationRunning, queueAutoTranslation, queueTranslation, whenTranslationSettled } from "../lib/caddieAutoTranslate";
 import { useCaddieFeedbackLanguage } from "../lib/useCaddieFeedbackLanguage";
 import { FAILURE_BODY_KEYS, FAILURE_TITLE_KEYS, analysisFailure } from "../lib/caddieFailure";
@@ -67,9 +69,9 @@ export function CaddieAnalysisDetail() {
   const { hasLoaded: caddieHasLoaded, loadPoseData, refreshMediaUrls } = useRealCaddie();
   const { isDemo } = useAuth();
   const coachEnabled = useCoachReplayEnabled();
-  const { t, locale: appLocale } = useLocale();
-  // `locale` below is Caddie's feedback language (lib/caddieFeedbackLanguage):
-  // translation, the language notice and Translate use it; dates use appLocale.
+  // Inside CaddieLocaleScope: `t` and `dateLocale` are the Caddie feedback
+  // language, like `locale` below (translation, the notice and Translate).
+  const { t, locale: dateLocale } = useLocale();
   const locale = useCaddieFeedbackLanguage();
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -196,6 +198,8 @@ export function CaddieAnalysisDetail() {
 
   const sourcePost = analysis.sourcePostId ? getPost(analysis.sourcePostId) : undefined;
   const details = analysis.details;
+  // Flat legacy feedback; the demo's fixture rows read in the screen's language.
+  const legacy = demoLegacyFeedback(analysis, t);
   const failure = analysisFailure(analysis.errorMessage, isStaleProcessing(analysis));
   const failureBodyKey = FAILURE_BODY_KEYS[failure.code];
 
@@ -207,17 +211,19 @@ export function CaddieAnalysisDetail() {
     // the post is actually published, so the public post never points at
     // the private original. A Community-sourced analysis already has a
     // public URL and is reused as before.
+    // The composer's starting caption, in Caddie's language like the rest of this screen.
+    const caption = analysis.swingType ? t("caddie.shareCaption", { club: clubLabel(analysis.swingType, t) }) : "";
     const prefill: CreatePostSwingPrefill = analysis.sourceMediaPath
       ? {
           swingVideoUrl: analysis.sourceMediaUrl,
           privateVideoPath: analysis.sourceMediaPath,
           privateThumbnailPath: analysis.thumbnailPath,
-          caption: analysis.swingType ? `${analysis.swingType} swing` : "",
+          caption,
         }
       : {
           swingVideoUrl: analysis.sourceMediaUrl,
           videoThumbnailUrl: analysis.thumbnailUrl,
-          caption: analysis.swingType ? `${analysis.swingType} swing` : "",
+          caption,
         };
     navigate("/community/new", { state: prefill });
   }
@@ -242,7 +248,7 @@ export function CaddieAnalysisDetail() {
       });
       navigate(`/caddie/${created.id}`, { replace: true });
     } catch (err) {
-      showToast(err instanceof Error ? err.message : t("caddie.askCaddieError"), "warning");
+      showToast(caddieErrorText(err, t), "warning");
     } finally {
       setRetrying(false);
     }
@@ -262,7 +268,7 @@ export function CaddieAnalysisDetail() {
       // Same queue as the automatic translation, so they never overlap.
       await queueTranslation(id, () => translateCaddieAnalysis(id, locale));
     } catch (err) {
-      showToast(err instanceof Error ? err.message : t("caddie.askCaddieError"), "warning");
+      showToast(caddieErrorText(err, t, "caddie.error.translateFailed"), "warning");
     } finally {
       setTranslating(false);
     }
@@ -300,7 +306,7 @@ export function CaddieAnalysisDetail() {
       });
       showToast(t("caddie.feedbackShared"), "success");
     } catch (err) {
-      showToast(err instanceof Error ? err.message : t("caddie.couldNotSave"), "warning");
+      showToast(caddieErrorText(err, t, "caddie.error.shareFailed"), "warning");
     } finally {
       sharingFeedbackRef.current = false;
       setSharingFeedback(false);
@@ -320,8 +326,9 @@ export function CaddieAnalysisDetail() {
     low: t("caddie.confidenceLow"),
   };
   const languageName = (value: string) => LOCALES.find((l) => l.value === value)?.nativeName ?? value;
-  const languageNotice = showsLanguageNotice(details?.language, locale);
-  const translateButton = (
+  const offer = translateOffer(details?.language, locale);
+  const languageNotice = offer === "notice";
+  const translateButton = offer !== "none" && (
     <button
       onClick={translateFeedback}
       disabled={translating}
@@ -343,7 +350,7 @@ export function CaddieAnalysisDetail() {
 
       <div>
         <h1 className="text-xl font-bold text-slate-900">{clubLabel(analysis.swingType, t) || t("caddie.title")}</h1>
-        <p className="text-sm text-slate-500">{formatShortDate(analysis.createdAt, appLocale)}</p>
+        <p className="text-sm text-slate-500">{formatShortDate(analysis.createdAt, dateLocale)}</p>
         {sourcePost && (
           <button
             onClick={() => navigate(`/community/${sourcePost.id}`)}
@@ -473,10 +480,10 @@ export function CaddieAnalysisDetail() {
           <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-fairway-700">
             <CaddieNavIcon size={14} /> {t("caddie.title")}
           </p>
-          {analysis.analysisSummary && <p className="text-sm text-slate-700">{analysis.analysisSummary}</p>}
-          <Section title={t("caddie.whatLooksGood")} items={analysis.strengths} />
-          <Section title={t("caddie.workOn")} items={analysis.issues} />
-          <Section title={t("caddie.caddiesFix")} items={analysis.recommendations} />
+          {legacy.analysisSummary && <p className="text-sm text-slate-700">{legacy.analysisSummary}</p>}
+          <Section title={t("caddie.whatLooksGood")} items={legacy.strengths} />
+          <Section title={t("caddie.workOn")} items={legacy.issues} />
+          <Section title={t("caddie.caddiesFix")} items={legacy.recommendations} />
         </div>
       ) : analysis.status === "failed" || isStaleProcessing(analysis) ? (
         <div className="flex flex-col items-start gap-2.5 rounded-2xl border border-red-100 bg-red-50/60 px-4 py-3.5">

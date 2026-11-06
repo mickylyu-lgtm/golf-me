@@ -4,6 +4,7 @@ import { Home } from "../../pages/Home";
 import { Find } from "../../pages/Find";
 import { Inbox } from "../../pages/Inbox";
 import { Caddie } from "../../pages/Caddie";
+import { CaddieLocaleScope } from "../caddie/CaddieLocaleScope";
 import { Profile } from "../../pages/Profile";
 import { perfHudTabSwipe } from "../../lib/perfHud";
 
@@ -23,7 +24,8 @@ const PANELS = [
   { path: "/", render: () => <Home /> },
   { path: "/messages", render: () => <Inbox /> },
   { path: "/find", render: () => <Find /> },
-  { path: "/caddie", render: () => <Caddie /> },
+  // Caddie renders in the Caddie feedback language (CaddieLocaleScope).
+  { path: "/caddie", render: () => <CaddieLocaleScope><Caddie /></CaddieLocaleScope> },
   { path: "/profile", render: () => <Profile /> },
 ] as const;
 

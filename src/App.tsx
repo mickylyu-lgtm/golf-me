@@ -37,6 +37,7 @@ import { Home } from "./pages/Home";
 import { Discover } from "./pages/Discover";
 import { Find } from "./pages/Find";
 import { Caddie } from "./pages/Caddie";
+import { CaddieLocaleScope } from "./components/caddie/CaddieLocaleScope";
 import { GolfCalls } from "./pages/GolfCalls";
 import { GolfCallDetail } from "./pages/GolfCallDetail";
 import { MyRounds } from "./pages/MyRounds";
@@ -477,9 +478,10 @@ export default function App() {
                   <Route path="/courses/nearby" element={<NearbyCourses />} />
                   <Route path="/courses/map" element={<CourseMap />} />
                   <Route path="/courses/:courseId" element={<CourseDetail />} />
-                  <Route path="/caddie" element={<Caddie />} />
-                  <Route path="/caddie/analyze" element={<AnalyzeSwing />} />
-                  <Route path="/caddie/:analysisId" element={<CaddieAnalysisDetail />} />
+                  {/* Caddie renders in the Caddie feedback language (CaddieLocaleScope). */}
+                  <Route path="/caddie" element={<CaddieLocaleScope><Caddie /></CaddieLocaleScope>} />
+                  <Route path="/caddie/analyze" element={<CaddieLocaleScope><AnalyzeSwing /></CaddieLocaleScope>} />
+                  <Route path="/caddie/:analysisId" element={<CaddieLocaleScope><CaddieAnalysisDetail /></CaddieLocaleScope>} />
                 </Route>
                 {/* Unknown paths used to render a blank page. Standalone like
                     /privacy, so it works with or without a session. */}

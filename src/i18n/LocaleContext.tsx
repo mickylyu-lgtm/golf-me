@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from "react";
 import { en } from "./locales/en";
 import type { TranslationKey } from "./locales/en";
+import { makeTranslator, scopeLocaleValue } from "./translate";
 
 export type Locale = "en" | "zh-CN" | "zh-TW" | "es" | "ko" | "ja";
 
@@ -72,17 +73,7 @@ interface LocaleContextValue {
 const LocaleContext = createContext<LocaleContextValue | null>(null);
 
 function buildT(locale: Locale) {
-  const dict = loadedDictionaries[locale] ?? en;
-  return (key: TranslationKey, vars?: Record<string, string | number>) => {
-    let str = dict[key] ?? en[key];
-    if (vars) {
-      for (const [k, v] of Object.entries(vars)) {
-        // replaceAll: a placeholder can appear more than once (review.intro uses {name} twice).
-        str = str.replaceAll(`{${k}}`, String(v));
-      }
-    }
-    return str;
-  };
+  return makeTranslator<TranslationKey>(loadedDictionaries[locale] ?? en, en);
 }
 
 export function LocaleProvider({ children }: { children: ReactNode }) {
@@ -150,6 +141,39 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
 export function ForceLocale({ locale, children }: { locale: Locale; children: ReactNode }) {
   const t = useMemo(() => buildT(locale), [locale]);
   const value = useMemo(() => ({ locale, setLocale: () => {}, t }), [locale, t]);
+  return <LocaleContext.Provider value={value}>{children}</LocaleContext.Provider>;
+}
+
+// Renders a subtree in another language (`locale`, `t`) while the rest of
+// the app keeps its own: Caddie's screens follow the Caddie feedback
+// language (components/caddie/CaddieLocaleScope). Unlike ForceLocale, the
+// dictionary loads on demand, and until it has, the subtree simply keeps the
+// surrounding language (never English in between, never a blank). The
+// provider is always rendered, so loading never remounts the subtree.
+// setLocale is the parent's: it still changes the app's language. The
+// scope never touches the app locale or "golfme:locale".
+export function LocaleScope({ locale, children }: { locale: Locale; children: ReactNode }) {
+  const parent = useLocale();
+  const [loaded, setLoaded] = useState<Locale | null>(() => (loadedDictionaries[locale] ? locale : null));
+  useEffect(() => {
+    if (loadedDictionaries[locale]) {
+      setLoaded(locale);
+      return;
+    }
+    let cancelled = false;
+    loadDictionary(locale)
+      .then(() => {
+        if (!cancelled) setLoaded(locale);
+      })
+      // A failed load leaves the subtree in the surrounding language.
+      .catch((err) => console.error(`GolfMe: failed to load ${locale} translations; keeping the app language.`, err));
+    return () => {
+      cancelled = true;
+    };
+  }, [locale]);
+  const ready = loaded === locale && Boolean(loadedDictionaries[locale]);
+  const t = useMemo(() => (ready ? buildT(locale) : parent.t), [ready, locale, parent.t]);
+  const value = useMemo(() => (ready ? scopeLocaleValue(parent, locale, t) : parent), [ready, parent, locale, t]);
   return <LocaleContext.Provider value={value}>{children}</LocaleContext.Provider>;
 }
 

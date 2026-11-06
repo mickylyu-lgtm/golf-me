@@ -6,6 +6,28 @@ Last updated: 2026-11-04 (**"New to GolfMe" badge** — sprout icon instead of t
 
 Note: Phases between Phase 20/21 (see below) and Phase 22 span roughly 31 commits (2026-09-16 through 2026-09-21) that also never got a numbered write-up as they landed — Phase 22 below reconstructs them from `git log`/code review (that session's own commit messages are unusually detailed, so this is a faithful summary, not a guess) rather than live session narration. Older gap, still not backfilled: Phases between Phase 6 and Phase 20 (chat keyboard/Capacitor Keyboard native linking, floating swipeable BottomNav + auto-collapse + centering fixes, tee-time booking fallback hero image, and everything else through 2026-09-15) — see `git log` for that range (commits from "Prefer GolfCourseAPI v1.1 coordinates..." through "Floating pill bottom nav with press-and-slide tab selection, haptics, Caddie unify").
 
+## Caddie renders entirely in the Caddie feedback language — 2026-11-05 (branch `fix/caddie-language-scope` on 1453a88, uncommitted/not deployed; no migration, no Edge Function change)
+
+- **Why**: Micky picked 简体中文 as Caddie's feedback language: AI text was Chinese, but all Caddie UI stayed English. "The language switcher should switch all languages within Caddie", "all parts within Caddie should be fully translated".
+- **Approach**: `LocaleScope` (i18n/LocaleContext.tsx) is a nested provider that overrides only `locale`/`t` for its subtree. It loads the dictionary on demand, keeps the surrounding language until that load finishes (no English flash, never remounts), passes the parent's `setLocale` through, and never writes `golfme:locale`. Its pure rules are in `i18n/translate.ts`. `components/caddie/CaddieLocaleScope` mounts it with `useCaddieFeedbackLanguage()` around the three Caddie routes in App.tsx and the Caddie panel of RootTabCarousel. The top bar, bottom/side nav, Home's Caddie card, the bell/push notifications and every other screen keep the app language.
+- **Decisions**: toasts raised from Caddie screens use the Caddie language, because their text comes from the scoped `t` and they are about what is on screen. Toasts and notifications raised outside Caddie stay in the app language. Dates on Caddie screens follow the scope too (the list and the detail use `formatShortDate(…, scoped locale)`).
+- **Strings**: almost everything was already keyed; the gap was the scope. Newly localized:
+  - Request errors: the English sentences from analyze-swing/translate-caddie-analysis used to be toasted verbatim. `lib/caddieErrorText.ts` maps every one of them, plus the daily-limit regex, codes and Storage errors, to keys. Anything unknown gets a translated generic line.
+  - The "Share to Community" caption (`caddie.shareCaption`, was `${swingType} swing`).
+  - The demo's fixture feedback (`caddie.demo.*` via `demoLegacyFeedback`).
+  - es: "Feedback"/"coach" replaced (`caddie.shareFeedback`, `caddie.feedbackPostTitle`, `caddie.thinking4`, `coachReplay.title`, `coachReplay.coachMode`) and `swingAnalysis.followThrough` → "Terminación".
+  - 26 new keys ×6.
+- **Translate button**: `translateOffer()` (lib/caddieLanguage). When the recorded language equals the Caddie language, no button (it used to show "Translate to 简体中文" on Chinese feedback). A different recorded language shows the notice + Translate. A row with no recorded language shows the plain button. There is no "Show original": a translation overwrites the stored text.
+- **Still not translated**: Spanish keeps the golf loanwords Swing/Driver/Wedge/Backswing/Downswing, which are standard in Spanish golf (Micky to confirm). "AI" on the cap logo, "Caddie"/"GolfMe", "MB" and the language picker's native names stay as they are. Server-side follow-up (not built): give every analyze-swing/translate-caddie-analysis error a stable `code` so the client stops matching English sentences. A kill-switch refusal is already coded, but RealCaddieContext localizes it in the app language before throwing. caddieErrorText re-reads the code, so Caddie screens still show it in the Caddie language.
+- Tests: `tests/caddieLocale.test.ts` (13, in test:caddie):
+  - the scope overrides `t` without touching the parent/app locale;
+  - Caddie routes are wrapped;
+  - new keys ×6 with matching placeholders, and every key a Caddie file uses is translated;
+  - a strict source scan of every Caddie file for JSX text, attributes, toasts, `err.message` and English literals, with a self-test;
+  - every server error sentence is mapped;
+  - translateOffer and the demo feedback.
+- Totals: 598/598 node tests, tsc, lint (0 errors) and build all pass. Headless demo probe (`scratchpad/caddie-lang/probe.mjs`; demo-caddie-2 patched with fixture details/pose/phases/cues and a generated webm, plus processing/failed/other-language rows) covered app en + Caddie zh-CN, app en + Caddie es, and app zh-CN + Caddie en. Across 24 screens (list, analyze, processing, failed, legacy demo + demo Coach Replay cards, detail, Slow Mode, Swing Check per phase, Coach Replay cards, other-language notice, after share), the DOM text contained no English UI string; the nav kept the app language and `golfme:locale` was untouched. **Not tested**: physical iPhone, real accounts (real translate/analyze errors).
+
 ## Bell cleanup + notification avatars — 2026-11-05 (LIVE on Micky's "ship bell after"; no migration, no backend change)
 
 Micky: "a tapped notification should clear out of the bell so it doesn't stack up" and "internal notifications should include the person's profile picture, it looks preliminary".

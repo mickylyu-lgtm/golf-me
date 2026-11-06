@@ -16,6 +16,7 @@ import { supabase } from "../lib/supabase";
 import { CADDIE_MEDIA_BUCKET } from "../lib/caddieMedia";
 import { CaddieRequestError } from "../lib/caddieAnalysis";
 import { clubLabel } from "../lib/clubLabel";
+import { caddieErrorText } from "../lib/caddieErrorText";
 const MAX_SWING_VIDEO_BYTES = 200 * 1024 * 1024; // matches the Storage bucket's own file_size_limit
 const MAX_SWING_VIDEO_SECONDS = 10; // max length of the WINDOW actually analyzed (2026-08-22 credit-efficiency pass) — Caddie's Roboflow pass calls once per sampled frame, so a longer clip directly multiplies calls/latency/credit spend; see analyze-swing's ANALYSIS_FPS comment. Was 15s. A source video longer than this is no longer rejected outright — VideoTrimSelector lets the golfer pick which 10s window to analyze instead.
 // Once analyze-swing actually creates the 'processing' row, the real
@@ -292,7 +293,7 @@ export function AnalyzeSwing() {
             if (error) console.error("GolfMe: couldn't remove an unused Caddie upload.", error);
           });
       }
-      showToast(err instanceof Error ? err.message : t("caddie.askCaddieError"), "warning");
+      showToast(caddieErrorText(err, t), "warning");
       setSubmitting(false);
     }
   }
