@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { ArrowLeft, ChevronRight, List, LocateFixed, MapPin, X } from "lucide-react";
+import { ArrowLeft, ChevronRight, List, Locate, LocateFixed, LocateOff, MapPin, X } from "lucide-react";
 import maplibregl from "maplibre-gl";
+import { Capacitor } from "@capacitor/core";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useData } from "../context/DataContext";
 import { useLocale } from "../i18n/LocaleContext";
@@ -20,6 +21,8 @@ import { TEE_TIMES_VISIBLE, matchSupportedTeeTimeCourse } from "../services/teeT
 import { goBack } from "../lib/goBack";
 import { initialBrowseArea, withBrowseArea } from "../lib/browseArea";
 import { loadMapCamera, prefersReducedMotion, saveMapCamera } from "../lib/courseMapCamera";
+import { DEVICE_DOT_PRECISION, accuracyRadiusPx, watchDeviceLocation } from "../lib/deviceLocation";
+import type { DeviceFix, LocateProblem } from "../lib/deviceLocation";
 
 // "Golf Courses Near You" as a full-screen map (Micky, 2026-11-04, after
 // LINQ Golf's map): one pin per nearby course from the same source as the
@@ -46,6 +49,13 @@ const PIN_STAGGER_MAX_MS = 400;
 const PIN_REVEAL_FALLBACK_MS = 2500;
 // Dragging the sheet down this far closes it.
 const SHEET_CLOSE_DRAG_PX = 90;
+// Locate: how far in to zoom (never out) when centring on the device, and
+// the smallest accuracy circle worth drawing around the 16 px dot.
+const LOCATE_MIN_ZOOM = 11;
+const LOCATE_GLIDE_MS = 600;
+const ACCURACY_CIRCLE_MIN_PX = 12;
+
+type LocateStatus = "off" | "searching" | "on" | LocateProblem;
 
 const PIN_SVG =
   '<svg viewBox="0 0 24 32" width="100%" height="100%" aria-hidden="true"><path d="M12 0C5.4 0 0 5.3 0 11.9 0 20.8 12 32 12 32s12-11.2 12-20.1C24 5.3 18.6 0 12 0z" fill="currentColor" stroke="white" stroke-width="1.5"/><circle cx="12" cy="11.5" r="4.2" fill="white"/></svg>';
@@ -141,8 +151,12 @@ export function CourseMap() {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<Map<string, { marker: maplibregl.Marker; el: HTMLElement; shape: HTMLElement }>>(new Map());
-  const hereRef = useRef<maplibregl.Marker | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
+  // The device's own position (locate button). Held only in these refs and
+  // the marker: never React state, never sent or saved (lib/deviceLocation.ts).
+  const deviceDotRef = useRef<{ marker: maplibregl.Marker; circle: HTMLElement } | null>(null);
+  const deviceFixRef = useRef<DeviceFix | null>(null);
+  const sizeAccuracyCircleRef = useRef(() => {});
   const selectedKeyRef = useRef(selectedKey);
   selectedKeyRef.current = selectedKey;
   const areaIdRef = useRef(areaId);
@@ -200,38 +214,159 @@ export function CourseMap() {
     // that corner. Tapping empty map closes the card, like the reference.
     map.on("click", () => setSelectedKey(null));
     map.on("moveend", rememberCamera);
+    map.on("zoom", () => sizeAccuracyCircleRef.current());
     mapRef.current = map;
     const markers = markersRef.current;
     return () => {
       rememberCamera();
       markers.clear();
-      hereRef.current = null;
+      deviceDotRef.current = null;
       map.remove();
       mapRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // "You are here": the chosen area's centre. A different area recentres
-  // (the first one keeps whatever camera was restored).
-  // Keyed on the area id, not "first run", so re-running (React's dev
-  // double effects, a remount) never jumps away from a restored camera.
+  // A different area recentres the map (the first one keeps whatever camera
+  // was restored). Keyed on the area id, not "first run", so re-running
+  // (React's dev double effects, a remount) never jumps away from a restored
+  // camera. The area's centre is NOT drawn as a "you are here" dot any more:
+  // it is a search centre (a city centroid, or a fix rounded to ~1 km), and
+  // drawn like a GPS dot it read as the device's position (Micky,
+  // 2026-11-07: a dot in the harbour for "New York, NY"). The real device
+  // position is the locate button's job, below.
   const centredAreaRef = useRef<string | null>(restored ? areaId : null);
   useEffect(() => {
     const map = mapRef.current;
     if (!map || lat == null || lng == null) return;
-    if (!hereRef.current) {
-      const el = document.createElement("div");
-      el.className = "h-4 w-4 rounded-full border-[3px] border-white bg-blue-500 shadow-[0_0_0_6px_rgba(59,130,246,0.25)]";
-      hereRef.current = new maplibregl.Marker({ element: el }).setLngLat([lng, lat]).addTo(map);
-    } else {
-      hereRef.current.setLngLat([lng, lat]);
-    }
     if (centredAreaRef.current === areaId) return;
     centredAreaRef.current = areaId;
     map.jumpTo({ center: [lng, lat] });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lat, lng]);
+
+  // Locate: a live watch of the device position while the map is open (and
+  // in the foreground), drawn as a blue dot with its accuracy circle. Starts
+  // only from a tap, stops when the map closes or the app is backgrounded.
+  const [locate, setLocate] = useState<LocateStatus>("off");
+  const stopWatchRef = useRef<(() => void) | null>(null);
+  // Watching was asked for (survives a background pause).
+  const wantWatchRef = useRef(false);
+  // Centre on the next fix (the tap that started the watch).
+  const centreOnFixRef = useRef(false);
+
+  sizeAccuracyCircleRef.current = () => {
+    const map = mapRef.current;
+    const dot = deviceDotRef.current;
+    const fix = deviceFixRef.current;
+    if (!map || !dot || !fix) return;
+    const r = accuracyRadiusPx(fix.accuracyM, fix.lat, map.getZoom());
+    dot.circle.style.display = r < ACCURACY_CIRCLE_MIN_PX ? "none" : "";
+    dot.circle.style.width = dot.circle.style.height = `${Math.round(r * 2)}px`;
+  };
+
+  function centreOnDevice(fix: DeviceFix) {
+    const map = mapRef.current;
+    if (!map) return;
+    map.easeTo({
+      center: [fix.lng, fix.lat],
+      zoom: Math.max(map.getZoom(), LOCATE_MIN_ZOOM),
+      duration: prefersReducedMotion() ? 0 : LOCATE_GLIDE_MS,
+      essential: false,
+    });
+  }
+
+  function removeDeviceDot() {
+    deviceDotRef.current?.marker.remove();
+    deviceDotRef.current = null;
+    deviceFixRef.current = null;
+  }
+
+  function showDeviceFix(fix: DeviceFix) {
+    const map = mapRef.current;
+    if (!map) return;
+    deviceFixRef.current = fix;
+    if (!deviceDotRef.current) {
+      // Taps go through to the map (closing the card), like empty map.
+      const el = document.createElement("div");
+      el.className = "pointer-events-none relative h-4 w-4";
+      el.setAttribute("aria-hidden", "true");
+      const circle = document.createElement("div");
+      circle.className = "absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-blue-500/40 bg-blue-500/15";
+      const dot = document.createElement("div");
+      dot.className = "absolute inset-0 rounded-full border-[3px] border-white bg-blue-500 shadow-md";
+      el.append(circle, dot);
+      deviceDotRef.current = { marker: new maplibregl.Marker({ element: el }).setLngLat([fix.lng, fix.lat]).addTo(map), circle };
+    } else {
+      deviceDotRef.current.marker.setLngLat([fix.lng, fix.lat]);
+    }
+    sizeAccuracyCircleRef.current();
+    if (centreOnFixRef.current) {
+      centreOnFixRef.current = false;
+      centreOnDevice(fix);
+    }
+  }
+
+  function startWatch() {
+    stopWatchRef.current?.();
+    stopWatchRef.current = watchDeviceLocation("geolocation" in navigator ? navigator.geolocation : undefined, DEVICE_DOT_PRECISION, {
+      onFix: (fix) => {
+        showDeviceFix(fix);
+        setLocate("on");
+      },
+      onProblem: (problem) => {
+        // A dropped fix while one is already shown: keep the last dot.
+        if (problem === "unavailable" && deviceFixRef.current) return;
+        if (problem !== "unavailable") {
+          wantWatchRef.current = false;
+          stopWatchRef.current = null;
+          removeDeviceDot();
+        }
+        setLocate(problem);
+      },
+    });
+  }
+
+  function stopWatch() {
+    stopWatchRef.current?.();
+    stopWatchRef.current = null;
+  }
+
+  function onLocateTap() {
+    const fix = deviceFixRef.current;
+    if (fix && stopWatchRef.current) {
+      centreOnDevice(fix);
+      return;
+    }
+    wantWatchRef.current = true;
+    centreOnFixRef.current = true;
+    setLocate("searching");
+    startWatch();
+  }
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (!wantWatchRef.current) return;
+      if (document.visibilityState === "hidden") stopWatch();
+      else if (!stopWatchRef.current) startWatch();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      wantWatchRef.current = false;
+      stopWatch();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const locateMessage =
+    locate === "denied"
+      ? t(Capacitor.isNativePlatform() ? "courseMap.locateDeniedApp" : "courseMap.locateDeniedWeb")
+      : locate === "unavailable"
+        ? t("courseMap.locateUnavailable")
+        : locate === "unsupported"
+          ? t("courseMap.locateUnsupported")
+          : null;
 
   // One pin per course, rebuilt only when the set of courses changes —
   // never for a selection (that only restyles, below).
@@ -415,6 +550,37 @@ export function CourseMap() {
         )}
         {area && !loading && !error && mapped.length === 0 && (
           <p className="pointer-events-auto rounded-2xl bg-white/95 p-3 text-center text-sm text-slate-500 shadow-md">{t("nearbyCourses.emptyTitle")}</p>
+        )}
+        {locateMessage && (
+          <div role="status" className="pointer-events-auto flex items-start gap-2 rounded-2xl bg-white/95 p-3 shadow-md">
+            <LocateOff size={16} className="mt-0.5 shrink-0 text-slate-400" />
+            <p className="min-w-0 flex-1 text-sm text-slate-600">{locateMessage}</p>
+            <button
+              onClick={() => setLocate("off")}
+              aria-label={t("common.close")}
+              className="-m-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-100"
+            >
+              <X size={15} />
+            </button>
+          </div>
+        )}
+        {!mapFailed && (
+          <div className="flex justify-end">
+            <button
+              onClick={onLocateTap}
+              aria-label={t("courseMap.locate")}
+              aria-pressed={locate === "on"}
+              className={`pointer-events-auto flex h-11 w-11 items-center justify-center rounded-full bg-white/95 shadow-md backdrop-blur transition-colors ${
+                locate === "on" ? "text-blue-500" : "text-slate-600 hover:text-fairway-700"
+              }`}
+            >
+              {locate === "on" ? (
+                <LocateFixed size={19} />
+              ) : (
+                <Locate size={19} className={locate === "searching" ? "animate-pulse motion-reduce:animate-none" : undefined} />
+              )}
+            </button>
+          </div>
         )}
       </div>
 
