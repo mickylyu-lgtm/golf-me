@@ -997,6 +997,8 @@ export const ko: Record<TranslationKey, string> = {
   "golfCallDetail.joinRound": "라운드 참가",
   "golfCallDetail.requestToJoinButton": "참가 요청",
   "golfCallDetail.markCompletedToast": "라운드가 완료 처리되었습니다 — 이제 리뷰를 남길 수 있습니다.",
+  "golfCallDetail.celebrateTitle": "라운드 완료",
+  "golfCallDetail.celebrateBody": "멋진 라운드였어요. 이제 그룹 리뷰를 남길 수 있어요.",
   "golfCallDetail.markCompleted": "라운드 완료 처리",
   "golfCallDetail.markCompletedConfirmTitle": "이 라운드를 완료 처리할까요?",
   "golfCallDetail.markCompletedConfirmMessage": "라운드를 실제로 플레이한 후에만 진행하세요. 되돌릴 수 없으며, 그룹 전원의 리뷰가 열립니다.",

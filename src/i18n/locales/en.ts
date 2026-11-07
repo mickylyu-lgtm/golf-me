@@ -1476,6 +1476,8 @@ export const en = {
   "golfCallDetail.joinRound": "Join Round",
   "golfCallDetail.requestToJoinButton": "Request to Join",
   "golfCallDetail.markCompletedToast": "Round marked completed — you can now leave reviews.",
+  "golfCallDetail.celebrateTitle": "Round complete",
+  "golfCallDetail.celebrateBody": "Nice round. Reviews are open for your group.",
   "golfCallDetail.markCompleted": "Mark Round Completed",
   "golfCallDetail.markCompletedConfirmTitle": "Mark this round completed?",
   "golfCallDetail.markCompletedConfirmMessage": "Only do this once the round has actually been played. It can't be undone, and it opens reviews for everyone in the group.",

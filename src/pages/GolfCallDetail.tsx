@@ -58,6 +58,8 @@ import { goBack } from "../lib/goBack";
 import { findTabPath } from "../lib/findTab";
 import { roundedMiles } from "../lib/geo";
 import { useJoinRound } from "../lib/useJoinRound";
+import { useRoundCelebration } from "../lib/useRoundCelebration";
+import { RoundCompleteCelebration } from "../components/golfcall/RoundCompleteCelebration";
 
 export function GolfCallDetail() {
   const { id } = useParams<{ id: string }>();
@@ -105,6 +107,8 @@ export function GolfCallDetail() {
 
   const call = id ? getGolfCall(id) : undefined;
   const { joining, join: joinRound } = useJoinRound(call);
+  const isMember = Boolean(call && (call.hostId === currentUser.id || call.joinedGolferIds.includes(currentUser.id)));
+  const { celebrating, celebrate, done: celebrationDone } = useRoundCelebration(call, currentUser.id, isMember);
 
   // Every round-page view (it used to be named first_round_viewed, but it
   // never knew whether this was the golfer's first). Dev log only.
@@ -441,7 +445,7 @@ export function GolfCallDetail() {
         <button
           onClick={() => {
             simulateCallCompletion(call.id);
-            showToast(t("golfCallDetail.markCompletedToast"), "info");
+            celebrate();
           }}
           className="self-center text-xs font-medium text-slate-400 underline-offset-2 transition-colors duration-200 hover:text-slate-600 hover:underline"
         >
@@ -554,6 +558,7 @@ export function GolfCallDetail() {
           onCancel={() => setCancelConfirmOpen(false)}
         />
       )}
+      {celebrating && <RoundCompleteCelebration onDone={celebrationDone} />}
       {completeConfirmOpen && (
         <ConfirmDialog
           title={t("golfCallDetail.markCompletedConfirmTitle")}
@@ -562,7 +567,7 @@ export function GolfCallDetail() {
           onConfirm={async () => {
             try {
               await completeGolfCall(call.id);
-              showToast(t("golfCallDetail.markCompletedToast"), "success");
+              celebrate();
             } catch (err) {
               showToast(err instanceof Error ? err.message : t("golfCallDetail.markCompletedError"), "warning");
             } finally {

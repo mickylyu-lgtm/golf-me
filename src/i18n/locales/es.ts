@@ -997,6 +997,8 @@ export const es: Record<TranslationKey, string> = {
   "golfCallDetail.joinRound": "Unirse a la ronda",
   "golfCallDetail.requestToJoinButton": "Solicitar unirse",
   "golfCallDetail.markCompletedToast": "Ronda marcada como completada — ya puedes dejar reseñas.",
+  "golfCallDetail.celebrateTitle": "Ronda completada",
+  "golfCallDetail.celebrateBody": "Buena ronda. Ya puedes dejar reseñas a tu grupo.",
   "golfCallDetail.markCompleted": "Marcar ronda como completada",
   "golfCallDetail.markCompletedConfirmTitle": "¿Marcar esta ronda como completada?",
   "golfCallDetail.markCompletedConfirmMessage": "Hazlo solo cuando la ronda ya se haya jugado. No se puede deshacer y abre las reseñas para todo el grupo.",

@@ -1200,3 +1200,25 @@ html.gm-hold-lock textarea {
     height: 24px;
   }
 }
+
+/* Round-complete card (RoundCompleteCelebration): springs in, holds, fades
+   out just before the component unmounts at 2.8s. Reduced motion: a plain
+   fade, no scale. */
+.gm-round-complete-card {
+  animation: gm-round-card 2.8s cubic-bezier(0.2, 0.9, 0.25, 1.15) both;
+}
+@keyframes gm-round-card {
+  0% { opacity: 0; transform: translateY(14px) scale(0.86); }
+  14% { opacity: 1; transform: translateY(0) scale(1.02); }
+  22% { transform: translateY(0) scale(1); }
+  86% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-6px) scale(0.98); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gm-round-complete-card { animation: gm-round-card-fade 2.8s linear both; }
+  @keyframes gm-round-card-fade {
+    0% { opacity: 0; }
+    10%, 86% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+}

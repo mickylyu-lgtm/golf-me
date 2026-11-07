@@ -997,6 +997,8 @@ export const zhTW: Record<TranslationKey, string> = {
   "golfCallDetail.joinRound": "加入球局",
   "golfCallDetail.requestToJoinButton": "申請加入",
   "golfCallDetail.markCompletedToast": "球局已標記為完成 — 現在可以留下評價了。",
+  "golfCallDetail.celebrateTitle": "球局完成",
+  "golfCallDetail.celebrateBody": "打得漂亮。現在可以為同組球友留下評價了。",
   "golfCallDetail.markCompleted": "標記球局完成",
   "golfCallDetail.markCompletedConfirmTitle": "將此球局標記為完成？",
   "golfCallDetail.markCompletedConfirmMessage": "請僅在球局實際打完後操作。此操作無法復原，並會為全組開啟評價。",

@@ -997,6 +997,8 @@ export const ja: Record<TranslationKey, string> = {
   "golfCallDetail.joinRound": "ラウンドに参加",
   "golfCallDetail.requestToJoinButton": "参加をリクエスト",
   "golfCallDetail.markCompletedToast": "ラウンドを完了にしました — レビューを投稿できます。",
+  "golfCallDetail.celebrateTitle": "ラウンド完了",
+  "golfCallDetail.celebrateBody": "ナイスラウンド。グループのレビューができるようになりました。",
   "golfCallDetail.markCompleted": "ラウンドを完了にする",
   "golfCallDetail.markCompletedConfirmTitle": "このラウンドを完了にしますか？",
   "golfCallDetail.markCompletedConfirmMessage": "実際にラウンドをプレーした後にだけ行ってください。元に戻すことはできず、グループ全員のレビューが開始されます。",
