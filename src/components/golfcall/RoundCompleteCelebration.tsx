@@ -1,5 +1,4 @@
 import { useEffect, useRef } from "react";
-import { Flag } from "lucide-react";
 import { useLocale } from "../../i18n/LocaleContext";
 import { tapHaptic } from "../../lib/tapFeedback";
 import { CONFETTI_MS, confettiAlpha, makeConfetti, stepPiece } from "../../lib/roundCelebration";
@@ -84,12 +83,38 @@ export function RoundCompleteCelebration({ onDone }: { onDone: () => void }) {
         role="status"
         aria-live="polite"
       >
-        <span className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-forest text-brand-gold shadow-inner">
-          <Flag className="h-7 w-7" strokeWidth={2.2} aria-hidden="true" />
-        </span>
+        <HoledOut />
         <span className="mt-4 text-lg font-bold text-slate-900">{t("golfCallDetail.celebrateTitle")}</span>
         <span className="mt-1 text-sm text-slate-500">{t("golfCallDetail.celebrateBody")}</span>
       </button>
     </div>
+  );
+}
+
+// A drawn green with the pin and a ball rolling into the cup: a golf moment,
+// not a stock icon in a circle. The ball rolls in and drops (CSS
+// .gm-holed-ball); with reduced motion it simply sits in the cup.
+function HoledOut() {
+  return (
+    <svg viewBox="0 0 120 84" className="h-20 w-28" aria-hidden="true">
+      <defs>
+        <radialGradient id="gm-green" cx="50%" cy="35%" r="70%">
+          <stop offset="0%" stopColor="#4fae74" />
+          <stop offset="100%" stopColor="#24683f" />
+        </radialGradient>
+        <radialGradient id="gm-ball" cx="38%" cy="35%" r="70%">
+          <stop offset="0%" stopColor="#ffffff" />
+          <stop offset="100%" stopColor="#d9dee3" />
+        </radialGradient>
+      </defs>
+      <ellipse cx="60" cy="66" rx="56" ry="15" fill="url(#gm-green)" />
+      <path d="M12 64 Q60 54 108 64" fill="none" stroke="#ffffff" strokeOpacity="0.12" strokeWidth="5" />
+      <ellipse cx="70" cy="66" rx="8.5" ry="3.2" fill="#0e2717" />
+      <path d="M61.6 65.6 Q70 63.2 78.4 65.6" fill="none" stroke="#ffffff" strokeOpacity="0.35" strokeWidth="0.8" />
+      <line x1="70" y1="65" x2="70" y2="8" stroke="#f4f4f2" strokeWidth="2.2" strokeLinecap="round" />
+      <path className="gm-holed-flag" d="M71 9 Q82 10.5 92 15 Q82 18.5 71 21 Z" fill="#f0b93f" />
+      <ellipse cx="40" cy="69" rx="5" ry="1.4" fill="#0e2717" opacity="0.25" className="gm-holed-shadow" />
+      <circle className="gm-holed-ball" cx="40" cy="64" r="4.6" fill="url(#gm-ball)" stroke="#c8ced4" strokeWidth="0.5" />
+    </svg>
   );
 }

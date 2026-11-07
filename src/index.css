@@ -1222,3 +1222,38 @@ html.gm-hold-lock textarea {
     100% { opacity: 0; }
   }
 }
+
+/* Round-complete illustration: the ball rolls 30px into the cup and drops;
+   the flag lifts once. */
+.gm-holed-ball {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: gm-holed-ball 1.15s cubic-bezier(0.35, 0, 0.25, 1) 0.25s both;
+}
+.gm-holed-shadow {
+  animation: gm-holed-shadow 1.15s cubic-bezier(0.35, 0, 0.25, 1) 0.25s both;
+}
+.gm-holed-flag {
+  transform-box: fill-box;
+  transform-origin: left center;
+  animation: gm-holed-flag 1.4s ease-in-out 0.9s both;
+}
+@keyframes gm-holed-ball {
+  0% { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+  70% { transform: translate(30px, 1px) rotate(260deg); opacity: 1; }
+  100% { transform: translate(30px, 6px) scale(0.55); opacity: 0; }
+}
+@keyframes gm-holed-shadow {
+  0% { transform: translateX(0); opacity: 0.25; }
+  70% { transform: translateX(30px); opacity: 0.25; }
+  100% { transform: translateX(30px); opacity: 0; }
+}
+@keyframes gm-holed-flag {
+  0%, 100% { transform: scaleX(1); }
+  40% { transform: scaleX(0.86) skewY(-3deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gm-holed-ball,
+  .gm-holed-shadow { animation: none; opacity: 0; }
+  .gm-holed-flag { animation: none; }
+}
