@@ -71,8 +71,8 @@
 --    the report is resolved. Objects can't be deleted from SQL
 --    (storage.protect_delete), so the chat-video-retention Edge Function
 --    calls these and removes the objects through the Storage API. It is
---    scheduled daily here if pg_cron is already installed; otherwise
---    chat-video-schedule.sql (scratchpad) enables pg_cron and schedules it.
+--    scheduled daily (04:41 UTC) here with pg_cron, which 20261107240000
+--    already installed in production.
 --    The job authenticates with the existing push_internal_secret (Vault +
 --    PUSH_INTERNAL_SECRET function secret), no new secret.
 --
@@ -1064,13 +1064,20 @@ $$;
 
 revoke execute on function private.request_chat_video_retention() from public, anon, authenticated;
 
+-- Daily at 04:41 UTC (clear of 20261107240000's 04:17 purge and its hourly
+-- :23 sweep). pg_cron is already installed in production by 20261107240000;
+-- "if not exists" keeps a fresh chain (where this file runs first) working.
+-- Idempotent: re-running replaces the job.
+create extension if not exists pg_cron;
+
 do $$
+declare
+  v_job bigint;
 begin
-  if exists (select 1 from pg_extension where extname = 'pg_cron') then
-    perform cron.schedule('chat-video-retention', '23 4 * * *', 'select private.request_chat_video_retention()');
-  else
-    raise notice 'pg_cron is not installed: run chat-video-schedule.sql to schedule the daily chat video retention job.';
-  end if;
+  for v_job in select jobid from cron.job where jobname = 'chat-video-retention' loop
+    perform cron.unschedule(v_job);
+  end loop;
+  perform cron.schedule('chat-video-retention', '41 4 * * *', 'select private.request_chat_video_retention()');
 end;
 $$;
 

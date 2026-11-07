@@ -843,6 +843,7 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
           onPickFiles={canSendRoundImages ? photo.pick : undefined}
           mediaAccept={canSendRoundMedia ? "image/*,video/*" : "image/*"}
           mediaMultiple={canSendRoundMedia}
+          onMediaTooLarge={() => showToast(mediaText.pickError("videoTooLarge"), "warning")}
           photoLabel={canSendRoundMedia ? mediaText.addLabel : t("chat.addPhoto")}
           photoKey={photo.sendKey}
           photoBusy={photo.busy}

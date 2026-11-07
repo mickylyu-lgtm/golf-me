@@ -8,7 +8,8 @@ import { isSendEnter } from "../../lib/isImeComposing";
 import { composerTextareaHeight } from "../../lib/composerAutosize";
 import { createSendGuard } from "../../lib/sendGuard";
 import { draftSendKey } from "../../lib/chatImages";
-import { pickChatMedia } from "../../lib/chatMediaPicker";
+import { pickChatMedia, pickChatMediaFiles } from "../../lib/chatMediaPicker";
+import { MEDIA_MAX_ITEMS, VIDEO_STAGED_MAX_BYTES } from "../../lib/chatMedia";
 
 // Font, line-height and padding shared by the textarea and its hidden
 // measuring mirror: the mirror only measures correctly while these match.
@@ -36,6 +37,8 @@ interface ChatComposerProps {
   onPickFiles?: (files: File[]) => void;
   mediaAccept?: string;
   mediaMultiple?: boolean;
+  /** The native picker refused a video over the staging limit (200 MiB). */
+  onMediaTooLarge?: () => void;
   // Voice messages (lib/chatVoice.ts): passed once the page can send them;
   // the toggle then shows where this browser can record.
   voice?: {
@@ -72,9 +75,11 @@ export function ChatComposer({
   onPickFiles,
   mediaAccept = "image/*",
   mediaMultiple = false,
+  onMediaTooLarge,
   voice,
 }: ChatComposerProps) {
   const pickOne = onPickFiles ? (file: File) => onPickFiles([file]) : onPickImage;
+  const tappedPickRef = useRef<((files: File[]) => void) | null>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [canVoice] = useState(voiceRecordingAvailable);
   const [voiceMode, setVoiceMode] = useState(false);
@@ -232,7 +237,25 @@ export function ChatComposer({
         <>
           <button
             type="button"
-            onClick={() => void pickChatMedia({ openFileInput: () => fileInputRef.current?.click(), onPicked: pickOne })}
+            onClick={() => {
+              const openFileInput = () => fileInputRef.current?.click();
+              if (onPickFiles) {
+                // Photos + videos, several at once: native in 2.5+ builds
+                // (lib/mediaPicker.ts capability check); 2.4 and the web
+                // open the file input below. The handler is the one of
+                // THIS tap (the page binds it to the chat visit), also for
+                // the web input's later change event.
+                tappedPickRef.current = onPickFiles;
+                void pickChatMediaFiles({
+                  kinds: mediaAccept.includes("video") ? ["image", "video"] : ["image"],
+                  limit: mediaMultiple ? MEDIA_MAX_ITEMS : 1,
+                  maxVideoBytes: VIDEO_STAGED_MAX_BYTES,
+                  onTooLarge: onMediaTooLarge,
+                  openFileInput,
+                  onPicked: onPickFiles,
+                });
+              } else void pickChatMedia({ openFileInput, onPicked: pickOne });
+            }}
             aria-label={photoLabel}
             title={photoLabel}
             data-chat-photo-button
@@ -253,7 +276,9 @@ export function ChatComposer({
               // Cleared so picking the same photo again still fires.
               e.target.value = "";
               if (files.length === 0) return;
-              if (onPickFiles) onPickFiles(files);
+              const handler = tappedPickRef.current ?? onPickFiles;
+              tappedPickRef.current = null;
+              if (handler) handler(files);
               else pickOne(files[0]);
             }}
           />

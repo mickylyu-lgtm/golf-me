@@ -1095,6 +1095,7 @@ export function DirectMessageThread() {
                 onPickFiles={canSendDirectImages ? photo.pick : undefined}
                 mediaAccept={canSendDirectMedia ? "image/*,video/*" : "image/*"}
                 mediaMultiple={canSendDirectMedia}
+                onMediaTooLarge={() => showToast(mediaText.pickError("videoTooLarge"), "warning")}
                 photoLabel={canSendDirectMedia ? mediaText.addLabel : t("chat.addPhoto")}
                 photoKey={photo.sendKey}
                 photoBusy={photo.busy}
