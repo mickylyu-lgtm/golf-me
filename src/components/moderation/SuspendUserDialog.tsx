@@ -51,7 +51,7 @@ export function SuspendUserDialog({
     <Modal title={`Suspend ${name}`} onClose={() => !busy && onClose()}>
       <div className="flex flex-col gap-4">
         <p className="text-sm text-slate-600">
-          They can still sign in, read and delete their account, but can't post, comment, like, message, react, host or join rounds. They see a banner
+          They can still sign in, read and delete their account, but can't post, comment, like, message, react, host or join rounds, or change their profile name, bio or photo. They see a banner
           with the end date. Others see nothing different on their profile.
         </p>
         <fieldset className="flex flex-col gap-1.5" disabled={busy}>

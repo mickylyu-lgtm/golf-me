@@ -19,6 +19,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { getApnsJwt, mapLimit, missingApnsConfig, sendApns, tokenFingerprint, type ApnsMessage } from "../_shared/apns.ts";
+import { linkedPostIds, withoutRemovedPosts } from "../_shared/fanoutRemovedPosts.ts";
 
 const TOKEN_CHUNK = 500;
 const APNS_CONCURRENCY = 50;
@@ -38,11 +39,30 @@ type OwedPush = { recipient_id: string; title: string; body: string; link_to: st
 async function processJob(admin: SupabaseClient, jobId: string): Promise<Record<string, unknown>> {
   const { data, error } = await admin.rpc("claim_notification_fanout", { p_job_id: jobId });
   if (error) return { job: jobId.slice(0, 8), outcome: "claim_failed", error: error.message };
-  const owed = (data ?? []) as OwedPush[];
+  let owed = (data ?? []) as OwedPush[];
+
+  // A Community post removed by an admin after this job was claimed: drop
+  // its pushes at send time (fanoutRemovedPosts.ts). The rows are still
+  // marked sent by finish_notification_fanout, so a retry won't resend them.
+  const postIds = linkedPostIds(owed);
+  let droppedRemoved = 0;
+  if (postIds.length > 0) {
+    const { data: posts, error: postError } = await admin.from("community_posts").select("id, removed_at").in("id", postIds);
+    if (postError) console.error("notify-fanout: removed-post check skipped.", postError.message);
+    const filtered = withoutRemovedPosts(owed, postError ? { ok: false } : { ok: true, rows: (posts ?? []) as { id: string; removed_at: string | null }[] });
+    owed = filtered.keep;
+    droppedRemoved = filtered.dropped;
+  }
+
   if (owed.length === 0) {
     // Nothing to push (skipped, already done, or bell-only recipients).
     const { error: finishError } = await admin.rpc("finish_notification_fanout", { p_job_id: jobId });
-    return { job: jobId.slice(0, 8), outcome: finishError ? "finish_failed" : "no_pushes", recipients: 0 };
+    return {
+      job: jobId.slice(0, 8),
+      outcome: finishError ? "finish_failed" : droppedRemoved > 0 ? "post_removed" : "no_pushes",
+      recipients: 0,
+      dropped_removed: droppedRemoved,
+    };
   }
 
   const byUser = new Map(owed.map((p) => [p.recipient_id, p]));
@@ -94,6 +114,7 @@ async function processJob(admin: SupabaseClient, jobId: string): Promise<Record<
     job: jobId.slice(0, 8),
     outcome: finishError ? "finish_failed" : "done",
     recipients: owed.length,
+    dropped_removed: droppedRemoved,
     tokens: messages.length,
     sent,
     failed,

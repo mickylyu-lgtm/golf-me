@@ -41,10 +41,12 @@
 --    objectionable-text filter (private.reject_objectionable_text).
 --    Blocked for a suspended user: posts (and post media, and editing a
 --    post's content), comments, post/comment likes, DMs, round chat messages,
---    DM and round-chat reactions, hosting a round, joining or re-joining one.
+--    DM and round-chat reactions, hosting a round, joining or re-joining one,
+--    and changing their profile name, bio or photo (Micky 2026-11-07: an
+--    impersonator mustn't keep editing the impersonation).
 --    Still allowed: signing in, reading, leaving rounds, unsending, removing
---    a reaction, deleting their own content, blocking, reporting, editing
---    their profile, deleting the account.
+--    a reaction, deleting their own content, blocking, reporting, every other
+--    profile setting/preference, deleting the account.
 --    The trigger only fires for rows the caller writes as themselves (the
 --    row's author/sender/voter/user column = auth.uid()), so a side effect of
 --    an allowed action that writes as someone else (the founder welcome DM)
@@ -66,10 +68,16 @@
 -- Policies changed (re-created with their current definition, `using (true)`
 -- since 20260816143600, plus the removal/hidden filter):
 --   community_posts_select_authenticated, community_comments_select_authenticated.
--- No INSERT/UPDATE/DELETE policy is changed.
+-- No existing INSERT/UPDATE/DELETE policy is changed. Added: two RESTRICTIVE
+-- storage.objects policies (avatars bucket only) so a suspended user can't
+-- replace their avatar file.
+--
+-- Removing a post also closes its Golf Circle fan-out job and takes back
+-- the "new post" bell rows already sent (notify-fanout re-checks removed_at
+-- before each push).
 --
 -- Needs (all applied in production): 20260818040000 (private.has_role,
--- user_roles), 20261107200000 (dynamic notifications_type_check incl.
+-- user_roles), 20261030120000 (private.notification_fanout_jobs), 20261107200000 (dynamic notifications_type_check incl.
 -- post_liked). Independent of the unapplied 20261107150000 /
 -- 20261107220000: the notification types are read from the catalog, and
 -- 20261107150000's own list now includes the two new types.
@@ -248,7 +256,7 @@ begin
     return new;
   end if;
   if private.is_suspended(v_uid) then
-    raise exception 'account_suspended: Your account is suspended, so you can''t post, comment, message, react, host or join rounds right now.'
+    raise exception 'account_suspended: Your account is suspended, so you can''t do that right now.'
       using errcode = 'P0001',
             hint    = 'account_suspended',
             detail  = tg_table_name;
@@ -293,6 +301,42 @@ create trigger reject_suspended_rejoin before update of participant_status on pu
   for each row
   when (new.participant_status = 'joined' and old.participant_status is distinct from 'joined')
   execute function private.reject_suspended_write('user_id');
+-- Profile name, bio and photo (only these columns; language, preferences,
+-- notification switches, location etc. stay editable). Compared old vs new,
+-- so a save that resends the unchanged name with a new setting still works.
+create trigger reject_suspended_profile_edit before update of name, bio, photo_url on public.profiles
+  for each row
+  when (
+    old.id = new.id
+    and (new.name, new.bio, new.photo_url) is distinct from (old.name, old.bio, old.photo_url)
+  )
+  execute function private.reject_suspended_write('id');
+
+-- The avatar FILE too: AvatarUpload upserts the fixed path
+-- avatars/<uid>/avatar.jpg before it saves photo_url, so without this a
+-- suspended user could replace the picture behind an unchanged photo_url.
+-- RESTRICTIVE policies (ANDed with the existing avatar_images_*_own ones,
+-- which stay as they are), limited to the avatars bucket. Deleting stays
+-- allowed. The helper only answers for the caller.
+create function private.caller_is_suspended()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select private.is_suspended((select auth.uid()));
+$$;
+revoke execute on function private.caller_is_suspended() from public, anon;
+grant execute on function private.caller_is_suspended() to authenticated;
+
+create policy avatar_images_insert_not_suspended on storage.objects
+  as restrictive for insert to authenticated
+  with check (bucket_id <> 'avatars' or not (select private.caller_is_suspended()));
+create policy avatar_images_update_not_suspended on storage.objects
+  as restrictive for update to authenticated
+  using (bucket_id <> 'avatars' or not (select private.caller_is_suspended()))
+  with check (bucket_id <> 'avatars' or not (select private.caller_is_suspended()));
 
 -- ---------------------------------------------------------------------------
 -- 3. Audit log
@@ -439,6 +483,18 @@ begin
 
   insert into private.moderation_actions (admin_id, action, target_type, target_id, target_user_id, reason, note)
   values (v_admin, 'remove_post', 'post', p_post_id, v_author, p_reason, v_note);
+
+  -- Golf Circle fan-out for this post (20261030120000): a job not sent yet
+  -- is closed (claim_notification_fanout returns nothing for 'skipped'),
+  -- and bell rows already written are taken back. The job update runs
+  -- first: it waits for a claim in progress, so the delete then also sees
+  -- that claim's rows. A push already in flight is dropped by notify-fanout,
+  -- which re-checks removed_at just before sending.
+  update private.notification_fanout_jobs
+     set status = 'skipped', result = 'post removed', finished_at = now()
+   where kind = 'circle_post' and source_id = p_post_id and status in ('pending', 'processing');
+  delete from public.notifications
+   where type = 'circle_post' and link_to = '/community/' || p_post_id::text;
 
   if v_author <> v_admin then
     select language into v_lang from public.profiles where id = v_author;
@@ -760,7 +816,9 @@ begin
   from private.moderation_actions a
   left join public.profiles ap on ap.id = a.admin_id
   left join public.profiles tp on tp.id = a.target_user_id
-  order by a.created_at desc, a.id desc
+  -- Insertion order (identity), not created_at: two actions in the same
+  -- clock tick must still list in the order they happened.
+  order by a.id desc
   limit least(greatest(coalesce(p_limit, 100), 1), 500);
 end;
 $$;

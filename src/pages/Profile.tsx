@@ -38,6 +38,7 @@ import { useReputationState } from "../lib/useReputationState";
 import { formatHandicapNumber, handicapColorClass } from "../lib/handicapColor";
 import { useRoles } from "../lib/useRoles";
 import { isObjectionableContentError } from "../lib/objectionableContent";
+import { isAccountSuspendedError } from "../lib/moderation";
 
 // Same cap as the profiles_bio_length database check.
 const BIO_MAX_LENGTH = 150;
@@ -157,7 +158,14 @@ export function Profile() {
         bio: form.bio,
       });
     } catch (err) {
-      showToast(isObjectionableContentError(err) ? t("moderation.objectionableContent") : t("profile.saveFailedError"), "warning");
+      showToast(
+        isObjectionableContentError(err)
+          ? t("moderation.objectionableContent")
+          : isAccountSuspendedError(err)
+            ? t("moderation.accountSuspended")
+            : t("profile.saveFailedError"),
+        "warning",
+      );
       return;
     }
     setEditing(false);

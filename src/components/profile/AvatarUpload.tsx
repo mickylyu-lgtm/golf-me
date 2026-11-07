@@ -9,6 +9,8 @@ import { AVATAR_BUCKET, avatarPath, resizeImageToSquareBlob, uploadAvatarBlob } 
 import type { GolferProfile } from "../../types";
 import { FullscreenMediaViewer } from "../community/FullscreenMediaViewer";
 import { largestPhotoUrl } from "../../lib/providerPhoto";
+import { useModeration } from "../../context/ModerationContext";
+import { isAccountSuspendedError } from "../../lib/moderation";
 
 // Client-side only: reads the file, center-crops it to a square, downsizes
 // it, and re-encodes as a JPEG data URL. Keeps localStorage lean without
@@ -61,6 +63,9 @@ export function AvatarUpload({ golfer, onChange, onBusyChange, size = "xl" }: Av
   const [viewerOpen, setViewerOpen] = useState(false);
   const { t } = useLocale();
   const { isDemo, authUser } = useAuth();
+  // A suspended account can't change its photo (enforced in Postgres and
+  // Storage, migration 20261107270000); say so instead of a generic error.
+  const { suspended } = useModeration();
 
   function setBusy(busy: boolean) {
     setLoading(busy);
@@ -83,7 +88,7 @@ export function AvatarUpload({ golfer, onChange, onBusyChange, size = "xl" }: Av
       // data-URL/base64 string into the database.
       photoUrl = !isDemo && authUser ? await uploadAvatarBlob(authUser.id, await resizeImageToSquareBlob(file)) : await resizeImageToSquareDataUrl(file);
     } catch {
-      setError(t("avatarUpload.loadError"));
+      setError(suspended ? t("moderation.accountSuspended") : t("avatarUpload.loadError"));
       setBusy(false);
       return;
     }
@@ -91,7 +96,7 @@ export function AvatarUpload({ golfer, onChange, onBusyChange, size = "xl" }: Av
       await onChange(photoUrl);
     } catch (err) {
       console.error("GolfMe: failed to save the profile photo.", err);
-      setError(t("avatarUpload.saveError"));
+      setError(isAccountSuspendedError(err) || suspended ? t("moderation.accountSuspended") : t("avatarUpload.saveError"));
     } finally {
       setBusy(false);
     }
@@ -108,7 +113,7 @@ export function AvatarUpload({ golfer, onChange, onBusyChange, size = "xl" }: Av
       await onChange(undefined);
     } catch (err) {
       console.error("GolfMe: failed to remove the profile photo.", err);
-      setError(t("avatarUpload.saveError"));
+      setError(isAccountSuspendedError(err) ? t("moderation.accountSuspended") : t("avatarUpload.saveError"));
       setBusy(false);
       return;
     }
