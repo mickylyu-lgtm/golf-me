@@ -3,7 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
 import {
   Activity,
+  Ban,
   Bookmark,
+  EyeOff,
   Loader2,
   MapPin,
   MessageCircle,
@@ -48,6 +50,10 @@ import { barsCoverStyle, readVideoFrame, thumbIsDark, thumbResults, useBlurredBa
 import { barsDebugEnabled, buildTag } from "../../lib/barsDebug";
 import { courseFindRoundsSearch } from "../../lib/roundSearchParams";
 import { useLocale } from "../../i18n/LocaleContext";
+import { useModeration } from "../../context/ModerationContext";
+import { useRealCommunity } from "../../context/RealCommunityContext";
+import { RemoveContentDialog } from "../moderation/RemoveContentDialog";
+import { SuspendUserDialog } from "../moderation/SuspendUserDialog";
 
 // A touch that moves further than this between press and release is a
 // scroll or swipe, never a tap: it must not open the post or the video.
@@ -102,6 +108,11 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
   const [reportOpen, setReportOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
+  // Admin tools (migration 20261107270000; hidden until it's applied).
+  const moderation = useModeration();
+  const realCommunity = useRealCommunity();
+  const [removeOpen, setRemoveOpen] = useState(false);
+  const [suspendOpen, setSuspendOpen] = useState(false);
   const [mediaLightboxIndex, setMediaLightboxIndex] = useState<number | null>(null);
   const [feedMuted, setFeedMuted] = useState(true);
   const [askingCaddie, setAskingCaddie] = useState(false);
@@ -306,6 +317,8 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
   const saved = isPostSaved(post.id);
   const commentCount = commentsForPost(post.id).length;
   const isOwn = post.authorId === currentUser.id;
+  // Pending (optimistic) posts have no server row yet.
+  const canModerate = moderation.available && moderation.isAdmin && !isOwn && !post.id.startsWith("pending-");
   const call = post.golfCallId ? getGolfCall(post.golfCallId) : undefined;
 
   function goToDetail(e: React.MouseEvent) {
@@ -479,6 +492,30 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
                   >
                     <ShieldX size={15} /> Block {author.name.split(" ")[0]}
                   </button>
+                  {canModerate && (
+                    <>
+                      <div className="my-1 border-t border-slate-100" role="separator" />
+                      <p className="px-3 pb-0.5 pt-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Admin</p>
+                      <button
+                        onClick={() => {
+                          setMenuOpen(false);
+                          setRemoveOpen(true);
+                        }}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+                      >
+                        <EyeOff size={15} /> Remove post
+                      </button>
+                      <button
+                        onClick={() => {
+                          setMenuOpen(false);
+                          setSuspendOpen(true);
+                        }}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+                      >
+                        <Ban size={15} /> Suspend {author.name.split(" ")[0]}
+                      </button>
+                    </>
+                  )}
                 </>
               )}
             </div>
@@ -748,6 +785,40 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
               showToast(`Blocked ${author.name}.`, "info");
             }}
             onCancel={() => setBlockConfirmOpen(false)}
+          />
+        </div>
+      )}
+
+      {removeOpen && (
+        <div onClick={stop}>
+          <RemoveContentDialog
+            kind="post"
+            id={post.id}
+            authorName={author.name}
+            onClose={() => setRemoveOpen(false)}
+            onRemoved={() => {
+              setRemoveOpen(false);
+              showToast("Post removed for everyone.", "info");
+              // Realtime may not deliver an update the admin can no longer
+              // select, so refresh the feed directly.
+              void realCommunity.retry();
+              if (!linkToDetail) navigate("/community", { replace: true });
+            }}
+          />
+        </div>
+      )}
+
+      {suspendOpen && (
+        <div onClick={stop}>
+          <SuspendUserDialog
+            userId={author.id}
+            name={author.name}
+            onClose={() => setSuspendOpen(false)}
+            onSuspended={() => {
+              setSuspendOpen(false);
+              showToast(`${author.name} is suspended.`, "info");
+              void realCommunity.retry();
+            }}
           />
         </div>
       )}

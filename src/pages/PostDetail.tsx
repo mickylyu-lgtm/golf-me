@@ -14,6 +14,7 @@ import { CommentItem } from "../components/community/CommentItem";
 import { CoachReviewSection } from "../components/community/CoachReviewSection";
 import { loadChatDraft, postCommentDraftKey, saveChatDraft } from "../lib/chatDraft";
 import { isObjectionableContentError } from "../lib/objectionableContent";
+import { isAccountSuspendedError } from "../lib/moderation";
 import { useKeyboardHeight } from "../lib/useKeyboardHeight";
 import { useComposerFocus } from "../lib/useComposerFocus";
 import { focusMovedToOtherField } from "../lib/composerFocus";
@@ -155,9 +156,11 @@ export function PostDetail() {
       showToast(
         isObjectionableContentError(err)
           ? t("moderation.objectionableContent")
-          : err instanceof Error
-            ? err.message
-            : "Couldn't post your comment. Please try again.",
+          : isAccountSuspendedError(err)
+            ? t("moderation.accountSuspended")
+            : err instanceof Error
+              ? err.message
+              : "Couldn't post your comment. Please try again.",
         "warning",
       );
     } finally {

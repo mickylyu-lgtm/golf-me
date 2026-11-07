@@ -111,7 +111,7 @@ export function withLocallyRead<T extends InboxNotification>(list: readonly T[],
 }
 
 // Never a person, even if a row carries an actor id.
-const SYSTEM_TYPES: ReadonlySet<string> = new Set(["caddie_analysis_complete"]);
+const SYSTEM_TYPES: ReadonlySet<string> = new Set(["caddie_analysis_complete", "post_removed", "comment_removed"]);
 
 export type NotificationActor<P> =
   /** A person's avatar. `showPhoto` false: initials only (blocked either way). */

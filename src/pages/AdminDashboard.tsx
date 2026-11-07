@@ -10,6 +10,10 @@ import { Avatar } from "../components/ui/Avatar";
 import { Badge } from "../components/ui/Badge";
 import { EmptyState } from "../components/ui/EmptyState";
 import { BookingEvidenceReview } from "../components/admin/BookingEvidenceReview";
+import { ModerationPanel } from "../components/admin/ModerationPanel";
+import { useModerationAdminData } from "../lib/useModerationAdminData";
+import { RemoveContentDialog } from "../components/moderation/RemoveContentDialog";
+import { SuspendUserDialog } from "../components/moderation/SuspendUserDialog";
 
 // Internal admin tool only — same access model as AdminReviewers.tsx
 // (hidden from nav, gated on isAdmin client-side, re-verified server-side
@@ -305,6 +309,11 @@ export function AdminDashboard() {
   const [retryingReports, setRetryingReports] = useState(false);
   const [updatingReportId, setUpdatingReportId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // Moderation (migration 20261107270000; everything below stays hidden
+  // until it's applied).
+  const moderationData = useModerationAdminData();
+  const [removeTarget, setRemoveTarget] = useState<{ kind: "post" | "comment"; id: string; authorName: string; reportId: string } | null>(null);
+  const [suspendTarget, setSuspendTarget] = useState<{ userId: string; name: string; reportId: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -525,6 +534,47 @@ export function AdminDashboard() {
                       {r.reported_comment_id ? "Open the post this comment is on" : "Open reported post"}
                     </Link>
                   )}
+                  {moderationData.enabled && (r.reported_post_id || r.reported_comment_id || r.reported_user_id) && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {r.reported_comment_id ? (
+                        moderationData.isRemoved(r.reported_comment_id) ? (
+                          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-500">Comment removed</span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setRemoveTarget({ kind: "comment", id: r.reported_comment_id ?? "", authorName: r.reported_name ?? "the author", reportId: r.id })}
+                            className="rounded-full border border-red-200 bg-white px-2.5 py-1 text-xs font-semibold text-red-600"
+                          >
+                            Remove comment
+                          </button>
+                        )
+                      ) : r.reported_post_id ? (
+                        moderationData.isRemoved(r.reported_post_id) ? (
+                          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-500">Post removed</span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setRemoveTarget({ kind: "post", id: r.reported_post_id ?? "", authorName: r.reported_name ?? "the author", reportId: r.id })}
+                            className="rounded-full border border-red-200 bg-white px-2.5 py-1 text-xs font-semibold text-red-600"
+                          >
+                            Remove post
+                          </button>
+                        )
+                      ) : null}
+                      {r.reported_user_id &&
+                        (moderationData.isSuspended(r.reported_user_id) ? (
+                          <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">Suspended</span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setSuspendTarget({ userId: r.reported_user_id ?? "", name: r.reported_name ?? "this user", reportId: r.id })}
+                            className="rounded-full border border-red-200 bg-white px-2.5 py-1 text-xs font-semibold text-red-600"
+                          >
+                            Suspend {(r.reported_name ?? "user").split(" ")[0]}
+                          </button>
+                        ))}
+                    </div>
+                  )}
                   <div className="flex flex-wrap gap-1.5">
                     {REPORT_ACTIONS.map((a) => (
                       <button
@@ -544,6 +594,36 @@ export function AdminDashboard() {
           </div>
         )}
       </section>
+
+      <ModerationPanel data={moderationData} />
+
+      {removeTarget && (
+        <RemoveContentDialog
+          kind={removeTarget.kind}
+          id={removeTarget.id}
+          authorName={removeTarget.authorName}
+          onClose={() => setRemoveTarget(null)}
+          onRemoved={() => {
+            const reportId = removeTarget.reportId;
+            setRemoveTarget(null);
+            void moderationData.reload();
+            void setReportStatus(reportId, "actioned");
+          }}
+        />
+      )}
+      {suspendTarget && (
+        <SuspendUserDialog
+          userId={suspendTarget.userId}
+          name={suspendTarget.name}
+          onClose={() => setSuspendTarget(null)}
+          onSuspended={() => {
+            const reportId = suspendTarget.reportId;
+            setSuspendTarget(null);
+            void moderationData.reload();
+            void setReportStatus(reportId, "actioned");
+          }}
+        />
+      )}
 
       <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between">

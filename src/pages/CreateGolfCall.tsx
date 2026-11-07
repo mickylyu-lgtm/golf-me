@@ -32,6 +32,7 @@ import { clearHostRoundDraft, loadHostRoundDraft, saveHostRoundDraft } from "../
 import type { LookingFor, WhenChoice } from "../lib/hostRoundDraft";
 import { parseHostPrefill } from "../lib/hostPrefill";
 import { isObjectionableContentError } from "../lib/objectionableContent";
+import { isAccountSuspendedError } from "../lib/moderation";
 import { tapHaptic } from "../lib/tapFeedback";
 
 const BOOKING_SOURCES = ["Course Website", "GolfNow", "Lightspeed / Chronogolf", "Phone Reservation", "Other"] as const;
@@ -443,9 +444,11 @@ export function CreateGolfCall() {
       showToast(
         isObjectionableContentError(err)
           ? t("moderation.objectionableContent")
-          : err instanceof Error
-            ? err.message
-            : t("host.postError"),
+          : isAccountSuspendedError(err)
+            ? t("moderation.accountSuspended")
+            : err instanceof Error
+              ? err.message
+              : t("host.postError"),
         "warning",
       );
     }

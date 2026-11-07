@@ -22,6 +22,7 @@ import { clearCommunityPostDraft, loadCommunityPostDraft, saveCommunityPostDraft
 import { copyCaddieMediaToCommunity, removeCommunityMediaCreatedForFailedPost, signCaddieMediaPath } from "../lib/caddieMedia";
 import type { DraftMediaItem } from "../lib/communityPostDraft";
 import { isObjectionableContentError } from "../lib/objectionableContent";
+import { isAccountSuspendedError } from "../lib/moderation";
 import { goBack } from "../lib/goBack";
 import { tapHaptic } from "../lib/tapFeedback";
 import { isInMemoryPick, pickMedia, pickMediaFiles } from "../lib/mediaPicker";
@@ -560,6 +561,8 @@ export function CreatePost() {
       showToast(
         isObjectionableContentError(err)
           ? t("moderation.objectionableContent")
+          : isAccountSuspendedError(err)
+            ? t("moderation.accountSuspended")
           : err instanceof PostMediaCapError
             ? `A post can have up to ${MAX_POST_MEDIA_ITEMS} photos/videos. Remove some and try again.`
             : err instanceof Error

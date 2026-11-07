@@ -16,6 +16,7 @@ import {
   TriangleAlert,
   FileCheck2,
   ThumbsUp,
+  EyeOff,
 } from "lucide-react";
 import type { AppNotification, GolferProfile, NotificationType } from "../../types";
 import { Avatar } from "../ui/Avatar";
@@ -50,6 +51,9 @@ const ICONS: Record<NotificationType, NotificationIconComponent> = {
   booking_evidence_reviewed: FileCheck2,
   // Same glyph as the post's like button.
   post_liked: ThumbsUp,
+  // Migration 20261107270000: an admin removed your post / comment.
+  post_removed: EyeOff,
+  comment_removed: EyeOff,
 };
 
 const BADGE_CLASSES: Record<NotificationBadgeKind, string> = {

@@ -1,6 +1,10 @@
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { MoreHorizontal, ShieldAlert, ShieldCheck, ShieldX, ThumbsUp, Trash2 } from "lucide-react";
+import { EyeOff, MoreHorizontal, ShieldAlert, ShieldCheck, ShieldX, ThumbsUp, Trash2 } from "lucide-react";
+import { useModeration } from "../../context/ModerationContext";
+import { useRealCommunity } from "../../context/RealCommunityContext";
+import { RemoveContentDialog } from "../moderation/RemoveContentDialog";
+import { isAccountSuspendedError } from "../../lib/moderation";
 import type { PostComment } from "../../types";
 import { useData } from "../../context/DataContext";
 import { useToast } from "../../context/ToastContext";
@@ -33,6 +37,10 @@ export function CommentItem({ comment, postId, replies }: CommentItemProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
+  // Admin tools (migration 20261107270000; hidden until it's applied).
+  const moderation = useModeration();
+  const realCommunity = useRealCommunity();
+  const [removeOpen, setRemoveOpen] = useState(false);
   // In-flight guard: a fast double tap / double Enter must post once. A ref,
   // not only state, so a second press before the re-render is refused too.
   const sendingRef = useRef(false);
@@ -42,6 +50,7 @@ export function CommentItem({ comment, postId, replies }: CommentItemProps) {
   if (!author || isBlocked(comment.authorId)) return null;
 
   const isOwn = comment.authorId === currentUser.id;
+  const canModerate = moderation.available && moderation.isAdmin && !isOwn;
   const upvoted = isCommentUpvoted(comment.id);
   const isReply = Boolean(comment.parentCommentId);
 
@@ -66,7 +75,9 @@ export function CommentItem({ comment, postId, replies }: CommentItemProps) {
       showToast(
         isObjectionableContentError(err)
           ? t("moderation.objectionableContent")
-          : err instanceof Error
+          : isAccountSuspendedError(err)
+            ? t("moderation.accountSuspended")
+            : err instanceof Error
             ? err.message
             : "Couldn't post your reply. Please try again.",
         "warning",
@@ -144,6 +155,17 @@ export function CommentItem({ comment, postId, replies }: CommentItemProps) {
                       >
                         <ShieldX size={13} /> Block
                       </button>
+                      {canModerate && (
+                        <button
+                          onClick={() => {
+                            setMenuOpen(false);
+                            setRemoveOpen(true);
+                          }}
+                          className="flex w-full items-center gap-2 border-t border-slate-100 px-3 py-2 text-left text-xs text-red-600 hover:bg-red-50"
+                        >
+                          <EyeOff size={13} /> Remove (admin)
+                        </button>
+                      )}
                     </>
                   )}
                 </div>
@@ -183,6 +205,20 @@ export function CommentItem({ comment, postId, replies }: CommentItemProps) {
 
       {reportOpen && (
         <ReportModal reportedId={author.id} reportedName={author.name} context="comment" commentId={comment.id} onClose={() => setReportOpen(false)} />
+      )}
+
+      {removeOpen && (
+        <RemoveContentDialog
+          kind="comment"
+          id={comment.id}
+          authorName={author.name}
+          onClose={() => setRemoveOpen(false)}
+          onRemoved={() => {
+            setRemoveOpen(false);
+            showToast("Comment removed for everyone.", "info");
+            void realCommunity.retry();
+          }}
+        />
       )}
 
       {blockConfirmOpen && (

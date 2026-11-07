@@ -749,7 +749,11 @@ export type NotificationType =
   | "booking_evidence_reviewed"
   // Migration 20261107200000: someone liked your post (once per liker per
   // post, ever; not across a block).
-  | "post_liked";
+  | "post_liked"
+  // Migration 20261107270000: an admin removed your post / comment (no
+  // actor; links to the community guidelines).
+  | "post_removed"
+  | "comment_removed";
 
 export interface AppNotification {
   id: string;

@@ -8,6 +8,7 @@ import { NotificationPopupHost } from "../notifications/NotificationPopupHost";
 import { NotificationRouteClearer } from "../notifications/NotificationRouteClearer";
 import { FoundingRevealHost } from "../golfer/FoundingRevealHost";
 import { CaddieDoneHaptic } from "../caddie/CaddieDoneHaptic";
+import { SuspensionBanner } from "../moderation/SuspensionBanner";
 import { MOBILE_NAV_ITEMS } from "../../lib/nav";
 import { useChatRouteMotion } from "../../lib/useChatRouteMotion";
 
@@ -34,6 +35,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="flex min-h-screen flex-col sm:pl-20 lg:pl-60">
         <TopBar />
         <main className="flex flex-1 flex-col pb-24 sm:pb-10">
+          <SuspensionBanner />
           {/* flex-1 on both this wrapper and, for root tabs, on
               RootTabCarousel's own root — lets the swipe-detection region
               fill any leftover viewport space below a short tab's actual
