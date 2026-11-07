@@ -6,23 +6,25 @@ Last updated: 2026-11-06 (see "Handoff 2026-11-06" just below for the exact next
 
 Note: Phases between Phase 20/21 (see below) and Phase 22 span roughly 31 commits (2026-09-16 through 2026-09-21) that also never got a numbered write-up as they landed — Phase 22 below reconstructs them from `git log`/code review (that session's own commit messages are unusually detailed, so this is a faithful summary, not a guess) rather than live session narration. Older gap, still not backfilled: Phases between Phase 6 and Phase 20 (chat keyboard/Capacitor Keyboard native linking, floating swipeable BottomNav + auto-collapse + centering fixes, tee-time booking fallback hero image, and everything else through 2026-09-15) — see `git log` for that range (commits from "Prefer GolfCourseAPI v1.1 coordinates..." through "Floating pill bottom nav with press-and-slide tab selection, haptics, Caddie unify").
 
-## Handoff 2026-11-06 (end of a long laptop session; read this first)
+## Handoff 2026-11-07 (read this first)
 
 **Live on golfme.app today:** TestFlight 2.4 (1) code (one-tap photo picker, native appearance; build uploaded by Micky); course overview speed + layout fix (migration `20261107190000` applied, course-photos redeployed); plain icons instead of Sparkles, "[Photo]"/"[Voice message]" labels (no emojis in UI copy, Micky's rule); voice messages + lifecycle fix (migration `20261107180000` applied); keyboard icon no longer auto-focuses; Caddie done-haptic; Caddie filming tips + clearer pose_not_found + full-res retry + diagnostics (analyze-swing redeployed); photo pinch-zoom + own-avatar viewer; like notifications + comment pushes (migration `20261107200000` applied).
 
 **Caddie failure finding (Nov 4–6):** all failures were `pose_not_found` with 0 usable frames, from 2 golfers; one later succeeded with another clip. Not Gemini, not HEVC/rotation/trim (ruled out with synthetic fixtures). Likely content (no full body visible). Watch `pose_fullres_retry_result` and `private.caddie_job_diagnostics` (query Q6 in the session scratchpad `caddie-pose-diagnose.sql`) to see if the full-res retry rescues anything.
 
-**Not shipped yet (exact next actions):**
-- In progress (local worktrees, not shipped): chat video messages (60 s, server transcode, 180-day retention, one picker), native one-tap video picker for build 2.5, Caddie saved swings. Smooth keyboard motion is built and committed locally on `feat/keyboard-motion` (see its section below; not pushed or deployed). Club picker with vector art, scan fixes and the video can't-play overlay are LIVE (main).
-- Caddie club picker "required" UX (see its section): SHIPPED 2026-11-06; Micky reviews scratchpad `club-required-ux/` screenshots, then ship (client only).
-- Booking stage 2/3 migration `20261107150000` still NOT applied (client dormant). It now also lists `post_liked`.
-- iOS 2.5 (1) one-tap video + multi-select picker (see its section below): local commit, not pushed; web part is safe on 2.4 (falls back), the native part needs an Xcode build + iPhone check.
-- Photo-with-caption push text "📷 " prefix: fixed in `20261107220000` ("[Photo] <caption>"), applies with the chat video migration.
-- **Chat video + albums** (golfme-architect; Micky "ship video"; migration `20261107220000` NOT applied yet): see its section below for the deploy order.
-- Privacy Policy update + the server jobs that make it true (LIVE 2026-11-06: migration 20261107240000 APPLIED by Micky, check true; chat-media-sweep + course-photos deployed; branch `privacy-promises`, local commits, golfme-architect; LAUNCH_CHECKLIST 10a.6): migration `20261107240000_privacy_retention_jobs` (NOT APPLIED; enables pg_cron: daily purge of unsent-text copies after 90 days unless an open report holds them; hourly `chat-media-sweep` Edge Function removes chat-media files no message row points at, older than 24 h), `course-photos` without maps.mail.ru, Gemini wording "we ask Google to delete it", Verified Golfer paragraph (matches `20261107230000`, separate branch). Deploy order: `chat-media-sweep --no-verify-jwt` → scratchpad `privacy-purge-apply.sql` (check → true) → `course-photos` → web. PGlite 47/47.
-- Caddie Saved swings (local commit, see its section): Micky reviews scratchpad `caddie-saved/` screenshots; client can ship before migration `20261107210000` (Save hidden until applied).
-- Verified Golfer badge, server-derived (phone dropped): migration `20261107230000_verified_golfer_derived` PREPARED, NOT APPLIED; client ships dormant until it is (see its section below).
-- Voice message privacy fix SHIPPED 2026-11-06 (see "Voice message privacy" below); two-account checklist PENDING; client only. Follow-ups (named "not sent" toast + migration `20261107250000_reply_trigger_authz_first`, NOT APPLIED) are a local commit on `fix/voice-toast-reply-scope`: scratchpad `reply-scope-check.sql` (expect false) → `reply-scope-apply.sql` → check (expect true). Client and migration are independent.
+**State at 2026-11-07 ~04:30 UTC (main 1b4fca5, deployed):** everything below is LIVE in the app unless it says otherwise. Database status:
+- APPLIED by Micky with check true: `20261107180000` chat voice, `20261107190000` course imagery detail, `20261107200000` likes/comment pushes, `20261107210000` saved swings, `20261107230000` Verified Golfer derived, `20261107240000` privacy retention jobs (pg_cron now enabled).
+- NOT applied yet:
+  - `20261107150000` booking stage 2/3 (client dormant; now also lists `post_liked`).
+  - `20261107220000` chat video + albums. BLOCKED: `api/chat-video` answers `not_configured` in production, so Micky must check Vercel Production env `SUPABASE_URL` = `https://adokdenbmpshqgjbzshb.supabase.co` and `SUPABASE_ANON_KEY`. Then redeploy and re-test `POST /api/chat-video`, which should return 401 without a token. Also confirm the Supabase Storage global upload limit is at least 200 MB. Only then apply `chat-video-apply.sql`, then deploy `delete-account` and `chat-video-retention --no-verify-jwt`.
+  - `20261107250000` reply trigger authz-first (safe anytime; paste files sent).
+  - `20261107260000` Community 10-media cap (Micky runs `community-cap-precheck.sql` first).
+
+**Not shipped / in progress (exact next actions):**
+- iOS 2.5 (1) build: the native one-tap video + multi-select picker code is on main (web part safe on 2.4); it needs `npx cap sync ios` plus an Xcode archive on the Mac.
+- Chat navigation + keyboard motion (golfme-architect, frozen area; Micky's WeChat reference recording is in `.claude/inbox/`): local worktree, plan first.
+- Reminder for Micky: the shared-deps Review Gate fix (memory `pending-shared-deps`) and removing the bare `Edit`/`Write` allow rules.
+- Marketing images batch 1 (Higgsfield, scratchpad `marketing-v1/`): waiting for Micky's picks.
 
 **Open questions for Micky:** (chat video plan answered "yes for all": 60 s, own-server transcode, 180-day retention, one picker); save a large avatar copy for the zoom viewer (stored avatars are 320 px); hide "Share to Community" on a FAILED Caddie analysis; "AI-generated preview" pill wording on course videos.
 
