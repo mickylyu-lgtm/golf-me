@@ -887,6 +887,29 @@ body {
   background-image: radial-gradient(circle at 15% 0%, rgba(55, 129, 79, 0.06), transparent 45%);
 }
 
+/* App feel on phones (Micky, 2026-11-07): pressing on a label or row must
+   not start a text selection or the iOS Copy / Look Up callout. Text you type
+   (inputs, textareas, editable fields) stays selectable, and an element can
+   opt back in with Tailwind's `select-text`. Desktop mice keep normal
+   selection. Copying a message stays available through the hold menu. */
+@media (pointer: coarse) {
+  body,
+  body * {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+  body input,
+  body textarea,
+  body [contenteditable="true"],
+  body .select-text,
+  body .select-text * {
+    -webkit-user-select: text;
+    user-select: text;
+    -webkit-touch-callout: default;
+  }
+}
+
 * {
   scrollbar-width: thin;
   scrollbar-color: theme(colors.fairway.200) transparent;
