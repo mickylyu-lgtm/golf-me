@@ -63,6 +63,20 @@ export function createVideoSelectionGate(): VideoSelectionGate {
   };
 }
 
+/**
+ * Why a picked file can't be used at all, checked before anything is read:
+ * not a video (a native pick that couldn't be read arrives as an empty
+ * untyped file, lib/mediaPicker.ts unreadablePickFile), an empty file, or
+ * over the size cap. Null if it's worth preparing. Such a pick still
+ * supersedes an older one (Micky, 2026-11-06: the newest selection wins,
+ * even an invalid one; the older pick is never silently restored).
+ */
+export function videoPickRejection(file: { type: string; size: number }, maxBytes: number): "unsupported" | "too_large" | null {
+  if (!file.type.startsWith("video/") || file.size === 0) return "unsupported";
+  if (file.size > maxBytes) return "too_large";
+  return null;
+}
+
 export type VideoSelectionOutcome<F> =
   // A newer pick, Remove or leaving the page won: do nothing at all (no
   // draft, no selector, no toast, no loading change).

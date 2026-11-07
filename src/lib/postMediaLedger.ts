@@ -158,6 +158,26 @@ export async function uploadIntoSlots<F, T extends { id: string }>(opts: {
   }
 }
 
+/**
+ * The database's own 10-per-post backstop refused the media (migration
+ * 20261107260000_community_post_media_cap: SQLSTATE 23514, hint
+ * 'community_post_media_cap'). Only an older or modified client should
+ * ever hit it.
+ */
+export function isPostMediaCapError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const e = err as { code?: unknown; hint?: unknown };
+  return e.code === "23514" && e.hint === "community_post_media_cap";
+}
+
+/** Thrown by createPost when the server refused the media; the post was taken back down. */
+export class PostMediaCapError extends Error {
+  constructor() {
+    super("community_post_media_cap");
+    this.name = "PostMediaCapError";
+  }
+}
+
 /** Inserts `item` into `items` by pick order (`seqOf`), so a later pick finishing first doesn't jump ahead. */
 export function insertBySeq<T extends { id: string }>(items: readonly T[], item: T, seqOf: (id: string) => number): T[] {
   if (items.some((m) => m.id === item.id)) return [...items];

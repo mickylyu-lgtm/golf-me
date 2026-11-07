@@ -25,7 +25,7 @@ import { isObjectionableContentError } from "../lib/objectionableContent";
 import { goBack } from "../lib/goBack";
 import { tapHaptic } from "../lib/tapFeedback";
 import { isInMemoryPick, pickMedia, pickMediaFiles } from "../lib/mediaPicker";
-import { createPostMediaLedger, insertBySeq, uploadIntoSlots } from "../lib/postMediaLedger";
+import { PostMediaCapError, createPostMediaLedger, insertBySeq, uploadIntoSlots } from "../lib/postMediaLedger";
 
 type Attachment = "none" | "photo" | "course" | "round" | "swing";
 
@@ -560,7 +560,9 @@ export function CreatePost() {
       showToast(
         isObjectionableContentError(err)
           ? t("moderation.objectionableContent")
-          : err instanceof Error
+          : err instanceof PostMediaCapError
+            ? `A post can have up to ${MAX_POST_MEDIA_ITEMS} photos/videos. Remove some and try again.`
+            : err instanceof Error
             ? err.message
             : "Couldn't publish your post. Please try again.",
         "warning",

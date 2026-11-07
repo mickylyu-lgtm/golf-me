@@ -6,6 +6,7 @@ import { privatizeAnalysesOfPost } from "../lib/caddieMedia";
 import { useAuth } from "./AuthContext";
 import { fetchPublicProfiles } from "../lib/publicProfilesFetch";
 import { INITIAL_LOAD_STATUS, applyLoadOutcome, isFirstLoadError, isRefreshError } from "../lib/loadStatus";
+import { PostMediaCapError, isPostMediaCapError } from "../lib/postMediaLedger";
 import type { CommunityPost, PostComment, GolferProfile, PostMediaItem, PostType, PostCategory, SwingAnalysisStatus } from "../types";
 
 const COMMUNITY_MEDIA_BUCKET = "community-media";
@@ -354,11 +355,22 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
             })),
           )
           .select();
-        // The post itself is already live at this point — a media-insert
-        // failure must never look like the whole post failed to publish.
-        // Falls back to the optimistic pendingMedia rows (still keyed to
-        // the old pending.id) via the reconciliation effect below, same as
-        // any other refetch-driven cleanup.
+        // The server's 10-per-post cap refused the media (the app caps at
+        // 10 too, so only an older/modified client gets here): take the
+        // just-created post back down rather than leave it live without
+        // its photos, and let the composer say why (draft kept).
+        if (mediaError && isPostMediaCapError(mediaError)) {
+          const { error: undoError } = await supabase.from("community_posts").delete().eq("id", newPost.id);
+          if (undoError) console.error("GolfMe: couldn't remove a post whose media was refused.", undoError);
+          setPendingPosts((prev) => prev.filter((p) => p.id !== pending.id));
+          setMediaRows((prev) => prev.filter((m) => m.post_id !== pending.id));
+          throw new PostMediaCapError();
+        }
+        // The post itself is already live at this point — any other
+        // media-insert failure must never look like the whole post failed
+        // to publish. Falls back to the optimistic pendingMedia rows (still
+        // keyed to the old pending.id) via the reconciliation effect below,
+        // same as any other refetch-driven cleanup.
         if (mediaError) console.error("GolfMe: failed to attach post media.", mediaError);
         else insertedMedia = (mediaData ?? []) as MediaRow[];
       }

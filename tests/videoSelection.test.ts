@@ -7,9 +7,10 @@
 // is pending, then set the draft or open the trim selector.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createVideoSelectionGate, prepareVideoSelection } from "../src/lib/videoSelection.ts";
+import { createVideoSelectionGate, prepareVideoSelection, videoPickRejection } from "../src/lib/videoSelection.ts";
 
 const MAX_SECONDS = 15;
+const MAX_BYTES = 200 * 1024 * 1024;
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -40,9 +41,17 @@ function page() {
     preparing: false,
     created: [] as string[],
     errors: [] as string[],
+    toasts: [] as string[],
   };
-  async function pick(name: string) {
+  async function pick(name: string, meta: { type: string; size: number } = { type: "video/quicktime", size: 1000 }) {
     const token = gate.begin();
+    const rejection = videoPickRejection(meta, MAX_BYTES);
+    if (rejection) {
+      gate.end(token);
+      state.preparing = false;
+      state.toasts.push(rejection === "too_large" ? "caddie.videoTooLarge" : "caddie.unsupportedVideo");
+      return;
+    }
     state.preparing = true;
     const outcome = await prepareVideoSelection<Clip>({
       gate,
@@ -262,4 +271,46 @@ test("a stale pick skips its in-memory copy entirely", async () => {
   d.resolve(5);
   assert.deepEqual(await run, { kind: "stale" });
   assert.equal(copies, 0);
+});
+
+// Micky, 2026-11-06: the newest selection wins even when it's invalid; a
+// clear error, and the older pick is never silently restored.
+for (const [label, meta, toast] of [
+  ["wrong type", { type: "image/jpeg", size: 1000 }, "caddie.unsupportedVideo"],
+  ["unreadable native pick (empty, untyped)", { type: "application/octet-stream", size: 0 }, "caddie.unsupportedVideo"],
+  ["empty video file", { type: "video/mp4", size: 0 }, "caddie.unsupportedVideo"],
+  ["too large", { type: "video/mp4", size: MAX_BYTES + 1 }, "caddie.videoTooLarge"],
+] as const) {
+  test(`a newer invalid pick (${label}) wins: its error shows and A's late result does nothing`, async () => {
+    const p = page();
+    const a = p.pick("a");
+    assert.equal(p.state.preparing, true);
+    await p.pick("bad", meta);
+    assert.deepEqual(p.state.toasts, [toast]);
+    assert.equal(p.state.preparing, false, "A's spinner is gone with A");
+    await p.ready("a");
+    await a;
+    assert.equal(p.state.draft, undefined, "A is not restored");
+    assert.equal(p.state.trim, undefined);
+    assert.deepEqual(p.state.created, [], "no preview URL for A");
+    assert.equal(p.state.preparing, false);
+    assert.deepEqual(p.state.toasts, [toast], "no second message");
+  });
+}
+
+test("an invalid pick, then a valid one: the valid one lands", async () => {
+  const p = page();
+  await p.pick("bad", { type: "text/plain", size: 10 });
+  const b = p.pick("b");
+  await p.ready("b");
+  await b;
+  assert.equal(p.state.draft?.file.name, "b");
+  assert.deepEqual(p.state.toasts, ["caddie.unsupportedVideo"]);
+});
+
+test("videoPickRejection boundaries", () => {
+  assert.equal(videoPickRejection({ type: "video/quicktime", size: MAX_BYTES }, MAX_BYTES), null);
+  assert.equal(videoPickRejection({ type: "video/quicktime", size: MAX_BYTES + 1 }, MAX_BYTES), "too_large");
+  assert.equal(videoPickRejection({ type: "video/mp4", size: 1 }, MAX_BYTES), null);
+  assert.equal(videoPickRejection({ type: "", size: 5 }, MAX_BYTES), "unsupported");
 });

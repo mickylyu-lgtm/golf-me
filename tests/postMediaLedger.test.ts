@@ -6,7 +6,16 @@
 // uploads that resolve when the test says so (deferred promises).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createPostMediaLedger, insertBySeq, uploadIntoSlots, type MediaSlot } from "../src/lib/postMediaLedger.ts";
+import { createPostMediaLedger, insertBySeq, isPostMediaCapError, uploadIntoSlots, type MediaSlot } from "../src/lib/postMediaLedger.ts";
+
+test("the server's cap refusal is recognised by code + hint only", () => {
+  // Shape of a PostgREST error from migration 20261107260000.
+  assert.equal(isPostMediaCapError({ code: "23514", hint: "community_post_media_cap", message: "A post can have at most 10 photos or videos." }), true);
+  assert.equal(isPostMediaCapError({ code: "23514", hint: null, message: "other check" }), false);
+  assert.equal(isPostMediaCapError({ code: "P0001", hint: "community_post_media_cap" }), false);
+  assert.equal(isPostMediaCapError(new Error("community_post_media_cap")), false);
+  assert.equal(isPostMediaCapError(null), false);
+});
 
 const CAP = 10;
 

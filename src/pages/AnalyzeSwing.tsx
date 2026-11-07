@@ -20,7 +20,7 @@ import { CaddieRequestError } from "../lib/caddieAnalysis";
 import { isCatalogClub, restoredDraftClub } from "../lib/clubCatalog";
 import { caddieErrorText } from "../lib/caddieErrorText";
 import { isInMemoryPick, pickMedia } from "../lib/mediaPicker";
-import { createVideoSelectionGate, prepareVideoSelection } from "../lib/videoSelection";
+import { createVideoSelectionGate, prepareVideoSelection, videoPickRejection } from "../lib/videoSelection";
 const MAX_SWING_VIDEO_BYTES = 200 * 1024 * 1024; // matches the Storage bucket's own file_size_limit
 const MAX_SWING_VIDEO_SECONDS = 10; // max length of the WINDOW actually analyzed (2026-08-22 credit-efficiency pass) — Caddie's Roboflow pass calls once per sampled frame, so a longer clip directly multiplies calls/latency/credit spend; see analyze-swing's ANALYSIS_FPS comment. Was 15s. A source video longer than this is no longer rejected outright — VideoTrimSelector lets the golfer pick which 10s window to analyze instead.
 // Once analyze-swing actually creates the 'processing' row, the real
@@ -190,16 +190,11 @@ export function AnalyzeSwing() {
     // being prepared must not land after the golfer has moved on
     // (lib/videoSelection.ts).
     const token = selectionGate.begin();
-    if (!file.type.startsWith("video/")) {
+    const rejection = videoPickRejection(file, MAX_SWING_VIDEO_BYTES);
+    if (rejection) {
       selectionGate.end(token);
       setPreparingPick(false);
-      showToast(t("caddie.unsupportedVideo"), "warning");
-      return;
-    }
-    if (file.size > MAX_SWING_VIDEO_BYTES) {
-      selectionGate.end(token);
-      setPreparingPick(false);
-      showToast(t("caddie.videoTooLarge"), "warning");
+      showToast(t(rejection === "too_large" ? "caddie.videoTooLarge" : "caddie.unsupportedVideo"), "warning");
       return;
     }
     setPreparingPick(true);
