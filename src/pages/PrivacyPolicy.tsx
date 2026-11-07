@@ -98,7 +98,8 @@ export function PrivacyPolicy() {
           1 km (under a mile) before it's sent or saved, so we only ever store an approximate playing area — never your exact position —
           and you can enter an area manually instead. When you search for courses or places, that approximate location and what you type
           are sent to our course-search provider. When you look at the course map or a course page, the map area on screen is used to load
-          map images (see "Course maps and imagery" below).
+          map images (see "Course maps and imagery" below). If you tap the locate button on the course map, your exact position is shown
+          as a dot on your own screen only, while the map is open; it is never sent to us or saved.
         </Item>
         <Item label="Content you create">
           Golf Calls you host or join, direct messages and round group chats (including photos and voice messages you send in them),
