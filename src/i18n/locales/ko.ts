@@ -601,6 +601,8 @@ export const ko: Record<TranslationKey, string> = {
   "chat.mediaSending": "사진과 동영상 보내는 중",
   "chat.mediaNotSent": "보내지 못했습니다. 잠시 후 다시 시도해 주세요.",
   "chat.mediaRejected": "여기서는 보낼 수 없습니다.",
+  "chat.viewProfileOf": "{name}님의 프로필 보기",
+  "chat.viewYourProfile": "내 프로필 보기",
   "chat.voiceSending": "음성 메시지 보내는 중",
   "chat.unsend": "전송 취소",
   "chat.youUnsent": "메시지 전송을 취소했습니다",

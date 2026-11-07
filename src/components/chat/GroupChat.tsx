@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { AlertCircle, Lock, Reply } from "lucide-react";
 import { useData } from "../../context/DataContext";
 import { useToast } from "../../context/ToastContext";
-import { Avatar } from "../ui/Avatar";
 import { ChatComposer } from "./ChatComposer";
 import { groupChatDraftKey, loadChatDraft, saveChatDraft } from "../../lib/chatDraft";
 import { useLocale } from "../../i18n/LocaleContext";
@@ -32,6 +30,7 @@ import type { ChatMessage, PostMediaItem } from "../../types";
 import { ChatPhotoBody } from "./ChatImage";
 import { ChatVideoTrimSheet, MediaAttachmentStrip } from "./MediaAttachmentStrip";
 import { ChatMediaBody } from "./ChatMedia";
+import { ChatAvatarButton } from "./ChatAvatarButton";
 import { useChatMediaAttachment } from "../../lib/useChatMediaAttachment";
 import { chatMediaViewerItems, useChatMediaText } from "../../lib/useChatMediaText";
 import { MEDIA_MAX_ITEMS } from "../../lib/chatMedia";
@@ -89,7 +88,6 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
   } = useData();
   const { showToast } = useToast();
   const { t, locale } = useLocale();
-  const navigate = useNavigate();
   // Photos (lib/chatImages.ts): the composer's one picked photo (dropped
   // when the round changes or the chat turns read-only) and the fullscreen
   // viewer. The chip renders inside the composer wrapper, so docking /
@@ -591,15 +589,7 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
           const avatar = sender && (
             // Tap: that golfer's profile; a long press magnifies the photo
             // (Avatar swallows the click after it). Same as the DM thread.
-            <button
-              type="button"
-              aria-label={t("roundChat.viewProfile")}
-              onClick={() => navigate(isMe ? "/profile" : `/golfer/${m.senderId}`)}
-              data-reply-avatar
-              className="shrink-0 rounded-full"
-            >
-              <Avatar golfer={sender} size="xs" showVerified={false} />
-            </button>
+            <ChatAvatarButton golfer={sender} isMe={isMe} replyAvatar />
           );
           // Unsent: a quiet placeholder where the message was (its text is
           // already gone). Not a hold / reply target; quotes of it say

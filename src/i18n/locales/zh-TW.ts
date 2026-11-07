@@ -601,6 +601,8 @@ export const zhTW: Record<TranslationKey, string> = {
   "chat.mediaSending": "正在傳送照片和影片",
   "chat.mediaNotSent": "未傳送，請稍後再試。",
   "chat.mediaRejected": "這裡無法傳送此內容。",
+  "chat.viewProfileOf": "查看{name}的個人檔案",
+  "chat.viewYourProfile": "查看你的個人檔案",
   "chat.voiceSending": "正在傳送語音訊息",
   "chat.unsend": "收回",
   "chat.youUnsent": "你收回了一則訊息",

@@ -38,6 +38,7 @@ import { Capacitor } from "@capacitor/core";
 import { ChatPhotoBody } from "../components/chat/ChatImage";
 import { ChatVideoTrimSheet, MediaAttachmentStrip } from "../components/chat/MediaAttachmentStrip";
 import { ChatMediaBody } from "../components/chat/ChatMedia";
+import { ChatAvatarButton } from "../components/chat/ChatAvatarButton";
 import { useChatMediaAttachment } from "../lib/useChatMediaAttachment";
 import { chatMediaViewerItems, useChatMediaText } from "../lib/useChatMediaText";
 import { MEDIA_MAX_ITEMS } from "../lib/chatMedia";
@@ -789,9 +790,7 @@ export function DirectMessageThread() {
               if (m.unsentAt) {
                 return (
                   <div key={m.id} data-reply-row={m.id} className={`relative flex items-end gap-2 ${isMe ? "flex-row-reverse" : ""}`}>
-                    <span className="shrink-0 rounded-full">
-                      <Avatar golfer={isMe ? currentUser : other} size="xs" showVerified={false} />
-                    </span>
+                    <ChatAvatarButton golfer={isMe ? currentUser : other} isMe={isMe} />
                     <p className="max-w-[75%] rounded-2xl border border-dashed border-slate-200 px-3.5 py-2 text-xs text-slate-400 italic">
                       {isMe ? t("chat.youUnsent") : t("chat.theyUnsent", { name: other.name })}
                     </p>
@@ -808,9 +807,7 @@ export function DirectMessageThread() {
                 const sendingLabel = m.voice ? t("chat.voiceSending") : m.media ? mediaText.sending : t("chat.photoSending");
                 return (
                   <div key={m.id} data-reply-row={m.id} data-photo-pending={m.delivery} className="relative flex items-end gap-2 flex-row-reverse">
-                    <span className="shrink-0 rounded-full">
-                      <Avatar golfer={currentUser} size="xs" showVerified={false} />
-                    </span>
+                    <ChatAvatarButton golfer={currentUser} isMe />
                     <div className="flex max-w-[75%] flex-col items-end">
                       <div
                         className={`rounded-2xl rounded-br-sm p-1 text-sm [overflow-wrap:anywhere] ${
@@ -900,15 +897,7 @@ export function DirectMessageThread() {
                   </span>
                   {/* Tap goes to that golfer's profile; a long press magnifies
                       the photo (Avatar swallows the click after it). */}
-                  <button
-                    type="button"
-                    aria-label="View Profile"
-                    onClick={() => navigate(isMe ? "/profile" : `/golfer/${other.id}`)}
-                    data-reply-avatar
-                    className="shrink-0 rounded-full"
-                  >
-                    <Avatar golfer={isMe ? currentUser : other} size="xs" showVerified={false} />
-                  </button>
+                  <ChatAvatarButton golfer={isMe ? currentUser : other} isMe={isMe} replyAvatar />
                   <div
                     data-reply-bubble={replyEnabled ? m.id : undefined}
                     // Hold / right-click -> actions menu (useMessageLongPress).
@@ -993,9 +982,7 @@ export function DirectMessageThread() {
                 swipe-to-reply or unsend target. */}
             {threadFailedSends.map((f) => (
               <div key={f.key} className="flex items-end gap-2 flex-row-reverse">
-                <span className="shrink-0 rounded-full">
-                  <Avatar golfer={currentUser} size="xs" showVerified={false} />
-                </span>
+                <ChatAvatarButton golfer={currentUser} isMe />
                 <div className="flex max-w-[75%] flex-col items-end">
                   <div className="rounded-2xl rounded-br-sm border border-rose-300 bg-rose-50 px-3.5 py-2 text-sm text-slate-800 [overflow-wrap:anywhere]">
                     {f.text}
@@ -1038,9 +1025,7 @@ export function DirectMessageThread() {
               snapped down just because the other person started typing. */}
             {otherTyping && (
               <div className="flex items-end gap-2">
-                <button type="button" aria-label="View Profile" onClick={() => navigate(`/golfer/${other.id}`)} className="shrink-0 rounded-full">
-                  <Avatar golfer={other} size="xs" showVerified={false} />
-                </button>
+                <ChatAvatarButton golfer={other} isMe={false} />
                 <TypingBubble />
               </div>
             )}

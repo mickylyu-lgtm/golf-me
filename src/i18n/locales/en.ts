@@ -616,6 +616,8 @@ export const en = {
   "chat.mediaSending": "Sending photos and videos",
   "chat.mediaNotSent": "Didn't send — try again in a moment.",
   "chat.mediaRejected": "This can't be sent here.",
+  "chat.viewProfileOf": "View {name}'s profile",
+  "chat.viewYourProfile": "View your profile",
   "chat.unsend": "Unsend",
   "chat.youUnsent": "You unsent a message",
   "chat.theyUnsent": "{name} unsent a message",

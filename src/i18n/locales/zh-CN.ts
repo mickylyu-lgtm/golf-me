@@ -601,6 +601,8 @@ export const zhCN: Record<TranslationKey, string> = {
   "chat.mediaSending": "正在发送照片和视频",
   "chat.mediaNotSent": "未发送，请稍后再试。",
   "chat.mediaRejected": "这里无法发送此内容。",
+  "chat.viewProfileOf": "查看{name}的个人资料",
+  "chat.viewYourProfile": "查看你的个人资料",
   "chat.voiceSending": "正在发送语音消息",
   "chat.unsend": "撤回",
   "chat.youUnsent": "你撤回了一条消息",
