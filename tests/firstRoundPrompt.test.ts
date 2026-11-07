@@ -92,10 +92,11 @@ test("return path: only real round links survive sign-in", () => {
   }
 });
 
-test("Universal Link routing maps only golfme.app round links", () => {
+// Every other claimed path: tests/appLinks.test.ts.
+test("Universal Link routing maps golfme.app round links", () => {
   assert.equal(routeForAppUrl("https://golfme.app" + ROUND), ROUND);
   assert.equal(routeForAppUrl("https://www.golfme.app" + ROUND + "/"), ROUND);
-  assert.equal(routeForAppUrl("https://golfme.app" + ROUND + "?utm=x"), ROUND);
+  assert.equal(routeForAppUrl("https://golfme.app" + ROUND + "?utm=x"), ROUND + "?utm=x");
   assert.equal(routeForAppUrl("com.golfme.ios://auth-callback#access_token=x"), null);
   assert.equal(routeForAppUrl("https://evil.com" + ROUND), null);
   assert.equal(routeForAppUrl("http://golfme.app" + ROUND), null);

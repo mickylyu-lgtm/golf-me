@@ -66,15 +66,16 @@
     <!-- Shows the native App Store banner at the top of Safari on iOS -->
     <meta name="apple-itunes-app" content="app-id=6806917441" />
     <script>
-      // On a shared round link, the banner's "Open" hands the same round to
-      // the app (appUrlOpen -> routeForAppUrl) instead of just launching it.
-      // Set before the banner is drawn; same paths as the AASA allowlist.
+      // The banner's "Open" hands this page to the app (appUrlOpen ->
+      // routeForAppUrl in src/lib/appLinks.ts, which ignores anything the
+      // AASA doesn't claim) instead of just launching it. Set before the
+      // banner is drawn. Never on a sign-in result: no auth query items,
+      // and the fragment is never passed.
       (function () {
-        var p = location.pathname.replace(/\/+$/, "");
-        if (/^\/golf-calls\/[0-9a-f-]{36}$/i.test(p)) {
-          var m = document.querySelector('meta[name="apple-itunes-app"]');
-          if (m) m.setAttribute("content", "app-id=6806917441, app-argument=https://golfme.app" + p);
-        }
+        if (/[?&](code|token_hash|access_token|refresh_token|error|error_code|error_description)=/.test(location.search)) return;
+        var p = location.pathname.replace(/\/+$/, "") || "/";
+        var m = document.querySelector('meta[name="apple-itunes-app"]');
+        if (m) m.setAttribute("content", "app-id=6806917441, app-argument=https://golfme.app" + (p + location.search).replace(/,/g, "%2C"));
       })();
     </script>
 

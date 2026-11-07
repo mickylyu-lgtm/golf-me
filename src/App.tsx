@@ -299,7 +299,9 @@ function AppUrlOpenRouting() {
     if (!Capacitor.isNativePlatform()) return;
     const route = (url: string | undefined) => {
       const path = url ? routeForAppUrl(url) : null;
-      if (!path || path === window.location.pathname.replace(/\/+$/, "")) return;
+      // Compared with query + hash: /find?tab=rounds is not /find.
+      const here = (window.location.pathname.replace(/\/+$/, "") || "/") + window.location.search + window.location.hash;
+      if (!path || path === here) return;
       navigateRef.current(path);
     };
     if (!launchUrlChecked) {

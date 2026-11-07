@@ -66,20 +66,6 @@ export function peekReturnTo(): string | null {
   return null;
 }
 
-const APP_HOSTS = new Set(["golfme.app", "www.golfme.app"]);
-
-// Maps a Universal Link (https://golfme.app/golf-calls/<id>) delivered to the
-// native app via appUrlOpen onto the in-app route. Anything else -- the
-// com.golfme.ios:// auth callback, other hosts, paths outside the AASA
-// allowlist -- returns null and is left alone.
-export function routeForAppUrl(url: string): string | null {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return null;
-  }
-  if (parsed.protocol !== "https:" || !APP_HOSTS.has(parsed.hostname)) return null;
-  const path = parsed.pathname.replace(/\/+$/, "");
-  return isAllowedReturnPath(path) ? path : null;
-}
+// Universal Link routing (every path the AASA claims, not just rounds) lives
+// in lib/appLinks; re-exported here for existing callers.
+export { routeForAppUrl } from "./appLinks.ts";
