@@ -17,6 +17,7 @@ import {
   compareRoundMessages,
   createRoundMessageStore,
   isBeforeCursor,
+  isHistoryCut,
   mergeRoundMessageRows,
   olderPageCursor,
   roundMessagesBefore,
@@ -39,9 +40,14 @@ function ts(second: number, micros = 0): string {
   return `${base}${frac}+00:00`;
 }
 
-function table() {
+function table(cap = CAP) {
   const rows: Row[] = [];
   let n = 0;
+  function matching(opts: { round?: string; before?: RoundMessageCursor }): Row[] {
+    return rows
+      .filter((r) => (opts.round ? r.round_id === opts.round : true))
+      .filter((r) => (opts.before ? isBeforeCursor(r, opts.before) : true));
+  }
   return {
     rows,
     insert(round: string, second: number, micros = 0, id?: string): Row {
@@ -51,15 +57,17 @@ function table() {
     },
     /** The old global query: oldest first, no limit (the cap still applies). */
     oldGlobal(): Row[] {
-      return [...rows].sort((a, b) => a.created_at.localeCompare(b.created_at)).slice(0, CAP);
+      return [...rows].sort((a, b) => a.created_at.localeCompare(b.created_at)).slice(0, cap);
     },
     /** order created_at desc, id desc, limit; optional round and cursor. */
     newestFirst(limit: number, opts: { round?: string; before?: RoundMessageCursor } = {}): Row[] {
-      return rows
-        .filter((r) => (opts.round ? r.round_id === opts.round : true))
-        .filter((r) => (opts.before ? isBeforeCursor(r, opts.before) : true))
+      return matching(opts)
         .sort((a, b) => -compareRoundMessages(a, b))
-        .slice(0, Math.min(limit, CAP));
+        .slice(0, Math.min(limit, cap));
+    },
+    /** count: "exact": the total matching the filter, ignoring limit and cap (Content-Range). */
+    count(opts: { round?: string } = {}): number {
+      return matching(opts).length;
     },
   };
 }
@@ -288,4 +296,169 @@ test("empty history, a single page, and an exact page boundary", () => {
   const full = exact.newestFirst(10, { round: "R" });
   assert.equal(full.length, 10);
   assert.deepEqual(exact.newestFirst(10, { round: "R", before: olderPageCursor(full)! }), [], "next page after an exact boundary is empty");
+});
+
+// ------------------------------------------------ "is truncated" rule (Micky: say when the limit is reached)
+
+test("isHistoryCut: with the exact total, held < total; an exactly complete history is not cut", () => {
+  assert.equal(isHistoryCut({ held: 200, total: 200, fetched: 200, limit: 200 }), false, "exactly full page, nothing more");
+  assert.equal(isHistoryCut({ held: 200, total: 201, fetched: 200, limit: 200 }), true);
+  assert.equal(isHistoryCut({ held: 199, total: 199, fetched: 199, limit: 200 }), false);
+  assert.equal(isHistoryCut({ held: 0, total: 0, fetched: 0, limit: 200 }), false);
+});
+
+test("isHistoryCut without a total: an exactly full response may have more; one short of full is complete", () => {
+  assert.equal(isHistoryCut({ held: 200, total: null, fetched: 200, limit: ROUND_MESSAGE_PAGE }), true);
+  assert.equal(isHistoryCut({ held: 199, total: null, fetched: 199, limit: ROUND_MESSAGE_PAGE }), false);
+  // The DM window (RealSocialContext MESSAGE_WINDOW = 1000) uses the same rule on its full refresh.
+  assert.equal(isHistoryCut({ held: 1000, total: null, fetched: 1000, limit: 1000 }), true);
+  assert.equal(isHistoryCut({ held: 999, total: null, fetched: 999, limit: 1000 }), false);
+  assert.equal(isHistoryCut({ held: 1000, total: 1000, fetched: 1000, limit: 1000 }), false, "full window, exact total says nothing more");
+  assert.equal(isHistoryCut({ held: 1000, total: 4321, fetched: 1000, limit: 1000 }), true);
+});
+
+test("isHistoryCut: a server cap below the limit is caught only by the total", () => {
+  assert.equal(isHistoryCut({ held: 50, total: 300, fetched: 50, limit: 200 }), true);
+  assert.equal(isHistoryCut({ held: 50, total: null, fetched: 50, limit: 200 }), false, "no total: a capped response looks complete (why the app asks for count)");
+});
+
+function loadPage(store: ReturnType<typeof createRoundMessageStore<Row>>, db: ReturnType<typeof table>, round: string, withCount = true) {
+  const token = store.beginPage(round);
+  return store.acceptPage(round, token, db.newestFirst(ROUND_MESSAGE_PAGE, { round }), withCount ? db.count({ round }) : null);
+}
+
+test("round historyCut: exactly full page vs one short, with and without the count; false before the page loads", () => {
+  const exact = table(1000);
+  for (let i = 0; i < ROUND_MESSAGE_PAGE; i++) exact.insert("R", i);
+  const store = createRoundMessageStore<Row>();
+  store.watch("R");
+  assert.deepEqual(store.historyCut("R"), { cut: false, held: 0 }, "no page yet: no notice (no flicker)");
+  loadPage(store, exact, "R");
+  assert.deepEqual(store.historyCut("R"), { cut: false, held: ROUND_MESSAGE_PAGE });
+  loadPage(store, exact, "R", false);
+  assert.equal(store.historyCut("R").cut, true, "no total + exactly full page: may have more");
+
+  exact.insert("R", 10_000);
+  loadPage(store, exact, "R");
+  assert.deepEqual(store.historyCut("R"), { cut: true, held: ROUND_MESSAGE_PAGE }, "one more than a page exists");
+
+  const short = table(1000);
+  for (let i = 0; i < ROUND_MESSAGE_PAGE - 1; i++) short.insert("S", i);
+  const s2 = createRoundMessageStore<Row>();
+  s2.watch("S");
+  loadPage(s2, short, "S", false);
+  assert.deepEqual(s2.historyCut("S"), { cut: false, held: ROUND_MESSAGE_PAGE - 1 });
+});
+
+test("round historyCut counts window and page together (each row once)", () => {
+  const db = table(1000);
+  for (let i = 0; i < 260; i++) db.insert("R", i);
+  const store = createRoundMessageStore<Row>();
+  store.setWindow(db.newestFirst(ROUND_MESSAGE_WINDOW)); // the window holds all 260
+  store.watch("R");
+  loadPage(store, db, "R");
+  assert.deepEqual(store.historyCut("R"), { cut: false, held: 260 }, "page is full but the window has the rest");
+  store.reset();
+  assert.deepEqual(store.historyCut("R"), { cut: false, held: 0 });
+});
+
+// ------------------------------------------------ a server cap BELOW the requested page and window sizes
+
+test("cap 50 < page 200 < window 1000: busy rounds fill the window, the open round's newest are still all held", () => {
+  const db = table(50);
+  for (let i = 0; i < 120; i++) db.insert("R", i * 10); // the open round, older activity
+  for (const busy of ["B1", "B2", "B3"]) for (let i = 0; i < 150; i++) db.insert(busy, 2000 + i);
+  const store = createRoundMessageStore<Row>();
+  store.setWindow(db.newestFirst(ROUND_MESSAGE_WINDOW));
+  assert.equal(store.rows().length, 50);
+  assert.equal(store.rows().filter((r) => r.round_id === "R").length, 0, "the open round is outside the capped window");
+  store.watch("R");
+  loadPage(store, db, "R");
+  const held = store.rows().filter((r) => r.round_id === "R");
+  const newestR = db.rows.filter((r) => r.round_id === "R").slice(-50);
+  assert.deepEqual(ids(held), ids(newestR), "newest-first then reversed: exactly R's newest 50, oldest to newest");
+  assert.equal(held[held.length - 1].id, newestR[newestR.length - 1].id);
+  assert.deepEqual(store.historyCut("R"), { cut: true, held: 50 }, "and the thread says it shows only the latest");
+  // The global newest is held too.
+  const all = store.rows();
+  assert.equal(all[all.length - 1].id, [...db.rows].sort(compareRoundMessages).at(-1)!.id);
+});
+
+test("cap 50: realtime inserts in several rounds during and after the initial fetch never lose the open round's newest", () => {
+  const db = table(50);
+  for (let i = 0; i < 80; i++) db.insert("R", i);
+  for (let i = 0; i < 80; i++) db.insert("B", 100 + i);
+  const store = createRoundMessageStore<Row>();
+  store.watch("R");
+  const tokenEarly = store.beginPage("R");
+  const windowEarly = db.newestFirst(ROUND_MESSAGE_WINDOW);
+  const pageEarly = db.newestFirst(ROUND_MESSAGE_PAGE, { round: "R" });
+  const countEarly = db.count({ round: "R" });
+  // Inserts land while the initial fetch is in flight, in R and B.
+  db.insert("R", 500);
+  db.insert("B", 501);
+  db.insert("R", 502);
+  store.setWindow(windowEarly);
+  store.acceptPage("R", tokenEarly, pageEarly, countEarly);
+  // Realtime: the follow-up refetch (window + R's page).
+  store.setWindow(db.newestFirst(ROUND_MESSAGE_WINDOW));
+  loadPage(store, db, "R");
+  // More after: busy round floods the window.
+  for (let i = 0; i < 60; i++) db.insert("B", 600 + i);
+  db.insert("R", 700);
+  store.setWindow(db.newestFirst(ROUND_MESSAGE_WINDOW));
+  loadPage(store, db, "R");
+  const held = store.rows().filter((r) => r.round_id === "R");
+  assert.deepEqual(ids(held.slice(-50)), ids(db.rows.filter((r) => r.round_id === "R").slice(-50)));
+  assert.equal(new Set(ids(store.rows())).size, store.rows().length, "no duplicates");
+  const sorted = [...store.rows()].sort(compareRoundMessages);
+  assert.deepEqual(ids(store.rows()), ids(sorted), "chronological");
+});
+
+test("cap 50: after switching rounds, the new round's newest are held and the old round's late page is dropped", () => {
+  const db = table(50);
+  for (let i = 0; i < 90; i++) db.insert("R", i);
+  for (let i = 0; i < 90; i++) db.insert("S", 1000 + i);
+  for (let i = 0; i < 90; i++) db.insert("B", 3000 + i);
+  const store = createRoundMessageStore<Row>();
+  const r = store.watch("R");
+  const late = store.beginPage("R");
+  const rPage = db.newestFirst(ROUND_MESSAGE_PAGE, { round: "R" });
+  r.unwatch();
+  store.watch("S");
+  store.setWindow(db.newestFirst(ROUND_MESSAGE_WINDOW));
+  loadPage(store, db, "S");
+  db.insert("S", 9000); // realtime after the switch
+  store.setWindow(db.newestFirst(ROUND_MESSAGE_WINDOW));
+  loadPage(store, db, "S");
+  assert.equal(store.acceptPage("R", late, rPage, 90), false);
+  assert.equal(store.rows().some((x) => x.round_id === "R"), false);
+  assert.deepEqual(
+    ids(store.rows().filter((x) => x.round_id === "S")),
+    ids(db.rows.filter((x) => x.round_id === "S").slice(-50)),
+  );
+  assert.deepEqual(store.historyCut("S"), { cut: true, held: 50 });
+});
+
+test("cap = window = 1000 (live max_rows, confirmed by Micky 2026-11-06): the exact boundary", () => {
+  const db = table(1000);
+  for (let i = 0; i < 1000; i++) db.insert(i % 2 ? "B" : "R", i); // the oldest row is R's
+  const window = db.newestFirst(ROUND_MESSAGE_WINDOW);
+  assert.equal(window.length, ROUND_MESSAGE_WINDOW);
+  // Exactly 1000 exist: complete with the total; without it, a full window "may have more".
+  assert.equal(isHistoryCut({ held: window.length, total: db.count(), fetched: window.length, limit: ROUND_MESSAGE_WINDOW }), false);
+  assert.equal(isHistoryCut({ held: window.length, total: null, fetched: window.length, limit: ROUND_MESSAGE_WINDOW }), true);
+  // One more: still 1000 back (newest), the total says cut, and the oldest is the one left out.
+  const newest = db.insert("R", 5000);
+  const after = db.newestFirst(ROUND_MESSAGE_WINDOW);
+  assert.equal(after.length, ROUND_MESSAGE_WINDOW);
+  assert.equal(isHistoryCut({ held: after.length, total: db.count(), fetched: after.length, limit: ROUND_MESSAGE_WINDOW }), true);
+  const store = createRoundMessageStore<Row>();
+  store.setWindow(after);
+  assert.equal(store.rows().at(-1)!.id, newest.id);
+  assert.equal(store.rows().some((r) => r.id === db.rows[0].id), false, "the very oldest is the one cut");
+  // The per-round page (200) is under the cap, so it returns its full page and the count decides.
+  store.watch("R");
+  loadPage(store, db, "R");
+  assert.deepEqual(store.historyCut("R"), { cut: true, held: db.count({ round: "R" }) - 1 }, "R has 501; 500 held via window + page");
 });

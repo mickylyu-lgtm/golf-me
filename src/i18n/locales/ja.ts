@@ -95,6 +95,8 @@ export const ja: Record<TranslationKey, string> = {
   "credibility.building": "信頼度構築中",
   "credibility.limited": "実績が少ない",
   "chat.noMessagesYet": "まだメッセージはありません — グループに挨拶しましょう。",
+  "chat.historyLatest": "最新の{count}件のメッセージを表示しています",
+  "chat.historyMayBeCut": "古いメッセージは表示されない場合があります",
   "chat.messagePlaceholder": "グループにメッセージ...",
   "chat.sendFailedToast": "メッセージを送信できませんでした。入力した内容は残っています。もう一度お試しください。",
 

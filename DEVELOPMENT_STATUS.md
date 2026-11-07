@@ -52,7 +52,15 @@ Micky's privacy brief (isolated at 8bbe790 with modeled UI callbacks, not on a d
 
 **Tests:** `tests/chatImageAttachment.test.ts` (15; uses the real `createMediaPicker` with a controlled native driver), `tests/roundMessagePages.test.ts` (16; an in-memory table with a small row cap; the first case shows the old query shape missing the newest row). Both run in `npm run test:chat` / `npm run test:roundchat`. `npm run check` green (993 tests).
 
-**Open for Micky:** (a) a "load older" control for round chats (and DMs) beyond the newest window, yes/no; (b) the live PostgREST max-rows value is unknown, and both explicit limits work whatever it is.
+**Live max_rows = 1000** (Micky, Supabase dashboard → Data API → Max rows, 2026-11-06). So the round window (1000) and the DM window (1000) equal the cap, and the per-round page (200) is under it.
+
+**Follow-up (same day, Micky's decisions):** "load older" is deferred. Instead the thread now says when it isn't showing everything:
+- **Round chat:** shows "Showing the latest N messages" (`chat.historyLatest`) at the top of the list. The per-round page query now asks for `count: "exact"`, which gives the round's true total whatever the row cap. `isHistoryCut` (lib/roundMessagePages.ts) is held < total. Without a total it falls back to "the response filled the limit". The line is hidden until the round's page has loaded, so it doesn't flicker.
+- **DMs:** shows "Older messages may not be shown" (`chat.historyMayBeCut`). The full-refresh DM window query also asks for `count: "exact"` (RealSocialContext `messageHistoryCut`). Only the whole window is known to be cut, not which threads, hence "may".
+- Both lines are static rows inside the list, above the message rows. No docking, scroll or keyboard code changed. DirectMessageThread: one destructured name and the row. Localised in all 6 languages. Never shown in demo.
+- More tests: the cut rule (exactly full vs one short, both windows, cap below the limit), a server cap of 50 below the page (200) and window (1000) with busy rounds, realtime inserts and round switches, and cap = window = 1000 at the exact boundary.
+
+**Open for Micky:** a "load older" control (deferred).
 
 ## Smooth keyboard motion (field reveal) — 2026-11-06 (branch `feat/keyboard-motion` off origin/main 1c032e1; one local commit, not pushed/deployed; golfme-architect; web-bundle only, no migration, no backend, no native change)
 

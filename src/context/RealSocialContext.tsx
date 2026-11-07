@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { supabase } from "../lib/supabase";
+import { isHistoryCut } from "../lib/roundMessagePages";
 import { useAuth } from "./AuthContext";
 import { fetchGolferDirectory, fetchMyBlockedProfiles, fetchPublicProfiles } from "../lib/publicProfilesFetch";
 import { discoverableCandidates } from "../lib/discoverability";
@@ -149,6 +150,8 @@ interface NotificationRow {
 
 interface RealSocialContextValue {
   profilesById: Map<string, GolferProfile>;
+  /** More DM messages exist than the newest-N window holds, so older history may be missing (never in demo). */
+  messageHistoryCut: boolean;
   isLoading: boolean;
   /** True once the first full fetch has finished, success OR failure (always true in demo). Check loadError before treating an empty inbox as empty. */
   hasLoaded: boolean;
@@ -354,6 +357,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
   const { isDemo, authUser, profile: ownProfile } = useAuth();
   const [participants, setParticipants] = useState<ConversationParticipantRow[]>([]);
   const [messages, setMessages] = useState<MessageRow[]>([]);
+  const [messageHistoryCut, setMessageHistoryCut] = useState(false);
   const [blocks, setBlocks] = useState<BlockRow[]>([]);
   const [follows, setFollows] = useState<FollowRow[]>([]);
   const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
@@ -641,8 +645,17 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
                 .in("conversation_id", conversationIds)
                 .gte("created_at", new Date(Date.parse(newest.created_at) - MESSAGE_OVERLAP_MS).toISOString())
                 .order("created_at", { ascending: true })
-            : supabase.from("messages").select("*").in("conversation_id", conversationIds).order("created_at", { ascending: false }).limit(MESSAGE_WINDOW);
-          const [{ data: allParticipants, error: pErr }, { data: messageRows, error: mErr }] = await Promise.all([participantsQuery, messagesQuery]);
+            : // count: the exact total, so a cut window is known whatever the row cap (messageHistoryCut).
+              supabase
+                .from("messages")
+                .select("*", { count: "exact" })
+                .in("conversation_id", conversationIds)
+                .order("created_at", { ascending: false })
+                .limit(MESSAGE_WINDOW);
+          const [{ data: allParticipants, error: pErr }, { data: messageRows, error: mErr, count: messageTotal }] = await Promise.all([
+            participantsQuery,
+            messagesQuery,
+          ]);
           if (pErr) throw pErr;
           if (mErr) throw mErr;
           if (!isCurrent()) return;
@@ -655,7 +668,12 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
               added.length === 0 ? messagesRef.current : [...messagesRef.current, ...added].sort((a, b) => a.created_at.localeCompare(b.created_at));
           } else {
             nextMessages = keepIfSame(messagesRef.current, fetched.reverse());
+            // More DM messages exist than the newest-N window holds: older
+            // history may be missing from some threads (which ones isn't known).
+            setMessageHistoryCut(isHistoryCut({ held: fetched.length, total: messageTotal, fetched: fetched.length, limit: MESSAGE_WINDOW }));
           }
+        } else {
+          setMessageHistoryCut(false);
         }
         setParticipants((prev) => keepIfSame(prev, nextParticipants));
         messagesRef.current = nextMessages;
@@ -794,6 +812,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     voiceProbeRef.current = "unknown";
     setVoiceProbe("unknown");
     setVoiceColumnMissing(false);
+    setMessageHistoryCut(false);
 
     if (isDemo || !selfId) {
       setParticipants([]);
@@ -1904,6 +1923,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
   const value = useMemo<RealSocialContextValue>(
     () => ({
       profilesById,
+      messageHistoryCut: !isDemo && messageHistoryCut,
       isLoading,
       hasLoaded: isDemo || loadStatus.settled,
       loadError: !isDemo && isFirstLoadError(loadStatus),
@@ -1955,6 +1975,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     }),
     [
       profilesById,
+      messageHistoryCut,
       isLoading,
       isDemo,
       loadStatus,

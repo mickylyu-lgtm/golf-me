@@ -95,6 +95,8 @@ export const es: Record<TranslationKey, string> = {
   "credibility.building": "Generando Credibilidad",
   "credibility.limited": "Historial Limitado",
   "chat.noMessagesYet": "Aún no hay mensajes — saluda al grupo.",
+  "chat.historyLatest": "Mostrando los {count} mensajes más recientes",
+  "chat.historyMayBeCut": "Puede que no se muestren los mensajes más antiguos",
   "chat.messagePlaceholder": "Mensaje al grupo...",
   "chat.sendFailedToast": "El mensaje no se envió. Tu texto sigue ahí; inténtalo de nuevo.",
 

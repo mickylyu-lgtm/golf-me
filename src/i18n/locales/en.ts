@@ -107,6 +107,8 @@ export const en = {
   "credibility.building": "Building Credibility",
   "credibility.limited": "Limited History",
   "chat.noMessagesYet": "No messages yet — say hello to the group.",
+  "chat.historyLatest": "Showing the latest {count} messages",
+  "chat.historyMayBeCut": "Older messages may not be shown",
   "chat.messagePlaceholder": "Message the group...",
   "chat.sendFailedToast": "Message didn't send. Your text is still there — try again.",
 

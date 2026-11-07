@@ -95,6 +95,8 @@ export const zhTW: Record<TranslationKey, string> = {
   "credibility.building": "口碑累積中",
   "credibility.limited": "記錄較少",
   "chat.noMessagesYet": "暫無訊息 — 跟大家打個招呼吧。",
+  "chat.historyLatest": "僅顯示最近 {count} 則訊息",
+  "chat.historyMayBeCut": "較早的訊息可能未顯示",
   "chat.messagePlaceholder": "給小組發訊息...",
   "chat.sendFailedToast": "訊息未送出。你輸入的內容仍在，請再試一次。",
 

@@ -189,6 +189,10 @@ interface DataContextValue {
   messagesForCall: (callId: string) => ChatMessage[];
   /** A round chat is open (real accounts: also loads that round's newest page). Returns the unwatch. */
   watchRoundMessages: (callId: string) => () => void;
+  /** An open round chat holds only its latest `held` messages; more exist (never in demo). */
+  roundHistoryCut: (callId: string) => { cut: boolean; held: number };
+  /** The DM window is full: older DM history may be missing (never in demo). */
+  dmHistoryMayBeCut: boolean;
   visibleGolfers: (excludeSelf?: boolean) => GolferProfile[];
   reviewsAbout: (golferId: string) => Review[];
 
@@ -522,6 +526,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
     (callId: string) => (auth.isDemo ? () => {} : realWatchRoundMessages(callId)),
     [auth.isDemo, realWatchRoundMessages],
   );
+  const realRoundHistoryCut = realRounds.roundHistoryCut;
+  const roundHistoryCut = useCallback(
+    (callId: string) => (auth.isDemo ? { cut: false, held: 0 } : realRoundHistoryCut(callId)),
+    [auth.isDemo, realRoundHistoryCut],
+  );
+  const dmHistoryMayBeCut = !auth.isDemo && realSocial.messageHistoryCut;
   const reviewsAbout = useCallback((golferId: string) => data.reviews.filter((r) => r.revieweeId === golferId), [data.reviews]);
 
   const mockBlockedIds = useMemo(
@@ -2200,6 +2210,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       getGolfCall,
       messagesForCall,
       watchRoundMessages,
+      roundHistoryCut,
+      dmHistoryMayBeCut,
       visibleGolfers,
       reviewsAbout,
       session,
@@ -2328,6 +2340,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       getGolfCall,
       messagesForCall,
       watchRoundMessages,
+      roundHistoryCut,
+      dmHistoryMayBeCut,
       visibleGolfers,
       reviewsAbout,
       logIn,

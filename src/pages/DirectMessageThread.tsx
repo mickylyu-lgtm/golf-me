@@ -83,6 +83,7 @@ export function DirectMessageThread() {
     sendDirectVoice,
     canSendDirectMedia,
     sendDirectMedia,
+    dmHistoryMayBeCut,
   } = useData();
   const { showToast } = useToast();
   const { t, locale } = useLocale();
@@ -775,6 +776,13 @@ export function DirectMessageThread() {
           className="flex min-h-0 flex-1 touch-pan-y flex-col gap-3 overflow-x-hidden overflow-y-auto px-4 py-4"
         >
           <div className="mt-auto" />
+          {/* Static row above the messages (no scroll / keyboard code): the
+              DM window is full, so older history may be missing. */}
+          {dmHistoryMayBeCut && messages.length > 0 && (
+            <p data-history-cut className="text-center text-xs text-slate-400">
+              {t("chat.historyMayBeCut")}
+            </p>
+          )}
           {messages.length === 0 && threadFailedSends.length === 0 && (
             <p className="my-auto text-center text-sm text-slate-400">
               {eligible ? "No messages yet — say hello." : "You can't message this golfer."}

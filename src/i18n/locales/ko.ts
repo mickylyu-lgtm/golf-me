@@ -95,6 +95,8 @@ export const ko: Record<TranslationKey, string> = {
   "credibility.building": "신뢰도 쌓는 중",
   "credibility.limited": "기록 부족",
   "chat.noMessagesYet": "아직 메시지가 없습니다 — 그룹에 인사해보세요.",
+  "chat.historyLatest": "최근 메시지 {count}개를 표시하고 있습니다",
+  "chat.historyMayBeCut": "이전 메시지는 표시되지 않을 수 있습니다",
   "chat.messagePlaceholder": "그룹에 메시지 보내기...",
   "chat.sendFailedToast": "메시지를 보내지 못했습니다. 입력한 내용은 그대로 있으니 다시 시도해 주세요.",
 

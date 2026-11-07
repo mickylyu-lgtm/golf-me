@@ -84,6 +84,19 @@ export function mergeRoundMessageRows<T extends RoundMessageKey>(sources: readon
   return [...byId.values()].sort(compareRoundMessages);
 }
 
+/**
+ * Whether a chat's loaded history may be missing older messages, so the
+ * thread says so instead of looking complete ("Showing the latest N").
+ * With the query's exact total (PostgREST `count: "exact"`, independent of
+ * any row cap): fewer held than exist. Without it: the response filled the
+ * requested limit, so more may exist. A response the server cut below the
+ * limit can only be told apart with the total.
+ */
+export function isHistoryCut(s: { held: number; total?: number | null; fetched: number; limit: number }): boolean {
+  if (typeof s.total === "number" && Number.isFinite(s.total)) return s.held < s.total;
+  return s.fetched >= s.limit;
+}
+
 /** A round's own page: only that round's rows. */
 export function roundPageRows<T extends RoundMessageKey>(roundId: string, rows: readonly T[]): T[] {
   return rows.filter((r) => r.round_id === roundId);
@@ -99,6 +112,9 @@ export function roundPageRows<T extends RoundMessageKey>(roundId: string, rows: 
 export function createRoundMessageStore<T extends RoundMessageKey>() {
   let windowRows: T[] = [];
   const pages = new Map<string, T[]>();
+  // Per open round: how many rows its page request returned, and the
+  // round's exact total when the server gave one.
+  const pageInfo = new Map<string, { fetched: number; total: number | null }>();
   const watchers = new Map<string, number>();
   const seqs = new Map<string, number>();
   const bump = (roundId: string) => {
@@ -133,6 +149,7 @@ export function createRoundMessageStore<T extends RoundMessageKey>() {
           }
           watchers.delete(roundId);
           bump(roundId); // an in-flight page for it is now stale
+          pageInfo.delete(roundId);
           return pages.delete(roundId);
         },
       };
@@ -145,10 +162,30 @@ export function createRoundMessageStore<T extends RoundMessageKey>() {
       return bump(roundId);
     },
     /** Keeps a page response if it's still wanted. False = stale, dropped. */
-    acceptPage(roundId: string, token: number, rows: readonly T[]): boolean {
+    acceptPage(roundId: string, token: number, rows: readonly T[], total: number | null = null): boolean {
       if (seqs.get(roundId) !== token || !watchers.has(roundId)) return false;
-      pages.set(roundId, roundPageRows(roundId, rows));
+      const own = roundPageRows(roundId, rows);
+      pages.set(roundId, own);
+      pageInfo.set(roundId, { fetched: own.length, total: typeof total === "number" ? total : null });
       return true;
+    },
+    /**
+     * An open round's held history is cut (isHistoryCut against its page:
+     * held = every held row of the round, window and page together). False
+     * until its page has loaded: the shared window alone can't tell.
+     */
+    historyCut(roundId: string): { cut: boolean; held: number } {
+      let held = 0;
+      const seen = new Set<string>();
+      for (const rows of [windowRows, pages.get(roundId) ?? []]) {
+        for (const r of rows) {
+          if (r.round_id !== roundId || seen.has(r.id)) continue;
+          seen.add(r.id);
+          held++;
+        }
+      }
+      const info = pageInfo.get(roundId);
+      return { cut: info ? isHistoryCut({ held, total: info.total, fetched: info.fetched, limit: ROUND_MESSAGE_PAGE }) : false, held };
     },
     /** The same change in every source (an unsend wiping a row locally). */
     patch(map: (rows: T[]) => T[]) {
@@ -159,6 +196,7 @@ export function createRoundMessageStore<T extends RoundMessageKey>() {
     reset() {
       windowRows = [];
       pages.clear();
+      pageInfo.clear();
       for (const roundId of [...seqs.keys()]) bump(roundId);
     },
   };

@@ -95,6 +95,8 @@ export const zhCN: Record<TranslationKey, string> = {
   "credibility.building": "口碑积累中",
   "credibility.limited": "记录较少",
   "chat.noMessagesYet": "暂无消息 — 跟大家打个招呼吧。",
+  "chat.historyLatest": "仅显示最近 {count} 条消息",
+  "chat.historyMayBeCut": "较早的消息可能未显示",
   "chat.messagePlaceholder": "给小组发消息...",
   "chat.sendFailedToast": "消息未发送。你输入的内容仍在，请重试。",
 

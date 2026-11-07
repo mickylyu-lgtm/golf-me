@@ -70,6 +70,7 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
     getGolfCall,
     messagesForCall,
     watchRoundMessages,
+    roundHistoryCut,
     sendMessage,
     retryRoundMessage,
     discardRoundMessage,
@@ -131,6 +132,8 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
   // While open, this round's own newest page is held too (lib/
   // roundMessagePages.ts), so it can't fall outside the shared window.
   useEffect(() => watchRoundMessages(callId), [callId, watchRoundMessages]);
+  // More exist on the server than are held: say so at the top of the list.
+  const history = roundHistoryCut(callId);
   // Completed / cancelled: history stays, the composer is replaced by a
   // read-only note (the round_messages insert policy refuses posts too).
   const status = getGolfCall(callId)?.status;
@@ -572,6 +575,11 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
         className={`flex touch-pan-y flex-col gap-3 overflow-x-hidden overflow-y-auto px-4 py-4 ${layout === "page" ? "min-h-0 flex-1" : "max-h-96"}`}
       >
         <div className="mt-auto" />
+        {history.cut && (
+          <p data-history-cut className="text-center text-xs text-slate-400">
+            {t("chat.historyLatest", { count: history.held })}
+          </p>
+        )}
         {messages.length === 0 && <p className="text-center text-sm text-slate-400">{t("chat.noMessagesYet")}</p>}
         <div ref={rowsRef} className="flex flex-col gap-3">
         {messages.map((m) => {

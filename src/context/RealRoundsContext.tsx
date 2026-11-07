@@ -106,6 +106,8 @@ interface RealRoundsContextValue {
   messagesForCall: (roundId: string) => ChatMessage[];
   /** A round chat is open: also hold that round's own newest page (lib/roundMessagePages.ts). Returns the unwatch. */
   watchRoundMessages: (roundId: string) => () => void;
+  /** An open round chat holds only its latest `held` messages (more exist on the server). */
+  roundHistoryCut: (roundId: string) => { cut: boolean; held: number };
   /** Shows the message at once as "sending"; on failure it stays as a failed bubble (retry/discard; "objectionable" = edit/discard, never resent). Never throws. */
   sendRoundMessage: (roundId: string, text: string, replyToId?: string | null) => Promise<SendMessageResult>;
   retryRoundMessage: (message: { clientId: string; roundId: string; text: string; replyToId?: string | null }) => Promise<SendMessageResult>;
@@ -342,9 +344,11 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
       const forUser = authUser?.id;
       if (!forUser) return;
       const token = messageStore.beginPage(roundId);
-      const { data, error } = await supabase
+      // count: the round's exact total (whatever the row cap), so the thread
+      // can say when it shows only the latest messages (isHistoryCut).
+      const { data, error, count } = await supabase
         .from("round_messages")
-        .select("*")
+        .select("*", { count: "exact" })
         .eq("round_id", roundId)
         .order("created_at", { ascending: false })
         .order("id", { ascending: false })
@@ -355,7 +359,7 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
         console.error("GolfMe: failed to load round messages.", error);
         return;
       }
-      if (messageStore.acceptPage(roundId, token, (data ?? []) as RoundMessageRow[])) composeMessageRows();
+      if (messageStore.acceptPage(roundId, token, (data ?? []) as RoundMessageRow[], count)) composeMessageRows();
     },
     [authUser, messageStore, composeMessageRows],
   );
@@ -575,6 +579,9 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
     (roundId: string) => mergeRoundMessages(messageRows, pendingMessages, roundId),
     [messageRows, pendingMessages],
   );
+  // Read from the store on every render (this provider's value is rebuilt
+  // each render, and messageRows is composed from the same store).
+  const roundHistoryCut = (roundId: string) => messageStore.historyCut(roundId);
 
   // A sent message is kept until a refetch brings in its row (by id), so a
   // refetch that started before the insert can't make it blink out.
@@ -1216,6 +1223,7 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
     submitReview,
     messagesForCall,
     watchRoundMessages,
+    roundHistoryCut,
     sendRoundMessage,
     retryRoundMessage,
     discardRoundMessage,
