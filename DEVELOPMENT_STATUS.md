@@ -21,7 +21,7 @@ Note: Phases between Phase 20/21 (see below) and Phase 22 span roughly 31 commit
   - (`20261107260000` Community 10-media cap: APPLIED by Micky 2026-11-07, precheck 0 posts over cap, check true.)
 
 **Not shipped / in progress (exact next actions):**
-- iOS 2.5 (1) build: the native one-tap video + multi-select picker code is on main (web part safe on 2.4); it needs `npx cap sync ios` plus an Xcode archive on the Mac.
+- iOS 2.5 (1) build: Micky plans it next week (2.4 already App Store approved). Full steps, What to Test and What's New in LAUNCH_CHECKLIST.md section 10b. Before App Store submission chat video must be live and the Privacy Policy needs its chat-video sentence.
 - Chat navigation + keyboard motion (golfme-architect, frozen area; Micky's WeChat reference recording is in `.claude/inbox/`): local worktree, plan first.
 - Reminder for Micky: the shared-deps Review Gate fix (memory `pending-shared-deps`) and removing the bare `Edit`/`Write` allow rules.
 - Marketing images batch 1 (Higgsfield, scratchpad `marketing-v1/`): waiting for Micky's picks.

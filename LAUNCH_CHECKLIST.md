@@ -432,6 +432,174 @@ Thanks for playing with GolfMe. See you on the course!
   8. `[x]` (in the branch) Verified Golfer badge: how it is derived (confirmed email or Apple/Google sign-in, profile photo, 1 completed round with another golfer), others see only the badge, no phone number collected. Matches `20261107230000_verified_golfer_derived` (separate branch); publish together with or after that migration.
   Deploy order: `supabase functions deploy chat-media-sweep --no-verify-jwt` → paste `privacy-purge-apply.sql` (after `20261107180000_chat_voice`; check file → true) → `supabase functions deploy course-photos` → web deploy (the policy text). Device check: none (server jobs; watch `cron.job_run_details` and the `chat-media-sweep` logs the next day).
 
+## 10b. NEXT BUILD: 2.5 (1) TESTFLIGHT (prepared 2026-11-07 on origin/main 1b4fca5; one-tap video picking + multi-select)
+The last uploaded build is **2.4 (1)** (Micky, 2026-11-06). This one is **2.5 (1)**. Everything native is already on `main` (8bbe790); there is no branch to merge first. Since 2.4 the app has also been getting web changes live from golfme.app, so most of section 3's second half can be checked on 2.4 as well.
+
+#### 0. What is native in this build (needs the Xcode archive)
+
+Checked with `git diff 44ccba0 origin/main -- ios/` (44ccba0 = the 2.4 photo-picker commit; 3f3cb81, the 2.4 checklist, touched no native file). Exactly two files changed, both in 8bbe790:
+
+| File | Change |
+|---|---|
+| `ios/App/App.xcodeproj/project.pbxproj` | `MARKETING_VERSION` 2.4 → **2.5** (Debug + Release). `CURRENT_PROJECT_VERSION` stays **1**. Nothing else: no new file entries, no build settings. |
+| `ios/App/App/MediaPickerPlugin.swift` | `GolfMeMediaPicker.pick({ kinds, limit })`: photos, videos or both; `limit` 1 to 10 (1 = one tap picks and closes; above 1, iOS numbers each choice in order and shows its own Add button). Returns `{ items: [...] }` in the order chosen; a single item is also returned at the top level, as in 2.4. Photos unchanged (metadata-free JPEG). **Videos:** `.compatible` representation, so iOS converts HEVC/HDR clips to H.264 after the picker closes; the file is copied into `Caches/GolfMeMediaPicks/` and only its path is returned (no base64). **New methods** `readChunk({ path, offset, length })` (base64, at most 4 MB per call; the page reads 2 MB chunks) and `discard({ path })`, both restricted to that folder; the folder is emptied at the start of each video pick. |
+
+Not changed: `Info.plist` (PHPicker without library access needs no permission), `AppleSignInPlugin.swift`, `SceneDelegate.swift`, `capacitor.config.ts`, `Package.swift`, npm dependencies (the `package.json` diff since 2.4 is test scripts only). No new Swift file. The Swift has **not been compiled yet** (written on Linux): the first Xcode build is the compile check.
+
+Web side: `src/lib/mediaPicker.ts` detects the build from the plugin's method list. A 2.4 build has only `pick`, so videos and multi-select fall back to the file input; 2.5 has `readChunk`, so they go native. The same web deploy is therefore safe on both builds.
+
+#### 1. On the Mac
+
+1. **Get main.** Your local `project.pbxproj` edits (Team) will block the pull, so set them aside first:
+   `git stash` → `git pull` → `git stash pop`.
+   **Conflict note (it happened with 2.4):** `stash pop` left conflict markers (`<<<<<<<`) in `project.pbxproj` and `Info.plist`, and Xcode can't open a project file with markers in it. Fix, per file:
+   `git checkout origin/main -- ios/App/App.xcodeproj/project.pbxproj` and `git checkout origin/main -- ios/App/App/Info.plist`,
+   then `git stash drop` (a pop that conflicts keeps the stash entry). Then re-pick the **Team** in Xcode → target App → Signing & Capabilities (that is the only local edit the stash carried). `git status` should then show both files clean.
+   Simpler alternative if the stash only ever held the Team: skip the stash, run `git checkout -- ios/App/App.xcodeproj/project.pbxproj ios/App/App/Info.plist`, `git pull`, and re-pick the Team.
+2. `npm install` (no new packages; keeps node_modules in step with the lockfile).
+3. `npm run ios:sync` (builds the web app, then `npx cap sync ios`). Expect **"Found 6 Capacitor plugins"** and no `Package.swift` change. The media picker is an app-local Swift file, not a package, so it is not in that count.
+4. `npm run ios:open` (or open `ios/App/App.xcodeproj`).
+5. Target App → General: **Version 2.5**, **Build 1**. Signing & Capabilities: Team set; Push Notifications, Sign in with Apple and Associated Domains (`applinks:golfme.app`) present.
+6. **Debug run on the iPhone first** (destination: your iPhone, Product → Run). This is the first compile of the new Swift; if it fails, send Claude the exact error from the Issue navigator before archiving. With it running, do the "native" checks in section 3 (one-tap Caddie video, chat multi-select, a 4K HEVC clip).
+7. Destination **Any iOS Device (arm64)** → Product → **Archive**.
+8. Organizer → the new archive → **Distribute App** → **App Store Connect** → **Upload**. Keep automatic signing and "Upload symbols". The export-compliance question is skipped (`ITSAppUsesNonExemptEncryption = false`).
+
+#### 2. In App Store Connect
+
+1. TestFlight → iOS builds: wait for **2.5 (1)** to finish processing (an email arrives, usually 5 to 30 min).
+2. If it shows "Missing Compliance", answer No (standard HTTPS only).
+3. Paste **What to Test** (section 5b) into the build's Test Details.
+4. Internal Testing → your group → add build 2.5 (1) (or automatic distribution is already on).
+5. Install from the TestFlight app on the iPhone and run section 3.
+6. When you submit 2.5 for review: App Store tab → **+ Version** → **2.5**, select build 2.5 (1), paste **What's New** (section 5c, after trimming any line whose server update isn't live), update the App Review notes (section 4) and check App Privacy and the Privacy Policy (section 6).
+
+#### 3. What to test on the iPhone
+
+**New native behaviour in 2.5 (needs this build)**
+- [ ] **Caddie → Select Video:** one tap on a clip closes the picker (no "1 Selected" sheet, no permission alert); preview, trim and Ask Caddie work as before. Cancel and swipe-down leave nothing selected and the button still works; a quick double tap opens one picker.
+- [ ] **Community → Create Post:** swing video is one tap; the photo/video button picks several at once, numbered in order, with iOS's Add button; they appear in that order.
+- [ ] **Chat (DMs and round chat):** a single photo is still one tap. Choosing more than one: up to 10 photos and videos mixed, in order (needs the chat video SQL, see below).
+- [ ] **H.264 conversion delay.** A clip filmed in the iPhone's default "High Efficiency" (HEVC) format, especially 4K60 or HDR, is converted by iOS after the picker closes. Until it finishes, the page shows nothing; the spinner appears only once the plugin answers. Time it, from the tap to the spinner and then to the preview, for a **10 s** and a **30 s** 4K60 HEVC clip, plus a ~100 MB file. Write the seconds down: if the silent gap is long, the follow-up is a native "Preparing video" signal.
+- [ ] A video over 200 MB shows the "too large" message and isn't read.
+- [ ] A sent or posted video plays on a second iPhone (it is H.264 now, which should also help the "black screen on another account" report).
+- [ ] **On a phone still on 2.4** (with the same web deploy): Caddie Select Video and chat multi-select fall back to the old file input, with no error.
+
+**Shipped on the web since 2.4, needs a device check** (works on 2.4 too, except the native picking above)
+- [ ] **Chat video and albums** (**only after migration `20261107220000_chat_video_albums` is applied** and `delete-account` + `chat-video-retention` are deployed; before that the composer behaves exactly as in 2.4): send a video (one over 60 s opens the trim sheet), and an album of photos and videos that arrives as one stacked deck; swipe through the deck without scrolling the chat or triggering swipe-to-reply; tap opens the fullscreen viewer; autoplay muted, tap for sound; push text "[Video]" / "[Album]"; unsend removes it on the other phone; airplane mode mid-upload → Retry resumes.
+- [ ] **Avatars open profiles:** in DMs and round chat, tap any message avatar → that golfer's profile (yours → your profile). A hold or a swipe that starts on the avatar does not navigate.
+- [ ] **Voice privacy (A→B):** two accounts. Start holding to talk in chat A, switch to chat B before releasing: the clip never lands in B. Release in A, then switch to B quickly: it goes to A only. If a clip can't be sent, the toast names chat A ("Voice message to {name} wasn't sent.").
+- [ ] **Verified Golfer card** (Me → Reputation → Trust & verification): the medallion with its progress ring, "n of 3", and the three steps with their inline actions (Confirm email, Add photo, Find a round). The live badge logic needs migration `20261107230000_verified_golfer_derived`; before it, real accounts see the old Email row. **Tutorial:** the new "Get verified" step comes after Chat and before Caddie and spotlights the card (new real account only).
+- [ ] **Saved swings** (after migration `20261107210000_caddie_saved_swings`; Save is hidden until then): Save on a complete analysis, the shelf on /caddie sorted by club, horizontal scroll vs. page scroll, the save showing after the app comes back from the background.
+- [ ] **Club picker:** the visual picker with club art scrolls smoothly; a club is required (no "Not sure"), and the disabled button explains why.
+- [ ] **Caddie filming tips:** the tips card on the upload screen folds away and stays folded; a clip with no full body shows "We couldn't see your whole body in this video" with Try again and Choose another video.
+- [ ] **Community upload cap:** pick photos and videos while others are still uploading; never more than 10 in a post, Post stays disabled until every upload has finished. (The server-side cap, migration `20261107260000`, is separate and not needed for this check.)
+- [ ] **Photo zoom:** pinch and double tap in the fullscreen viewer (chat and Community), pan while zoomed, swipe between photos and drag down to close still work at 1x; tap your own avatar on Me to see it fullscreen.
+- [ ] **Keyboard motion:** tapping a field slides it into view smoothly instead of jumping (Host a Round, sheets such as Report, onboarding). Compare with the old behaviour on the same phone: Me → About → tap the description line **7 times** (founder account only) toggles smooth motion on/off with a toast; it applies from the next field tap. DMs and round chat should feel unchanged. Also try Reduce Motion and the emoji keyboard.
+- [ ] **Like and comment pushes:** with two accounts, a like on your post gives one bell row and push ("<name> liked your post."), only once per person; a comment or reply pushes with a preview.
+- [ ] **Round chat:** opens on the newest messages; in a round with more messages than it holds, the top says "Showing the latest N messages" (DMs: "Older messages may not be shown"). It must not flicker on open.
+- [ ] Still fine from 2.4: one-tap chat photo, dark/light status bar and keyboard, voice messages (hold to talk with the silent switch on), course map and overview.
+
+#### 4. App Review notes
+
+Use 10a.4's text, with two changes: in the first paragraph say "(text, photos, videos and voice messages)" once the chat video SQL is applied (otherwise "text, photos and voice messages"); and in Permissions, "record a swing, or record a voice message" stays as it is (video picking uses the same photo-library wording). No new permission prompt in 2.5.
+
+#### 5. Release notes
+
+Baseline: 2.4 (1) code, 2026-11-06 (44ccba0 / 3f3cb81). 41 commits to 1b4fca5.
+
+##### 5a. Changelog since 2.4 (user-facing, grouped)
+
+**Chat**
+- Voice messages in DMs and round chats: hold to talk, release to send, slide up to cancel; play/pause bubbles; react, reply and unsend like any message.
+- Videos (up to 60 s, longer clips open a trim sheet) and albums of up to 10 photos and videos, sent as one message and shown as a swipeable stack (needs migration `20261107220000`). Videos are converted on our server to H.264 with location and camera data removed, and expire after 180 days.
+- Choose several photos and videos at once, in order (native in 2.5; file input on 2.4 and the web).
+- Tap any avatar in a chat to open that golfer's profile.
+- A voice message only ever goes to the chat it was recorded in; if it can't be sent, the message names that chat.
+- Round chats open on the newest messages and say when only the latest are shown; DMs say when older messages may be missing.
+- A late photo pick can no longer land in a different chat's composer.
+- Previews read "[Photo]", "[Voice message]", "[Video]" and "[3 photos]" instead of emojis.
+
+**Caddie**
+- One-tap video picking (native in 2.5), with HEVC/HDR clips arriving as H.264.
+- Saved swings: save a complete analysis and find it on a shelf sorted by Driver, Woods, Hybrids, Irons and Wedges (needs migration `20261107210000`).
+- A visual club picker with club art; choosing a club is now required.
+- Filming tips on the upload screen, a clearer message when your whole body isn't in the frame, and one extra full-resolution attempt before an analysis fails.
+- A success haptic when an analysis finishes, on any screen.
+- Picking a second video while the first is still loading now always keeps the newest one.
+
+**Community**
+- Notifications when someone likes your post, and pushes for comments and replies.
+- One-tap swing video and multi-select photos and videos in Create Post (native in 2.5).
+- A post can never take more than 10 photos and videos, and Post waits until every upload has finished.
+- A clear "can't play" / tap-to-play overlay instead of a black video.
+
+**Profile and trust**
+- Verified Golfer: earned with a confirmed email or Apple/Google sign-in, a profile photo and one completed round with another golfer; a redesigned card shows each step, and the tutorial has a "Get verified" step (needs migration `20261107230000`).
+- Tap your own photo to see it fullscreen.
+
+**Look and feel**
+- Pinch and double-tap zoom on photos.
+- Fields slide smoothly into view when the keyboard opens.
+- Plainer icons in place of sparkles.
+- Course overviews load faster, and the layout fallback is fixed.
+
+**Privacy**
+- Privacy Policy updated for sign-in, chat photos and voice, course imagery, Caddie, pushes and retention; unsent text copies are deleted after 90 days and orphaned chat files within a day, by server jobs.
+
+##### 5b. TestFlight "What to Test" (paste into Test Details)
+
+```
+GolfMe 2.5 (1)
+
+New in this build:
+- One-tap video picking. In Caddie (Select Video) and in Create Post, tap a video and it is chosen straight away, with no "1 Selected" screen.
+- Choose several at once. In Create Post, and in chats, you can pick up to 10 photos and videos in one go. In a chat they arrive as a single album you can swipe through.
+- iPhone videos filmed in High Efficiency (HEVC) or HDR are converted by iOS before they appear, so a long 4K clip can take a few seconds with nothing on screen. Please tell us roughly how long a 10-second and a 30-second clip take.
+
+Please also try (recently added):
+- Chat videos and albums: send a short video and a mix of photos and videos, and check they play on the other phone.
+- Tap someone's photo in a chat to open their profile.
+- Voice messages: start recording in one chat, switch to another, and check the clip never ends up in the wrong chat.
+- Me > Reputation: the new Verified Golfer card, and the "Get verified" step in the tutorial.
+- Caddie: save a swing, the new club picker, and the filming tips on the upload screen.
+- Create Post: add photos while others are still uploading. A post holds at most 10.
+- Pinch to zoom on photos. Fields sliding into view when the keyboard opens.
+- Likes and comments on your posts send a notification.
+- Round chats open on the newest messages.
+
+Report anything odd with a screenshot: TestFlight > Send Beta Feedback.
+```
+
+##### 5c. App Store "What's New" (2.5, about 950 characters)
+
+```
+Voice messages: hold to talk in any direct message or round chat, and release to send.
+
+Videos and albums in chat: send a video up to 60 seconds, or choose up to 10 photos and videos at once. They arrive together as one album you can swipe through.
+
+One-tap picking: choosing a swing video for Caddie or a post now takes a single tap, with no extra confirm screen.
+
+Saved swings: keep your best Caddie analyses, sorted by club.
+
+A new club picker and filming tips help Caddie get a clear look at your swing.
+
+Verified Golfer: confirm your email or sign in with Apple or Google, add a profile photo, and play one round with another golfer. Your Reputation page shows each step.
+
+Also in this update:
+• Pinch to zoom on any photo.
+• Notifications when someone likes or comments on your post.
+• Tap a golfer's photo in any chat to open their profile.
+• Course pages load faster.
+• Smoother scrolling when the keyboard opens, plus fixes throughout.
+```
+Before pasting, remove any paragraph whose server update isn't live on golfme.app: "Videos and albums in chat" needs `20261107220000`, "Saved swings" needs `20261107210000`, "Verified Golfer" needs `20261107230000`. If voice messages were already described in an earlier live version's notes, drop that line too (2.4's notes did not mention them).
+
+#### 6. App Privacy and Privacy Policy
+
+- **App Privacy label:** no new selections. "Photos or Videos" (linked, App Functionality) already covers chat videos and albums; "Audio Data" covers voice messages.
+- **Privacy Policy gap (fix before submitting 2.5 if chat video is live):** `src/pages/PrivacyPolicy.tsx` covers "Chat photos and voice messages" but says nothing about **chat videos**: that they are uploaded to a private staging area, converted on our own server (Vercel function `api/chat-video`, ffmpeg) with location and camera metadata removed, and deleted automatically after 180 days unless an open report holds them. Add that to the same item (and the "Photos and voice messages aren't automatically scanned" line) and publish it with or after migration `20261107220000`.
+- **PrivacyInfo.xcprivacy:** still not needed (2.5's Swift uses no required-reason API). Add one only if App Store Connect sends an ITMS-91053 email after the upload.
+
 ## 11. MARKETPLACE SEEDING (NYC) — no fake users or activity in production
 | Status | Item | Notes |
 |---|---|---|
