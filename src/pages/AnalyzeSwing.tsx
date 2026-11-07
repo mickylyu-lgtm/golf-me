@@ -20,6 +20,7 @@ import { CaddieRequestError } from "../lib/caddieAnalysis";
 import { isCatalogClub, restoredDraftClub } from "../lib/clubCatalog";
 import { caddieErrorText } from "../lib/caddieErrorText";
 import { isInMemoryPick, pickMedia } from "../lib/mediaPicker";
+import { createVideoSelectionGate, prepareVideoSelection } from "../lib/videoSelection";
 const MAX_SWING_VIDEO_BYTES = 200 * 1024 * 1024; // matches the Storage bucket's own file_size_limit
 const MAX_SWING_VIDEO_SECONDS = 10; // max length of the WINDOW actually analyzed (2026-08-22 credit-efficiency pass) — Caddie's Roboflow pass calls once per sampled frame, so a longer clip directly multiplies calls/latency/credit spend; see analyze-swing's ANALYSIS_FPS comment. Was 15s. A source video longer than this is no longer rejected outright — VideoTrimSelector lets the golfer pick which 10s window to analyze instead.
 // Once analyze-swing actually creates the 'processing' row, the real
@@ -100,6 +101,18 @@ export function AnalyzeSwing() {
   const currentDraftRef = useRef(draftSwingVideo);
   currentDraftRef.current = draftSwingVideo;
   useEffect(() => () => trimReopenGate.cancel(), [trimReopenGate]);
+  // A picked video being prepared (length read + in-memory copy): only the
+  // newest pick, while this page is open, may land (lib/videoSelection.ts).
+  const selectionGate = useRef(createVideoSelectionGate()).current;
+  const [preparingPick, setPreparingPick] = useState(false);
+  const pendingTrimRef = useRef(pendingTrim);
+  pendingTrimRef.current = pendingTrim;
+  const swingTypeRef = useRef(swingType);
+  swingTypeRef.current = swingType;
+  useEffect(() => {
+    selectionGate.open();
+    return () => selectionGate.close();
+  }, [selectionGate]);
 
   useEffect(() => {
     if (localStorage.getItem(UPLOAD_IN_PROGRESS_KEY)) {
@@ -173,25 +186,29 @@ export function AnalyzeSwing() {
   }
 
   async function acceptVideoFile(file: File) {
+    // The newest pick wins, even one refused below: an older pick still
+    // being prepared must not land after the golfer has moved on
+    // (lib/videoSelection.ts).
+    const token = selectionGate.begin();
     if (!file.type.startsWith("video/")) {
+      selectionGate.end(token);
+      setPreparingPick(false);
       showToast(t("caddie.unsupportedVideo"), "warning");
       return;
     }
     if (file.size > MAX_SWING_VIDEO_BYTES) {
+      selectionGate.end(token);
+      setPreparingPick(false);
       showToast(t("caddie.videoTooLarge"), "warning");
       return;
     }
+    setPreparingPick(true);
 
-    let duration: number | undefined;
-    try {
-      duration = await readVideoDuration(file);
-    } catch {
-      // Metadata read failing isn't itself disqualifying — the file-size
-      // and format checks above already ran; let it through as an
-      // untrimmed clip rather than blocking a real, valid file over a
-      // metadata quirk.
-    }
-
+    // A failing metadata read isn't itself disqualifying — the file-size
+    // and format checks above already ran; it's let through as an
+    // untrimmed clip rather than blocking a real, valid file over a
+    // metadata quirk.
+    //
     // iOS/WKWebView can evict the actual data behind a picked File's handle
     // if it just sits in memory for a while (this draft deliberately
     // survives navigating away and back, so there's no bound on how long)
@@ -206,24 +223,29 @@ export function AnalyzeSwing() {
     // original reference can't affect it. Falls back to the original file
     // if this itself fails (rare) rather than blocking selection over it.
     // A native pick already is such an in-memory copy (lib/mediaPicker.ts).
-    let stableFile = file;
-    if (!isInMemoryPick(file)) {
-      try {
-        const bytes = await file.arrayBuffer();
-        stableFile = new File([bytes], file.name, { type: file.type });
-      } catch (err) {
-        console.error("GolfMe: failed to read the video into memory.", err);
-      }
-    }
+    const outcome = await prepareVideoSelection({
+      gate: selectionGate,
+      token,
+      file,
+      readDuration: readVideoDuration,
+      stabilize: async (f) => (isInMemoryPick(f) ? f : new File([await f.arrayBuffer()], f.name, { type: f.type })),
+      onStabilizeError: (err) => console.error("GolfMe: failed to read the video into memory.", err),
+    });
+    // A newer pick owns the spinner; otherwise this one is over.
+    if (!selectionGate.pending) setPreparingPick(false);
+    if (outcome.kind === "stale") return;
+    const { file: stableFile, duration } = outcome;
     const previewUrl = URL.createObjectURL(stableFile);
 
-    if (pendingTrim && !pendingTrim.editing) URL.revokeObjectURL(pendingTrim.previewUrl);
+    // Read now, not from this call's render: the selector may have changed meanwhile.
+    const openTrim = pendingTrimRef.current;
+    if (openTrim && !openTrim.editing) URL.revokeObjectURL(openTrim.previewUrl);
     if (duration !== undefined && duration > MAX_SWING_VIDEO_SECONDS) {
       setPendingTrim({ file: stableFile, previewUrl, duration });
       return;
     }
     setPendingTrim(undefined);
-    setDraftSwingVideo({ file: stableFile, previewUrl, swingType });
+    setDraftSwingVideo({ file: stableFile, previewUrl, swingType: swingTypeRef.current });
   }
 
   function confirmTrim(trimStartSeconds: number, trimEndSeconds: number) {
@@ -267,6 +289,8 @@ export function AnalyzeSwing() {
   function removeVideo() {
     trimReopenGate.cancel();
     setTrimReopening(false);
+    selectionGate.cancel();
+    setPreparingPick(false);
     setDraftSwingVideo(undefined);
   }
 
@@ -420,10 +444,10 @@ export function AnalyzeSwing() {
         <button
           onClick={selectVideo}
           disabled={readingPick}
-          aria-busy={readingPick}
+          aria-busy={readingPick || preparingPick}
           className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-200 py-10 text-slate-400 transition-colors duration-150 hover:border-fairway-300 hover:text-fairway-600"
         >
-          {readingPick ? <Loader2 size={22} className="animate-spin text-fairway-600" /> : <Video size={22} />}
+          {readingPick || preparingPick ? <Loader2 size={22} className="animate-spin text-fairway-600" /> : <Video size={22} />}
           <span className="text-sm font-semibold">{t("caddie.selectVideo")}</span>
           <span className="text-xs text-slate-400">{t("caddie.noVideoSelected")}</span>
           <span className="text-xs text-slate-400">{t("caddie.recommendedLength")}</span>

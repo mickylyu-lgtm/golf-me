@@ -25,6 +25,7 @@ import { isObjectionableContentError } from "../lib/objectionableContent";
 import { goBack } from "../lib/goBack";
 import { tapHaptic } from "../lib/tapFeedback";
 import { isInMemoryPick, pickMedia, pickMediaFiles } from "../lib/mediaPicker";
+import { createPostMediaLedger, insertBySeq, uploadIntoSlots } from "../lib/postMediaLedger";
 
 type Attachment = "none" | "photo" | "course" | "round" | "swing";
 
@@ -78,7 +79,17 @@ export function CreatePost() {
     prefill?.swingVideoUrl || prefill?.privateVideoPath ? "swing" : (draft?.activeTool ?? "none"),
   );
   const [mediaItems, setMediaItems] = useState<DraftMediaItem[]>(draft?.mediaItems ?? []);
-  const [mediaUploading, setMediaUploading] = useState(false);
+  // The synchronous slot bookkeeping behind mediaItems (lib/postMediaLedger.ts):
+  // the cap and "still uploading" are decided by it, never by React state
+  // alone. Seeded once with the restored draft's items.
+  const [mediaLedger] = useState(() => createPostMediaLedger(MAX_POST_MEDIA_ITEMS, (draft?.mediaItems ?? []).map((m) => m.id)));
+  // Mirrors mediaLedger.pending (set from it after every change, so it can't
+  // drift or go negative); one batch finishing doesn't clear another's.
+  const [pendingUploads, setPendingUploads] = useState(0);
+  const mediaUploading = pendingUploads > 0;
+  // Leaving the page cancels whatever is still uploading: a late result is
+  // dropped instead of landing in a page that's gone.
+  useEffect(() => () => mediaLedger.cancelPending(), [mediaLedger]);
   // A native video pick (one-tap picker) being read into the page.
   const [readingPick, setReadingPick] = useState(false);
   // Never restored from the draft — a File can't survive localStorage's
@@ -167,7 +178,9 @@ export function CreatePost() {
   // "the swing video is the PRIMARY content" instruction.
   function attachedKind(): Attachment {
     if (videoFile || prefilledVideoUrl || privateShare) return "swing";
-    if (mediaItems.length > 0) return "photo";
+    // Photos still uploading count too: attaching another kind meanwhile
+    // asks first (and cancels them) instead of mixing both into one post.
+    if (mediaItems.length > 0 || mediaUploading) return "photo";
     if (courseTag) return "course";
     if (golfCallId) return "round";
     return "none";
@@ -187,70 +200,81 @@ export function CreatePost() {
     run();
   }
 
-  // Uploads run one file at a time and each item is appended to
-  // mediaItems as soon as it finishes — a mixed batch of photos/videos
-  // shows up progressively rather than as one all-or-nothing wait, and one
-  // bad file (wrong type, too large, a failed upload) is skipped with a
-  // toast instead of losing the whole batch.
-  async function doAttachMedia(files: File[]) {
-    setMediaUploading(true);
-    setActiveTool("photo");
-    try {
-      for (const file of files) {
-        const isVideo = file.type.startsWith("video/");
-        const isImage = file.type.startsWith("image/");
-        if (!isVideo && !isImage) {
-          showToast(`"${file.name}" isn't a photo or video — skipped.`, "warning");
-          continue;
-        }
-        if (isVideo && file.size > MAX_SWING_VIDEO_BYTES) {
-          showToast(`"${file.name}" is too large — skipped.`, "warning");
-          continue;
-        }
-        if (isVideo && (isDemo || !authUser)) {
-          showToast("Video attachments need a real GolfMe account — skipped.", "warning");
-          continue;
-        }
+  // One photo/video into community-media (or a data URL in demo). Throws
+  // on failure; uploadIntoSlots skips that file with a toast.
+  async function uploadPostMedia(file: File): Promise<Omit<DraftMediaItem, "id">> {
+    if (file.type.startsWith("video/")) {
+      const path = `${authUser!.id}/post-${crypto.randomUUID()}.${file.name.split(".").pop() ?? "mp4"}`;
+      const { error: uploadError } = await supabase.storage.from(COMMUNITY_MEDIA_BUCKET).upload(path, file, { contentType: file.type });
+      if (uploadError) throw uploadError;
+      const url = supabase.storage.from(COMMUNITY_MEDIA_BUCKET).getPublicUrl(path).data.publicUrl;
 
-        try {
-          if (isVideo) {
-            const path = `${authUser!.id}/post-${crypto.randomUUID()}.${file.name.split(".").pop() ?? "mp4"}`;
-            const { error: uploadError } = await supabase.storage.from(COMMUNITY_MEDIA_BUCKET).upload(path, file, { contentType: file.type });
-            if (uploadError) throw uploadError;
-            const url = supabase.storage.from(COMMUNITY_MEDIA_BUCKET).getPublicUrl(path).data.publicUrl;
-
-            let thumbnailUrl: string | undefined;
-            try {
-              const thumbBlob = await captureVideoThumbnail(file);
-              const thumbPath = `${authUser!.id}/post-thumb-${crypto.randomUUID()}.jpg`;
-              const { error: thumbUploadError } = await supabase.storage
-                .from(COMMUNITY_MEDIA_BUCKET)
-                .upload(thumbPath, thumbBlob, { contentType: "image/jpeg" });
-              if (!thumbUploadError) thumbnailUrl = supabase.storage.from(COMMUNITY_MEDIA_BUCKET).getPublicUrl(thumbPath).data.publicUrl;
-            } catch (thumbErr) {
-              console.error("GolfMe: failed to capture a video thumbnail.", thumbErr);
-            }
-            setMediaItems((prev) => [...prev, { id: crypto.randomUUID(), kind: "video", url, thumbnailUrl }]);
-          } else {
-            let url: string;
-            if (!isDemo && authUser) {
-              const blob = await resizeImageToBlob(file);
-              const path = `${authUser.id}/${crypto.randomUUID()}.jpg`;
-              const { error: uploadError } = await supabase.storage.from(COMMUNITY_MEDIA_BUCKET).upload(path, blob, { contentType: "image/jpeg" });
-              if (uploadError) throw uploadError;
-              url = supabase.storage.from(COMMUNITY_MEDIA_BUCKET).getPublicUrl(path).data.publicUrl;
-            } else {
-              url = await resizeImageToDataUrl(file);
-            }
-            setMediaItems((prev) => [...prev, { id: crypto.randomUUID(), kind: "image", url }]);
-          }
-        } catch {
-          showToast(`Couldn't upload "${file.name}" — skipped.`, "warning");
-        }
+      let thumbnailUrl: string | undefined;
+      try {
+        const thumbBlob = await captureVideoThumbnail(file);
+        const thumbPath = `${authUser!.id}/post-thumb-${crypto.randomUUID()}.jpg`;
+        const { error: thumbUploadError } = await supabase.storage
+          .from(COMMUNITY_MEDIA_BUCKET)
+          .upload(thumbPath, thumbBlob, { contentType: "image/jpeg" });
+        if (!thumbUploadError) thumbnailUrl = supabase.storage.from(COMMUNITY_MEDIA_BUCKET).getPublicUrl(thumbPath).data.publicUrl;
+      } catch (thumbErr) {
+        console.error("GolfMe: failed to capture a video thumbnail.", thumbErr);
       }
-    } finally {
-      setMediaUploading(false);
+      return { kind: "video", url, thumbnailUrl };
     }
+    if (!isDemo && authUser) {
+      const blob = await resizeImageToBlob(file);
+      const path = `${authUser.id}/${crypto.randomUUID()}.jpg`;
+      const { error: uploadError } = await supabase.storage.from(COMMUNITY_MEDIA_BUCKET).upload(path, blob, { contentType: "image/jpeg" });
+      if (uploadError) throw uploadError;
+      return { kind: "image", url: supabase.storage.from(COMMUNITY_MEDIA_BUCKET).getPublicUrl(path).data.publicUrl };
+    }
+    return { kind: "image", url: await resizeImageToDataUrl(file) };
+  }
+
+  // Uploads run one file at a time and each item lands in mediaItems as
+  // soon as it finishes — a mixed batch of photos/videos shows up
+  // progressively rather than as one all-or-nothing wait, and one bad file
+  // (wrong type, too large, a failed upload) is skipped with a toast
+  // instead of losing the whole batch. Slots are reserved synchronously
+  // here, before any await, so a second pick while this one runs (or two
+  // picks before a render) can't take the post past the cap.
+  function doAttachMedia(files: File[]) {
+    const usable: File[] = [];
+    for (const file of files) {
+      const isVideo = file.type.startsWith("video/");
+      const isImage = file.type.startsWith("image/");
+      if (!isVideo && !isImage) {
+        showToast(`"${file.name}" isn't a photo or video — skipped.`, "warning");
+        continue;
+      }
+      if (isVideo && file.size > MAX_SWING_VIDEO_BYTES) {
+        showToast(`"${file.name}" is too large — skipped.`, "warning");
+        continue;
+      }
+      if (isVideo && (isDemo || !authUser)) {
+        showToast("Video attachments need a real GolfMe account — skipped.", "warning");
+        continue;
+      }
+      usable.push(file);
+    }
+    if (usable.length === 0) return;
+    const slots = mediaLedger.reserve(usable.length);
+    if (slots.length === 0) {
+      showToast(`You can attach up to ${MAX_POST_MEDIA_ITEMS} photos/videos per post.`, "warning");
+      return;
+    }
+    if (slots.length < usable.length) showToast(`Only the first ${slots.length} were added — ${MAX_POST_MEDIA_ITEMS} per post max.`, "warning");
+    setPendingUploads(mediaLedger.pending);
+    setActiveTool("photo");
+    void uploadIntoSlots<File, DraftMediaItem>({
+      ledger: mediaLedger,
+      batch: slots.map((slot, i) => ({ file: usable[i], slot })),
+      upload: uploadPostMedia,
+      onCommitted: (item) => setMediaItems((prev) => insertBySeq(prev, item, mediaLedger.seqOf)),
+      onFailed: (file) => showToast(`Couldn't upload "${file.name}" — skipped.`, "warning"),
+      onChange: () => setPendingUploads(mediaLedger.pending),
+    });
   }
 
   function handleFile(e: ChangeEvent<HTMLInputElement>) {
@@ -263,7 +287,8 @@ export function CreatePost() {
   // picker with up to the remaining slots, in selection order; else the
   // multi-select file input. Either way they land in attachFiles.
   function selectMedia() {
-    const remainingSlots = MAX_POST_MEDIA_ITEMS - mediaItems.length;
+    // Counts uploads still running, not just the items already shown.
+    const remainingSlots = mediaLedger.remaining;
     if (remainingSlots <= 0) {
       showToast(`You can attach up to ${MAX_POST_MEDIA_ITEMS} photos/videos per post.`, "warning");
       return;
@@ -281,14 +306,14 @@ export function CreatePost() {
 
   function attachFiles(files: File[]) {
     if (files.length === 0) return;
-    const remainingSlots = MAX_POST_MEDIA_ITEMS - mediaItems.length;
-    if (remainingSlots <= 0) {
+    // The cap itself is enforced by the slot reservation in doAttachMedia
+    // (synchronous, counting uploads still running); this only saves a
+    // confirm dialog when nothing could be added anyway.
+    if (attachedKind() === "photo" && mediaLedger.remaining <= 0) {
       showToast(`You can attach up to ${MAX_POST_MEDIA_ITEMS} photos/videos per post.`, "warning");
       return;
     }
-    const toAttach = files.slice(0, remainingSlots);
-    if (files.length > toAttach.length) showToast(`Only the first ${remainingSlots} were added — ${MAX_POST_MEDIA_ITEMS} per post max.`, "warning");
-    requestAttach("photo", () => void doAttachMedia(toAttach));
+    requestAttach("photo", () => doAttachMedia(files));
   }
 
   function doAttachVideo(file: File) {
@@ -371,6 +396,7 @@ export function CreatePost() {
   }
 
   function removeMediaItem(id: string) {
+    mediaLedger.remove(id);
     setMediaItems((prev) => {
       const next = prev.filter((m) => m.id !== id);
       if (next.length === 0 && activeTool === "photo") setActiveTool("none");
@@ -418,6 +444,18 @@ export function CreatePost() {
 
   async function handlePost() {
     if (!canPost || posting) return;
+    // The disabled button isn't the only guard: refuse a snapshot with
+    // uploads still running, more than the cap, or items the slot ledger
+    // doesn't know (state that hasn't caught up yet).
+    if (mediaLedger.pending > 0) return;
+    if (kind === "photo") {
+      const block = mediaLedger.publishBlock(mediaItems.map((m) => m.id));
+      if (block === "over_cap") {
+        showToast(`You can attach up to ${MAX_POST_MEDIA_ITEMS} photos/videos per post. Remove some to post.`, "warning");
+        return;
+      }
+      if (block) return;
+    }
     setPosting(true);
     setUploadProgress(kind === "swing" && videoFile ? "uploading" : "publishing");
     // Public community-media objects THIS attempt wrote. If the post then
@@ -759,6 +797,9 @@ export function CreatePost() {
             // Clear whatever's currently attached before running the new
             // attach — requestAttach() only queues this dialog when the
             // kinds genuinely differ, so the old one is always safe to drop.
+            // Also cancels photos still uploading: their late results are dropped.
+            mediaLedger.clear();
+            setPendingUploads(0);
             setMediaItems([]);
             setVideoFile(undefined);
             if (videoPreviewUrl && !prefilledVideoUrl) URL.revokeObjectURL(videoPreviewUrl);
