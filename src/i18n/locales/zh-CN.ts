@@ -605,6 +605,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "chat.mediaRejected": "这里无法发送此内容。",
   "chat.viewProfileOf": "查看{name}的个人资料",
   "chat.viewYourProfile": "查看你的个人资料",
+  "chat.voiceNotSentTo": "发给{name}的语音消息未发送。",
   "chat.voiceSending": "正在发送语音消息",
   "chat.unsend": "撤回",
   "chat.youUnsent": "你撤回了一条消息",

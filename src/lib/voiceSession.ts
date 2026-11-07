@@ -62,7 +62,8 @@ export interface VoiceSessionDeps {
   origin?(): VoiceOrigin | null;
   onState(state: VoiceState): void;
   onClip(clip: SentVoiceClip): void;
-  onNotice(notice: VoiceNotice): void;
+  /** `origin` is set for "failed" (a released clip that couldn't be made): the conversation it was for. */
+  onNotice(notice: VoiceNotice, origin?: VoiceOrigin | null): void;
   haptic?(kind: VoiceHaptic): void;
   now(): number;
   /** Revoke a clip's object URL that will never be sent. */
@@ -195,12 +196,12 @@ export function createVoiceSession(deps: VoiceSessionDeps): VoiceSession {
         }
         delivered = true;
         if (clip) deps.onClip(Object.freeze({ ...clip, origin, recordingId }));
-        else deps.onNotice("failed");
+        else deps.onNotice("failed", origin);
       },
       () => {
         if (delivered) return;
         delivered = true;
-        deps.onNotice("failed");
+        deps.onNotice("failed", origin);
       },
     );
   };
@@ -268,6 +269,19 @@ export function claimVoiceClip(clip: VoiceClip): boolean {
   if (claimed.has(clip)) return false;
   claimed.add(clip);
   return true;
+}
+
+/**
+ * The "not sent" toast names the conversation the clip was for (Micky,
+ * 2026-11-06), since it can show while another thread is open: "Voice
+ * message to <golfer / course> wasn't sent." Generic when the name is unknown.
+ */
+export function voiceNotSentText(
+  t: (key: "chat.voiceNotSent" | "chat.voiceNotSentTo", vars?: Record<string, string>) => string,
+  name: string | null | undefined,
+): string {
+  const n = name?.trim();
+  return n ? t("chat.voiceNotSentTo", { name: n }) : t("chat.voiceNotSent");
 }
 
 export type VoiceSendClaim = { ok: true; to: string } | { ok: false; reason: "duplicate" | "noOrigin" };

@@ -583,6 +583,7 @@ export const en = {
   "chat.micDenied": "Microphone access is off. Allow it for GolfMe in Settings to send voice messages.",
   "chat.micUnavailable": "Voice messages aren't available on this device.",
   "chat.voiceNotSent": "Voice message didn't send — try again in a moment.",
+  "chat.voiceNotSentTo": "Voice message to {name} wasn't sent.",
   "chat.voiceSending": "Sending voice message",
   "chat.addMedia": "Add photos or videos",
   "chat.video": "[Video]",

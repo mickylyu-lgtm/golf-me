@@ -605,6 +605,7 @@ export const ja: Record<TranslationKey, string> = {
   "chat.mediaRejected": "ここでは送信できません。",
   "chat.viewProfileOf": "{name}さんのプロフィールを見る",
   "chat.viewYourProfile": "自分のプロフィールを見る",
+  "chat.voiceNotSentTo": "{name}へのボイスメッセージを送信できませんでした。",
   "chat.voiceSending": "ボイスメッセージを送信中",
   "chat.unsend": "送信を取り消す",
   "chat.youUnsent": "メッセージの送信を取り消しました",

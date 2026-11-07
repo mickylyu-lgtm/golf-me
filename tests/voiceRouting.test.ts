@@ -18,12 +18,20 @@ import assert from "node:assert/strict";
 import {
   claimVoiceSend,
   createVoiceSession,
+  voiceNotSentText,
   voiceSendPlan,
   type SentVoiceClip,
   type VoiceOrigin,
   type VoiceSession,
 } from "../src/lib/voiceSession.ts";
 import type { ActiveRecording, VoiceClip } from "../src/lib/voiceRecorder.ts";
+import { makeTranslator } from "../src/i18n/translate.ts";
+import { en } from "../src/i18n/locales/en.ts";
+import { es } from "../src/i18n/locales/es.ts";
+import { ja } from "../src/i18n/locales/ja.ts";
+import { ko } from "../src/i18n/locales/ko.ts";
+import { zhCN } from "../src/i18n/locales/zh-CN.ts";
+import { zhTW } from "../src/i18n/locales/zh-TW.ts";
 
 const flush = () => new Promise<void>((r) => setImmediate(r));
 
@@ -179,7 +187,16 @@ function threadPage(kind: Kind, first: string) {
 
   // HoldToTalk: originRef + cbRef updated on render; the session per mount.
   const originRef = { current: { kind, id: first } as VoiceOrigin };
-  const cbRef = { current: { onClip: stable, onNotice: (n: string) => notices.push(n) } };
+  const noticeOrigins: (VoiceOrigin | null | undefined)[] = [];
+  const cbRef = {
+    current: {
+      onClip: stable,
+      onNotice: (n: string, o?: VoiceOrigin | null) => {
+        notices.push(n);
+        noticeOrigins.push(o);
+      },
+    },
+  };
   let lastOrigin = `${kind}:${first}`;
   let session: VoiceSession;
   const mountComposer = () => {
@@ -188,7 +205,7 @@ function threadPage(kind: Kind, first: string) {
       origin: () => originRef.current,
       onState() {},
       onClip: (clip) => cbRef.current.onClip(clip),
-      onNotice: (n) => cbRef.current.onNotice(n),
+      onNotice: (n, o) => cbRef.current.onNotice(n, o),
       now: () => 0,
     });
   };
@@ -208,6 +225,7 @@ function threadPage(kind: Kind, first: string) {
     backend,
     mic,
     notices,
+    noticeOrigins,
     page,
     get session() {
       return session;
@@ -430,6 +448,7 @@ for (const kind of ["dm", "round"] as const) {
     t.mic.mics[0].stop.reject(new Error("recorder failed"));
     await flush();
     assert.deepEqual(t.notices, ["failed"]);
+    assert.deepEqual(t.noticeOrigins, [{ kind, id: "A" }], "the toast is named for A, not the thread on screen");
     assert.equal(t.backend.jobs.length, 0);
   });
 
@@ -694,4 +713,27 @@ test("session: the origin is captured at press and frozen on the clip; the gette
   assert.deepEqual(clips[0].origin, { kind: "dm", id: "A" });
   assert.ok(Object.isFrozen(clips[0]) && Object.isFrozen(clips[0].origin), "frozen");
   assert.ok(clips[0].recordingId);
+});
+
+// ---------------------------------------------------------------- the named "not sent" toast
+
+const LOCALES = { en, es, ja, ko, zhCN, zhTW } as const;
+
+test("toast: every locale names the chat, keeps {name} once, no emoji", () => {
+  for (const [code, dict] of Object.entries(LOCALES)) {
+    const line = (dict as Record<string, string>)["chat.voiceNotSentTo"];
+    assert.ok(line, `${code} has chat.voiceNotSentTo`);
+    assert.equal(line.split("{name}").length, 2, `${code}: {name} exactly once`);
+    assert.ok(!/\p{Extended_Pictographic}/u.test(line), `${code}: no emoji`);
+    const t = makeTranslator(dict as Record<string, string>, en as Record<string, string>);
+    assert.ok(voiceNotSentText(t, "Pebble Beach").includes("Pebble Beach"), `${code}: the name is shown`);
+  }
+});
+
+test("toast: named for a golfer or a course; generic when the name is unknown", () => {
+  const t = makeTranslator(en as Record<string, string>, en as Record<string, string>);
+  assert.equal(voiceNotSentText(t, "Alex Kim"), "Voice message to Alex Kim wasn't sent.");
+  assert.equal(voiceNotSentText(t, "Pebble Beach Golf Links"), "Voice message to Pebble Beach Golf Links wasn't sent.");
+  assert.equal(voiceNotSentText(t, undefined), en["chat.voiceNotSent"]);
+  assert.equal(voiceNotSentText(t, "   "), en["chat.voiceNotSent"]);
 });

@@ -605,6 +605,7 @@ export const es: Record<TranslationKey, string> = {
   "chat.mediaRejected": "Esto no se puede enviar aquí.",
   "chat.viewProfileOf": "Ver el perfil de {name}",
   "chat.viewYourProfile": "Ver tu perfil",
+  "chat.voiceNotSentTo": "No se envió el mensaje de voz para {name}.",
   "chat.voiceSending": "Enviando mensaje de voz",
   "chat.unsend": "Anular envío",
   "chat.youUnsent": "Anulaste el envío de un mensaje",

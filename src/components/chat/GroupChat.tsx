@@ -39,7 +39,7 @@ import { messagePreviewText } from "../../lib/chatImages";
 import { canCopyImages, copyChatImage } from "../../lib/chatImageClient";
 import { VoiceMessage } from "./VoiceMessage";
 import { useVoiceComposerProps } from "../../lib/useVoiceComposerProps";
-import { voiceSendPlan, type SentVoiceClip } from "../../lib/voiceSession";
+import { voiceNotSentText, voiceSendPlan, type SentVoiceClip } from "../../lib/voiceSession";
 
 // layout "card" (default): the inline card on the round page, list capped
 // at max-h-96, composer docked over the keyboard while typing (below).
@@ -121,6 +121,7 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
     canSendRoundVoice && roundStatus !== "completed" && roundStatus !== "cancelled",
     { kind: "round", id: callId },
     (clip) => voiceClipRef.current(clip),
+    (o) => getGolfCall(o.id)?.course,
   );
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
   const [text, setText] = useState(() => loadChatDraft(groupChatDraftKey(callId)));
@@ -480,10 +481,17 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
       replyToId: replyEnabled && replyTarget && isActionableRoundMessage(replyTarget) ? replyTarget.id : null,
     });
     if (!plan) return;
+    // The toast names the round it was for (it may show over another one).
+    const notSent = () => showToast(voiceNotSentText(t, getGolfCall(plan.to)?.course), "info");
     const originStatus = getGolfCall(plan.to)?.status;
-    if (originStatus === "completed" || originStatus === "cancelled") return;
+    if (originStatus === "completed" || originStatus === "cancelled") {
+      notSent();
+      return;
+    }
     if (plan.here) setReplyToId(null);
-    void sendRoundVoice(clip, plan.replyToId);
+    void sendRoundVoice(clip, plan.replyToId).then((result) => {
+      if (result === "failed") notSent();
+    });
   };
   const voiceLabels = { play: t("chat.voicePlay"), pause: t("chat.voicePause"), unavailable: t("chat.voiceUnavailable"), unsupported: t("chat.voiceUnsupported") };
 

@@ -45,7 +45,7 @@ interface ChatComposerProps {
     /** The conversation this composer sends to; each recording keeps the one it started in. */
     origin: VoiceOrigin;
     onClip: (clip: SentVoiceClip) => void;
-    onNotice: (notice: VoiceNotice) => void;
+    onNotice: (notice: VoiceNotice, origin?: VoiceOrigin | null) => void;
     labels: HoldToTalkLabels & { toVoice: string; toKeyboard: string };
   };
 }

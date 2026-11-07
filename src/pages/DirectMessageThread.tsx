@@ -48,7 +48,7 @@ import { canCopyImages, copyChatImage } from "../lib/chatImageClient";
 import type { DirectMessage, PostMediaItem } from "../types";
 import { VoiceMessage } from "../components/chat/VoiceMessage";
 import { useVoiceComposerProps } from "../lib/useVoiceComposerProps";
-import { voiceSendPlan, type SentVoiceClip } from "../lib/voiceSession";
+import { voiceNotSentText, voiceSendPlan, type SentVoiceClip } from "../lib/voiceSession";
 
 const IS_NATIVE = Capacitor.isNativePlatform();
 
@@ -117,6 +117,7 @@ export function DirectMessageThread() {
     canSendDirectVoice && Boolean(id && getGolfer(id)) && (id ? canMessage(id) && !isBlocked(id) : false),
     id ? { kind: "dm", id } : null,
     (clip) => voiceClipRef.current(clip),
+    (o) => getGolfer(o.id)?.name,
   );
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
 
@@ -569,7 +570,7 @@ export function DirectMessageThread() {
     if (!plan) return;
     if (plan.here) setReplyToId(null);
     void sendDirectVoice(clip, plan.replyToId ?? undefined).then((result) => {
-      if (result === "failed") showToast(t("chat.voiceNotSent"), "info");
+      if (result === "failed") showToast(voiceNotSentText(t, getGolfer(plan.to)?.name), "info");
     });
   };
   const voiceLabels = { play: t("chat.voicePlay"), pause: t("chat.voicePause"), unavailable: t("chat.voiceUnavailable"), unsupported: t("chat.voiceUnsupported") };

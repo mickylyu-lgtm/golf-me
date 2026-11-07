@@ -43,7 +43,7 @@ export function HoldToTalk({
 }: {
   origin: VoiceOrigin;
   onClip: (clip: SentVoiceClip) => void;
-  onNotice: (n: VoiceNotice) => void;
+  onNotice: (n: VoiceNotice, origin?: VoiceOrigin | null) => void;
   labels: HoldToTalkLabels;
 }) {
   const barRef = useRef<HTMLDivElement>(null);
@@ -91,7 +91,7 @@ export function HoldToTalk({
         setState(next);
       },
       onClip: (clip) => cbRef.current.onClip(clip),
-      onNotice: (n) => cbRef.current.onNotice(n),
+      onNotice: (n, o) => cbRef.current.onNotice(n, o),
       haptic: (kind) => tapHaptic(kind),
       now: () => performance.now(),
       revokeUrl: (url) => URL.revokeObjectURL(url),
