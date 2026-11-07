@@ -21,6 +21,7 @@ import { formatMessageTime } from "../lib/messageTime";
 import { useSwipeToRevealTimes } from "../lib/useSwipeToRevealTimes";
 import { useSwipeToReply } from "../lib/useSwipeToReply";
 import { useWebKeyboardInset } from "../lib/useWebKeyboardInset";
+import { useKeyboardFollow } from "../lib/useKeyboardFollow";
 import { useMessageLongPress } from "../lib/useMessageLongPress";
 import { MessageActionsMenu } from "../components/chat/MessageActionsMenu";
 import { useExitPresence } from "../lib/useExitPresence";
@@ -441,6 +442,13 @@ export function DirectMessageThread() {
     const el = listRef.current;
     if (el && nearBottomRef.current) el.scrollTop = el.scrollHeight;
   }, [keyboardInset]);
+
+  // The box still ends exactly where boxHeight says; in the native app the
+  // frames in between now follow the keyboard's slide instead of jumping
+  // there when the slide starts (lib/useKeyboardFollow.ts; declared after
+  // the re-pin above so it starts from that pinned state). Kill switch:
+  // lib/chatMotion.ts CHAT_MOTION.
+  useKeyboardFollow({ enabled: hasThread, boxRef, listRef, nearBottomRef, keyboardInset, boxHeight });
 
   // The chat box below is sized to fit the viewport exactly (see its own
   // comment), but that's a best-effort calc(), not a hard guarantee --

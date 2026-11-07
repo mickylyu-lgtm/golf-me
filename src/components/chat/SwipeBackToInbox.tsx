@@ -1,6 +1,7 @@
 import { useRef, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useEdgeSwipeBack } from "../../lib/useEdgeSwipeBack";
+import { skipNextChatRouteMotion } from "../../lib/chatRouteMotion";
 
 // Wraps the DM thread route (/messages/:id) with the iOS-style edge swipe
 // back to the Chat list. A wrapper rather than code inside
@@ -27,6 +28,8 @@ export function SwipeBackToInbox({ children }: { children: ReactNode }) {
     // without leaving the thread behind in history.
     const fromInbox = (location.state as { fromInbox?: boolean } | null)?.fromInbox === true;
     const idx = (window.history.state as { idx?: number } | null)?.idx;
+    // The swipe already slid the thread away: no second (route) transition.
+    skipNextChatRouteMotion(location.pathname);
     if (fromInbox && typeof idx === "number" && idx > 0) navigate(-1);
     else navigate("/messages", { replace: true });
   });

@@ -22,7 +22,7 @@ Note: Phases between Phase 20/21 (see below) and Phase 22 span roughly 31 commit
 
 **Not shipped / in progress (exact next actions):**
 - iOS 2.5 (1) build: Micky plans it next week (2.4 already App Store approved). Full steps, What to Test and What's New in LAUNCH_CHECKLIST.md section 10b. Before App Store submission chat video must be live and the Privacy Policy needs its chat-video sentence.
-- Chat navigation + keyboard motion (golfme-architect, frozen area; Micky's WeChat reference recording is in `.claude/inbox/`): local worktree, plan first.
+- Chat navigation + keyboard motion: SHIPPED 2026-11-07 (see its section; kill switch CHAT_MOTION in src/lib/chatMotion.ts, About 7-tap compare toggle). iPhone checklist in that section is PENDING.
 - Reminder for Micky: the shared-deps Review Gate fix (memory `pending-shared-deps`) and removing the bare `Edit`/`Write` allow rules.
 - Marketing images batch 1 (Higgsfield, scratchpad `marketing-v1/`): waiting for Micky's picks.
 - **golfme.app links open the app** (see its section below): SHIPPED 2026-11-07. Web only (AASA + router + Smart Banner), no new build. After deploy: check the live AASA, then iPhone checks in that section.
@@ -51,6 +51,36 @@ Micky's answers to the voice-privacy questions.
 - **Tests**: `tests/voiceRouting.test.ts` 55 (named-toast origin on a stop failure after navigating, 6-locale key / {name} / no emoji, English wording + fallback). `npm run check` green.
 
 ## Voice message privacy: a clip can only go to the conversation it was recorded in — 2026-11-06 (SHIPPED to main as 110ea75; client only, no migration, no backend change; NOT device / two-account verified)
+
+## Chat navigation + keyboard motion (WeChat reference) — 2026-11-07 (branch `feat/chat-motion` off `feat/chat-video` d3f1aa6; one local commit, not pushed/deployed; golfme-architect; web bundle only: no migration, no backend, no native change, no TestFlight build needed)
+
+Micky's brief: opening/closing a conversation swapped screens abruptly; on keyboard open the composer and messages jumped up before the keyboard arrived (a gap), and on Back the list appeared while the keyboard was still going down. Plan + evidence: scratchpad `chat-motion-plan.md`; WeChat frames from his recording in scratchpad `chat-motion/ref/`.
+
+**Causes (reproduced with the fake-keyboard harness, which now models the keyboard's own slide):**
+- The DM box and the full-screen round chat box took their final height in the first frame after keyboardWillShow, which arrives as the slide starts. Blank strip up to 268 px on open; on close the composer dropped behind the keyboard still covering it (up to 260 px).
+- No route transition exists (BrowserRouter has none), so the list and the thread swapped in one frame.
+- The header dip was NOT reproduced headless (header and TopBar never move in the harness). Hypothesis for the device: the closed DM layout overflows the viewport by about 52 px, so a WebKit focus pan can move the locked page and the shrink then clamps it back. Not changed.
+
+**What changed:**
+- `lib/keyboard/follow.ts` + `lib/useKeyboardFollow.ts`, called from DirectMessageThread (one hook call after its keyboard re-pin) and `useChatViewportBox`. Native app only. React still sets the final height. In between, one `style.height` write plus a list re-pin (only if the reader is at the bottom) per frame: height = min(closed height, viewport bottom − box top − inset). The composer waits until the rising keyboard reaches it, then rides its top edge. The slide is timed from the Will* event. Duration: this device's measured WillShow→DidShow / WillHide→DidHide (keyboard store `getSlideMs`; the source now also listens to keyboardDidHide, for timing only); 250 ms until one is measured. Curve: cubic-bezier(0.38, 0.7, 0.125, 1). Interruptions (reopen while closing, emoji height change) continue from the height on screen. Both ends of the motion are measured from committed layouts, so it always ends exactly on React's value, even if the caller's own maths is stale. Web path unchanged.
+- `lib/chatRouteMotion.ts` (rules) + `lib/useChatRouteMotion.ts` in AppShell: one Web Animations transform/opacity animation on the content column, started in the commit's layout effect. 24 px plus a fade from 0.4, 240 ms ease-out. Entering a conversation: from the right. Back to the list, or a POP into a conversation: from the left. TopBar and tab bar stay still. `main` clips overflow-x meanwhile. A new navigation cancels the running one. Skipped right after the DM edge swipe (it has already slid). Taps are never blocked.
+- Back + dismissal: no new code or timers. The textarea still blurs at the route commit, so the keyboard's slide down and the list's slide in start in the same frame. (WeChat slides the keyboard out sideways with the screen; a WKWebView can't move the system keyboard.)
+
+**Kill switch:** `CHAT_MOTION` in `lib/chatMotion.ts`. Per device, the founder's About switch (tap the description 7 times) now flips both the field-reveal motion and chat motion. Reduce Motion turns it off.
+
+**Checks:** `npm run check` (1088 tests). New tests: `tests/keyboardFollow.test.ts`, `tests/chatRouteMotion.test.ts`, slide-timing tests in `keyboardStore.test.ts`. Harness: new screens `dm-kb-motion`, `roundchat-kb-motion`, `dm-route-motion`, `dm-back-kb`; a before/after `--diff` of every screen shows the only change on the old screens is the extra keyboardDidHide listener. Harness before → after, at 390x844 and 375x667, DM and round chat alike:
+- Keyboard model matching the app's curve, 250 or 350 ms (the app measures the duration): open blank strip 268 → 0 px; close covered 213-235 → 0 px; residual error ≤ 3 px.
+- A deliberately different curve (500 ms ease): 268 → 72 px.
+- Reopen during a close: 256 → ≤ 11 px.
+- Emoji height change: 34 → ≤ 1 px.
+- A reader scrolled up keeps scrollTop 0. Header and TopBar never move. Reduced motion is unchanged (one-frame resize).
+- Route: 0 → 16 animated frames; a rapid open / back / open never shows more than one thread screen.
+
+Headless suites on a production preview: roundchat 41/41, holdlift 39/39, reactions 28/28, chatvideo 46/46, chatvoice 45/45. One chatvoice run under heavy CPU load failed "round: plays" (a 900 ms timing check); it passed on the quiet rerun. chatimages-bracket is stale for this branch: it waits for `accept='image/*'`, and the chat-video picker is now `image/*,video/*`.
+
+**Needs a physical iPhone (app), all UNVERIFIED:** whether the composer rides the keyboard (the curve constant is the only tuning knob); the header dip; Back and the edge swipe with the keyboard open; a cancelled swipe; emoji / QuickType height changes; rotation; hardware keyboard; Reduce Motion; VoiceOver order on enter and leave; iPhone Safari (keyboard motion unchanged there; only the route transition is new).
+
+## Voice message privacy: a clip can only go to the conversation it was recorded in — 2026-11-06 (local commit on the golfme-architect worktree branch off origin/main 5058670; not pushed/deployed; client only, no migration, no backend change; NOT device / two-account verified)
 
 Micky's privacy brief (isolated at 8bbe790 with modeled UI callbacks, not on a device or live account; no evidence a real user was affected).
 - **Root cause (still present at 5058670)**: the destination was decided when `recorder.stop()` resolved, not when the recording started. `HoldToTalk` → `cbRef.current.onClip` → `useVoiceComposerProps` stable callback → the page's `voiceClipRef.current`, which `DirectMessageThread` / `GroupChat` reassign on every render to call `sendDirectVoice(other.id, …)` / `sendRoundVoice(callId, …)`. The page is reused across `/messages/:id` and round ids (notification / deep link), so a clip released in A whose stop was still pending was sent to B (with B's reply quote). That held even if the composer remounted: the old session's late callback still reached the page's newest closure. Upload, insert, Not sent and retry were already bound to their job (`photoJobsRef` stores otherId / roundId at entry), so the leak was only at the hand-over.

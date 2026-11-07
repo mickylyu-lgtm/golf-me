@@ -35,6 +35,15 @@
 // imperative listeners (subscribeEvents) for the global hooks that react
 // to every WillShow even when the height didn't change
 // (useRevealFocusedFieldAboveKeyboard, useDismissKeyboardOnDrag).
+//
+// Slide timing (getSlideMs): the plugin doesn't pass on UIKit's animation
+// duration, but iOS sends Will* when the keyboard starts sliding and Did*
+// when it has finished, so the gap between a WillShow that opened a closed
+// keyboard and the DidShow after it is this device's real slide time (the
+// same for WillHide -> DidHide). Only used to time the chat composer's
+// follow motion (lib/useKeyboardFollow.ts); it never changes the height.
+// A DidHide without a WillHide this store saw (the cancelled hide above)
+// measures nothing.
 
 export type KeyboardWillEvent = { type: "willShow"; height: number } | { type: "willHide" };
 
@@ -42,6 +51,8 @@ export interface KeyboardEventHandlers {
   willShow(height: number): void;
   willHide(): void;
   didShow(height: number): void;
+  // Timing only (see above): never changes the height.
+  didHide(): void;
 }
 
 // Installs the native listeners. Called at most once per store.
@@ -53,9 +64,20 @@ export interface KeyboardStore {
   subscribe(listener: () => void): () => void;
   // Every WillShow / WillHide, as received.
   subscribeEvents(listener: (event: KeyboardWillEvent) => void): () => void;
+  // The last measured full slide (ms) up ("show") or down ("hide"), or null
+  // before one has been seen.
+  getSlideMs(kind: "show" | "hide"): number | null;
+  // When the last WillShow / WillHide arrived (the clock passed in), null
+  // before any: the moment the current slide started.
+  getLastWillAt(): number | null;
   // Exposed for tests; production calls go through the installed source.
   handlers: KeyboardEventHandlers;
 }
+
+// A Will -> Did gap outside this range isn't a keyboard slide (a stalled
+// JS thread, a backgrounded app) and is ignored.
+export const SLIDE_SAMPLE_MIN_MS = 80;
+export const SLIDE_SAMPLE_MAX_MS = 1000;
 
 function sanitize(height: unknown): number {
   const n = typeof height === "number" ? height : Number(height);
@@ -95,12 +117,26 @@ function notify<T>(listeners: Set<T>, call: (listener: T) => void) {
 }
 
 // `source` null (web/PWA): height is always 0 and nothing is installed.
-export function createKeyboardStore(source: KeyboardSource | null): KeyboardStore {
+export function createKeyboardStore(source: KeyboardSource | null, now: () => number = () => Date.now()): KeyboardStore {
   let height = 0;
   let lastWill: "show" | "hide" | null = null;
   let installed = false;
   const heightListeners = new Set<() => void>();
   const eventListeners = new Set<(event: KeyboardWillEvent) => void>();
+  // The slide being timed: started by a WillShow that opened a closed
+  // keyboard or a WillHide that closed an open one.
+  let slide: { kind: "show" | "hide"; at: number } | null = null;
+  const slideMs: { show: number | null; hide: number | null } = { show: null, hide: null };
+  // When the last WillShow / WillHide arrived: the start of that slide.
+  let lastWillAt: number | null = null;
+
+  function endSlide(kind: "show" | "hide") {
+    const s = slide;
+    if (!s || s.kind !== kind) return;
+    slide = null;
+    const ms = now() - s.at;
+    if (ms >= SLIDE_SAMPLE_MIN_MS && ms <= SLIDE_SAMPLE_MAX_MS) slideMs[kind] = ms;
+  }
 
   function setHeight(next: number) {
     if (next === height) return;
@@ -111,18 +147,27 @@ export function createKeyboardStore(source: KeyboardSource | null): KeyboardStor
   const handlers: KeyboardEventHandlers = {
     willShow(raw) {
       const next = sanitize(raw);
+      lastWillAt = now();
+      if (height === 0 && next > 0) slide = { kind: "show", at: lastWillAt };
+      else if (next === 0) slide = null;
       lastWill = "show";
       setHeight(next);
       notify(eventListeners, (listener) => listener({ type: "willShow", height: next }));
     },
     willHide() {
+      lastWillAt = now();
+      slide = height > 0 ? { kind: "hide", at: lastWillAt } : null;
       lastWill = "hide";
       setHeight(0);
       notify(eventListeners, (listener) => listener({ type: "willHide" }));
     },
     didShow(raw) {
+      endSlide("show");
       if (lastWill === "hide" || height > 0) return;
       setHeight(sanitize(raw));
+    },
+    didHide() {
+      endSlide("hide");
     },
   };
 
@@ -150,6 +195,8 @@ export function createKeyboardStore(source: KeyboardSource | null): KeyboardStor
         eventListeners.delete(listener);
       };
     },
+    getSlideMs: (kind) => slideMs[kind],
+    getLastWillAt: () => lastWillAt,
     handlers,
   };
 }

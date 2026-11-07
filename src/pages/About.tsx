@@ -57,8 +57,10 @@ export function About() {
   }
 
   // Same gesture on the description: the per-device before/after switch for
-  // the smooth keyboard reveal (lib/keyboard/smoothScroll.ts). Takes effect
-  // on the next field tap, no restart.
+  // the smooth keyboard reveal (lib/keyboard/smoothScroll.ts) and the chat
+  // motion that follows the same switch (lib/chatMotion.ts: the chat box
+  // following the keyboard, the list <-> conversation transition). Takes
+  // effect on the next field tap / navigation, no restart.
   const descriptionTaps = useRef<number[]>([]);
   function onDescriptionTap() {
     if (!canToggleEntry) return;
@@ -68,7 +70,7 @@ export function About() {
     descriptionTaps.current = [];
     const on = !keyboardMotionEnabled();
     setKeyboardMotionOverride(on ? "on" : "off");
-    showToast(on ? "Smooth keyboard motion ON (new)." : "Smooth keyboard motion OFF (old instant jumps).", "info");
+    showToast(on ? "Keyboard + chat motion ON (new)." : "Keyboard + chat motion OFF (old instant jumps).", "info");
   }
 
   return (

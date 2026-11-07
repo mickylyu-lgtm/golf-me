@@ -119,29 +119,66 @@ function fakeNativeBridge() {
   };
   const fire = (name, data) => {
     state.log.push(name);
+    state.timeline.push({ name, t: performance.now() });
     for (const callback of Array.from(listeners.get(name)?.values() ?? [])) callback(data);
+  };
+  // The keyboard's own slide (only the *-kb-motion / route screens read it):
+  // the visible keyboard height eases from where it is to the new height
+  // over model.ms with a cubic-bezier, the way UIKit animates it while the
+  // web view only gets keyboardWillShow at the start. The real curve and
+  // duration aren't known here, so screens run it with several models.
+  // didShow / didHide fire when the model's slide ends; the body resize
+  // waits model.bodyDelayMs (the real plugin: duration + 0.2 s; 0 keeps the
+  // older screens' next-task timing).
+  const model = { ms: 250, bezier: [0.38, 0.7, 0.125, 1], bodyDelayMs: 0 };
+  window.__kbModel = model;
+  const bez = (p) => {
+    const [x1, y1, x2, y2] = model.bezier;
+    const bx = (s) => 3 * (1 - s) * (1 - s) * s * x1 + 3 * (1 - s) * s * s * x2 + s * s * s;
+    const by = (s) => 3 * (1 - s) * (1 - s) * s * y1 + 3 * (1 - s) * s * s * y2 + s * s * s;
+    let lo = 0;
+    let hi = 1;
+    for (let i = 0; i < 30; i++) {
+      const mid = (lo + hi) / 2;
+      if (bx(mid) < p) lo = mid;
+      else hi = mid;
+    }
+    return by((lo + hi) / 2);
+  };
+  state.anim = { from: 0, to: 0, start: 0 };
+  state.timeline = [];
+  const visible = (now) => {
+    const a = state.anim;
+    const p = Math.min(1, Math.max(0, (now - a.start) / Math.max(1, model.ms)));
+    return a.from + (a.to - a.from) * bez(p);
   };
   window.__kb = {
     get height() {
       return state.height;
     },
+    visibleHeight: (now = performance.now()) => visible(now),
+    timeline: () => state.timeline.slice(),
     show(h) {
+      const now = performance.now();
+      state.anim = { from: visible(now), to: h, start: now };
       state.height = h;
       fire("keyboardWillShow", { keyboardHeight: h });
       setTimeout(() => {
         if (state.height === h) document.body.style.height = `${window.innerHeight - h}px`;
-      }, 0);
+      }, model.bodyDelayMs);
       setTimeout(() => {
         if (state.height === h) fire("keyboardDidShow", { keyboardHeight: h });
-      }, 250);
+      }, model.ms);
     },
     hide() {
+      const now = performance.now();
+      state.anim = { from: visible(now), to: 0, start: now };
       state.height = 0;
       fire("keyboardWillHide", undefined);
       document.body.style.height = "";
       setTimeout(() => {
         if (state.height === 0) fire("keyboardDidHide", undefined);
-      }, 250);
+      }, model.ms);
     },
     listenerCounts() {
       const out = {};
@@ -553,6 +590,107 @@ function summarise(values) {
   };
 }
 const traceStop = async (page) => summarise(await page.evaluate(() => window.__trace.stop()));
+
+// ---------------------------------------------------------------------------
+// Chat motion traces (the *-kb-motion and *-route-motion screens). Once per
+// painted frame (same ResizeObserver trick as samplerStart), from a step's
+// start: the chat box's bottom edge, where the modelled keyboard's top edge
+// is at that moment (window.__kb.visibleHeight), the thread header's top,
+// the app TopBar's top, window.scrollY, the list's distance from its
+// bottom and scrollTop, the route, and the route content wrapper's
+// transform / opacity. Summarised by chatMotionSummary below.
+async function chatTraceStart(page, cfg) {
+  await page.evaluate((c) => {
+    const rows = [];
+    const t0 = performance.now();
+    const pick = (s) => (s ? window.__kbPick(s) : null);
+    const sample = () => {
+      const now = performance.now();
+      const box = pick(c.box);
+      const list = pick(c.list);
+      const header = pick(c.header);
+      const topbar = document.querySelector("header");
+      const wrap = document.querySelector("main > div");
+      const ws = wrap ? getComputedStyle(wrap) : null;
+      rows.push({
+        t: Math.round(now - t0),
+        path: window.location.pathname,
+        boxBottom: box ? Math.round(box.getBoundingClientRect().bottom) : null,
+        kbTop: Math.round(window.innerHeight - window.__kb.visibleHeight(now)),
+        headerTop: header ? Math.round(header.getBoundingClientRect().top) : null,
+        topbarTop: topbar ? Math.round(topbar.getBoundingClientRect().top) : null,
+        scrollY: Math.round(window.scrollY),
+        listDist: list ? Math.round(list.scrollHeight - list.scrollTop - list.clientHeight) : null,
+        listTop: list ? Math.round(list.scrollTop) : null,
+        transform: ws ? ws.transform : null,
+        opacity: ws ? Number(ws.opacity) : null,
+        threads: document.querySelectorAll("[data-swipe-back-root]").length,
+        anims: wrap ? wrap.getAnimations().map((a) => `${a.playState}:${Math.round(Number(a.currentTime))}`).join(",") : null,
+        focused: document.activeElement ? document.activeElement.tagName.toLowerCase() : null,
+      });
+    };
+    let raf = 0;
+    const loop = () => {
+      const ro = new ResizeObserver(() => {
+        ro.disconnect();
+        sample();
+      });
+      ro.observe(document.documentElement);
+      raf = requestAnimationFrame(loop);
+    };
+    sample();
+    raf = requestAnimationFrame(loop);
+    window.__chatTrace = {
+      stop() {
+        cancelAnimationFrame(raf);
+        sample();
+        return rows;
+      },
+    };
+  }, cfg);
+}
+const chatTraceStop = (page) => page.evaluate(() => window.__chatTrace.stop());
+
+// closedBottom: the box's bottom with the keyboard closed (above the tab
+// bar). Ideal box bottom at any moment = min(closedBottom, keyboard top):
+// the composer stays put until the rising keyboard reaches it, then rides
+// its top edge. error > 0: the composer is below the keyboard's top (that
+// many px covered); error < 0: it's above it (a blank strip). Only frames
+// where the keyboard is on screen or the box isn't at rest count.
+function chatMotionSummary(rows, closedBottom) {
+  const range = (k) => {
+    const v = rows.map((r) => r[k]).filter((x) => typeof x === "number");
+    return v.length ? [Math.min(...v), Math.max(...v)] : null;
+  };
+  let maxCovered = 0;
+  let maxBlank = 0;
+  let boxMovingFrames = 0;
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    if (r.boxBottom === null) continue;
+    if (i > 0 && rows[i - 1].boxBottom !== null && rows[i - 1].boxBottom !== r.boxBottom) boxMovingFrames++;
+    const ideal = Math.min(closedBottom, r.kbTop);
+    const err = r.boxBottom - ideal;
+    if (err > maxCovered) maxCovered = err;
+    if (-err > maxBlank) maxBlank = -err;
+  }
+  return {
+    frames: rows.length,
+    boxMovingFrames,
+    maxBlankPx: maxBlank,
+    maxCoveredPx: maxCovered,
+    headerTop: range("headerTop"),
+    topbarTop: range("topbarTop"),
+    scrollY: range("scrollY"),
+    listDist: range("listDist"),
+    listTop: range("listTop"),
+    boxBottomPath: rows.map((r) => r.boxBottom).filter((v, i, a) => i === 0 || v !== a[i - 1]),
+    kbTopEnd: rows.length ? rows[rows.length - 1].kbTop : null,
+    // [ms, box bottom, keyboard top] while either moves.
+    frames3: rows.filter((r, i) => i === 0 || r.boxBottom !== rows[i - 1].boxBottom || r.kbTop !== rows[i - 1].kbTop).map((r) => [r.t, r.boxBottom, r.kbTop]),
+  };
+}
+const setKbModel = (page, m) => page.evaluate((mm) => Object.assign(window.__kbModel, mm), m);
 const setReducedMotion = (page, on) => page.emulateMedia({ reducedMotion: on ? "reduce" : "no-preference" });
 // Every context runs with reduced motion unless --motion (set in main).
 let contextReducedMotion = true;
@@ -1005,7 +1143,235 @@ const SCREENS = {
     const after = await probe(page);
     return { route: "/golf-calls/new", closed, open, after, blurredByDrag: closed.focused !== open.focused };
   },
+
+  // Chat keyboard motion (DM): per painted frame while the modelled
+  // keyboard slides up / down, for three keyboard models (the real curve
+  // and duration aren't known here): the box bottom vs the keyboard top,
+  // header / TopBar stability, list pinning. Plus an interrupted close
+  // (reopened 90 ms into the slide down) and a reader scrolled up.
+  async "dm-kb-motion"(page, base, kb, shot) {
+    await seedThread(page, "dm");
+    return chatKbMotion(page, base, kb, shot, {
+      route: "/messages/g11",
+      box: "[data-swipe-back-root] div.rounded-2xl.border.bg-white",
+      list: "[data-no-swipe]",
+      header: '[data-swipe-back-root] button[aria-label="Back"]',
+    });
+  },
+
+  async "roundchat-kb-motion"(page, base, kb, shot) {
+    await seedThread(page, "round");
+    return chatKbMotion(page, base, kb, shot, {
+      route: "/messages/round/call-7",
+      box: '[data-keyboard-drag-dismiss="off"]',
+      list: '[data-keyboard-drag-dismiss="off"] > div.overflow-y-auto',
+      header: 'main button[aria-label="Back"]',
+    });
+  },
+
+  // Inbox -> thread -> Back, then a rapid open/back/open, each with a frame
+  // trace of the route content wrapper (transform / opacity), how many
+  // thread screens exist, and the route.
+  async "dm-route-motion"(page, base, kb, shot) {
+    await setReducedMotion(page, false);
+    try {
+      // A real load, not gotoRoute: its synthetic popstate (state without
+      // React Router's idx) can leave the router one route behind, which
+      // made the first open read as "thread -> same thread".
+      await page.goto(`${base}/messages`, { waitUntil: "load" });
+      await settle(page, 1200);
+      const step = async (fn, ms = 500) => {
+        await chatTraceStart(page, {});
+        await fn();
+        await page.waitForTimeout(ms);
+        const rows = await chatTraceStop(page);
+        return routeMotionSummary(rows);
+      };
+      const open = await step(() => jsClick(page, "button", "Ethan Park"));
+      await shot("opened");
+      const back = await step(() => jsClick(page, '[data-swipe-back-root] button[aria-label="Back"]'));
+      const rapid = await step(async () => {
+        await jsClick(page, "button", "Ethan Park");
+        await page.waitForTimeout(40);
+        await jsClick(page, '[data-swipe-back-root] button[aria-label="Back"]');
+        await page.waitForTimeout(40);
+        await jsClick(page, "button", "Ethan Park");
+      }, 700);
+      const finalPath = await page.evaluate(() => window.location.pathname);
+      const back2 = await step(() => jsClick(page, '[data-swipe-back-root] button[aria-label="Back"]'));
+      // Reduced motion: no transform on any frame.
+      await setReducedMotion(page, true);
+      const reduced = await step(() => jsClick(page, "button", "Ethan Park"));
+      await step(() => jsClick(page, '[data-swipe-back-root] button[aria-label="Back"]'));
+      return { route: "/messages", open, back, rapid, rapidFinalPath: finalPath, back2, reduced };
+    } finally {
+      await setReducedMotion(page, contextReducedMotion);
+    }
+  },
+
+  // Back with the keyboard up: when the route changes vs when the keyboard
+  // starts down (keyboardWillHide, sent here when the textarea loses focus,
+  // as iOS does), and what the content wrapper does meanwhile.
+  async "dm-back-kb"(page, base, kb, shot) {
+    await setReducedMotion(page, false);
+    try {
+      await page.goto(`${base}/messages`, { waitUntil: "load" });
+      await settle(page, 1200);
+      await jsClick(page, "button", "Ethan Park");
+      await settle(page, 500);
+      await focus(page, "textarea");
+      await kbShow(page, kb);
+      await settle(page, 500);
+      // The fake bridge has no iOS: a blur closes the keyboard here.
+      await page.evaluate(() => {
+        const onOut = (e) => {
+          if (e.target instanceof HTMLTextAreaElement && window.__kb.height > 0) window.__kb.hide();
+        };
+        document.addEventListener("focusout", onOut, true);
+        window.__offBlurHide = () => document.removeEventListener("focusout", onOut, true);
+      });
+      const t0 = await page.evaluate(() => performance.now());
+      await chatTraceStart(page, { box: "[data-swipe-back-root] div.rounded-2xl.border.bg-white" });
+      await jsClick(page, '[data-swipe-back-root] button[aria-label="Back"]');
+      await page.waitForTimeout(600);
+      const rows = await chatTraceStop(page);
+      const timeline = await page.evaluate((start) => window.__kb.timeline().filter((e) => e.t >= start).map((e) => ({ name: e.name, t: Math.round(e.t - start) })), t0);
+      await page.evaluate(() => window.__offBlurHide?.());
+      const firstInbox = rows.find((r) => r.path === "/messages");
+      return {
+        route: "/messages/g11",
+        willHideAtMs: timeline.find((e) => e.name === "keyboardWillHide")?.t ?? null,
+        routeChangedAtFrameMs: firstInbox ? firstInbox.t : null,
+        motion: routeMotionSummary(rows),
+      };
+    } finally {
+      await setReducedMotion(page, contextReducedMotion);
+    }
+  },
 };
+
+function routeMotionSummary(rows) {
+  const moving = rows.filter((r) => r.transform && r.transform !== "none");
+  const xs = moving.map((r) => {
+    const m = /matrix\(([^)]+)\)/.exec(r.transform);
+    return m ? Math.round(Number(m[1].split(",")[4])) : null;
+  });
+  return {
+    frames: rows.length,
+    transformFrames: moving.length,
+    translateX: xs.length ? [Math.min(...xs), Math.max(...xs)] : null,
+    opacity: rows.length ? [Math.min(...rows.map((r) => r.opacity)), Math.max(...rows.map((r) => r.opacity))] : null,
+    maxThreads: Math.max(0, ...rows.map((r) => r.threads)),
+    paths: rows.map((r) => r.path).filter((v, i, a) => i === 0 || v !== a[i - 1]),
+    endPath: rows.length ? rows[rows.length - 1].path : null,
+    // [ms, route, translateX, opacity, thread screens] per frame, first 20.
+    head: rows.slice(0, 20).map((r) => {
+      const m = r.transform && /matrix\(([^)]+)\)/.exec(r.transform);
+      return [r.t, r.path, m ? Math.round(Number(m[1].split(",")[4])) : 0, Math.round(r.opacity * 100) / 100, r.threads, r.anims];
+    }),
+  };
+}
+
+async function chatKbMotion(page, base, kb, shot, cfg) {
+  await setReducedMotion(page, false);
+  const out = { route: cfg.route };
+  try {
+    await gotoRoute(page, base, cfg.route);
+    const closedBottom = await page.evaluate((s) => Math.round(window.__kbPick(s).getBoundingClientRect().bottom), cfg.box);
+    out.closedBottom = closedBottom;
+    const models = [
+      { name: "m250", ms: 250, bezier: [0.38, 0.7, 0.125, 1] },
+      { name: "m350", ms: 350, bezier: [0.38, 0.7, 0.125, 1] },
+      { name: "m500ease", ms: 500, bezier: [0.25, 0.1, 0.25, 1] },
+    ];
+    for (const m of models) {
+      await setKbModel(page, { ms: m.ms, bezier: m.bezier, bodyDelayMs: m.ms + 200 });
+      await focus(page, "textarea");
+      // Warm-up slide (untraced): the app times its motion from the last
+      // measured WillShow -> DidShow, as on a device after the first open.
+      await kbShow(page, kb);
+      await page.waitForTimeout(m.ms + 300);
+      await kbHide(page);
+      await page.waitForTimeout(m.ms + 300);
+      await focus(page, "textarea");
+      await chatTraceStart(page, cfg);
+      await kbShow(page, kb);
+      await page.waitForTimeout(m.ms + 450);
+      out[`${m.name}-open`] = chatMotionSummary(await chatTraceStop(page), closedBottom);
+      if (m.name === "m250") await shot("open");
+      await chatTraceStart(page, cfg);
+      await kbHide(page);
+      await page.waitForTimeout(m.ms + 300);
+      out[`${m.name}-close`] = chatMotionSummary(await chatTraceStop(page), closedBottom);
+    }
+    await setKbModel(page, { ms: 250, bezier: [0.38, 0.7, 0.125, 1], bodyDelayMs: 450 });
+    // Interrupted: close, then reopen 90 ms into the slide down. (One full
+    // close first, so the app's measured slide times are this model's.)
+    await focus(page, "textarea");
+    await kbShow(page, kb);
+    await settle(page, 600);
+    await kbHide(page);
+    await settle(page, 600);
+    await focus(page, "textarea");
+    await kbShow(page, kb);
+    await settle(page, 600);
+    await chatTraceStart(page, cfg);
+    await kbHide(page);
+    await page.waitForTimeout(90);
+    await kbShow(page, kb);
+    await page.waitForTimeout(700);
+    out.interrupted = chatMotionSummary(await chatTraceStop(page), closedBottom);
+    out.interruptedEnd = await probe(page, "textarea");
+    await kbHide(page);
+    await settle(page, 600);
+    // Height change while open (emoji / QuickType bar): +40 px and back.
+    await kbShow(page, kb);
+    await settle(page, 600);
+    await chatTraceStart(page, cfg);
+    await kbShow(page, kb + 40);
+    await page.waitForTimeout(500);
+    await kbShow(page, kb);
+    await page.waitForTimeout(500);
+    out.heightChange = chatMotionSummary(await chatTraceStop(page), closedBottom);
+    await kbHide(page);
+    await settle(page, 600);
+    // Reading older messages: scrollTop must not move on open / close.
+    await page.evaluate((s) => {
+      const l = window.__kbPick(s);
+      l.scrollTop = 0;
+      l.dispatchEvent(new Event("scroll"));
+    }, cfg.list);
+    await settle(page, 200);
+    await focus(page, "textarea");
+    await chatTraceStart(page, cfg);
+    await kbShow(page, kb);
+    await page.waitForTimeout(700);
+    await kbHide(page);
+    await page.waitForTimeout(700);
+    out.scrolledUp = chatMotionSummary(await chatTraceStop(page), closedBottom);
+    // Reduced motion: the box moves in one frame (the old behaviour).
+    await setReducedMotion(page, true);
+    await page.evaluate((s) => {
+      const l = window.__kbPick(s);
+      l.scrollTop = l.scrollHeight;
+      l.dispatchEvent(new Event("scroll"));
+    }, cfg.list);
+    await settle(page, 200);
+    await focus(page, "textarea");
+    await chatTraceStart(page, cfg);
+    await kbShow(page, kb);
+    await page.waitForTimeout(700);
+    out.reducedOpen = chatMotionSummary(await chatTraceStop(page), closedBottom);
+    await kbHide(page);
+    await settle(page, 600);
+    out.after = await probe(page, "textarea");
+    out.afterFocused = await page.evaluate(() => document.activeElement?.tagName.toLowerCase() ?? null);
+    return out;
+  } finally {
+    await setKbModel(page, { ms: 250, bezier: [0.38, 0.7, 0.125, 1], bodyDelayMs: 0 });
+    await setReducedMotion(page, contextReducedMotion);
+  }
+}
 
 // ---------------------------------------------------------------------------
 function printDiff(beforeFile, afterFile) {
@@ -1042,6 +1408,18 @@ function printDiff(beforeFile, afterFile) {
       if (!ta || typeof ta !== "object" || !("movingFrames" in ta)) continue;
       const fmt = (t) => (t ? `${t.from}->${t.to} moving=${t.movingFrames} maxStep=${t.maxStep} oneWay=${t.oneDirection}` : "-");
       console.log(`  ${k}: ${fmt(tb)}  =>  ${fmt(ta)}`);
+    }
+    // Chat keyboard / route motion summaries.
+    for (const k of Object.keys(a)) {
+      const ta = a[k];
+      const tb = b[k];
+      if (ta && typeof ta === "object" && "maxBlankPx" in ta) {
+        const fmt = (t) => (t ? `boxMoving=${t.boxMovingFrames} blank<=${t.maxBlankPx} covered<=${t.maxCoveredPx} header=${JSON.stringify(t.headerTop)} topbar=${JSON.stringify(t.topbarTop)} scrollY=${JSON.stringify(t.scrollY)} listDist=${JSON.stringify(t.listDist)} listTop=${JSON.stringify(t.listTop)}` : "-");
+        console.log(`  ${k}:\n    before ${fmt(tb)}\n    after  ${fmt(ta)}`);
+      } else if (ta && typeof ta === "object" && "transformFrames" in ta) {
+        const fmt = (t) => (t ? `transformFrames=${t.transformFrames} x=${JSON.stringify(t.translateX)} opacity=${JSON.stringify(t.opacity)} maxThreads=${t.maxThreads} paths=${t.paths.join(">")}` : "-");
+        console.log(`  ${k}:\n    before ${fmt(tb)}\n    after  ${fmt(ta)}`);
+      }
     }
   }
 }
@@ -1174,7 +1552,19 @@ async function main() {
     // Composer steps: [min,max] over every sampled frame.
     const range = (a) => (a ? (a.min === a.max ? `${a.min}` : `${a.min}..${a.max}`) : "-");
     for (const [stepName, s] of Object.entries(r)) {
-      if (!s || typeof s !== "object" || !("frames" in s)) continue;
+      if (s && typeof s === "object" && "maxBlankPx" in s) {
+        console.log(
+          `  ${stepName.padEnd(20)} frames=${s.frames} boxMoving=${s.boxMovingFrames} blank<=${s.maxBlankPx} covered<=${s.maxCoveredPx} ` +
+            `header=${range({ min: s.headerTop?.[0], max: s.headerTop?.[1] })} topbar=${range({ min: s.topbarTop?.[0], max: s.topbarTop?.[1] })} scrollY=${range({ min: s.scrollY?.[0], max: s.scrollY?.[1] })} ` +
+            `listDist=${range({ min: s.listDist?.[0], max: s.listDist?.[1] })} listTop=${range({ min: s.listTop?.[0], max: s.listTop?.[1] })}`,
+        );
+        continue;
+      }
+      if (s && typeof s === "object" && "transformFrames" in s) {
+        console.log(`  ${stepName.padEnd(20)} frames=${s.frames} transformFrames=${s.transformFrames} x=${JSON.stringify(s.translateX)} opacity=${JSON.stringify(s.opacity)} maxThreads=${s.maxThreads} paths=${s.paths.join(">")}`);
+        continue;
+      }
+      if (!s || typeof s !== "object" || !("frames" in s) || !s.final) continue;
       console.log(
         `  ${stepName.padEnd(20)} compBottom-kbTop=${range(s.composerBottomMinusKbTop)} headerTop=${range(s.headerTop)} scrollY=${range(s.scrollY)} ` +
           `listDist=${range(s.listDistFromBottom)} (final ${s.final.listDist}, top ${s.final.listScrollTop}) taH=${range(s.textareaH)} taScroll=${s.final.textareaScrollTop} sel=${s.final.selection} focus=${s.final.focused}`,

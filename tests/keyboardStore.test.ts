@@ -198,6 +198,68 @@ test("DidShow only fills in a missed WillShow; never moves or reopens", () => {
   }
 });
 
+// Slide timing (getSlideMs / getLastWillAt): only for the chat follow motion.
+function timedNative() {
+  let t = 1000;
+  let handlers: KeyboardEventHandlers | null = null;
+  const store = createKeyboardStore(
+    (h) => {
+      handlers = h;
+    },
+    () => t,
+  );
+  store.subscribe(() => {});
+  const fire = (): KeyboardEventHandlers => {
+    assert.ok(handlers);
+    return handlers;
+  };
+  return { store, fire, advance: (ms: number) => (t += ms) };
+}
+
+test("slide timing: WillShow (closed -> open) to DidShow, WillHide to DidHide", () => {
+  const { store, fire, advance } = timedNative();
+  assert.equal(store.getSlideMs("show"), null);
+  assert.equal(store.getLastWillAt(), null);
+  fire().willShow(336);
+  assert.equal(store.getLastWillAt(), 1000);
+  advance(270);
+  fire().didShow(336);
+  assert.equal(store.getSlideMs("show"), 270);
+  advance(1000);
+  fire().willHide();
+  assert.equal(store.getLastWillAt(), 2270);
+  advance(240);
+  fire().didHide();
+  assert.equal(store.getSlideMs("hide"), 240);
+  assert.equal(store.getHeight(), 0, "DidHide never changes the height");
+});
+
+test("slide timing ignores field-to-field WillShows, stray Did events and implausible gaps", () => {
+  const { store, fire, advance } = timedNative();
+  fire().willShow(336);
+  advance(250);
+  fire().didShow(336);
+  // Already open: another WillShow (another field / emoji) isn't a slide from closed.
+  fire().willShow(376);
+  advance(30);
+  fire().didShow(376);
+  assert.equal(store.getSlideMs("show"), 250);
+  // A DidHide with no WillHide seen (the plugin's cancelled hide): nothing.
+  fire().didHide();
+  assert.equal(store.getSlideMs("hide"), null);
+  // Too long to be a slide (a stalled thread): ignored.
+  fire().willHide();
+  advance(5000);
+  fire().didHide();
+  assert.equal(store.getSlideMs("hide"), null);
+  // Too short: ignored.
+  fire().willShow(336);
+  advance(10);
+  fire().didShow(336);
+  assert.equal(store.getSlideMs("show"), 250);
+  assert.equal(store.getHeight(), 336);
+});
+
 test("off-native (no source): always 0, nothing installed, subscriptions are no-ops", () => {
   const store = createKeyboardStore(null);
   let calls = 0;

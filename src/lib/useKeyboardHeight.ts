@@ -30,9 +30,11 @@ const capacitorKeyboardSource: KeyboardSource = (handlers) => {
   add(Keyboard.addListener("keyboardWillShow", (info: KeyboardInfo) => handlers.willShow(info.keyboardHeight)));
   add(Keyboard.addListener("keyboardWillHide", () => handlers.willHide()));
   add(Keyboard.addListener("keyboardDidShow", (info: KeyboardInfo) => handlers.didShow(info.keyboardHeight)));
+  // Slide timing only (store.ts getSlideMs); never changes the height.
+  add(Keyboard.addListener("keyboardDidHide", () => handlers.didHide()));
 };
 
-const keyboardStore = createKeyboardStore(Capacitor.isNativePlatform() ? capacitorKeyboardSource : null);
+const keyboardStore = createKeyboardStore(Capacitor.isNativePlatform() ? capacitorKeyboardSource : null, () => performance.now());
 
 const getServerHeight = () => 0;
 
@@ -49,4 +51,15 @@ export function getKeyboardHeight(): number {
 // app-wide hooks. Returns the unsubscribe. A no-op off-native.
 export function subscribeKeyboardEvents(listener: (event: KeyboardWillEvent) => void): () => void {
   return keyboardStore.subscribeEvents(listener);
+}
+
+// This device's last measured keyboard slide up / down in ms (WillShow ->
+// DidShow, WillHide -> DidHide), or null before one was seen / off-native.
+export function getKeyboardSlideMs(kind: "show" | "hide"): number | null {
+  return keyboardStore.getSlideMs(kind);
+}
+
+// performance.now() of the last keyboardWillShow / WillHide, or null.
+export function getKeyboardWillAt(): number | null {
+  return keyboardStore.getLastWillAt();
 }

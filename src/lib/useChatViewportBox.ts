@@ -5,6 +5,7 @@ import { useKeyboardHeight } from "./useKeyboardHeight";
 import { useWebKeyboardInset } from "./useWebKeyboardInset";
 import { lockPageScroll } from "./scrollLock";
 import { pinToBottom } from "./chatScroll";
+import { useKeyboardFollow } from "./useKeyboardFollow";
 
 const IS_NATIVE = Capacitor.isNativePlatform();
 
@@ -77,8 +78,17 @@ export function useChatViewportBox({
     return () => ro.disconnect();
   }, [enabled, listRef, nearBottomRef]);
 
-  if (!enabled || boxTop === null) return undefined;
-  return keyboardInset > 0
-    ? `${window.innerHeight - boxTop - keyboardInset}px`
-    : `calc(${window.innerHeight}px - ${boxTop}px - 4.25rem - env(safe-area-inset-bottom))`;
+  const boxHeight =
+    !enabled || boxTop === null
+      ? undefined
+      : keyboardInset > 0
+        ? `${window.innerHeight - boxTop - keyboardInset}px`
+        : `calc(${window.innerHeight}px - ${boxTop}px - 4.25rem - env(safe-area-inset-bottom))`;
+
+  // Native app: the frames between two keyboard heights follow the
+  // keyboard's slide (lib/useKeyboardFollow.ts). Declared after the re-pin
+  // above; the box still ends at boxHeight.
+  useKeyboardFollow({ enabled, boxRef, listRef, nearBottomRef, keyboardInset, boxHeight });
+
+  return boxHeight;
 }
