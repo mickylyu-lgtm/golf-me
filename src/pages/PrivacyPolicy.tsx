@@ -59,7 +59,7 @@ export function PrivacyPolicy() {
       <Section title="The short version">
         <p>
           GolfMe is a social app for finding golf rounds and golfers to play with. We collect what's needed to run that — your profile,
-          the rounds, messages (including photos and voice messages) and posts you're part of, and your location only when you choose to
+          the rounds, messages (including photos, videos and voice messages) and posts you're part of, and your location only when you choose to
           share it. We don't sell your data, we
           don't show ads, and we don't track you across other apps or websites. We use privacy-friendly page-view analytics that aren't
           linked to your account.
@@ -102,19 +102,21 @@ export function PrivacyPolicy() {
           as a dot on your own screen only, while the map is open; it is never sent to us or saved.
         </Item>
         <Item label="Content you create">
-          Golf Calls you host or join, direct messages and round group chats (including photos and voice messages you send in them),
+          Golf Calls you host or join, direct messages and round group chats (including photos, videos and voice messages you send in them),
           Community posts, comments, likes, saved and hidden posts, photos and videos you upload, follows, reviews you leave about golfers
           you've played with (including optional private notes), reports you file, blocks, booking-proof screenshots you attach to a round,
           and swing reviews if you're a coach reviewer.
         </Item>
-        <Item label="Chat photos and voice messages">
+        <Item label="Chat photos, videos and voice messages">
           Before a photo you send in a direct message or round chat is uploaded, your device re-encodes it, which removes hidden metadata
-          such as the location where it was taken (GPS) and other camera (EXIF) data. Voice messages are recorded on your device. Both are
+          such as the location where it was taken (GPS) and other camera (EXIF) data. Videos you send in a chat are converted on our own
+          servers into a standard format, with hidden metadata such as location removed; the original upload is deleted straight after,
+          and the video is deleted automatically 180 days after it was sent. Voice messages are recorded on your device. All of these are
           stored privately and can only be opened by the people in that chat. If you unsend one (within 5 minutes of sending), it's removed
           from the chat and its file is deleted; we don't keep a copy. If the app can't delete the file right away, our server deletes it
-          automatically within about a day. Photos and voice messages aren't automatically scanned or moderated.
-          If someone reports a chat, GolfMe admins can view the photos and voice messages the reported person sent in that chat so they can
-          review the report.
+          automatically within about a day. Photos, videos and voice messages aren't automatically scanned or moderated.
+          If someone reports a chat, GolfMe admins can view the photos, videos and voice messages the reported person sent in that chat so
+          they can review the report.
         </Item>
         <Item label="Caddie swing videos">
           Swing videos you upload to Caddie and the AI-generated analysis produced from them (score, feedback and body-position data).
@@ -168,8 +170,8 @@ export function PrivacyPolicy() {
         <p>
           GolfMe is a social app. Other signed-in GolfMe members can see your profile (including the profile details and approximate
           playing area listed above, your reputation and whether you have the Verified Golfer badge), your posts and comments, who you follow, and the Golf Calls you host or have
-          joined. Direct messages and round group chats, including their photos and voice messages, are visible only to the people in
-          them (GolfMe admins can view a reported chat's photos and voice messages, as described above). Reviews you write, their private notes,
+          joined. Direct messages and round group chats, including their photos, videos and voice messages, are visible only to the people in
+          them (GolfMe admins can view a reported chat's photos, videos and voice messages, as described above). Reviews you write, their private notes,
           your reports and your booking proofs are not shown to other members (GolfMe admins can see reports and booking proofs to keep
           the community safe). Photos and videos you post to the Community can be viewed by anyone who has their link.
         </p>
@@ -241,7 +243,7 @@ export function PrivacyPolicy() {
         <p>
           You can edit your profile and remove most of your content directly in the app, change your location or enter it manually, and
           turn notifications off. You can delete your account entirely from Me → Settings → Account — this permanently deletes your
-          profile and virtually everything tied to it (posts, comments, messages including the photos and voice messages you sent, Golf
+          profile and virtually everything tied to it (posts, comments, messages including the photos, videos and voice messages you sent, Golf
           Call history, reviews, follows, Caddie videos, analyses and their technical records, booking proofs, device tokens). A small amount of information may be kept in anonymized form for safety records — for example,
           a report that named you stays on file with your identity removed from it. To ask about, correct or delete your data (including
           a waitlist entry), email us at the address above.
@@ -254,7 +256,7 @@ export function PrivacyPolicy() {
           anonymized safety records described above). When you unsend a text message, it disappears from the chat for everyone, but we
           keep a hidden copy of its text, which only GolfMe's operator can access, for safety. The copy is deleted automatically 90 days
           after the message was unsent, unless a report about that message, or about its sender in that chat, is still open; then it is
-          kept until the report is closed and deleted automatically after that. Unsent photos and voice messages are deleted, with no copy
+          kept until the report is closed and deleted automatically after that. Unsent photos, videos and voice messages are deleted, with no copy
           kept (if the app can't delete the file right away, our server deletes it automatically within about a day). For swing videos
           sent to Google Gemini for Caddie, we ask Google to delete the video right after the analysis. Waitlist entries are kept until you ask us to remove them. Technical logs
           kept by our providers are deleted on their standard schedules.

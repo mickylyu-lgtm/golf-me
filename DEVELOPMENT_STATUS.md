@@ -16,7 +16,7 @@ Note: Phases between Phase 20/21 (see below) and Phase 22 span roughly 31 commit
 - APPLIED by Micky with check true: `20261107180000` chat voice, `20261107190000` course imagery detail, `20261107200000` likes/comment pushes, `20261107210000` saved swings, `20261107230000` Verified Golfer derived, `20261107240000` privacy retention jobs (pg_cron now enabled).
 - NOT applied yet:
   - `20261107150000` booking stage 2/3 (client dormant; now also lists `post_liked`).
-  - `20261107220000` chat video + albums. BLOCKED: `api/chat-video` answers `not_configured` in production, so Micky must check Vercel Production env `SUPABASE_URL` = `https://adokdenbmpshqgjbzshb.supabase.co` and `SUPABASE_ANON_KEY`. Then redeploy and re-test `POST /api/chat-video`, which should return 401 without a token. Also confirm the Supabase Storage global upload limit is at least 200 MB. Only then apply `chat-video-apply.sql`, then deploy `delete-account` and `chat-video-retention --no-verify-jwt`.
+  - (`20261107220000` chat video + albums: APPLIED by Micky 2026-11-07, check true; Vercel SUPABASE_URL/SUPABASE_ANON_KEY fixed by Micky; delete-account + chat-video-retention deployed; storage limit 400 MB.)
   - (`20261107250000` reply trigger authz-first: APPLIED by Micky 2026-11-07, check true.)
   - (`20261107260000` Community 10-media cap: APPLIED by Micky 2026-11-07, precheck 0 posts over cap, check true.)
 
