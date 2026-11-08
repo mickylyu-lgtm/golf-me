@@ -184,8 +184,13 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
   }
 
   const wide = useWideScreen();
+  // Feed cards on phones: a fixed square box (reserved before anything
+  // loads, so the feed never jumps) with every photo shown whole inside it
+  // (Micky, 2026-11-08: no cropped edges, no tap needed to see the full
+  // picture). Unused space is a plain light background. Videos in an album
+  // keep filling the same box.
   const itemClass =
-    variant !== "card" ? "" : wide ? "h-[min(70vh,36rem)] w-full shrink-0 snap-center object-contain" : "h-80 w-full shrink-0 snap-center object-cover";
+    variant !== "card" ? "" : wide ? "h-[min(70vh,36rem)] w-full shrink-0 snap-center object-contain" : "aspect-square w-full shrink-0 snap-center object-cover";
 
   return (
     <div className="relative">
@@ -318,7 +323,7 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
               </div>
             )
           ) : variant === "card" ? (
-            <CardImage key={item.id} src={item.url} className={itemClass} fit={wide ? "contain" : "cover"} onClick={() => onItemClick?.(i)} />
+            <CardImage key={item.id} src={item.url} className={itemClass.replace("object-cover", "object-contain")} fit="contain" onClick={() => onItemClick?.(i)} />
           ) : (
             // Pinch / double-tap zoom and pan (ZoomableImage); resets when
             // swiped away from.
