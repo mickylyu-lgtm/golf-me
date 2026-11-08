@@ -120,6 +120,10 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
   }
 
   const results: GolfCall[] = isMatched ? (matchedResults ?? []).map((r) => r.call) : defaultResults;
+  // Your own hosted rounds get their own labelled group on top, so they are
+  // never mistaken for someone else's round further down the list.
+  const myHosted = results.filter((c) => c.hostId === currentUser.id);
+  const otherRounds = results.filter((c) => c.hostId !== currentUser.id);
 
   return (
     <div className="flex flex-col gap-5">
@@ -213,7 +217,7 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
 
       {/* The unfiltered list is every upcoming round, not a distance-filtered
           one, so it isn't labelled "near you". */}
-      {!isMatched && (
+      {!isMatched && myHosted.length === 0 && (
         <h2 className="text-sm font-bold uppercase tracking-wide text-slate-400">{t("find.upcomingRounds")}</h2>
       )}
 
@@ -283,7 +287,18 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
         )
       ) : (
         <div className="flex flex-col gap-3">
-          {results.map((call) => (
+          {myHosted.length > 0 && (
+            <h2 className="text-sm font-bold uppercase tracking-wide text-fairway-700">{t("find.yourHostedRounds")}</h2>
+          )}
+          {myHosted.map((call) => (
+            <GolfCallCard key={call.id} call={call} />
+          ))}
+          {myHosted.length > 0 && otherRounds.length > 0 && (
+            <h2 className="mt-3 text-sm font-bold uppercase tracking-wide text-slate-400">
+              {isMatched ? t("find.otherRounds") : t("find.upcomingRounds")}
+            </h2>
+          )}
+          {otherRounds.map((call) => (
             <GolfCallCard key={call.id} call={call} />
           ))}
         </div>

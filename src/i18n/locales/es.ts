@@ -949,6 +949,8 @@ export const es: Record<TranslationKey, string> = {
   "find.filters": "Filtros",
   "find.hideFilters": "Ocultar filtros",
   "find.upcomingRounds": "Próximas rondas",
+  "find.yourHostedRounds": "Rondas que organizas",
+  "find.otherRounds": "Otras rondas",
   "find.clearSearchText": "Borrar búsqueda",
   "find.noRealGolfersYetDesc": "Invita a un amigo golfista a unirse, o mira si hay una ronda abierta a la que sumarte.",
   "find.seeOpenRounds": "Ver rondas abiertas",

@@ -949,6 +949,8 @@ export const ko: Record<TranslationKey, string> = {
   "find.filters": "필터",
   "find.hideFilters": "필터 숨기기",
   "find.upcomingRounds": "다가오는 라운드",
+  "find.yourHostedRounds": "내가 호스트하는 라운드",
+  "find.otherRounds": "다른 라운드",
   "find.clearSearchText": "검색 지우기",
   "find.noRealGolfersYetDesc": "골프 친구를 초대하거나, 참여할 수 있는 라운드가 있는지 확인해 보세요.",
   "find.seeOpenRounds": "모집 중인 라운드 보기",

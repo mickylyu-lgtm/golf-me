@@ -949,6 +949,8 @@ export const ja: Record<TranslationKey, string> = {
   "find.filters": "フィルター",
   "find.hideFilters": "フィルターを隠す",
   "find.upcomingRounds": "今後のラウンド",
+  "find.yourHostedRounds": "あなたが主催するラウンド",
+  "find.otherRounds": "その他のラウンド",
   "find.clearSearchText": "検索をクリア",
   "find.noRealGolfersYetDesc": "ゴルフ仲間を招待するか、参加できるラウンドがないか見てみましょう。",
   "find.seeOpenRounds": "募集中のラウンドを見る",

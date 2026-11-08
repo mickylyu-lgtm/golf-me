@@ -949,6 +949,8 @@ export const zhCN: Record<TranslationKey, string> = {
   "find.filters": "筛选",
   "find.hideFilters": "隐藏筛选",
   "find.upcomingRounds": "即将开始的球局",
+  "find.yourHostedRounds": "你发起的球局",
+  "find.otherRounds": "其他球局",
   "find.clearSearchText": "清除搜索",
   "find.noRealGolfersYetDesc": "邀请一位球友加入，或者看看有没有可以加入的球局。",
   "find.seeOpenRounds": "查看有空位的球局",
