@@ -26,6 +26,7 @@ import {
 import type { CommunityPost, PostMediaItem } from "../../types";
 import { useData } from "../../context/DataContext";
 import { useToast } from "../../context/ToastContext";
+import { tapHaptic } from "../../lib/tapFeedback";
 import { Avatar } from "../ui/Avatar";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
@@ -701,7 +702,10 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
             onClick={() => {
               // The pop marks a fresh like from this tap only: never first
               // render, a like from another device, or an unlike.
-              if (!upvoted) setLikePop((n) => n + 1);
+              if (!upvoted) {
+                setLikePop((n) => n + 1);
+                tapHaptic("medium");
+              }
               togglePostUpvote(post.id).catch(() => showToast(t("community.likeFailed"), "warning"));
             }}
             aria-pressed={upvoted}
@@ -710,7 +714,19 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
               upvoted ? "border-transparent bg-fairway-500 text-white" : "border-slate-200 text-slate-600 hover:border-fairway-300"
             }`}
           >
-            <ThumbsUp key={likePop} size={13} fill={upvoted ? "currentColor" : "none"} className={likePop > 0 && upvoted ? "gm-like-pop" : undefined} />{" "}
+            {likePop > 0 && upvoted && (
+              <span key={`ring-${likePop}`} aria-hidden="true" className="gm-like-ring pointer-events-none absolute inset-0 rounded-full" />
+            )}
+            <span className="relative inline-flex">
+              <ThumbsUp key={likePop} size={13} fill={upvoted ? "currentColor" : "none"} className={likePop > 0 && upvoted ? "gm-like-pop" : undefined} />
+              {likePop > 0 && upvoted && (
+                <span key={`burst-${likePop}`} aria-hidden="true" className="pointer-events-none absolute inset-0">
+                  {[0, 60, 120, 180, 240, 300].map((deg, i) => (
+                    <span key={deg} className="gm-like-spark" style={{ "--a": `${deg}deg`, "--c": i % 2 ? "#f0b93f" : "#2f8f5b" } as React.CSSProperties} />
+                  ))}
+                </span>
+              )}
+            </span>{" "}
             <span className="tabular-nums">{postUpvoteCount(post.id)}</span>
           </button>
           <button
