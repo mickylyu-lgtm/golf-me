@@ -222,7 +222,7 @@
     <!-- Appearance (Settings -> Appearance), before first paint so a dark
          launch never flashes cream. Same rules as src/lib/appearance.ts:
          localStorage golfme:appearance = light | dark | system (default
-         system); the signed-out static landing page (gm-static-landing)
+         light); the signed-out static landing page (gm-static-landing)
          always stays light. The EntryOverlay's green (gm-entry-boot) wins
          over either, as before. -->
     <script>
@@ -232,7 +232,7 @@
           if (root.classList.contains("gm-static-landing")) return;
           var s = null;
           try { s = localStorage.getItem("golfme:appearance"); } catch (e) {}
-          if (s !== "light" && s !== "dark" && s !== "system") s = "system";
+          if (s !== "light" && s !== "dark" && s !== "system") s = "light";
           var dark = s === "dark" || (s === "system" && !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches));
           if (!dark) return;
           root.classList.add("dark");

@@ -10,10 +10,11 @@ export type ColorScheme = "light" | "dark";
 
 export const APPEARANCE_STORAGE_KEY = "golfme:appearance";
 export const APPEARANCE_SETTINGS: readonly AppearanceSetting[] = ["light", "dark", "system"];
-// What a device that never chose gets. "system" matches the iPhone, and the
-// native status bar (which follows the iPhone's own setting) then matches the
-// app too.
-export const DEFAULT_APPEARANCE: AppearanceSetting = "system";
+// What a device that never chose gets: Light (Micky, 2026-11-08). Dark and
+// Match iPhone are a choice in Settings -> Appearance. Only an explicit
+// choice is ever stored, so devices that never picked switch to Light, and
+// anyone who picked Match iPhone or Dark keeps it.
+export const DEFAULT_APPEARANCE: AppearanceSetting = "light";
 
 // <meta name="theme-color">: light keeps the colour it always had; dark is
 // the dark page colour so browser chrome blends with the app.

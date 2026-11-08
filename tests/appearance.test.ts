@@ -37,7 +37,7 @@ test("a forced-light screen (the landing page) wins over every setting", () => {
 });
 
 test("unknown or missing stored values fall back to the default", () => {
-  assert.equal(DEFAULT_APPEARANCE, "system");
+  assert.equal(DEFAULT_APPEARANCE, "light");
   for (const v of [null, undefined, "", "Dark", "auto", 1, {}]) assert.equal(parseAppearance(v), DEFAULT_APPEARANCE);
   for (const v of ["light", "dark", "system"]) assert.equal(parseAppearance(v), v);
 });
