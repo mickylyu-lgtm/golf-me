@@ -4,6 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  CUE_HARD_MAX_CHARS,
   CUE_MAX_CHARS,
   placedCueCheckpoints,
   sanitizeCheckpointCues,
@@ -45,20 +46,26 @@ test("sanitizeCue: a cue carrying a link is dropped, not cleaned", () => {
   assert.equal(sanitizeCue("Watch www.example.com"), null);
 });
 
-test("sanitizeCue: long cues are capped on a word boundary with an ellipsis", () => {
-  const long = "Let your lead hip clear first and keep your chest over the ball a beat longer so the arms can follow through";
-  const out = sanitizeCue(long)!;
-  assert.ok(Array.from(out).length <= CUE_MAX_CHARS, out);
-  assert.ok(out.endsWith("…"));
-  assert.ok(long.startsWith(out.slice(0, -1)), "cut at a word boundary, nothing invented");
-  assert.ok(!/\s…$/.test(out));
+test("sanitizeCue: a cue a little over the target is shown whole, never with an ellipsis", () => {
+  const long = "Rotate shoulders around a centered head position without sliding laterally away from the target.";
+  assert.ok(Array.from(long).length > CUE_MAX_CHARS);
+  assert.equal(sanitizeCue(long), long);
 });
 
-test("sanitizeCue: CJK (no spaces) is capped by code point", () => {
-  const out = sanitizeCue("保".repeat(200))!;
-  assert.equal(Array.from(out).length, CUE_MAX_CHARS);
-  assert.ok(out.endsWith("…"));
+test("sanitizeCue: a very long cue keeps whole sentences, or is dropped", () => {
+  const two = "Keep your head centered over the ball. " + "Let the lead hip clear first and keep your chest over the ball a beat longer so the arms can follow through freely and finish tall.";
+  assert.ok(Array.from(two).length > CUE_HARD_MAX_CHARS);
+  assert.equal(sanitizeCue(two), "Keep your head centered over the ball.");
+  const oneRunOn = "Let your lead hip clear first and keep your chest over the ball a beat longer so the arms can follow through and finish high with balance on the lead side every time you swing";
+  assert.ok(Array.from(oneRunOn).length > CUE_HARD_MAX_CHARS);
+  assert.equal(sanitizeCue(oneRunOn), null);
+  assert.equal(sanitizeCue("保".repeat(200)), null);
   assert.equal(sanitizeCue("保持头部稳定"), "保持头部稳定");
+});
+
+test("sanitizeCue: a cue already cut short by an older version is hidden", () => {
+  assert.equal(sanitizeCue("Rotate shoulders around a centered head position without sliding laterally away from…"), null);
+  assert.equal(sanitizeCue("Keep turning..."), null);
 });
 
 test("sanitizeCheckpointCues: unknown keys dropped, bad values dropped, all-bad is undefined", () => {

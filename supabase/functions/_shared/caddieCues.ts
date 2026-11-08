@@ -20,14 +20,19 @@ export const CUE_CHECKPOINTS = ["address", "top", "impact", "follow_through"] as
 export type CueCheckpoint = (typeof CUE_CHECKPOINTS)[number];
 export type CheckpointCues = Partial<Record<CueCheckpoint, string>>;
 
-// Short enough to read on a frozen frame in one glance.
+// What the prompt asks for: short enough to read on a frozen frame in one
+// glance. A cue that runs over is still shown whole up to CUE_HARD_MAX_CHARS.
 export const CUE_MAX_CHARS = 90;
+// Beyond this, the cue keeps its first complete sentence(s) that fit, or is
+// dropped. A cue is never cut mid-sentence with "…" (Micky, 2026-11-08: a
+// half-finished "Remember" line looks broken).
+export const CUE_HARD_MAX_CHARS = 160;
 
 // A cue is one plain line: strip the markdown/HTML Gemini sometimes adds,
-// collapse whitespace, drop wrapping quotes, and cap the length (on a word
-// boundary when there is one, so a Latin-script cue isn't cut mid-word; CJK
-// has no spaces and is cut by code point). Returns null for anything that
-// isn't a usable cue, including one carrying a link.
+// collapse whitespace, drop wrapping quotes. Returns null for anything that
+// isn't a usable cue, including one carrying a link, and for a cue an
+// earlier version of this helper already cut short (it ends in "…"), so old
+// stored analyses stop showing a broken line too.
 export function sanitizeCue(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
   let s = raw;
@@ -39,13 +44,16 @@ export function sanitizeCue(raw: unknown): string | null {
   s = s.replace(/\s+/g, " ").trim();
   s = s.replace(/^["'“‘「『]+|["'”’」』]+$/g, "").trim();
   if (!s) return null;
+  if (/(?:…|\.\.\.)$/u.test(s)) return null;
   const chars = Array.from(s);
-  if (chars.length <= CUE_MAX_CHARS) return s;
-  let cut = chars.slice(0, CUE_MAX_CHARS - 1).join("");
-  const lastSpace = cut.lastIndexOf(" ");
-  if (lastSpace >= Math.floor(CUE_MAX_CHARS * 0.6)) cut = cut.slice(0, lastSpace);
-  cut = cut.replace(/[\s,;:.\-–—、。，]+$/u, "");
-  return cut ? `${cut}…` : null;
+  if (chars.length <= CUE_HARD_MAX_CHARS) return s;
+  // Too long: keep whole sentences that fit, never a fragment.
+  const head = chars.slice(0, CUE_HARD_MAX_CHARS).join("");
+  const ends = [...head.matchAll(/[.!?。！？](?=\s|$)/gu)];
+  const last = ends.length ? ends[ends.length - 1] : null;
+  if (!last || last.index === undefined) return null;
+  const kept = head.slice(0, last.index + 1).trim();
+  return kept.length >= 12 ? kept : null;
 }
 
 // Keeps only known checkpoint keys with a usable cue. When `placed` is
