@@ -16,6 +16,8 @@ import { CoachModeSwitch, CoachPageMeasurer, CoachReplayCard, CoachReplayStrip, 
 import type { CoachPageLayout } from "./CoachReplayCard";
 import { useCoachVideoPauses } from "./useCoachVideoPauses";
 import { lockPageScroll } from "../../lib/scrollLock";
+import { ReplayControls } from "./ReplayControls";
+import { CONTROLS_IDLE_MS, controlsVisible } from "../../lib/replayControls";
 
 // Standard COCO-17 joint pairs — only drawn when BOTH ends are present in
 // that frame's keypoints. Roboflow's output already had unreliable joints
@@ -285,10 +287,13 @@ const COACH_PHASE_KEY: Partial<Record<CoachMomentLabel, PhaseButton["labelKey"]>
 const FS_AXIS_LOCK_PX = 10;
 const FS_DISMISS_PX = 120;
 const FS_DISMISS_VELOCITY = 0.5;
-// The native video controls bar sits along the bottom edge.
+// The native video controls bar sits along the bottom edge (Original mode).
 const FS_CONTROLS_STRIP_PX = 90;
-// The fullscreen coach card's distance from the bottom edge.
+// The fullscreen coach card's distance from the bottom edge, and the side
+// insets that keep it and the controls clear of a landscape notch.
 const FS_SLOT_BOTTOM = "max(0.75rem, env(safe-area-inset-bottom))";
+const FS_SIDE_LEFT = "max(0.75rem, env(safe-area-inset-left))";
+const FS_SIDE_RIGHT = "max(0.75rem, env(safe-area-inset-right))";
 
 const REPLAY_MODES = [
   { speed: 1, labelKey: "caddie.replayOriginal", showOverlay: false },
@@ -328,6 +333,50 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
   const coachActive = coachAvailable && coachOn && mode.showOverlay;
   const coach = useCoachVideoPauses(videoRef, coachCheckpoints, coachActive);
   const [coachLayout, setCoachLayout] = useState<CoachPageLayout | null>(null);
+
+  // Analysis mode uses Caddie's own controls (ReplayControls), not the
+  // native ones: those put a big play button and a scrubber over the swing
+  // at every coach checkpoint, and their fullscreen button (and pinch) opened
+  // the OS player, which shows only the <video>, so the coaching cards
+  // vanished there (Micky, 2026-11-08). Original mode keeps the native player.
+  // A tap on the video shows the controls; they fade after a few idle
+  // seconds, never while scrubbing or keyboard-focused, and a checkpoint
+  // pause shows none.
+  const customControls = showOverlay;
+  const [videoPaused, setVideoPaused] = useState(true);
+  const [controlsRevealed, setControlsRevealed] = useState(false);
+  const [controlsHeld, setControlsHeld] = useState(false);
+  const [controlsPoke, setControlsPoke] = useState(0);
+  const revealControls = useCallback(() => {
+    setControlsRevealed(true);
+    setControlsPoke((n) => n + 1);
+  }, []);
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const sync = () => setVideoPaused(video.paused);
+    sync();
+    video.addEventListener("play", sync);
+    video.addEventListener("pause", sync);
+    video.addEventListener("ended", sync);
+    return () => {
+      video.removeEventListener("play", sync);
+      video.removeEventListener("pause", sync);
+      video.removeEventListener("ended", sync);
+    };
+  }, []);
+  useEffect(() => {
+    if (!controlsRevealed || controlsHeld) return;
+    const id = window.setTimeout(() => setControlsRevealed(false), CONTROLS_IDLE_MS);
+    return () => window.clearTimeout(id);
+  }, [controlsRevealed, controlsHeld, controlsPoke]);
+  // A checkpoint freeze takes the controls down with it (unless they are in
+  // use), so the paused swing and its card are all that shows.
+  const frozenAtCheckpoint = coach.active !== null;
+  useEffect(() => {
+    if (frozenAtCheckpoint) setControlsRevealed(false);
+  }, [frozenAtCheckpoint, coach.activeIndex]);
+  const showControls = customControls && controlsVisible({ revealed: controlsRevealed, held: controlsHeld, paused: videoPaused, frozenAtCheckpoint });
   // The body parts the open card talks about, highlighted on the paused
   // frame (draw() reads the ref; redrawRef repaints when the card changes).
   // Only findings from measured pose segments map; score/focus/work_on
@@ -471,11 +520,11 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
   function onFsTouchStart(e: React.TouchEvent) {
     if (!customFullscreen) return;
     const touch = e.touches[0];
-    const onCard = e.target instanceof Element && e.target.closest("[data-coach-slot]") !== null;
-    // The video may sit above a coach card in fullscreen, so its controls
-    // bar is along the video's own bottom edge, not the screen's.
+    const onCard = e.target instanceof Element && e.target.closest("[data-coach-slot], [data-replay-controls], [data-fs-close]") !== null;
+    // Caddie's own controls are excluded above. The native controls bar (if
+    // ever shown here) is along the video's own bottom edge, not the screen's.
     const videoBottom = videoRef.current?.getBoundingClientRect().bottom ?? window.innerHeight;
-    const onControls = touch.clientY > videoBottom - FS_CONTROLS_STRIP_PX && touch.clientY <= videoBottom;
+    const onControls = !customControls && touch.clientY > videoBottom - FS_CONTROLS_STRIP_PX && touch.clientY <= videoBottom;
     fsDragRef.current = onCard || onControls || e.touches.length > 1 ? null : { x: touch.clientX, y: touch.clientY, t: Date.now(), axis: "none" };
   }
   function onFsTouchMove(e: React.TouchEvent) {
@@ -537,6 +586,9 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
   useEffect(() => {
     if (!showOverlay) {
       setCustomFullscreen(false);
+      // The custom controls go with it; a hold left set would stall the cards.
+      setControlsHeld(false);
+      setControlsRevealed(false);
       setCallouts([]);
       calloutsSignatureRef.current = "";
     }
@@ -846,6 +898,7 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
         stepTotal={stepTotal}
         onContinue={coach.resume}
         onSkip={coach.skip}
+        holdAutoContinue={controlsHeld}
       />
     ) : coach.ended && coachSummary ? (
       <CoachSummaryCard summary={coachSummary} pages={coachLayout?.summary} onReplay={coach.start} onDone={coach.dismissEnded} />
@@ -896,7 +949,10 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
               resumeAtRef.current = null;
             }
           }}
-          controls
+          controls={!customControls}
+          // The OS picture-in-picture window can't show the overlay either,
+          // and with no native controls nothing would bring it back.
+          disablePictureInPicture={customControls}
           // playsInline: without it, iOS Safari can auto-promote playback
           // into its OWN real native fullscreen the instant play() fires —
           // on top of (separate from) our own customFullscreen CSS state —
@@ -920,11 +976,12 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
           className={customFullscreen ? `block w-full object-contain ${fsReserve ? "" : "h-full"}` : "block max-h-80 w-full"}
           onClick={(e) => {
             if (!(e.target instanceof HTMLVideoElement)) return;
-            if (showOverlay) {
-              // In-app fullscreen (see the customFullscreen comment above)
-              // — only the FIRST tap opens it; once already full-viewport,
-              // a tap should just do the normal play/pause toggle.
-              if (!customFullscreen) setCustomFullscreen(true);
+            if (customControls) {
+              // A tap shows the controls (play/pause, scrubber, full screen),
+              // or tucks them away again; it never starts or stops playback
+              // by itself. Full screen is the controls' own button.
+              if (controlsRevealed && !controlsHeld) setControlsRevealed(false);
+              else revealControls();
             } else {
               // No preventDefault, bubble phase — WebKit only honors
               // webkitEnterFullscreen() as a real user gesture without
@@ -967,22 +1024,60 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
           <div
             ref={fsSlotRef}
             data-coach-slot
-            className="absolute inset-x-3 z-10 flex flex-col"
-            style={{ bottom: FS_SLOT_BOTTOM }}
+            className="absolute z-10 mx-auto flex max-w-xl flex-col"
+            style={{ bottom: FS_SLOT_BOTTOM, left: FS_SIDE_LEFT, right: FS_SIDE_RIGHT }}
             onClick={(e) => e.stopPropagation()}
           >
             {coachSlot}
           </div>
         )}
+        {customControls && (
+          <ReplayControls
+            videoRef={videoRef}
+            visible={showControls}
+            paused={videoPaused}
+            fullscreen={customFullscreen}
+            // Along the bottom of the video itself: above the coach card in
+            // full screen (fsReserve), inside the safe area, never over it.
+            style={
+              customFullscreen
+                ? {
+                    left: FS_SIDE_LEFT,
+                    right: FS_SIDE_RIGHT,
+                    bottom: fsReserve ? `calc(${fsSlotHeight}px + ${FS_SLOT_BOTTOM} + 0.5rem)` : FS_SLOT_BOTTOM,
+                  }
+                : { left: "0.5rem", right: "0.5rem", bottom: "0.5rem" }
+            }
+            onPlayPause={() => {
+              const video = videoRef.current;
+              if (!video) return;
+              if (!video.paused) {
+                video.pause();
+                return;
+              }
+              // Same path as the card's Continue (once only); from the end,
+              // a coached replay starts the lesson over.
+              if (video.ended && coachActive) coach.start();
+              else {
+                if (video.ended) video.currentTime = 0;
+                coach.resume();
+              }
+            }}
+            onToggleFullscreen={() => setCustomFullscreen((on) => !on)}
+            onInteract={revealControls}
+            onHoldChange={setControlsHeld}
+          />
+        )}
         {customFullscreen && (
           <button
+            data-fs-close
             onClick={(e) => {
               e.stopPropagation();
               setCustomFullscreen(false);
             }}
             aria-label={t("common.close")}
-            className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white"
-            style={{ top: "max(0.75rem, env(safe-area-inset-top))" }}
+            className="absolute z-20 flex h-11 w-11 items-center justify-center rounded-full bg-black/50 text-white"
+            style={{ top: "max(0.75rem, env(safe-area-inset-top))", right: FS_SIDE_RIGHT }}
           >
             <X size={18} />
           </button>

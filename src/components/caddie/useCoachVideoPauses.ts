@@ -87,10 +87,23 @@ export function useCoachVideoPauses(videoRef: RefObject<HTMLVideoElement | null>
     };
   }, [videoRef, checkpoints, enabled]);
 
+  // Continue, the card's own auto-continue and the play control can land in
+  // the same moment; only the first one starts playback. A play() that is
+  // refused leaves the card up, so Continue can be tapped again.
+  const playPendingRef = useRef(false);
   const resume = useCallback(() => {
-    void videoRef.current?.play().catch(() => {});
+    const video = videoRef.current;
+    if (!video || !video.paused || playPendingRef.current) return;
+    playPendingRef.current = true;
+    void video
+      .play()
+      .catch(() => {})
+      .finally(() => {
+        playPendingRef.current = false;
+      });
   }, [videoRef]);
   const skip = useCallback(() => {
+    if (playPendingRef.current) return;
     skippedRef.current = true;
     resume();
   }, [resume]);

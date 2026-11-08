@@ -12,6 +12,20 @@ const HANDLE_WIDTH_PX = 14;
 
 type DragMode = "start" | "end" | "middle" | null;
 
+type FilmstripSlot = string | null | undefined;
+interface FilmstripState {
+  file: File;
+  attempt: number;
+  frames: FilmstripSlot[];
+  status: "loading" | "ready" | "failed";
+}
+const loadingStrip = (file: File, attempt: number): FilmstripState => ({
+  file,
+  attempt,
+  frames: Array.from({ length: FILMSTRIP_FRAME_COUNT }, () => undefined),
+  status: "loading",
+});
+
 // A picked video longer than Caddie's clip-length cap used to just get
 // rejected outright (see AnalyzeSwing.tsx's own MAX_SWING_VIDEO_SECONDS
 // comment history) -- reported live as wanting to crop a long clip down
@@ -57,7 +71,12 @@ export function VideoTrimSelector({
   const [start, setStart] = useState(initialWindow.start);
   const [end, setEnd] = useState(initialWindow.end);
   const [previewTime, setPreviewTime] = useState(initialWindow.start);
-  const [thumbnails, setThumbnails] = useState<string[] | undefined>(undefined);
+  // The filmstrip, slot by slot (undefined = still coming, null = no usable
+  // frame). Tagged with the file and attempt it belongs to, so a newer pick
+  // or a retry never shows the previous run's frames.
+  const [stripAttempt, setStripAttempt] = useState(0);
+  const [strip, setStrip] = useState<FilmstripState>(() => loadingStrip(file, 0));
+  const stripNow = strip.file === file && strip.attempt === stripAttempt ? strip : loadingStrip(file, stripAttempt);
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
   // Real footage from a phone is often 60fps/high-resolution — seeking to
   // an arbitrary (non-keyframe) point means the browser has to decode
@@ -68,22 +87,38 @@ export function VideoTrimSelector({
   // than looking stuck/broken.
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
 
+  // A newer file (or the trimmer closing) aborts the run in flight, which
+  // releases its decoder straight away. Trimming never waits on this: the
+  // handles and the preview work with no frames at all.
   useEffect(() => {
-    let cancelled = false;
-    generateVideoFilmstrip(file, FILMSTRIP_FRAME_COUNT)
+    const controller = new AbortController();
+    const attempt = stripAttempt;
+    // finished: whatever has not arrived is final, and no frame at all is a failure.
+    const update = (fn: (frames: FilmstripSlot[]) => FilmstripSlot[], finished = false) =>
+      setStrip((prev) => {
+        const base = prev.file === file && prev.attempt === attempt ? prev : loadingStrip(file, attempt);
+        const frames = fn(base.frames).map((f) => (finished ? (f ?? null) : f));
+        const status = finished ? (frames.some(Boolean) ? "ready" : "failed") : base.status;
+        return { file, attempt, frames, status };
+      });
+    generateVideoFilmstrip(file, FILMSTRIP_FRAME_COUNT, {
+      signal: controller.signal,
+      fallbackDuration: duration,
+      onFrame: (i, src) => {
+        if (!controller.signal.aborted) update((frames) => frames.map((f, j) => (j === i ? src : f)));
+      },
+    })
       .then((frames) => {
-        if (!cancelled) setThumbnails(frames);
+        if (controller.signal.aborted) return;
+        update((prev) => frames.map((f, i) => f ?? prev[i] ?? null), true);
       })
       .catch((err) => {
+        if (controller.signal.aborted) return;
         console.error("GolfMe: failed to build a trim filmstrip.", err);
-        if (!cancelled) setThumbnails([]); // falls back to a bare track, never blocks trimming
+        update((prev) => prev, true);
       });
-    return () => {
-      cancelled = true;
-    };
-    // file is a fresh object per pick (AnalyzeSwing never mutates it in place) -- safe to run once per mount.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    return () => controller.abort();
+  }, [file, duration, stripAttempt]);
 
   // Forces the preview to actually decode/paint the seeked-to frame -- see
   // captureVideoThumbnail's own comment on why currentTime alone isn't
@@ -270,15 +305,30 @@ export function VideoTrimSelector({
             first reach for it. */}
         <div ref={trackRef} className="relative h-16 touch-none select-none">
           <div className="absolute inset-0 overflow-hidden rounded-lg bg-slate-900">
-            {thumbnails === undefined ? (
-              <div className="flex h-full w-full items-center justify-center text-[11px] text-slate-400">…</div>
-            ) : thumbnails.length > 0 ? (
-              <div className="flex h-full w-full">
-                {thumbnails.map((src, i) => (
-                  <img key={i} src={src} alt="" draggable={false} className="h-full flex-1 object-cover" />
-                ))}
+            {/* One cell per sampled slot, filled as each frame arrives;
+                object-cover keeps the frame's own proportions (portrait or
+                landscape) and crops it to the cell instead of stretching. */}
+            <div className="flex h-full w-full" data-filmstrip-status={stripNow.status}>
+              {stripNow.frames.map((src, i) =>
+                src ? (
+                  <img key={i} src={src} alt="" draggable={false} className="h-full min-w-0 flex-1 object-cover" />
+                ) : (
+                  <div
+                    key={i}
+                    aria-hidden="true"
+                    className={`h-full min-w-0 flex-1 border-r border-slate-900 last:border-r-0 ${src === undefined ? "animate-pulse bg-slate-700" : "bg-slate-800"}`}
+                  />
+                ),
+              )}
+            </div>
+            {stripNow.status === "loading" && !stripNow.frames.some(Boolean) && (
+              <div role="status" className="pointer-events-none absolute inset-0 z-[1] flex items-center justify-center">
+                <span className="flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1 text-[11px] font-semibold text-fixed-white">
+                  <Loader2 size={13} aria-hidden="true" className="animate-spin" />
+                  {t("caddie.trimFramesLoading")}
+                </span>
               </div>
-            ) : null}
+            )}
 
             {/* Dim the excluded portions on either side of the selection. */}
             <div className="pointer-events-none absolute inset-y-0 left-0 bg-black/55" style={{ width: `${startPct}%` }} />
@@ -330,6 +380,18 @@ export function VideoTrimSelector({
         <p className="text-center text-xs font-semibold text-slate-600">
           {t("caddie.trimSelectedLabel", { start: formatClock(start), end: formatClock(end) })}
         </p>
+        {stripNow.status === "failed" && (
+          <div role="status" className="flex items-center justify-center gap-2 text-center">
+            <p className="text-[11px] text-slate-500">{t("caddie.trimFramesFailed")}</p>
+            <button
+              type="button"
+              onClick={() => setStripAttempt((n) => n + 1)}
+              className="min-h-9 shrink-0 rounded-full px-3 text-xs font-semibold text-fairway-700 hover:text-fairway-800"
+            >
+              {t("caddie.trimFramesRetry")}
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="flex gap-2">

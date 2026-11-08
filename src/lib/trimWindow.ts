@@ -22,3 +22,15 @@ export function initialTrimWindow(
   const start = Math.min(total - length, Math.max(0, prevStart));
   return { start, end: start + length };
 }
+
+/**
+ * The times a trim filmstrip samples: the middle of each of `count` equal
+ * slots, kept a little inside the clip (a frame exactly at 0 or at the very
+ * end is often black or not decodable).
+ */
+export function filmstripTimes(duration: number, count: number): number[] {
+  if (!Number.isFinite(duration) || duration <= 0 || count <= 0) return [];
+  const lo = Math.min(0.05, duration / 2);
+  const hi = Math.max(lo, duration - 0.05);
+  return Array.from({ length: count }, (_, i) => Math.min(hi, Math.max(lo, ((i + 0.5) * duration) / count)));
+}

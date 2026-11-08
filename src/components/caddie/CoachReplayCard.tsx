@@ -373,9 +373,24 @@ export interface CoachReplayCardProps {
   stepTotal: number;
   onContinue: () => void;
   onSkip: () => void;
+  // The player's own controls are in use (scrubbing, keyboard focus): the
+  // reading-time countdown waits, then starts over once they are let go.
+  holdAutoContinue?: boolean;
 }
 
-export function CoachReplayCard({ checkpoint, pages, stepOffset, stepTotal, onContinue, onSkip }: CoachReplayCardProps) {
+// The app in the background (or the tab hidden): no countdown runs there, so
+// coming back never finds the swing already played on past the moment.
+function useDocumentVisible() {
+  const [visible, setVisible] = useState(() => typeof document === "undefined" || document.visibilityState !== "hidden");
+  useEffect(() => {
+    const onChange = () => setVisible(document.visibilityState !== "hidden");
+    document.addEventListener("visibilitychange", onChange);
+    return () => document.removeEventListener("visibilitychange", onChange);
+  }, []);
+  return visible;
+}
+
+export function CoachReplayCard({ checkpoint, pages, stepOffset, stepTotal, onContinue, onSkip, holdAutoContinue = false }: CoachReplayCardProps) {
   const { t } = useLocale();
   const reducedMotion = usePrefersReducedMotion();
   const blocks = checkpointBlocks(checkpoint);
@@ -388,7 +403,8 @@ export function CoachReplayCard({ checkpoint, pages, stepOffset, stepTotal, onCo
   // card holds this page until Continue. Reduced motion keeps the timing but
   // drops the moving countdown bar.
   const [heldPage, setHeldPage] = useState<number | null>(null);
-  const autoContinue = heldPage !== page;
+  const documentVisible = useDocumentVisible();
+  const autoContinue = heldPage !== page && !holdAutoContinue && documentVisible;
   const pageTextLength = visible.reduce((n, b) => n + claimLength(t, b.id === "cue" ? checkpoint.cue : checkpointClaim(checkpoint, b.id), b.range), 0);
   const dwellMs = coachDwellMs(pageTextLength);
 
