@@ -63,8 +63,12 @@ import {
   shouldRunFullResPoseRetry,
   stepRetryDelayMs,
   tallyRoboflowOutput,
+  GEMINI_GENERATE_MIN_TRY_MS,
+  TERMINAL_RESERVE_MS,
+  geminiGenerateTryTimeoutMs,
+  requestFailureKind,
 } from "../_shared/caddieReliability.ts";
-import type { CaddieStage, PosePassName, PoseSignalTally, StepFailure, TrimWindow } from "../_shared/caddieReliability.ts";
+import type { CaddieStage, PosePassName, PoseSignalTally, RequestFailureKind, StepFailure, TrimWindow } from "../_shared/caddieReliability.ts";
 import { CUE_MAX_CHARS, WORK_ON_CHECKPOINTS, withSanitizedCheckpointCues, withSanitizedWorkOnCheckpoints } from "../_shared/caddieCues.ts";
 import { withMeasuredCueCheck } from "../_shared/caddieVerdicts.ts";
 
@@ -139,7 +143,10 @@ const TIMEOUT_MS = {
   roboflowFrame: 25_000,
   geminiUpload: 90_000,
   geminiPoll: 15_000,
-  geminiGenerate: 150_000,
+  // generateContent has no fixed timeout any more: each try's comes from
+  // geminiGenerateTryTimeoutMs() (_shared/caddieReliability.ts), 60/75/75 s
+  // capped to the remaining deadline. It was a fixed 150 s, which is how
+  // job 5f4c8655 lost ~150 s per stalled request and then its deadline.
 } as const;
 // Rough cost of one more run of each step: a retry only happens when the
 // remaining deadline covers the back-off plus this.
@@ -152,8 +159,10 @@ const STEP_BUDGET_MS: Record<CaddieStage, number> = {
   pose_gate: 0,
   gemini_upload: 30_000,
   gemini_processing: 20_000,
-  gemini_generate: 60_000,
-  output_validation: 60_000,
+  // The shortest try worth starting plus the terminal reserve (see
+  // geminiGenerateTryTimeoutMs, which also caps each try's own timeout).
+  gemini_generate: GEMINI_GENERATE_MIN_TRY_MS + TERMINAL_RESERVE_MS,
+  output_validation: GEMINI_GENERATE_MIN_TRY_MS + TERMINAL_RESERVE_MS,
   save: 5_000,
 };
 // Asks extract-frames to downscale frames to this long side (smaller
@@ -559,11 +568,15 @@ class StepError extends Error {
   readonly retryAfter: string | null;
   // How many times the step ran before giving up (for diagnostics).
   stepAttempts = 1;
-  constructor(failure: StepFailure, retryAfter: string | null = null) {
+  // timeout / aborted / network / http / invalid_output / internal — logs
+  // and diagnostics only (the stored category is unchanged).
+  kind: RequestFailureKind;
+  constructor(failure: StepFailure, retryAfter: string | null = null, kind?: RequestFailureKind) {
     super(`${failure.category}@${failure.stage}`);
     this.name = "StepError";
     this.failure = failure;
     this.retryAfter = retryAfter;
+    this.kind = kind ?? requestFailureKind(null, failure.httpStatus, failure.category);
   }
 }
 
@@ -581,7 +594,8 @@ function httpStepError(stage: CaddieStage, status: number, body: string, headers
 function thrownStepError(stage: CaddieStage, err: unknown): StepError {
   if (err instanceof StepError) return err;
   const { category, retryable } = classifyThrown(stage, err);
-  return new StepError({ stage, category, retryable, detail: `threw ${safeErrorName(err)}` });
+  const kind = requestFailureKind(err);
+  return new StepError({ stage, category, retryable, detail: `threw ${safeErrorName(err)} (${kind})` }, null, kind);
 }
 
 function hardFailure(stage: CaddieStage, category: StepFailure["category"], detail: string): StepError {
@@ -635,6 +649,8 @@ Deno.serve(async (req: Request) => {
   }
   // Gemini auth travels in this header on every call, never in a URL.
   const geminiAuth: Record<string, string> = { "x-goog-api-key": geminiApiKey };
+  const thinkingSecret = (Deno.env.get("CADDIE_GEMINI_THINKING_LEVEL") ?? "").trim().toLowerCase();
+  const geminiThinkingLevel = ["minimal", "low", "medium", "high"].includes(thinkingSecret) ? thinkingSecret : null;
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -926,6 +942,29 @@ Deno.serve(async (req: Request) => {
   let trimmedPath: string | null = null;
   let currentStage: CaddieStage = "media_fetch";
 
+  // Aborted the moment this attempt reaches a terminal state (fail(), the
+  // deadline, or the save). Every provider/route fetch listens to it as
+  // well as to its own timeout, so a request still open when the attempt
+  // ends is cancelled — its socket and the worker's memory are released —
+  // instead of running on in the background (job 5f4c8655: attempt 1's
+  // second generateContent was still open when its deadline fired).
+  const pipelineAbort = new AbortController();
+  function requestSignal(timeoutMs: number): AbortSignal {
+    const timeout = AbortSignal.timeout(timeoutMs);
+    if (typeof AbortSignal.any === "function") return AbortSignal.any([pipelineAbort.signal, timeout]);
+    // Older runtimes without AbortSignal.any: forward both by hand.
+    const both = new AbortController();
+    const forward = (s: AbortSignal) => () => both.abort(s.reason);
+    if (pipelineAbort.signal.aborted) both.abort(pipelineAbort.signal.reason);
+    pipelineAbort.signal.addEventListener("abort", forward(pipelineAbort.signal), { once: true });
+    timeout.addEventListener("abort", forward(timeout), { once: true });
+    return both.signal;
+  }
+  function settle(): void {
+    settled = true;
+    if (!pipelineAbort.signal.aborted) pipelineAbort.abort(new DOMException("attempt settled", "AbortError"));
+  }
+
   // One structured, always-on log line per event: job id, attempt, stage,
   // timing and classified outcome only — never a URL, body or message.
   function logEvent(evt: string, fields: Record<string, unknown> = {}, level: "log" | "error" = "log") {
@@ -954,17 +993,30 @@ Deno.serve(async (req: Request) => {
   // app builds, followed by `<category>@<stage>` — no free text. The
   // classified columns carry the structure; the redacted detail goes to
   // private.caddie_job_diagnostics only (admin-readable).
-  async function fail(failure: StepFailure, stepAttempts = 1): Promise<void> {
+  async function fail(failure: StepFailure, stepAttempts = 1, kind?: RequestFailureKind): Promise<void> {
     if (settled) return;
-    settled = true;
+    settle();
     const detail = redactDetail(failure.detail, 300);
     logEvent(
       "failed",
-      { stage: failure.stage, category: failure.category, retryable: failure.retryable, http_status: failure.httpStatus ?? null, step_attempts: stepAttempts },
+      {
+        stage: failure.stage,
+        category: failure.category,
+        kind: kind ?? requestFailureKind(null, failure.httpStatus, failure.category),
+        retryable: failure.retryable,
+        http_status: failure.httpStatus ?? null,
+        step_attempts: stepAttempts,
+        remaining_ms: PIPELINE_DEADLINE_MS - (Date.now() - pipelineStart),
+      },
       "error",
     );
-    // Marked failed, not deleted — see the header comment above.
-    const { error: failUpdateError } = await supabase
+    // Marked failed, not deleted — see the header comment above. Scoped to
+    // THIS attempt while it is still processing; `select` tells us whether
+    // it matched. When it didn't (a newer attempt owns the row, or this
+    // attempt's save landed first), this attempt no longer owns the row:
+    // no diagnostic, and above all no file removal (the trimmed copy may
+    // be what a completed row now points at).
+    const { data: failedRows, error: failUpdateError } = await supabase
       .from("caddie_analyses")
       .update({
         status: "failed",
@@ -978,9 +1030,14 @@ Deno.serve(async (req: Request) => {
       })
       .eq("id", row.id)
       .eq("status", "processing")
-      .eq("attempt", attempt);
+      .eq("attempt", attempt)
+      .select("id");
     if (failUpdateError) {
+      // Unknown whether it landed; the stale sweep (390 s) is the backstop.
       console.error("[analyze-swing] failed to mark row as failed.", { rowId: row.id, reason: redactDetail(failUpdateError.message, 160) });
+    } else if (!failedRows || failedRows.length === 0) {
+      logEvent("failure_discarded", { reason: "row no longer processing for this attempt" });
+      return;
     }
     const { error: diagError } = await supabase.rpc("record_caddie_diagnostic", {
       p_analysis_id: row.id,
@@ -1005,11 +1062,11 @@ Deno.serve(async (req: Request) => {
   // Runs one pipeline step, re-running it up to 2 more times with back-off
   // for transient failures only (stepRetryDelayMs), while the deadline
   // allows. Same row, same attempt: a step retry never creates a record.
-  async function runStep<T>(stage: CaddieStage, fn: () => Promise<T>): Promise<T> {
+  async function runStep<T>(stage: CaddieStage, fn: (stepAttempt: number) => Promise<T>): Promise<T> {
     for (let stepAttempt = 1; ; stepAttempt++) {
-      if (settled) throw new StepError({ stage, category: "deadline_exceeded", retryable: true, detail: "settled" });
+      if (settled) throw new StepError({ stage, category: "deadline_exceeded", retryable: true, detail: "settled" }, null, "aborted");
       try {
-        const value = await fn();
+        const value = await fn(stepAttempt);
         if (stepAttempt > 1) logEvent("step_recovered", { stage, step_attempt: stepAttempt });
         return value;
       } catch (err) {
@@ -1017,18 +1074,27 @@ Deno.serve(async (req: Request) => {
         stepError.stepAttempts = stepAttempt;
         const remainingMs = PIPELINE_DEADLINE_MS - (Date.now() - pipelineStart);
         const delay = settled ? null : stepRetryDelayMs(stepError.failure, stepAttempt, remainingMs, STEP_BUDGET_MS[stage], stepError.retryAfter);
-        if (delay === null) throw stepError;
-        logEvent("step_retry", {
+        const fields = {
           stage: stepError.failure.stage,
           category: stepError.failure.category,
+          kind: stepError.kind,
           http_status: stepError.failure.httpStatus ?? null,
           step_attempt: stepAttempt,
-          delay_ms: delay,
-        });
+          remaining_ms: remainingMs,
+          ...(stage.startsWith("gemini") || stage === "output_validation" ? { model: GEMINI_MODEL } : {}),
+        };
+        if (delay === null) {
+          if (!settled) logEvent("step_gave_up", fields, "error");
+          throw stepError;
+        }
+        logEvent("step_retry", { ...fields, delay_ms: delay, ...(lastRequestTimeoutMs.has(stage) ? { request_timeout_ms: lastRequestTimeoutMs.get(stage) } : {}) });
         await sleep(delay);
       }
     }
   }
+  // The timeout the most recent try of a step ran with, for step_retry's
+  // telemetry (only the steps that set one: gemini_generate).
+  const lastRequestTimeoutMs = new Map<CaddieStage, number>();
 
   // ---- Everything from here runs AFTER the response below is already
   // sent — this request can't stay open for the full pipeline. The client
@@ -1041,7 +1107,7 @@ Deno.serve(async (req: Request) => {
     } catch (err) {
       if (settled) return;
       const stepError = err instanceof StepError ? err : new StepError({ stage: currentStage, category: "internal", retryable: false, detail: `threw ${safeErrorName(err)}` });
-      await fail(stepError.failure, stepError.stepAttempts);
+      await fail(stepError.failure, stepError.stepAttempts, stepError.kind);
     }
   }
 
@@ -1057,7 +1123,7 @@ Deno.serve(async (req: Request) => {
     if (!trimWindow) {
       await enterStage("media_fetch");
       const media = await runStep("media_fetch", async () => {
-        const res = await fetch(pipelineVideoUrl, { signal: AbortSignal.timeout(TIMEOUT_MS.media) });
+        const res = await fetch(pipelineVideoUrl, { signal: requestSignal(TIMEOUT_MS.media) });
         if (!res.ok) throw httpStepError("media_fetch", res.status, await res.text().catch(() => ""), res.headers);
         // Refuse to buffer something that would risk the worker's memory
         // limit (a silent kill) — fail it clearly instead.
@@ -1089,7 +1155,7 @@ Deno.serve(async (req: Request) => {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${frameExtractSecret}` },
           body: JSON.stringify({ videoUrl: pipelineVideoUrl, startSeconds: window.startSeconds, endSeconds: window.endSeconds }),
-          signal: AbortSignal.timeout(TIMEOUT_MS.trim),
+          signal: requestSignal(TIMEOUT_MS.trim),
         });
         if (!res.ok) throw httpStepError("trim", res.status, await res.text().catch(() => ""), res.headers);
         const bytes = await res.arrayBuffer();
@@ -1137,7 +1203,7 @@ Deno.serve(async (req: Request) => {
           // an UNtrimmed video (nothing was picked, or duration was already
           // under the cap), same as before this feature existed.
           body: JSON.stringify({ videoUrl: effectiveVideoUrl, fps: ANALYSIS_FPS, maxLongSide }),
-          signal: AbortSignal.timeout(TIMEOUT_MS.extract),
+          signal: requestSignal(TIMEOUT_MS.extract),
         });
         // 422 = ffmpeg couldn't decode it; 502 = it couldn't fetch the video;
         // 500 + token = resources/internal; 504 = the Vercel function timed out
@@ -1192,7 +1258,7 @@ Deno.serve(async (req: Request) => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ api_key: roboflowApiKey, inputs: { image: { type: "base64", value: frame.base64 } } }),
-        signal: AbortSignal.timeout(TIMEOUT_MS.roboflowFrame),
+        signal: requestSignal(TIMEOUT_MS.roboflowFrame),
       });
       if (!res.ok) {
         const errBody = await res.text().catch(() => "");
@@ -1407,7 +1473,7 @@ Deno.serve(async (req: Request) => {
               method: "POST",
               headers: { "Content-Type": "application/json", Authorization: `Bearer ${frameExtractSecret}` },
               body: JSON.stringify({ videoUrl: effectiveVideoUrl, fps: DENSE_IMPACT_FPS, startSeconds: denseStart, endSeconds: denseEnd, maxLongSide: frameLongSide }),
-              signal: AbortSignal.timeout(TIMEOUT_MS.extract),
+              signal: requestSignal(TIMEOUT_MS.extract),
             });
             if (denseExtractRes.ok) {
               const denseExtractBody = await denseExtractRes.json();
@@ -1497,7 +1563,7 @@ Deno.serve(async (req: Request) => {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({ file: { display_name: `swing-${row.id}-a${attempt}` } }),
-          signal: AbortSignal.timeout(TIMEOUT_MS.geminiPoll),
+          signal: requestSignal(TIMEOUT_MS.geminiPoll),
         });
         const uploadUrl = startRes.headers.get("x-goog-upload-url");
         if (!startRes.ok || !uploadUrl) {
@@ -1511,7 +1577,7 @@ Deno.serve(async (req: Request) => {
             "X-Goog-Upload-Command": "upload, finalize",
           },
           body: videoBytes,
-          signal: AbortSignal.timeout(TIMEOUT_MS.geminiUpload),
+          signal: requestSignal(TIMEOUT_MS.geminiUpload),
         });
         if (!uploadRes.ok) throw httpStepError("gemini_upload", uploadRes.status, await uploadRes.text().catch(() => ""), uploadRes.headers);
         const file = (await uploadRes.json())?.file;
@@ -1533,7 +1599,7 @@ Deno.serve(async (req: Request) => {
         if (settled) return;
         await sleep(GEMINI_ACTIVE_POLL_MS);
         try {
-          const pollRes = await fetch(`${GEMINI_API_BASE}/v1beta/${geminiFile.name}`, { headers: geminiAuth, signal: AbortSignal.timeout(TIMEOUT_MS.geminiPoll) });
+          const pollRes = await fetch(`${GEMINI_API_BASE}/v1beta/${geminiFile.name}`, { headers: geminiAuth, signal: requestSignal(TIMEOUT_MS.geminiPoll) });
           if (!pollRes.ok) {
             const pollBody = await pollRes.text().catch(() => "");
             if (!isRetryableStatus(pollRes.status)) throw httpStepError("gemini_processing", pollRes.status, pollBody, pollRes.headers);
@@ -1579,21 +1645,58 @@ Deno.serve(async (req: Request) => {
             temperature: 0.4,
             responseMimeType: "application/json",
             responseSchema: buildResponseSchema(localeName),
+            // OFF unless Micky sets the secret (latency experiment, may
+            // change feedback quality): CADDIE_GEMINI_THINKING_LEVEL =
+            // minimal | low | medium | high. Unset = the model's default,
+            // exactly as before.
+            ...(geminiThinkingLevel ? { thinkingConfig: { thinkingLevel: geminiThinkingLevel } } : {}),
           },
         });
       // 429/5xx/network from Gemini is usually gone within seconds, and an
       // empty/unparseable/invalid answer is worth exactly one more try:
       // runStep re-runs generate + parse + validate together.
       await enterStage("gemini_generate");
-      parsed = await runStep("gemini_generate", async () => {
-        const genRes = await fetch(`${GEMINI_API_BASE}/v1beta/models/${GEMINI_MODEL}:generateContent`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...geminiAuth },
-          body: genRequestBody,
-          signal: AbortSignal.timeout(TIMEOUT_MS.geminiGenerate),
-        });
-        if (!genRes.ok) throw httpStepError("gemini_generate", genRes.status, await genRes.text().catch(() => ""), genRes.headers);
-        const genBody = await genRes.json();
+      parsed = await runStep("gemini_generate", async (tryIndex) => {
+        // This try's own timeout: the 60/75/75 s schedule, capped so it ends
+        // TERMINAL_RESERVE_MS before the deadline. runStep only starts a
+        // retry when at least GEMINI_GENERATE_MIN_TRY_MS of it would fit, so
+        // null here means the deadline moved under us (a long back-off).
+        const remainingMs = PIPELINE_DEADLINE_MS - (Date.now() - pipelineStart);
+        const tryTimeoutMs = geminiGenerateTryTimeoutMs(tryIndex, remainingMs);
+        if (tryTimeoutMs === null) {
+          throw new StepError({ stage: "gemini_generate", category: "deadline_exceeded", retryable: true, detail: `no time for try ${tryIndex}, ${Math.round(remainingMs / 1000)}s left` }, null, "timeout");
+        }
+        lastRequestTimeoutMs.set("gemini_generate", tryTimeoutMs);
+        const tryStart = Date.now();
+        const tryLog = (outcome: string, extra: Record<string, unknown> = {}) =>
+          logEvent("gemini_try", { stage: "gemini_generate", model: GEMINI_MODEL, thinking: geminiThinkingLevel ?? "default", try: tryIndex, request_timeout_ms: tryTimeoutMs, request_ms: Date.now() - tryStart, outcome, ...extra });
+        let genRes: Response;
+        let genBody: Record<string, unknown> & { candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: unknown }[]; promptFeedback?: { blockReason?: unknown } };
+        try {
+          genRes = await fetch(`${GEMINI_API_BASE}/v1beta/models/${GEMINI_MODEL}:generateContent`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...geminiAuth },
+            body: genRequestBody,
+            signal: requestSignal(tryTimeoutMs),
+          });
+          if (!genRes.ok) {
+            const stepError = httpStepError("gemini_generate", genRes.status, await genRes.text().catch(() => ""), genRes.headers);
+            tryLog("http", { http_status: genRes.status, category: stepError.failure.category, retry_after: genRes.headers.get("retry-after") !== null });
+            throw stepError;
+          }
+          genBody = await genRes.json();
+        } catch (err) {
+          if (err instanceof StepError) throw err;
+          const stepError = thrownStepError("gemini_generate", err);
+          // Our own timeout vs. the network vs. the attempt being settled.
+          tryLog(stepError.kind);
+          throw new StepError(
+            { ...stepError.failure, detail: `${stepError.failure.detail} after ${Date.now() - tryStart}ms of ${tryTimeoutMs}ms, try ${tryIndex}` },
+            null,
+            stepError.kind,
+          );
+        }
+        tryLog("responded");
         const candidate = genBody?.candidates?.[0];
         const text = candidate?.content?.parts?.[0]?.text;
         const finish = `finish ${safeToken(candidate?.finishReason)} block ${safeToken(genBody?.promptFeedback?.blockReason)}`;
@@ -1697,11 +1800,11 @@ Deno.serve(async (req: Request) => {
     });
     if (!savedRows || savedRows.length === 0) {
       logEvent("result_discarded", { reason: "row no longer processing for this attempt" });
-      settled = true;
+      settle();
       return;
     }
-    settled = true;
-    logEvent("complete", { stage: "save" });
+    settle();
+    logEvent("complete", { stage: "save", total_ms: Date.now() - pipelineStart });
     // The untrimmed private original is now unreferenced (this row points at
     // the trimmed copy) unless another of the caller's rows still uses it —
     // remove it rather than leave a private orphan. Best-effort; never a
@@ -1748,7 +1851,8 @@ Deno.serve(async (req: Request) => {
     const outcome = await Promise.race([run, deadline]);
     clearTimeout(timer);
     if (outcome === "timeout") {
-      await fail({ stage: currentStage, category: "deadline_exceeded", retryable: true, detail: `pipeline exceeded ${PIPELINE_DEADLINE_MS / 1000}s` });
+      // fail() also aborts whatever request is still open.
+      await fail({ stage: currentStage, category: "deadline_exceeded", retryable: true, detail: `pipeline exceeded ${PIPELINE_DEADLINE_MS / 1000}s` }, 1, "timeout");
     }
   }
 

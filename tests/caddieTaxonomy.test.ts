@@ -142,9 +142,11 @@ test("step retry: at most 2 more tries, back-off grows, never past the deadline"
   assert.equal(stepRetryDelayMs(transient, 2, 300_000, 30_000, null, fixed), 6000);
   assert.equal(stepRetryDelayMs(transient, 3, 300_000, 30_000, null, fixed), null); // 3 tries total
   assert.equal(maxStepAttempts("provider_unavailable"), 3);
-  // Retry-After is honored, capped at 10 s.
+  // Retry-After is honored up to 30 s; asked to wait longer, no retry (a
+  // sooner retry only buys another 429).
   assert.equal(stepRetryDelayMs(transient, 1, 300_000, 30_000, "4", fixed), 4000);
-  assert.equal(stepRetryDelayMs(transient, 1, 300_000, 30_000, "120", fixed), 10_000);
+  assert.equal(stepRetryDelayMs(transient, 1, 300_000, 30_000, "20", fixed), 20_000);
+  assert.equal(stepRetryDelayMs(transient, 1, 300_000, 30_000, "120", fixed), null);
   // Not enough deadline left for the wait plus one more run of the step.
   assert.equal(stepRetryDelayMs(transient, 1, 31_000, 30_000, null, fixed), null);
   // Non-retryable never retries; bad model output gets exactly one more try.
@@ -221,4 +223,26 @@ test("a coded refusal reaches the golfer in the Caddie language, never the serve
     assert.doesNotMatch(text, /[A-Za-z]{4,}/, `${code}: "${text}"`);
   }
   assert.match(caddieErrorText(Object.assign(new Error("x"), { code: "daily_limit" }), tZh), /30/);
+});
+
+test("generateContent tries: scheduled timeouts, capped to end before the deadline, none that can't finish", async () => {
+  const { geminiGenerateTryTimeoutMs, requestFailureKind, TERMINAL_RESERVE_MS, GEMINI_GENERATE_MIN_TRY_MS } = await import("../supabase/functions/_shared/caddieReliability.ts");
+  // Plenty of deadline left: the schedule.
+  assert.equal(geminiGenerateTryTimeoutMs(1, 270_000), 60_000);
+  assert.equal(geminiGenerateTryTimeoutMs(2, 200_000), 75_000);
+  assert.equal(geminiGenerateTryTimeoutMs(3, 120_000), 75_000);
+  assert.equal(geminiGenerateTryTimeoutMs(9, 120_000), 75_000);
+  // Capped so the try ends TERMINAL_RESERVE_MS before the deadline.
+  assert.equal(geminiGenerateTryTimeoutMs(2, 70_000), 70_000 - TERMINAL_RESERVE_MS);
+  // A try that couldn't run for at least the minimum never starts
+  // (job 5f4c8655: the old rule started one at ~212 s that the deadline killed).
+  assert.equal(geminiGenerateTryTimeoutMs(2, TERMINAL_RESERVE_MS + GEMINI_GENERATE_MIN_TRY_MS - 1), null);
+  assert.equal(geminiGenerateTryTimeoutMs(1, 10_000), null);
+  // Request failure kinds (logs/diagnostics only).
+  assert.equal(requestFailureKind(new DOMException("t", "TimeoutError")), "timeout");
+  assert.equal(requestFailureKind(new DOMException("a", "AbortError")), "aborted");
+  assert.equal(requestFailureKind(new TypeError("network")), "network");
+  assert.equal(requestFailureKind(null, 503), "http");
+  assert.equal(requestFailureKind(null, null, "model_output_invalid"), "invalid_output");
+  assert.equal(requestFailureKind(new Error("x")), "internal");
 });

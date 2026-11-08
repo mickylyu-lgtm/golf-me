@@ -95,10 +95,15 @@ export function maxStepAttempts(category: CaddieFailureCategory): number {
 
 const STEP_BACKOFF_BASE_MS = 2000;
 const STEP_BACKOFF_CAP_MS = 10_000;
+// A provider's Retry-After is honored up to this. Asked to wait longer, the
+// step is not retried (retrying sooner than asked only buys another 429);
+// the attempt fails as rate-limited and the golfer gets Try again.
+export const RETRY_AFTER_MAX_MS = 30_000;
 
 // Delay before re-running a failed step, or null when it must not be
-// retried: not retryable, out of tries, or not enough pipeline deadline
-// left for the wait plus one more typical run of the step.
+// retried: not retryable, out of tries, a Retry-After longer than
+// RETRY_AFTER_MAX_MS, or not enough pipeline deadline left for the wait
+// plus one more typical run of the step.
 export function stepRetryDelayMs(
   failure: Pick<StepFailure, "category" | "retryable">,
   stepAttempt: number,
@@ -109,12 +114,60 @@ export function stepRetryDelayMs(
 ): number | null {
   if (!failure.retryable || stepAttempt >= maxStepAttempts(failure.category)) return null;
   const retryAfterSeconds = retryAfterHeader ? Number(retryAfterHeader) : NaN;
-  const base =
-    Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 0
-      ? retryAfterSeconds * 1000
-      : STEP_BACKOFF_BASE_MS * 3 ** (stepAttempt - 1) * (1 + 0.25 * random());
-  const delay = Math.round(Math.min(STEP_BACKOFF_CAP_MS, base));
+  let delay: number;
+  if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 0) {
+    delay = Math.round(retryAfterSeconds * 1000);
+    if (delay > RETRY_AFTER_MAX_MS) return null;
+  } else {
+    delay = Math.round(Math.min(STEP_BACKOFF_CAP_MS, STEP_BACKOFF_BASE_MS * 3 ** (stepAttempt - 1) * (1 + 0.25 * random())));
+  }
   return remainingMs - delay > stepBudgetMs ? delay : null;
+}
+
+// ---- Gemini generateContent budget (2026-11-08, job 5f4c8655) ----
+// Production: generateContent sat ~150 s (the old fixed per-request
+// timeout) before being retried, twice in one job; the identical retry
+// answered in ~15 s. The old retry rule only asked for 60 s of deadline
+// left, so attempt 1's retry started at ~212 s with another 150 s timeout
+// and the 330 s deadline killed it (deadline_exceeded, ~5.5 min wasted).
+// Now each try gets its own timeout from this schedule, capped so the try
+// ends TERMINAL_RESERVE_MS before the deadline, and a try only starts when
+// that capped timeout is still at least GEMINI_GENERATE_MIN_TRY_MS.
+// Assumption (one production sample, label for retuning from the
+// gemini_try log lines): a healthy answer takes ~15 s, so 60 s is 4x that.
+// The second and third tries get longer, in case the first was cut off
+// while genuinely working rather than stalled.
+// Worst case (every try hung, generation starting ~60 s in): an honest,
+// retryable failure at ~4.5 min instead of deadline_exceeded at 5.5 min.
+export const GEMINI_GENERATE_TRY_TIMEOUTS_MS = [60_000, 75_000, 75_000] as const;
+export const GEMINI_GENERATE_MIN_TRY_MS = 30_000; // ~2x a healthy answer
+// Time kept back at the end of the pipeline deadline for the save (or the
+// terminal failure write, diagnostic and cleanup) to land.
+export const TERMINAL_RESERVE_MS = 15_000;
+
+// Timeout for try `tryIndex` (1-based) of generateContent with this much of
+// the pipeline deadline left, or null when no useful try fits any more.
+export function geminiGenerateTryTimeoutMs(tryIndex: number, remainingMs: number): number | null {
+  const scheduled = GEMINI_GENERATE_TRY_TIMEOUTS_MS[Math.min(tryIndex, GEMINI_GENERATE_TRY_TIMEOUTS_MS.length) - 1];
+  const capped = Math.min(scheduled, remainingMs - TERMINAL_RESERVE_MS);
+  return capped >= GEMINI_GENERATE_MIN_TRY_MS ? capped : null;
+}
+
+// What kind of failure a request ended in, for logs and diagnostics only
+// (the stored category stays one of CADDIE_FAILURE_CATEGORIES, so no
+// schema change): our own timeout fired, the pipeline aborted it (deadline
+// or a terminal state), the network failed, the provider answered with an
+// HTTP error, or the answer was unusable.
+export type RequestFailureKind = "timeout" | "aborted" | "network" | "http" | "invalid_output" | "internal";
+
+export function requestFailureKind(err: unknown, httpStatus?: number | null, category?: CaddieFailureCategory): RequestFailureKind {
+  if (typeof httpStatus === "number") return "http";
+  if (category === "model_output_invalid") return "invalid_output";
+  const name = safeErrorName(err);
+  if (name === "TimeoutError") return "timeout";
+  if (name === "AbortError") return "aborted";
+  if (name === "TypeError") return "network";
+  return "internal";
 }
 
 // HTTP failure of a provider or one of our Vercel routes -> category.
