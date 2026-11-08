@@ -135,7 +135,7 @@ export interface RoundMessageRowLike extends ImageRowColumns, VoiceRowColumns {
   // replies and unsend (roundRowsHaveColumn).
   reply_to_message_id?: string | null;
   unsent_at?: string | null;
-  /** Only present once migration 20261108120000_chat_message_edit is applied (editSupported). */
+  /** Only present once migration 20261108140000_chat_message_edit is applied (editSupported). */
   edited_at?: string | null;
   /** A video / album (migration 20261107220000). */
   media?: unknown;

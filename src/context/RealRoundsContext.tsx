@@ -135,7 +135,7 @@ interface RealRoundsContextValue {
   unsendSupported: boolean;
   /** Sender only, within 5 minutes by the database clock (public.unsend_round_message). */
   unsendRoundMessage: (messageId: string) => Promise<UnsendResult>;
-  /** Edit (migration 20261108120000): rows carry edited_at and the RPC exists. */
+  /** Edit (migration 20261108140000): rows carry edited_at and the RPC exists. */
   editSupported: boolean;
   /** Sender only, still in the round (open/full, no host block), text only, within 5 minutes of created_at by the database clock (public.edit_round_message). */
   editRoundMessage: (messageId: string, text: string, expectedText?: string) => Promise<EditResult>;

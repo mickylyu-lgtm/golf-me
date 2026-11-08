@@ -80,7 +80,7 @@ interface MessageRow extends ImageRowColumns, VoiceRowColumns {
   // Only present once migration 20261105120000_add_dm_unsend is applied;
   // its presence is how unsendSupported detects the feature.
   unsent_at?: string | null;
-  // Only present once migration 20261108120000_chat_message_edit is
+  // Only present once migration 20261108140000_chat_message_edit is
   // applied; its presence is how editSupported detects the feature.
   edited_at?: string | null;
   // image_path / image_width / image_height / image_thumb (ImageRowColumns):
@@ -1312,7 +1312,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     [selfId, applyReactions, pendingMessages],
   );
 
-  // Edit (migration 20261108120000_chat_message_edit): detected from the
+  // Edit (migration 20261108140000_chat_message_edit): detected from the
   // column on fetched rows, like unsend; a missing RPC (PGRST202) hides it
   // for this session. The server enforces sender, conversation access
   // (participant, no block), suspension, text-only and the 5-minute window

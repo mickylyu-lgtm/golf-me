@@ -1,5 +1,5 @@
 -- ---------------------------------------------------------------------------
--- 20261108120000_chat_message_edit
+-- 20261108140000_chat_message_edit
 --
 -- Edit your own text message within 5 minutes, in DMs and round chats
 -- (Micky's brief 2026-11-08, section 4). PREPARED, NOT APPLIED: designed by
@@ -116,7 +116,7 @@ begin
      or not exists (select 1 from information_schema.columns
                      where table_schema = 'public' and table_name = 'messages' and column_name = 'media')
      or to_regprocedure('private.purge_expired_unsent_copies()') is null then
-    raise exception '20261108120000_chat_message_edit needs 20261107130000, 20261107220000 and 20261107240000 applied first.';
+    raise exception '20261108140000_chat_message_edit needs 20261107130000, 20261107220000 and 20261107240000 applied first.';
   end if;
 end;
 $$;

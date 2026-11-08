@@ -1,6 +1,6 @@
 // Edit my own text message within 5 minutes of sending (DMs and round chats).
 // The database decides (public.edit_message / public.edit_round_message,
-// migration 20261108120000): sender only, still allowed to post in that chat,
+// migration 20261108140000): sender only, still allowed to post in that chat,
 // text messages only, and
 //     created_at <= now() < created_at + 5 minutes
 // by the DATABASE clock, from the message's original created_at (editing
