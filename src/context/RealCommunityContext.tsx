@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { ReactNode } from "react";
 import { supabase } from "../lib/supabase";
 import { refetchOnResume } from "../lib/resumeRefetch";
+import { classifyVersionError, createRefetchCoalescer, startFeedSignal } from "../lib/feedSync";
 import { privatizeAnalysesOfPost } from "../lib/caddieMedia";
 import { useAuth } from "./AuthContext";
 import { fetchPublicProfiles } from "../lib/publicProfilesFetch";
@@ -156,8 +157,13 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
   const [profilesById, setProfilesById] = useState<Map<string, GolferProfile>>(new Map());
   const [isLoading, setIsLoading] = useState(false);
   const [loadStatus, setLoadStatus] = useState(INITIAL_LOAD_STATUS);
-  const fetchingRef = useRef(false);
   const selfId = authUser?.id;
+  // The account the provider currently shows: a fetch that finishes after a
+  // sign-out / account switch must not write the previous account's feed.
+  const currentSelfRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    currentSelfRef.current = isDemo ? undefined : selfId;
+  }, [isDemo, selfId]);
 
   // Posts render optimistically (see createPost below) — the pending-entry
   // pattern proven out for messaging earlier this project, applied here for
@@ -165,9 +171,11 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
   // plus a full refetch to see their own post.
   const [pendingPosts, setPendingPosts] = useState<PostRow[]>([]);
 
-  const refetch = useCallback(async () => {
-    if (!selfId || fetchingRef.current) return;
-    fetchingRef.current = true;
+  // One fetch at a time; a request during a fetch (a moderation signal, a
+  // Realtime event) queues exactly one more, so it is never dropped
+  // (lib/feedSync.ts createRefetchCoalescer).
+  const fetchOnce = useCallback(async () => {
+    if (!selfId || currentSelfRef.current !== selfId) return;
     try {
       const [
         { data: posts, error: postsErr },
@@ -193,6 +201,7 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
       if (cVotesErr) throw cVotesErr;
       if (savedErr) throw savedErr;
       if (hiddenErr) throw hiddenErr;
+      if (currentSelfRef.current !== selfId) return;
 
       const nextPosts = (posts ?? []) as PostRow[];
       const nextComments = (comments ?? []) as CommentRow[];
@@ -213,6 +222,7 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
         // are filtered out in DataContext.visiblePosts anyway).
         const { profiles, error: profErr } = await fetchPublicProfiles(Array.from(ids));
         if (profErr) throw profErr;
+        if (currentSelfRef.current !== selfId) return;
         const map = new Map<string, GolferProfile>();
         for (const g of profiles) map.set(g.id, g);
         setProfilesById(map);
@@ -221,11 +231,15 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error("GolfMe: failed to load Community.", err);
       // State is left as it was: a failed refresh keeps the last good feed.
-      setLoadStatus((prev) => applyLoadOutcome(prev, false));
-    } finally {
-      fetchingRef.current = false;
+      if (currentSelfRef.current === selfId) setLoadStatus((prev) => applyLoadOutcome(prev, false));
     }
   }, [selfId]);
+  const fetchOnceRef = useRef(fetchOnce);
+  useEffect(() => {
+    fetchOnceRef.current = fetchOnce;
+  }, [fetchOnce]);
+  const [coalescer] = useState(() => createRefetchCoalescer(() => fetchOnceRef.current()));
+  const refetch = useCallback(() => coalescer.request(), [coalescer]);
 
   useEffect(() => {
     if (isDemo || !selfId) {
@@ -246,17 +260,55 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
     setLoadStatus(INITIAL_LOAD_STATUS);
     refetch().finally(() => setIsLoading(false));
 
+    // Events missed while the socket was down (app backgrounded, network
+    // drop) never replay: a re-join after a drop refetches once.
+    let feedJoined = false;
+    let feedDropped = false;
     const channel = supabase
       .channel("community-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "community_posts" }, () => refetch())
       .on("postgres_changes", { event: "*", schema: "public", table: "community_post_media" }, () => refetch())
       .on("postgres_changes", { event: "*", schema: "public", table: "community_comments" }, () => refetch())
       .on("postgres_changes", { event: "*", schema: "public", table: "community_post_votes" }, () => refetch())
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          if (feedJoined && feedDropped) void refetch();
+          feedJoined = true;
+          feedDropped = false;
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          feedDropped = true;
+        }
+      });
+    // Moderation on other devices (migration 20261107280000): a removed or
+    // hidden row's own UPDATE never reaches the people who can no longer read
+    // it, so an opaque counter tells everyone to refetch. Off (old behaviour)
+    // when the table is missing or unreadable. Its own channel, so a missing
+    // table can't break the channel above.
+    const signal = startFeedSignal({
+      readVersion: async () => {
+        const { data, error } = await supabase.from("community_feed_version").select("version").eq("id", 1).maybeSingle();
+        if (error) return { ok: false, reason: classifyVersionError(error) };
+        const version = Number((data as { version?: unknown } | null)?.version);
+        return data && Number.isFinite(version) ? { ok: true, version } : { ok: false, reason: "missing" };
+      },
+      subscribe: ({ onVersion, onStatus }) => {
+        const signalChannel = supabase
+          .channel("community-feed-signal")
+          .on("postgres_changes", { event: "UPDATE", schema: "public", table: "community_feed_version" }, (payload) =>
+            onVersion(Number((payload.new as { version?: unknown }).version)),
+          )
+          .subscribe((status) => onStatus(status));
+        return () => {
+          void supabase.removeChannel(signalChannel);
+        };
+      },
+      refetch: () => void refetch(),
+    });
     const stopResume = refetchOnResume(() => void refetch());
 
     return () => {
       supabase.removeChannel(channel);
+      signal.stop();
       stopResume();
     };
   }, [isDemo, selfId, refetch]);

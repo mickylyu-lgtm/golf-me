@@ -273,11 +273,13 @@ const REPORT_STATUS_STYLES: Record<string, string> = {
 };
 
 // The three states an admin can move a report to — mirrors the allowed set
-// in admin_set_report_status() ('open' is only the insert default).
+// in admin_set_report_status() ('open' is only the insert default). These
+// only file the report; they never remove or hide anything (that's
+// Remove post / Remove comment / Suspend above them), so the labels say "Mark".
 const REPORT_ACTIONS = [
-  { status: "reviewed", label: "Reviewed" },
-  { status: "actioned", label: "Actioned" },
-  { status: "dismissed", label: "Dismissed" },
+  { status: "reviewed", label: "Mark reviewed" },
+  { status: "actioned", label: "Mark actioned" },
+  { status: "dismissed", label: "Mark dismissed" },
 ] as const;
 
 function fmtDateTime(iso: string) {
@@ -575,6 +577,7 @@ export function AdminDashboard() {
                         ))}
                     </div>
                   )}
+                  <p className="text-[11px] text-slate-400">Report status only: marking a report doesn't remove or hide the content.</p>
                   <div className="flex flex-wrap gap-1.5">
                     {REPORT_ACTIONS.map((a) => (
                       <button
