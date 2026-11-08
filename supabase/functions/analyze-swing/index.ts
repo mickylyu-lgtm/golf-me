@@ -1251,6 +1251,8 @@ Deno.serve(async (req: Request) => {
       // only the (small, re-encoded) trimmed copy is.
       await enterStage("trim");
       const window = trimWindow;
+      let trimSource = "unknown";
+      let trimRouteMs: number | null = null;
       if (!reusedPose && parallelExtractMaxBytes > 0) {
         // Only for an original small enough that a second full download
         // (extract-frames fetches it too) costs less than waiting for the
@@ -1274,6 +1276,12 @@ Deno.serve(async (req: Request) => {
         });
         if (!res.ok) throw httpStepError("trim", res.status, await res.text().catch(() => ""), res.headers);
         const bytes = await res.arrayBuffer();
+        // trim-video (2026-11-08) says whether it read only the window
+        // ("range") or fell back to downloading the whole original ("full").
+        const src = res.headers.get("x-trim-source");
+        trimSource = src === "range" || src === "full" ? src : "unknown";
+        const ms = Number(res.headers.get("x-trim-ms"));
+        trimRouteMs = Number.isFinite(ms) ? ms : null;
         if (bytes.byteLength === 0) throw new StepError({ stage: "trim", category: "provider_unavailable", retryable: true, detail: "0 bytes" });
         return bytes;
       });
@@ -1301,7 +1309,7 @@ Deno.serve(async (req: Request) => {
       effectiveVideoUrl = trimmedSignedUrl;
       videoBytes = trimmedBytes;
       videoContentType = "video/mp4";
-      logEvent("video_trimmed", { bytes: videoBytes.byteLength });
+      logEvent("video_trimmed", { bytes: videoBytes.byteLength, trim_source: trimSource, trim_route_ms: trimRouteMs });
     }
 
     // --- Frame extraction (Vercel/Node — see api/extract-frames.ts). ---

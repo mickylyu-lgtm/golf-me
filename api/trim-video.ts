@@ -18,7 +18,7 @@
 // secret, deliberately not a second one: this endpoint has the identical
 // trust boundary, server-to-server, analyze-swing is the only caller).
 import { spawn } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import ffmpegPathImport from "ffmpeg-static";
@@ -67,21 +67,140 @@ export function classifyFfmpegFailure(err: unknown): { status: number; token: Ff
   return { status: 500, token: "internal" };
 }
 
-function runFfmpeg(args: string[]): Promise<string> {
+// timeoutMs: kill ffmpeg (SIGKILL) if it runs longer — used to bound the
+// network read below.
+function runFfmpeg(args: string[], timeoutMs?: number): Promise<string> {
   return new Promise((resolve, reject) => {
     if (!ffmpegPath) return reject(new Error("ffmpeg-static did not resolve a binary path"));
     const proc = spawn(ffmpegPath, args);
+    const timer = timeoutMs ? setTimeout(() => proc.kill("SIGKILL"), timeoutMs) : undefined;
     let stderr = "";
     proc.stderr?.on("data", (chunk) => {
       stderr += chunk.toString();
       if (stderr.length > 64_000) stderr = stderr.slice(-32_000); // only the tail is ever inspected
     });
-    proc.on("error", reject);
+    proc.on("error", (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
     proc.on("close", (code, signal) => {
+      clearTimeout(timer);
       if (code === 0) resolve(stderr);
       else reject(new FfmpegError(code, signal, stderr.slice(-4000)));
     });
   });
+}
+
+// The one re-encode both paths run: frame-accurate cut of [start, start+duration).
+function trimArgs(input: string, start: number, duration: number, output: string, inputOptions: string[] = []): string[] {
+  return [
+    "-y",
+    ...inputOptions,
+    "-ss",
+    start.toFixed(3),
+    "-i",
+    input,
+    "-t",
+    duration.toFixed(3),
+    "-c:v",
+    "libx264",
+    "-preset",
+    "veryfast",
+    "-pix_fmt",
+    "yuv420p",
+    "-c:a",
+    "aac",
+    "-movflags",
+    "+faststart",
+    output,
+  ];
+}
+
+// ---- Range read (2026-11-08) ----
+// A window picked from a LONG recording used to cost a download of the
+// whole original (90 MB for a 60 s fixture) before ffmpeg seeked into it.
+// ffmpeg now reads the signed URL itself: with the input-side -ss it asks
+// Storage only for the container index and the bytes around the window
+// (33.6 of 90.7 MB on the H.264 fixture, 29.4 of 91.5 MB on HEVC; scratchpad
+// trim-bench/). Same ffmpeg arguments, so the same output.
+//
+// Guard rails:
+//  * -f mov: only QuickTime/MP4 (every iPhone/Android camera file). Other
+//    containers fall back to the full download, which probes as before.
+//    Pinning the demuxer also means a file that is really a playlist can't
+//    make ffmpeg open other URLs; drefs (mov external references) are off by
+//    default; protocols are limited to https over tls/tcp.
+//  * bounded: each network read/write gives up after RANGE_RW_TIMEOUT_US
+//    (with ffmpeg's own reconnects for a dropped connection), and the whole
+//    ffmpeg run is killed after RANGE_READ_TIMEOUT_MS.
+//  * ANY failure of this path (network, timeout, an odd file) falls back
+//    once to the old full download + local file, whose result and error
+//    tokens are exactly as before; nothing about the range attempt's error
+//    reaches the caller (no stderr, no URL).
+export const RANGE_READ_TIMEOUT_MS = 45_000;
+const RANGE_RW_TIMEOUT_US = 15_000_000;
+export function rangeInputOptions(protocols = "https,tls,tcp"): string[] {
+  return [
+    "-protocol_whitelist",
+    protocols,
+    "-rw_timeout",
+    String(RANGE_RW_TIMEOUT_US),
+    "-reconnect",
+    "1",
+    "-reconnect_on_network_error",
+    "1",
+    "-reconnect_delay_max",
+    "4",
+    "-f",
+    "mov",
+  ];
+}
+
+export type TrimSource = "range" | "full";
+
+// Trims `videoUrl`'s window into `outputPath`: the range read first, then
+// (once) the full download. Throws only the full path's errors, classified
+// by the caller as before. `protocols` is for local tests (plain http).
+export async function trimWindowToFile(
+  videoUrl: string,
+  start: number,
+  duration: number,
+  workDir: string,
+  outputPath: string,
+  opts: { protocols?: string; rangeTimeoutMs?: number } = {},
+): Promise<{ source: TrimSource; rangeFailure?: string }> {
+  let rangeFailure: string | undefined;
+  try {
+    await runFfmpeg(trimArgs(videoUrl, start, duration, outputPath, rangeInputOptions(opts.protocols)), opts.rangeTimeoutMs ?? RANGE_READ_TIMEOUT_MS);
+    const { size } = await stat(outputPath);
+    if (size > 0) return { source: "range" };
+    rangeFailure = "empty_output";
+  } catch (err) {
+    rangeFailure = err instanceof FfmpegError ? (err.signal === "SIGKILL" ? "timeout" : classifyFfmpegFailure(err).token) : "spawn";
+  }
+  await rm(outputPath, { force: true }).catch(() => {});
+
+  let videoRes: Response;
+  try {
+    videoRes = await fetch(videoUrl);
+  } catch {
+    // The thrown error's message embeds the signed URL: token only.
+    throw new SourceFetchError();
+  }
+  if (!videoRes.ok) throw new SourceFetchError(videoRes.status);
+  const inputPath = path.join(workDir, "input.mov");
+  await writeFile(inputPath, new Uint8Array(await videoRes.arrayBuffer()));
+  await runFfmpeg(trimArgs(inputPath, start, duration, outputPath));
+  return { source: "full", rangeFailure };
+}
+
+class SourceFetchError extends Error {
+  readonly sourceStatus?: number;
+  constructor(sourceStatus?: number) {
+    super("source_fetch_failed");
+    this.name = "SourceFetchError";
+    this.sourceStatus = sourceStatus;
+  }
 }
 
 // Health audit P2-9 (defense in depth): analyze-swing, the only caller,
@@ -121,49 +240,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   let workDir: string | undefined;
   try {
-    let videoRes: Response;
-    try {
-      videoRes = await fetch(videoUrl);
-    } catch {
-      // The thrown error's message embeds the signed URL: token only.
-      return res.status(502).json({ error: "source_fetch_failed" });
-    }
-    if (!videoRes.ok) return res.status(502).json({ error: "source_fetch_failed", sourceStatus: videoRes.status });
-    const videoBytes = new Uint8Array(await videoRes.arrayBuffer());
-
     workDir = await mkdtemp(path.join(tmpdir(), "swing-trim-"));
-    const inputPath = path.join(workDir, "input.mov");
     const outputPath = path.join(workDir, "output.mp4");
-    await writeFile(inputPath, videoBytes);
 
     // Re-encodes rather than stream-copying (-c copy) — a copy-trim can
     // only cut on a source keyframe, which can land a full GOP (often
     // 1-2s on phone video) away from the golfer's actual chosen boundary.
     // This is meant to be a precise crop, not a fast-but-approximate one,
     // and these clips are short enough that re-encoding stays quick.
-    await runFfmpeg([
-      "-y",
-      "-ss",
-      clampedStart.toFixed(3),
-      "-i",
-      inputPath,
-      "-t",
-      clampedDuration.toFixed(3),
-      "-c:v",
-      "libx264",
-      "-preset",
-      "veryfast",
-      "-pix_fmt",
-      "yuv420p",
-      "-c:a",
-      "aac",
-      "-movflags",
-      "+faststart",
-      outputPath,
-    ]);
+    const startedAt = Date.now();
+    let trimmed: { source: TrimSource; rangeFailure?: string };
+    try {
+      trimmed = await trimWindowToFile(videoUrl, clampedStart, clampedDuration, workDir, outputPath);
+    } catch (err) {
+      if (err instanceof SourceFetchError) {
+        return res.status(502).json({ error: "source_fetch_failed", ...(err.sourceStatus ? { sourceStatus: err.sourceStatus } : {}) });
+      }
+      throw err;
+    }
+    if (trimmed.rangeFailure) console.error("[trim-video] range read failed, used the full download", { error: trimmed.rangeFailure });
 
     const outputBytes = await readFile(outputPath);
     res.setHeader("Content-Type", "video/mp4");
+    // Telemetry for analyze-swing's video_trimmed log line (tokens only).
+    res.setHeader("X-Trim-Source", trimmed.source);
+    res.setHeader("X-Trim-Ms", String(Date.now() - startedAt));
     return res.status(200).send(outputBytes);
   } catch (err) {
     // A classified token only — never ffmpeg's stderr or a thrown message.
