@@ -117,6 +117,16 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
     };
   }, []);
 
+  // Chat videos (native controls): swiping to another item stops the one
+  // left behind, so only the video on screen ever plays.
+  useEffect(() => {
+    if (variant !== "lightbox") return;
+    media.forEach((item, i) => {
+      if (i === activeIndex || item.type !== "video" || !item.nativeControls) return;
+      videoElsRef.current.get(item.id)?.pause();
+    });
+  }, [activeIndex, media, variant]);
+
   function handleScroll() {
     const track = trackRef.current;
     if (!track || track.clientWidth === 0) return;
@@ -216,6 +226,23 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
                   if (e.target instanceof HTMLVideoElement) enterNativeVideoFullscreen(e.target);
                 }}
               />
+            ) : item.nativeControls ? (
+              // Chat videos: the platform's own controls (timeline, time,
+              // play/pause, and its fullscreen button into the native
+              // player) instead of the tap/hold/mute layer below.
+              // data-video-controls: scrubbing the timeline mustn't read as
+              // a drag-to-dismiss.
+              <div key={item.id} className="relative h-full w-full shrink-0 snap-center overflow-hidden bg-black" data-video-controls>
+                <LightboxVideo
+                  src={item.url}
+                  poster={item.thumbnailUrl}
+                  controls
+                  elRef={(el) => {
+                    if (el) videoElsRef.current.set(item.id, el);
+                    else videoElsRef.current.delete(item.id);
+                  }}
+                />
+              </div>
             ) : (
               // Full-bleed, edge to edge, but the video itself is
               // letterboxed/contained (object-contain on a black backdrop)
@@ -435,11 +462,13 @@ function CardVideo({ src, poster, className, fit, onClick }: {
 
 // The fullscreen viewer's video, with the same loading / error / retry
 // states as the card. Fills its (relative) slide.
-function LightboxVideo({ src, poster, elRef, onClick }: {
+function LightboxVideo({ src, poster, elRef, onClick, controls = false }: {
   src: string | undefined;
   poster?: string;
   elRef: (el: HTMLVideoElement | null) => void;
-  onClick: (e: React.MouseEvent<HTMLVideoElement>) => void;
+  onClick?: (e: React.MouseEvent<HTMLVideoElement>) => void;
+  /** The platform's controls; such a video plays once (no loop), like the native player. */
+  controls?: boolean;
 }) {
   const playback = useVideoPlayback(src);
   const posterUsable = !!poster && thumbResults.get(poster) !== "load-error";
@@ -454,7 +483,8 @@ function LightboxVideo({ src, poster, elRef, onClick }: {
         src={withFirstFrameHint(src, posterUsable)}
         poster={posterUsable ? poster : undefined}
         playsInline
-        loop
+        loop={!controls}
+        controls={controls}
         preload="metadata"
         className="h-full w-full object-contain"
         onClick={onClick}

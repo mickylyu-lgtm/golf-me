@@ -81,7 +81,7 @@ export async function chatMediaViewerItems(
     if (!url) continue;
     const poster = m.kind === "video" ? (local?.posterUrl ?? (m.poster ? await urls.get(m.poster) : null)) : null;
     if (i === index) start = out.length;
-    out.push({ id: `chat-media-${i}`, type: m.kind, url, ...(poster ? { thumbnailUrl: poster } : {}) });
+    out.push({ id: `chat-media-${i}`, type: m.kind, url, ...(poster ? { thumbnailUrl: poster } : {}), ...(m.kind === "video" ? { nativeControls: true } : {}) });
   }
   return { items: out, index: start };
 }

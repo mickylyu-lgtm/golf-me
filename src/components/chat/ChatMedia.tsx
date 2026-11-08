@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, PointerEvent, ReactNode } from "react";
-import { ImageOff, Maximize2, Play, VideoOff, Volume2, VolumeX } from "lucide-react";
+import { ImageOff, Maximize2, Play, VideoOff } from "lucide-react";
 import {
   DECK_FAN_PX,
   deckAxis,
@@ -8,13 +8,13 @@ import {
   deckDisplaySize,
   deckIndexAfterSwipe,
   formatVideoDuration,
-  localWindowUrl,
   videoDisplaySize,
   type ChatMediaItem,
 } from "../../lib/chatMedia";
 import { chatVideoUrls } from "../../lib/chatVideoClient";
 import { useChatImageUrl } from "../../lib/useChatImageUrl";
 import type { OutgoingMediaItemState } from "../../types";
+import { useNativeChatVideo } from "./useNativeChatVideo";
 
 // Videos and albums inside a chat bubble (DMs and round chat; rules in
 // lib/chatMedia.ts). Every box is sized from the stored width / height
@@ -29,8 +29,10 @@ import type { OutgoingMediaItemState } from "../../types";
 //     is replied to from the hold menu; a hold still opens that menu (the
 //     long press only cancels on movement).
 //   - A single video is not a deck: swipe-to-reply / times work over it as
-//     over a photo. Tap = sound on / off, the corner button = fullscreen.
-//   - Tap on a deck card opens the fullscreen viewer at that item.
+//     over a photo. Tap = the native player (useNativeChatVideo), the one
+//     Community videos open in; the in-app viewer when that is refused.
+//   - Tap on a deck card: a video on top opens the native player the same
+//     way; a photo (or a refused video) opens the fullscreen viewer there.
 
 export interface ChatMediaLabels {
   video: string;
@@ -93,7 +95,7 @@ function ExpiredBox({ label }: { label: string }) {
 }
 
 // ---------------------------------------------------------------------------
-// A single video: inline, muted, playsInline; tap for sound
+// A single video: inline, muted, playsInline; tap for the native player
 // ---------------------------------------------------------------------------
 
 export function ChatVideo({
@@ -114,17 +116,17 @@ export function ChatVideo({
   const urls = chatVideoUrls();
   const size = videoDisplaySize(item.width, item.height);
   const poster = useChatImageUrl(item.poster ?? null, local?.posterUrl ?? null, urls);
-  const src = useChatImageUrl(item.expired ? null : item.path, local ? localWindowUrl(local.localUrl, local.trim) : null, urls);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const src = useNativeChatVideo(item, local);
+  const videoRef = src.videoRef;
   const boxRef = useRef<HTMLDivElement>(null);
-  const [muted, setMuted] = useState(true);
+  const visibleRef = useRef(false);
   const [failed, setFailed] = useState(false);
   const [blocked, setBlocked] = useState(false);
   const sending = progress !== undefined;
 
-  // Plays (muted) only while mostly on screen; never with reduced motion
-  // (a tap starts it then). Off screen it pauses, so a long thread never
-  // streams every video at once.
+  // Plays (muted) only while mostly on screen; never with reduced motion.
+  // Off screen it pauses, so a long thread never streams every video at
+  // once. Left alone while the native player has it.
   useEffect(() => {
     const el = videoRef.current;
     const box = boxRef.current;
@@ -132,8 +134,10 @@ export function ChatVideo({
     const reduced = prefersReducedMotion();
     const io = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting && entry.intersectionRatio >= 0.6) {
-          if (reduced && el.muted) return;
+        visibleRef.current = entry.isIntersecting && entry.intersectionRatio >= 0.6;
+        if (src.isOpen()) return;
+        if (visibleRef.current) {
+          if (reduced) return;
           el.play().then(
             () => setBlocked(false),
             () => setBlocked(true),
@@ -144,25 +148,25 @@ export function ChatVideo({
     );
     io.observe(box);
     return () => io.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [src.url, item.expired]);
 
-  function toggleSound() {
-    const el = videoRef.current;
-    if (!el || failed) return;
-    const next = !el.muted;
-    el.muted = next;
-    setMuted(next);
-    if (el.paused) {
-      el.play().then(
-        () => setBlocked(false),
-        () => {
-          // Unmuted play refused (no gesture window): fall back to muted.
-          el.muted = true;
-          setMuted(true);
-          el.play().catch(() => setBlocked(true));
-        },
-      );
-    }
+  // Tap: the native player (Community's), from the start, with sound. When
+  // it closes, the bubble goes back to its muted preview (on screen) or
+  // stays paused. Refused (no metadata yet, e.g. Low Power Mode, or a link
+  // about to expire): the in-app viewer.
+  function openPlayer() {
+    // The thread decides whether this bubble opens at all (not while its send is pending).
+    if (sending || failed || !onOpen) return;
+    src.open(
+      onOpen,
+      () => {
+        const el = videoRef.current;
+        if (!el) return;
+        if (visibleRef.current && !prefersReducedMotion()) el.play().catch(() => setBlocked(true));
+        else el.pause();
+      },
+    );
   }
 
   return (
@@ -195,13 +199,13 @@ export function ChatVideo({
               className="absolute inset-0 h-full w-full object-cover"
             />
           )}
+          {/* No preventDefault anywhere on this tap: WebKit only opens its
+              native player from a click nothing upstream has cancelled. */}
           <button
             type="button"
-            aria-label={muted ? labels.soundOn : labels.soundOff}
-            aria-disabled={sending || failed || !src.url ? true : undefined}
-            onClick={() => {
-              if (!sending) toggleSound();
-            }}
+            aria-label={labels.openFullscreen}
+            aria-disabled={sending || failed || !src.url || !onOpen ? true : undefined}
+            onClick={openPlayer}
             className="absolute inset-0 flex items-center justify-center"
           >
             {(blocked || failed) && !sending && (
@@ -216,24 +220,10 @@ export function ChatVideo({
             </span>
           )}
           <DurationBadge ms={item.durationMs} />
-          {!sending && (
-            <span className="pointer-events-none absolute right-1.5 bottom-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/55 text-fixed-white" aria-hidden="true">
-              {muted ? <VolumeX size={13} /> : <Volume2 size={13} />}
+          {!sending && onOpen && (
+            <span className="pointer-events-none absolute top-1.5 right-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/55 text-fixed-white" aria-hidden="true">
+              <Maximize2 size={12} />
             </span>
-          )}
-          {onOpen && !sending && (
-            <button
-              type="button"
-              aria-label={labels.openFullscreen}
-              onClick={(e) => {
-                e.stopPropagation();
-                videoRef.current?.pause();
-                onOpen();
-              }}
-              className="absolute top-1.5 right-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/55 text-fixed-white"
-            >
-              <Maximize2 size={14} />
-            </button>
           )}
           {sending && <ProgressRing progress={progress ?? 0} processing={labels.processing} />}
         </>
@@ -254,6 +244,7 @@ function DeckCard({
   animate,
   index,
   total,
+  onTopVideo,
 }: {
   item: ChatMediaItem;
   local?: OutgoingMediaItemState | null;
@@ -262,11 +253,23 @@ function DeckCard({
   animate: boolean;
   index: number;
   total: number;
+  /** The top card only: hands the deck this card's native-player opener (null when it has none). */
+  onTopVideo?: (open: ((fallback: () => void) => void) | null) => void;
 }) {
   const urls = chatVideoUrls();
   const isVideo = item.kind === "video";
   const picture = useChatImageUrl(isVideo ? (item.poster ?? null) : item.path, isVideo ? (local?.posterUrl ?? null) : (local?.localUrl ?? null), urls);
   const sending = local && !local.done;
+  // The top card's video is loaded (metadata only, never played inline,
+  // under its poster) so a tap can hand it to the native player.
+  const playable = isVideo && !item.expired && !sending && !!onTopVideo;
+  const video = useNativeChatVideo(playable ? item : null, local);
+  const canOpen = playable && !!video.url && !video.unavailable;
+  useEffect(() => {
+    if (!onTopVideo) return;
+    onTopVideo(canOpen ? (fallback) => video.open(fallback, () => video.videoRef.current?.pause()) : null);
+  });
+  useEffect(() => () => onTopVideo?.(null), [onTopVideo]);
   return (
     <div
       data-deck-card={index}
@@ -286,6 +289,21 @@ function DeckCard({
       ) : (
         <>
           {!isVideo && item.thumb && <img src={item.thumb} alt="" aria-hidden="true" draggable={false} className="absolute inset-0 h-full w-full scale-110 object-cover blur-md" />}
+          {playable && video.url && !video.unavailable && (
+            // eslint-disable-next-line jsx-a11y/media-has-caption
+            <video
+              ref={video.videoRef}
+              src={video.url}
+              muted
+              playsInline
+              preload="metadata"
+              aria-hidden="true"
+              tabIndex={-1}
+              onLoadedMetadata={video.onLoad}
+              onError={video.onError}
+              className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+            />
+          )}
           {picture.url && !picture.unavailable && (
             <img
               src={picture.url}
@@ -340,6 +358,19 @@ export function ChatAlbumDeck({
   const drag = useRef<{ id: number; x: number; y: number; t: number; axis: "pending" | "deck" | "scroll" } | null>(null);
   const suppressClick = useRef(0);
   const index = Math.min(current, count - 1);
+  const topVideoOpen = useRef<((fallback: () => void) => void) | null>(null);
+  const setTopVideoOpen = useCallback((open: ((fallback: () => void) => void) | null) => {
+    topVideoOpen.current = open;
+  }, []);
+
+  // A video on top opens the native player (synchronously, inside the tap);
+  // otherwise, or when that's refused, the fullscreen viewer at this item.
+  function openAt(i: number) {
+    const fallback = () => onOpen?.(i);
+    const item = items[i];
+    if (onOpen && item?.kind === "video" && !item.expired && topVideoOpen.current) topVideoOpen.current(fallback);
+    else fallback();
+  }
 
   function onPointerDown(e: PointerEvent<HTMLDivElement>) {
     if (!e.isPrimary || (e.pointerType === "mouse" && e.button !== 0)) return;
@@ -377,7 +408,7 @@ export function ChatAlbumDeck({
   function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
     if (e.key === "ArrowRight") setCurrent(Math.min(count - 1, index + 1));
     else if (e.key === "ArrowLeft") setCurrent(Math.max(0, index - 1));
-    else if (e.key === "Enter" || e.key === " ") onOpen?.(index);
+    else if (e.key === "Enter" || e.key === " ") openAt(index);
     else return;
     e.preventDefault();
   }
@@ -396,7 +427,7 @@ export function ChatAlbumDeck({
       onKeyDown={onKeyDown}
       onClick={() => {
         if (Date.now() < suppressClick.current) return;
-        onOpen?.(index);
+        openAt(index);
       }}
       className="relative max-w-full touch-pan-y select-none outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 [-webkit-touch-callout:none]"
       style={{ width: `${size.width}px`, height: `${size.height}px` }}
@@ -411,6 +442,7 @@ export function ChatAlbumDeck({
           total={count}
           animate={!dragging && !reduced}
           style={deckCardStyle(i, index, count, i === index ? dx : 0, reduced)}
+          onTopVideo={i === index ? setTopVideoOpen : undefined}
         />
       ))}
       <span

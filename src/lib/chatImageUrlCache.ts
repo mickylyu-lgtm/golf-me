@@ -50,6 +50,10 @@ export interface ChatImageUrlCache {
   loaded(path: string): void;
   /** Serve this path from a local URL (own just-sent photo, demo). */
   setLocal(path: string, url: string): void;
+  /** When the URL peek() returns stops being served (this device's clock): Infinity for a local URL, null when there is none. */
+  expiresAt(path: string): number | null;
+  /** Drop a still-valid URL so the next get() signs a fresh one, without counting it as a failure. */
+  renew(path: string): void;
   /** Forget everything (sign-out / account switch). Returns the local URLs so the caller can revoke them. */
   reset(): string[];
   /** Subscribe to "this path's URL changed" (for re-rendering). */
@@ -150,6 +154,14 @@ export function createChatImageUrlCache(options: ChatImageUrlCacheOptions): Chat
     setLocal(path, url) {
       local.set(path, url);
       emit(path);
+    },
+    expiresAt(path) {
+      if (local.has(path)) return Number.POSITIVE_INFINITY;
+      if (!fresh(path)) return null;
+      return entries.get(path)?.expiresAt ?? null;
+    },
+    renew(path) {
+      if (!local.has(path)) entries.delete(path);
     },
     reset() {
       generation += 1;

@@ -485,6 +485,8 @@ export interface PostMediaItem {
   type: "image" | "video";
   url: string;
   thumbnailUrl?: string; // videos only — a real captured frame, never a placeholder
+  /** Videos only: the fullscreen viewer shows the platform's own controls (timeline, time, play/pause, fullscreen) instead of its tap-to-pause / hold-for-2x layer. Chat videos. */
+  nativeControls?: boolean;
 }
 
 export interface CommunityPost {
