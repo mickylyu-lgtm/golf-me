@@ -111,6 +111,7 @@ export const ko: Record<TranslationKey, string> = {
   "community.swingPostBadge": "스윙 게시물",
   "community.like": "좋아요",
   "community.liked": "좋아요 완료",
+  "community.likeFailed": "좋아요를 업데이트하지 못했어요. 다시 시도해 주세요.",
   "community.likes": "좋아요",
   "community.comment": "댓글",
   "community.comments": "댓글",

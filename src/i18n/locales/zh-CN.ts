@@ -111,6 +111,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "community.swingPostBadge": "挥杆动态",
   "community.like": "赞",
   "community.liked": "已赞",
+  "community.likeFailed": "无法更新你的点赞，请重试。",
   "community.likes": "赞",
   "community.comment": "评论",
   "community.comments": "评论",

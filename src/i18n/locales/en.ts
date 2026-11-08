@@ -123,6 +123,7 @@ export const en = {
   "community.swingPostBadge": "Swing Post",
   "community.like": "Like",
   "community.liked": "Liked",
+  "community.likeFailed": "Couldn't update your like. Try again.",
   "community.likes": "Likes",
   "community.comment": "Comment",
   "community.comments": "Comments",

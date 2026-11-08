@@ -111,6 +111,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "community.swingPostBadge": "揮桿動態",
   "community.like": "讚",
   "community.liked": "已按讚",
+  "community.likeFailed": "無法更新你的按讚，請再試一次。",
   "community.likes": "讚",
   "community.comment": "留言",
   "community.comments": "留言",

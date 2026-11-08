@@ -105,6 +105,8 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
   const { t, locale } = useLocale();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  // Bumped by each tap that likes the post; keys the icon so the pop replays.
+  const [likePop, setLikePop] = useState(0);
   const [reportOpen, setReportOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
@@ -696,14 +698,20 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
         </div>
         <div className="flex items-center gap-1.5">
           <button
-            onClick={() => togglePostUpvote(post.id)}
+            onClick={() => {
+              // The pop marks a fresh like from this tap only: never first
+              // render, a like from another device, or an unlike.
+              if (!upvoted) setLikePop((n) => n + 1);
+              togglePostUpvote(post.id).catch(() => showToast(t("community.likeFailed"), "warning"));
+            }}
             aria-pressed={upvoted}
             aria-label={upvoted ? t("community.liked") : t("community.like")}
             className={`relative flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold after:absolute after:inset-x-0 after:-inset-y-2 transition-all duration-200 ease-out active:scale-95 ${
               upvoted ? "border-transparent bg-fairway-500 text-white" : "border-slate-200 text-slate-600 hover:border-fairway-300"
             }`}
           >
-            <ThumbsUp size={13} fill={upvoted ? "currentColor" : "none"} /> {postUpvoteCount(post.id)}
+            <ThumbsUp key={likePop} size={13} fill={upvoted ? "currentColor" : "none"} className={likePop > 0 && upvoted ? "gm-like-pop" : undefined} />{" "}
+            <span className="tabular-nums">{postUpvoteCount(post.id)}</span>
           </button>
           <button
             onClick={goToComments}

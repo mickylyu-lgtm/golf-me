@@ -111,6 +111,7 @@ export const es: Record<TranslationKey, string> = {
   "community.swingPostBadge": "Publicación de Swing",
   "community.like": "Me gusta",
   "community.liked": "Te gusta",
+  "community.likeFailed": "No se pudo actualizar tu me gusta. Inténtalo de nuevo.",
   "community.likes": "Me gusta",
   "community.comment": "Comentar",
   "community.comments": "Comentarios",

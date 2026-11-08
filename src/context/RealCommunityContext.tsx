@@ -7,6 +7,7 @@ import { useAuth } from "./AuthContext";
 import { fetchPublicProfiles } from "../lib/publicProfilesFetch";
 import { INITIAL_LOAD_STATUS, applyLoadOutcome, isFirstLoadError, isRefreshError } from "../lib/loadStatus";
 import { PostMediaCapError, isPostMediaCapError } from "../lib/postMediaLedger";
+import { isLikeAlreadyDone, runOncePerId, type PostVoteRow } from "../lib/likeFeedback";
 import type { CommunityPost, PostComment, GolferProfile, PostMediaItem, PostType, PostCategory, SwingAnalysisStatus } from "../types";
 
 const COMMUNITY_MEDIA_BUCKET = "community-media";
@@ -438,18 +439,29 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
 
   const isPostUpvoted = useCallback((postId: string) => postVotes.some((v) => v.post_id === postId && v.voter_id === selfId), [postVotes, selfId]);
   const postUpvoteCount = useCallback((postId: string) => postVotes.filter((v) => v.post_id === postId).length, [postVotes]);
+  // One like/unlike request per post at a time: a tap while one is in flight
+  // is ignored, so rapid taps can't send a second insert (or a delete racing
+  // an insert) and leave the count wrong.
+  const voteInFlight = useRef(new Set<string>());
   const togglePostUpvote = useCallback(
     async (postId: string) => {
       if (!selfId) return;
-      const already = postVotes.some((v) => v.post_id === postId && v.voter_id === selfId);
-      setPostVotes((prev) => (already ? prev.filter((v) => !(v.post_id === postId && v.voter_id === selfId)) : [...prev, { post_id: postId, voter_id: selfId }]));
-      const { error } = already
-        ? await supabase.from("community_post_votes").delete().eq("post_id", postId).eq("voter_id", selfId)
-        : await supabase.from("community_post_votes").insert({ post_id: postId, voter_id: selfId });
-      if (error) {
-        setPostVotes((prev) => (already ? [...prev, { post_id: postId, voter_id: selfId }] : prev.filter((v) => !(v.post_id === postId && v.voter_id === selfId))));
-        throw new Error(error.message);
-      }
+      const mine = (v: PostVoteRow) => v.post_id === postId && v.voter_id === selfId;
+      const add = (prev: PostVoteRow[]) => (prev.some(mine) ? prev : [...prev, { post_id: postId, voter_id: selfId }]);
+      const remove = (prev: PostVoteRow[]) => prev.filter((v) => !mine(v));
+      await runOncePerId(voteInFlight.current, postId, async () => {
+        const already = postVotes.some(mine);
+        setPostVotes(already ? remove : add);
+        const { error } = already
+          ? await supabase.from("community_post_votes").delete().eq("post_id", postId).eq("voter_id", selfId)
+          : await supabase.from("community_post_votes").insert({ post_id: postId, voter_id: selfId });
+        // Already liked on the server (another device, a stale feed): the
+        // outcome the golfer asked for is true, so it is not a failure.
+        if (error && !isLikeAlreadyDone(already, error.code)) {
+          setPostVotes(already ? add : remove);
+          throw new Error(error.message);
+        }
+      });
     },
     [selfId, postVotes],
   );

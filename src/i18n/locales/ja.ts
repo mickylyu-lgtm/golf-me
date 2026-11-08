@@ -111,6 +111,7 @@ export const ja: Record<TranslationKey, string> = {
   "community.swingPostBadge": "スイング投稿",
   "community.like": "いいね",
   "community.liked": "いいね済み",
+  "community.likeFailed": "いいねを更新できませんでした。もう一度お試しください。",
   "community.likes": "いいね",
   "community.comment": "コメント",
   "community.comments": "コメント",
