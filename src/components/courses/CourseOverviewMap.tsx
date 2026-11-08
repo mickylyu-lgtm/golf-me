@@ -16,6 +16,7 @@ import {
   overviewMotion,
   overviewTileSize,
   overviewZoomCap,
+  pictureZoomCap,
   type OverviewMotion,
 } from "../../lib/droneOrbit";
 import { overviewFraming, validBounds, type CourseBounds } from "../../../supabase/functions/_shared/courseBounds.ts";
@@ -43,7 +44,8 @@ interface CourseOverviewMapProps {
 // The "drone shot" (Micky, 2026-11-05): aerial imagery (USGS NAIP for US
 // courses, MapTiler when keyed) in MapLibre, tilted to pitch 45 (was 60
 // until 2026-11-06) and slowly circling the course. The camera never goes
-// more than 0.3 zoom past the source's deepest tiles (USGS: 16) and retina
+// more than 0.3 zoom past the source's deepest tiles (USGS: 16), or, once
+// the sharp picture shows, 0.5 past the picture's own pixels, and retina
 // screens get USGS tiles at native density (lib/droneOrbit overviewZoomCap /
 // overviewTileSize). Drag or pinch to look around; that pauses the circling,
 // which carries on from there after a few seconds. Reduced motion: the same
@@ -277,7 +279,9 @@ export function CourseOverviewMap({ lat, lng, bounds, name, courseId, useServer,
             bearing: motion === "still" ? STILL_BEARING : 0,
             minZoom: 12.5,
             // Pinching in stops where the imagery would only get blurrier:
-            // tile zoom 16.3 on USGS (MapLibre 15.3), 17.5 on MapTiler.
+            // tile zoom 16.3 on USGS (MapLibre 15.3), 17.5 on MapTiler;
+            // deeper once the sharp picture shows (~17.5 for an 18-hole
+            // course, see the picture effect below).
             maxZoom: maplibreZoom(overviewZoomCap(source.maxZoom)),
             maxPitch: 70,
             maxBounds: camera.maxBounds,
@@ -379,6 +383,9 @@ export function CourseOverviewMap({ lat, lng, bounds, name, courseId, useServer,
       );
       // A late arrival fades in instead of popping mid-orbit.
       if (reveal === "fade") requestAnimationFrame(() => mapRef.current === map && map.getLayer(DETAIL_ID) && map.setPaintProperty(DETAIL_ID, "raster-opacity", 1));
+      // The picture holds far more than the z16 tiles: pinching in may go
+      // to its own detail (lib/droneOrbit pictureZoomCap).
+      map.setMaxZoom(maplibreZoom(pictureZoomCap(picture.pic.bbox, picture.pic.width, source.maxZoom)));
     } catch {
       // Map gone or style not ready: the tiles stay.
     }
@@ -386,11 +393,12 @@ export function CourseOverviewMap({ lat, lng, bounds, name, courseId, useServer,
       try {
         if (map.getLayer(DETAIL_ID)) map.removeLayer(DETAIL_ID);
         if (map.getSource(DETAIL_ID)) map.removeSource(DETAIL_ID);
+        map.setMaxZoom(maplibreZoom(overviewZoomCap(source.maxZoom)));
       } catch {
         // Already removed with the map.
       }
     };
-  }, [loaded, picture]);
+  }, [loaded, picture, source.maxZoom]);
 
   // The OSM layout: only while this overview shows with Layout on. Nothing
   // is asked with Layout off.

@@ -13,8 +13,77 @@ import {
   layoutToGeoJSON,
   parseCourseLayout,
   simplifyLine,
+  askLayoutWithRetry,
+  FOSSGIS_OVERPASS_ENDPOINTS,
+  LAYOUT_RETRY_MIN_MS,
   type OsmLayoutElement,
+  type OverpassVerdict,
 } from "../supabase/functions/_shared/courseLayout.ts";
+
+test("Overpass retry: FOSSGIS only, a random first server, one jittered retry on the other, only for invalid answers", async () => {
+  assert.deepEqual(FOSSGIS_OVERPASS_ENDPOINTS, ["https://overpass-api.de/api/interpreter", "https://z.overpass-api.de/api/interpreter"]);
+  const invalid: OverpassVerdict = { kind: "invalid", reason: "http 504" };
+  const unmapped: OverpassVerdict = { kind: "unmapped" };
+  const run = async (answers: OverpassVerdict[], random: number, extra: Partial<Parameters<typeof askLayoutWithRetry>[0]> = {}) => {
+    const timeouts: number[] = [];
+    const sleeps: number[] = [];
+    let i = 0;
+    const r = await askLayoutWithRetry({
+      endpoints: FOSSGIS_OVERPASS_ENDPOINTS,
+      ask: async (_e, t) => {
+        timeouts.push(t);
+        return answers[Math.min(i++, answers.length - 1)];
+      },
+      budgetMs: 100_000,
+      sleep: async (ms) => void sleeps.push(ms),
+      random: () => random,
+      ...extra,
+    });
+    return { ...r, timeouts, sleeps };
+  };
+  const a = await run([invalid, unmapped], 0.99);
+  assert.equal(a.verdict.kind, "unmapped");
+  assert.deepEqual(a.asked.map((u) => new URL(u).hostname), ["z.overpass-api.de", "overpass-api.de"]);
+  assert.equal(a.sleeps.length, 1);
+  assert.ok(a.sleeps[0] >= 500 && a.sleeps[0] <= 2000);
+  assert.deepEqual(a.timeouts, [55_000, 55_000]);
+  const b = await run([unmapped, invalid], 0);
+  assert.equal(b.asked.length, 1, "a valid empty answer is not retried");
+  const c = await run([invalid], 0);
+  assert.equal(c.verdict.kind, "invalid");
+  assert.equal(c.asked.length, 2, "never more than two asks");
+  // A throwing ask is just invalid.
+  const d = await askLayoutWithRetry({ endpoints: ["x"], ask: async () => Promise.reject(new Error("boom")), budgetMs: 1000, sleep: async () => {} });
+  assert.equal(d.verdict.kind, "invalid");
+  // The cap: a refused retry stops; a refused first ask is "cap".
+  const e = await run([invalid], 0, { mayAsk: async (n) => n === 0 });
+  assert.equal(e.asked.length, 1);
+  const f = await run([invalid], 0, { mayAsk: async () => false });
+  assert.deepEqual(f.verdict, { kind: "invalid", reason: "cap" });
+  assert.equal(f.asked.length, 0);
+});
+
+test("Overpass retry: no retry without enough time left; an ask never gets more than the budget", async () => {
+  let t = 0;
+  const asked: number[] = [];
+  const r = await askLayoutWithRetry({
+    endpoints: FOSSGIS_OVERPASS_ENDPOINTS,
+    ask: async (_e, timeout) => {
+      asked.push(timeout);
+      t += 45_000;
+      return { kind: "invalid", reason: "network/timeout" };
+    },
+    budgetMs: 45_000 + LAYOUT_RETRY_MIN_MS - 1,
+    clock: () => t,
+    sleep: async () => {},
+    random: () => 0,
+  });
+  assert.deepEqual(asked, [55_000], "one ask: 55 s at most");
+  assert.equal(r.asked.length, 1, "19.999 s left: no retry");
+  const short = await askLayoutWithRetry({ endpoints: ["x"], ask: async (_e, timeout) => (asked.push(timeout), { kind: "unmapped" }), budgetMs: 30, sleep: async () => {} });
+  assert.equal(short.verdict.kind, "unmapped");
+  assert.equal(asked.at(-1), 30, "a small budget caps the ask");
+});
 
 const pt = (lon: number, lat: number) => ({ lat, lon });
 // A small closed square around (lon, lat).

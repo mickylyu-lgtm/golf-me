@@ -9,16 +9,21 @@
 //     NAIP ImageServer for them.
 //   * Demo courses (no id), or while course-photos doesn't know these
 //     requests yet (an older deployment answers without `pictures` /
-//     `layouts`): the browser asks USGS / overpass-api.de directly, one
-//     endpoint only (maps.mail.ru is gone: it saw each viewer's IP).
+//     `layouts`): the browser asks USGS / Overpass directly: FOSSGIS's own
+//     servers only (overpass-api.de, z.overpass-api.de; maps.mail.ru is
+//     gone: it saw each viewer's IP).
+//   * A cold layout can take 20-110 s on the server: course-photos answers
+//     "pending" after 20 s and keeps looking; the page asks again every 8 s
+//     (up to 2.5 min) and keeps saying "Loading the course layout…".
 // Nothing is asked until it's needed: the picture when the course page's
 // media shows, the layout only while the overview shows with Layout on.
 import { NAIP_GIVE_UP_MS, cornersOf, naipExportFor, validMercBox, type Corners, type MercBox } from "./naipExport.ts";
 import {
+  FOSSGIS_OVERPASS_ENDPOINTS,
+  askLayoutWithRetry,
   classifyOverpassAnswer,
   isLayoutAnswer,
   layoutOverpassQuery,
-  settleLayoutAttempts,
   type CourseLayout,
   type LayoutAnswer,
   type OverpassVerdict,
@@ -138,11 +143,17 @@ export function coursePicture(course: { id?: string; bounds?: CourseBounds | nul
 
 // ---- OSM layout ----
 
-/** Direct (demo / fallback) endpoint: FOSSGIS's main instance only. */
-export const LAYOUT_OVERPASS_ENDPOINTS = ["https://overpass-api.de/api/interpreter"];
-// Overpass queues requests before its own 25 s query limit: 26-34 s answers
-// were seen, so 50 s before giving up.
-const LAYOUT_TIMEOUT_MS = 50_000;
+/** Direct (demo / fallback) endpoints: FOSSGIS's two servers only
+ * (overpass-api.de, z.overpass-api.de), one retry on the other. */
+export const LAYOUT_OVERPASS_ENDPOINTS = FOSSGIS_OVERPASS_ENDPOINTS;
+// Overpass queues requests before its own 25 s query limit: 11-50 s
+// answers were seen (2026-11-07), so up to 55 s per ask and 100 s for both.
+const LAYOUT_TIMEOUT_MS = 100_000;
+// A cold server lookup can take 20-110 s (course-photos answers "pending"
+// after 20 s and keeps going): ask again every 8 s, for up to 2.5 minutes,
+// while the page says "Loading the course layout…".
+export const LAYOUT_POLL_MS = 8_000;
+export const LAYOUT_POLL_BUDGET_MS = 150_000;
 // Per device. A layout: 30 days. A course with nothing mapped: 7 days (OSM
 // volunteers keep mapping). A failure: not stored; this session waits a
 // couple of minutes before asking again, unless the golfer asks (Layout
@@ -225,9 +236,11 @@ export function writeLayoutCache(key: string, answer: LayoutAnswer, now: number)
 
 /** One endpoint, validated: an HTTP error, a non-JSON body or an error
  * remark is "invalid", never "unmapped". */
-async function askOverpass(endpoint: string, name: string, bounds: CourseBounds, signal?: AbortSignal): Promise<OverpassVerdict> {
+async function askOverpass(endpoint: string, name: string, bounds: CourseBounds, timeoutMs: number): Promise<OverpassVerdict> {
+  const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timer = setTimeout(() => ctrl?.abort(), timeoutMs);
   try {
-    const res = await fetch(`${endpoint}?data=${encodeURIComponent(layoutOverpassQuery(bounds))}`, { signal });
+    const res = await fetch(`${endpoint}?data=${encodeURIComponent(layoutOverpassQuery(bounds))}`, { signal: ctrl?.signal });
     if (!res.ok) return { kind: "invalid", reason: `http ${res.status}` };
     let json: unknown;
     try {
@@ -238,19 +251,45 @@ async function askOverpass(endpoint: string, name: string, bounds: CourseBounds,
     return classifyOverpassAnswer(json, name);
   } catch {
     return { kind: "invalid", reason: "network/timeout" };
+  } finally {
+    clearTimeout(timer);
   }
 }
 
-async function directLayout(name: string, bounds: CourseBounds, timeoutMs = LAYOUT_TIMEOUT_MS): Promise<LayoutAnswer | null> {
-  const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
-  const timer = setTimeout(() => ctrl?.abort(), timeoutMs);
-  try {
-    return await settleLayoutAttempts(
-      LAYOUT_OVERPASS_ENDPOINTS.map((e) => askOverpass(e, name, bounds, ctrl?.signal)),
-      () => ctrl?.abort(),
-    );
-  } finally {
-    clearTimeout(timer);
+/** Demo / fallback: one ask, and one retry on FOSSGIS's other server. */
+async function directLayout(name: string, bounds: CourseBounds, timeoutMs = LAYOUT_TIMEOUT_MS, sleep?: (ms: number) => Promise<void>): Promise<LayoutAnswer | null> {
+  const { verdict } = await askLayoutWithRetry({
+    endpoints: LAYOUT_OVERPASS_ENDPOINTS,
+    ask: (endpoint, t) => askOverpass(endpoint, name, bounds, t),
+    budgetMs: timeoutMs,
+    sleep,
+  });
+  if (verdict.kind === "ok") return { status: "ok", layout: verdict.layout };
+  return verdict.kind === "unmapped" ? { status: "unmapped" } : null;
+}
+
+type ServerLayout = { kind: "answer"; answer: LayoutAnswer | null } | { kind: "old" };
+
+/** course-photos' layout, asking again while it says "pending" (a cold
+ * lookup carries on server-side). "old" = a course-photos that doesn't
+ * know layouts (or none reachable): the caller asks directly. */
+async function serverLayout(id: string, pollMs: number, budgetMs: number): Promise<ServerLayout> {
+  const started = Date.now();
+  for (let ask = 0; ; ask++) {
+    let res: CoursePhotosResponse | null;
+    try {
+      res = await callServer({ courseIds: [id], layout: true });
+    } catch {
+      // Down / not deployed: direct, unless an earlier ask already reached
+      // a server that knows layouts (then a hiccup just ends this wait).
+      return ask === 0 ? { kind: "old" } : { kind: "answer", answer: null };
+    }
+    if (!res || !res.layouts || typeof res.layouts !== "object") return ask === 0 ? { kind: "old" } : { kind: "answer", answer: null };
+    const a = res.layouts[id];
+    if (isLayoutAnswer(a)) return { kind: "answer", answer: a };
+    const pending = Array.isArray(res.layoutsPending) && res.layoutsPending.includes(id);
+    if (!pending || Date.now() - started + pollMs > budgetMs) return { kind: "answer", answer: null };
+    await new Promise((r) => setTimeout(r, pollMs));
   }
 }
 
@@ -259,7 +298,11 @@ const layoutFailedAt = new Map<string, number>();
 
 /** The course's layout for the overview. `force` (the golfer turned Layout
  * back on) skips the short wait after a failure. Resolves, never rejects. */
-export function courseLayout(course: { id?: string; name: string; bounds?: CourseBounds | null }, opts: { useServer: boolean; force?: boolean; timeoutMs?: number }): Promise<LayoutResult> {
+export function courseLayout(
+  course: { id?: string; name: string; bounds?: CourseBounds | null },
+  // timeoutMs / pollMs / pollBudgetMs / sleep: tests only.
+  opts: { useServer: boolean; force?: boolean; timeoutMs?: number; pollMs?: number; pollBudgetMs?: number; sleep?: (ms: number) => Promise<void> },
+): Promise<LayoutResult> {
   const key = layoutCacheKey(course);
   const known = layoutAsks.get(key);
   if (known) return known;
@@ -271,18 +314,13 @@ export function courseLayout(course: { id?: string; name: string; bounds?: Cours
     let answer: LayoutAnswer | null = null;
     let viaServer = false;
     if (opts.useServer && course.id) {
-      try {
-        const res = await callServer({ courseIds: [course.id], layout: true });
-        if (res && res.layouts && typeof res.layouts === "object") {
-          viaServer = true;
-          const a = res.layouts[course.id];
-          answer = isLayoutAnswer(a) ? a : null;
-        }
-      } catch {
-        // Not deployed / down: direct below.
+      const s = await serverLayout(course.id, opts.pollMs ?? LAYOUT_POLL_MS, opts.pollBudgetMs ?? LAYOUT_POLL_BUDGET_MS);
+      if (s.kind === "answer") {
+        viaServer = true;
+        answer = s.answer;
       }
     }
-    if (!viaServer && !answer && course.bounds) answer = await directLayout(course.name, course.bounds, opts.timeoutMs);
+    if (!viaServer && !answer && course.bounds) answer = await directLayout(course.name, course.bounds, opts.timeoutMs, opts.sleep);
     if (answer) {
       writeLayoutCache(key, answer, Date.now());
       layoutFailedAt.delete(key);

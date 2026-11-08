@@ -67,6 +67,10 @@ Deno.serve((req: Request) =>
     store,
     now: () => new Date(),
     log: (message, data) => console.error(message, data ?? {}),
+    // A slow layout lookup finishes (and is stored) after the response.
+    // (Read off globalThis: the edge-runtime.d.ts import doesn't declare it
+    // for a plain `deno check`; Supabase's runtime always has it.)
+    background: (p) => (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } }).EdgeRuntime?.waitUntil(p),
     async authenticate(r) {
       const authHeader = r.headers.get("Authorization") ?? "";
       if (!authHeader) return false;

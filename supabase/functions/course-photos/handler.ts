@@ -43,6 +43,8 @@ import {
 import { outlineFromGeoapifyFeature, overpassQuery, pickCourseOutline, validBounds, type CourseBounds } from "../_shared/courseBounds.ts";
 import type { CoursePictureOut } from "../_shared/coursePhotoTypes.ts";
 import {
+  FOSSGIS_OVERPASS_ENDPOINTS,
+  askLayoutWithRetry,
   classifyOverpassAnswer,
   isLayoutAnswer,
   layoutOverpassQuery,
@@ -111,6 +113,13 @@ export interface Deps {
   store: Store;
   now: () => Date;
   log?: (message: string, data?: Record<string, unknown>) => void;
+  /** Keep a promise running after the response (EdgeRuntime.waitUntil).
+   * Without it a slow layout lookup is simply awaited. */
+  background?: (p: Promise<unknown>) => void;
+  /** Tests: the retry pause, its jitter and elapsed time. */
+  sleep?: (ms: number) => Promise<void>;
+  random?: () => number;
+  clock?: () => number;
 }
 
 export const QUOTA = {
@@ -159,10 +168,24 @@ const CAP_ENV: Record<string, string> = {
   [QUOTA.usgsExport]: "COURSE_PHOTOS_DAILY_USGS_EXPORT_CAP",
 };
 
-// The layout comes from FOSSGIS's main instance only (no third-party mirror
-// sees which courses GolfMe users look at).
-export const LAYOUT_OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter";
-const LAYOUT_SERVER_TIMEOUT_MS = 40_000;
+// The layout comes from FOSSGIS's two public Overpass servers only
+// (overpass-api.de and z.overpass-api.de: one operator, one policy; no
+// third-party mirror sees which courses GolfMe users look at). One retry on
+// the other server (_shared/courseLayout askLayoutWithRetry).
+export const LAYOUT_OVERPASS_ENDPOINTS = FOSSGIS_OVERPASS_ENDPOINTS;
+// 2026-11-07 (Micky, Silver Lake: "Couldn't load the course layout"): the
+// single 40 s ask lost to 11-50 s Overpass answers. Now a request waits up
+// to LAYOUT_WAIT_MS for the answer; past that it says "pending" and the
+// lookup carries on in the background (EdgeRuntime.waitUntil) for up to
+// LAYOUT_JOB_BUDGET_MS, storing the result; the course page asks again a
+// little later and gets the stored layout. 20 s keeps every response well
+// under the iPhone web view's 60 s request timeout. The job budget leaves
+// room inside the function's 150 s wall clock.
+export const LAYOUT_WAIT_MS = 20_000;
+export const LAYOUT_JOB_BUDGET_MS = 110_000;
+// A lookup started this recently (layout_checked_at with no status yet) is
+// still running somewhere: say "pending", don't start a second one.
+export const LAYOUT_PENDING_MS = 150_000;
 export const LAYOUT_OK_RECHECK_MS = 90 * 24 * 60 * 60 * 1000;
 // A course with nothing mapped: OSM volunteers map courses all the time.
 export const LAYOUT_UNMAPPED_RECHECK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -172,11 +195,12 @@ const NAIP_MIN_BYTES = 20_000;
 // The bucket's own limit (20261107190000).
 const NAIP_MAX_BYTES = 3 * 1024 * 1024;
 
-// Overpass endpoints, tried in order. FOSSGIS's main instance only
+// Overpass endpoints, tried in order. FOSSGIS's two servers only
 // (2026-11-06: maps.mail.ru dropped, so no third-party mirror sees which
-// courses GolfMe users look at). It is often overloaded; a failure isn't
+// courses GolfMe users look at; 2026-11-07: z.overpass-api.de, FOSSGIS's
+// second server, added). They are often overloaded; a failure isn't
 // recorded, so the outline is simply asked again on a later view.
-export const OVERPASS_ENDPOINTS = ["https://overpass-api.de/api/interpreter"];
+export const OVERPASS_ENDPOINTS = FOSSGIS_OVERPASS_ENDPOINTS;
 const OVERPASS_TIMEOUT_MS = 8000;
 export const OUTLINE_RECHECK_MS = 180 * 24 * 60 * 60 * 1000;
 
@@ -688,15 +712,15 @@ async function resolvePicture(deps: Deps, course: CourseRow, row: ImageryRow, bo
   return storedPicture(deps, row);
 }
 
-/** One Overpass ask for the layout (overpass-api.de only: FOSSGIS's main
- * instance; identified by User-Agent as its policy asks). */
-async function overpassLayout(deps: Deps, course: CourseRow, bounds: CourseBounds): Promise<OverpassVerdict> {
+/** One Overpass ask for the layout (a FOSSGIS server; identified by
+ * User-Agent as its policy asks; only the course's box is sent). */
+async function overpassLayout(deps: Deps, endpoint: string, course: CourseRow, bounds: CourseBounds, timeoutMs: number): Promise<OverpassVerdict> {
   try {
-    const res = await deps.fetch(LAYOUT_OVERPASS_ENDPOINT, {
+    const res = await deps.fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": WIKI_UA },
       body: "data=" + encodeURIComponent(layoutOverpassQuery(bounds)),
-      signal: AbortSignal.timeout(LAYOUT_SERVER_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (!res.ok) return { kind: "invalid", reason: `http ${res.status}` };
     let data: unknown;
@@ -720,16 +744,40 @@ export function storedLayout(row: ImageryRow, now: Date): LayoutAnswer | null {
   return null;
 }
 
-/** The layout: stored, else one Overpass ask. A transient failure (error
- * remark, HTTP error, timeout, cap) is never stored: null = "not now". */
-async function resolveLayout(deps: Deps, course: CourseRow, row: ImageryRow, bounds: CourseBounds | null): Promise<LayoutAnswer | null> {
-  const known = storedLayout(row, deps.now());
-  if (known) return known;
-  if (!bounds) return null;
-  if (!(await deps.store.takeQuota(QUOTA.overpassLayout, cap(deps, QUOTA.overpassLayout)))) return null;
-  const v = await overpassLayout(deps, course, bounds);
+/** A lookup another request started a moment ago (its marker: a check time
+ * with no status yet, see resolveLayout) and that hasn't finished. */
+export function layoutPendingElsewhere(row: ImageryRow, now: Date): boolean {
+  if (row.layout_status != null || !row.layout_checked_at) return false;
+  const at = Date.parse(row.layout_checked_at);
+  return Number.isFinite(at) && now.getTime() - at >= -60_000 && now.getTime() - at < LAYOUT_PENDING_MS;
+}
+
+// Lookups running in this isolate, per course (a second request for the
+// same course joins the first instead of asking Overpass again).
+const layoutJobs = new Map<string, Promise<LayoutAnswer | null>>();
+
+function waitMs(deps: Deps, name: string, fallback: number): number {
+  const raw = deps.env(name);
+  const n = raw == null || raw === "" ? NaN : Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+
+/** The lookup itself: up to two asks (askLayoutWithRetry), the result
+ * stored; a transient failure stores nothing (and clears our marker). */
+async function layoutJob(deps: Deps, course: CourseRow, row: ImageryRow, bounds: CourseBounds, marked: boolean): Promise<LayoutAnswer | null> {
+  const { verdict: v, asked } = await askLayoutWithRetry({
+    endpoints: LAYOUT_OVERPASS_ENDPOINTS,
+    ask: (endpoint, timeoutMs) => overpassLayout(deps, endpoint, course, bounds, timeoutMs),
+    budgetMs: waitMs(deps, "COURSE_PHOTOS_LAYOUT_JOB_MS", LAYOUT_JOB_BUDGET_MS),
+    // The first ask's unit was taken before the job; a retry takes its own.
+    mayAsk: (attempt) => (attempt === 0 ? Promise.resolve(true) : deps.store.takeQuota(QUOTA.overpassLayout, cap(deps, QUOTA.overpassLayout))),
+    sleep: deps.sleep,
+    random: deps.random,
+    clock: deps.clock,
+  });
   if (v.kind === "invalid") {
-    deps.log?.("course-photos: layout lookup failed", { courseId: course.id, reason: v.reason });
+    deps.log?.("course-photos: layout lookup failed", { courseId: course.id, reason: v.reason, asked: asked.map((e) => new URL(e).hostname) });
+    if (marked) await deps.store.saveImagery({ course_id: course.id, layout_checked_at: null }).catch(() => {});
     // An older stored layout beats nothing while Overpass is down.
     return row.layout_status === "ok" && isLayoutAnswer({ status: "ok", layout: row.layout }) ? { status: "ok", layout: row.layout as CourseLayout } : null;
   }
@@ -742,6 +790,49 @@ async function resolveLayout(deps: Deps, course: CourseRow, row: ImageryRow, bou
   await deps.store.saveImagery(update);
   Object.assign(row, update);
   return v.kind === "ok" ? { status: "ok", layout: v.layout } : { status: "unmapped" };
+}
+
+/** The layout: stored, else an Overpass lookup. Answers within
+ * LAYOUT_WAIT_MS; a lookup still running then is "pending" (it carries on
+ * in the background and stores its result; the page asks again). A
+ * transient failure (error remark, HTTP error, timeout, cap) is never
+ * stored: null = "not now". */
+async function resolveLayout(deps: Deps, course: CourseRow, row: ImageryRow, bounds: CourseBounds | null): Promise<LayoutAnswer | null | "pending"> {
+  const known = storedLayout(row, deps.now());
+  if (known) return known;
+  let job = layoutJobs.get(course.id);
+  if (!job) {
+    if (layoutPendingElsewhere(row, deps.now())) return "pending";
+    if (!bounds) return null;
+    if (!(await deps.store.takeQuota(QUOTA.overpassLayout, cap(deps, QUOTA.overpassLayout)))) return null;
+    // First lookup for this course: mark it (a check time, no status: the
+    // 20261107190000 shape check allows it, storedLayout ignores it) so a
+    // follow-up landing on another isolate says "pending" instead of
+    // querying Overpass again. A stale stored layout being re-checked
+    // keeps its row untouched.
+    let marked = false;
+    if (row.layout_status == null) {
+      marked = await deps.store.saveImagery({ course_id: course.id, layout_checked_at: deps.now().toISOString() }).then(
+        () => true,
+        () => false,
+      );
+    }
+    const started = layoutJob(deps, course, row, bounds, marked).catch(() => null);
+    job = started.finally(() => layoutJobs.delete(course.id));
+    layoutJobs.set(course.id, job);
+    deps.background?.(job);
+  }
+  if (!deps.background) return job;
+  const wait = waitMs(deps, "COURSE_PHOTOS_LAYOUT_WAIT_MS", LAYOUT_WAIT_MS);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<"pending">((r) => {
+    timer = setTimeout(() => r("pending"), wait);
+  });
+  try {
+    return await Promise.race([job, late]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export async function resolveCoursePhotos(body: unknown, deps: Deps): Promise<CoursePhotosResponse> {
@@ -798,7 +889,8 @@ async function resolveCourseDetail(rawIds: unknown, wantPicture: boolean, wantLa
     wantLayout ? resolveLayout(deps, course, row, o.bounds).catch(() => null) : Promise.resolve(undefined),
   ]);
   if (wantPicture) out.pictures![id] = picture ?? null;
-  if (wantLayout && layout) out.layouts![id] = layout;
+  if (wantLayout && layout === "pending") out.layoutsPending = [id];
+  else if (wantLayout && layout && layout !== "pending") out.layouts![id] = layout;
   return out;
 }
 

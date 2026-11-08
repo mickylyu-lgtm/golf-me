@@ -11,9 +11,32 @@ import {
   overviewMotion,
   overviewTileSize,
   overviewZoomCap,
+  pictureZoomCap,
+  PICTURE_OVERZOOM,
 } from "../src/lib/droneOrbit.ts";
+import { naipExportFor } from "../supabase/functions/_shared/naipExport.ts";
 import { POINT_OVERVIEW_ZOOM, fitZoom, overviewFraming, type CourseBounds } from "../supabase/functions/_shared/courseBounds.ts";
 import { MAX_TILE_UPSCALE, USGS_MAX_ZOOM, USGS_SOURCE, maptilerSource, tileZoomFor } from "../src/lib/satelliteTiles.ts";
+
+test("with the sharp picture the camera may pinch in to the picture's own detail (Silver Lake, 2026-11-07)", () => {
+  // Silver Lake Golf Course, Staten Island: its OSM outline (way 33872010).
+  const silverLake = { south: 40.6186367, west: -74.1072899, north: 40.6318131, east: -74.0955992 };
+  const e = naipExportFor(silverLake, { devicePixelRatio: 2 })!;
+  assert.ok(e);
+  const capTile = pictureZoomCap(e.bbox, e.width, USGS_SOURCE.maxZoom);
+  // ~0.93 m of ground per picture pixel -> native at tile zoom ~16.96.
+  assert.ok(capTile > 17.3 && capTile < 17.6, `cap ${capTile}`);
+  assert.ok(maplibreZoom(capTile) - maplibreZoom(overviewZoomCap(USGS_SOURCE.maxZoom)) > 1.1, "well past the tiles' 15.3 (MapLibre)");
+  // Never more than PICTURE_OVERZOOM past one picture pixel per CSS pixel.
+  const native = Math.log2((2 * Math.PI * 6378137) / (256 * ((e.bbox[2] - e.bbox[0]) / e.width)));
+  assert.ok(Math.abs(capTile - (native + PICTURE_OVERZOOM)) < 1e-9);
+  // A tiny box at the mosaic's 0.3 m: stops at 19.5 at most.
+  assert.ok(pictureZoomCap([0, 0, 300, 300], 1000, 16) <= 19.5);
+  // Junk or a coarse picture never lowers the tiles' own cap.
+  assert.equal(pictureZoomCap([0, 0, NaN, 1], 100, 16), overviewZoomCap(16));
+  assert.equal(pictureZoomCap([0, 0, 1e6, 1e6], 256, 16), overviewZoomCap(16));
+  assert.equal(pictureZoomCap([0, 0, 100, 100], 0, 16), overviewZoomCap(16));
+});
 
 // Real OSM outlines (lib/courses.ts demo fixtures).
 const VAN_CORTLANDT: CourseBounds = { south: 40.8903751, west: -73.8914454, north: 40.906012, east: -73.8836547 };

@@ -71,6 +71,9 @@ export interface CoursePhotosResponse {
   /** With `layout`: the layout or "unmapped"; a missing id = not resolved
    * this time (Overpass down / cap reached): retry later, cache nothing. */
   layouts?: Record<string, LayoutAnswer>;
+  /** With `layout`: ids whose Overpass lookup is still running (it carries
+   * on server-side and is stored): ask again in a few seconds. */
+  layoutsPending?: string[];
 }
 
 export type { CourseBounds } from "./courseBounds.ts";

@@ -37,6 +37,30 @@ export function overviewZoomCap(sourceMaxZoom: number): number {
   return Math.min(OVERVIEW_MAX_TILE_ZOOM, max + OVERZOOM_ALLOWANCE);
 }
 
+// With the sharp NAIP picture on (drone v2), the tiles' 16.3 is far short of
+// what the picture holds (Micky, 2026-11-07: "it's not letting me zoom in as
+// much"; before 6c5233b the overview allowed MapLibre 18.5 = tile zoom 19.5,
+// z16 tiles blown up 11x). The camera may then go to where one picture pixel
+// is PICTURE_OVERZOOM zoom past one CSS pixel (0.5 = drawn at most 1.41x,
+// close to the tiles' own 1.23x; 0.75 looked soft on a 3x screen). The
+// picture itself is never finer than the mosaic's 0.3 m (naipExport), so
+// this also stops at the NAIP detail limit; never below the tiles' cap.
+export const PICTURE_OVERZOOM = 0.5;
+export const PICTURE_MAX_TILE_ZOOM = 19.5;
+const EARTH_CIRCUMFERENCE_M = 2 * Math.PI * 6378137;
+
+/** Deepest tile zoom while the picture (a Web-Mercator box `widthPx` px
+ * wide) shows; the tiles' cap when the box is unusable. */
+export function pictureZoomCap(bbox: readonly number[], widthPx: number, sourceMaxZoom: number): number {
+  const tiles = overviewZoomCap(sourceMaxZoom);
+  if (!Array.isArray(bbox) || bbox.length !== 4 || !bbox.every(Number.isFinite) || !(widthPx > 0)) return tiles;
+  const mercPerPx = (bbox[2] - bbox[0]) / widthPx;
+  if (!(mercPerPx > 0)) return tiles;
+  // One picture pixel = one CSS pixel at this tile zoom.
+  const native = Math.log2(EARTH_CIRCUMFERENCE_M / (256 * mercPerPx));
+  return Math.max(tiles, Math.min(native + PICTURE_OVERZOOM, PICTURE_MAX_TILE_ZOOM));
+}
+
 /** The raster source's tileSize. On a retina screen USGS tiles are declared
  * 128 px, so MapLibre asks for the next zoom up and draws each 256 px tile
  * at the screen's own density instead of scaling it 2x (up to z16, where

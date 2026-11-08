@@ -312,6 +312,80 @@ export async function settleLayoutAttempts(attempts: Promise<OverpassVerdict>[],
   });
 }
 
+// ---- Asking Overpass: two FOSSGIS servers, one retry ----
+//
+// Measured 2026-11-07 (Silver Lake, Staten Island, 81 KB answer): 11-50 s
+// per answer, plus fast 502 "at capacity" answers. overpass-api.de and
+// lz4.overpass-api.de are the same machine (same IP); z.overpass-api.de is
+// FOSSGIS's second one (its own 2 slots per IP). Both are the same
+// operator and the same usage policy, so no third-party mirror is added.
+// (overpass.kumi.systems answered 504 after 41 s, overpass.private.coffee
+// nothing in 70 s.)
+export const FOSSGIS_OVERPASS_ENDPOINTS = ["https://overpass-api.de/api/interpreter", "https://z.overpass-api.de/api/interpreter"];
+/** One ask: Overpass queues before its own 25 s query limit; 50 s answers
+ * were seen. */
+export const LAYOUT_ATTEMPT_TIMEOUT_MS = 55_000;
+/** A retry isn't started with less time than this left. */
+export const LAYOUT_RETRY_MIN_MS = 20_000;
+
+export interface LayoutRetryOptions {
+  /** Tried in turn from a random start (spreads the load over both). */
+  endpoints: string[];
+  /** One validated ask (never rejects; HTTP error / non-JSON / error remark
+   * / timeout = "invalid"). */
+  ask: (endpoint: string, timeoutMs: number) => Promise<OverpassVerdict>;
+  /** Total time for both attempts, the pause included. */
+  budgetMs: number;
+  attemptTimeoutMs?: number;
+  /** Before each attempt (the server's daily cap); false = stop. */
+  mayAsk?: (attempt: number) => Promise<boolean>;
+  sleep?: (ms: number) => Promise<void>;
+  random?: () => number;
+  clock?: () => number;
+}
+
+export interface LayoutRetryResult {
+  verdict: OverpassVerdict;
+  /** The endpoints actually asked, in order. */
+  asked: string[];
+}
+
+/** At most two attempts, on different endpoints, with a 0.5-2 s jittered
+ * pause between them; only an "invalid" answer is retried. A valid
+ * "unmapped" is final (both servers carry the same data). Never rejects. */
+export async function askLayoutWithRetry(o: LayoutRetryOptions): Promise<LayoutRetryResult> {
+  const clock = o.clock ?? Date.now;
+  const random = o.random ?? Math.random;
+  const sleep = o.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const perAttempt = o.attemptTimeoutMs ?? LAYOUT_ATTEMPT_TIMEOUT_MS;
+  const start = clock();
+  const asked: string[] = [];
+  const n = o.endpoints.length;
+  let verdict: OverpassVerdict = { kind: "invalid", reason: "not asked" };
+  if (n === 0) return { verdict, asked };
+  const first = Math.min(n - 1, Math.floor(Math.max(0, random()) * n));
+  for (let attempt = 0; attempt < Math.min(2, n); attempt++) {
+    if (attempt > 0) {
+      await sleep(500 + Math.floor(Math.max(0, Math.min(1, random())) * 1500));
+    }
+    const left = o.budgetMs - (clock() - start);
+    if (attempt > 0 && left < LAYOUT_RETRY_MIN_MS) break;
+    if (o.mayAsk && !(await o.mayAsk(attempt).catch(() => false))) {
+      if (attempt === 0) verdict = { kind: "invalid", reason: "cap" };
+      break;
+    }
+    const endpoint = o.endpoints[(first + attempt) % n];
+    asked.push(endpoint);
+    try {
+      verdict = await o.ask(endpoint, Math.max(1, Math.min(perAttempt, left)));
+    } catch {
+      verdict = { kind: "invalid", reason: "network/timeout" };
+    }
+    if (verdict.kind !== "invalid") break;
+  }
+  return { verdict, asked };
+}
+
 /** Is this an answer we may trust from the server or the cache? */
 export function isLayoutAnswer(x: unknown): x is LayoutAnswer {
   const a = x as LayoutAnswer;

@@ -4,6 +4,7 @@
 // No network.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { classifyOverpassAnswer } from "../_shared/courseLayout.ts";
 import { DEFAULT_CAPS, OVERPASS_ENDPOINTS, QUOTA, handleRequest, resolveCoursePhotos, type CourseRow, type Deps, type ImageryRow } from "./handler.ts";
 
 const DYKER: CourseRow = { id: "11111111-1111-4111-8111-111111111111", name: "Dyker Beach Golf Course", latitude: 40.6145, longitude: -74.0216 };
@@ -39,12 +40,22 @@ function makeDeps(opts: {
   naip?: "ok" | "fail" | "html" | "slow-first";
   /** The layout query's Overpass answer (JSON body), or "fail" (504). */
   layoutAnswer?: unknown | "fail";
+  /** Per layout query, in order (the last one repeats); wins over
+   * layoutAnswer. */
+  layoutAnswers?: (unknown | "fail")[];
+  /** Each layout query takes this long (ms). */
+  layoutDelayMs?: number;
+  /** EdgeRuntime.waitUntil stand-in: collects the background promises. */
+  background?: boolean;
 }) {
   const calls: Call[] = [];
   const saved: ImageryRow[] = [];
   const usage = new Map<string, number>();
   const uploads: { path: string; size: number }[] = [];
   let naipFirstUrl: string | undefined;
+  let layoutAsked = 0;
+  const sleeps: number[] = [];
+  const background: Promise<unknown>[] = [];
   const rows = new Map((opts.imagery ?? []).map((r) => [r.course_id, { ...r }]));
   const ok = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
   const fetchStub = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -100,8 +111,12 @@ function makeDeps(opts: {
       return new Response(jpeg, { status: 200, headers: { "Content-Type": "image/jpeg" } });
     }
     if (url.includes("/api/interpreter") && String(init?.body ?? "").includes(encodeURIComponent('"golf"~'))) {
-      if (opts.layoutAnswer === "fail") return new Response("busy", { status: 504 });
-      return ok(opts.layoutAnswer ?? { elements: [] });
+      const seq = opts.layoutAnswers;
+      const answer = seq ? seq[Math.min(layoutAsked, seq.length - 1)] : opts.layoutAnswer;
+      layoutAsked++;
+      if (opts.layoutDelayMs) await new Promise((r) => setTimeout(r, opts.layoutDelayMs));
+      if (answer === "fail") return new Response("busy", { status: 504 });
+      return ok(answer ?? { elements: [] });
     }
     if (url.includes("/api/interpreter")) {
       if (opts.overpass === "fail") return new Response("busy", { status: 504 });
@@ -115,6 +130,11 @@ function makeDeps(opts: {
     fetch: fetchStub,
     env: (name) => (name === "GOOGLE_PLACES_API_KEY" ? opts.key : name === "GEOAPIFY_API_KEY" ? opts.geoKey : opts.caps?.[name]),
     now: () => new Date("2026-11-05T12:00:00Z"),
+    // The retry pause is recorded, not waited; the first server is the
+    // first in the list.
+    sleep: async (ms) => void sleeps.push(ms),
+    random: () => 0,
+    ...(opts.background ? { background: (p: Promise<unknown>) => void background.push(p) } : {}),
     store: {
       async courses(ids) {
         return (opts.courses ?? [DYKER, OTHER]).filter((c) => ids.includes(c.id));
@@ -140,7 +160,7 @@ function makeDeps(opts: {
       },
     },
   };
-  return { deps, calls, saved, usage, rows, uploads };
+  return { deps, calls, saved, usage, rows, uploads, sleeps, background };
 }
 
 const GOOD_PLACE = {
@@ -329,14 +349,14 @@ test("outline from Geoapify Place Details first when the course has a Geoapify i
   assert.equal(calls.filter((c) => c.url.includes("/api/interpreter")).length, 0);
 });
 
-test("Overpass down: no outline this time, not recorded, overpass-api.de only (never maps.mail.ru)", async () => {
-  assert.deepEqual(OVERPASS_ENDPOINTS, ["https://overpass-api.de/api/interpreter"]);
+test("Overpass down: no outline this time, not recorded, FOSSGIS's two servers only (never maps.mail.ru)", async () => {
+  assert.deepEqual(OVERPASS_ENDPOINTS, ["https://overpass-api.de/api/interpreter", "https://z.overpass-api.de/api/interpreter"]);
   const { deps, calls, rows } = makeDeps({ overpass: "fail", wikiArticle: null, geotags: [] });
   const res = await resolveCoursePhotos({ courseIds: [DYKER.id] }, deps);
   assert.ok(!(DYKER.id in (res.bounds ?? {})), "left out: the client keeps the point framing and may ask later");
   assert.equal(rows.get(DYKER.id)?.outline_checked_at, undefined);
   const hosts = new Set(calls.filter((c) => c.url.includes("/api/interpreter")).map((c) => new URL(c.url).hostname));
-  assert.deepEqual([...hosts], ["overpass-api.de"]);
+  assert.deepEqual([...hosts], ["overpass-api.de", "z.overpass-api.de"]);
   assert.equal(calls.some((c) => c.url.includes("mail.ru")), false);
   assert.equal(res.photos[DYKER.id], null, "the photo answer is unaffected");
 });
@@ -455,7 +475,7 @@ test("picture: only US courses, only with an outline, and within the daily cap",
   assert.equal(exportCalls(capped.calls).length, 0);
 });
 
-test("layout: one Overpass query to overpass-api.de only (identified), stored, never asked again", async () => {
+test("layout: one Overpass query to a FOSSGIS server (identified), stored, never asked again", async () => {
   const { deps, calls, rows } = makeDeps({ imagery: [DYKER_OUTLINE], layoutAnswer: LAYOUT_OK });
   const res = await resolveCoursePhotos({ courseIds: [DYKER.id], layout: true }, deps);
   const a = res.layouts?.[DYKER.id];
@@ -499,4 +519,96 @@ test("detail requests: one course only, a small layout cap, and no photo lookups
   assert.equal(layoutCalls(calls).length, 0);
   assert.equal(calls.some((c) => c.url.includes("places")), false);
   assert.equal(DEFAULT_CAPS[QUOTA.overpassLayout], 40);
+});
+
+// ---- Layout reliability (2026-11-07, Silver Lake "Couldn't load the course layout") ----
+
+const ERROR_REMARK = { elements: [], remark: 'runtime error: Query timed out in "query" at line 1 after 26 seconds.' };
+const layoutHosts = (calls: Call[]) => layoutCalls(calls).map((c) => new URL(c.url).hostname);
+
+test("layout: a failed ask (504, error remark) is retried once on FOSSGIS's other server after a jittered pause; each ask takes a cap unit", async () => {
+  for (const first of ["fail", ERROR_REMARK] as const) {
+    const { deps, calls, rows, sleeps, usage } = makeDeps({ imagery: [DYKER_OUTLINE], layoutAnswers: [first, LAYOUT_OK] });
+    const res = await resolveCoursePhotos({ courseIds: [DYKER.id], layout: true }, deps);
+    assert.equal(res.layouts?.[DYKER.id]?.status, "ok");
+    assert.deepEqual(layoutHosts(calls), ["overpass-api.de", "z.overpass-api.de"]);
+    for (const c of layoutCalls(calls)) assert.match(c.headers["User-Agent"] ?? "", /^GolfMe\//);
+    assert.equal(sleeps.length, 1);
+    assert.ok(sleeps[0] >= 500 && sleeps[0] <= 2000, `jitter ${sleeps[0]}`);
+    assert.equal(usage.get(QUOTA.overpassLayout), 2);
+    assert.equal(rows.get(DYKER.id)?.layout_status, "ok");
+  }
+});
+
+test("layout: at most two asks; both failing stores nothing and clears the in-progress marker", async () => {
+  const { deps, calls, rows } = makeDeps({ imagery: [DYKER_OUTLINE], layoutAnswers: ["fail"] });
+  const res = await resolveCoursePhotos({ courseIds: [DYKER.id], layout: true }, deps);
+  assert.equal(res.layouts?.[DYKER.id], undefined);
+  assert.equal(res.layoutsPending, undefined);
+  assert.equal(layoutCalls(calls).length, 2);
+  assert.equal(rows.get(DYKER.id)?.layout_status, undefined);
+  assert.equal(rows.get(DYKER.id)?.layout_checked_at, null, "marker cleared: the next view may ask again");
+});
+
+test("layout: a valid 'unmapped' is final (no retry); the retry respects the daily cap", async () => {
+  const a = makeDeps({ imagery: [DYKER_OUTLINE], layoutAnswers: [{ elements: [] }, LAYOUT_OK] });
+  assert.deepEqual((await resolveCoursePhotos({ courseIds: [DYKER.id], layout: true }, a.deps)).layouts?.[DYKER.id], { status: "unmapped" });
+  assert.equal(layoutCalls(a.calls).length, 1);
+  const b = makeDeps({ imagery: [DYKER_OUTLINE], layoutAnswers: ["fail", LAYOUT_OK], caps: { COURSE_PHOTOS_DAILY_OVERPASS_LAYOUT_CAP: "1" } });
+  assert.equal((await resolveCoursePhotos({ courseIds: [DYKER.id], layout: true }, b.deps)).layouts?.[DYKER.id], undefined);
+  assert.equal(layoutCalls(b.calls).length, 1, "cap 1: no retry");
+});
+
+test("layout: a slow lookup answers 'pending', finishes in the background and is stored; the next ask gets it", async () => {
+  const { deps, calls, rows, background } = makeDeps({
+    imagery: [DYKER_OUTLINE],
+    layoutAnswer: LAYOUT_OK,
+    layoutDelayMs: 60,
+    background: true,
+    caps: { COURSE_PHOTOS_LAYOUT_WAIT_MS: "5" },
+  });
+  const r1 = await resolveCoursePhotos({ courseIds: [DYKER.id], layout: true }, deps);
+  assert.deepEqual(r1.layoutsPending, [DYKER.id]);
+  assert.equal(r1.layouts?.[DYKER.id], undefined);
+  assert.equal(background.length, 1, "kept alive past the response");
+  assert.ok(rows.get(DYKER.id)?.layout_checked_at && rows.get(DYKER.id)?.layout_status == null, "in-progress marker");
+  // A second ask while it runs joins it (no second Overpass query).
+  const r2 = await resolveCoursePhotos({ courseIds: [DYKER.id], layout: true }, deps);
+  assert.deepEqual(r2.layoutsPending, [DYKER.id]);
+  await Promise.all(background);
+  assert.equal(layoutCalls(calls).length, 1);
+  assert.equal(rows.get(DYKER.id)?.layout_status, "ok");
+  const r3 = await resolveCoursePhotos({ courseIds: [DYKER.id], layout: true }, deps);
+  assert.equal(r3.layouts?.[DYKER.id]?.status, "ok");
+  assert.equal(r3.layoutsPending, undefined);
+  assert.equal(layoutCalls(calls).length, 1);
+});
+
+test("layout: a fast answer comes back inline even with a background runner", async () => {
+  const { deps } = makeDeps({ imagery: [DYKER_OUTLINE], layoutAnswer: LAYOUT_OK, background: true });
+  const r = await resolveCoursePhotos({ courseIds: [DYKER.id], layout: true }, deps);
+  assert.equal(r.layouts?.[DYKER.id]?.status, "ok");
+  assert.equal(r.layoutsPending, undefined);
+});
+
+test("layout: another isolate's fresh marker means 'pending' with no query; a stale one (job died) is asked again", async () => {
+  const now = new Date("2026-11-05T12:00:00Z").getTime();
+  const fresh = makeDeps({ imagery: [{ ...DYKER_OUTLINE, layout_checked_at: new Date(now - 30_000).toISOString() }], layoutAnswer: LAYOUT_OK, background: true });
+  const r1 = await resolveCoursePhotos({ courseIds: [DYKER.id], layout: true }, fresh.deps);
+  assert.deepEqual(r1.layoutsPending, [DYKER.id]);
+  assert.equal(layoutCalls(fresh.calls).length, 0);
+  const stale = makeDeps({ imagery: [{ ...DYKER_OUTLINE, layout_checked_at: new Date(now - 10 * 60_000).toISOString() }], layoutAnswer: LAYOUT_OK, background: true });
+  const r2 = await resolveCoursePhotos({ courseIds: [DYKER.id], layout: true }, stale.deps);
+  assert.equal(r2.layouts?.[DYKER.id]?.status, "ok");
+  assert.equal(layoutCalls(stale.calls).length, 1);
+});
+
+test("layout: a stale stored layout being re-checked keeps its row (no marker) and is served if Overpass fails", async () => {
+  const parsed = classifyOverpassAnswer(LAYOUT_OK, DYKER.name);
+  assert.equal(parsed.kind, "ok");
+  const old = { ...DYKER_OUTLINE, layout_status: "ok" as const, layout_checked_at: "2026-07-01T00:00:00Z", layout: (parsed as { layout: unknown }).layout };
+  const { deps, saved } = makeDeps({ imagery: [old], layoutAnswers: ["fail"] });
+  const r = await resolveCoursePhotos({ courseIds: [DYKER.id], layout: true }, deps);
+  assert.equal(r.layouts?.[DYKER.id]?.status, "ok");
+  assert.equal(saved.length, 0, "nothing written");
 });

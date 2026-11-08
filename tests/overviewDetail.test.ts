@@ -100,40 +100,46 @@ async function client(plan: FetchPlan, storage = memoryStorage()) {
 const json = (body: unknown, status = 200) => Promise.resolve({ ok: status >= 200 && status < 300, status, json: async () => structuredClone(body) });
 const hang = (_u: string, init?: RequestInit) =>
   new Promise((_r, reject) => init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError"))));
+// The direct path's retry pause, not waited in tests.
+const noPause = async () => {};
+const FOSSGIS = ["overpass-api.de", "z.overpass-api.de"];
 
-test("demo/direct: overpass-api.de only (never maps.mail.ru); a layout is cached on the device for 30 days", async () => {
+test("demo/direct: FOSSGIS's servers only (never maps.mail.ru); a layout is cached on the device for 30 days", async () => {
   const { mod, calls, storage } = await client(() => json(VALID));
-  const r = await mod.courseLayout({ name: NAME, bounds: B }, { useServer: false });
+  const r = await mod.courseLayout({ name: NAME, bounds: B }, { useServer: false, sleep: noPause });
   assert.equal(r.status, "ready");
   assert.equal(calls.length, 1);
-  assert.equal(new URL(calls[0]).hostname, "overpass-api.de");
-  assert.deepEqual(mod.LAYOUT_OVERPASS_ENDPOINTS, ["https://overpass-api.de/api/interpreter"]);
+  assert.ok(FOSSGIS.includes(new URL(calls[0]).hostname));
+  assert.deepEqual(mod.LAYOUT_OVERPASS_ENDPOINTS, ["https://overpass-api.de/api/interpreter", "https://z.overpass-api.de/api/interpreter"]);
   assert.ok(storage.getItem(mod.layoutCacheKey({ name: NAME, bounds: B })));
   // A new session on the same device: from the cache, no request.
   const next = await client(() => json(VALID), storage);
-  assert.equal((await next.mod.courseLayout({ name: NAME, bounds: B }, { useServer: false })).status, "ready");
+  assert.equal((await next.mod.courseLayout({ name: NAME, bounds: B }, { useServer: false, sleep: noPause })).status, "ready");
   assert.equal(next.calls.length, 0);
 });
 
 test("a 200 with an error remark is 'unavailable': nothing cached, a short wait, then a retry (forced by the golfer)", async () => {
   let answer: unknown = ERROR_REMARK;
   const { mod, calls, storage } = await client(() => json(answer));
-  const r = await mod.courseLayout({ name: NAME, bounds: B }, { useServer: false });
+  const r = await mod.courseLayout({ name: NAME, bounds: B }, { useServer: false, sleep: noPause });
   assert.equal(r.status, "unavailable");
   assert.equal(storage.getItem(mod.layoutCacheKey({ name: NAME, bounds: B })), null, "no negative cache for a failure");
+  // One ask and one retry on the other FOSSGIS server.
+  assert.equal(calls.length, 2);
+  assert.deepEqual(new Set(calls.map((u) => new URL(u).hostname)), new Set(FOSSGIS));
   // Asked again right away: not hammered.
-  assert.equal((await mod.courseLayout({ name: NAME, bounds: B }, { useServer: false })).status, "unavailable");
-  assert.equal(calls.length, 1);
+  assert.equal((await mod.courseLayout({ name: NAME, bounds: B }, { useServer: false, sleep: noPause })).status, "unavailable");
+  assert.equal(calls.length, 2);
   // Layout off and on (force): asks again, and gets the real answer.
   answer = VALID;
-  assert.equal((await mod.courseLayout({ name: NAME, bounds: B }, { useServer: false, force: true })).status, "ready");
-  assert.equal(calls.length, 2);
+  assert.equal((await mod.courseLayout({ name: NAME, bounds: B }, { useServer: false, force: true, sleep: noPause })).status, "ready");
+  assert.equal(calls.length, 3);
 });
 
 test("a genuinely unmapped course is remembered for 7 days, then asked again", async () => {
   const storage = memoryStorage();
   const { mod, calls } = await client(() => json({ version: 0.6, elements: [] }), storage);
-  assert.equal((await mod.courseLayout({ name: NAME, bounds: B }, { useServer: false })).status, "unmapped");
+  assert.equal((await mod.courseLayout({ name: NAME, bounds: B }, { useServer: false, sleep: noPause })).status, "unmapped");
   const key = mod.layoutCacheKey({ name: NAME, bounds: B });
   const day = 24 * 3600 * 1000;
   assert.deepEqual(mod.readLayoutCache(key, Date.now() + 6 * day), { status: "unmapped" });
@@ -149,16 +155,16 @@ test("timeouts and all providers failing end as 'unavailable' (not a silent noth
   const t1 = await client(hang);
   assert.equal((await t1.mod.courseLayout({ name: NAME, bounds: B }, { useServer: false, timeoutMs: 30 })).status, "unavailable");
   const t2 = await client(() => json({}, 504));
-  assert.equal((await t2.mod.courseLayout({ name: NAME, bounds: B }, { useServer: false })).status, "unavailable");
+  assert.equal((await t2.mod.courseLayout({ name: NAME, bounds: B }, { useServer: false, sleep: noPause })).status, "unavailable");
   const t3 = await client(() => Promise.reject(new TypeError("offline")));
-  assert.equal((await t3.mod.courseLayout({ name: NAME, bounds: B }, { useServer: false })).status, "unavailable");
+  assert.equal((await t3.mod.courseLayout({ name: NAME, bounds: B }, { useServer: false, sleep: noPause })).status, "unavailable");
   assert.equal(t3.storage.m.size, 0);
 });
 
 test("the old v1 cache (which could hold a wrong 'no layout' for 30 days) is ignored and cleared", async () => {
   const storage = memoryStorage({ "golfme:courseLayout:v1:forest park golf course|40.6969,-73.8688,40.7027,-73.8590": JSON.stringify({ at: Date.now(), layout: null }) });
   const { mod, calls } = await client(() => json(VALID), storage);
-  assert.equal((await mod.courseLayout({ name: NAME, bounds: B }, { useServer: false })).status, "ready");
+  assert.equal((await mod.courseLayout({ name: NAME, bounds: B }, { useServer: false, sleep: noPause })).status, "ready");
   assert.equal(calls.length, 1);
   assert.equal([...storage.m.keys()].some((k) => k.startsWith("golfme:courseLayout:v1:")), false);
 });
@@ -191,6 +197,42 @@ test("real accounts: a transient server miss is 'unavailable' (no direct fallbac
     throw new Error("404 not deployed");
   });
   assert.equal((await c.mod.courseLayout({ id: ID, name: NAME, bounds: B }, { useServer: true })).status, "ready");
+});
+
+test("real accounts: while course-photos says 'pending' the page keeps loading and asks again, then shows the stored layout", async () => {
+  const { mod, calls } = await client(() => json(VALID));
+  const layout = (classifyOverpassAnswer(VALID, NAME) as { layout: unknown }).layout;
+  let asks = 0;
+  mod.setDetailServer(async () => {
+    asks++;
+    return asks < 3 ? { photos: {}, layouts: {}, layoutsPending: [ID] } : { photos: {}, layouts: { [ID]: { status: "ok", layout } } };
+  });
+  const r = await mod.courseLayout({ id: ID, name: NAME, bounds: B }, { useServer: true, pollMs: 5 });
+  assert.equal(r.status, "ready");
+  assert.equal(asks, 3);
+  assert.equal(calls.length, 0, "never Overpass from the browser");
+  assert.equal(mod.LAYOUT_POLL_MS, 8000);
+  assert.ok(mod.LAYOUT_POLL_BUDGET_MS >= 120_000, "covers the server's 110 s lookup");
+});
+
+test("real accounts: 'pending' past the wait budget ends as 'unavailable' (no direct fallback); a later hiccup too", async () => {
+  const a = await client(() => json(VALID));
+  let asksA = 0;
+  a.mod.setDetailServer(async () => {
+    asksA++;
+    return { photos: {}, layouts: {}, layoutsPending: [ID] };
+  });
+  assert.equal((await a.mod.courseLayout({ id: ID, name: NAME, bounds: B }, { useServer: true, pollMs: 5, pollBudgetMs: 40 })).status, "unavailable");
+  assert.ok(asksA >= 2 && asksA <= 9, `asked ${asksA} times`);
+  assert.equal(a.calls.length, 0);
+  const b = await client(() => json(VALID));
+  let asksB = 0;
+  b.mod.setDetailServer(async () => {
+    if (++asksB > 1) throw new Error("network");
+    return { photos: {}, layouts: {}, layoutsPending: [ID] };
+  });
+  assert.equal((await b.mod.courseLayout({ id: ID, name: NAME, bounds: B }, { useServer: true, pollMs: 5 })).status, "unavailable");
+  assert.equal(b.calls.length, 0, "the server knows layouts: no direct ask behind its back");
 });
 
 // ---- the picture ----
