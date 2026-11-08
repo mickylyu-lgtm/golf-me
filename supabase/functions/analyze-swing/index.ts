@@ -152,6 +152,7 @@ const TIMEOUT_MS = {
   roboflowFrame: 25_000,
   geminiUpload: 90_000,
   geminiPoll: 15_000,
+  sizeProbe: 5_000,
   // generateContent has no fixed timeout any more: each try's comes from
   // geminiGenerateTryTimeoutMs() (_shared/caddieReliability.ts), 60/75/75 s
   // capped to the remaining deadline. It was a fixed 150 s, which is how
@@ -685,6 +686,15 @@ Deno.serve(async (req: Request) => {
   // fraction (0..1) of attempts whose generateContent asks for
   // thinkingLevel "low" (_shared/caddiePreprocessing.ts thinkingArmFor).
   const thinkingLowSample = parseSampleRate(Deno.env.get("CADDIE_THINKING_LOW_SAMPLE"));
+  // Parallel trim + frame extraction from the original's window, for
+  // originals up to this many MB. OFF (0) unless the secret is set: on
+  // fixtures it saved no measurable CPU time (H.264 1.18 -> 1.04 s, HEVC
+  // 1.29 -> 1.36 s locally), it downloads the original a second time, and
+  // freezedetect can pick a slightly different active window on the noisier
+  // original than on the re-encoded copy. Turn on only if production
+  // frames_extracted extract_ms shows extraction is cold-start/transfer
+  // bound (scratchpad trim-bench/).
+  const parallelExtractMaxBytes = Math.max(0, Number(Deno.env.get("CADDIE_PARALLEL_EXTRACT_MAX_MB") ?? "0") || 0) * 1_000_000;
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -1190,13 +1200,26 @@ Deno.serve(async (req: Request) => {
       logEvent("preprocessing_reuse", { verdict, from_attempt: storedRow?.attempt ?? null });
     }
 
-    // With a trim window, coarse frames are extracted from the ORIGINAL's
-    // window (extract-frames `sourceWindow`) at the same time as the trim,
-    // instead of after it (api/extract-frames.ts; same timeline and frame
-    // size as the trimmed copy, tests/extractSourceWindow.test.ts). An
-    // older extract-frames that doesn't echo the window is detected below
-    // and the frames are re-extracted from the trimmed copy, as before.
-    let earlyExtract: Promise<CoarseExtract> | null = null;
+    // Optional (CADDIE_PARALLEL_EXTRACT_MAX_MB, off by default): with a trim
+    // window and a small original, coarse frames are extracted from the
+    // ORIGINAL's window (extract-frames `sourceWindow`) at the same time as
+    // the trim instead of after it (same timeline and frame size as the
+    // trimmed copy, tests/extractSourceWindow.test.ts). An older
+    // extract-frames that doesn't echo the window is detected below and the
+    // frames are re-extracted from the trimmed copy, as before.
+    let earlyExtract: Promise<CoarseExtract | null> | null = null;
+    // The original's size from a 1-byte range read (Content-Range total),
+    // or null when the store doesn't say (then: no parallel extraction).
+    async function originalSizeBytes(): Promise<number | null> {
+      try {
+        const res = await fetch(pipelineVideoUrl, { headers: { Range: "bytes=0-0" }, signal: requestSignal(TIMEOUT_MS.sizeProbe) });
+        const total = res.headers.get("content-range")?.match(/\/(\d+)\s*$/)?.[1];
+        await res.body?.cancel().catch(() => {});
+        return res.status === 206 && total ? Number(total) : null;
+      } catch {
+        return null;
+      }
+    }
 
     if (!trimWindow) {
       await enterStage("media_fetch");
@@ -1228,8 +1251,16 @@ Deno.serve(async (req: Request) => {
       // only the (small, re-encoded) trimmed copy is.
       await enterStage("trim");
       const window = trimWindow;
-      if (!reusedPose) {
-        earlyExtract = extractCoarseFrames(FRAME_MAX_LONG_SIDE, { sourceWindow: window });
+      if (!reusedPose && parallelExtractMaxBytes > 0) {
+        // Only for an original small enough that a second full download
+        // (extract-frames fetches it too) costs less than waiting for the
+        // trim. A window picked from a LONG recording (tens to hundreds of
+        // MB) keeps the old order: extract from the small trimmed copy.
+        earlyExtract = originalSizeBytes().then((size) => {
+          const parallel = size !== null && size <= parallelExtractMaxBytes;
+          logEvent("frames_source", { original_bytes: size, parallel });
+          return parallel ? extractCoarseFrames(FRAME_MAX_LONG_SIDE, { sourceWindow: window }) : null;
+        });
         // Settled by the await below; until then a rejection (or an abort
         // after a failed trim) must not surface as an unhandled one.
         earlyExtract.catch(() => {});
@@ -1337,7 +1368,7 @@ Deno.serve(async (req: Request) => {
       trustedPoseData = reusedPose;
     } else {
       await enterStage("frame_extract");
-      let firstExtract = earlyExtract ? await earlyExtract : await extractCoarseFrames(FRAME_MAX_LONG_SIDE);
+      let firstExtract = (earlyExtract ? await earlyExtract : null) ?? (await extractCoarseFrames(FRAME_MAX_LONG_SIDE));
       if (!firstExtract.windowHonored) {
         logEvent("source_window_unsupported", {});
         firstExtract = await extractCoarseFrames(FRAME_MAX_LONG_SIDE);

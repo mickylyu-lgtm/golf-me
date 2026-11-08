@@ -81,6 +81,7 @@ interface Call {
   endedAt?: number;
   outcome?: "ok" | "aborted";
   body?: string;
+  range?: string | null;
 }
 let calls: Call[] = [];
 type Responder = (call: Call, nth: number) => Promise<Response>;
@@ -168,7 +169,7 @@ function routeOf(url: string, method: string): string {
 (globalThis as unknown as { fetch: unknown }).fetch = async (input: string | URL | Request, init?: RequestInit) => {
   const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
   const method = init?.method ?? "GET";
-  const call: Call = { url, method, signal: init?.signal, startedAt: vnow(), body: typeof init?.body === "string" ? init.body : undefined };
+  const call: Call = { url, method, signal: init?.signal, startedAt: vnow(), body: typeof init?.body === "string" ? init.body : undefined, range: new Headers(init?.headers).get("range") };
   calls.push(call);
   const route = routeOf(url, method);
   const responder = routes[route];
@@ -437,13 +438,50 @@ function modelRoutes(opts: { echoWindow?: boolean; roboflow?: Responder } = {}):
 }
 const count = (route: string) => calls.filter((c) => routeOf(c.url, c.method) === route).length;
 
-Deno.test("stage model: a first analysis (trim + extract in parallel, Roboflow at 16)", async () => {
-  reset(modelRoutes());
+// The original's size answer for the 1-byte range probe.
+const sizedStorage = (bytes: number): Responder => (c) =>
+  c.range
+    ? after(c, 100, () => new Response(new Uint8Array(1), { status: 206, headers: { "content-range": `bytes 0-0/${bytes}` } }))
+    : after(c, 500, () => new Response(new Uint8Array(1024), { status: 200, headers: { "content-type": "video/quicktime" } }));
+async function withParallelExtract<T>(mb: string, fn: () => Promise<T>): Promise<T> {
+  Deno.env.set("CADDIE_PARALLEL_EXTRACT_MAX_MB", mb);
+  try {
+    return await fn();
+  } finally {
+    Deno.env.delete("CADDIE_PARALLEL_EXTRACT_MAX_MB");
+  }
+}
+
+Deno.test("stage model: a first analysis by default (sequential trim -> extract, Roboflow at 16, no size probe)", async () => {
+  reset({ ...modelRoutes(), "storage-get": sizedStorage(12_000_000) });
+  await newJob();
+  const row = onlyRow();
+  assertEquals(row.status, "complete", "complete");
+  const extracts = calls.filter((c) => routeOf(c.url, c.method) === "extract").map((c) => JSON.parse(c.body ?? "{}"));
+  assert(extracts.every((b) => !b.sourceWindow) && extracts[0].videoUrl.includes("caddie-trimmed-"), "frames from the trimmed copy, as before");
+  assertEquals(calls.filter((c) => c.range).length, 0, "no range probe when the option is off");
+  console.info(`  MODEL first analysis (default): ${finishedS(row).toFixed(0)} s (roboflow ${count("roboflow")})`);
+});
+
+Deno.test("stage model: parallel option on, but a window picked from a LONG original (90 MB) keeps the sequential order", async () => {
+  await withParallelExtract("40", async () => {
+    reset({ ...modelRoutes(), "storage-get": sizedStorage(90_700_000) });
+    await newJob();
+    assertEquals(onlyRow().status, "complete", "complete");
+    const extracts = calls.filter((c) => routeOf(c.url, c.method) === "extract").map((c) => JSON.parse(c.body ?? "{}"));
+    assert(extracts.every((b) => !b.sourceWindow), "the 90 MB original is not downloaded a second time");
+    assertEquals(logEvents("frames_source")[0]?.parallel, false, "decision logged");
+  });
+});
+
+Deno.test("stage model: parallel option on, small original (trim + extract in parallel, Roboflow at 16)", () =>
+  withParallelExtract("40", async () => {
+  reset({ ...modelRoutes(), "storage-get": sizedStorage(12_000_000) });
   await newJob();
   const row = onlyRow();
   assertEquals(row.status, "complete", "complete");
   const extracts = calls.filter((c) => routeOf(c.url, c.method) === "extract");
-  console.info(`  MODEL first analysis: ${finishedS(row).toFixed(0)} s (extract calls ${extracts.length}, roboflow ${count("roboflow")})`);
+  console.info(`  MODEL first analysis (parallel option on): ${finishedS(row).toFixed(0)} s (extract calls ${extracts.length}, roboflow ${count("roboflow")})`);
   const coarse = extracts.find((c) => JSON.parse(c.body ?? "{}").sourceWindow);
   const trimCall = calls.find((c) => routeOf(c.url, c.method) === "trim");
   assert(coarse && trimCall && Math.abs(coarse.startedAt - trimCall.startedAt) < 2_000, "coarse extraction started together with the trim");
@@ -451,10 +489,11 @@ Deno.test("stage model: a first analysis (trim + extract in parallel, Roboflow a
   assertEquals(extracts.length, 2, "coarse (original window) + dense (trimmed copy), no re-extraction");
   assert(logEvents("complete")[0]?.thinking_level === "default", "thinking_level logged on complete");
   assertEquals((row.analysis_json as Record<string, unknown>).thinking_level, "default", "and stored with the analysis");
-});
+  }));
 
-Deno.test("stage model: an older extract-frames that ignores sourceWindow is detected; frames re-extracted from the trimmed copy", async () => {
-  reset(modelRoutes({ echoWindow: false }));
+Deno.test("stage model: an older extract-frames that ignores sourceWindow is detected; frames re-extracted from the trimmed copy", () =>
+  withParallelExtract("40", async () => {
+  reset({ ...modelRoutes({ echoWindow: false }), "storage-get": sizedStorage(12_000_000) });
   await newJob();
   const row = onlyRow();
   assertEquals(row.status, "complete", "complete");
@@ -463,7 +502,7 @@ Deno.test("stage model: an older extract-frames that ignores sourceWindow is det
   assertEquals(extracts.length, 3, "original (ignored) + trimmed copy + dense");
   assert(!extracts[1].sourceWindow && extracts[1].videoUrl.includes("caddie-trimmed-"), "re-extracted from the trimmed copy");
   console.info(`  MODEL old extract-frames fallback: ${finishedS(row).toFixed(0)} s`);
-});
+  }));
 
 Deno.test("stage model: a Roboflow 429 burst halves concurrency and the job still completes, uncharged retries", async () => {
   let n = 0;
