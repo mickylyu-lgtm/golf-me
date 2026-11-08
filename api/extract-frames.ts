@@ -163,9 +163,15 @@ interface ActiveWindow {
 // Runs the freezedetect pass and returns the padded active (motion) window,
 // or undefined if detection was inconclusive/not worth trusting — callers
 // treat undefined as "analyze the whole clip, untrimmed."
-async function detectActiveWindow(inputPath: string): Promise<ActiveWindow | undefined> {
+// With a sourceWindow, ffmpeg reads only that part of the input
+// (`inputSeek` = input-side -ss/-t, frame-accurate when decoding) and every
+// timestamp is relative to the window's start; `windowSeconds` replaces the
+// file's own duration.
+async function detectActiveWindow(inputPath: string, source?: ActiveWindow): Promise<ActiveWindow | undefined> {
+  const inputSeek = source ? sourceSeekArgs(source) : [];
   const log = await runFfmpeg([
     "-y",
+    ...inputSeek,
     "-i",
     inputPath,
     "-vf",
@@ -176,7 +182,10 @@ async function detectActiveWindow(inputPath: string): Promise<ActiveWindow | und
     "null",
     "-",
   ]);
-  const duration = parseDurationSeconds(log);
+  const fileDuration = parseDurationSeconds(log);
+  const windowSeconds = source ? source.endSeconds - source.startSeconds : undefined;
+  const duration =
+    windowSeconds === undefined ? fileDuration : fileDuration === undefined ? windowSeconds : Math.min(windowSeconds, fileDuration - source!.startSeconds);
   if (!duration || duration <= 0) return undefined;
 
   const starts = [...log.matchAll(/freeze_start:\s*([\d.]+)/g)].map((m) => Number(m[1]));
@@ -213,6 +222,15 @@ async function detectActiveWindow(inputPath: string): Promise<ActiveWindow | und
   return { startSeconds: paddedStart, endSeconds: paddedEnd };
 }
 
+// Input-side seek (before -i): ffmpeg decodes from the previous keyframe and
+// drops frames up to the exact start (accurate seek, its default when
+// decoding), and output timestamps start at 0 — the same timeline as
+// api/trim-video.ts's re-encoded copy of that window, which uses the same
+// -ss/-t before -i.
+function sourceSeekArgs(source: ActiveWindow): string[] {
+  return ["-ss", source.startSeconds.toFixed(3), "-t", (source.endSeconds - source.startSeconds).toFixed(3)];
+}
+
 // Health audit P2-9 (defense in depth): analyze-swing, the only caller,
 // now only ever passes this project's own Supabase Storage URLs (a signed
 // caddie-media URL or a public community-media URL). Refuse anything else
@@ -235,9 +253,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
-  const { videoUrl, fps, startSeconds, endSeconds, maxLongSide } = (req.body ?? {}) as {
+  const { videoUrl, fps, startSeconds, endSeconds, maxLongSide, sourceWindow } = (req.body ?? {}) as {
     videoUrl?: string;
     fps?: number;
+    // Optional (2026-11-08): read only this part of the (untrimmed) source,
+    // exactly the window api/trim-video.ts cuts, and report every
+    // timestamp relative to its start, so analyze-swing can extract frames
+    // IN PARALLEL with the trim instead of waiting for the trimmed copy.
+    // Echoed back in the response; a caller that gets no echo is talking
+    // to an older build and must not use these frames.
+    sourceWindow?: { startSeconds?: number; endSeconds?: number };
     // Optional: downscale frames so their long side is at most this many
     // pixels (smaller Roboflow payloads). The response then carries
     // coordinateScale, the factor that maps a frame pixel back to a source-
@@ -259,6 +284,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     typeof startSeconds === "number" && typeof endSeconds === "number" && endSeconds > startSeconds
       ? { startSeconds: Math.max(0, startSeconds), endSeconds }
       : undefined;
+
+  let source: ActiveWindow | undefined;
+  if (sourceWindow !== undefined) {
+    const s = sourceWindow?.startSeconds;
+    const e = sourceWindow?.endSeconds;
+    if (typeof s !== "number" || typeof e !== "number" || !Number.isFinite(s) || !Number.isFinite(e) || s < 0 || e <= s) {
+      return res.status(400).json({ error: "bad_source_window" });
+    }
+    // Same 15 s backstop as trim-video's MAX_TRIM_SECONDS.
+    source = { startSeconds: s, endSeconds: Math.min(e, s + 15) };
+  }
 
   const targetLongSide =
     typeof maxLongSide === "number" && Number.isFinite(maxLongSide)
@@ -288,13 +324,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let activeWindow: ActiveWindow | undefined = explicitWindow;
     if (!activeWindow) {
       try {
-        activeWindow = await detectActiveWindow(inputPath);
+        activeWindow = await detectActiveWindow(inputPath, source);
       } catch (err) {
         console.error("[extract-frames] active-window detection failed, analyzing the whole clip", { error: classifyFfmpegFailure(err).token });
       }
     }
 
-    const extractArgs = ["-y", "-i", inputPath];
+    const extractArgs = ["-y", ...(source ? sourceSeekArgs(source) : []), "-i", inputPath];
     if (activeWindow) {
       extractArgs.push("-ss", activeWindow.startSeconds.toFixed(3), "-t", (activeWindow.endSeconds - activeWindow.startSeconds).toFixed(3));
     } else {
@@ -347,6 +383,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       coordinateScale,
       frames,
       activeWindowTrim: activeWindow ? { startSeconds: activeWindow.startSeconds, endSeconds: activeWindow.endSeconds } : null,
+      // The source window honored (timestamps above are relative to its
+      // start), or null. analyze-swing checks this before trusting frames.
+      sourceWindow: source ?? null,
     });
   } catch (err) {
     // A classified token only — never ffmpeg's stderr (video metadata) or a

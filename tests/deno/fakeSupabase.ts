@@ -25,6 +25,8 @@ export interface FakeDb {
   rpcCalls: string[];
   uploads: string[];
   removed: string[];
+  // private.caddie_preprocessing (migration 20261108160000), by analysis id.
+  preprocessing: Map<string, Record<string, unknown>>;
   // Test hook: called before an UPDATE is applied (simulates a concurrent writer).
   beforeUpdate?: (patch: Record<string, unknown>) => void | Promise<void>;
 }
@@ -32,7 +34,7 @@ export interface FakeDb {
 const STALE_MS = 6 * 60 * 1000;
 
 export function newFakeDb(userId: string): FakeDb {
-  return { userId, rows: [], charges: [], starts: [], diagnostics: [], rpcCalls: [], uploads: [], removed: [] };
+  return { userId, rows: [], charges: [], starts: [], diagnostics: [], rpcCalls: [], uploads: [], removed: [], preprocessing: new Map() };
 }
 
 function db(): FakeDb {
@@ -190,6 +192,8 @@ class Query implements PromiseLike<{ data: unknown; error: unknown; count?: numb
         Object.assign(row, patch, { updated_at: new Date().toISOString() });
         // private.charge_caddie_allowance()
         if (row.status === "complete" && !wasComplete && !d.charges.some((c) => c.analysis_id === row.id)) d.charges.push({ analysis_id: row.id });
+        // private.drop_caddie_preprocessing_on_complete() (20261108160000)
+        if (row.status === "complete" && !wasComplete) d.preprocessing.delete(row.id);
         changed.push(row);
       }
       return this.wantRows ? this.shape(changed) : { data: null, error: null };
@@ -226,6 +230,40 @@ export function createClient(_url: string, _key: string, _opts?: unknown) {
       if (name === "caddie_allowance_status") {
         const used = d.charges.length + d.rows.filter((r) => r.status === "processing").length;
         return Promise.resolve({ data: [{ used, daily_limit: 30, starts: d.starts.length, start_ceiling: 60 }], error: null });
+      }
+      // 20261108160000: owner-checked; save only while that attempt is
+      // processing; get only an unexpired one (7 days). The pose goes
+      // through JSON like jsonb (key order may change; the HMAC must not care).
+      if (name === "save_caddie_preprocessing") {
+        const a = args ?? {};
+        const row = d.rows.find((r) => r.id === a.p_analysis_id);
+        if (!row || row.owner_id !== d.userId || row.status !== "processing" || row.attempt !== a.p_attempt) {
+          return Promise.resolve({ data: null, error: { message: "Not authorized.", code: "42501" } });
+        }
+        const now = Date.now();
+        const reorder = (v: unknown): unknown =>
+          Array.isArray(v) ? v.map(reorder) : v && typeof v === "object" ? Object.fromEntries(Object.entries(v as Record<string, unknown>).reverse().map(([k, x]) => [k, reorder(x)])) : v;
+        d.preprocessing.set(String(a.p_analysis_id), {
+          analysis_id: a.p_analysis_id,
+          owner_id: d.userId,
+          attempt: a.p_attempt,
+          source_key: a.p_source_key,
+          trim_start_seconds: a.p_trim_start_seconds,
+          trim_end_seconds: a.p_trim_end_seconds,
+          pipeline_version: a.p_pipeline_version,
+          pose: reorder(JSON.parse(JSON.stringify(a.p_pose))),
+          sig: a.p_sig,
+          created_at: new Date(now).toISOString(),
+          expires_at: new Date(now + 7 * 24 * 3600 * 1000).toISOString(),
+        });
+        return Promise.resolve({ data: null, error: null });
+      }
+      if (name === "get_caddie_preprocessing") {
+        const rec = d.preprocessing.get(String(args?.p_analysis_id));
+        const ok = rec && rec.owner_id === d.userId && Date.parse(String(rec.expires_at)) > Date.now();
+        if (!ok) return Promise.resolve({ data: [], error: null });
+        const { owner_id: _o, expires_at: _e, ...out } = rec;
+        return Promise.resolve({ data: [out], error: null });
       }
       if (name === "record_caddie_diagnostic") {
         d.diagnostics.push({ ...args });

@@ -153,6 +153,64 @@ export function geminiGenerateTryTimeoutMs(tryIndex: number, remainingMs: number
   return capped >= GEMINI_GENERATE_MIN_TRY_MS ? capped : null;
 }
 
+// ---- Roboflow concurrency (2026-11-08) ----
+// Frames go to Roboflow up to `max` at a time (16, was a fixed 8: same
+// number of calls, about half the wall time). The first 429 halves the
+// limit for the rest of this job's passes (never below `min`), so a rate
+// limit slows the job down instead of failing frames; per-frame back-off
+// and Retry-After still apply on top. It never goes back up within a job.
+export class AdaptiveConcurrency {
+  limit: number;
+  readonly min: number;
+  private active = 0;
+  private waiters: (() => void)[] = [];
+  constructor(max: number, min: number) {
+    this.limit = Math.max(1, max);
+    this.min = Math.max(1, Math.min(min, this.limit));
+  }
+  async acquire(): Promise<void> {
+    while (this.active >= this.limit) await new Promise<void>((resolve) => this.waiters.push(resolve));
+    this.active++;
+  }
+  release(): void {
+    this.active--;
+    if (this.active < this.limit) this.waiters.shift()?.();
+  }
+  /** Halves the limit (not below min). True when it actually went down. */
+  onRateLimited(): boolean {
+    const next = Math.max(this.min, Math.floor(this.limit / 2));
+    if (next >= this.limit) return false;
+    this.limit = next;
+    return true;
+  }
+  get inFlight(): number {
+    return this.active;
+  }
+}
+
+// Like a fixed-size worker pool, but every call waits for a slot of `gate`.
+export async function mapWithAdaptiveConcurrency<T, R>(items: T[], gate: AdaptiveConcurrency, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    for (;;) {
+      await gate.acquire();
+      if (next >= items.length) {
+        gate.release();
+        return;
+      }
+      const i = next++;
+      try {
+        results[i] = await fn(items[i]);
+      } finally {
+        gate.release();
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(gate.limit, items.length) }, worker));
+  return results;
+}
+
 // What kind of failure a request ended in, for logs and diagnostics only
 // (the stored category stays one of CADDIE_FAILURE_CATEGORIES, so no
 // schema change): our own timeout fired, the pipeline aborted it (deadline
