@@ -3,6 +3,7 @@ import { useCallback, useRef, useState } from "react";
 import { Activity, Calendar, MessageSquare, RefreshCw, Shield, Stethoscope, Users, Wand2 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import {
+  NOT_SET_UP_REASON,
   REPORTING_TIMEZONE_LABEL,
   addDays,
   classifyRpcError,
@@ -244,6 +245,16 @@ export function AnalyticsPanel() {
         </p>
       </div>
 
+      {live.status === "not_set_up" ? (
+        <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+          <p className="font-semibold text-slate-700">Unavailable until the analytics migration is applied.</p>
+          <p className="mt-1">
+            {NOT_SET_UP_REASON} Active golfers, Golf Calls &amp; matching, Social, retention and Caddie will appear here, computed from existing records (no
+            waiting for new tracking). Checked again every 5 minutes.
+          </p>
+        </div>
+      ) : (
+      <>
       <Section title="Active golfers" icon={<Users size={15} className="text-fairway-600" />} state={activity} onRetry={() => void live.refreshNow()}
         note={(() => {
           const d = activity.kind === "ok" ? activity.data : activity.kind === "error" ? activity.data : undefined;
@@ -279,7 +290,7 @@ export function AnalyticsPanel() {
         {(g) => (
           <div className="flex flex-col gap-2">
             <Grid>
-              <Tile emphasis label="Rounds joined" value={g.joins} detail={`${g.repeat_joiners} golfers joined 2+ rounds`} />
+              <Tile emphasis label="Rounds joined" value={g.joins} detail={`${g.repeat_joiners} ${g.repeat_joiners === 1 ? "golfer" : "golfers"} joined 2+ rounds`} />
               <Tile emphasis label="Unique joiners" value={g.unique_joiners} detail={g.joiners_into_excluded_hosts_rounds > 0 ? `${g.joiners_into_excluded_hosts_rounds} joined your rounds` : undefined} />
               <Tile emphasis label="Fill rate" value={fmtRate(g.fill.slots_taken_now, g.fill.slots_total)} detail={`${g.fill.slots_taken_now} of ${g.fill.slots_total} slots · ${g.fill.rounds_full_now} full`} />
               <Tile label="Rounds hosted" value={g.rounds_hosted} detail={`${g.unique_hosts} hosts · ${fmtRate(g.rounds_with_a_join, g.rounds_hosted)} got a join`} />
@@ -363,6 +374,8 @@ export function AnalyticsPanel() {
           </p>
         )}
       </Section>
+      </>
+      )}
     </section>
   );
 }
