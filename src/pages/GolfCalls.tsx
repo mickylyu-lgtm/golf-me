@@ -295,7 +295,7 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
           ))}
           {myHosted.length > 0 && otherRounds.length > 0 && (
             <h2 className="mt-3 text-sm font-bold uppercase tracking-wide text-slate-400">
-              {isMatched ? t("find.otherRounds") : t("find.upcomingRounds")}
+              {t("find.otherRounds")}
             </h2>
           )}
           {otherRounds.map((call) => (

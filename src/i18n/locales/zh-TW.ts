@@ -950,7 +950,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "find.hideFilters": "隱藏篩選",
   "find.upcomingRounds": "即將開始的球局",
   "find.yourHostedRounds": "你發起的球局",
-  "find.otherRounds": "其他球局",
+  "find.otherRounds": "其他球友發起",
   "find.clearSearchText": "清除搜尋",
   "find.noRealGolfersYetDesc": "邀請一位球友加入，或看看有沒有可以加入的球局。",
   "find.seeOpenRounds": "查看有空位的球局",

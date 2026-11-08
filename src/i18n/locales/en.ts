@@ -977,7 +977,7 @@ export const en = {
   "find.hideFilters": "Hide filters",
   "find.upcomingRounds": "Upcoming rounds",
   "find.yourHostedRounds": "Rounds you're hosting",
-  "find.otherRounds": "Other rounds",
+  "find.otherRounds": "Hosted by others",
   "find.clearSearchText": "Clear search",
   "find.noRealGolfersYetDesc": "Invite a golf friend to join you, or see if there's an open round to jump into.",
   "find.seeOpenRounds": "See open rounds",
