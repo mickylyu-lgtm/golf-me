@@ -736,6 +736,8 @@ export interface HiddenPost {
 export type NotificationType =
   | "post_reply"
   | "comment_reply"
+  // Demo, and real accounts since migration 20261108150000: "<name> followed
+  // you." (once per follower ever, not across a block; link /golfer/<id>).
   | "new_follower"
   | "round_created_from_post"
   | "post_became_round"

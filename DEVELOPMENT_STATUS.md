@@ -6,6 +6,11 @@ Last updated: 2026-11-08 (**Caddie urgent: stalled Gemini generation**: bounded 
 
 Note: Phases between Phase 20/21 (see below) and Phase 22 span roughly 31 commits (2026-09-16 through 2026-09-21) that also never got a numbered write-up as they landed — Phase 22 below reconstructs them from `git log`/code review (that session's own commit messages are unusually detailed, so this is a faithful summary, not a guess) rather than live session narration. Older gap, still not backfilled: Phases between Phase 6 and Phase 20 (chat keyboard/Capacitor Keyboard native linking, floating swipeable BottomNav + auto-collapse + centering fixes, tee-time booking fallback hero image, and everything else through 2026-09-15) — see `git log` for that range (commits from "Prefer GolfCourseAPI v1.1 coordinates..." through "Floating pill bottom nav with press-and-slide tab selection, haptics, Caddie unify").
 
+
+## Applied by Micky 2026-11-08 (SQL editor; each apply returned Success)
+- `20261107270000` admin moderation (check true), `20261107280000` community feed signal, `20261108120000` admin product analytics (founder exclusion seeded), `20261108140000` chat message edit, `20261108150000` follow notifications (bell row + push once per follower→followee pair, never across blocks/suspension/muted/seeded/bot/app_reviewer; send-push unchanged; demo mirrors it).
+- Shipped with this: Coach Replay keeps coaching in fullscreen (native fullscreen hands back to the in-app one) and key-moment cards auto-continue (also under reduced motion; tap a card to hold).
+
 ## Handoff 2026-11-07 (read this first)
 
 **Live on golfme.app today:** TestFlight 2.4 (1) code (one-tap photo picker, native appearance; build uploaded by Micky); course overview speed + layout fix (migration `20261107190000` applied, course-photos redeployed); plain icons instead of Sparkles, "[Photo]"/"[Voice message]" labels (no emojis in UI copy, Micky's rule); voice messages + lifecycle fix (migration `20261107180000` applied); keyboard icon no longer auto-focuses; Caddie done-haptic; Caddie filming tips + clearer pose_not_found + full-res retry + diagnostics (analyze-swing redeployed); photo pinch-zoom + own-avatar viewer; like notifications + comment pushes (migration `20261107200000` applied).

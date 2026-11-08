@@ -876,7 +876,8 @@ $$;
 -- 'post_liked' belongs to 20261107200000 (likes). Listed here as well so
 -- applying this file after that one doesn't drop it (allowing a type that
 -- nothing writes yet is harmless). Same for 'post_removed' /
--- 'comment_removed' from 20261107270000 (admin moderation).
+-- 'comment_removed' from 20261107270000 (admin moderation), and
+-- 'new_follower' from 20261108150000 (follow notifications).
 alter table public.notifications drop constraint notifications_type_check;
 alter table public.notifications
   add constraint notifications_type_check check (
@@ -888,7 +889,8 @@ alter table public.notifications
       'new_round_nearby', 'circle_post',
       'booking_status_changed', 'booking_evidence_reviewed',
       'post_liked',
-      'post_removed', 'comment_removed'
+      'post_removed', 'comment_removed',
+      'new_follower'
     ])
   );
 

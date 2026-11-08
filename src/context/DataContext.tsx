@@ -1279,9 +1279,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
         };
         return { ...prev, follows: [...prev.follows, connection] };
       });
-      pushNotification(golferId, "new_follower", `${currentUser.name} started following you.`, `/golfer/${currentUser.id}`, currentUser.id);
+      // Same rule as the server (20261108150000): once per follower per
+      // golfer, ever (unfollow + re-follow never repeats it), never across a
+      // block. pushNotification already skips yourself.
+      if (isBlockedEitherWay(golferId)) return;
+      const already = data.notifications.some((n) => n.userId === golferId && n.type === "new_follower" && n.actorId === currentUser.id);
+      if (!already) pushNotification(golferId, "new_follower", `${currentUser.name} followed you.`, `/golfer/${currentUser.id}`, currentUser.id);
     },
-    [pushNotification, currentUser.name, currentUser.id],
+    [pushNotification, isBlockedEitherWay, data.notifications, currentUser.name, currentUser.id],
   );
 
   const demoUnfollowUser = useCallback((golferId: string) => {
