@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import type { CoachCheckpoint } from "../../lib/coachReplay";
+import { isVideoInNativeFullscreen } from "../../lib/video";
 
 // Drives Coach Replay on a real <video>: while it plays, watches the clock
 // every animation frame and, the first time playback crosses a checkpoint,
@@ -33,7 +34,9 @@ export function useCoachVideoPauses(videoRef: RefObject<HTMLVideoElement | null>
     const tick = () => {
       raf = 0;
       const now = video.currentTime;
-      if (!video.paused && !skippedRef.current) {
+      // Never freeze inside the OS fullscreen player: no card can show there,
+      // so a pause would just stop the swing with nothing to continue it.
+      if (!video.paused && !skippedRef.current && !isVideoInNativeFullscreen(video)) {
         for (let i = 0; i < checkpoints.length; i++) {
           const at = checkpoints[i].timeSeconds;
           if (consumedRef.current.has(i) || at < last - 0.001 || at > now) continue;

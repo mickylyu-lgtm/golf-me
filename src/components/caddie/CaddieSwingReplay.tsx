@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { Check, Info, Minus, TriangleAlert } from "lucide-react";
 import { X } from "lucide-react";
 import type { CaddieCameraAngle, CaddieCheckpointCues, CaddiePoseData, CaddieScore, CaddieSwingPhases } from "../../types";
-import { enterNativeVideoFullscreen, getVideoContentRect } from "../../lib/video";
+import { enterNativeVideoFullscreen, getVideoContentRect, isVideoInNativeFullscreen } from "../../lib/video";
 import { useLocale } from "../../i18n/LocaleContext";
 import { computeSwingAssessment, segmentStatusAtTime } from "../../lib/swingAssessment";
 import type { SwingSegmentId, SwingSegmentStatus } from "../../lib/swingAssessment";
@@ -497,6 +497,37 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
     if (fsDragY > FS_DISMISS_PX || velocity > FS_DISMISS_VELOCITY) setCustomFullscreen(false);
     setFsDragY(0);
   }
+
+  // The native controls bar has its own fullscreen button. In analysis mode
+  // the OS player would drop the skeleton and the Coach Replay cards (and a
+  // coach freeze would leave the clip paused with no card to continue it),
+  // so the native player is handed straight back and the in-app fullscreen,
+  // which keeps both, opens instead (Micky, 2026-11-08). Playback carries on
+  // if it was playing.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !showOverlay) return;
+    type WebkitVideo = HTMLVideoElement & { webkitExitFullscreen?: () => void };
+    const takeOver = () => {
+      if (!isVideoInNativeFullscreen(video)) return;
+      const wasPlaying = !video.paused;
+      try {
+        const wv = video as WebkitVideo;
+        if (typeof wv.webkitExitFullscreen === "function") wv.webkitExitFullscreen();
+        else if (document.fullscreenElement === video) void document.exitFullscreen().catch(() => {});
+      } catch {
+        // The OS player stays; the coach hook below keeps playing through.
+      }
+      setCustomFullscreen(true);
+      if (wasPlaying) window.setTimeout(() => void video.play().catch(() => {}), 0);
+    };
+    video.addEventListener("webkitbeginfullscreen", takeOver);
+    document.addEventListener("fullscreenchange", takeOver);
+    return () => {
+      video.removeEventListener("webkitbeginfullscreen", takeOver);
+      document.removeEventListener("fullscreenchange", takeOver);
+    };
+  }, [showOverlay]);
 
   // Leaving analysis mode (or losing pose data) while mid-custom-fullscreen
   // would otherwise strand the video pinned full-viewport with no overlay

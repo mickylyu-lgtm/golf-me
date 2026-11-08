@@ -383,10 +383,12 @@ export function CoachReplayCard({ checkpoint, pages, stepOffset, stepTotal, onCo
   const [page, setPage] = usePage(cardPages.length);
   const visible = (cardPages[page] ?? []).map(rangeOf).flatMap(({ block, range }) => (blocks[block] ? [{ ...blocks[block], range }] : []));
   const isLastPage = page >= cardPages.length - 1;
-  // Tapping the card holds this page: the swing waits until Continue. Under
-  // reduced motion it always waits (nothing moves on its own).
+  // Each key moment holds long enough to read, then the swing carries on by
+  // itself (Micky, 2026-11-08: it must not just stay paused). Tapping the
+  // card holds this page until Continue. Reduced motion keeps the timing but
+  // drops the moving countdown bar.
   const [heldPage, setHeldPage] = useState<number | null>(null);
-  const autoContinue = !reducedMotion && heldPage !== page;
+  const autoContinue = heldPage !== page;
   const pageTextLength = visible.reduce((n, b) => n + claimLength(t, b.id === "cue" ? checkpoint.cue : checkpointClaim(checkpoint, b.id), b.range), 0);
   const dwellMs = coachDwellMs(pageTextLength);
 
@@ -444,7 +446,7 @@ export function CoachReplayCard({ checkpoint, pages, stepOffset, stepTotal, onCo
         </button>
       </div>
 
-      {autoContinue && (
+      {autoContinue && !reducedMotion && (
         <span
           key={`dwell-${page}`}
           aria-hidden="true"
