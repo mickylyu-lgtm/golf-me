@@ -24,6 +24,7 @@ import { resolveCallDistanceMiles } from "../lib/courseSearch";
 import { useSessionState } from "../lib/useSessionState";
 import { COURSE_MAP_TUTORIAL_ID } from "../lib/tutorialSteps";
 import { useShareActions } from "../lib/useShareActions";
+import { hostedFirst } from "../lib/hostedFirst";
 
 interface GolfCallsProps {
   embedded?: boolean;
@@ -81,7 +82,7 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
     if (vibeFilter) list = list.filter((c) => c.vibe === vibeFilter);
     if (walk && walk !== "Either") list = list.filter((c) => c.walkOrCart === walk || c.walkOrCart === "Either");
 
-    return list
+    const scored = list
       .map((call) => ({
         call,
         // Compatibility only. The old +2 for an attached booking
@@ -90,6 +91,8 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
         matchScore: computeCallCompatibility(currentUser, call).overall,
       }))
       .sort((a, b) => b.matchScore - a.matchScore);
+    // Rounds you host stay on top, whatever their score.
+    return hostedFirst(scored, currentUser.id, (x) => x.call);
   }, [isMatched, baseResults, radius, when, customDate, intent, budgetMax, skill, vibeFilter, walk, currentUser, effectiveLoc]);
 
   // Newest-posted first (not soonest tee time) -- a freshly hosted round
@@ -97,8 +100,8 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
   // expectation as a social post, rather than being buried under rounds
   // happening sooner but posted long ago.
   const defaultResults = useMemo(
-    () => [...baseResults].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-    [baseResults],
+    () => hostedFirst([...baseResults].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), currentUser.id, (c) => c),
+    [baseResults, currentUser.id],
   );
 
   const whenLabel =
