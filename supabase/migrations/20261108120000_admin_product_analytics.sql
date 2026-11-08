@@ -42,6 +42,7 @@
 --      admin_analytics_retention(p_from date, p_to date)
 --      admin_analytics_golf_calls(p_from date, p_to date)
 --      admin_analytics_social(p_from date, p_to date)
+--      admin_analytics_caddie(p_from date, p_to date)
 --      admin_analytics_exclusions()
 --    p_from/p_to are reporting-timezone calendar dates, inclusive; they map
 --    to the half-open range [p_from 00:00, p_to + 1 00:00) in
@@ -61,6 +62,7 @@
 --   drop function if exists public.admin_analytics_golf_calls(date, date);
 --   drop function if exists public.admin_analytics_social(date, date);
 --   drop function if exists public.admin_analytics_exclusions();
+--   drop function if exists public.admin_analytics_caddie(date, date);
 --   drop trigger if exists trg_analytics_round_participation on public.round_participants;
 --   drop trigger if exists trg_analytics_round_status on public.golf_calls;
 --   drop trigger if exists trg_analytics_onboarding on public.profiles;
@@ -571,13 +573,15 @@ begin
     from r left join first_join fj on fj.round_id = r.id
   ), joins_in_range as (
     -- Joins by eligible golfers in range, into any round (incl. excluded hosts').
-    select x.user_id, x.round_id, x.host_excluded
+    -- A tracked join appears both as an event and (if it's the latest) as
+    -- the source row, with the same time: dedupe on (user, round, at).
+    select x.user_id, x.round_id, x.host_excluded, x.at
     from (
-      select rp.user_id, rp.round_id, g.host_user_id in (select user_id from ex) as host_excluded
+      select rp.user_id, rp.round_id, g.host_user_id in (select user_id from ex) as host_excluded, rp.joined_at as at
       from public.round_participants rp join public.golf_calls g on g.id = rp.round_id
       where rp.user_id <> g.host_user_id and rp.joined_at >= w.start_at and rp.joined_at < w.effective_end
-      union all
-      select ev.user_id, ev.round_id, coalesce(g.host_user_id in (select user_id from ex), false)
+      union
+      select ev.user_id, ev.round_id, coalesce(g.host_user_id in (select user_id from ex), false), ev.occurred_at
       from private.analytics_events ev left join public.golf_calls g on g.id = ev.round_id
       where ev.event_type = 'round_joined' and ev.occurred_at >= w.start_at and ev.occurred_at < w.effective_end
     ) x
@@ -626,6 +630,7 @@ begin
       'both', (select count(*) from per_round where status = 'completed' and participant_confirmed),
       'combined_deduped', (select count(*) from per_round where status = 'completed' or participant_confirmed),
       'estimated', null),
+    'joins', (select count(*) from joins_in_range),
     'unique_joiners', (select count(distinct user_id) from joins_in_range),
     'joiners_into_excluded_hosts_rounds', (select count(distinct user_id) from joins_in_range where host_excluded),
     'repeat_joiners', (select count(*) from repeaters where rounds >= 2),
@@ -759,6 +764,61 @@ begin
   return v_result;
 end;
 $$;
+
+-- Caddie (feature metric, not headline activity). One caddie_analyses row =
+-- one analysis job (a retry is the same row with attempt + 1, not a new
+-- job). Rows an owner deleted are gone. Uses only columns from the base
+-- table (status, created_at), so it works with or without 20261107140000.
+create function public.admin_analytics_caddie(p_from date, p_to date)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  w record;
+  v_result jsonb;
+begin
+  if not private.has_role((select auth.uid()), 'admin') then
+    raise exception 'Not authorized.' using errcode = '42501';
+  end if;
+  select * into w from private.analytics_window(p_from, p_to);
+
+  with ex as (
+    select e as user_id from private.analytics_excluded_ids() e
+  ), jobs as (
+    select a.owner_id, a.status, a.created_at
+    from public.caddie_analyses a
+    where a.created_at >= w.start_at and a.created_at < w.effective_end
+      and a.owner_id not in (select user_id from ex)
+  ), per_user as (
+    select owner_id, count(*) as n from jobs group by owner_id
+  ), earlier as (
+    select distinct a.owner_id from public.caddie_analyses a
+    where a.created_at < w.start_at and a.owner_id not in (select user_id from ex)
+  )
+  select jsonb_build_object(
+    'version', 1,
+    'timezone', private.analytics_tz(),
+    'range', jsonb_build_object('from', p_from, 'to', p_to, 'start_at', w.start_at, 'end_at', w.end_at, 'partial', w.partial),
+    'analyses', (select count(*) from jobs),
+    'unique_users', (select count(*) from per_user),
+    'repeat_users', (select count(*) from per_user where n >= 2),
+    'returning_users', (select count(*) from per_user where owner_id in (select owner_id from earlier)),
+    'complete', (select count(*) from jobs where status = 'complete'),
+    'failed', (select count(*) from jobs where status = 'failed'),
+    'processing', (select count(*) from jobs where status = 'processing'),
+    'coverage', jsonb_build_object(
+      'jobs', 'One row per analysis job; retries are attempts on the same job. Deleted analyses are gone.',
+      'failed', 'Failures are only kept since analyze-swing stopped deleting failed rows (Phase 22).')
+  ) into v_result;
+  return v_result;
+end;
+$$;
+
+revoke execute on function public.admin_analytics_caddie(date, date) from public, anon;
+grant execute on function public.admin_analytics_caddie(date, date) to authenticated;
 
 create function public.admin_analytics_exclusions()
 returns jsonb
