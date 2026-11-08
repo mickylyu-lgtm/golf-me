@@ -1,6 +1,10 @@
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
+import { AnalyticsPanel } from "../components/admin/AnalyticsPanel";
+import { fmtAgo } from "../lib/adminAnalytics";
+import { useLiveRefresh } from "../lib/useLiveRefresh";
+import type { RefreshOutcome } from "../lib/useLiveRefresh";
 import { Bell, Calendar, Flag, LayoutGrid, MessageSquare, Smartphone, TrendingDown, TrendingUp, Trophy, Users, Wand2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useRoles } from "../lib/useRoles";
@@ -178,24 +182,27 @@ function weekCounts(dates: (string | null | undefined)[]): WeekCounts {
   return { last, prev };
 }
 
-// Overview cards: percent change of what was added in the last 7 days
-// against the 7 days before, as a small badge beside the number (Micky,
-// 2026-10-28). "New" when the week before had none (a "+∞%" says nothing);
-// nothing at all when neither week had any.
-function WeekBadge({ last, prev }: WeekCounts) {
-  if (last === 0 && prev === 0) return null;
-  const pct = prev > 0 ? Math.round(((last - prev) / prev) * 100) : null;
-  const tone =
-    pct === null || pct > 0 ? "bg-fairway-50 text-fairway-700" : pct < 0 ? "bg-rose-50 text-rose-600" : "bg-slate-100 text-slate-500";
-  const Icon = pct !== null && pct < 0 ? TrendingDown : TrendingUp;
+// All-time totals: what was added in the last 7 days and the 7 days before,
+// as plain counts. Replaces the 2026-10-28 percent badge: a "+5953%" on a
+// small base (2026-11-08 screenshot) read as growth it wasn't.
+function WeekAdded({ last, prev }: WeekCounts) {
   return (
-    <span
-      title={`${last} in the last 7 days, ${prev} the week before`}
-      className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${tone}`}
-    >
-      {pct !== 0 && <Icon size={11} className="shrink-0" />}
-      {pct === null ? "New" : `${Math.abs(pct)}%`}
-    </span>
+    <p className="text-[11px] text-slate-400" title="Rows created in each 7-day window (every account, incl. test/admin)">
+      +{last} last 7 days · +{prev} week before
+    </p>
+  );
+}
+
+function SectionError({ what, message, onRetry }: { what: string; message: string; onRetry: () => void }) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-3">
+      <p className="text-xs text-rose-700">
+        <span className="font-semibold">Couldn't load {what}.</span> Nothing is shown rather than a wrong number. ({message})
+      </p>
+      <button type="button" onClick={onRetry} className="shrink-0 rounded-full border border-rose-300 bg-white px-3 py-1 text-xs font-semibold text-rose-700">
+        Retry
+      </button>
+    </div>
   );
 }
 
@@ -291,7 +298,8 @@ function personLabel(name: string | null, username: string | null) {
 }
 
 export function AdminDashboard() {
-  const { isDemo } = useAuth();
+  const { isDemo, authUser } = useAuth();
+  const selfId = authUser?.id ?? null;
   const { isAdmin, loading: rolesLoading } = useRoles();
 
   const [users, setUsers] = useState<UserRow[]>([]);
@@ -317,8 +325,12 @@ export function AdminDashboard() {
   const [removeTarget, setRemoveTarget] = useState<{ kind: "post" | "comment"; id: string; authorName: string; reportId: string } | null>(null);
   const [suspendTarget, setSuspendTarget] = useState<{ userId: string; name: string; reportId: string } | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  // Per-RPC failures (key = RPC name): a failed query shows an error card,
+  // never an empty state or a zero.
+  const [loadErrors, setLoadErrors] = useState<Record<string, string>>({});
+
+  const load = useCallback(async (opts?: { silent?: boolean }): Promise<RefreshOutcome> => {
+    if (!opts?.silent) setLoading(true);
     const [
       { data: u, error: uErr },
       { data: cs, error: csErr },
@@ -346,29 +358,41 @@ export function AdminDashboard() {
       supabase.rpc("admin_caddie_failure_stats"),
       supabase.rpc("admin_list_caddie_failures", { p_limit: 30 }),
     ]);
-    if (cfsErr) console.error("GolfMe: admin_caddie_failure_stats failed.", cfsErr);
-    if (cflErr) console.error("GolfMe: admin_list_caddie_failures failed.", cflErr);
-    setCaddieFailureStats((cfs ?? []) as CaddieFailureStatRow[]);
-    setCaddieFailures((cfl ?? []) as CaddieFailureRow[]);
-    if (uErr) console.error("GolfMe: admin_list_users failed.", uErr);
-    if (csErr) console.error("GolfMe: admin_caddie_stats failed.", csErr);
-    if (caErr) console.error("GolfMe: admin_list_caddie_analyses failed.", caErr);
-    if (ovErr) console.error("GolfMe: admin_platform_overview failed.", ovErr);
-    if (gcErr) console.error("GolfMe: admin_golf_call_stats failed.", gcErr);
-    if (coErr) console.error("GolfMe: admin_community_stats failed.", coErr);
-    if (rdErr) console.error("GolfMe: admin_reputation_distribution failed.", rdErr);
-    if (msErr) console.error("GolfMe: admin_messaging_stats failed.", msErr);
-    if (psErr) console.error("GolfMe: admin_push_stats failed.", psErr);
+    const errs: Record<string, { message: string } | null> = {
+      admin_caddie_failure_stats: cfsErr,
+      admin_list_caddie_failures: cflErr,
+      admin_list_users: uErr,
+      admin_caddie_stats: csErr,
+      admin_list_caddie_analyses: caErr,
+      admin_platform_overview: ovErr,
+      admin_golf_call_stats: gcErr,
+      admin_community_stats: coErr,
+      admin_reputation_distribution: rdErr,
+      admin_messaging_stats: msErr,
+      admin_push_stats: psErr,
+    };
+    const nextErrors: Record<string, string> = {};
+    for (const [name, err] of Object.entries(errs)) {
+      if (err) {
+        console.error(`GolfMe: ${name} failed.`, err);
+        nextErrors[name] = err.message;
+      }
+    }
     if (rpErr) console.error("GolfMe: admin_list_reports failed.", rpErr);
-    setUsers((u ?? []) as UserRow[]);
-    setCaddieStats(((cs as CaddieStats[]) ?? [])[0] ?? null);
-    setCaddieAnalyses((ca ?? []) as CaddieAnalysisRow[]);
-    setOverview(((ov as PlatformOverview[]) ?? [])[0] ?? null);
-    setGolfCallStats(((gc as GolfCallStats[]) ?? [])[0] ?? null);
-    setCommunityStats(((co as CommunityStats[]) ?? [])[0] ?? null);
-    setReputationDist((rd ?? []) as ReputationDistributionRow[]);
-    setMessagingStats(((ms as MessagingStats[]) ?? [])[0] ?? null);
-    setPushStats(((ps as PushStats[]) ?? [])[0] ?? null);
+    setLoadErrors(nextErrors);
+    // A failed RPC keeps whatever was on screen (its error card says so);
+    // only a successful one replaces the data.
+    if (!cfsErr) setCaddieFailureStats((cfs ?? []) as CaddieFailureStatRow[]);
+    if (!cflErr) setCaddieFailures((cfl ?? []) as CaddieFailureRow[]);
+    if (!uErr) setUsers((u ?? []) as UserRow[]);
+    if (!csErr) setCaddieStats(((cs as CaddieStats[]) ?? [])[0] ?? null);
+    if (!caErr) setCaddieAnalyses((ca ?? []) as CaddieAnalysisRow[]);
+    if (!ovErr) setOverview(((ov as PlatformOverview[]) ?? [])[0] ?? null);
+    if (!gcErr) setGolfCallStats(((gc as GolfCallStats[]) ?? [])[0] ?? null);
+    if (!coErr) setCommunityStats(((co as CommunityStats[]) ?? [])[0] ?? null);
+    if (!rdErr) setReputationDist((rd ?? []) as ReputationDistributionRow[]);
+    if (!msErr) setMessagingStats(((ms as MessagingStats[]) ?? [])[0] ?? null);
+    if (!psErr) setPushStats(((ps as PushStats[]) ?? [])[0] ?? null);
     if (rpErr) {
       setReportsError(rpErr.message);
     } else {
@@ -376,7 +400,14 @@ export function AdminDashboard() {
       setReports((rp ?? []) as ReportRow[]);
     }
     setLoading(false);
+    return Object.keys(nextErrors).length > 0 || rpErr ? "error" : "ok";
   }, []);
+
+  // Totals and lists below the analytics panel refresh quietly every 60 s
+  // while the page is visible (same scheduler as the panel).
+  const silentLoad = useCallback(() => load({ silent: true }), [load]);
+  const totalsLive = useLiveRefresh(silentLoad, { enabled: isAdmin && !isDemo, intervalMs: 60_000 });
+  const retryAll = () => void totalsLive.refreshNow();
 
   const retryReports = useCallback(async () => {
     setRetryingReports(true);
@@ -403,14 +434,14 @@ export function AdminDashboard() {
     setUpdatingReportId(null);
   }, []);
 
-  useEffect(() => {
-    if (!isAdmin) return;
-    load();
-  }, [isAdmin, load]);
-
   if (isDemo) return <Navigate to="/" replace />;
   if (!rolesLoading && !isAdmin) return <Navigate to="/" replace />;
-  if (rolesLoading || loading) return null;
+  if (rolesLoading) return null;
+
+  // Never offer "Suspend" on yourself or another admin (the server refuses
+  // both too: admin_suspend_user, 22023).
+  const adminIds = new Set(users.filter((u) => u.is_admin).map((u) => u.id));
+  const canSuspend = (userId: string) => userId !== selfId && !adminIds.has(userId);
 
   const onboardedCount = users.filter((u) => u.has_onboarded).length;
   // Signups by member_since. Onboarded uses the same date (when they joined,
@@ -423,41 +454,10 @@ export function AdminDashboard() {
     <div className="flex flex-col gap-8 pb-10">
       <div>
         <h1 className="text-xl font-bold text-slate-900">Platform Dashboard</h1>
-        <p className="text-sm text-slate-500">Users and every real-usage stat, at a glance.</p>
+        <p className="text-sm text-slate-500">Real golfer activity first; moderation and all-time totals below.</p>
       </div>
 
-      {overview && (
-        <section className="flex flex-col gap-3">
-          <div className="flex items-baseline justify-between gap-2">
-            <h2 className="flex items-center gap-1.5 text-sm font-bold text-slate-800">
-              <LayoutGrid size={15} className="text-fairway-600" /> Overview
-            </h2>
-            <span className="text-xs text-slate-400">Trends: last 7 days vs the week before</span>
-          </div>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {(
-              [
-                { label: "Real users", value: overview.total_users, week: usersWeek },
-                { label: "Onboarded", value: overview.onboarded_users, week: onboardedWeek },
-                { label: "Golf Calls", value: overview.golf_calls_total, week: golfCallStats && { last: golfCallStats.hosted_last_7d, prev: golfCallStats.hosted_prev_7d } },
-                { label: "Rounds completed", value: overview.rounds_completed, week: null },
-                { label: "Community posts", value: overview.community_posts_total, week: communityStats && { last: communityStats.posts_last_7d, prev: communityStats.posts_prev_7d } },
-                { label: "Messages sent", value: overview.messages_total, week: messagingStats && { last: messagingStats.messages_last_7d, prev: messagingStats.messages_prev_7d } },
-                { label: "Caddie analyses", value: overview.caddie_analyses_total, week: caddieStats && { last: caddieStats.analyses_last_7d, prev: caddieStats.analyses_prev_7d } },
-                { label: "Push tokens", value: overview.push_tokens_registered, week: null },
-              ] satisfies { label: string; value: number; week: WeekCounts | null }[]
-            ).map((stat) => (
-              <div key={stat.label} className="rounded-2xl border border-slate-100 bg-white p-3">
-                <div className="flex items-center gap-2">
-                  <p className="text-lg font-bold text-slate-800">{stat.value}</p>
-                  {stat.week && <WeekBadge {...stat.week} />}
-                </div>
-                <p className="text-xs text-slate-500">{stat.label}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
+      <AnalyticsPanel />
 
       <BookingEvidenceReview />
 
@@ -564,6 +564,7 @@ export function AdminDashboard() {
                         )
                       ) : null}
                       {r.reported_user_id &&
+                        canSuspend(r.reported_user_id) &&
                         (moderationData.isSuspended(r.reported_user_id) ? (
                           <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">Suspended</span>
                         ) : (
@@ -629,16 +630,58 @@ export function AdminDashboard() {
       )}
 
       <section className="flex flex-col gap-3">
+        <div className="flex flex-col gap-0.5">
+          <h2 className="flex items-center gap-1.5 text-sm font-bold text-slate-800">
+            <LayoutGrid size={15} className="text-fairway-600" /> All-time totals
+          </h2>
+          <p className="text-[11px] text-slate-400">
+            Cumulative row counts since launch across every account, including yours, admins and test accounts. Not activity: see Product analytics above for that.
+            {totalsLive.lastSuccessAt !== null && <> Updated {fmtAgo(totalsLive.now - totalsLive.lastSuccessAt)}, refreshes every 60 s while open.</>}
+          </p>
+        </div>
+        {loadErrors.admin_platform_overview ? (
+          <SectionError what="the totals" message={loadErrors.admin_platform_overview} onRetry={retryAll} />
+        ) : loading && !overview ? (
+          <p className="text-xs text-slate-400">Loading…</p>
+        ) : overview ? (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {(
+              [
+                { label: "Accounts (all time)", value: overview.total_users, week: loadErrors.admin_list_users ? null : usersWeek },
+                { label: "Onboarded accounts", value: overview.onboarded_users, week: loadErrors.admin_list_users ? null : onboardedWeek },
+                { label: "Golf Calls hosted (all time)", value: overview.golf_calls_total, week: golfCallStats && { last: golfCallStats.hosted_last_7d, prev: golfCallStats.hosted_prev_7d } },
+                { label: "Rounds marked completed by host", value: overview.rounds_completed, week: null },
+                { label: "Community posts (all time)", value: overview.community_posts_total, week: communityStats && { last: communityStats.posts_last_7d, prev: communityStats.posts_prev_7d } },
+                { label: "DMs stored (all time, incl. welcome DMs)", value: overview.messages_total, week: messagingStats && { last: messagingStats.messages_last_7d, prev: messagingStats.messages_prev_7d } },
+                { label: "Caddie analyses (all time)", value: overview.caddie_analyses_total, week: caddieStats && { last: caddieStats.analyses_last_7d, prev: caddieStats.analyses_prev_7d } },
+                { label: "Push devices registered (now)", value: overview.push_tokens_registered, week: null },
+              ] satisfies { label: string; value: number; week: WeekCounts | null }[]
+            ).map((stat) => (
+              <div key={stat.label} className="rounded-2xl border border-slate-100 bg-white p-3">
+                <p className="text-lg font-bold tabular-nums text-slate-800">{stat.value}</p>
+                <p className="text-xs text-slate-500">{stat.label}</p>
+                {stat.week && <WeekAdded {...stat.week} />}
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </section>
+
+      <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <h2 className="flex items-center gap-1.5 text-sm font-bold text-slate-800">
             <Users size={15} className="text-fairway-600" /> Registered Users
           </h2>
           <span className="text-sm font-semibold text-slate-500">
-            {users.length} total · {onboardedCount} onboarded
+            {loadErrors.admin_list_users ? "Unavailable" : `${users.length} accounts · ${onboardedCount} onboarded`}
           </span>
         </div>
 
-        {users.length === 0 ? (
+        {loadErrors.admin_list_users ? (
+          <SectionError what="users" message={loadErrors.admin_list_users} onRetry={retryAll} />
+        ) : loading && users.length === 0 ? (
+          <p className="text-xs text-slate-400">Loading…</p>
+        ) : users.length === 0 ? (
           <EmptyState icon={<Users size={20} />} title="No registered users yet." />
         ) : (
           <div className="flex flex-col gap-2">
@@ -676,9 +719,13 @@ export function AdminDashboard() {
       <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <h2 className="flex items-center gap-1.5 text-sm font-bold text-slate-800">
-            <Wand2 size={15} className="text-fairway-600" /> Caddie Usage
+            <Wand2 size={15} className="text-fairway-600" /> Caddie Usage (all accounts)
           </h2>
         </div>
+
+        {loadErrors.admin_caddie_stats && <SectionError what="Caddie stats" message={loadErrors.admin_caddie_stats} onRetry={retryAll} />}
+        {loadErrors.admin_caddie_failure_stats && <SectionError what="Caddie failure stats" message={loadErrors.admin_caddie_failure_stats} onRetry={retryAll} />}
+        {loadErrors.admin_list_caddie_failures && <SectionError what="recent Caddie failures" message={loadErrors.admin_list_caddie_failures} onRetry={retryAll} />}
 
         {caddieStats && (
           <>
@@ -782,7 +829,9 @@ export function AdminDashboard() {
           </div>
         )}
 
-        {caddieAnalyses.length === 0 ? (
+        {loadErrors.admin_list_caddie_analyses ? (
+          <SectionError what="the Caddie analyses list" message={loadErrors.admin_list_caddie_analyses} onRetry={retryAll} />
+        ) : caddieAnalyses.length === 0 ? (
           <EmptyState icon={<Wand2 size={20} />} title="No Caddie analyses yet." />
         ) : (
           <div className="flex flex-col gap-2">
@@ -808,8 +857,9 @@ export function AdminDashboard() {
 
       <section className="flex flex-col gap-3">
         <h2 className="flex items-center gap-1.5 text-sm font-bold text-slate-800">
-          <Calendar size={15} className="text-fairway-600" /> Golf Calls
+          <Calendar size={15} className="text-fairway-600" /> Golf Calls (all accounts)
         </h2>
+        {loadErrors.admin_golf_call_stats && <SectionError what="Golf Call stats" message={loadErrors.admin_golf_call_stats} onRetry={retryAll} />}
         {golfCallStats && (
           <>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -853,8 +903,9 @@ export function AdminDashboard() {
 
       <section className="flex flex-col gap-3">
         <h2 className="flex items-center gap-1.5 text-sm font-bold text-slate-800">
-          <MessageSquare size={15} className="text-fairway-600" /> Community
+          <MessageSquare size={15} className="text-fairway-600" /> Community (all accounts)
         </h2>
+        {loadErrors.admin_community_stats && <SectionError what="Community stats" message={loadErrors.admin_community_stats} onRetry={retryAll} />}
         {communityStats && (
           <>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -905,7 +956,9 @@ export function AdminDashboard() {
           <Trophy size={15} className="text-fairway-600" /> Reputation Distribution
         </h2>
         <p className="text-xs text-slate-500">Current tier of every real, onboarded golfer — computed live via get_reputation_state(), same source of truth the app itself reads.</p>
-        {reputationDist.length === 0 ? (
+        {loadErrors.admin_reputation_distribution ? (
+          <SectionError what="the Reputation distribution" message={loadErrors.admin_reputation_distribution} onRetry={retryAll} />
+        ) : reputationDist.length === 0 ? (
           <EmptyState icon={<Trophy size={20} />} title="No onboarded real golfers yet." />
         ) : (
           (() => {
@@ -933,14 +986,15 @@ export function AdminDashboard() {
 
       <section className="flex flex-col gap-3">
         <h2 className="flex items-center gap-1.5 text-sm font-bold text-slate-800">
-          <Bell size={15} className="text-fairway-600" /> Messaging &amp; Notifications
+          <Bell size={15} className="text-fairway-600" /> Messaging &amp; Notifications (all accounts)
         </h2>
+        {loadErrors.admin_messaging_stats && <SectionError what="messaging stats" message={loadErrors.admin_messaging_stats} onRetry={retryAll} />}
         {messagingStats && (
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {(
               [
-                { label: "Conversations", value: messagingStats.conversations_total, trend: null },
-                { label: "Total messages", value: messagingStats.messages_total, trend: null },
+                { label: "Conversations (all time)", value: messagingStats.conversations_total, trend: null },
+                { label: "DMs (all time)", value: messagingStats.messages_total, trend: null },
                 {
                   label: "Messages (24h)",
                   value: messagingStats.messages_last_24h,
@@ -951,8 +1005,8 @@ export function AdminDashboard() {
                   value: messagingStats.messages_last_7d,
                   trend: <TrendIndicator current={messagingStats.messages_last_7d} previous={messagingStats.messages_prev_7d} />,
                 },
-                { label: "Notifications sent", value: messagingStats.notifications_total, trend: null },
-                { label: "Unread", value: messagingStats.notifications_unread, trend: null },
+                { label: "Notifications created (all time)", value: messagingStats.notifications_total, trend: null },
+                { label: "Notifications unread (now)", value: messagingStats.notifications_unread, trend: null },
               ] satisfies { label: string; value: number | string; trend: ReactNode }[]
             ).map((stat) => (
               <div key={stat.label} className="rounded-2xl border border-slate-100 bg-white p-3">
@@ -971,6 +1025,7 @@ export function AdminDashboard() {
         <h2 className="flex items-center gap-1.5 text-sm font-bold text-slate-800">
           <Smartphone size={15} className="text-fairway-600" /> Push Notification Health
         </h2>
+        {loadErrors.admin_push_stats && <SectionError what="push stats" message={loadErrors.admin_push_stats} onRetry={retryAll} />}
         {pushStats && (
           <>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
