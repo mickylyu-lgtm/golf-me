@@ -124,7 +124,9 @@ export function PrivacyPolicy() {
           sends still frames from the clip to Roboflow to detect your body position and the clip itself to Google Gemini to write your
           feedback (see "Service providers" below). If an analysis fails, we keep a technical record of what went wrong (numbers only, such
           as how many frames showed a usable body; never images or video) so we can make Caddie more reliable, and we keep a record that
-          each analysis ran so daily limits work, even after you delete that analysis.
+          each analysis ran so daily limits work, even after you delete that analysis. If an analysis fails after your body position was
+          detected, we keep that body-position data (never images or video) for up to 7 days so Try again can finish faster. It is
+          deleted as soon as the analysis completes, when you delete the analysis, or after 7 days, whichever comes first.
         </Item>
         <Item label="Activity and reputation">
           Rounds you've completed and the ratings other golfers give you (show-up, on-time, pace, respect, would play again), which we
@@ -260,7 +262,7 @@ export function PrivacyPolicy() {
           sending), the chat shows the new text marked "Edited", and we keep a hidden copy of the earlier text on the same terms: only
           GolfMe's operator can access it, and it is deleted automatically 90 days after the edit unless such a report is still open. Unsent photos, videos and voice messages are deleted, with no copy
           kept (if the app can't delete the file right away, our server deletes it automatically within about a day). For swing videos
-          sent to Google Gemini for Caddie, we ask Google to delete the video right after the analysis. Waitlist entries are kept until you ask us to remove them. Technical logs
+          sent to Google Gemini for Caddie, we ask Google to delete the video right after the analysis. Body-position data from a Caddie analysis that failed is deleted automatically after at most 7 days. Waitlist entries are kept until you ask us to remove them. Technical logs
           kept by our providers are deleted on their standard schedules.
         </p>
       </Section>
