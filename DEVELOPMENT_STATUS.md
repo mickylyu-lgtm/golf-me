@@ -38,7 +38,7 @@ Note: Phases between Phase 20/21 (see below) and Phase 22 span roughly 31 commit
 
 **Needs a real iPhone / two accounts:** 2.4 one-tap picker + dark status bar/keyboard; voice (test plan in scratchpad `GolfMe-voice-iPhone-test-plan.md`); like/comment pushes; pinch-zoom feel; club picker scroll; Caddie bad-clip flow.
 
-## Edit own text message within 5 minutes (DMs + round chats) — 2026-11-08 (local commit; not pushed/deployed; golfme-architect; migration `20261108120000_chat_message_edit` PREPARED, NOT APPLIED; no Edge Function, no native change)
+## Edit own text message within 5 minutes (DMs + round chats) — 2026-11-08 (local commit; not pushed/deployed; golfme-architect; migration `20261108140000_chat_message_edit` PREPARED, NOT APPLIED; no Edge Function, no native change)
 
 Micky's brief 2026-11-08 section 4. Hold a bubble -> Reply, Copy, **Edit**, Unsend. Edit opens `EditMessageSheet` (shared keyboard-aware `Modal`, the same sheet ReportModal uses inside the DM thread), prefilled, Save / Cancel; a saved edit shows a small "Edited" in the bubble.
 
