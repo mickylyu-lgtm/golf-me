@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { ReactNode } from "react";
 import {
+  Award,
   ChevronRight,
   ClipboardList,
   Clock,
@@ -254,7 +255,7 @@ export function Profile() {
 
         <ProfileSection title={t("profile.sectionSocial")}>
           <ProfileRow
-            icon={<Users size={16} />}
+            icon={<Award size={16} />}
             label={t("profile.reputation")}
             value={reputationState ? tierDisplayName(reputationState.tierKey, t) : undefined}
             onClick={() => navigate("/profile/reputation")}
