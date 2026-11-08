@@ -80,7 +80,7 @@ export function CaddieAnalysisDetail() {
     markNotificationRead,
   } = useData();
   const savingRef = useRef(false);
-  const { hasLoaded: caddieHasLoaded, loadPoseData, refreshMediaUrls } = useRealCaddie();
+  const { hasLoaded: caddieHasLoaded, loadPoseData, refreshMediaUrls, checkStatus } = useRealCaddie();
   const { isDemo } = useAuth();
   const coachEnabled = useCoachReplayEnabled();
   // Inside CaddieLocaleScope: `t` and `dateLocale` are the Caddie feedback
@@ -561,7 +561,8 @@ export function CaddieAnalysisDetail() {
         </div>
       ) : (
         <div className="flex flex-col gap-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-3.5">
-          <CaddieThinking />
+          {/* Real rows: the persisted stage + elapsed, honest long-wait copy and Check again. Demo rows have no job columns. */}
+          <CaddieThinking job={isDemo ? undefined : analysis} onCheckAgain={isDemo ? undefined : checkStatus} />
           <p className="pl-16 text-xs text-slate-500">{t("swingAnalysis.processingDescription")}</p>
         </div>
       )}

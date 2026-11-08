@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Clock, Globe, ScanLine, Trash2, Video } from "lucide-react";
+import { Clock, Globe, RefreshCw, ScanLine, Trash2, Video } from "lucide-react";
 import { DeleteAnalysisDialog } from "../components/caddie/DeleteAnalysisDialog";
 import { SavedSwings } from "../components/caddie/SavedSwings";
 import type { CaddieAnalysis } from "../types";
@@ -60,7 +60,7 @@ function saveHistoryCount(n: number): void {
 export function Caddie() {
   const { caddieAnalyses, translateCaddieAnalysis, caddieSavedSupported } = useData();
   const { isDemo } = useAuth();
-  const { refreshMediaUrls } = useRealCaddie();
+  const { refreshMediaUrls, historyLoadFailed, checkStatus } = useRealCaddie();
   const { t, locale } = useLocale();
   // Caddie's own feedback language, not the app's (lib/caddieFeedbackLanguage).
   const feedbackLanguage = useCaddieFeedbackLanguage();
@@ -173,6 +173,18 @@ export function Caddie() {
 
       <section>
         <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-slate-400">{t("caddie.recent")}</h2>
+        {/* The last history read failed or timed out (RealCaddieContext aborts it after 15 s). */}
+        {historyLoadFailed && (
+          <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-amber-100 bg-amber-50/70 px-3 py-2 text-xs text-amber-800" role="status">
+            <span>{t("caddie.historyRefreshFailed")}</span>
+            <button
+              onClick={() => void checkStatus()}
+              className="flex min-h-9 shrink-0 items-center gap-1 rounded-full px-2 font-semibold text-amber-900 hover:text-amber-950"
+            >
+              <RefreshCw size={13} /> {t("caddie.progress.checkAgain")}
+            </button>
+          </div>
+        )}
         {visible.length === 0 ? (
           <EmptyState icon={<Video size={20} />} title={t("caddie.emptyTitle")} description={t("caddie.emptyDescription")} />
         ) : (

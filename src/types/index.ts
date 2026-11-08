@@ -675,6 +675,9 @@ export interface CaddieAnalysis {
   attempt?: number;
   attemptStartedAt?: string;
   stage?: string;
+  // When `stage` was last written (the server persists trim, frame_extract,
+  // pose, gemini_upload, gemini_generate as it enters each).
+  stageUpdatedAt?: string;
   failureStage?: string;
   failureCategory?: string;
   finishedAt?: string;

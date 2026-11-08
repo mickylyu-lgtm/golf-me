@@ -55,6 +55,7 @@ interface CaddieAnalysisRow {
   attempt?: number | null;
   attempt_started_at?: string | null;
   stage?: string | null;
+  stage_updated_at?: string | null;
   failure_stage?: string | null;
   failure_category?: string | null;
   finished_at?: string | null;
@@ -149,6 +150,7 @@ function rowToAnalysis(row: CaddieAnalysisRow, poseData: CaddiePoseData | undefi
     attempt: row.attempt ?? undefined,
     attemptStartedAt: row.attempt_started_at ?? undefined,
     stage: row.stage ?? undefined,
+    stageUpdatedAt: row.stage_updated_at ?? undefined,
     failureStage: row.failure_stage ?? undefined,
     failureCategory: row.failure_category ?? undefined,
     finishedAt: row.finished_at ?? undefined,
@@ -218,6 +220,14 @@ interface RealCaddieContextValue {
   loadPoseData: (id: string, rowUpdatedAt: string) => Promise<void>;
   /** Re-signs these private caddie-media paths now (e.g. after a video/image load error). No-op in demo. */
   refreshMediaUrls: (paths: Array<string | undefined>) => void;
+  /**
+   * "Check again": asks the database to settle this account's abandoned
+   * attempts (sweep_stale_caddie_jobs) and re-reads the list. Never marks
+   * anything failed by itself: only the server decides. No-op in demo.
+   */
+  checkStatus: () => Promise<void>;
+  /** The most recent history read failed or timed out; what's shown may be out of date. */
+  historyLoadFailed: boolean;
 }
 
 // How often an in-flight analysis is re-read from the DB while the app is
@@ -229,7 +239,18 @@ const PROCESSING_POLL_MS = 5000;
 // The job columns need migration 20261107140000 (apply it before shipping
 // this build). Keep in sync with translate-caddie-analysis's LIST_COLUMNS.
 const LIST_COLUMNS =
-  "id, owner_id, source_type, source_post_id, source_media_url, thumbnail_url, source_media_path, thumbnail_path, swing_type, status, analysis_summary, strengths, issues, recommendations, drills, analysis_json, camera_angle, score, model, error_message, shared_to_community, created_at, updated_at, attempt, attempt_started_at, stage, failure_stage, failure_category, finished_at";
+  "id, owner_id, source_type, source_post_id, source_media_url, thumbnail_url, source_media_path, thumbnail_path, swing_type, status, analysis_summary, strengths, issues, recommendations, drills, analysis_json, camera_angle, score, model, error_message, shared_to_community, created_at, updated_at, attempt, attempt_started_at, stage, stage_updated_at, failure_stage, failure_category, finished_at";
+// A history read that hasn't answered by then is aborted, so a hung request
+// can't hold the one-at-a-time lock (inFlightRef) and block every later
+// refresh (realtime, resume, the processing poll). The next trigger retries.
+const HISTORY_FETCH_TIMEOUT_MS = 15_000;
+// analyze-swing's own deadline is 330 s and sweep_stale_caddie_jobs()
+// (migration 20261107140000) marks a 'processing' attempt older than 390 s
+// failed/worker_lost. Past this, the app asks the database to run that
+// sweep itself (owner-scoped RPC), so an attempt whose worker died reaches
+// its real, retryable failure without the golfer having to start another
+// analysis first.
+const SWEEP_AFTER_MS = 400_000;
 // Saved swings (migration 20261107210000). Asked for on top of
 // LIST_COLUMNS; a database without the column answers 42703 and the list
 // is read again without it (Save stays hidden for this session).
@@ -275,6 +296,8 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
   const { locale } = useLocale();
   const [rows, setRows] = useState<CaddieAnalysisRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  // The last history read failed or timed out (rows shown may be out of date).
+  const [historyLoadFailed, setHistoryLoadFailed] = useState(false);
   // Which account the first fetch has completed for — lets a deep-linked
   // detail screen (push tap from a killed app, web refresh) wait for data
   // instead of treating "not loaded yet" as "doesn't exist".
@@ -328,10 +351,12 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
       pendingRefetchRef.current = true;
       return inFlight.promise;
     }
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), HISTORY_FETCH_TIMEOUT_MS);
     const run: Promise<void> = (async () => {
       try {
         const listQuery = (columns: string) =>
-          supabase.from("caddie_analyses").select(columns).eq("owner_id", selfId).order("created_at", { ascending: false });
+          supabase.from("caddie_analyses").select(columns).eq("owner_id", selfId).order("created_at", { ascending: false }).abortSignal(controller.signal);
         const wantSaved = savedColumnRef.current !== "missing";
         let { data, error } = await listQuery(wantSaved ? LIST_COLUMNS_WITH_SAVED : LIST_COLUMNS);
         if (error && wantSaved && isMissingSavedColumn(error)) {
@@ -346,10 +371,14 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
         if (selfIdRef.current !== selfId) return;
         setSavedSupported(savedColumnRef.current === "present");
         setRows((data ?? []) as unknown as CaddieAnalysisRow[]);
+        setHistoryLoadFailed(false);
       } catch (err) {
-        console.error("GolfMe: failed to load Caddie history.", err);
+        console.error(controller.signal.aborted ? "GolfMe: Caddie history request timed out." : "GolfMe: failed to load Caddie history.", err);
+        // The rows already shown stay; screens can offer a retry.
+        if (selfIdRef.current === selfId) setHistoryLoadFailed(true);
       }
     })().finally(() => {
+      window.clearTimeout(timer);
       // Only clear/follow up if this is still the tracked fetch (an account
       // switch may have started a newer one for a different selfId).
       if (inFlightRef.current?.promise !== run) return;
@@ -469,17 +498,40 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
     rowsRef.current = rows;
   }, [rows]);
   const anyProcessing = rows.some((r) => r.status === "processing");
+  // Asks the database to settle this caller's abandoned attempts (see
+  // SWEEP_AFTER_MS), then re-reads the list. From the poll at most once a
+  // minute per row attempt (the server decides with its own clock, so a
+  // phone whose clock runs fast just gets a no-op and asks again later);
+  // checkStatus() (the screen's "Check again") always runs it.
+  const sweptAtRef = useRef<Map<string, number>>(new Map());
+  const sweepAndRefetch = useCallback(async (): Promise<void> => {
+    if (isDemo || !selfId) return;
+    const { error } = await supabase.rpc("sweep_stale_caddie_jobs");
+    if (error) console.error("GolfMe: couldn't check abandoned Caddie analyses.", error);
+    await refetch();
+  }, [isDemo, selfId, refetch]);
   useEffect(() => {
     if (isDemo || !selfId || !anyProcessing) return;
     const timer = window.setInterval(() => {
       if (document.visibilityState !== "visible") return;
-      const active = rowsRef.current.some(
-        (r) => r.status === "processing" && !isStaleProcessing({ status: r.status, createdAt: r.created_at, attemptStartedAt: r.attempt_started_at ?? undefined }),
+      const processing = rowsRef.current.filter((r) => r.status === "processing");
+      const overdue = processing.filter((r) => {
+        const startedAt = new Date(r.attempt_started_at ?? r.created_at).getTime();
+        const lastSweep = sweptAtRef.current.get(`${r.id}:${r.attempt ?? 1}`) ?? 0;
+        return Date.now() - startedAt > SWEEP_AFTER_MS && Date.now() - lastSweep > 60_000;
+      });
+      if (overdue.length > 0) {
+        overdue.forEach((r) => sweptAtRef.current.set(`${r.id}:${r.attempt ?? 1}`, Date.now()));
+        void sweepAndRefetch();
+        return;
+      }
+      const active = processing.some(
+        (r) => !isStaleProcessing({ status: r.status, createdAt: r.created_at, attemptStartedAt: r.attempt_started_at ?? undefined }),
       );
       if (active) void refetch();
     }, PROCESSING_POLL_MS);
     return () => window.clearInterval(timer);
-  }, [isDemo, selfId, anyProcessing, refetch]);
+  }, [isDemo, selfId, anyProcessing, refetch, sweepAndRefetch]);
 
   // Signs any private path that has no URL yet or whose URL is within
   // SIGNED_URL_REFRESH_MARGIN_MS of expiring. Runs whenever the row list
@@ -736,8 +788,24 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
   const hasLoaded = isDemo || (!!selfId && loadedForId === selfId);
 
   const value = useMemo<RealCaddieContextValue>(
-    () => ({ analyses, isLoading, hasLoaded, getAnalysis, createAnalysis, retryAnalysis, deleteAnalysis, markShared, setSaved, savedSupported, translateAnalysis, loadPoseData, refreshMediaUrls }),
-    [analyses, isLoading, hasLoaded, getAnalysis, createAnalysis, retryAnalysis, deleteAnalysis, markShared, setSaved, savedSupported, translateAnalysis, loadPoseData, refreshMediaUrls],
+    () => ({
+      analyses,
+      isLoading,
+      hasLoaded,
+      getAnalysis,
+      createAnalysis,
+      retryAnalysis,
+      deleteAnalysis,
+      markShared,
+      setSaved,
+      savedSupported,
+      translateAnalysis,
+      loadPoseData,
+      refreshMediaUrls,
+      checkStatus: sweepAndRefetch,
+      historyLoadFailed: !isDemo && historyLoadFailed,
+    }),
+    [analyses, isLoading, hasLoaded, getAnalysis, createAnalysis, retryAnalysis, deleteAnalysis, markShared, setSaved, savedSupported, translateAnalysis, loadPoseData, refreshMediaUrls, sweepAndRefetch, isDemo, historyLoadFailed],
   );
 
   return <RealCaddieContext.Provider value={value}>{children}</RealCaddieContext.Provider>;
