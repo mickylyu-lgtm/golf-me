@@ -1,7 +1,7 @@
 import { Suspense, lazy, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { lockHoldSelection } from "../../lib/holdSelectionLock";
-import { Copy, Plus, Reply, Undo2 } from "lucide-react";
+import { Copy, Pencil, Plus, Reply, Undo2 } from "lucide-react";
 import type { MessageAction } from "../../lib/messageLongPress";
 import { FOCUS_EXIT_MS, currentPressScale, focusLayout, overhangBelow, type FocusLayout, type Rect } from "../../lib/messageFocus";
 import { isCustomReaction, type QuickReaction } from "../../lib/reactions";
@@ -27,9 +27,12 @@ interface MessageActionsMenuProps {
   // available here (blocked, still sending, database not migrated yet).
   reactions: { emojis: readonly QuickReaction[]; mine: QuickReaction | null; onPick: (emoji: QuickReaction) => void } | null;
   actions: MessageAction[];
-  labels: { menu: string; reply: string; unsend: string; copy: string; reactWith: (emoji: string) => string };
+  labels: { menu: string; reply: string; unsend: string; copy: string; edit?: string; reactWith: (emoji: string) => string };
   onReply: () => void;
   onUnsend: () => void;
+  // Only called when `actions` has "edit" (my own text message, inside the
+  // window): opens the edit sheet (EditMessageSheet).
+  onEdit?: () => void;
   onCopy: () => void;
   onClose: () => void;
 }
@@ -97,7 +100,7 @@ function copyOf(bubble: HTMLElement): HTMLElement {
 // same as the composer's send button), so an open keyboard stays open; the
 // thread's scroll position, sizes and the real bubble's layout never change
 // (the real bubble is only made transparent while its copy stands in).
-export function MessageActionsMenu({ bubble, alignRight, closing, reactions, actions, labels, onReply, onUnsend, onCopy, onClose }: MessageActionsMenuProps) {
+export function MessageActionsMenu({ bubble, alignRight, closing, reactions, actions, labels, onReply, onUnsend, onEdit, onCopy, onClose }: MessageActionsMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   const liftRef = useRef<HTMLDivElement>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
@@ -441,6 +444,11 @@ export function MessageActionsMenu({ bubble, alignRight, closing, reactions, act
           {actions.includes("copy") && (
             <button type="button" role="menuitem" onMouseDown={(e) => e.preventDefault()} onClick={onCopy} className={`${item} text-slate-700 hover:bg-slate-50`}>
               <Copy size={15} aria-hidden="true" /> {labels.copy}
+            </button>
+          )}
+          {actions.includes("edit") && onEdit && (
+            <button type="button" role="menuitem" onMouseDown={(e) => e.preventDefault()} onClick={onEdit} className={`${item} text-slate-700 hover:bg-slate-50`}>
+              <Pencil size={15} aria-hidden="true" /> {labels.edit}
             </button>
           )}
           {actions.includes("unsend") && (

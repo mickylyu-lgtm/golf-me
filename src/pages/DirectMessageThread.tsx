@@ -28,6 +28,9 @@ import { useExitPresence } from "../lib/useExitPresence";
 import { FOCUS_EXIT_MS } from "../lib/messageFocus";
 import { ReactionPill } from "../components/chat/ReactionPill";
 import { canUnsendMessage, unsendRemainingMs } from "../lib/unsend";
+import { canEditMessage, editRemainingMs } from "../lib/messageEdit";
+import { EditMessageSheet } from "../components/chat/EditMessageSheet";
+import { EditedMark } from "../components/chat/ChatBubbleParts";
 import { messageActions } from "../lib/messageLongPress";
 import { QUICK_REACTIONS, canReactToMessage, groupReactionsByMessage, myReaction, nextReaction, summarizeReactions, type QuickReaction } from "../lib/reactions";
 import { copyText } from "../lib/share";
@@ -68,6 +71,8 @@ export function DirectMessageThread() {
     canReplyToMessages,
     canUnsendMessages,
     unsendDirectMessage,
+    canEditMessages,
+    editDirectMessage,
     canReactToMessages,
     messageReactions,
     setMessageReaction,
@@ -260,6 +265,21 @@ export function DirectMessageThread() {
     const t = window.setTimeout(() => setNowMs(Date.now()), nextUnsendExpiry + 50);
     return () => window.clearTimeout(t);
   }, [nextUnsendExpiry]);
+  // Edit (lib/messageEdit.ts): my own text message within 5 minutes, only
+  // where I can still post here. Same clock tick as Unsend; the server
+  // decides. The sheet (EditMessageSheet) is its own modal: the composer,
+  // its draft and this thread's layout/keyboard code are untouched.
+  const editEnabled = Boolean(other) && eligible && !blocked && canEditMessages;
+  const editableIds = new Set(editEnabled ? messages.filter((m) => canEditMessage(m, currentUser.id, nowMs)).map((m) => m.id) : []);
+  const nextEditExpiry = editEnabled
+    ? Math.min(...messages.filter((m) => editableIds.has(m.id)).map((m) => editRemainingMs(m.createdAt, nowMs)))
+    : Infinity;
+  useEffect(() => {
+    if (!Number.isFinite(nextEditExpiry)) return;
+    const t = window.setTimeout(() => setNowMs(Date.now()), nextEditExpiry + 50);
+    return () => window.clearTimeout(t);
+  }, [nextEditExpiry]);
+  const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
   useMessageLongPress(listRef, Boolean(other), (messageId, bubble) => {
     const m = messages.find((x) => x.id === messageId);
     // A photo still sending / not sent isn't a message yet.
@@ -277,6 +297,7 @@ export function DirectMessageThread() {
   // the page.
   useEffect(() => setReplyToId(null), [id]);
   useEffect(() => setActionsFor(null), [id]);
+  useEffect(() => setEditing(null), [id]);
   // A picked photo belongs to one thread, like the reply target.
   const removePhoto = photo.clear;
   useEffect(() => removePhoto(), [id, removePhoto]);
@@ -971,7 +992,10 @@ export function DirectMessageThread() {
                         onOpen={setViewerUrl}
                       />
                     ) : (
-                      m.text
+                      <>
+                        {m.text}
+                        {m.editedAt && <EditedMark isMe={isMe} label={t("chat.edited")} />}
+                      </>
                     )}
                     <ReactionPill
                       summary={reactionSummary}
@@ -1136,6 +1160,7 @@ export function DirectMessageThread() {
           actions={messageActions({
             canReply: replyEnabled,
             canUnsend: unsendableIds.has(actionsMessage.id),
+            canEdit: editableIds.has(actionsMessage.id),
             // A photo with no text where images can't go on the clipboard: no Copy.
             // A video / album: no Copy.
             canCopy: !actionsMessage.media && !(actionsMessage.voice && !actionsMessage.text.trim()) && !(actionsMessage.image && !actionsMessage.text.trim() && !canCopyImages()),
@@ -1145,15 +1170,30 @@ export function DirectMessageThread() {
             reply: t("chat.reply"),
             unsend: t("chat.unsend"),
             copy: t("chat.copy"),
+            edit: t("chat.edit"),
             reactWith: (emoji) => t("chat.reactWith", { emoji }),
           }}
           onReply={() => {
             setActionsFor(null);
             startReply(actionsMessage.id);
           }}
+          onEdit={() => {
+            setActionsFor(null);
+            setEditing({ id: actionsMessage.id, text: actionsMessage.text });
+          }}
           onUnsend={() => handleUnsend(actionsMessage.id)}
           onCopy={() => handleCopy(actionsMessage.id)}
           onClose={closeActions}
+        />
+      )}
+      {editing && (
+        <EditMessageSheet
+          key={editing.id}
+          initialText={editing.text}
+          currentText={messagesById.get(editing.id)?.text ?? editing.text}
+          gone={!messagesById.get(editing.id) || Boolean(messagesById.get(editing.id)?.unsentAt)}
+          onSave={(text, expected) => editDirectMessage(editing.id, text, expected)}
+          onClose={() => setEditing(null)}
         />
       )}
       {reportOpen && <ReportModal reportedId={other.id} reportedName={other.name} context="chat" onClose={() => setReportOpen(false)} />}

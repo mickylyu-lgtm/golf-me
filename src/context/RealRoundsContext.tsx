@@ -43,6 +43,8 @@ function roundJobPath(job: { roundId: string; messageId: string; audio?: { mime:
 import type { PendingRoundMessage, RoundMessageRowLike } from "../lib/roundChat";
 import { classifyUnsendError } from "../lib/unsend";
 import type { UnsendResult } from "../lib/unsend";
+import { classifyEditError, isMissingEditRpc, normalizeEditText, parseEditResponse } from "../lib/messageEdit";
+import type { EditResult } from "../lib/messageEdit";
 import { isMissingReactionsTableError, myReaction, overlayPendingReactions, reactionRowsToReactions, withReaction } from "../lib/reactions";
 import type { MessageReaction, QuickReaction } from "../lib/reactions";
 import { createReactionWriteQueue } from "../lib/reactionWrites";
@@ -133,6 +135,10 @@ interface RealRoundsContextValue {
   unsendSupported: boolean;
   /** Sender only, within 5 minutes by the database clock (public.unsend_round_message). */
   unsendRoundMessage: (messageId: string) => Promise<UnsendResult>;
+  /** Edit (migration 20261108120000): rows carry edited_at and the RPC exists. */
+  editSupported: boolean;
+  /** Sender only, still in the round (open/full, no host block), text only, within 5 minutes of created_at by the database clock (public.edit_round_message). */
+  editRoundMessage: (messageId: string, text: string, expectedText?: string) => Promise<EditResult>;
   reactionsSupported: boolean;
   /** Every reaction this account can see (RLS: rounds it's in), tombstones dropped. */
   roundReactions: MessageReaction[];
@@ -1104,6 +1110,40 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
     [authUser, applyReactions, refetch, messageStore, composeMessageRows],
   );
 
+  // Edit (public.edit_round_message): offered once fetched rows carry
+  // edited_at; a missing RPC hides it for this session. This device patches
+  // its own rows from the server's answer, in every source messageRows is
+  // composed from; the realtime UPDATE refetches on every member's device.
+  const [editRpcMissing, setEditRpcMissing] = useState(false);
+  const editSupported = useMemo(() => !editRpcMissing && roundRowsHaveColumn(messageRows, "edited_at"), [messageRows, editRpcMissing]);
+  const editRoundMessage = useCallback(
+    async (messageId: string, text: string, expectedText?: string): Promise<EditResult> => {
+      if (!authUser) return "failed";
+      const next = normalizeEditText(text);
+      if (!next) return "empty";
+      const { data, error } = await supabase.rpc("edit_round_message", {
+        p_message_id: messageId,
+        p_text: next,
+        ...(expectedText !== undefined ? { p_expected_text: expectedText } : {}),
+      });
+      if (error) {
+        if (isMissingEditRpc(error)) setEditRpcMissing(true);
+        const result = classifyEditError(error);
+        // Never the text itself: only the error.
+        if (result === "failed") console.error("GolfMe: failed to edit round message.", { code: error.code, hint: error.hint });
+        return result;
+      }
+      const answer = parseEditResponse(data);
+      if (!answer) return "failed";
+      messageStore.patch((rows: RoundMessageRow[]) =>
+        rows.map((m) => (m.id === messageId ? { ...m, text: answer.text, edited_at: answer.editedAt ?? m.edited_at ?? null } : m)),
+      );
+      composeMessageRows();
+      return answer.status;
+    },
+    [authUser, messageStore, composeMessageRows],
+  );
+
   // Optimistic, queued and ordered exactly like DM reactions
   // (RealSocialContext.setMessageReaction): one write in flight per message,
   // the latest tap queued, each write sequenced (a removal is a tombstone,
@@ -1236,6 +1276,8 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
     repliesSupported,
     unsendSupported,
     unsendRoundMessage,
+    editSupported,
+    editRoundMessage,
     reactionsSupported: reactionsSupport === "yes",
     roundReactions,
     setRoundReaction,

@@ -63,6 +63,8 @@ function safeLocalStorage(): Storage | undefined {
 }
 import { canUnsendMessage } from "../lib/unsend";
 import type { UnsendResult } from "../lib/unsend";
+import { demoEdit } from "../lib/messageEdit";
+import type { EditResult } from "../lib/messageEdit";
 import { DEMO_IMAGE_PREFIX } from "../lib/chatImages";
 import type { ChatImageRef, ProcessedChatImage } from "../lib/chatImages";
 import { chatImageUrls } from "../lib/chatImageClient";
@@ -228,6 +230,10 @@ interface DataContextValue {
   canReplyToRoundMessages: boolean;
   canUnsendRoundMessages: boolean;
   unsendRoundMessage: (messageId: string) => Promise<UnsendResult>;
+  // Edit my text message within 5 minutes (lib/messageEdit.ts): always in
+  // demo; for real accounts once the edit migration is applied.
+  canEditRoundMessages: boolean;
+  editRoundMessage: (messageId: string, text: string, expectedText?: string) => Promise<EditResult>;
   canReactToRoundMessages: boolean;
   // Photos in round chat (lib/chatImages.ts, migration 20261107170000):
   // always in demo (page-local photos); for real accounts once the database
@@ -301,6 +307,10 @@ interface DataContextValue {
   // accounts once the unsend migration is applied.
   canUnsendMessages: boolean;
   unsendDirectMessage: (messageId: string) => Promise<UnsendResult>;
+  // Edit my text DM within 5 minutes (lib/messageEdit.ts): always in demo;
+  // for real accounts once the edit migration is applied.
+  canEditMessages: boolean;
+  editDirectMessage: (messageId: string, text: string, expectedText?: string) => Promise<EditResult>;
   // Photos in DMs (lib/chatImages.ts): always in demo; for real accounts
   // once the database has messages.image_path. A failed photo send stays as
   // a "Not sent" bubble (delivery "failed") until retried or discarded.
@@ -1013,6 +1023,25 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [auth.isDemo, realRounds, data.messages, currentUser.id],
   );
 
+  const canEditRoundMessages = auth.isDemo || realRounds.editSupported;
+  // Demo: the same rules as public.edit_round_message (lib/messageEdit
+  // demoEdit) on the localStorage copy.
+  const editRoundMessage = useCallback(
+    async (messageId: string, text: string, expectedText?: string): Promise<EditResult> => {
+      if (!auth.isDemo) return realRounds.editRoundMessage(messageId, text, expectedText);
+      const target = data.messages.find((m) => m.id === messageId);
+      const outcome = demoEdit(target, currentUser.id, text, expectedText, Date.now());
+      if (outcome.result === "edited") {
+        setData((prev) => ({
+          ...prev,
+          messages: prev.messages.map((m) => (m.id === messageId ? { ...m, text: outcome.text!, editedAt: outcome.editedAt } : m)),
+        }));
+      }
+      return outcome.result;
+    },
+    [auth.isDemo, realRounds, data.messages, currentUser.id],
+  );
+
   // Demo round reactions: page-local like the DM ones (resets on reload),
   // same rules as the database (not on an unsent message, only while the
   // round is open/full). Cleared when the signed-in identity changes.
@@ -1515,6 +1544,25 @@ export function DataProvider({ children }: { children: ReactNode }) {
       }));
       setDemoReactions((prev) => prev.filter((r) => r.messageId !== messageId));
       return "unsent";
+    },
+    [auth.isDemo, realSocial, data.directMessages, currentUser.id],
+  );
+
+  const canEditMessages = auth.isDemo || realSocial.editSupported;
+  // Demo: the same rules as public.edit_message (lib/messageEdit demoEdit)
+  // on the localStorage copy.
+  const editDirectMessage = useCallback(
+    async (messageId: string, text: string, expectedText?: string): Promise<EditResult> => {
+      if (!auth.isDemo) return realSocial.editDirectMessage(messageId, text, expectedText);
+      const target = data.directMessages.find((m) => m.id === messageId);
+      const outcome = demoEdit(target, currentUser.id, text, expectedText, Date.now());
+      if (outcome.result === "edited") {
+        setData((prev) => ({
+          ...prev,
+          directMessages: prev.directMessages.map((m) => (m.id === messageId ? { ...m, text: outcome.text!, editedAt: outcome.editedAt } : m)),
+        }));
+      }
+      return outcome.result;
     },
     [auth.isDemo, realSocial, data.directMessages, currentUser.id],
   );
@@ -2237,6 +2285,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       canReplyToRoundMessages,
       canUnsendRoundMessages,
       unsendRoundMessage,
+      canEditRoundMessages,
+      editRoundMessage,
       canReactToRoundMessages,
       canSendRoundImages,
       sendRoundImage,
@@ -2273,6 +2323,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       canReplyToMessages,
       canUnsendMessages,
       unsendDirectMessage,
+      canEditMessages,
+      editDirectMessage,
       canSendDirectImages,
       sendDirectImage,
       retryDirectImage,
@@ -2366,6 +2418,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       canReplyToRoundMessages,
       canUnsendRoundMessages,
       unsendRoundMessage,
+      canEditRoundMessages,
+      editRoundMessage,
       canReactToRoundMessages,
       canSendRoundImages,
       sendRoundImage,
@@ -2402,6 +2456,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       canReplyToMessages,
       canUnsendMessages,
       unsendDirectMessage,
+      canEditMessages,
+      editDirectMessage,
       canSendDirectImages,
       sendDirectImage,
       retryDirectImage,

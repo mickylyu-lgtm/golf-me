@@ -135,6 +135,8 @@ export interface RoundMessageRowLike extends ImageRowColumns, VoiceRowColumns {
   // replies and unsend (roundRowsHaveColumn).
   reply_to_message_id?: string | null;
   unsent_at?: string | null;
+  /** Only present once migration 20261108120000_chat_message_edit is applied (editSupported). */
+  edited_at?: string | null;
   /** A video / album (migration 20261107220000). */
   media?: unknown;
 }
@@ -188,7 +190,7 @@ function pendingImage(photo: PendingRoundPhoto): ChatImageRef {
 // ---------------------------------------------------------------------------
 
 /** A fetched row carries this column (rows are selected with "*"), i.e. the migration is applied. */
-export function roundRowsHaveColumn(rows: readonly object[], column: "reply_to_message_id" | "unsent_at"): boolean {
+export function roundRowsHaveColumn(rows: readonly object[], column: "reply_to_message_id" | "unsent_at" | "edited_at"): boolean {
   return rows.some((r) => Object.prototype.hasOwnProperty.call(r, column));
 }
 
@@ -322,6 +324,7 @@ export function mergeRoundMessages(rows: readonly RoundMessageRowLike[], pending
         createdAt: r.created_at,
         replyToId: r.reply_to_message_id ?? null,
         unsentAt: r.unsent_at ?? null,
+        editedAt: r.edited_at ?? null,
         ...(image ? { image } : {}),
       };
     });

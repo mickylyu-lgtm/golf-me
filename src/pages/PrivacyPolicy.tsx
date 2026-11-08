@@ -14,7 +14,7 @@ import { goBack } from "../lib/goBack";
 // integrations (see APP_STORE_PRIVACY.md for the evidence and the App Store
 // privacy answers) — update this file, the date, and APP_STORE_PRIVACY.md if
 // the data collected or the third parties involved change.
-const LAST_UPDATED = "November 6, 2026";
+const LAST_UPDATED = "November 8, 2026";
 const CONTACT_EMAIL = "support@golfme.app";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -256,7 +256,9 @@ export function PrivacyPolicy() {
           anonymized safety records described above). When you unsend a text message, it disappears from the chat for everyone, but we
           keep a hidden copy of its text, which only GolfMe's operator can access, for safety. The copy is deleted automatically 90 days
           after the message was unsent, unless a report about that message, or about its sender in that chat, is still open; then it is
-          kept until the report is closed and deleted automatically after that. Unsent photos, videos and voice messages are deleted, with no copy
+          kept until the report is closed and deleted automatically after that. When you edit a text message (within 5 minutes of
+          sending), the chat shows the new text marked "Edited", and we keep a hidden copy of the earlier text on the same terms: only
+          GolfMe's operator can access it, and it is deleted automatically 90 days after the edit unless such a report is still open. Unsent photos, videos and voice messages are deleted, with no copy
           kept (if the app can't delete the file right away, our server deletes it automatically within about a day). For swing videos
           sent to Google Gemini for Caddie, we ask Google to delete the video right after the analysis. Waitlist entries are kept until you ask us to remove them. Technical logs
           kept by our providers are deleted on their standard schedules.

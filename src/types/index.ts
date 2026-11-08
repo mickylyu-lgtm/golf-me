@@ -298,6 +298,8 @@ export interface ChatMessage {
   replyToId?: string | null;
   /** Unsend (lib/unsend.ts): set when the sender unsent it; the text is then empty. */
   unsentAt?: string | null;
+  /** Edit (lib/messageEdit.ts): set when the sender edited the text (within 5 minutes); shown as "Edited". */
+  editedAt?: string | null;
   /** The photo it carries (migration 20261107170000); the text may then be empty. */
   image?: ChatImageRef | null;
   /** The voice message it carries (migration 20261107180000). */
@@ -429,6 +431,9 @@ export interface DirectMessage {
   // Unsend (lib/unsend.ts): set when the sender unsent it; the text is then
   // empty (wiped by the database for real accounts).
   unsentAt?: string | null;
+  // Edit (lib/messageEdit.ts): set when the sender edited the text (within
+  // 5 minutes of sending); the bubble then says "Edited".
+  editedAt?: string | null;
   // The photo it carries (migration 20261107170000); the text may then be
   // empty. Cleared by unsend.
   image?: ChatImageRef | null;

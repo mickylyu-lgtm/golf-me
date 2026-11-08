@@ -69,6 +69,12 @@ export function ReplyBar({ title, text, cancelLabel, onCancel }: { title: string
   );
 }
 
+// "Edited" after a text message's words (lib/messageEdit.ts), inside the
+// bubble, in the bubble's own muted colour. Inline text, no box of its own.
+export function EditedMark({ isMe, label }: { isMe: boolean; label: string }) {
+  return <span className={`ml-1.5 text-[10px] font-medium whitespace-nowrap ${isMe ? "text-white/70" : "text-slate-400"}`}>{label}</span>;
+}
+
 // The send time each row keeps just past the list's right clip edge, shown
 // by useSwipeToRevealTimes (drag the thread left).
 export function RevealedTime({ dateTime, label }: { dateTime: string; label: MessageTimeLabel | null }) {

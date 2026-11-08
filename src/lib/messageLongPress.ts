@@ -32,17 +32,20 @@ export function longPressSurvivesCancel(dx: number, dy: number): boolean {
 
 // What the hold / right-click menu offers for one bubble, in display order.
 // Reactions and Reply only where the thread allows them (not blocked,
-// feature available); Copy always; Unsend only for my own message inside
-// the window (lib/unsend.ts canUnsendMessage decides `canUnsend`).
-export type MessageAction = "reply" | "copy" | "unsend";
+// feature available); Copy always; Edit only for my own text message inside
+// the window (lib/messageEdit.ts canEditMessage decides `canEdit`); Unsend
+// only for my own message inside the window (lib/unsend.ts canUnsendMessage
+// decides `canUnsend`).
+export type MessageAction = "reply" | "copy" | "edit" | "unsend";
 
 // canCopy (default true) is false only for a photo with no text on a
 // platform that can't put an image on the clipboard (lib/chatImageClient
 // canCopyImages): there is then nothing Copy could do.
-export function messageActions(input: { canReply: boolean; canUnsend: boolean; canCopy?: boolean }): MessageAction[] {
+export function messageActions(input: { canReply: boolean; canUnsend: boolean; canCopy?: boolean; canEdit?: boolean }): MessageAction[] {
   const actions: MessageAction[] = [];
   if (input.canReply) actions.push("reply");
   if (input.canCopy !== false) actions.push("copy");
+  if (input.canEdit) actions.push("edit");
   if (input.canUnsend) actions.push("unsend");
   return actions;
 }

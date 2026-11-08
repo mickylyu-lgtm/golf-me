@@ -17,6 +17,8 @@ import type { ReportTarget } from "../lib/reportRow";
 import { reconcilePendingDms } from "../lib/dmPending";
 import { classifyUnsendError } from "../lib/unsend";
 import type { UnsendResult } from "../lib/unsend";
+import { classifyEditError, isMissingEditRpc, normalizeEditText, parseEditResponse } from "../lib/messageEdit";
+import type { EditResult } from "../lib/messageEdit";
 import { isMissingReactionsTableError, myReaction, overlayPendingReactions, reactionRowsToReactions, withReaction } from "../lib/reactions";
 import type { MessageReaction, QuickReaction } from "../lib/reactions";
 import { createReactionWriteQueue } from "../lib/reactionWrites";
@@ -78,6 +80,9 @@ interface MessageRow extends ImageRowColumns, VoiceRowColumns {
   // Only present once migration 20261105120000_add_dm_unsend is applied;
   // its presence is how unsendSupported detects the feature.
   unsent_at?: string | null;
+  // Only present once migration 20261108120000_chat_message_edit is
+  // applied; its presence is how editSupported detects the feature.
+  edited_at?: string | null;
   // image_path / image_width / image_height / image_thumb (ImageRowColumns):
   // only present once migration 20261107170000_chat_images is applied.
   // A video / album (20261107220000): the stored item array.
@@ -202,6 +207,11 @@ interface RealSocialContextValue {
   // until the unsend migration is applied and a row has proved it.
   unsendSupported: boolean;
   unsendDirectMessage: (messageId: string) => Promise<UnsendResult>;
+  // Edit my text message within 5 minutes (lib/messageEdit.ts,
+  // public.edit_message). False until the edit migration is applied and a
+  // row has proved it, or once the RPC turned out to be missing.
+  editSupported: boolean;
+  editDirectMessage: (messageId: string, text: string, expectedText?: string) => Promise<EditResult>;
   // Photos (lib/chatImages.ts, migration 20261107170000). False until the
   // database is known to have the image columns (a fetched row carries them
   // or a one-row probe succeeded), so the photo button stays hidden before.
@@ -272,6 +282,7 @@ function messageRowToDirectMessage(row: MessageRow): DirectMessage {
     createdAt: row.created_at,
     replyToId: row.reply_to_message_id ?? null,
     unsentAt: row.unsent_at ?? null,
+    editedAt: row.edited_at ?? null,
     ...(row.image_path ? { image: imageFromRow(row) } : {}),
     ...(row.audio_path ? { voice: voiceFromRow(row) } : {}),
     ...(row.media ? { media: mediaFromRow(row.media) } : {}),
@@ -662,10 +673,18 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
           nextParticipants = (allParticipants ?? []) as ConversationParticipantRow[];
           const fetched = (messageRows ?? []) as MessageRow[];
           if (incremental) {
-            const known = new Set(messagesRef.current.map((m) => m.id));
+            const known = new Map(messagesRef.current.map((m) => [m.id, m]));
             const added = fetched.filter((m) => !known.has(m.id));
-            nextMessages =
-              added.length === 0 ? messagesRef.current : [...messagesRef.current, ...added].sort((a, b) => a.created_at.localeCompare(b.created_at));
+            // A row fetched again with new content (an edit or unsend this
+            // poll saw while realtime was down): take the newer version.
+            const changed = new Map(
+              fetched.filter((m) => {
+                const k = known.get(m.id);
+                return k !== undefined && !sameJson(k, m);
+              }).map((m) => [m.id, m]),
+            );
+            const current = changed.size > 0 ? messagesRef.current.map((m) => changed.get(m.id) ?? m) : messagesRef.current;
+            nextMessages = added.length === 0 ? current : [...current, ...added].sort((a, b) => a.created_at.localeCompare(b.created_at));
           } else {
             nextMessages = keepIfSame(messagesRef.current, fetched.reverse());
             // More DM messages exist than the newest-N window holds: older
@@ -1291,6 +1310,47 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       return "unsent";
     },
     [selfId, applyReactions, pendingMessages],
+  );
+
+  // Edit (migration 20261108120000_chat_message_edit): detected from the
+  // column on fetched rows, like unsend; a missing RPC (PGRST202) hides it
+  // for this session. The server enforces sender, conversation access
+  // (participant, no block), suspension, text-only and the 5-minute window
+  // from the original created_at; this device only patches its own copy
+  // from the server's answer (the realtime UPDATE brings it to the others).
+  const [editRpcMissing, setEditRpcMissing] = useState(false);
+  const editSupported = useMemo(
+    () => !editRpcMissing && messages.some((m) => Object.prototype.hasOwnProperty.call(m, "edited_at")),
+    [messages, editRpcMissing],
+  );
+  const editDirectMessage = useCallback(
+    async (messageId: string, text: string, expectedText?: string): Promise<EditResult> => {
+      if (!selfId) return "failed";
+      const next = normalizeEditText(text);
+      if (!next) return "empty";
+      const { data, error } = await supabase.rpc("edit_message", {
+        p_message_id: messageId,
+        p_text: next,
+        ...(expectedText !== undefined ? { p_expected_text: expectedText } : {}),
+      });
+      if (error) {
+        if (isMissingEditRpc(error)) setEditRpcMissing(true);
+        const result = classifyEditError(error);
+        // Never the text itself: only the error.
+        if (result === "failed") console.error("GolfMe: failed to edit message.", { code: error.code, hint: error.hint });
+        return result;
+      }
+      const answer = parseEditResponse(data);
+      if (!answer) return "failed";
+      // Don't wait for the realtime echo to update this device.
+      const patched = messagesRef.current.map((m) =>
+        m.id === messageId ? { ...m, text: answer.text, edited_at: answer.editedAt ?? m.edited_at ?? null } : m,
+      );
+      messagesRef.current = patched;
+      setMessages(patched);
+      return answer.status;
+    },
+    [selfId],
   );
 
   // ---- Photos (lib/chatImages.ts, migration 20261107170000) ----
@@ -1949,6 +2009,8 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       repliesSupported,
       unsendSupported,
       unsendDirectMessage,
+      editSupported,
+      editDirectMessage,
       imagesSupported,
       sendDirectImage,
       retryDirectImage,
@@ -2000,6 +2062,8 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       repliesSupported,
       unsendSupported,
       unsendDirectMessage,
+      editSupported,
+      editDirectMessage,
       imagesSupported,
       sendDirectImage,
       retryDirectImage,

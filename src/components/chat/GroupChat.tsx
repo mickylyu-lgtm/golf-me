@@ -14,7 +14,8 @@ import { useChatViewportBox } from "../../lib/useChatViewportBox";
 import { NewMessagesPill } from "./NewMessagesPill";
 import { MessageActionsMenu } from "./MessageActionsMenu";
 import { ReactionPill } from "./ReactionPill";
-import { MessageQuote, ReplyBar, RevealedTime } from "./ChatBubbleParts";
+import { EditedMark, MessageQuote, ReplyBar, RevealedTime } from "./ChatBubbleParts";
+import { EditMessageSheet } from "./EditMessageSheet";
 import { useMessageLongPress } from "../../lib/useMessageLongPress";
 import { useSwipeToReply } from "../../lib/useSwipeToReply";
 import { useSwipeToRevealTimes } from "../../lib/useSwipeToRevealTimes";
@@ -22,6 +23,7 @@ import { useExitPresence } from "../../lib/useExitPresence";
 import { FOCUS_EXIT_MS } from "../../lib/messageFocus";
 import { messageActions } from "../../lib/messageLongPress";
 import { canUnsendMessage, unsendRemainingMs } from "../../lib/unsend";
+import { canEditMessage, editRemainingMs } from "../../lib/messageEdit";
 import { QUICK_REACTIONS, groupReactionsByMessage, myReaction, nextReaction, summarizeReactions, type QuickReaction } from "../../lib/reactions";
 import { canRetryRoundMessage, editRejectedOutcome, isActionableRoundMessage } from "../../lib/roundChat";
 import { formatMessageTime } from "../../lib/messageTime";
@@ -77,6 +79,8 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
     canReplyToRoundMessages,
     canUnsendRoundMessages,
     unsendRoundMessage,
+    canEditRoundMessages,
+    editRoundMessage,
     canReactToRoundMessages,
     roundMessageReactions,
     setRoundMessageReaction,
@@ -336,6 +340,23 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
     const timer = window.setTimeout(() => setNowMs(Date.now()), nextUnsendExpiry + 50);
     return () => window.clearTimeout(timer);
   }, [nextUnsendExpiry]);
+  // Edit (lib/messageEdit.ts): my own stored text message within 5 minutes,
+  // only while the chat takes posts (not read-only). The server decides
+  // (public.edit_round_message). The sheet is its own modal; the composer,
+  // its draft and the docking / keyboard code are untouched.
+  const editEnabled = !readOnly && canEditRoundMessages;
+  const editableIds = new Set(
+    editEnabled ? messages.filter((m) => isActionableRoundMessage(m) && canEditMessage(m, currentUser.id, nowMs)).map((m) => m.id) : [],
+  );
+  const nextEditExpiry = editEnabled
+    ? Math.min(...messages.filter((m) => editableIds.has(m.id)).map((m) => editRemainingMs(m.createdAt, nowMs)))
+    : Infinity;
+  useEffect(() => {
+    if (!Number.isFinite(nextEditExpiry)) return;
+    const timer = window.setTimeout(() => setNowMs(Date.now()), nextEditExpiry + 50);
+    return () => window.clearTimeout(timer);
+  }, [nextEditExpiry]);
+  const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
   // Hold (touch) / right-click (mouse) any bubble that has one (not a system
   // line, not unsent, not a failed send) -> the focus menu.
   useMessageLongPress(listRef, true, (messageId, bubble) => {
@@ -353,6 +374,7 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
   // A reply target / open menu belongs to one round; no timer outlives us.
   useEffect(() => setReplyToId(null), [callId]);
   useEffect(() => setActionsFor(null), [callId]);
+  useEffect(() => setEditing(null), [callId]);
   useEffect(() => () => window.clearTimeout(highlightTimerRef.current), []);
   // The round ended (or reply support went away) while a reply was picked.
   useEffect(() => {
@@ -698,7 +720,10 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
                       onOpen={m.delivery ? undefined : setViewerUrl}
                     />
                   ) : (
-                    m.text
+                    <>
+                      {m.text}
+                      {m.editedAt && <EditedMark isMe={isMe && !failed} label={t("chat.edited")} />}
+                    </>
                   )}
                   {m.delivery === "sending" && <span className="sr-only"> ({t("roundChat.sending")})</span>}
                   <ReactionPill
@@ -885,6 +910,7 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
           actions={messageActions({
             canReply: replyEnabled && isActionableRoundMessage(actionsMessage),
             canUnsend: unsendableIds.has(actionsMessage.id),
+            canEdit: editableIds.has(actionsMessage.id),
             // A photo with no text where images can't go on the clipboard: no Copy.
             canCopy: !actionsMessage.media && !(actionsMessage.voice && !actionsMessage.text.trim()) && !(actionsMessage.image && !actionsMessage.text.trim() && !canCopyImages()),
           })}
@@ -893,15 +919,30 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
             reply: t("chat.reply"),
             unsend: t("chat.unsend"),
             copy: t("chat.copy"),
+            edit: t("chat.edit"),
             reactWith: (emoji) => t("chat.reactWith", { emoji }),
           }}
           onReply={() => {
             setActionsFor(null);
             startReply(actionsMessage.id);
           }}
+          onEdit={() => {
+            setActionsFor(null);
+            setEditing({ id: actionsMessage.id, text: actionsMessage.text });
+          }}
           onUnsend={() => handleUnsend(actionsMessage.id)}
           onCopy={() => handleCopy(actionsMessage.id)}
           onClose={closeActions}
+        />
+      )}
+      {editing && (
+        <EditMessageSheet
+          key={editing.id}
+          initialText={editing.text}
+          currentText={messagesById.get(editing.id)?.text ?? editing.text}
+          gone={!messagesById.get(editing.id) || Boolean(messagesById.get(editing.id)?.unsentAt)}
+          onSave={(text, expected) => editRoundMessage(editing.id, text, expected)}
+          onClose={() => setEditing(null)}
         />
       )}
     </div>
