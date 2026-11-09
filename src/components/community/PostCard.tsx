@@ -117,6 +117,8 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
   const [removeOpen, setRemoveOpen] = useState(false);
   const [suspendOpen, setSuspendOpen] = useState(false);
   const [mediaLightboxIndex, setMediaLightboxIndex] = useState<number | null>(null);
+  // The photo last viewed in the fullscreen viewer; the card lands there.
+  const [cardMediaIndex, setCardMediaIndex] = useState<number | undefined>(undefined);
   const [feedMuted, setFeedMuted] = useState(true);
   const [askingCaddie, setAskingCaddie] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -530,7 +532,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
 
       {!isSwingPost && displayMedia.length > 0 && (
         <div onClick={stop} className="overflow-hidden rounded-xl border border-slate-100">
-          <MediaCarousel media={displayMedia} variant="card" onItemClick={(i) => {
+          <MediaCarousel media={displayMedia} variant="card" showIndex={cardMediaIndex} onItemClick={(i) => {
               if (!isDragClick()) setMediaLightboxIndex(i);
             }} />
         </div>
@@ -759,7 +761,14 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
 
       {mediaLightboxIndex !== null && displayMedia.length > 0 && (
         <div onClick={stop}>
-          <FullscreenMediaViewer media={displayMedia} initialIndex={mediaLightboxIndex} onClose={() => setMediaLightboxIndex(null)} />
+          <FullscreenMediaViewer
+            media={displayMedia}
+            initialIndex={mediaLightboxIndex}
+            onClose={(last) => {
+              setMediaLightboxIndex(null);
+              if (last !== undefined) setCardMediaIndex(last);
+            }}
+          />
         </div>
       )}
 

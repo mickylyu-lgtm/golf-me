@@ -19,6 +19,11 @@ interface MediaCarouselProps {
   /** Card variant only — a tap opens the fullscreen lightbox at this index. */
   onItemClick?: (index: number) => void;
   initialIndex?: number;
+  /** Called with the slide in view whenever it changes. */
+  onIndexChange?: (index: number) => void;
+  /** Card variant: jump (no animation) to this slide when it changes, e.g.
+   * to the photo last viewed in the fullscreen viewer. */
+  showIndex?: number;
 }
 
 const HOLD_TO_SPEED_UP_MS = 180;
@@ -59,7 +64,7 @@ export function feedPhotoBoxAspect(photoAspect: number | null): number {
 }
 const photoAspectCache = new Map<string, number>();
 
-export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }: MediaCarouselProps) {
+export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0, onIndexChange, showIndex }: MediaCarouselProps) {
   const [activeIndex, setActiveIndex] = useState(initialIndex);
   const trackRef = useRef<HTMLDivElement>(null);
   const holdTimerRef = useRef<number | null>(null);
@@ -77,6 +82,18 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
     if (track && initialIndex > 0) track.scrollLeft = initialIndex * track.clientWidth;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Back from the fullscreen viewer: land on the photo last viewed there
+  // (Micky, 2026-11-09), not the post's first one.
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track || showIndex === undefined) return;
+    const i = Math.max(0, Math.min(media.length - 1, showIndex));
+    track.scrollLeft = i * track.clientWidth;
+    setActiveIndex(i);
+  }, [showIndex, media.length]);
+  const onIndexChangeRef = useRef(onIndexChange);
+  onIndexChangeRef.current = onIndexChange;
 
   // Opening fullscreen on a playing feed video should keep it playing (not
   // drop back to a paused poster the golfer has to tap again) AND unmute
@@ -192,6 +209,10 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
     }
     el.playbackRate = 1;
   }
+
+  useEffect(() => {
+    onIndexChangeRef.current?.(activeIndex);
+  }, [activeIndex]);
 
   const wide = useWideScreen();
   // Feed cards on phones, like Instagram photo posts (Micky, 2026-11-09:

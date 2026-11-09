@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { PostMediaItem } from "../../types";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
@@ -11,7 +11,8 @@ import { pushModal } from "../../lib/modalStack";
 interface FullscreenMediaViewerProps {
   media: PostMediaItem[];
   initialIndex?: number;
-  onClose: () => void;
+  /** Called with the slide that was in view, so the card can land there. */
+  onClose: (lastIndex?: number) => void;
   /** Optional bottom action (e.g. "Change photo" on your own avatar). */
   action?: { label: string; onClick: () => void };
 }
@@ -54,7 +55,12 @@ function isZoomOwned(target: EventTarget | null): boolean {
 // either way (opened via double-tap on the feed card). Vertical drags are
 // intercepted here; horizontal ones are left alone so MediaCarousel's own
 // native scroll-snap still swipes between items normally.
-export function FullscreenMediaViewer({ media, initialIndex = 0, onClose, action }: FullscreenMediaViewerProps) {
+export function FullscreenMediaViewer({ media, initialIndex = 0, onClose: onCloseProp, action }: FullscreenMediaViewerProps) {
+  const lastIndexRef = useRef(initialIndex);
+  // Stable, so the modal-stack registration below isn't redone every render.
+  const onClosePropRef = useRef(onCloseProp);
+  onClosePropRef.current = onCloseProp;
+  const onClose = useCallback(() => onClosePropRef.current(lastIndexRef.current), []);
   const [dragY, setDragY] = useState(0);
   const [dragging, setDragging] = useState(false);
   const mountedAtRef = useRef(Date.now());
@@ -210,7 +216,7 @@ export function FullscreenMediaViewer({ media, initialIndex = 0, onClose, action
         className={`h-dvh w-full ${dragging ? "" : "transition-transform duration-200 ease-out"}`}
         style={{ transform: `translateY(${dragY}px)` }}
       >
-        <MediaCarousel media={media} variant="lightbox" initialIndex={initialIndex} />
+        <MediaCarousel media={media} variant="lightbox" initialIndex={initialIndex} onIndexChange={(i) => (lastIndexRef.current = i)} />
       </div>
       {/* Top-left: a video's mute toggle owns the top-right corner. */}
       <button
