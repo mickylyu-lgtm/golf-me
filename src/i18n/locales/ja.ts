@@ -674,6 +674,8 @@ export const ja: Record<TranslationKey, string> = {
   "emojiPicker.tone4": "やや暗い",
   "emojiPicker.tone5": "暗い",
   "chatInbox.title": "チャット",
+  "chatInbox.pickConversation": "会話を選択",
+  "chatInbox.pickConversationBody": "左のチャットを選ぶと、ここで読んで返信できます。",
   "chatInbox.searchPlaceholder": "会話を検索",
   "chatInbox.emptyTitle": "まだメッセージはありません。",
   "chatInbox.emptyDescription": "ゴルファーのプロフィールを開いて会話を始めましょう。",

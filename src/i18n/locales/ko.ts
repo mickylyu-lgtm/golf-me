@@ -674,6 +674,8 @@ export const ko: Record<TranslationKey, string> = {
   "emojiPicker.tone4": "약간 어두운 피부색",
   "emojiPicker.tone5": "어두운 피부색",
   "chatInbox.title": "채팅",
+  "chatInbox.pickConversation": "대화를 선택하세요",
+  "chatInbox.pickConversationBody": "왼쪽에서 채팅을 선택하면 여기에서 읽고 답장할 수 있어요.",
   "chatInbox.searchPlaceholder": "대화 검색",
   "chatInbox.emptyTitle": "아직 메시지가 없습니다.",
   "chatInbox.emptyDescription": "골퍼의 프로필을 열어 대화를 시작하세요.",

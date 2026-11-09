@@ -216,7 +216,7 @@ export function Discover({ embedded = false }: DiscoverProps) {
           />
         )
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4">
           {results.map(({ golfer, compat }) => (
             <GolferCard key={golfer.id} golfer={golfer} compatibility={compat} onClick={() => navigate(`/golfer/${golfer.id}`)} />
           ))}

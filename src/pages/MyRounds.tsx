@@ -92,7 +92,7 @@ export function MyRounds() {
             }
           />
         ) : (
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-3 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4">
             {upcoming.map((c) => {
               const isHost = c.hostId === currentUser.id;
               const openSpots = c.totalSpots - c.joinedGolferIds.length;
@@ -135,7 +135,7 @@ export function MyRounds() {
         {past.length === 0 ? (
           <EmptyState icon={<ClipboardList size={20} />} title={t("myGolf.emptyPast")} description={t("myGolf.emptyPastDesc")} />
         ) : (
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-3 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4">
             {past.map((c) => {
               const teammates = c.joinedGolferIds.filter((gid) => gid !== currentUser.id);
               const reviewedCount = teammates.filter((gid) => hasReviewed(c.id, gid)).length;

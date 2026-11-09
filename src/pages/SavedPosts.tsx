@@ -37,7 +37,7 @@ export function SavedPosts() {
           }
         />
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4">
           {savedPostsList.map((post) => (
             <PostCard key={post.id} post={post} />
           ))}

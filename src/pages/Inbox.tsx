@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { CalendarDays, Flag, MessageCircle, Search, Share2, ShieldCheck, Users } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
@@ -125,6 +125,9 @@ export function Inbox() {
   );
 }
 
+// The conversation open next to the list (desktop two-pane chat only).
+const OPEN_ROW_CLASS = "aria-[current=page]:border-fairway-300 aria-[current=page]:bg-fairway-50/70";
+
 function DirectList() {
   const { dmConversations, typingConversationIds } = useData();
   const { isDemo } = useAuth();
@@ -132,6 +135,9 @@ function DirectList() {
   // A failed first load must not read as "no conversations yet".
   const view = listView({ count: dmConversations.length, isDemo, hasLoaded: social.hasLoaded, loadError: social.loadError, isLoading: social.isLoading });
   const navigate = useNavigate();
+  // Desktop two-pane chat (DesktopChatLayout): the open conversation is marked
+  // in the list. On a phone the list never shows next to a conversation.
+  const { pathname } = useLocation();
   const { t, locale } = useLocale();
   const mediaText = useChatMediaText();
   const { shareApp } = useShareActions();
@@ -189,7 +195,8 @@ function DirectList() {
               key={c.conversationId}
               onClick={() => navigate(`/messages/${c.otherGolfer.id}`, { state: { fromInbox: true } })}
               data-haptic="tap"
-              className={`flex w-full items-center gap-3 p-3 text-left ${CLICKABLE_CARD_CLASS} ${CARD_PRESS_CLASS}`}
+              aria-current={pathname === `/messages/${c.otherGolfer.id}` ? "page" : undefined}
+              className={`flex w-full items-center gap-3 p-3 text-left ${CLICKABLE_CARD_CLASS} ${CARD_PRESS_CLASS} ${OPEN_ROW_CLASS}`}
             >
               <Avatar golfer={c.otherGolfer} size="md" />
               <div className="min-w-0 flex-1">
@@ -279,6 +286,7 @@ function RoundsList() {
 function RoundChatRow({ call }: { call: GolfCall }) {
   const { messagesForCall, getGolfer, currentUser } = useData();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const { t, locale } = useLocale();
   const mediaText = useChatMediaText();
   const messages = messagesForCall(call.id);
@@ -291,7 +299,8 @@ function RoundChatRow({ call }: { call: GolfCall }) {
     <button
       onClick={() => navigate(`/messages/round/${call.id}`)}
       data-haptic="tap"
-      className={`flex w-full items-center gap-3 p-3 text-left ${CLICKABLE_CARD_CLASS} ${CARD_PRESS_CLASS}`}
+      aria-current={pathname === `/messages/round/${call.id}` ? "page" : undefined}
+      className={`flex w-full items-center gap-3 p-3 text-left ${CLICKABLE_CARD_CLASS} ${CARD_PRESS_CLASS} ${OPEN_ROW_CLASS}`}
     >
       <span
         className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${ended ? "bg-slate-100 text-slate-400" : "bg-fairway-50 text-fairway-600"}`}

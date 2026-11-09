@@ -161,7 +161,7 @@ export function Caddie() {
         </label>
       </div>
 
-      <Button size="lg" fullWidth icon={<ScanLine size={16} />} onClick={() => navigate("/caddie/analyze")}>
+      <Button size="lg" fullWidth className="lg:w-auto lg:self-start lg:px-10" icon={<ScanLine size={16} />} onClick={() => navigate("/caddie/analyze")}>
         {t("caddie.analyzeSwing")}
       </Button>
 
@@ -188,7 +188,7 @@ export function Caddie() {
         {visible.length === 0 ? (
           <EmptyState icon={<Video size={20} />} title={t("caddie.emptyTitle")} description={t("caddie.emptyDescription")} />
         ) : (
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-3 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4">
             {visible.map((a) => {
               const issueCount = a.details?.workOn.length ?? a.issues.length;
               // A live job can't be deleted (its worker is still running);

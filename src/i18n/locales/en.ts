@@ -688,6 +688,8 @@ export const en = {
   "emojiPicker.tone4": "Medium-dark",
   "emojiPicker.tone5": "Dark",
   "chatInbox.title": "Chat",
+  "chatInbox.pickConversation": "Pick a conversation",
+  "chatInbox.pickConversationBody": "Choose a chat on the left to read and reply here.",
   "chatInbox.searchPlaceholder": "Search conversations",
   "chatInbox.emptyTitle": "No messages yet.",
   "chatInbox.emptyDescription": "Open a golfer's profile to start a conversation.",

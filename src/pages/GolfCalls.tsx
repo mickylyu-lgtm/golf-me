@@ -286,15 +286,16 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
           />
         )
       ) : (
-        <div className="flex flex-col gap-3">
+        // lg+: two round cards per row; the headings span the row.
+        <div className="flex flex-col gap-3 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4">
           {myHosted.length > 0 && (
-            <h2 className="text-sm font-bold uppercase tracking-wide text-fairway-700">{t("find.yourHostedRounds")}</h2>
+            <h2 className="text-sm font-bold uppercase tracking-wide text-fairway-700 lg:col-span-2">{t("find.yourHostedRounds")}</h2>
           )}
           {myHosted.map((call) => (
             <GolfCallCard key={call.id} call={call} />
           ))}
           {myHosted.length > 0 && otherRounds.length > 0 && (
-            <h2 className="mt-3 text-sm font-bold uppercase tracking-wide text-slate-400">
+            <h2 className="mt-3 text-sm font-bold uppercase tracking-wide text-slate-400 lg:col-span-2 lg:mt-4">
               {t("find.upcomingRounds")}
             </h2>
           )}

@@ -674,6 +674,8 @@ export const zhTW: Record<TranslationKey, string> = {
   "emojiPicker.tone4": "中深膚色",
   "emojiPicker.tone5": "深膚色",
   "chatInbox.title": "聊天",
+  "chatInbox.pickConversation": "選擇一個對話",
+  "chatInbox.pickConversationBody": "在左側選擇一個聊天，即可在這裡閱讀和回覆。",
   "chatInbox.searchPlaceholder": "搜尋對話",
   "chatInbox.emptyTitle": "尚無訊息。",
   "chatInbox.emptyDescription": "打開一位球友的主頁即可開始對話。",

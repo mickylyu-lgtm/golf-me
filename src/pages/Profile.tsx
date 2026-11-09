@@ -237,7 +237,7 @@ export function Profile() {
           (Instagram-style, under the name and stats). Empty: a quiet prompt
           that opens the same Edit Profile popup. */}
       {currentUser.bio?.trim() ? (
-        <p className="-mt-3 whitespace-pre-line break-words text-sm leading-relaxed text-slate-700">{currentUser.bio}</p>
+        <p className="-mt-3 whitespace-pre-line break-words text-sm leading-relaxed text-slate-700 lg:max-w-2xl">{currentUser.bio}</p>
       ) : (
         <button
           onClick={startEditing}
@@ -247,7 +247,7 @@ export function Profile() {
         </button>
       )}
 
-      <div className="flex flex-col gap-5">
+      <div className="flex flex-col gap-5 lg:grid lg:grid-cols-2 lg:items-start lg:gap-x-6 lg:gap-y-7">
         <ProfileSection title={t("profile.sectionGolf")}>
           <ProfileRow icon={<ClipboardList size={16} />} label={t("profile.myGolf")} onClick={() => navigate("/my-rounds")} />
           <ProfileRow icon={<SlidersHorizontal size={16} />} label={t("profile.matchPreferences")} onClick={() => navigate("/profile/preferences")} />

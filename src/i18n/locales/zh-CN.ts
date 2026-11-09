@@ -674,6 +674,8 @@ export const zhCN: Record<TranslationKey, string> = {
   "emojiPicker.tone4": "中等-深肤色",
   "emojiPicker.tone5": "较深肤色",
   "chatInbox.title": "聊天",
+  "chatInbox.pickConversation": "选择一个对话",
+  "chatInbox.pickConversationBody": "在左侧选择一个聊天，即可在这里阅读和回复。",
   "chatInbox.searchPlaceholder": "搜索对话",
   "chatInbox.emptyTitle": "暂无消息。",
   "chatInbox.emptyDescription": "打开一位球友的主页即可开始对话。",

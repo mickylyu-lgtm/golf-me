@@ -108,13 +108,13 @@ export function Community() {
 
       {/* Same gradient as Find.tsx's identical Rounds/Golfers segmented
           control -- same fix, same reasoning. */}
-      <div className="flex rounded-full border border-slate-200 bg-white p-1">
+      <div className="flex rounded-full border border-slate-200 bg-white p-1 lg:w-full lg:max-w-md lg:self-start">
         {TABS.map((tabOption) => (
           <button
             key={tabOption.value}
             onClick={() => setTab(tabOption.value)}
             className={`flex-1 rounded-full py-2 text-sm font-semibold transition ${
-              tab === tabOption.value ? "bg-gradient-to-br from-brand-forest to-brand-forest-deep text-white" : "text-slate-500"
+              tab === tabOption.value ? "bg-gradient-to-br from-brand-forest to-brand-forest-deep text-white" : "text-slate-500 hover:text-slate-800"
             }`}
           >
             {t(tabOption.labelKey)}
@@ -142,7 +142,8 @@ export function Community() {
           }
         />
       ) : (
-        <div className="flex flex-col gap-3">
+        // lg+: two posts per row.
+        <div className="flex flex-col gap-3 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4">
           {feed.map((post) => (
             <PostCard key={post.id} post={post} />
           ))}

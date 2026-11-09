@@ -1,4 +1,5 @@
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { MessagesSquare, Plus, Settings } from "lucide-react";
 import { NAV_ITEMS, isNavPathActive } from "../../lib/nav";
 import { NAV_TUTORIAL_ID_BY_PATH } from "../../lib/tutorialSteps";
 import { GolfMeLogo } from "../brand/GolfMeLogo";
@@ -75,7 +76,46 @@ export function SideNav() {
             </NavLink>
           );
         })}
+        {/* Desktop (lg+) extras: the wide sidebar has room for Community,
+            which phones reach from Home. Hidden on the tablet icon rail. */}
+        <div className="my-3 hidden border-t border-slate-200/80 lg:block" aria-hidden />
+        <NavLink
+          to="/community"
+          className={({ isActive }) =>
+            `hidden items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none lg:flex ${
+              isActive ? "bg-fairway-50 text-fairway-700" : "text-slate-500 hover:bg-slate-50 hover:text-slate-800 active:bg-slate-100"
+            }`
+          }
+        >
+          <span className="flex w-6 items-center justify-center">
+            <MessagesSquare size={20} />
+          </span>
+          {t("community.title")}
+        </NavLink>
       </nav>
+      <div className="hidden flex-col gap-1 px-3 lg:flex">
+        <button
+          type="button"
+          onClick={() => navigate("/golf-calls/new")}
+          className="mb-2 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-brand-forest to-brand-forest-deep px-3 py-2.5 text-sm font-semibold text-fixed-white shadow-sm transition-all duration-200 ease-out hover:shadow-md hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none"
+        >
+          <Plus size={16} />
+          {t("home.hostRound")}
+        </button>
+        <NavLink
+          to="/settings"
+          className={({ isActive }) =>
+            `flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none ${
+              isActive ? "text-fairway-700" : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"
+            }`
+          }
+        >
+          <span className="flex w-6 items-center justify-center">
+            <Settings size={18} />
+          </span>
+          {t("settings.title")}
+        </NavLink>
+      </div>
     </aside>
   );
 }

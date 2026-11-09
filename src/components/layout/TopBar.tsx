@@ -6,12 +6,20 @@ import { Avatar } from "../ui/Avatar";
 import { GolfMeLogo } from "../brand/GolfMeLogo";
 import { NotificationsPanel } from "../notifications/NotificationsPanel";
 import { ICON_PRESS_CLASS, PRESS_SCALE_CLASS } from "../ui/cardStyles";
+import { NAV_ITEMS, isNavPathActive } from "../../lib/nav";
+import { useLocale } from "../../i18n/LocaleContext";
+import type { TranslationKey } from "../../i18n/locales/en";
 
 export function TopBar() {
   const { currentUser, unreadNotificationCount } = useData();
   const navigate = useNavigate();
   const location = useLocation();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const { t } = useLocale();
+  const sectionKey: TranslationKey | undefined =
+    location.pathname === "/community" || location.pathname.startsWith("/community/")
+      ? "community.title"
+      : NAV_ITEMS.find((item) => isNavPathActive(item.path, location.pathname))?.labelKey;
 
   // TopBar stays mounted across route changes (it lives above
   // RootTabCarousel), so without this the panel would stay open after
@@ -35,7 +43,10 @@ export function TopBar() {
       <div className="sm:hidden">
         <GolfMeLogo size={18} />
       </div>
-      <div className="hidden sm:block" />
+      <div className="hidden sm:block">
+        {/* Desktop (lg+): the current section, like a Mac window title. */}
+        {sectionKey && <p className="hidden text-sm font-semibold tracking-tight text-slate-500 lg:block">{t(sectionKey)}</p>}
+      </div>
       <div className="flex items-center gap-2">
         <button
           // Open-only, not a toggle: now that the panel portals to

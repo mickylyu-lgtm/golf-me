@@ -4,6 +4,7 @@ import { SideNav } from "./SideNav";
 import { BottomNav } from "./BottomNav";
 import { TopBar } from "./TopBar";
 import { RootTabCarousel } from "./RootTabCarousel";
+import { DesktopChatLayout } from "./DesktopChatLayout";
 import { NotificationPopupHost } from "../notifications/NotificationPopupHost";
 import { NotificationRouteClearer } from "../notifications/NotificationRouteClearer";
 import { FoundingRevealHost } from "../golfer/FoundingRevealHost";
@@ -11,17 +12,39 @@ import { CaddieDoneHaptic } from "../caddie/CaddieDoneHaptic";
 import { SuspensionBanner } from "../moderation/SuspensionBanner";
 import { MOBILE_NAV_ITEMS } from "../../lib/nav";
 import { useChatRouteMotion } from "../../lib/useChatRouteMotion";
+import { useIsDesktop } from "../../lib/useIsDesktop";
 
 const ROOT_PATHS = new Set<string>(MOBILE_NAV_ITEMS.map((item) => item.path));
 
+// Desktop (lg+) content width. Browsing screens (feeds, lists, dashboards)
+// use the room: up to 72rem, with their own two-column grids. Everything
+// else (detail pages, forms, settings, a conversation) keeps the 48rem
+// reading column. Phones never see the difference: these are lg: classes.
+const WIDE_EXACT = new Set<string>(["/", "/find", "/caddie", "/profile", "/community", "/golf-calls", "/my-rounds", "/saved-posts", "/profile/posts", "/discover", "/courses/nearby", "/tee-times"]);
+const WIDE_PREFIXES = ["/admin/", "/messages"];
+
+function isWideRoute(pathname: string): boolean {
+  return WIDE_EXACT.has(pathname) || WIDE_PREFIXES.some((p) => pathname.startsWith(p));
+}
+
+// The chat list and its conversations: /messages, /messages/:id,
+// /messages/round/:id.
+function isChatRoute(pathname: string): boolean {
+  return pathname === "/messages" || pathname.startsWith("/messages/");
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
+  const isDesktop = useIsDesktop();
   // Only the 5 root tabs get the swipeable carousel — everything else
   // (Golf Call detail, a golfer's profile, chat, forms, settings...) stays
   // on React Router's normal single-page-per-route rendering, so a
   // horizontal gesture inside those deeper screens can never throw the
   // user into a different main tab.
   const isRootTab = ROOT_PATHS.has(pathname);
+  // Desktop chat is two panes (list + conversation), so the phone's
+  // list <-> conversation slide doesn't apply there.
+  const desktopChat = isDesktop && isChatRoute(pathname);
   const contentRef = useRef<HTMLDivElement>(null);
   useChatRouteMotion(contentRef);
 
@@ -45,8 +68,17 @@ export function AppShell({ children }: { children: ReactNode }) {
           {/* contentRef: the column the chat list <-> conversation
               transition moves (lib/useChatRouteMotion.ts); main clips its
               horizontal overflow while it runs. */}
-          <div ref={contentRef} className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 py-5 sm:px-6 sm:py-8">
-            {isRootTab ? <RootTabCarousel activePath={pathname} /> : children}
+          <div
+            ref={desktopChat ? undefined : contentRef}
+            className={`mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 py-5 sm:px-6 sm:py-8 ${isWideRoute(pathname) ? "lg:max-w-6xl lg:px-8" : ""}`}
+          >
+            {desktopChat ? (
+              <DesktopChatLayout>{pathname === "/messages" ? null : children}</DesktopChatLayout>
+            ) : isRootTab ? (
+              <RootTabCarousel activePath={pathname} />
+            ) : (
+              children
+            )}
           </div>
         </main>
       </div>
