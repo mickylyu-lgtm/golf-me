@@ -1,7 +1,15 @@
 // Run: npm run test:trust  (node --test, built-in type stripping)
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isMissingColumnError, reportRow } from "../src/lib/reportRow.ts";
+import { isMissingColumnError, reportErrorKind, reportRow } from "../src/lib/reportRow.ts";
+
+test("report refusals are told apart from network failures", () => {
+  assert.equal(reportErrorKind(new Error("report_target_invalid")), "invalid");
+  assert.equal(reportErrorKind({ code: "P0001", message: "x", hint: "report_target_invalid" }), "invalid");
+  assert.equal(reportErrorKind(new Error("report_rate_limited")), "rate");
+  assert.equal(reportErrorKind(new Error("Failed to fetch")), "network");
+  assert.equal(reportErrorKind(null), "network");
+});
 
 const base = { reporterId: "me", reportedUserId: "them", category: "Spam", details: "rude", context: "post" };
 

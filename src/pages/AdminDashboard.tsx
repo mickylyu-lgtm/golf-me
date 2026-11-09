@@ -14,6 +14,7 @@ import { Avatar } from "../components/ui/Avatar";
 import { Badge } from "../components/ui/Badge";
 import { EmptyState } from "../components/ui/EmptyState";
 import { BookingEvidenceReview } from "../components/admin/BookingEvidenceReview";
+import { SafetyReview } from "../components/admin/SafetyReview";
 import { ModerationPanel } from "../components/admin/ModerationPanel";
 import { useModerationAdminData } from "../lib/useModerationAdminData";
 import { RemoveContentDialog } from "../components/moderation/RemoveContentDialog";
@@ -598,6 +599,8 @@ export function AdminDashboard() {
           </div>
         )}
       </section>
+
+      <SafetyReview />
 
       <ModerationPanel data={moderationData} />
 

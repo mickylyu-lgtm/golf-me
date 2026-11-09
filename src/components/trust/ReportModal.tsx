@@ -6,6 +6,7 @@ import { REPORT_CATEGORIES, ROUND_ONLY_REPORT_CATEGORIES } from "../../types";
 import type { Report, ReportCategory } from "../../types";
 import { useData } from "../../context/DataContext";
 import { useToast } from "../../context/ToastContext";
+import { reportErrorKind, type ReportErrorKind } from "../../lib/reportRow";
 
 interface ReportModalProps {
   reportedId: string;
@@ -25,7 +26,9 @@ export function ReportModal({ reportedId, reportedName, context, golfCallId, pos
   const [category, setCategory] = useState<ReportCategory | null>(null);
   const [details, setDetails] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState(false);
+  // Which failure: network/unknown, the server refusing the target (deleted,
+  // removed, not yours to see), or the hourly report limit.
+  const [submitError, setSubmitError] = useState<false | ReportErrorKind>(false);
 
   // Waits for the server: "Report submitted" only once the report is saved.
   // A failure keeps the chosen reason and the details, says so, and the
@@ -38,7 +41,7 @@ export function ReportModal({ reportedId, reportedName, context, golfCallId, pos
       await reportUser(reportedId, category, details.trim(), context, { golfCallId, postId, commentId, messageId });
     } catch (err) {
       console.error("GolfMe: failed to submit report.", err);
-      setSubmitError(true);
+      setSubmitError(reportErrorKind(err));
       setSubmitting(false);
       return;
     }
@@ -74,7 +77,11 @@ export function ReportModal({ reportedId, reportedName, context, golfCallId, pos
         />
         {submitError && (
           <p role="alert" className="rounded-xl bg-red-50 px-3 py-2 text-xs leading-relaxed text-red-700">
-            Your report wasn't sent. Check your connection and try again — what you wrote is still here.
+            {submitError === "invalid"
+              ? "This can't be reported from here any more (it may have been deleted or removed). If something is still wrong, report the golfer's profile or contact support."
+              : submitError === "rate"
+                ? "You've sent a lot of reports in the last hour. Please wait a little and try again, or contact support if it's urgent."
+                : "Your report wasn't sent. Check your connection and try again — what you wrote is still here."}
           </p>
         )}
         <Button disabled={!category || submitting} aria-busy={submitting || undefined} onClick={submit} fullWidth>
