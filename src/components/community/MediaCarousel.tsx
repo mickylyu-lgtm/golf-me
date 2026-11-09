@@ -49,6 +49,16 @@ function useWideScreen(): boolean {
   return wide;
 }
 
+// Feed photo box shape (see MediaCarousel): Instagram's range, 4:5 tall to
+// 1.91:1 wide; 4:5 until the first photo's size is known.
+export const FEED_PHOTO_MIN_ASPECT = 4 / 5;
+export const FEED_PHOTO_MAX_ASPECT = 1.91;
+export function feedPhotoBoxAspect(photoAspect: number | null): number {
+  if (!photoAspect || !Number.isFinite(photoAspect) || photoAspect <= 0) return FEED_PHOTO_MIN_ASPECT;
+  return Math.min(FEED_PHOTO_MAX_ASPECT, Math.max(FEED_PHOTO_MIN_ASPECT, photoAspect));
+}
+const photoAspectCache = new Map<string, number>();
+
 export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }: MediaCarouselProps) {
   const [activeIndex, setActiveIndex] = useState(initialIndex);
   const trackRef = useRef<HTMLDivElement>(null);
@@ -184,13 +194,39 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
   }
 
   const wide = useWideScreen();
-  // Feed cards on phones: a fixed square box (reserved before anything
-  // loads, so the feed never jumps) with every photo shown whole inside it
-  // (Micky, 2026-11-08: no cropped edges, no tap needed to see the full
-  // picture). Unused space is a plain light background. Videos in an album
-  // keep filling the same box.
+  // Feed cards on phones, like Instagram photo posts (Micky, 2026-11-09:
+  // "just the image", no blank side bands): the box takes the first photo's
+  // own shape, kept between 4:5 (tall) and 1.91:1 (wide), and every item
+  // fills it edge to edge. A photo inside that range shows whole; one
+  // taller or wider is trimmed evenly to the limit, as Instagram does.
+  // Until the first photo's size is known the box is 4:5 (the common
+  // phone-photo shape), and sizes are remembered so a revisit never jumps.
+  const firstPhoto = variant === "card" && !wide ? media.find((m) => m.type !== "video") : undefined;
+  const firstPhotoSrc = firstPhoto ? firstPhoto.url : undefined;
+  const [photoAspect, setPhotoAspect] = useState<number | null>(() => (firstPhotoSrc ? (photoAspectCache.get(firstPhotoSrc) ?? null) : null));
+  useEffect(() => {
+    if (!firstPhotoSrc) return;
+    const cached = photoAspectCache.get(firstPhotoSrc);
+    if (cached) {
+      setPhotoAspect(cached);
+      return;
+    }
+    let live = true;
+    const probe = new Image();
+    probe.onload = () => {
+      if (!probe.naturalWidth || !probe.naturalHeight) return;
+      const a = probe.naturalWidth / probe.naturalHeight;
+      photoAspectCache.set(firstPhotoSrc, a);
+      if (live) setPhotoAspect(a);
+    };
+    probe.src = firstPhotoSrc;
+    return () => {
+      live = false;
+    };
+  }, [firstPhotoSrc]);
+  const boxAspect = feedPhotoBoxAspect(photoAspect);
   const itemClass =
-    variant !== "card" ? "" : wide ? "h-[min(70vh,36rem)] w-full shrink-0 snap-center object-contain" : "aspect-square w-full shrink-0 snap-center object-cover";
+    variant !== "card" ? "" : wide ? "h-[min(70vh,36rem)] w-full shrink-0 snap-center object-contain" : "h-full w-full shrink-0 snap-center object-cover";
 
   return (
     <div className="relative">
@@ -202,6 +238,7 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
         // never changes root tab (RootTabCarousel skips [data-no-swipe]).
         data-no-swipe
         className={`no-scrollbar flex w-full snap-x snap-mandatory overflow-x-auto scroll-smooth ${variant === "card" ? "rounded-xl" : "h-dvh"}`}
+        style={variant === "card" && !wide ? { aspectRatio: String(boxAspect) } : undefined}
       >
         {media.map((item, i) =>
           item.type === "video" ? (
@@ -323,7 +360,7 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0 }:
               </div>
             )
           ) : variant === "card" ? (
-            <CardImage key={item.id} src={item.url} className={itemClass.replace("object-cover", "object-contain")} fit="contain" onClick={() => onItemClick?.(i)} />
+            <CardImage key={item.id} src={item.url} className={itemClass} fit={wide ? "contain" : "cover"} onClick={() => onItemClick?.(i)} />
           ) : (
             // Pinch / double-tap zoom and pan (ZoomableImage); resets when
             // swiped away from.
