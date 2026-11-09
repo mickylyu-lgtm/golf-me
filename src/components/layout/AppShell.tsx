@@ -21,10 +21,16 @@ const ROOT_PATHS = new Set<string>(MOBILE_NAV_ITEMS.map((item) => item.path));
 // else (detail pages, forms, settings, a conversation) keeps the 48rem
 // reading column. Phones never see the difference: these are lg: classes.
 const WIDE_EXACT = new Set<string>(["/", "/find", "/caddie", "/profile", "/community", "/golf-calls", "/my-rounds", "/saved-posts", "/profile/posts", "/discover", "/courses/nearby", "/tee-times"]);
-const WIDE_PREFIXES = ["/admin/", "/messages"];
 
-function isWideRoute(pathname: string): boolean {
-  return WIDE_EXACT.has(pathname) || WIDE_PREFIXES.some((p) => pathname.startsWith(p));
+// Two-pane chat needs room for a 340px list plus a conversation at least
+// as wide as a phone, so it starts at xl (1280px); below that, chat keeps
+// the single reading column.
+const TWO_PANE_CHAT_MIN_WIDTH = 1280;
+
+function contentWidthClass(pathname: string): string {
+  if (isChatRoute(pathname)) return "xl:max-w-6xl xl:px-8";
+  if (WIDE_EXACT.has(pathname) || pathname.startsWith("/admin/")) return "lg:max-w-6xl lg:px-8";
+  return "";
 }
 
 // The chat list and its conversations: /messages, /messages/:id,
@@ -35,7 +41,7 @@ function isChatRoute(pathname: string): boolean {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
-  const isDesktop = useIsDesktop();
+  const twoPaneChatFits = useIsDesktop(TWO_PANE_CHAT_MIN_WIDTH);
   // Only the 5 root tabs get the swipeable carousel — everything else
   // (Golf Call detail, a golfer's profile, chat, forms, settings...) stays
   // on React Router's normal single-page-per-route rendering, so a
@@ -44,7 +50,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const isRootTab = ROOT_PATHS.has(pathname);
   // Desktop chat is two panes (list + conversation), so the phone's
   // list <-> conversation slide doesn't apply there.
-  const desktopChat = isDesktop && isChatRoute(pathname);
+  const desktopChat = twoPaneChatFits && isChatRoute(pathname);
   const contentRef = useRef<HTMLDivElement>(null);
   useChatRouteMotion(contentRef);
 
@@ -70,7 +76,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               horizontal overflow while it runs. */}
           <div
             ref={desktopChat ? undefined : contentRef}
-            className={`mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 py-5 sm:px-6 sm:py-8 ${isWideRoute(pathname) ? "lg:max-w-6xl lg:px-8" : ""}`}
+            className={`mx-auto flex w-full max-w-3xl flex-1 flex-col px-4 py-5 sm:px-6 sm:py-8 ${contentWidthClass(pathname)}`}
           >
             {desktopChat ? (
               <DesktopChatLayout>{pathname === "/messages" ? null : children}</DesktopChatLayout>

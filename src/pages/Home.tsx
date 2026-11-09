@@ -203,16 +203,16 @@ export function Home() {
   const preferencesRemaining = MIN_PREFERENCES_FOR_AUTO_MATCH - selectedPreferenceCount(currentUser);
 
   return (
-    // Desktop (lg+): a main column (actions, rounds, community) and a
-    // sticky right rail (courses, preferences, Caddie). Below lg the grid
-    // classes do nothing and the wrappers marked `contents` don't exist as
-    // boxes, so the phone layout is the same single column as before.
-    <div className="flex flex-col gap-5 lg:grid lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start lg:gap-x-8 lg:gap-y-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+    // Desktop: at xl (1280px+) a main column (actions, rounds, community)
+    // and a right rail (courses, preferences, Caddie); from lg the card lists
+    // go two-up. Below lg none of these classes apply and the `contents`
+    // wrappers are not boxes, so phones get the same single column as before.
+    <div className="flex flex-col gap-5 xl:grid xl:grid-cols-[minmax(0,1fr)_22rem] xl:items-start xl:gap-x-8 xl:gap-y-6">
       {/* Search bar, greeting, and the primary action cards are meant to
           read as one tight "top of Home" block (per product direction) —
           gap-3 here instead of inheriting the outer gap-6, which stays for
           spacing between this block and the sections below it. */}
-      <div className="flex flex-col gap-2.5 lg:col-start-1">
+      <div className="flex flex-col gap-2.5 xl:col-start-1">
         {/* Same fast entry point into FindFriends' own dedicated golfer-search
             screen used by Discover.tsx's shortcut — not a second search
             implementation. A plain button styled like a search bar, rather
@@ -311,7 +311,7 @@ export function Home() {
       {/* Available rounds, right below the Tee Times card (per product
           direction): nearby when there are any, otherwise the newest open
           rounds anywhere, otherwise an invitation to host the first one. */}
-      <section className="lg:col-start-1">
+      <section className="xl:col-start-1">
         <div className="mb-2.5 flex items-center justify-between">
           <h2 className="text-lg font-bold text-slate-900">
             {showingNearby ? t("home.roundsNearYou") : t("home.openRounds")}
@@ -326,7 +326,7 @@ export function Home() {
           )}
         </div>
         {homeRounds.length > 0 ? (
-          <div className="flex flex-col gap-3 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4">
+          <div className="flex flex-col gap-3 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4 xl:max-[1399px]:grid-cols-1">
             {homeRounds.map((call) => (
               <GolfCallCard key={call.id} call={call} />
             ))}
@@ -349,8 +349,8 @@ export function Home() {
         )}
       </section>
 
-      {/* lg+: the sticky right rail. */}
-      <div className="contents lg:sticky lg:top-24 lg:col-start-2 lg:row-span-3 lg:row-start-1 lg:flex lg:flex-col lg:gap-4">
+      {/* xl+: the right rail. */}
+      <div className="contents xl:col-start-2 xl:row-span-3 xl:row-start-1 xl:flex xl:flex-col xl:gap-4">
       <NearbyCoursesHomeCard />
 
       {preferencesRemaining > 0 && (
@@ -393,7 +393,7 @@ export function Home() {
       )}
       </div>
 
-      <section className="lg:col-start-1">
+      <section className="xl:col-start-1">
         <div data-tutorial-id={COMMUNITY_TUTORIAL_ID} className="mb-3 flex items-center justify-between gap-2">
           <h2 className="text-lg font-bold text-slate-900">{t("community.title")}</h2>
           <div className="flex shrink-0 items-center gap-3">
@@ -409,16 +409,16 @@ export function Home() {
           </div>
         </div>
         {recentPosts.length > 0 ? (
-          <div className="flex flex-col gap-3 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4">
+          <div className="flex flex-col gap-3 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4 xl:max-[1399px]:grid-cols-1">
             {recentPosts.map((post) => (
               <PostCard key={post.id} post={post} />
             ))}
             {morePosts ? (
-              <div ref={postsEndRef} aria-hidden="true" className="h-px lg:col-span-2" />
+              <div ref={postsEndRef} aria-hidden="true" className="h-px lg:col-span-full" />
             ) : (
               <button
                 onClick={() => navigate("/community")}
-                className="mt-1 flex min-h-11 items-center justify-center gap-1.5 self-center rounded-full px-4 text-sm font-semibold text-fairway-700 transition-colors duration-200 hover:bg-fairway-50 hover:text-fairway-800 lg:col-span-2 lg:justify-self-center"
+                className="mt-1 flex min-h-11 items-center justify-center gap-1.5 self-center rounded-full px-4 text-sm font-semibold text-fairway-700 transition-colors duration-200 hover:bg-fairway-50 hover:text-fairway-800 lg:col-span-full lg:justify-self-center"
               >
                 {t("community.seeAllPosts")} <ArrowRight size={14} aria-hidden="true" />
               </button>

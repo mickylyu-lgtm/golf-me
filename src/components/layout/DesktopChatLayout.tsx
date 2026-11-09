@@ -3,7 +3,7 @@ import { MessageCircle } from "lucide-react";
 import { Inbox } from "../../pages/Inbox";
 import { useLocale } from "../../i18n/LocaleContext";
 
-// Desktop only (AppShell mounts this at lg+ on /messages routes; phones keep
+// Desktop only (AppShell mounts this at 1280px+ on /messages routes; phones keep
 // the single-column list -> conversation flow). The chat list stays on the
 // left while a conversation is open on the right. The conversation screens
 // themselves (DirectMessageThread, RoundChatThread) are rendered unchanged
