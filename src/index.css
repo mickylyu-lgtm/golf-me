@@ -1324,3 +1324,18 @@ html.gm-hold-lock textarea {
   .gm-like-ring,
   .gm-like-spark { display: none; }
 }
+
+/* Desktop (mouse/trackpad) only: Tailwind v4's preflight gives buttons the
+   default arrow cursor. A pointer on everything clickable is what a Mac web
+   app is expected to show. Touch devices never match (hover: hover) and
+   (pointer: fine), so phones are unaffected. */
+@media (hover: hover) and (pointer: fine) {
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="tab"],
+  summary,
+  label[for],
+  select {
+    cursor: pointer;
+  }
+}

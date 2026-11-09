@@ -34,6 +34,50 @@ interface AuthProps {
   mode: "login" | "signup";
 }
 
+// Desktop only (lg and up; display:none below, so phones never render it):
+// the left half of the split sign-in layout. The same course photo as the
+// phone's band, under a forest wash, with the logo top-left and the
+// headline bottom-left. The sign-in panel sits centered on the right.
+// `decorative`: the email and code steps carry their own h1 in the panel,
+// so the hero's headline is plain text there.
+function DesktopAuthHero({ onBack, decorative = false }: { onBack: (() => void) | null; decorative?: boolean }) {
+  const { t } = useLocale();
+  const Headline = decorative ? "p" : "h1";
+  return (
+    <aside className="relative hidden w-[52%] shrink-0 overflow-hidden bg-brand-forest-deep lg:sticky lg:top-0 lg:flex lg:h-[100svh] lg:flex-col lg:justify-between lg:p-12">
+      <img
+        src={WELCOME_PHOTO.src}
+        alt=""
+        width={WELCOME_PHOTO.width}
+        height={WELCOME_PHOTO.height}
+        decoding="async"
+        style={{ transformOrigin: WELCOME_PHOTO.focal, transform: "scale(1.7)" }}
+        className="absolute inset-0 h-full w-full object-cover saturate-[1.1]"
+      />
+      <div className="absolute inset-0 bg-gradient-to-t from-brand-forest-deep via-brand-forest-deep/50 to-brand-forest-deep/45" aria-hidden />
+      <div className="relative flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <GolfMeIcon size={36} variant="gradient" className="rounded-[0.6rem] ring-1 ring-fixed-white/20" />
+          <GolfMeWordmark className="text-xl font-extrabold tracking-tight" golfClassName="text-fixed-white" />
+        </div>
+        {onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            className="flex min-h-10 items-center gap-1.5 rounded-full bg-fixed-white/10 px-4 text-sm font-semibold text-fixed-white ring-1 ring-fixed-white/15 transition-colors duration-200 hover:bg-fixed-white/20"
+          >
+            <ArrowLeft size={16} /> {t("auth.back")}
+          </button>
+        )}
+      </div>
+      <div className="relative max-w-md">
+        <Headline className="text-5xl font-extrabold leading-[1.05] tracking-tight text-fixed-white">{t("auth.welcome.headline")}</Headline>
+        <p className="mt-4 text-lg leading-relaxed text-fixed-white/80">{t("auth.welcome.subheadline")}</p>
+      </div>
+    </aside>
+  );
+}
+
 // Must match Supabase Dashboard > Authentication > Providers > Email >
 // "Email OTP Length": the code screen shows this many boxes and submits
 // once they're all filled.
@@ -483,11 +527,13 @@ export function Auth({ mode }: AuthProps) {
 
   if (step === "welcome") {
     return (
-      <div className="flex min-h-[100svh] flex-col bg-page">
-        <div className="mx-auto flex w-full max-w-md flex-1 flex-col">
+      <div className="flex min-h-[100svh] flex-col bg-page lg:flex-row">
+        <DesktopAuthHero onBack={isStandalone() ? null : () => navigate("/welcome")} />
+        {/* lg+: the sign-in panel, centered in the right half. */}
+        <div className="mx-auto flex w-full max-w-md flex-1 flex-col lg:max-w-none lg:items-center lg:justify-center lg:px-12 lg:py-16">
           {/* Fixed-height photo band: nothing below moves while it loads. */}
           {/* Takes the height the content below doesn't need: ~170px on an iPhone SE, ~340px on a 6.1" phone. */}
-          <div className="relative h-[clamp(150px,calc(100svh-500px),380px)] w-full shrink-0 overflow-hidden bg-brand-forest sm:rounded-b-[2rem]">
+          <div className="relative h-[clamp(150px,calc(100svh-500px),380px)] w-full shrink-0 overflow-hidden bg-brand-forest sm:rounded-b-[2rem] lg:hidden">
             {/* Photo from lib/welcomeImagery (one constant, swappable); the fixed band means no layout shift while it loads. */}
             <img
               src={WELCOME_PHOTO.src}
@@ -515,15 +561,16 @@ export function Auth({ mode }: AuthProps) {
             )}
           </div>
 
-          <div className="relative -mt-12 flex flex-1 flex-col px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+          <div className="relative -mt-12 flex flex-1 flex-col px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] lg:mt-0 lg:w-full lg:max-w-[380px] lg:flex-none lg:px-0 lg:pb-0">
             <div className="flex animate-fade-in flex-col items-center text-center motion-reduce:animate-none">
               <GolfMeIcon size={64} variant="gradient" className="rounded-[1.1rem] shadow-lg shadow-brand-forest/25 ring-4 ring-page" />
               <GolfMeWordmark className="mt-3 text-[1.7rem] font-extrabold leading-none tracking-tight" />
-              <h1 className="mt-4 text-[1.6rem] font-extrabold leading-tight tracking-tight text-brand-forest">{t("auth.welcome.headline")}</h1>
-              <p className="mt-1.5 max-w-[18rem] text-[15px] leading-snug text-slate-600">{t("auth.welcome.subheadline")}</p>
+              {/* lg+: the headline lives in DesktopAuthHero instead. */}
+              <h1 className="mt-4 text-[1.6rem] font-extrabold leading-tight tracking-tight text-brand-forest lg:hidden">{t("auth.welcome.headline")}</h1>
+              <p className="mt-1.5 max-w-[18rem] text-[15px] leading-snug text-slate-600 lg:hidden">{t("auth.welcome.subheadline")}</p>
             </div>
 
-            <div className="mt-auto flex flex-col gap-3 pt-6">
+            <div className="mt-auto flex flex-col gap-3 pt-6 lg:mt-10 lg:pt-0">
               {sessionExpired && (
                 <p role="status" className="flex items-start gap-2 rounded-2xl border border-slate-200 bg-white p-3 text-left text-sm text-slate-600">
                   <Info size={16} className="mt-0.5 shrink-0 text-fairway-700" aria-hidden />
@@ -722,9 +769,10 @@ export function Auth({ mode }: AuthProps) {
   }
 
   return (
-    <div className="flex min-h-[100svh] flex-col bg-page">
-      <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))]" style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}>
-        <div className="relative flex h-12 items-center justify-center">
+    <div className="flex min-h-[100svh] flex-col bg-page lg:flex-row">
+      <DesktopAuthHero onBack={null} decorative />
+      <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] lg:max-w-none lg:items-center lg:justify-center lg:px-12 lg:py-16" style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}>
+        <div className="relative flex h-12 items-center justify-center lg:w-full lg:max-w-[380px]">
           {onBack && (
             <button
               type="button"
@@ -740,7 +788,7 @@ export function Auth({ mode }: AuthProps) {
             <GolfMeWordmark className="text-lg font-extrabold tracking-tight" />
           </div>
         </div>
-        <div key={step} className="mt-8 flex flex-1 animate-fade-in flex-col motion-reduce:animate-none">
+        <div key={step} className="mt-8 flex flex-1 animate-fade-in flex-col motion-reduce:animate-none lg:w-full lg:max-w-[380px] lg:flex-none">
           {body}
           <div className="mt-auto pt-8">{legal}</div>
         </div>
