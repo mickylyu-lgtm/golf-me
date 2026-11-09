@@ -456,6 +456,7 @@ export const ko: Record<TranslationKey, string> = {
   "caddie.trimInstructions": "이 동영상은 {max}초보다 깁니다. Caddie가 분석할 부분을 드래그하여 선택하세요.",
   "caddie.trimSelectedLabel": "{start} – {end} 선택됨",
   "caddie.trimConfirm": "이 클립 사용",
+  "caddie.trimPlayheadLabel": "재생 위치",
   "caddie.trimStartLabel": "시작",
   "caddie.trimEndLabel": "종료",
   "caddie.trimPreview": "크롭 미리보기",

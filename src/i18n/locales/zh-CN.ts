@@ -456,6 +456,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "caddie.trimInstructions": "此视频长于{max}秒。拖动以选择Caddie要分析的部分。",
   "caddie.trimSelectedLabel": "已选择 {start} – {end}",
   "caddie.trimConfirm": "使用此片段",
+  "caddie.trimPlayheadLabel": "播放位置",
   "caddie.trimStartLabel": "开始",
   "caddie.trimEndLabel": "结束",
   "caddie.trimPreview": "预览裁剪",

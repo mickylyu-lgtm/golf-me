@@ -456,6 +456,7 @@ export const ja: Record<TranslationKey, string> = {
   "caddie.trimInstructions": "この動画は{max}秒より長いです。Caddieが分析する部分をドラッグして選んでください。",
   "caddie.trimSelectedLabel": "{start} 〜 {end} を選択中",
   "caddie.trimConfirm": "このクリップを使う",
+  "caddie.trimPlayheadLabel": "再生位置",
   "caddie.trimStartLabel": "開始",
   "caddie.trimEndLabel": "終了",
   "caddie.trimPreview": "切り抜きをプレビュー",

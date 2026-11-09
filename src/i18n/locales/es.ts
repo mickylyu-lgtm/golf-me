@@ -456,6 +456,7 @@ export const es: Record<TranslationKey, string> = {
   "caddie.trimInstructions": "Este video dura más de {max}s. Arrastra para elegir qué parte debe analizar Caddie.",
   "caddie.trimSelectedLabel": "{start} – {end} seleccionado",
   "caddie.trimConfirm": "Usar este clip",
+  "caddie.trimPlayheadLabel": "Posición de reproducción",
   "caddie.trimStartLabel": "Inicio",
   "caddie.trimEndLabel": "Fin",
   "caddie.trimPreview": "Previsualizar recorte",

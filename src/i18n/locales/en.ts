@@ -468,6 +468,7 @@ export const en = {
   "caddie.trimInstructions": "This video is longer than {max}s. Drag to pick which part Caddie should analyze.",
   "caddie.trimSelectedLabel": "{start} – {end} selected",
   "caddie.trimConfirm": "Use This Clip",
+  "caddie.trimPlayheadLabel": "Playback position",
   "caddie.trimStartLabel": "Start",
   "caddie.trimEndLabel": "End",
   "caddie.trimPreview": "Preview crop",

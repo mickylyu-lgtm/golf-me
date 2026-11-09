@@ -10,7 +10,7 @@ const MIN_WINDOW_SECONDS = 2; // a full swing (address through follow-through) r
 const FILMSTRIP_FRAME_COUNT = 10;
 const HANDLE_WIDTH_PX = 14;
 
-type DragMode = "start" | "end" | "middle" | null;
+type DragMode = "start" | "end" | "middle" | "playhead" | null;
 
 type FilmstripSlot = string | null | undefined;
 interface FilmstripState {
@@ -78,6 +78,10 @@ export function VideoTrimSelector({
   const [strip, setStrip] = useState<FilmstripState>(() => loadingStrip(file, 0));
   const stripNow = strip.file === file && strip.attempt === stripAttempt ? strip : loadingStrip(file, stripAttempt);
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
+  // Where the preview is, shown as a line across the filmstrip (Micky,
+  // 2026-11-09: see where the video is while it plays, and drag it to
+  // scrub). Kept inside the selected window, since that is what plays.
+  const [playhead, setPlayhead] = useState(initialWindow.start);
   // Real footage from a phone is often 60fps/high-resolution — seeking to
   // an arbitrary (non-keyframe) point means the browser has to decode
   // forward from the nearest preceding keyframe before it can actually
@@ -162,6 +166,26 @@ export function VideoTrimSelector({
     return () => video.removeEventListener("timeupdate", handleTimeUpdate);
   }, [end]);
 
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !isPreviewPlaying) return;
+    let raf = 0;
+    const tick = () => {
+      setPlayhead(video.currentTime);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [isPreviewPlaying]);
+
+  // Any seek from a handle drag moves the line too, kept inside the window.
+  useEffect(() => {
+    setPlayhead((p) => (dragRef.current.mode === "playhead" ? p : previewTime));
+  }, [previewTime]);
+  useEffect(() => {
+    setPlayhead((p) => Math.min(end, Math.max(start, p)));
+  }, [start, end]);
+
   function togglePreview() {
     const video = videoRef.current;
     if (!video || isPreviewLoading) return;
@@ -201,7 +225,9 @@ export function VideoTrimSelector({
     // Always restarts from the current start, even if playback previously
     // stopped sitting right at the old end -- pressing play should always
     // mean "show me the crop from the top," not "resume from wherever."
-    video.currentTime = start;
+    // Plays from the line when it sits inside the window (scrubbed there),
+    // else from the window's start.
+    video.currentTime = playhead > start + 0.05 && playhead < end - 0.1 ? playhead : start;
   }
 
   const dragRef = useRef<{ mode: DragMode; startAtDragBegin: number; endAtDragBegin: number; originClientX: number }>({
@@ -243,6 +269,11 @@ export function VideoTrimSelector({
       setEnd(next);
       if (next - start > maxSeconds) setStart(next - maxSeconds);
       setPreviewTime(next);
+    } else if (drag.mode === "playhead") {
+      const t = Math.min(end, Math.max(start, clientXToSeconds(e.clientX)));
+      setPlayhead(t);
+      const video = videoRef.current;
+      if (video) video.currentTime = t;
     } else if (drag.mode === "middle") {
       const rect = trackRef.current?.getBoundingClientRect();
       const secondsPerPx = rect && rect.width > 0 ? duration / rect.width : 0;
@@ -344,6 +375,39 @@ export function VideoTrimSelector({
               onPointerCancel={endDrag}
             />
           </div>
+
+          {/* Playhead: where the preview is. Drag it to scrub inside the
+              window; the touch target is wider than the line. */}
+          {duration > 0 && (
+            <div
+              role="slider"
+              aria-label={t("caddie.trimPlayheadLabel")}
+              aria-valuemin={start}
+              aria-valuemax={end}
+              aria-valuenow={playhead}
+              tabIndex={0}
+              data-trim-playhead
+              className="absolute -top-1.5 -bottom-1.5 z-[2] flex w-6 -translate-x-1/2 cursor-ew-resize justify-center"
+              style={{ left: `${(playhead / duration) * 100}%` }}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                beginDrag("playhead", e);
+              }}
+              onPointerMove={handlePointerMove}
+              onPointerUp={endDrag}
+              onPointerCancel={endDrag}
+              onKeyDown={(e) => {
+                if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+                e.preventDefault();
+                const next = Math.min(end, Math.max(start, playhead + (e.key === "ArrowRight" ? 0.1 : -0.1)));
+                setPlayhead(next);
+                if (videoRef.current) videoRef.current.currentTime = next;
+              }}
+            >
+              <span className="h-full w-[3px] rounded-full bg-fixed-white shadow-[0_0_0_1px_rgba(0,0,0,0.35)]" />
+              <span className="absolute -top-0.5 h-2.5 w-2.5 rounded-full bg-fixed-white shadow-[0_0_0_1px_rgba(0,0,0,0.35)]" />
+            </div>
+          )}
 
           {/* Edge handles -- each resizes just its own side. */}
           <div
