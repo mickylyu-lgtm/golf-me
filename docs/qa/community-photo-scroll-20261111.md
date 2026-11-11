@@ -1,8 +1,8 @@
 # Community photo scrolling: local regression results
 
-Date: 2026-11-11  
-Branch: `fix/community-photo-scroll-20261111`  
-Base: `294e06c` (`fix/round-chat-switch-20261110`)  
+Date: 2026-11-11
+Branch: `fix/community-photo-scroll-20261111`
+Base: `294e06c` (`fix/round-chat-switch-20261110`)
 Scope: local-only frontend fix; no push, deployment, database migration or production-account access.
 
 ## Confirmed cause
@@ -47,4 +47,3 @@ The accompanying screenshots are local synthetic fixtures, not production posts:
 ## Remaining validation
 
 Physical iPhone Safari/WKWebView, pinch gestures on real hardware, real account data, and production deployment were not tested. Review the local commit, then obtain approval before any push or deployment.
-

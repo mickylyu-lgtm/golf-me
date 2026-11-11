@@ -95,4 +95,3 @@ test("missing or zero-width tracks do not produce invalid scroll indices", () =>
   restore({ current: null }, { index: 2 }, [0, 1, 2], () => assert.fail());
   onScroll({ current: { clientWidth: 0, scrollLeft: 100 } }, [0, 1, 2], () => assert.fail());
 });
-

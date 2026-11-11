@@ -7,6 +7,13 @@ Last updated: 2026-11-09 (**Desktop (Mac browser) layout**: split sign-in, wider
 Note: Phases between Phase 20/21 (see below) and Phase 22 span roughly 31 commits (2026-09-16 through 2026-09-21) that also never got a numbered write-up as they landed — Phase 22 below reconstructs them from `git log`/code review (that session's own commit messages are unusually detailed, so this is a faithful summary, not a guess) rather than live session narration. Older gap, still not backfilled: Phases between Phase 6 and Phase 20 (chat keyboard/Capacitor Keyboard native linking, floating swipeable BottomNav + auto-collapse + centering fixes, tee-time booking fallback hero image, and everything else through 2026-09-15) — see `git log` for that range (commits from "Prefer GolfCourseAPI v1.1 coordinates..." through "Floating pill bottom nav with press-and-slide tab selection, haptics, Caddie unify").
 
 
+## Completed fixes preview - 2026-11-11 (preview branch only)
+
+- `preview/completed-fixes-20261111` is based on verified remote `main` `04b30e3` and contains only round-chat switch reset (`294e06c`), Community photo scrolling (`48e3db0`), and compact inline message editing (cherry-picked `30106bb` as `b4d0e64`). The older compact-edit base was already an ancestor of main; unrelated work was not merged.
+- Integration checks: `npm run check` passed TypeScript, lint, all 1,254 tests, build and prerender with a dummy backend. The synthetic message-edit browser suite passed DM/round save and cancel, preserved composer draft, compact/growing sizing, failure/retry, expiry/conflict, unsent drafts, duplicate save, late responses, IME and Escape. Browser requests were restricted to localhost. Physical iPhone/native and real-account checks remain pending.
+- Release boundary: Vercel's configured production branch is `main`; this branch is for a Preview URL only. No merge to main, production deployment, database migration, Supabase function deployment or native notification change is included. The native iOS sender-photo notification work still requires a signed build and device testing.
+- Next: open the Preview URL when its build is ready and test the three fixes. Prefer Try Demo Account for isolated tests; real sign-in may use the existing backend. Production release requires a separate decision.
+
 ## Community photo scrolling - 2026-11-11 (local only, not pushed or deployed)
 
 - Branch: `fix/community-photo-scroll-20261111`, based on `294e06c` (the isolated round-chat fix). Claude's active checkout and uncommitted work were not changed.
