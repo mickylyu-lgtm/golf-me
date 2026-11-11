@@ -7,6 +7,16 @@ Last updated: 2026-11-09 (**Desktop (Mac browser) layout**: split sign-in, wider
 Note: Phases between Phase 20/21 (see below) and Phase 22 span roughly 31 commits (2026-09-16 through 2026-09-21) that also never got a numbered write-up as they landed — Phase 22 below reconstructs them from `git log`/code review (that session's own commit messages are unusually detailed, so this is a faithful summary, not a guess) rather than live session narration. Older gap, still not backfilled: Phases between Phase 6 and Phase 20 (chat keyboard/Capacitor Keyboard native linking, floating swipeable BottomNav + auto-collapse + centering fixes, tee-time booking fallback hero image, and everything else through 2026-09-15) — see `git log` for that range (commits from "Prefer GolfCourseAPI v1.1 coordinates..." through "Floating pill bottom nav with press-and-slide tab selection, haptics, Caddie unify").
 
 
+## Community photo scrolling - 2026-11-11 (local only, not pushed or deployed)
+
+- Branch: `fix/community-photo-scroll-20261111`, based on `294e06c` (the isolated round-chat fix). Claude's active checkout and uncommitted work were not changed.
+- Reproduced the fullscreen photo snap-back: opening photo 2 and immediately swiping backward returned to photo 2 in 3/3 attempts; rapid open/close of photo 3 returned photo 1. CSS smooth scrolling was animating supposedly instant opening/return jumps.
+- Fixed the jumps to run before paint without CSS smooth scrolling, kept native momentum/snap, made repeated return-to-the-same-photo requests reliable, and bounded scroll indices.
+- Verification: `npm run check` passed (1,253 tests, TypeScript, lint, build/prerender); 27 local synthetic Chromium checks passed for rapid/repeated swipes, close/reopen, zoom/pan, dismiss/cancel, Escape, reduced motion and desktop wheel navigation. See `docs/qa/community-photo-scroll-20261111.md`.
+- Next: review the local commit; obtain permission before pushing/deploying. Real-account and physical-iPhone checks are still pending. No migration or native-shell change.
+
+
+
 ## Round chat switching reset - 2026-11-11 (B; local only, not pushed or deployed)
 
 - Branch: `fix/round-chat-switch-20261110`, based on the locally available `origin/main` `04b30e3`. Separate worktree; the active Claude checkout and its uncommitted changes were left alone.

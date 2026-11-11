@@ -22,8 +22,9 @@ interface MediaCarouselProps {
   /** Called with the slide in view whenever it changes. */
   onIndexChange?: (index: number) => void;
   /** Card variant: jump (no animation) to this slide when it changes, e.g.
-   * to the photo last viewed in the fullscreen viewer. */
-  showIndex?: number;
+   * to the photo last viewed in the fullscreen viewer. Pass a fresh request
+   * on each close, including when returning to the same index again. */
+  showSlide?: { index: number };
 }
 
 const HOLD_TO_SPEED_UP_MS = 180;
@@ -64,7 +65,7 @@ export function feedPhotoBoxAspect(photoAspect: number | null): number {
 }
 const photoAspectCache = new Map<string, number>();
 
-export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0, onIndexChange, showIndex }: MediaCarouselProps) {
+export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0, onIndexChange, showSlide }: MediaCarouselProps) {
   const [activeIndex, setActiveIndex] = useState(initialIndex);
   const trackRef = useRef<HTMLDivElement>(null);
   const holdTimerRef = useRef<number | null>(null);
@@ -77,7 +78,7 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0, o
   const [unmutedIds, setUnmutedIds] = useState<Set<string>>(new Set());
   // Jump to the tapped slide instantly (no animated scroll) the moment the
   // lightbox mounts, rather than opening on slide 0 every time.
-  useEffect(() => {
+  useLayoutEffect(() => {
     const track = trackRef.current;
     if (track && initialIndex > 0) track.scrollLeft = initialIndex * track.clientWidth;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -85,13 +86,13 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0, o
 
   // Back from the fullscreen viewer: land on the photo last viewed there
   // (Micky, 2026-11-09), not the post's first one.
-  useEffect(() => {
+  useLayoutEffect(() => {
     const track = trackRef.current;
-    if (!track || showIndex === undefined) return;
-    const i = Math.max(0, Math.min(media.length - 1, showIndex));
+    if (!track || showSlide === undefined) return;
+    const i = Math.max(0, Math.min(media.length - 1, showSlide.index));
     track.scrollLeft = i * track.clientWidth;
     setActiveIndex(i);
-  }, [showIndex, media.length]);
+  }, [showSlide, media.length]);
   const onIndexChangeRef = useRef(onIndexChange);
   onIndexChangeRef.current = onIndexChange;
 
@@ -157,7 +158,7 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0, o
   function handleScroll() {
     const track = trackRef.current;
     if (!track || track.clientWidth === 0) return;
-    const index = Math.round(track.scrollLeft / track.clientWidth);
+    const index = Math.max(0, Math.min(media.length - 1, Math.round(track.scrollLeft / track.clientWidth)));
     setActiveIndex((prev) => (prev === index ? prev : index));
   }
 
@@ -258,7 +259,11 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0, o
         // A horizontal swipe on a photo carousel scrolls the carousel; it
         // never changes root tab (RootTabCarousel skips [data-no-swipe]).
         data-no-swipe
-        className={`no-scrollbar flex w-full snap-x snap-mandatory overflow-x-auto scroll-smooth ${variant === "card" ? "rounded-xl" : "h-dvh"}`}
+        // Programmatic opening/return jumps must be instant. CSS smooth
+        // scrolling animates scrollLeft too, fighting an immediate swipe
+        // and briefly reporting the slides passed on the way to the target.
+        // Native touch momentum and scroll-snap remain browser-managed.
+        className={`no-scrollbar flex w-full snap-x snap-mandatory overflow-x-auto ${variant === "card" ? "rounded-xl" : "h-dvh"}`}
         style={variant === "card" && !wide ? { aspectRatio: String(boxAspect) } : undefined}
       >
         {media.map((item, i) =>
