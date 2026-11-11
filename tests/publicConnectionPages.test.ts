@@ -36,7 +36,7 @@ test("demo pages bound results and search separate fields literally", () => {
 });
 test("UI uses bounded server search and does not restore accepted-follower gates", () => {
   const ui=readFileSync(new URL("../src/components/profile/ProfileFollowers.tsx",import.meta.url),"utf8");
-  assert.match(ui,/useConnectionPages/);assert.doesNotMatch(ui,/getProfileConnections|isFollowing\(profileId\)/);
+  assert.match(ui,/useConnectionPages/);assert.doesNotMatch(ui,/getProfileConnections|permitted =[^\n]*isFollowing\(profileId\)/);
   assert.match(ui,/<FollowControl profileId=\{golfer.id\}/);
   const network=readFileSync(new URL("../src/lib/socialPrivacyFetch.ts",import.meta.url),"utf8");
   assert.match(network,/p_limit: 30, p_search: search, p_cursor: cursor/);

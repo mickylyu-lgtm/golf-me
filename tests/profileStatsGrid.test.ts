@@ -36,3 +36,14 @@ test("new stat labels exist in all six locales",()=>{
     for(const key of ["completedRounds","wouldPlayAgain","showUpRate","onTime","membership"])assert.ok(source.includes('"profileStats.'+key+'"'),locale+":"+key);
   }
 });
+
+test("mutuals are prominent before accepted follow, compact after, with no fabricated loading count",()=>{
+  const source=read("components/profile/ProfileFollowers.tsx");
+  const summary=source.slice(source.indexOf("export function ProfileMutualSummary"),source.indexOf("function FollowersSheet"));
+  assert.match(summary,/const compact = isFollowing\(profileId\)/);
+  assert.match(summary,/data-presentation=\{compact \? "compact" : "prominent"\}/);
+  assert.match(summary,/if \(!permitted \|\| value === undefined\) return null/);
+  assert.match(summary,/currentUser.id !== profileId && !isBlockedEitherWay\(profileId\)/);
+  assert.match(summary,/compact \? "sr-only"/);
+  assert.doesNotMatch(summary,/getFollowState|state === "pending"|mutualTotal \?\? 0/);
+});

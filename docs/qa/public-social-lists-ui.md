@@ -39,3 +39,9 @@ The local candidate was rebased without conflict onto remote main 9fa5f18862f699
 Read-only live preflight found no prerequisite drift: all 18 relevant function bodies, ownership/search_path/execution modes/ACLs, table policies and constraints, request-table protections, existing indexes and block trigger still matched the previously verified release. The new page RPC and indexes remain absent; the new migration remains unapplied. CI still has no automatic migration/db push. Migration SHA-256 remains c985e9fbbbdd51aa7360ef374c0e1e850b0d63fbd479d6d0efd518d55f06d3c1. No real records or secrets were read.
 
 This preflight is not release approval. Production SQL requires explicit scoped confirmation. The dependent frontend must not be published alone. Mac remains reported offline, so native Safari/WKWebView and the approved simulator-session Auth/PostgREST check remain unavailable. No production SQL, push or deployment was performed.
+
+
+## Mutual-summary presentation follow-up
+The eligible nonfollower/pending state now uses a prominent near-top card with the existing count and explanation. An accepted follow switches the same summary to a smaller text row; its explanation remains available to screen readers. Own, blocked, loading and failed states still do not fabricate a summary. The profile grid, data contract and connections sheet are unchanged.
+
+Validation: full npm run check passes 1,347 tests plus TypeScript, lint and production build. Synthetic browser regression checks accepted versus nonfollow/pending presentation, own/blocked omission, visible mutation transition, compact long names, and prominent 320/390 layouts without overflow. Same-profile/same-count screenshots are artifacts.local/mutual-before-follow-390.png and artifacts.local/mutual-after-follow-390.png. Chromium only; no new native Safari/WKWebView evidence.

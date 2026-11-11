@@ -37,15 +37,25 @@ export function ProfileFollowers({ profileId, layout = "inline" }: { profileId: 
 }
 
 export function ProfileMutualSummary({ profileId, name }: { profileId: string; name: string }) {
-  const { currentUser, getConnectionSummary, isBlockedEitherWay } = useData();
+  const { currentUser, getConnectionSummary, isFollowing, isBlockedEitherWay } = useData();
   const { t, locale } = useLocale();
   const permitted = currentUser.id !== profileId && !isBlockedEitherWay(profileId);
+  // Only accepted relationships compact the summary. Pending requests do not.
+  const compact = isFollowing(profileId);
   const read = useCallback(() => getConnectionSummary(profileId, "followers"), [getConnectionSummary, profileId]);
   const { value } = useSocialRead(read, permitted);
   if (!permitted || value === undefined) return null;
-  return <div className="my-1 max-w-sm rounded-xl bg-fairway-50/70 px-3 py-2 text-center" data-testid="mutual-summary">
-    <p className="text-sm font-medium text-fairway-800">{t(value.mutualTotal === 1 ? "followers.mutualSummaryOne" : "followers.mutualSummary", { count: value.mutualTotal.toLocaleString(locale), name })}</p>
-    <p className="mt-1 text-[11px] leading-snug text-slate-500">{t("followers.mutualSummaryHelp")}</p>
+  return <div data-testid="mutual-summary" data-presentation={compact ? "compact" : "prominent"}
+    className={compact
+      ? "my-1 flex max-w-sm items-start justify-center gap-1.5 px-2 py-1 text-center"
+      : "my-2 w-full max-w-sm rounded-2xl border border-fairway-100 bg-fairway-50/80 px-4 py-3 text-center"}>
+    <Users size={compact ? 14 : 22} aria-hidden="true" className={compact ? "mt-0.5 shrink-0 text-fairway-600" : "mx-auto mb-2 text-fairway-700"} />
+    <div className="min-w-0">
+      <p className={compact ? "text-xs font-medium leading-snug text-slate-600" : "text-sm font-semibold leading-snug text-fairway-900"}>
+        {t(value.mutualTotal === 1 ? "followers.mutualSummaryOne" : "followers.mutualSummary", { count: value.mutualTotal.toLocaleString(locale), name })}
+      </p>
+      <p className={compact ? "sr-only" : "mt-1.5 text-xs leading-snug text-fairway-800/75"}>{t("followers.mutualSummaryHelp")}</p>
+    </div>
   </div>;
 }
 

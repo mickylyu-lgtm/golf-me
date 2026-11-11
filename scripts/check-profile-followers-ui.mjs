@@ -42,6 +42,7 @@ const switchViewer=async(id)=>{
 fs.mkdirSync('artifacts.local',{recursive:true});
 await page.goto(base+'/profile');
 await page.getByTestId('own-profile-stats-grid').waitFor();
+assert.equal(await page.getByTestId('mutual-summary').count(),0,'own profile has no mutual summary');
 assert.equal(await page.getByTestId('own-profile-stats-grid').locator(':scope > *').count(),3);
 await page.waitForTimeout(350);await page.screenshot({path:'artifacts.local/profile-grid-own-390.png'});
 await page.getByRole('button',{name:'3 followers',exact:true}).click();
@@ -86,6 +87,9 @@ await page.waitForTimeout(350);await page.screenshot({path:'artifacts.local/foll
 
 await page.goto(base+'/golfer/g11');
 await page.getByText('You have 1 mutual with Alex Green',{exact:true}).waitFor();
+assert.equal(await page.getByTestId('mutual-summary').getAttribute('data-presentation'),'compact');
+const compactMutualHeight=(await page.getByTestId('mutual-summary').boundingBox()).height;
+await page.evaluate(()=>{let node=document.querySelector('[data-testid=mutual-summary]');while(node){node.scrollTo({top:0,behavior:'instant'});node=node.parentElement;}window.scrollTo({top:0,behavior:'instant'});});await page.waitForTimeout(350);await page.screenshot({path:'artifacts.local/mutual-after-follow-390.png'});
 for (const width of [320,390]) {
   await page.setViewportSize({width,height:844});
   await page.goto(base+'/golfer/g11');
@@ -140,6 +144,15 @@ await page.waitForTimeout(350);await page.screenshot({path:'artifacts.local/mutu
 await page.getByRole('button',{name:'Following',exact:true}).click();
 await page.getByRole('button',{name:'Follow',exact:true}).waitFor();
 await page.getByTestId('mutual-summary').waitFor();
+assert.equal(await page.getByTestId('mutual-summary').getAttribute('data-presentation'),'prominent');
+assert.ok((await page.getByTestId('mutual-summary').boundingBox()).height>compactMutualHeight,'prefollow summary is visibly larger');
+for(const width of [320,390]) {
+  await page.setViewportSize({width,height:844});await page.evaluate(()=>{let node=document.querySelector('[data-testid=mutual-summary]');while(node){node.scrollTo({top:0,behavior:'instant'});node=node.parentElement;}window.scrollTo({top:0,behavior:'instant'});});
+  const summary=page.getByTestId('mutual-summary');
+  assert.ok(await summary.evaluate(e=>e.scrollWidth<=e.clientWidth+1),'prominent summary fits '+width);
+  const box=await summary.boundingBox();assert.ok(box.y>=0 && box.y+box.height<650,'prominent summary near top '+width);
+}
+await page.waitForTimeout(3600);await page.screenshot({path:'artifacts.local/mutual-before-follow-390.png'});
 await page.getByRole('button',{name:'1 follower',exact:true}).click();
 await dialog.getByText('Cam Hill',{exact:true}).waitFor();
 assert.equal(await dialog.locator('li').count(),1);
@@ -160,6 +173,7 @@ await page.getByRole('button',{name:'Follow',exact:true}).click();
 await page.getByRole('button',{name:/Requested.*Cancel request/}).waitFor();
 await page.getByTestId('mutual-summary').waitFor();
 assert.ok(!(await data()).follows.some(f=>f.followerId==='g1'&&f.followingId==='g11'));
+assert.equal(await page.getByTestId('mutual-summary').getAttribute('data-presentation'),'prominent','pending remains prominent');
 await page.getByRole('button',{name:'1 follower',exact:true}).click();
 await dialog.getByText('Cam Hill',{exact:true}).waitFor();
 assert.equal(await dialog.locator('li').count(),1,'pending viewer can see public followers without becoming one');
@@ -217,6 +231,7 @@ await page.getByTestId('mutual-summary').waitFor();
 await page.goto(base+'/golfer/g3');
 await page.getByTestId('profile-stats-grid').waitFor();
 assert.equal(await page.getByTestId('profile-stats-grid').getByRole('button',{name:/follower/}).count(),0,'blocked follower control remains absent');
+assert.equal(await page.getByTestId('mutual-summary').count(),0,'blocked mutual summary absent');
 console.log('PASS: shared two/three-column reputation grid, own summary grid, six original stats, near-top public mutuals, new golfer and blocked variants.');
 // A larger synthetic graph must remain bounded and searchable without eager collection.
 await page.evaluate(()=>{
