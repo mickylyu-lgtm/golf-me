@@ -37,8 +37,8 @@ import type {
 import { AGE_PREF_MAX, AGE_PREF_MIN } from "../types";
 import { generateId } from "../lib/id";
 import type { ProfileFollowers } from "../lib/profileFollowers";
-import type { SocialPrivacyApi, ConnectionKind, FollowState } from "../lib/socialPrivacy";
-import { demoConnections, demoFollowState, demoIncomingRequests, demoBlocked } from "../lib/demoSocialPrivacy";
+import type { SocialPrivacyApi, ConnectionCursor, ConnectionKind, FollowState } from "../lib/socialPrivacy";
+import { demoConnectionPage, demoConnections, demoFollowState, demoIncomingRequests, demoBlocked } from "../lib/demoSocialPrivacy";
 import { blockedContactRows } from "../lib/blockedContacts";
 import type { BlockedContact } from "../lib/blockedContacts";
 import type { GeoPoint } from "../lib/geo";
@@ -1320,9 +1320,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
   // rollback-on-failure, same as the rest of this file's real/demo split.
   const isFollowing = useCallback((id: string) => (auth.isDemo ? demoIsFollowing(id) : realSocial.isFollowing(id)), [auth.isDemo, demoIsFollowing, realSocial]);
   const followingGolfers = auth.isDemo ? demoFollowingGolfers : realSocial.followingGolfers;
-  const { getProfileConnections: realConnections, getConnectionSummary: realSummary, getFollowState: realFollowState,
+  const { getConnectionPage: realConnectionPage, getProfileConnections: realConnections, getConnectionSummary: realSummary, getFollowState: realFollowState,
     getFollowRequests: realRequests, removeFollower: realRemoveFollower, cancelFollowRequest: realCancelRequest,
     respondToFollowRequest: realRespondRequest, setAccountPrivate: realSetPrivate } = realSocial;
+  const getConnectionPage = useCallback(async (id: string, kind: ConnectionKind, search: string, cursor: ConnectionCursor | null) => auth.isDemo
+    ? demoConnectionPage(data, currentUser.id, id, kind, search, cursor) : realConnectionPage(id, kind, search, cursor), [auth.isDemo, data, currentUser.id, realConnectionPage]);
   const getProfileConnections = useCallback(async (id: string, kind: ConnectionKind) => auth.isDemo
     ? demoConnections(data, currentUser.id, id, kind) : realConnections(id, kind), [auth.isDemo, data, currentUser.id, realConnections]);
   const getConnectionSummary = useCallback(async (id: string, kind: ConnectionKind) => auth.isDemo
@@ -1374,7 +1376,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       const request = { id: generateId("request"), followerId: currentUser.id, followingId: golferId, createdAt: new Date().toISOString() };
       setData((prev) => prev.followRequests?.some((r) => r.followerId === currentUser.id && r.followingId === golferId) ? prev : { ...prev, followRequests: [...(prev.followRequests ?? []), request] });
       pushNotification(golferId, "new_follow_request", currentUser.name + " requested to follow you.", "/profile", currentUser.id);
-      return { ...state, state: "pending", requestId: request.id, canViewConnections: false };
+      return { ...state, state: "pending", requestId: request.id, canViewConnections: true };
     }
     demoFollowUser(golferId);
     return { ...state, state: "following", canViewConnections: true };
@@ -2372,6 +2374,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       hasPlayedWith,
       playedWithIds,
       followingGolfers,
+      getConnectionPage,
       getProfileConnections,
       getConnectionSummary,
       getFollowState,
@@ -2515,6 +2518,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       hasPlayedWith,
       playedWithIds,
       followingGolfers,
+      getConnectionPage,
       getProfileConnections,
       getConnectionSummary,
       getFollowState,

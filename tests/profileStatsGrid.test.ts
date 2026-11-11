@@ -23,12 +23,12 @@ test("own summary tiles retain rounds, handicap and the existing follower contro
   assert.match(source,/label=\{t\("profile.handicap"\)\}/);
   assert.match(source,/<ProfileFollowers profileId=\{currentUser.id\} layout="stat"/);
 });
-test("grid presentation never substitutes a count for private or unknown followers",()=>{
+test("grid presentation never substitutes a count for blocked or unknown followers",()=>{
   const source=read("components/profile/ProfileFollowers.tsx");
   assert.match(source,/permitted \? <strong/);
   assert.match(source,/value === undefined \? "–" : value.total/);
-  assert.match(source,/<LockKeyhole/);
-  assert.match(source,/currentUser.id !== profileId && isFollowing\(profileId\) && !isBlockedEitherWay\(profileId\)/);
+  assert.doesNotMatch(source,/<LockKeyhole/);
+  assert.match(source,/currentUser.id !== profileId && !isBlockedEitherWay\(profileId\)/);
 });
 test("new stat labels exist in all six locales",()=>{
   for(const locale of ["en","es","ja","ko","zh-CN","zh-TW"]){

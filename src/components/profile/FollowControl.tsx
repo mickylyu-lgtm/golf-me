@@ -20,8 +20,8 @@ function FollowControlForViewer({ profileId, name }: { profileId: string; name: 
   const read = useCallback(() => getFollowState(profileId), [getFollowState, profileId]);
   const { value: state, failed, retry } = useSocialRead(read, permitted);
   if (!permitted) return null;
-  if (failed) return <Button size="sm" variant="outline" onClick={retry} title={t("socialPrivacy.followUnavailable")}>{t("socialPrivacy.followRetry")}</Button>;
-  return <Button size="sm" variant={state?.state === "none" ? "primary" : "outline"}
+  if (failed) return <Button className="min-h-11 shrink-0" size="sm" variant="outline" onClick={retry} title={t("socialPrivacy.followUnavailable")}>{t("socialPrivacy.followRetry")}</Button>;
+  return <Button className="min-h-11 shrink-0" size="sm" variant={state?.state === "none" ? "primary" : "outline"}
     icon={state?.state === "following" ? <UserRoundCheck size={14} /> : state?.state === "pending" ? <Clock3 size={14} /> : <UserRoundPlus size={14} />}
     disabled={!state || busy} title={state?.state === "pending" ? t("socialPrivacy.cancelRequest") : undefined}
     onClick={async () => {

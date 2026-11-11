@@ -1,9 +1,10 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { supabase } from "../lib/supabase";
-import { fetchConnections, fetchFollowState, fetchFollowRequests, sendFollow, sendUnfollow, sendRemoveFollower, sendCancelRequest, sendRespondRequest, sendPrivacySetting } from "../lib/socialPrivacyFetch";
-import type { SocialPrivacyApi, ConnectionKind, FollowState } from "../lib/socialPrivacy";
+import { fetchConnectionPage, fetchConnections, fetchFollowState, fetchFollowRequests, sendFollow, sendUnfollow, sendRemoveFollower, sendCancelRequest, sendRespondRequest, sendPrivacySetting } from "../lib/socialPrivacyFetch";
+import type { SocialPrivacyApi, ConnectionCursor, ConnectionKind, FollowState } from "../lib/socialPrivacy";
 import type { ProfileFollowers } from "../lib/profileFollowers";
+import { createSocialReadCoordinator, requireSocialScope } from "../lib/socialReadCoordinator";
 import { requireCurrentFollowerRead } from "../lib/profileFollowers";
 import { isHistoryCut } from "../lib/roundMessagePages";
 import { useAuth } from "./AuthContext";
@@ -1073,16 +1074,32 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
 
   // Scope changes invalidate late reads and render-time UI snapshots. No
   // shared list cache survives a follow, block, removal or identity change.
+  const socialReads = useRef<ReturnType<typeof createSocialReadCoordinator> | null>(null);
+  socialReads.current ??= createSocialReadCoordinator(4);
   const followerPrivacyRef = useRef({ selfId, blocks, follows, socialRevision });
   if (followerPrivacyRef.current.selfId !== selfId || followerPrivacyRef.current.blocks !== blocks || followerPrivacyRef.current.follows !== follows || followerPrivacyRef.current.socialRevision !== socialRevision) {
     followerPrivacyRef.current = { selfId, blocks, follows, socialRevision };
   }
+  const getConnectionPage = useCallback(async (id: string, kind: ConnectionKind, search: string, cursor: ConnectionCursor | null) => {
+    if (!selfId || isBlocked(id) || isBlockedBy(id)) throw new Error("Connections unavailable");
+    const privacy = followerPrivacyRef.current;
+    if (privacy.selfId !== selfId || privacy.blocks !== blocks || privacy.follows !== follows || privacy.socialRevision !== socialRevision) throw new Error("Follower visibility changed");
+    const result = await requireCurrentFollowerRead(fetchConnectionPage(id, kind, search, cursor), () => followerPrivacyRef.current === privacy && socialViewerRef.current === selfId);
+    // Row navigation resolves through the existing public-profile cache, including
+    // golfers outside the viewer's directory/following preload.
+    requireSocialScope(() => followerPrivacyRef.current === privacy && socialViewerRef.current === selfId);
+    const cache = new Map(profileCacheRef.current);
+    for (const golfer of result.golfers) cache.set(golfer.id, golfer);
+    profileCacheRef.current = cache;
+    setProfileCache((prev) => sameProfileMap(prev, cache) ? prev : cache);
+    return result;
+  }, [selfId, blocks, follows, socialRevision, isBlocked, isBlockedBy]);
   const getProfileConnections = useCallback(async (id: string, kind: ConnectionKind) => {
     if (!selfId || isBlocked(id) || isBlockedBy(id)) throw new Error("Connections unavailable");
-    if (id !== selfId && !follows.some((f) => f.follower_id === selfId && f.following_id === id)) throw new Error("Follow to view connections");
     const privacy = followerPrivacyRef.current;
     if (privacy.selfId !== selfId || privacy.blocks !== blocks || privacy.follows !== follows || privacy.socialRevision !== socialRevision) throw new Error("Follower visibility changed");
     const result = await requireCurrentFollowerRead(fetchConnections(id, kind), () => followerPrivacyRef.current === privacy && socialViewerRef.current === selfId);
+    requireSocialScope(() => followerPrivacyRef.current === privacy && socialViewerRef.current === selfId);
     const cache = new Map(profileCacheRef.current);
     for (const golfer of result.golfers) cache.set(golfer.id, golfer);
     profileCacheRef.current = cache;
@@ -1091,10 +1108,12 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
   }, [selfId, blocks, follows, socialRevision, isBlocked, isBlockedBy]);
   const getConnectionSummary = useCallback(async (id: string, kind: ConnectionKind) => {
     if (!selfId || isBlocked(id) || isBlockedBy(id)) throw new Error("Connections unavailable");
-    if (id !== selfId && !follows.some((f) => f.follower_id === selfId && f.following_id === id)) throw new Error("Follow to view connections");
     const privacy = followerPrivacyRef.current;
     if (privacy.selfId !== selfId || privacy.blocks !== blocks || privacy.follows !== follows || privacy.socialRevision !== socialRevision) throw new Error("Follower visibility changed");
-    return requireCurrentFollowerRead(fetchConnections(id, kind, true), () => followerPrivacyRef.current === privacy && socialViewerRef.current === selfId);
+    return socialReads.current!.deduplicate(privacy, "summary:" + id + ":" + kind, () => {
+      requireSocialScope(() => followerPrivacyRef.current === privacy && socialViewerRef.current === selfId);
+      return requireCurrentFollowerRead(fetchConnections(id, kind, true), () => followerPrivacyRef.current === privacy && socialViewerRef.current === selfId);
+    });
   }, [selfId, blocks, follows, socialRevision, isBlocked, isBlockedBy]);
   const getFollowerCount = useCallback(async (id: string) => (await getConnectionSummary(id, "followers")).total, [getConnectionSummary]);
   const getProfileFollowers = useCallback((id: string) => getProfileConnections(id, "followers"), [getProfileConnections]);
@@ -1102,7 +1121,10 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     if (!selfId || isBlocked(id) || isBlockedBy(id)) throw new Error("Follow status unavailable");
     const privacy = followerPrivacyRef.current;
     if (privacy.selfId !== selfId || privacy.blocks !== blocks || privacy.follows !== follows || privacy.socialRevision !== socialRevision) throw new Error("Follower visibility changed");
-    const state = await requireCurrentFollowerRead(fetchFollowState(id), () => followerPrivacyRef.current === privacy && socialViewerRef.current === selfId);
+    const isCurrent = () => followerPrivacyRef.current === privacy && socialViewerRef.current === selfId;
+    const state = await socialReads.current!.deduplicate(privacy, "state:" + id, () =>
+      requireCurrentFollowerRead(socialReads.current!.limit(() => fetchFollowState(id), isCurrent), isCurrent));
+    requireSocialScope(isCurrent);
     const accepted = state.state === "following";
     const localAccepted = follows.some((f) => f.follower_id === selfId && f.following_id === id);
     if (id !== selfId && accepted !== localAccepted) {
@@ -1120,13 +1142,14 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     const privacy = followerPrivacyRef.current;
     if (privacy.selfId !== selfId || privacy.blocks !== blocks || privacy.follows !== follows || privacy.socialRevision !== socialRevision) throw new Error("Follower visibility changed");
     const result = await requireCurrentFollowerRead(fetchFollowRequests(), () => followerPrivacyRef.current === privacy && socialViewerRef.current === selfId);
+    requireSocialScope(() => followerPrivacyRef.current === privacy && socialViewerRef.current === selfId);
     const cache = new Map(profileCacheRef.current);
     for (const request of result) cache.set(request.golfer.id, request.golfer);
     profileCacheRef.current = cache;
     setProfileCache((prev) => sameProfileMap(prev, cache) ? prev : cache);
     return result;
   }, [selfId, blocks, follows, socialRevision]);
-  // Server-confirmed follows only. A pending request never unlocks a list.
+  // Server-confirmed follows only. A pending request never becomes an accepted follow.
   const followUser = useCallback(async (id: string) => {
     if (!selfId || id === selfId) throw new Error("Follow unavailable");
     const key = selfId + ":" + id;
@@ -2111,6 +2134,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       unblockUser,
       isFollowing,
       followingGolfers,
+      getConnectionPage,
       getProfileConnections,
       getConnectionSummary,
       getFollowState,
@@ -2174,6 +2198,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       unblockUser,
       isFollowing,
       followingGolfers,
+      getConnectionPage,
       getProfileConnections,
       getConnectionSummary,
       getFollowState,

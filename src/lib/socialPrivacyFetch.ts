@@ -1,6 +1,6 @@
 import { supabase } from "./supabase";
-import { collectConnections, parseConnections, parseFollowRequests, parseFollowState, parsePrivacySetting, requireChangedResponse, requireRequestResponse } from "./socialPrivacy";
-import type { ConnectionKind, FollowRequest } from "./socialPrivacy";
+import { parseConnectionPage, collectConnections, parseConnections, parseFollowRequests, parseFollowState, parsePrivacySetting, requireChangedResponse, requireRequestResponse } from "./socialPrivacy";
+import type { ConnectionCursor, ConnectionKind, FollowRequest } from "./socialPrivacy";
 
 async function rpc(name: string, args?: Record<string, unknown>): Promise<unknown> {
   const { data, error } = await supabase.rpc(name, args);
@@ -43,4 +43,8 @@ export async function fetchFollowRequests(): Promise<FollowRequest[]> {
       return requests;
     }
   }
+}
+
+export async function fetchConnectionPage(id: string, kind: ConnectionKind, search: string, cursor: ConnectionCursor | null) {
+  return parseConnectionPage(await rpc("golfer_profile_connections_page", { p_profile_id: id, p_kind: kind, p_limit: 30, p_search: search, p_cursor: cursor }), kind);
 }

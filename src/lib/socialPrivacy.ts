@@ -13,6 +13,7 @@ export interface FollowRequest { id: string; createdAt: string; golfer: GolferPr
 export interface ConnectionSummary { total: number; mutualTotal: number }
 export interface ProfileConnections extends ConnectionSummary { golfers: GolferProfile[]; mutualIds: string[] }
 export interface SocialPrivacyApi {
+  getConnectionPage: (id: string, kind: ConnectionKind, search: string, cursor: ConnectionCursor | null) => Promise<ConnectionPage>;
   getProfileConnections: (id: string, kind: ConnectionKind) => Promise<ProfileConnections>;
   getConnectionSummary: (id: string, kind: ConnectionKind) => Promise<ConnectionSummary>;
   getFollowState: (id: string) => Promise<FollowState>;
@@ -39,8 +40,7 @@ export function parseFollowState(value: unknown): FollowState {
   const raw = object(value);
   if (!["none", "pending", "following"].includes(String(raw.state)) || typeof raw.is_private !== "boolean" || typeof raw.can_view_connections !== "boolean"
       || !(raw.request_id === null || typeof raw.request_id === "string")
-      || (raw.state === "pending" && !raw.request_id) || (raw.state !== "pending" && raw.request_id !== null)
-      || (raw.state === "pending" && raw.can_view_connections)) throw new Error("Invalid follow state");
+      || (raw.state === "pending" && !raw.request_id) || (raw.state !== "pending" && raw.request_id !== null)) throw new Error("Invalid follow state");
   return { state: raw.state as FollowState["state"], requestId: raw.request_id as string | null, isPrivate: raw.is_private, canViewConnections: raw.can_view_connections };
 }
 export function parseConnections(value: unknown, kind: ConnectionKind): ProfileConnections {
@@ -98,4 +98,23 @@ export function requireChangedResponse(value: unknown): void {
 }
 export function requireRequestResponse(value: unknown, accept: boolean): void {
   if (object(value).state !== (accept ? "accepted" : "rejected")) throw new Error("Invalid request response");
+}
+
+
+export type ConnectionCursor = Record<string, unknown>;
+export interface ConnectionPage extends ProfileConnections { matchedTotal: number; nextCursor: ConnectionCursor | null }
+export function parseConnectionPage(value: unknown, kind: ConnectionKind): ConnectionPage {
+  if (!value || typeof value !== "object") throw new Error("Invalid connection page");
+  const raw = value as Record<string, unknown>;
+  if (raw.version !== 2 || !count(raw.matched_total) || !count(raw.total) || raw.matched_total > raw.total
+      || !(raw.next_cursor === null || (typeof raw.next_cursor === "object" && !Array.isArray(raw.next_cursor)))) throw new Error("Invalid connection page");
+  const parsed = parseConnections({ ...raw, version: 1 }, kind);
+  if (parsed.golfers.length > raw.matched_total || (raw.next_cursor !== null && parsed.golfers.length === 0)) throw new Error("Invalid connection page");
+  return { ...parsed, matchedTotal: raw.matched_total, nextCursor: raw.next_cursor as ConnectionCursor | null };
+}
+/** Never silently skip overlapping or nonadvancing pages after graph changes. */
+export function appendConnectionPage(previous: ConnectionPage, next: ConnectionPage): ConnectionPage {
+  const seen = new Set(previous.golfers.map(g => g.id));
+  if (next.golfers.some(g => seen.has(g.id)) || (next.nextCursor && JSON.stringify(next.nextCursor) === JSON.stringify(previous.nextCursor))) throw new Error("Connections changed. Please retry.");
+  return { ...next, golfers: [...previous.golfers, ...next.golfers], mutualIds: [...previous.mutualIds, ...next.mutualIds] };
 }

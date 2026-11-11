@@ -81,6 +81,6 @@ test("late follower read is rejected after unfollow, block or account change", a
 test("follow changes invalidate live counts and open-sheet fetch callbacks", () => {
   const source = readFileSync(new URL("../src/context/RealSocialContext.tsx", import.meta.url), "utf8");
   assert.match(source, /followerPrivacyRef\.current\.follows !== follows/);
-  assert.equal((source.match(/\[selfId, blocks, follows, socialRevision, isBlocked, isBlockedBy\]/g) ?? []).length, 3);
+  assert.equal((source.match(/\[selfId, blocks, follows, socialRevision, isBlocked, isBlockedBy\]/g) ?? []).length, 4);
   assert.match(source, /requireCurrentFollowerRead\(fetchConnections/);
 });

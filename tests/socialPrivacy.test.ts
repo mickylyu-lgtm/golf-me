@@ -20,7 +20,7 @@ test("pending follow is never accepted; malformed state fails closed", () => {
   assert.equal(parseFollowState(state("pending", "r")).canViewConnections, false);
   assert.equal(parseFollowState(state("following", null, true, true)).state, "following");
   assert.equal(parseFollowState(state("none", null, true, true)).canViewConnections, true, "self can see connections");
-  for (const raw of [null, {}, state("accepted"), state("pending"), state("none", "r"), state("pending", "r", true, true), { ...state(), is_private: null }]) assert.throws(() => parseFollowState(raw));
+  for (const raw of [null, {}, state("accepted"), state("pending"), state("none", "r"), { ...state(), is_private: null }]) assert.throws(() => parseFollowState(raw));
 });
 test("connections parser checks kind, shape, totals and duplicate identities", () => {
   assert.equal(parseConnections(page([row("a")], 1, 7, "following"), "following").mutualTotal, 7, "mutual summary is unrelated to following total");
@@ -44,26 +44,26 @@ test("requests and write responses cannot fabricate successful state", () => {
   requireRequestResponse({version:1,state:"accepted"},true);
   assert.throws(() => requireRequestResponse({version:1,state:"rejected"},true));
 });
-test("demo requires self or accepted viewer to owner follow in both directions", () => {
+test("demo permits nonfollowers and pending viewers in both directions", () => {
   const data=demo();
   assert.equal(demoConnections(data,"viewer","owner","followers").total,3);
   assert.equal(demoConnections(data,"viewer","owner","followers").mutualTotal,1);
   assert.deepEqual(demoConnections(data,"viewer","owner","following").golfers.map(g=>g.id),["other"]);
   for(const kind of ["followers","following"] as const) {
-    assert.throws(()=>demoConnections(data,"other","viewer",kind),/Follow to view/);
+    assert.doesNotThrow(()=>demoConnections(data,"other","viewer",kind));
     assert.doesNotThrow(()=>demoConnections(data,"owner","owner",kind));
   }
   assert.equal(demoFollowState(data,"other","viewer").state,"pending");
-  assert.equal(demoFollowState(data,"other","viewer").canViewConnections,false);
+  assert.equal(demoFollowState(data,"other","viewer").canViewConnections,true);
 });
-test("demo accepted access survives privacy toggle and drops immediately after remove/unfollow/block", () => {
+test("demo public access survives privacy toggle and unfollow but not blocks", () => {
   const data=demo();
   data.privateFollowProfiles={owner:false};
   assert.equal(demoConnections(data,"viewer","owner","followers").mutualTotal,1);
   data.privateFollowProfiles={owner:true};
   assert.equal(demoConnections(data,"viewer","owner","followers").mutualTotal,1);
   const removed={...data,follows:data.follows.filter(f=>!(f.followerId==="viewer"&&f.followingId==="owner"))};
-  assert.throws(()=>demoConnections(removed,"viewer","owner","followers"));
+  assert.equal(demoConnections(removed,"viewer","owner","followers").total,2);
   for(const [blockerId,blockedId] of [["owner","viewer"],["viewer","owner"]]) {
     assert.throws(()=>demoConnections({...data,blocks:[{blockerId,blockedId,createdAt:"now"}]},"viewer","owner","following"));
   }
