@@ -1,6 +1,6 @@
 # Profile followers: local privacy hardening
 
-Status: local implementation and source review only. Migration NOT applied. Do not release the earlier broad-read prototype.
+Status: local implementation, source review and isolated PostgreSQL authorization tests passed. No remote/shared migration applied. Do not release the earlier broad-read prototype.
 
 ## Visible rows and counts
 
@@ -28,9 +28,9 @@ Existing broad authenticated SELECT on follows and supplied-id golfer_public_pro
 
 - Full local `npm run check`: 1,251 tests, 1,248 passed, 3 existing skips, 0 failures. Typecheck, build and prerender pass. 26 existing lint warnings, no errors/new warnings.
 - Synthetic browser checks: own/other counts, mutuals, search/no-results, profile navigation, two-way block omission including counts, Escape and 320/390/1440px layouts. External requests blocked.
-- Independent source review found no required SQL changes. This is not runtime authorization verification.
+- Independent source review found no required SQL changes. Isolated PostgreSQL role/grant tests now pass; full Supabase integration remains untested.
 - `scripts/staging/profile-followers-authz.sql` is a rollback-only synthetic suite. It refuses any database except an EMPTY disposable database named exactly `golfme_followers_test`. It creates fake schemas, roles and identities, applies the local function definitions inside the transaction, tests authenticated/anon behavior, then rolls everything back.
-- SQL suite NOT EXECUTED: this selected environment has no psql/Postgres/Docker runtime. It must pass on an isolated local test database before deployment approval. Its projection fixture mirrors the existing auth/block contract but cannot validate the deployed environment's schema/ownership/configuration.
-- After isolated SQL tests pass, validate on a separately authorized staging backend with its full migrations, then run real authenticated client and physical-iOS tests. Obtain explicit backend rollout/publication approval before applying any migration, pushing a deploy branch, or deploying. Never run the fixture script against a linked/production project.
+- SQL suite PASSED on PostgreSQL 17.11 in a disposable cloud workspace, using single-user mode because the runtime blocked sockets. Explicit authenticated/anon role tests passed; rollback and non-superuser role switching were verified. No network or live database connection. See profile-followers-local-test.md for exact scope and evidence. The projection fixture mirrors the existing auth/block contract but cannot validate deployed schema/ownership/configuration.
+- Next, validate on a separately authorized staging backend with its full migrations, then run real authenticated client and physical-iOS tests. Obtain explicit backend rollout/publication approval before applying any migration, pushing a deploy branch, or deploying. Never run the fixture script against a linked/production project.
 
 Migration: `supabase/migrations/20261111010730_profile_followers_visibility.sql` (CLI-generated, unapplied). Rollback commands are in its header.
