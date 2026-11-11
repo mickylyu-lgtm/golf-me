@@ -1,5 +1,13 @@
 # GolfMe — Development Status
 
+## Tutorial spotlight and founder-only replay — 2026-11-11 (tested, release authorized)
+
+- Replay Tutorial was previously shown to all real/demo accounts. Settings and the manual replay callback now require the existing authenticated founder ID; email, displayed profile and admin roles cannot grant it. Normal automatic first-time onboarding remains for new real accounts. Account changes reset the walkthrough; synchronous completion prevents a queued Home effect reopening it after Skip.
+- One stable spotlight cutout smoothly tracks moving/lazy targets, with a single instant offscreen scroll instead of competing re-scrolls. Frame sampling plus resize/DOM/scroll observation keeps alignment; all listeners/frames are cleaned up. Reduced motion is instant. No tutorial wording, backend, database or native-shell changes.
+- Final `npm run check` passed TypeScript, lint (28 baseline warnings / 0 errors), all 1,441 tests, build and prerender. Synthetic Chromium passed 77 access/motion/lifecycle checks at 320/390/1440px and the six-locale/30-case narrow, landscape and enlarged-text layout suite. Independent source review found no blocker; screenshots inspected. Physical iPhone/WebKit and real-account persistence remain unverified.
+- Details and reproduction: `docs/qa/tutorial-spotlight-founder-20261111.md`. Release base: remote main and live alias both `72e3d3c`; next: publish normally and verify exact-commit CI plus production assets. No production data or migration action is needed.
+
+
 ## Caddie feedback: remove model status leakage — 2026-11-11 (live, verified)
 
 - The reported Chinese finish text included model completion/compliance boilerplate, not a missing static UI translation. Saved score reasons previously flowed through generation, translation and rendering without cleanup; same-locale metadata suppressed another translation. The exact originating model call was not inspected.

@@ -1,13 +1,16 @@
-import { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "./AuthContext";
+import { canReplayTutorial } from "../lib/tutorialAccess";
 import { TUTORIAL_LAST_INDEX, TUTORIAL_STEPS } from "../lib/tutorialSteps";
 
 interface TutorialContextValue {
   active: boolean;
   stepIndex: number;
   start: () => void;
+  replay: () => void;
+  canReplay: boolean;
   next: () => void;
   back: () => void;
   skip: () => void;
@@ -21,29 +24,59 @@ const TutorialContext = createContext<TutorialContextValue | null>(null);
 
 export function TutorialProvider({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
-  const { isDemo, saveProfile } = useAuth();
-  const [active, setActive] = useState(false);
+  const { isDemo, authUser, onboardingTutorialCompleted, saveProfile } = useAuth();
+  const selfId = !isDemo ? authUser?.id : undefined;
+  const canReplay = canReplayTutorial(isDemo, authUser?.id);
+  const [activeUserId, setActiveUserId] = useState<string | null>(null);
+  const active = !!selfId && activeUserId === selfId;
   const [stepIndex, setStepIndex] = useState(0);
-  const [completedThisSession, setCompletedThisSession] = useState(false);
+  const [completedUserId, setCompletedUserId] = useState<string | null>(null);
+  const completedThisSession = !!selfId && completedUserId === selfId;
+  // Completion can race a lazy Home mount's already-queued auto-start effect.
+  // Mark it synchronously, not only after React commits the state update.
+  const completedUserRef = useRef<string | null>(null);
+  const accountUserRef = useRef(selfId);
 
-  // Demo accounts have no real profiles row to persist the flag on -- the
-  // walkthrough itself still works if launched manually (Settings ->
-  // Replay Tutorial), it just never auto-starts and never fails trying to
-  // save a completion state that has nowhere real to live.
+  useLayoutEffect(() => {
+    // Do not reset on mount (including StrictMode effect replay): Home may
+    // already have queued its one-time automatic start.
+    if (accountUserRef.current === selfId) return;
+    accountUserRef.current = selfId;
+    completedUserRef.current = null;
+    setActiveUserId(null);
+    setCompletedUserId(null);
+    setStepIndex(0);
+  }, [selfId]);
+
+  // Completion belongs to the signed-in account, never a demo profile.
   const persistCompleted = useCallback(async () => {
-    if (isDemo) return;
+    if (!selfId) return;
     try {
       await saveProfile({ onboarding_tutorial_completed: true });
     } catch (err) {
       console.error("GolfMe: failed to persist tutorial completion.", err);
     }
-  }, [isDemo, saveProfile]);
+  }, [selfId, saveProfile]);
 
-  const start = useCallback(() => {
+  const begin = useCallback(() => {
+    if (!selfId || accountUserRef.current !== selfId) return;
     setStepIndex(0);
-    setActive(true);
+    setActiveUserId(selfId);
     navigate(TUTORIAL_STEPS[0].route);
-  }, [navigate]);
+  }, [selfId, navigate]);
+
+  // Home's one-time onboarding stays available to every new real account.
+  // Manual replay is a separate founder-only action, guarded here as well
+  // as in Settings. Profile names, emails, demo IDs and admin roles do not
+  // confer access.
+  const start = useCallback(() => {
+    if (onboardingTutorialCompleted || completedThisSession || completedUserRef.current === selfId) return;
+    begin();
+  }, [begin, selfId, onboardingTutorialCompleted, completedThisSession]);
+  const replay = useCallback(() => {
+    if (!canReplay) return;
+    begin();
+  }, [canReplay, begin]);
 
   // Not functional setState updates -- navigate() is itself a setState
   // (React Router's own), and calling one setState from inside another's
@@ -52,9 +85,11 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
   // fire from a discrete click (never rapid/concurrent calls where a stale
   // `stepIndex` closure would matter), so reading it directly is safe.
   const next = useCallback(() => {
+    if (!active || accountUserRef.current !== selfId) return;
     if (stepIndex >= TUTORIAL_LAST_INDEX) {
-      setActive(false);
-      setCompletedThisSession(true);
+      completedUserRef.current = selfId ?? null;
+      setActiveUserId(null);
+      setCompletedUserId(selfId ?? null);
       void persistCompleted();
       navigate("/");
       return;
@@ -62,24 +97,27 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
     const nextIndex = stepIndex + 1;
     setStepIndex(nextIndex);
     navigate(TUTORIAL_STEPS[nextIndex].route);
-  }, [stepIndex, navigate, persistCompleted]);
+  }, [active, selfId, stepIndex, navigate, persistCompleted]);
 
   const back = useCallback(() => {
+    if (!active || accountUserRef.current !== selfId) return;
     if (stepIndex <= 0) return;
     const prevIndex = stepIndex - 1;
     setStepIndex(prevIndex);
     navigate(TUTORIAL_STEPS[prevIndex].route);
-  }, [stepIndex, navigate]);
+  }, [active, selfId, stepIndex, navigate]);
 
   const skip = useCallback(() => {
-    setActive(false);
-    setCompletedThisSession(true);
+    if (!active || accountUserRef.current !== selfId) return;
+    completedUserRef.current = selfId ?? null;
+    setActiveUserId(null);
+    setCompletedUserId(selfId ?? null);
     void persistCompleted();
-  }, [persistCompleted]);
+  }, [active, selfId, persistCompleted]);
 
   const value = useMemo(
-    () => ({ active, stepIndex, start, next, back, skip, completedThisSession }),
-    [active, stepIndex, start, next, back, skip, completedThisSession],
+    () => ({ active, stepIndex, start, replay, canReplay, next, back, skip, completedThisSession }),
+    [active, stepIndex, start, replay, canReplay, next, back, skip, completedThisSession],
   );
 
   return <TutorialContext.Provider value={value}>{children}</TutorialContext.Provider>;

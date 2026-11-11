@@ -137,7 +137,7 @@ function PushStatusLine({ userId, pushEnabled }: { userId: string; pushEnabled: 
 }
 
 export function Settings() {
-  const { start: startTutorial } = useTutorial();
+  const { replay: startTutorial, canReplay } = useTutorial();
   const { currentUser, golfers, blockedContacts, unblockUser, logOut, resetDemoData } = useData();
   const { isDemo, authUser, profileRow, pushEnabled: realPushEnabled, notifyNewRounds: realNotifyNewRounds, notifyCirclePosts: realNotifyCirclePosts, saveProfile } = useAuth();
   const { showToast } = useToast();
@@ -460,12 +460,12 @@ export function Settings() {
             good — dismissing it there shouldn't mean losing the ability to
             ever find it again. */}
         <AddToHomeScreenPrompt forceShow />
-        <button type="button" onClick={startTutorial}
+        {canReplay && <button type="button" onClick={startTutorial}
           className="flex min-h-11 items-center gap-3 rounded-2xl border border-slate-100 bg-white p-4 text-left transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-fairway-200 hover:shadow-md active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2">
           <RotateCcw size={16} aria-hidden="true" className="shrink-0 text-slate-400" />
           <span className="flex-1 text-sm font-semibold text-slate-800">{t("settings.replayTutorial")}</span>
           <ChevronRight size={16} aria-hidden="true" className="shrink-0 text-slate-300" />
-        </button>
+        </button>}
         <button
           onClick={() => navigate("/help")}
           className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white p-4 text-left transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-fairway-200 hover:shadow-md active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2"

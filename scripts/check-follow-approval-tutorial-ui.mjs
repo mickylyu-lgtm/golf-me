@@ -1,5 +1,6 @@
 // Local-only synthetic regression. No accounts, credentials or backend calls.
 // CHROMIUM_EXECUTABLE=/path/to/chromium [CHROMIUM_LIB_DIR=/path/to/libs] node scripts/check-follow-approval-tutorial-ui.mjs
+import { tutorialTestPlugin } from "./tutorial-test-plugin.mjs";
 import { chromium } from "playwright-core";
 import fs from "node:fs";
 import assert from "node:assert/strict";
@@ -9,7 +10,7 @@ import { fileURLToPath } from "node:url";
 process.env.VITE_SUPABASE_URL="http://127.0.0.1:9";
 process.env.VITE_SUPABASE_ANON_KEY="synthetic-preview-only";
 if (!process.env.CHROMIUM_EXECUTABLE) throw new Error("Set CHROMIUM_EXECUTABLE to an installed Chromium.");
-const server=await createServer({server:{host:"127.0.0.1",port:5191,strictPort:true,fs:{allow:[process.cwd(),resolve(dirname(fileURLToPath(import.meta.resolve("vite/package.json"))),"../..")]}}});
+const server=await createServer({plugins:[tutorialTestPlugin()],server:{host:"127.0.0.1",port:5191,strictPort:true,fs:{allow:[process.cwd(),resolve(dirname(fileURLToPath(import.meta.resolve("vite/package.json"))),"../..")]}}});
 await server.listen();
 let browser;
 try {

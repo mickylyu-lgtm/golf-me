@@ -1,23 +1,13 @@
-import { useEffect, useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { useLocale } from "../../i18n/LocaleContext";
 import { useTutorial } from "../../context/TutorialContext";
+import { watchTutorialTarget, type TutorialRect } from "../../lib/tutorialSpotlight";
 import { TUTORIAL_LAST_INDEX, TUTORIAL_STEPS } from "../../lib/tutorialSteps";
 
 const SPOTLIGHT_PADDING = 8;
 const CARD_MAX_WIDTH = 340;
 const CARD_MARGIN = 16;
-
-function findVisibleTarget(targetId: string): HTMLElement | null {
-  const candidates = document.querySelectorAll(`[data-tutorial-id="${targetId}"]`);
-  for (const el of candidates) {
-    // Both BottomNav (mobile) and SideNav (desktop) tag the same ids;
-    // offsetParent is null for the one hidden via Tailwind's responsive
-    // classes, so this always picks whichever copy is actually on screen.
-    if ((el as HTMLElement).offsetParent !== null) return el as HTMLElement;
-  }
-  return null;
-}
 
 // Fixed, centered card style for steps with no spotlight target (the
 // opening welcome and closing screens -- neither points at one widget, so
@@ -38,7 +28,7 @@ const SCROLLABLE_CENTERED_CARD_STYLE: CSSProperties = {
   overscrollBehavior: "contain",
 };
 
-function cardStyleForRect(rect: DOMRect): CSSProperties {
+function cardStyleForRect(rect: TutorialRect): CSSProperties {
   const viewportW = window.innerWidth;
   const viewportH = window.innerHeight;
   const width = Math.min(CARD_MAX_WIDTH, viewportW - CARD_MARGIN * 2);
@@ -62,81 +52,51 @@ export function TutorialOverlay() {
   const { t } = useLocale();
   const { active, stepIndex, next, back, skip } = useTutorial();
   const step = TUTORIAL_STEPS[stepIndex];
-  const [rect, setRect] = useState<DOMRect | null>(null);
+  const [measurement, setMeasurement] = useState<{ targetId: string | null; rect: TutorialRect | null }>({ targetId: null, rect: null });
+  const rect = active && measurement.targetId === step.targetId ? measurement.rect : null;
+  // Retain the same cutout node/geometry between steps. A temporarily absent
+  // lazy-page target fades to a full scrim instead of remounting or flashing.
+  const spotlightRect = measurement.rect;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!active || !step.targetId) {
-      setRect(null);
+      setMeasurement({ targetId: null, rect: null });
       return;
     }
     const targetId = step.targetId;
-    // Nav-tab targets are position:fixed (always on screen); the Community
-    // target is a normal in-flow element that can sit well below the fold
-    // depending on how much Home content is above it -- scrollIntoView
-    // covers that case too (a no-op for anything already visible).
-    let found = false;
-    const measure = () => {
-      const el = findVisibleTarget(targetId);
-      if (!el) {
-        setRect(null);
-        return;
-      }
-      found = true;
-      el.scrollIntoView({ block: "center", behavior: "auto" });
-      setRect(el.getBoundingClientRect());
-    };
-    measure();
-    // A step change can mean a real route swap (nav-tab targets, already
-    // mounted and stationary -- resolved by the immediate call above) or a
-    // RootTabCarousel slide to a different panel (the Community target,
-    // which visibly moves during that ~260ms transition) -- these two
-    // delayed re-measures catch the settled position (post-scroll,
-    // post-slide) either way without an open-ended poll.
-    const t1 = window.setTimeout(measure, 80);
-    const t2 = window.setTimeout(measure, 320);
-    // A lazy route (the Settings/Appearance step) may still be loading its
-    // chunk at 320ms: two more tries, only while nothing was found yet, so
-    // an already-placed spotlight is never re-scrolled. Still bounded.
-    const late = () => {
-      if (!found) measure();
-    };
-    const t3 = window.setTimeout(late, 800);
-    const t4 = window.setTimeout(late, 1600);
-    window.addEventListener("resize", measure);
-    window.addEventListener("orientationchange", measure);
-    return () => {
-      window.clearTimeout(t1);
-      window.clearTimeout(t2);
-      window.clearTimeout(t3);
-      window.clearTimeout(t4);
-      window.removeEventListener("resize", measure);
-      window.removeEventListener("orientationchange", measure);
-    };
-  }, [active, step, stepIndex]);
+    return watchTutorialTarget(targetId, (nextRect) => {
+      setMeasurement(previous => nextRect
+        ? { targetId, rect: nextRect }
+        : { ...previous, targetId: null });
+    });
+  }, [active, step.targetId]);
 
   if (!active) return null;
 
   const isLastStep = stepIndex === TUTORIAL_LAST_INDEX;
   const isFirstStep = stepIndex === 0;
-  // Progress only counts the 5 real feature steps, not this closing screen.
+  // Keep the existing progress and final-step controls.
   const showProgress = !isLastStep && stepIndex > 0;
 
   return (
     <div className="fixed inset-0 z-[100]" role="dialog" aria-modal="true" aria-label={t(step.titleKey)}>
-      {rect ? (
-        <div
-          className="pointer-events-none absolute rounded-2xl ring-2 ring-fixed-white transition-all duration-300 ease-out"
-          style={{
-            top: rect.top - SPOTLIGHT_PADDING,
-            left: rect.left - SPOTLIGHT_PADDING,
-            width: rect.width + SPOTLIGHT_PADDING * 2,
-            height: rect.height + SPOTLIGHT_PADDING * 2,
-            boxShadow: "0 0 0 9999px rgba(15, 23, 42, 0.72)",
-          }}
-        />
-      ) : (
-        <div className="absolute inset-0 bg-slate-900/72 transition-opacity duration-300 ease-out" />
-      )}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-slate-900/72 transition-opacity duration-200 motion-reduce:transition-none"
+        style={{ opacity: rect ? 0 : 1 }}
+      />
+      <div
+        aria-hidden="true"
+        data-tutorial-spotlight=""
+        className="pointer-events-none absolute left-0 top-0 rounded-2xl ring-2 ring-fixed-white transition-[transform,width,height,opacity] duration-350 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+        style={{
+          transform: `translate3d(${(spotlightRect?.left ?? 0) - SPOTLIGHT_PADDING}px, ${(spotlightRect?.top ?? 0) - SPOTLIGHT_PADDING}px, 0)`,
+          width: (spotlightRect?.width ?? 0) + SPOTLIGHT_PADDING * 2,
+          height: (spotlightRect?.height ?? 0) + SPOTLIGHT_PADDING * 2,
+          opacity: rect ? 1 : 0,
+          boxShadow: "0 0 0 9999px rgba(15, 23, 42, 0.72)",
+        }}
+      />
 
       {/* Blocks every tap on the real (shaded) interface underneath --
           nothing but this overlay's own controls below is interactive
@@ -145,7 +105,7 @@ export function TutorialOverlay() {
       <div className="absolute inset-0" />
 
       <div
-        className="absolute flex flex-col gap-3 rounded-2xl bg-white p-5 shadow-xl shadow-slate-900/20"
+        className="absolute flex flex-col gap-3 rounded-2xl bg-white p-5 shadow-xl shadow-slate-900/20 transition-[top,left,transform] duration-300 ease-out motion-reduce:transition-none"
         style={step.cardPlacement === "center" ? SCROLLABLE_CENTERED_CARD_STYLE : rect ? cardStyleForRect(rect) : CENTERED_CARD_STYLE}
       >
         {showProgress && (
