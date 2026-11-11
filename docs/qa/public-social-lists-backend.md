@@ -1,6 +1,13 @@
 # Public follower/following lists: backend review
 
-Status: LOCAL ONLY. No production SQL, migration history, roles, real accounts, pushes or deployments changed. Base: verified remote main f5d3329d9f98faa37758c5e352b138700fdee84c. Isolated branch feat/public-social-lists-20261111.
+Status: production backend applied and catalog-verified on 2026-11-11; matching frontend release pending. Isolated branch feat/public-social-lists-20261111 integrates verified main 7f5259626e919ce2a702486f174692ca77831cf3. Earlier validation sections below retain their historical scope.
+
+## Applied version reconciliation
+
+- Reviewed source: 20261111085135_public_social_lists.sql. Provider-recorded version: 20261111193537_public_social_lists; local filename is now 20261111193537_public_social_lists.sql and the executable fixture include follows it.
+- Local SQL bytes remain identical, SHA-256 c985e9fbbbdd51aa7360ef374c0e1e850b0d63fbd479d6d0efd518d55f06d3c1. Production stored SQL was verified to equal the exact approved timeout prefix plus reviewed source.
+- Production catalog verification passed; existing privacy protections are unchanged. This local rename is source alignment, not migration-history repair or reapplication. Prior manually installed history gaps remain untouched.
+- Authenticated API postchecks and matching frontend publication are separate gates. No frontend push occurred during this reconciliation.
 
 ## Scope and permissions
 

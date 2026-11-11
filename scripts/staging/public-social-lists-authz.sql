@@ -135,7 +135,7 @@ create temp table before_public_migration as select
  (select jsonb_agg(to_jsonb(f) order by follower_id,following_id) from follows f) follows,
  (select jsonb_agg(to_jsonb(r) order by requester_id,target_id) from private.follow_requests r) requests,
  (select jsonb_agg(jsonb_build_array(id,is_private) order by id) from profiles) privacy;
-\ir ../../supabase/migrations/20261111085135_public_social_lists.sql
+\ir ../../supabase/migrations/20261111193537_public_social_lists.sql
 select test_assert((select follows is not distinct from (select jsonb_agg(to_jsonb(f) order by follower_id,following_id) from follows f)
  and requests is not distinct from (select jsonb_agg(to_jsonb(r) order by requester_id,target_id) from private.follow_requests r)
  and privacy is not distinct from (select jsonb_agg(jsonb_build_array(id,is_private) order by id) from profiles)
