@@ -7,6 +7,10 @@
 Statuses: `[ ]` NOT STARTED · `[~]` IN PROGRESS · `[?]` NEEDS VERIFICATION · `[!]` BLOCKED · `[x]` COMPLETE (only with evidence it works).
 Classify every request: **A** blocks the launch going well (now: 1.1 release + marketplace) · **B** improves launch quality · **C** nonessential, later.
 
+### Local quality fix - 2026-11-11
+
+- [x] **B: Round-chat switching no longer carries the old scroll state or New messages pill.** Local branch `fix/round-chat-switch-20261110` (not pushed/deployed). Full `npm run check` passed; Chrome 1440x1000 synthetic-data checks passed for populated/empty rounds, repeated switching, drafts and sending. See DEVELOPMENT_STATUS.md for scope and evidence. Production and physical-iPhone validation remain unperformed.
+
 ### CURRENT BLOCKERS
 1. **1.1 live (2026-10-18) but not yet checked on the App Store build.** On the App Store build check: launch screen + entry animation (no cream flash), Sign in with Apple, Google, 6-digit email code (existing account, brand-new email, iOS autofill), and Sign in with Apple on a throwaway Apple ID → delete the account → confirm the `delete-account` logs show no "Apple token revocation not completed" (revocation never exercised for real). (A)
 2. **No real upcoming rounds.** Production has 0 upcoming rounds; a new App Store user finds nothing to join. Host 3–5 real NYC rounds. (A — marketplace)

@@ -278,8 +278,19 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
   // else's only if the reader is near the bottom, otherwise it's counted
   // for the "New messages" pill. Layout effect: pinned in the bubble's frame.
   const lastSeenIdRef = useRef<string | null>(null);
+  const scrollCallIdRef = useRef<string | null>(null);
   const lastMessageId = messages.length > 0 ? (messages[messages.length - 1].clientId ?? messages[messages.length - 1].id) : null;
   useLayoutEffect(() => {
+    // The desktop pane reuses this component when another round is picked.
+    // Its scroll position and new-message pill belong to the old round,
+    // even when both rounds have the same message count (or are empty).
+    // Reset before following the new tail, in this round's first paint.
+    if (scrollCallIdRef.current !== callId) {
+      scrollCallIdRef.current = callId;
+      nearBottomRef.current = true;
+      lastSeenIdRef.current = null;
+      setUnseenCount(0);
+    }
     const el = listRef.current;
     const keyed = messages.map((m) => ({ ...m, id: m.clientId ?? m.id }));
     const added = messagesAfter(keyed, lastSeenIdRef.current);
@@ -292,7 +303,7 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
     } else if (unseen > 0) setUnseenCount((n) => n + unseen);
     // messages is read for its new tail only; these keys change with it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages.length, lastMessageId]);
+  }, [callId, messages.length, lastMessageId]);
   const showLatest = () => {
     const el = listRef.current;
     if (el) pinToBottom(el);
