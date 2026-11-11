@@ -46,7 +46,7 @@ import { computeHandicapConfidence } from "../lib/credibility";
 import { useCredibilityStats } from "../lib/useCredibility";
 import { useReputationState } from "../lib/useReputationState";
 import { formatBudgetRange, isNewAccount, paceLabel } from "../lib/format";
-import { formatHandicapNumber, handicapColorClass } from "../lib/handicapColor";
+import { formatHandicapNumber, handicapColorClass, hasHandicap } from "../lib/handicapColor";
 import { isFounder } from "../lib/founder";
 import { availabilityLabel, vibeLabel, walkOrCartLabel } from "../lib/enumLabels";
 import { VIBE_TONE } from "../lib/theme";
@@ -216,11 +216,9 @@ export function GolferProfilePage() {
             </div>
           )}
           <p className="text-sm text-slate-500">
-            {/* Only the handicap NUMBER is colored -- see src/lib/handicapColor.ts.
-                Distinct from handicapLabel() (unchanged, still used by
-                GolferCard/CompareModal/DirectMessageThread) since this is
-                a profile-identity-specific treatment, not a global one. */}
-            {golfer.handicap === null ? (
+            {/* Same handicap treatment as your own profile, cards, and Compare.
+                This ability signal is separate from Reputation/verification. */}
+            {!hasHandicap(golfer.handicap) ? (
               t("golfCallDetail.noHandicapYet")
             ) : (
               <>

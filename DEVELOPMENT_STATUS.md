@@ -1,5 +1,13 @@
 # GolfMe — Development Status
 
+## Handicap presentation polish — 2026-11-11 (release authorized, checks passed)
+
+- User requested more rewarding color/flair for lower handicaps and less decoration as handicap rises. Shared styling keeps the existing bands: scratch/plus gold with strongest frame, below 5 violet with a lighter frame, below 10 teal tint, then unframed forest below 20, sage below 30 and neutral. Dedicated light/dark inks preserve readable contrast.
+- Own/public profiles, golfer cards and Compare share the treatment. The shared localized formatter also corrects plus-handicap notation in existing DM labels. Finite stored values and precision are preserved; null/non-finite inputs stay neutral. Reputation, verification, matching, stored-profile data and backend code are unchanged.
+- Integrated reviewed source patch onto current main 32b39ce in isolated branch feat/handicap-presentation-20261111. Updated the existing Compare AST test only to recognize its localized Handicap heading while preserving the eight-row and removed-credibility assertions.
+- Validation: full npm run check passed TypeScript, 1,378 tests, 26 baseline lint warnings/zero errors, build and prerender. Independent review found no actionable issues and passed 42 focused tests. Built-app browser checks passed 1,284 assertions at 320/390/1440px in light and dark appearances, with screenshots inspected. See docs/qa/handicap-presentation-20261111.md.
+- No production data writes, database migration, backend deployment or native-shell changes. Physical-device and real-account UI checks remain unverified. Next: coordinate release, recheck remote main, push normally, then verify exact-commit CI and the production alias.
+
 ## Compare: remove credibility row — 2026-11-11 (release authorized, verification pending)
 
 - User requested removing Building Credibility from Compare and explicitly authorized pushing this fix. Removed the Compare modal's entire Credibility row, including its tier labels. The eight other comparison rows, match reasons, profile reputation, translations and scoring are unchanged.

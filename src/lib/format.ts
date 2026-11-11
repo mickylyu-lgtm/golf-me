@@ -60,10 +60,8 @@ export function formatBudgetRange(min: number, max: number, noPreference: boolea
   return `$${min}–${maxLabel}`;
 }
 
-export function handicapLabel(handicap: number | null, t: TFn): string {
-  if (handicap === null) return t("golfCallDetail.noHandicapYet");
-  return t("golfCallDetail.handicapValue", { handicap });
-}
+// Keep existing call sites on the same localized, plus-aware formatter.
+export { handicapLabel } from "./handicapColor";
 
 export function skillTierFromHandicap(handicap: number | null): "Beginner" | "Intermediate" | "Advanced" {
   if (handicap === null || handicap > 20) return "Beginner";

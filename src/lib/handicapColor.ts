@@ -1,39 +1,42 @@
-// Subtle color progression for the handicap NUMBER only, on profile
-// identity lines — golf-ability signal, deliberately separate from GolfMe
-// Reputation (community trust/reliability). Never touch reputation scoring,
-// matching, or reviews from here — this is presentation only, reading the
-// same already-stored `handicap: number | null` GolferProfile field
-// everything else already reads, never a second calculation of it.
-//
-// A negative stored value is a plus handicap (standard golf convention —
-// e.g. a "+2" player's index is stored as -2) and belongs in the same
-// restrained-gold band as scratch (0), never its own separate treatment.
-// null (unknown/unset) is always neutral -- never inferred, never gold.
-const BANDS = [
-  { max: 0, className: "text-brand-gold" }, // scratch (0) and plus (negative) handicaps
-  { max: 5, className: "text-violet-600" }, // 0.1-4.9
-  { max: 10, className: "text-teal-600" }, // 5.0-9.9
-  { max: 20, className: "text-brand-forest" }, // 10.0-19.9 -- the GolfMe brand green anchor
-  { max: 30, className: "text-fairway-400" }, // 20.0-29.9 -- muted/light green
-] as const;
-const NEUTRAL_CLASS = "text-slate-500"; // 30.0+, and unknown/unset
+import type { TranslationKey } from "../i18n/locales/en";
 
-export function handicapColorClass(handicap: number | null): string {
-  if (handicap === null) return NEUTRAL_CLASS;
-  for (const band of BANDS) {
-    if (handicap < band.max || (band.max === 0 && handicap <= 0)) return band.className;
-  }
-  return NEUTRAL_CLASS;
+// Presentation only. Handicap flair never changes GolfMe Reputation,
+// verification, matching, reviews, or the already-stored handicap value.
+// Negative stored values are plus handicaps (for example, -2 displays +2).
+// Keep every finite value and its existing precision; do not clamp or round.
+export type HandicapTone = "gold" | "violet" | "teal" | "forest" | "sage" | "neutral";
+
+export function hasHandicap(handicap: number | null): handicap is number {
+  return typeof handicap === "number" && Number.isFinite(handicap);
 }
 
-// Renders the sign correctly for a plus handicap (stored as negative --
-// see above) and preserves whatever decimal precision is already stored,
-// same as every other handicap display in the app -- never rounds, never
-// invents a value. Returns "--" for null so callers can drop it straight
-// into existing "{count} rounds · Handicap {number}"-shaped layouts
-// unchanged.
+export function handicapTone(handicap: number | null): HandicapTone {
+  if (!hasHandicap(handicap)) return "neutral";
+  if (handicap <= 0) return "gold";
+  if (handicap < 5) return "violet";
+  if (handicap < 10) return "teal";
+  if (handicap < 20) return "forest";
+  if (handicap < 30) return "sage";
+  return "neutral";
+}
+
+// Shared by profiles, golfer cards, and Compare. Decoration decreases as
+// the handicap rises; readable contrast does not. CSS owns both appearances.
+export function handicapColorClass(handicap: number | null): string {
+  return `gm-handicap gm-handicap--${handicapTone(handicap)}`;
+}
+
 export function formatHandicapNumber(handicap: number | null): string {
-  if (handicap === null) return "--";
+  if (!hasHandicap(handicap)) return "--";
   if (handicap < 0) return `+${Math.abs(handicap)}`;
   return String(handicap);
+}
+
+type TFn = (key: TranslationKey, vars?: Record<string, string | number>) => string;
+
+// Shared localized label, also re-exported from format.ts for existing callers.
+// Formatting a plus handicap must never change its stored value or tier.
+export function handicapLabel(handicap: number | null, t: TFn): string {
+  if (!hasHandicap(handicap)) return t("golfCallDetail.noHandicapYet");
+  return t("golfCallDetail.handicapValue", { handicap: formatHandicapNumber(handicap) });
 }

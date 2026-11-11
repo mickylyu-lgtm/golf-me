@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import type { ReactNode } from "react";
 import type { GolferProfile } from "../../types";
 import { useData } from "../../context/DataContext";
 import { Modal } from "../ui/Modal";
@@ -9,6 +10,7 @@ import { golferMatchReasons } from "../../lib/matchReasons";
 import { golferDistanceLabel } from "../../lib/publicDirectory";
 import { computeCredibility } from "../../lib/credibility";
 import { formatBudgetRange, handicapLabel, paceLabel } from "../../lib/format";
+import { handicapColorClass } from "../../lib/handicapColor";
 import { vibeLabel, walkOrCartLabel } from "../../lib/enumLabels";
 import type { MatchFactor } from "../../lib/matchReasons";
 import { useLocale } from "../../i18n/LocaleContext";
@@ -17,7 +19,7 @@ import { useLocale } from "../../i18n/LocaleContext";
 // just a side-by-side read of whether two golfers would likely enjoy a
 // round together. Stacked (You / Them) rows rather than a wide table so it
 // never needs horizontal scroll on mobile.
-function CompareRow({ label, you, them }: { label: string; you: string; them: string }) {
+function CompareRow({ label, you, them }: { label: string; you: ReactNode; them: ReactNode }) {
   return (
     <div className="border-b border-slate-100 py-2.5 last:border-0">
       <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
@@ -70,7 +72,11 @@ export function CompareModal({ other, onClose }: { other: GolferProfile; onClose
         </div>
 
         <div>
-          <CompareRow label="Handicap" you={handicapLabel(currentUser.handicap, t)} them={handicapLabel(other.handicap, t)} />
+          <CompareRow
+            label={t("profile.handicap")}
+            you={<span className={handicapColorClass(currentUser.handicap)}>{handicapLabel(currentUser.handicap, t)}</span>}
+            them={<span className={handicapColorClass(other.handicap)}>{handicapLabel(other.handicap, t)}</span>}
+          />
           <CompareRow
             label="Rounds Played"
             you={`${currentUser.reputation.completedRounds} rounds`}

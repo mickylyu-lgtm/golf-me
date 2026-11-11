@@ -4,6 +4,7 @@ import { Avatar } from "../ui/Avatar";
 import { FoundingMark } from "./FoundingGolfer";
 import { Badge } from "../ui/Badge";
 import { formatBudgetRange, handicapLabel } from "../../lib/format";
+import { handicapColorClass } from "../../lib/handicapColor";
 import { vibeLabel, walkOrCartLabel } from "../../lib/enumLabels";
 import { VIBE_TONE } from "../../lib/theme";
 import { CompatibilityBadge } from "./CompatibilityBadge";
@@ -53,7 +54,7 @@ export function GolferCard({ golfer, compatibility, onClick }: GolferCardProps) 
       </div>
 
       <div className="flex flex-wrap gap-1.5">
-        <Badge tone="outline">{handicapLabel(golfer.handicap, t)}</Badge>
+        <span className={`${handicapColorClass(golfer.handicap)} self-center text-xs`}>{handicapLabel(golfer.handicap, t)}</span>
         {golfer.vibes.slice(0, 2).map((v) => (
           <Badge key={v} tone={VIBE_TONE[v]}>
             {vibeLabel(v, t)}

@@ -9,8 +9,20 @@ const labels: string[] = [];
 function visit(node: ts.Node) {
   if (ts.isJsxSelfClosingElement(node) && node.tagName.getText(ast) === "CompareRow") {
     const label = node.attributes.properties.find((prop): prop is ts.JsxAttribute => ts.isJsxAttribute(prop) && prop.name.getText(ast) === "label");
-    assert.ok(label?.initializer && ts.isStringLiteral(label.initializer));
-    labels.push(label.initializer.text);
+    assert.ok(label?.initializer);
+    if (ts.isStringLiteral(label.initializer)) {
+      labels.push(label.initializer.text);
+    } else {
+      // The handicap heading uses the shared localized profile label.
+      assert.ok(ts.isJsxExpression(label.initializer));
+      const call = label.initializer.expression;
+      assert.ok(call && ts.isCallExpression(call));
+      assert.equal(call.expression.getText(ast), "t");
+      assert.equal(call.arguments.length, 1);
+      assert.ok(ts.isStringLiteral(call.arguments[0]));
+      assert.equal(call.arguments[0].text, "profile.handicap");
+      labels.push("Handicap");
+    }
   }
   ts.forEachChild(node, visit);
 }
