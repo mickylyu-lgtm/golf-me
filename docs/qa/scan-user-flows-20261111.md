@@ -13,8 +13,8 @@ No database migration, Edge Function change, production data mutation, native bu
 ## Validation
 
 - Existing 1,300-test baseline passed before editing.
-- New regression tests cover pending success/failure, newer edits, same-text retyping, duplicate sends, post/account changes, unmount/remount, blocked storage, coordinate boundaries, the exact real/demo host handlers, failed/uncertain post linking and the link deadline.
-- Final aggregate `npm run check` passed: TypeScript, lint (26 existing warnings, zero errors), all 1,326 tests (zero failures/skips), production build and landing prerender with a dummy backend. Existing large-chunk build warnings remain.
+- New regression tests cover pending success/failure, newer edits, same-text retyping, duplicate sends, post/account changes, unmount/remount, blocked/full storage, external-tab edits, coordinate boundaries, the exact real/demo host handlers, failed/uncertain post linking and the link deadline.
+- Final aggregate `npm run check` passed: TypeScript, lint (26 existing warnings, zero errors), all 1,329 tests (zero failures/skips), production build and landing prerender with a dummy backend. Existing large-chunk build warnings remain.
 - Final browser run passed at all three widths. `scripts/check-scan-user-flows-ui.mjs` exercises the actual comment hook, Edit Tee Time modal, course autocomplete and nested LocationPicker at 320/390/1440 px. Providers use synthetic data. Every nonlocal browser request is blocked. Covers late responses, account/post switching, unmount success, missing coordinates, name-only rejection, nested Escape, town selection and saved coordinates. Screenshots stay in ignored `artifacts.local/`.
 - Independent review identified and prompted additional fixes for stale-success draft cleanup and unbounded post-link waits. Final review and final check totals are recorded in the release handoff.
 

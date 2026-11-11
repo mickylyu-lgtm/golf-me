@@ -1,17 +1,17 @@
 import type { ReactNode } from "react";
 import { useCallback, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
+import { RegisteredUsersSection } from "../components/admin/RegisteredUsersSection";
+import type { AdminUserRow } from "../lib/adminUsers";
 import { AnalyticsPanel } from "../components/admin/AnalyticsPanel";
 import { fmtAgo } from "../lib/adminAnalytics";
 import { useLiveRefresh } from "../lib/useLiveRefresh";
 import type { RefreshOutcome } from "../lib/useLiveRefresh";
-import { Bell, Calendar, Flag, LayoutGrid, MessageSquare, Smartphone, TrendingDown, TrendingUp, Trophy, Users, Wand2 } from "lucide-react";
+import { Bell, Calendar, Flag, LayoutGrid, MessageSquare, Smartphone, TrendingDown, TrendingUp, Trophy, Wand2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useRoles } from "../lib/useRoles";
 import { ReportChatImages } from "../components/admin/ReportChatImages";
 import { supabase } from "../lib/supabase";
-import { Avatar } from "../components/ui/Avatar";
-import { Badge } from "../components/ui/Badge";
 import { EmptyState } from "../components/ui/EmptyState";
 import { BookingEvidenceReview } from "../components/admin/BookingEvidenceReview";
 import { SafetyReview } from "../components/admin/SafetyReview";
@@ -24,21 +24,6 @@ import { SuspendUserDialog } from "../components/moderation/SuspendUserDialog";
 // (hidden from nav, gated on isAdmin client-side, re-verified server-side
 // by every RPC), and same reasoning for staying plain English rather than
 // routed through the i18n system.
-interface UserRow {
-  id: string;
-  name: string | null;
-  username: string | null;
-  email: string;
-  photo_url: string | null;
-  avatar_color: string | null;
-  avatar_initials: string | null;
-  has_onboarded: boolean;
-  verified_golfer: boolean;
-  is_admin: boolean;
-  is_coach_reviewer: boolean;
-  member_since: string;
-}
-
 interface CaddieStats {
   total_analyses: number;
   analyses_last_24h: number;
@@ -303,7 +288,7 @@ export function AdminDashboard() {
   const selfId = authUser?.id ?? null;
   const { isAdmin, loading: rolesLoading } = useRoles();
 
-  const [users, setUsers] = useState<UserRow[]>([]);
+  const [users, setUsers] = useState<AdminUserRow[]>([]);
   const [caddieStats, setCaddieStats] = useState<CaddieStats | null>(null);
   const [caddieAnalyses, setCaddieAnalyses] = useState<CaddieAnalysisRow[]>([]);
   const [caddieFailureStats, setCaddieFailureStats] = useState<CaddieFailureStatRow[]>([]);
@@ -385,7 +370,7 @@ export function AdminDashboard() {
     // only a successful one replaces the data.
     if (!cfsErr) setCaddieFailureStats((cfs ?? []) as CaddieFailureStatRow[]);
     if (!cflErr) setCaddieFailures((cfl ?? []) as CaddieFailureRow[]);
-    if (!uErr) setUsers((u ?? []) as UserRow[]);
+    if (!uErr) setUsers((u ?? []) as AdminUserRow[]);
     if (!csErr) setCaddieStats(((cs as CaddieStats[]) ?? [])[0] ?? null);
     if (!caErr) setCaddieAnalyses((ca ?? []) as CaddieAnalysisRow[]);
     if (!ovErr) setOverview(((ov as PlatformOverview[]) ?? [])[0] ?? null);
@@ -444,7 +429,6 @@ export function AdminDashboard() {
   const adminIds = new Set(users.filter((u) => u.is_admin).map((u) => u.id));
   const canSuspend = (userId: string) => userId !== selfId && !adminIds.has(userId);
 
-  const onboardedCount = users.filter((u) => u.has_onboarded).length;
   // Signups by member_since. Onboarded uses the same date (when they joined,
   // not when they finished onboarding, which isn't stored per user).
   const usersWeek = weekCounts(users.map((u) => u.member_since));
@@ -670,54 +654,13 @@ export function AdminDashboard() {
         ) : null}
       </section>
 
-      <section className="flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <h2 className="flex items-center gap-1.5 text-sm font-bold text-slate-800">
-            <Users size={15} className="text-fairway-600" /> Registered Users
-          </h2>
-          <span className="text-sm font-semibold text-slate-500">
-            {loadErrors.admin_list_users ? "Unavailable" : `${users.length} accounts · ${onboardedCount} onboarded`}
-          </span>
-        </div>
-
-        {loadErrors.admin_list_users ? (
-          <SectionError what="users" message={loadErrors.admin_list_users} onRetry={retryAll} />
-        ) : loading && users.length === 0 ? (
-          <p className="text-xs text-slate-400">Loading…</p>
-        ) : users.length === 0 ? (
-          <EmptyState icon={<Users size={20} />} title="No registered users yet." />
-        ) : (
-          <div className="flex flex-col gap-2">
-            {users.slice(0, 100).map((u) => (
-              <div key={u.id} className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white p-3">
-                <Avatar
-                  golfer={{
-                    avatarColor: u.avatar_color ?? "#5aa171",
-                    avatarInitials: u.avatar_initials ?? "?",
-                    photoUrl: u.photo_url ?? undefined,
-                    verification: { phoneVerified: false, emailVerified: false, verifiedGolfer: u.verified_golfer },
-                  }}
-                  size="sm"
-                  showVerified={u.verified_golfer}
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-slate-800">{u.name ?? "Unnamed"}</p>
-                  <p className="truncate text-xs text-slate-500">
-                    {u.username && <>@{u.username} · </>}
-                    {u.email} · joined {fmtDate(u.member_since)}
-                  </p>
-                </div>
-                <div className="flex shrink-0 flex-col items-end gap-1">
-                  {!u.has_onboarded && <Badge tone="outline">mid-onboarding</Badge>}
-                  {u.is_admin && <Badge tone="fairway">admin</Badge>}
-                  {u.is_coach_reviewer && <Badge tone="sky">reviewer</Badge>}
-                </div>
-              </div>
-            ))}
-            {users.length > 100 && <p className="text-center text-xs text-slate-400">+{users.length - 100} more</p>}
-          </div>
-        )}
-      </section>
+      <RegisteredUsersSection
+        users={users}
+        loading={loading}
+        error={loadErrors.admin_list_users
+          ? <SectionError what="users" message={loadErrors.admin_list_users} onRetry={retryAll} />
+          : null}
+      />
 
       <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between">

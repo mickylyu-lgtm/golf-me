@@ -3,8 +3,17 @@
 ## User-flow scan fixes — 2026-11-11 (local, pending coordinated release)
 
 - Fixes delayed comment/reply responses overwriting drafts, course edits silently losing location/search eligibility, and real-account rounds not linking back to their source post. Includes account/post ownership checks, exact draft revisions, bounded best-effort linking, six-language partial-success copy and no changes to the database.
-- Regression and local synthetic browser coverage: `docs/qa/scan-user-flows-20261111.md`. Final aggregate check passed TypeScript, lint (26 existing warnings/zero errors), all 1,326 tests, build and prerender. Synthetic UI checks passed at 320/390/1440 px. Physical iPhone and real-write testing remain unverified; no production mutation was used for QA.
-- Isolated branch `fix/scan-user-flows-20261111`, based on main `f5d3329`. Integrate only after final independent review and check the then-current main to avoid colliding with other active releases. No push/deployment from this worktree yet.
+- Regression and local synthetic browser coverage: `docs/qa/scan-user-flows-20261111.md`. Final aggregate check passed TypeScript, lint (26 existing warnings/zero errors), all 1,329 tests, build and prerender. Synthetic UI checks passed at 320/390/1440 px. Physical iPhone and real-write testing remain unverified; no production mutation was used for QA.
+- Isolated branch `fix/scan-user-flows-20261111`, initially based on main `f5d3329`, integrated with the admin release at `ea54fac`. Recheck final independent review and then-current main before publication. No push/deployment from this worktree yet.
+
+## Registered Users collapse and search - 2026-11-11 (release authorized, verification pending)
+
+- Registered Users on the admin dashboard starts folded, with a keyboard-accessible toggle and always-visible name/username/email search. Typing opens matching results; folding preserves the query, Clear resets it, and loading/error/empty states remain distinct. Errors and Retry stay visible when folded.
+- Search is case-insensitive and filters the entire loaded admin roster before pagination. Full registered emails wrap and can be selected; Show more makes matches beyond the previous 100-row display available. The existing server RPC cap remains 1,000 latest accounts and is disclosed when reached.
+- Admin route/role guards, server RPC, grants, and email authorization are unchanged. Search and results stay in component memory, never URLs, storage, or new network calls. No backend/migration, native build, push, deployment, or production data change.
+- Verification: full npm run check (TypeScript, 26 pre-existing lint warnings/0 errors, all 1,307 tests, build and prerender), seven focused search tests, and 128 synthetic browser assertions at 320/390/1440 px. Browser coverage includes keyboard/repeated fold, search beyond row 100, clear/focus, pagination, refreshed data, loading/error/retry/empty, long emails, cap disclosure, and no query persistence. No external browser requests. Details: docs/qa/admin-user-search-20261111.md.
+- User authorized safe push and go-live. Preflight confirmed remote main and live production are both f5d3329; the dashboard-only commit 3fca205 is a direct successor. Re-reviewed the change and confirmed server/API/auth/migration code is unchanged. Next: complete release checks, fast-forward main without force, verify exact-commit CI and Vercel production. Live admin Auth/PostgREST integration and a physical-device check were not run.
+
 
 ## Private social backend applied - 2026-11-11
 
