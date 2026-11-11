@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PostMediaItem } from "../../types";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
@@ -52,7 +52,7 @@ function isZoomOwned(target: EventTarget | null): boolean {
 
 // The fullscreen home for both a swing post's single video and a
 // multi-photo/video post's carousel — same drag-down-to-dismiss gesture
-// either way (opened via double-tap on the feed card). Vertical drags are
+// either way (opened by tapping the feed card). Vertical drags are
 // intercepted here; horizontal ones are left alone so MediaCarousel's own
 // native scroll-snap still swipes between items normally.
 export function FullscreenMediaViewer({ media, initialIndex = 0, onClose: onCloseProp, action }: FullscreenMediaViewerProps) {
@@ -74,6 +74,21 @@ export function FullscreenMediaViewer({ media, initialIndex = 0, onClose: onClos
   } | null>(null);
 
   const surfaceRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const modalEntryRef = useRef<ReturnType<typeof pushModal> | null>(null);
+  useLayoutEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    const dialog = dialogRef.current;
+    // The browser's modal dialog owns focus/inertness and receives Escape
+    // even while native media controls consume ordinary keyboard events.
+    dialog?.showModal();
+    closeRef.current?.focus({ preventScroll: true });
+    return () => {
+      dialog?.close();
+      if (previous?.isConnected) previous.focus({ preventScroll: true });
+    };
+  }, []);
   const { t } = useLocale();
 
   // Drag-to-dismiss is touch only: on a computer, Esc and the close button
@@ -82,12 +97,9 @@ export function FullscreenMediaViewer({ media, initialIndex = 0, onClose: onClos
   // from the Profile photo sheet), one Escape closes only this viewer.
   useEffect(() => {
     const entry = pushModal();
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && entry.isTop()) onClose();
-    };
-    window.addEventListener("keydown", onKeyDown);
+    modalEntryRef.current = entry;
     return () => {
-      window.removeEventListener("keydown", onKeyDown);
+      modalEntryRef.current = null;
       entry.release();
     };
   }, [onClose]);
@@ -135,7 +147,17 @@ export function FullscreenMediaViewer({ media, initialIndex = 0, onClose: onClos
       dragStateRef.current = null;
       return;
     }
-    const startedOnInteractive = e.target instanceof Element && e.target.closest("[data-video-controls]") !== null;
+    // Native timeline controls live in a closed browser shadow tree.
+    // Never intercept their bottom strip, even on a long vertical scrub.
+    const nativeSlide = e.target instanceof Element ? e.target.closest("[data-native-video-controls]") : null;
+    const video = nativeSlide?.querySelector("video");
+    const touchY = e.touches[0].clientY;
+    const bounds = video?.getBoundingClientRect();
+    if (bounds && touchY >= bounds.bottom - 100 && touchY <= bounds.bottom) {
+      dragStateRef.current = null;
+      return;
+    }
+    const startedOnInteractive = !!nativeSlide || (e.target instanceof Element && e.target.closest("[data-video-controls]") !== null);
     const t = e.touches[0];
     dragStateRef.current = { startX: t.clientX, startY: t.clientY, startTime: Date.now(), lastY: t.clientY, axis: "none", startedOnInteractive };
   }
@@ -199,14 +221,37 @@ export function FullscreenMediaViewer({ media, initialIndex = 0, onClose: onClos
   // touches reached RootTabCarousel's tab-swipe listener. data-no-swipe is
   // kept as a second guard in case it is ever rendered inline again.
   return createPortal(
-    <div
+    <dialog
+      ref={dialogRef}
+      onCancel={(e) => {
+        e.preventDefault();
+        if (!document.fullscreenElement && modalEntryRef.current?.isTop()) onClose();
+      }}
       role="dialog"
       aria-modal="true"
+      aria-label={media.some((item) => item.type === "video") ? t("caddie.replayControls") : t("chat.photoAlt")}
       data-gm-media
       data-no-swipe
-      className="fixed inset-0 z-[95] overflow-hidden"
+      className="fixed inset-0 z-[95] m-0 h-dvh w-screen max-h-none max-w-none overflow-hidden border-0 p-0 backdrop:bg-transparent"
       style={{ backgroundColor: `rgba(0,0,0,${backdropOpacity})` }}
     >
+      <span tabIndex={0} className="sr-only" onFocus={() => {
+        const activeVideo = [...(surfaceRef.current?.querySelectorAll("video") ?? [])].find((video) => !video.closest("[inert]"));
+        (activeVideo ?? closeRef.current)?.focus({ preventScroll: true });
+      }} />
+      {/* Compact visible control, with a full 44px touch/focus target. */}
+      <button
+        ref={closeRef}
+        type="button"
+        aria-label={t("common.close")}
+        onClick={onClose}
+        className="group absolute z-20 left-[max(1rem,env(safe-area-inset-left))] top-[calc(env(safe-area-inset-top)+1rem)] flex h-11 w-11 items-center justify-center rounded-full text-white focus-visible:bg-black/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+        style={{ opacity: backdropOpacity }}
+      >
+        <span aria-hidden="true" className="flex h-8 w-8 items-center justify-center rounded-full bg-black/40 transition-colors duration-150 group-hover:bg-black/60">
+          <X size={16} />
+        </span>
+      </button>
       <div
         ref={surfaceRef}
         onTouchStart={onTouchStart}
@@ -218,16 +263,6 @@ export function FullscreenMediaViewer({ media, initialIndex = 0, onClose: onClos
       >
         <MediaCarousel media={media} variant="lightbox" initialIndex={initialIndex} onIndexChange={(i) => (lastIndexRef.current = i)} />
       </div>
-      {/* Top-left: a video's mute toggle owns the top-right corner. */}
-      <button
-        type="button"
-        aria-label={t("common.close")}
-        onClick={onClose}
-        className="absolute left-4 top-[calc(env(safe-area-inset-top)+1rem)] flex h-9 w-9 items-center justify-center rounded-full bg-black/40 text-white transition-colors duration-150 hover:bg-black/60"
-        style={{ opacity: backdropOpacity }}
-      >
-        <X size={18} />
-      </button>
       {action && (
         <button
           type="button"
@@ -238,7 +273,8 @@ export function FullscreenMediaViewer({ media, initialIndex = 0, onClose: onClos
           {action.label}
         </button>
       )}
-    </div>,
+      <span tabIndex={0} className="sr-only" onFocus={() => closeRef.current?.focus({ preventScroll: true })} />
+    </dialog>,
     document.body,
   );
 }

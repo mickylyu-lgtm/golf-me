@@ -1,0 +1,26 @@
+[
+  {
+    "slug": "course-search",
+    "version": 38,
+    "matches_base": true,
+    "sha256": "ea88737bea4e790441f4895b9291cb2282bbaee8438b69208a569e9412fc9bf5"
+  },
+  {
+    "slug": "course-enrich",
+    "version": 31,
+    "matches_base": true,
+    "sha256": "417137cec3f2de04adfa0e68ff1b5b2b125bababf53897e69fc7176f4d002dd3"
+  },
+  {
+    "slug": "course-photos",
+    "version": 4,
+    "matches_base": true,
+    "sha256": "6e76e089f2ade1c62ed39945cc75e9e0f92980357dea73987cd2f467b1abecbb"
+  },
+  {
+    "slug": "translate-caddie-analysis",
+    "version": 22,
+    "matches_base": true,
+    "sha256": "74002919c685883aff91470c213f6abc1e7e8c6c253d43cdda54d528cf6997e8"
+  }
+]

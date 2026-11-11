@@ -43,7 +43,8 @@ import { FullscreenMediaViewer } from "./FullscreenMediaViewer";
 import { formatRelativeTime } from "../../lib/format";
 import { postCategoryLabel } from "../../lib/enumLabels";
 import { areaForCourse } from "../../lib/courses";
-import { enterNativeVideoFullscreen, isVideoInNativeFullscreen } from "../../lib/video";
+import { useNativeCommunityVideo } from "./useNativeCommunityVideo";
+import { activeNativeVideo } from "../../lib/nativeVideoPlayer";
 import { isStaleProcessing, usePeriodicRerender } from "../../lib/caddieAnalysis";
 import { FAILURE_KIND_KEYS, analysisFailure } from "../../lib/caddieFailure";
 import { caddieErrorText } from "../../lib/caddieErrorText";
@@ -59,8 +60,6 @@ import { SuspendUserDialog } from "../moderation/SuspendUserDialog";
 // A touch that moves further than this between press and release is a
 // scroll or swipe, never a tap: it must not open the post or the video.
 const TAP_SLOP_PX = 10;
-// How long native fullscreen gets to start before the in-app viewer is used.
-const NATIVE_FULLSCREEN_GRACE_MS = 1000;
 
 // Router navigations render in a transition, so the tapped card stays on
 // screen (and tappable) for a moment after the first tap. A second tap in
@@ -186,17 +185,9 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
     frameScansRef.current++;
     if (backdrop.bars || (!thumbBackdrop && !frameBackdrop)) setFrameBackdrop(backdrop);
   }
-  const fallbackTimerRef = useRef<number | null>(null);
-  const fallbackCleanupRef = useRef<(() => void) | null>(null);
+  const nativeVideo = useNativeCommunityVideo(videoRef, videoSrc);
+  const feedVisibleRef = useRef(false);
   const pressRef = useRef<{ x: number; y: number; moved: boolean } | null>(null);
-
-  function cancelFullscreenFallback() {
-    if (fallbackTimerRef.current !== null) window.clearTimeout(fallbackTimerRef.current);
-    fallbackTimerRef.current = null;
-    fallbackCleanupRef.current?.();
-    fallbackCleanupRef.current = null;
-  }
-  useEffect(() => cancelFullscreenFallback, []);
 
   // Tap vs drag, for every tap target on the card that has no native
   // button of its own (the card body, the swing video, a photo). iOS already
@@ -230,50 +221,18 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
   function handleVideoTap(e: React.MouseEvent) {
     stop(e);
     if (isDragClick(e) || mediaLightboxIndex !== null) return;
-    // No preventDefault here — WebKit only honors webkitEnterFullscreen()
-    // as a real user gesture when it's called with nothing upstream of it
-    // in the same event having called preventDefault; doing so was
-    // silently breaking fullscreen entirely (not just the earlier
-    // glitch/flash it was meant to fix).
-    const video = videoRef.current;
-    if (!video) return;
-    // Native fullscreen can be refused (metadata not loaded yet — common when
-    // the feed video never autoplayed, e.g. Low Power Mode — or WebKit accepts
-    // the call but never presents the player). Either way, fall back to the
-    // in-app fullscreen viewer the photo/video carousels already use, so the
-    // tap always opens something.
-    const openInAppViewer = () => {
-      videoRef.current?.pause(); // never two copies playing (with sound) at once
-      setMediaLightboxIndex(0);
-    };
-    cancelFullscreenFallback(); // a repeat tap replaces, never stacks, the pending check
-    // Remember whether native fullscreen actually started at any point,
-    // rather than sampling "is it fullscreen right now" after the grace
-    // period: a golfer who opens and drags the native player away within
-    // that second used to get the in-app viewer popping up as well.
-    let nativeStarted = false;
-    const markStarted = () => {
-      nativeStarted = true;
-    };
-    video.addEventListener("webkitbeginfullscreen", markStarted);
-    video.addEventListener("fullscreenchange", markStarted);
-    fallbackCleanupRef.current = () => {
-      video.removeEventListener("webkitbeginfullscreen", markStarted);
-      video.removeEventListener("fullscreenchange", markStarted);
-    };
-    if (!enterNativeVideoFullscreen(video)) {
-      cancelFullscreenFallback();
-      openInAppViewer();
-      return;
-    }
-    if (isVideoInNativeFullscreen(video)) nativeStarted = true;
-    fallbackTimerRef.current = window.setTimeout(() => {
-      fallbackTimerRef.current = null;
-      const v = videoRef.current;
-      const started = nativeStarted || (!!v && isVideoInNativeFullscreen(v));
-      cancelFullscreenFallback();
-      if (v && !started) openInAppViewer();
-    }, NATIVE_FULLSCREEN_GRACE_MS);
+    // Same native playback session as Chat: controls + audio, play once,
+    // then restore the muted feed. No preventDefault before WebKit's call.
+    nativeVideo.open(
+      () => { setFeedMuted(true); setMediaLightboxIndex(0); },
+      () => {
+        setFeedMuted(true);
+        const video = videoRef.current;
+        if (!video) return;
+        if (feedVisibleRef.current) void video.play().catch(() => setAutoplayBlocked(true));
+        else video.pause();
+      },
+    );
   }
 
   function toggleFeedMute(e: React.MouseEvent) {
@@ -294,7 +253,9 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
     if (!el) return;
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) {
+        feedVisibleRef.current = entry.isIntersecting;
+        if (activeNativeVideo() === el) return; // rotation/OS presentation must not pause the player
+        if (entry.isIntersecting && mediaLightboxIndex === null) {
           el.play().catch(() => {
             // Autoplay can still be blocked in some embedded contexts even
             // when muted — not an error state, just leaves it paused with
@@ -310,7 +271,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [post.videoUrl]);
+  }, [post.videoUrl, mediaLightboxIndex]);
 
   // Re-checks the Ask-Caddie row's stale mark below as time passes.
   usePeriodicRerender(caddieAnalyses.some((a) => a.sourcePostId === post.id && a.status === "processing"));
@@ -602,9 +563,14 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
               muted={feedMuted}
               loop
               playsInline
-              onClick={handleVideoTap}
               style={videoBackdrop?.bars && videoSize ? barsCoverStyle(videoBackdrop.bars, videoSize.w / videoSize.h) : undefined}
               className={`cursor-pointer ${videoBackdrop?.bars && videoSize ? "" : "absolute inset-0 h-full w-full object-cover"}`}
+            />
+            <button
+              type="button"
+              aria-label={t("caddie.replayFullscreen")}
+              onClick={handleVideoTap}
+              className="absolute inset-0 focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-white"
             />
             {barsDebugEnabled && (
               <BarsDebugReadout

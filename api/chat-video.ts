@@ -478,6 +478,38 @@ export async function transcodeLocal(opts: { input: string; workDir: string; tri
   return { ok: true, video, poster, info };
 }
 
+// Database-backed, cross-replica budgets. Never substitute an in-memory Map:
+// replicas, cold starts, refreshed JWTs and changed IPs would reset it.
+type BudgetAction = "chat-video";
+export interface BudgetClient {
+  rpc(name: string, args: Record<string, unknown>): {
+    abortSignal(signal: AbortSignal): PromiseLike<{ data: unknown; error: unknown }>;
+  };
+}
+export type BudgetDecision =
+  | { allowed: true }
+  | { allowed: false; status: 429 | 503; code: "rate_limited" | "rate_limit_unavailable"; retryAfter: number };
+
+export async function consumeRequestBudget(client: BudgetClient, action: BudgetAction): Promise<BudgetDecision> {
+  // Fail closed on missing migration, timeouts and malformed answers. No
+  // provider/ffmpeg work is allowed when the central counter is unavailable.
+  const unavailable: BudgetDecision = { allowed: false, status: 503, code: "rate_limit_unavailable", retryAfter: 30 };
+  try {
+    const { data, error } = await client.rpc("consume_request_budget", { p_action: action })
+      .abortSignal(AbortSignal.timeout(5000));
+    if (error || !data || typeof data !== "object") return unavailable;
+    const d = data as Record<string, unknown>;
+    if (d.allowed === true && d.retry_after_seconds === 0) return { allowed: true };
+    if (d.allowed === false && typeof d.retry_after_seconds === "number" &&
+        Number.isInteger(d.retry_after_seconds) && d.retry_after_seconds >= 1 && d.retry_after_seconds <= 86400) {
+      return { allowed: false, status: 429, code: "rate_limited", retryAfter: d.retry_after_seconds };
+    }
+    return unavailable;
+  } catch {
+    return unavailable;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Handler
 // ---------------------------------------------------------------------------
@@ -516,12 +548,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   });
   const { data: userData, error: userError } = await client.auth.getUser(jwt);
   const userId = userData?.user?.id;
-  if (userError || !userId) return res.status(401).json({ error: "unauthorized" });
+  if (userError || !userId || userData.user?.is_anonymous) return res.status(401).json({ error: "unauthorized" });
 
   const parsed = parseChatVideoRequest(req.body, userId);
-  if (!parsed.ok) return res.status(400).json({ error: parsed.error });
+  if (parsed.ok === false) return res.status(400).json({ error: parsed.error });
   const request = parsed.value;
   const { videoPath, posterPath } = outputPaths(request);
+
+  // Before Storage download or any ffmpeg work. Counts attempts (including
+  // retries) so parallel duplicate requests cannot multiply expensive work.
+  const budget = await consumeRequestBudget(client, "chat-video");
+  if (budget.allowed === false) {
+    res.setHeader("Retry-After", String(budget.retryAfter));
+    res.setHeader("Cache-Control", "no-store");
+    return res.status(budget.status).json({ error: budget.code, retryAfterSeconds: budget.retryAfter });
+  }
 
   const { data: allowed, error: allowedError } = await client.rpc("chat_video_can_post", {
     p_scope: request.scope,
@@ -576,7 +617,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const result = await transcodeLocal({ input, workDir, trim: request.trim });
-    if (!result.ok) return res.status(result.status).json({ error: result.error });
+    if (result.ok === false) return res.status(result.status).json({ error: result.error });
 
     const posterUp = await videoBucket.upload(posterPath, await readFile(result.poster), { contentType: "image/jpeg", upsert: false, cacheControl: "3600" });
     if (posterUp.error && !isAlreadyThere(posterUp.error as { message?: string; statusCode?: string })) return res.status(403).json({ error: "upload_refused" });

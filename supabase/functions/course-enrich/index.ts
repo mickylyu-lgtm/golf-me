@@ -28,6 +28,7 @@
 // means a given course is ever checked at most once.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { consumeRequestBudget, budgetResponse } from "../_shared/requestBudget.ts";
 
 interface RequestBody {
   courseId: string;
@@ -192,6 +193,9 @@ Deno.serve(async (req: Request) => {
     global: { headers: { Authorization: authHeader } },
   });
 
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData.user || authData.user.is_anonymous) return jsonResponse({ error: "Not authenticated." }, 401);
+
   const { data: course, error: courseError } = await supabase
     .from("courses")
     .select("id, name, city, region, holes, golfcourseapi_checked_at, latitude, longitude")
@@ -205,6 +209,10 @@ Deno.serve(async (req: Request) => {
     // never re-spend quota re-checking the same course.
     return jsonResponse({ matched: Boolean(course.holes), course });
   }
+
+  // Cached answers above do not consume paid-provider allowance.
+  const limited = budgetResponse(await consumeRequestBudget(supabase, "course-enrich"), corsHeaders);
+  if (limited) return limited;
 
   // GolfCourseAPI's search only reliably matches a short query against
   // club_name -- try the full name first, fall back to just its first word.

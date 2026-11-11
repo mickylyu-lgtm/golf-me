@@ -1,8 +1,9 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type React from "react";
-import { Play, Volume2, VolumeX } from "lucide-react";
+import { Play } from "lucide-react";
 import type { PostMediaItem } from "../../types";
-import { enterNativeVideoFullscreen } from "../../lib/video";
+import { useNativeCommunityVideo } from "./useNativeCommunityVideo";
+import { useLocale } from "../../i18n/LocaleContext";
 import { barsCoverStyle, safeFindBars, thumbResults, useBlurredBackdrop, type BarInsets } from "../../lib/blurredBackdrop";
 import { ZoomableImage } from "./ZoomableImage";
 import { resolveCommunityMediaUrl, withFirstFrameHint } from "../../lib/videoPlayback";
@@ -13,8 +14,7 @@ interface MediaCarouselProps {
   media: PostMediaItem[];
   /** Card-scale rendering (fixed max height, cropped to fill) vs. fullscreen
    * lightbox (full-bleed edge to edge, video letterboxed/contained rather
-   * than cropped so the full frame is always visible; hold-right-to-2x on
-   * video). */
+   * than cropped so the full frame is always visible, with native controls). */
   variant: "card" | "lightbox";
   /** Card variant only — a tap opens the fullscreen lightbox at this index. */
   onItemClick?: (index: number) => void;
@@ -26,8 +26,6 @@ interface MediaCarouselProps {
    * on each close, including when returning to the same index again. */
   showSlide?: { index: number };
 }
-
-const HOLD_TO_SPEED_UP_MS = 180;
 
 // Instagram-style swipeable media — a single item still renders (just no
 // dots/scroll-snap overhead beyond what one slide needs), so PostCard can
@@ -67,15 +65,10 @@ const photoAspectCache = new Map<string, number>();
 
 export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0, onIndexChange, showSlide }: MediaCarouselProps) {
   const [activeIndex, setActiveIndex] = useState(initialIndex);
+  const activeIndexRef = useRef(activeIndex);
+  activeIndexRef.current = activeIndex;
   const trackRef = useRef<HTMLDivElement>(null);
-  const holdTimerRef = useRef<number | null>(null);
-  const wasHoldingRef = useRef(false);
   const videoElsRef = useRef<Map<string, HTMLVideoElement>>(new Map());
-  const [playingIds, setPlayingIds] = useState<Set<string>>(new Set());
-  // Tracks which videos are currently UNmuted (positive tracking — a video
-  // element itself starts muted by default, and only the autoplay effect
-  // below or an explicit tap flips one into this set).
-  const [unmutedIds, setUnmutedIds] = useState<Set<string>>(new Set());
   // Jump to the tapped slide instantly (no animated scroll) the moment the
   // lightbox mounts, rather than opening on slide 0 every time.
   useLayoutEffect(() => {
@@ -120,37 +113,25 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0, o
     if (!item || item.type !== "video") return;
     const el = videoElsRef.current.get(item.id);
     if (!el) return;
+    let cancelled = false;
     el.muted = false;
-    el.play()
-      .then(() => {
-        setPlayingIds((prev) => new Set(prev).add(item.id));
-        setUnmutedIds((prev) => new Set(prev).add(item.id));
-      })
-      .catch(() => {
-        el.muted = true;
-        el.play()
-          .then(() => setPlayingIds((prev) => new Set(prev).add(item.id)))
-          .catch(() => {
-            // Autoplay blocked entirely even muted — rare, but not an error
-            // state. The play/pause overlay and normal controls are still
-            // right there as a fallback.
-          });
-      });
+    void el.play().catch(() => {
+      // A rejected attempt can arrive after a swipe or Close. It must not
+      // restart an offscreen/unmounted video with a second play request.
+      if (cancelled || activeIndexRef.current !== initialIndex) return;
+      el.muted = true;
+      void el.play().catch(() => { /* The native Play control remains available. */ });
+    });
+    return () => { cancelled = true; el.pause(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (holdTimerRef.current !== null) window.clearTimeout(holdTimerRef.current);
-    };
-  }, []);
-
-  // Chat videos (native controls): swiping to another item stops the one
+  // Swiping to another item stops the one
   // left behind, so only the video on screen ever plays.
   useEffect(() => {
     if (variant !== "lightbox") return;
     media.forEach((item, i) => {
-      if (i === activeIndex || item.type !== "video" || !item.nativeControls) return;
+      if (i === activeIndex || item.type !== "video") return;
       videoElsRef.current.get(item.id)?.pause();
     });
   }, [activeIndex, media, variant]);
@@ -160,55 +141,6 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0, o
     if (!track || track.clientWidth === 0) return;
     const index = Math.max(0, Math.min(media.length - 1, Math.round(track.scrollLeft / track.clientWidth)));
     setActiveIndex((prev) => (prev === index ? prev : index));
-  }
-
-  function togglePlay(item: PostMediaItem, el: HTMLVideoElement) {
-    if (el.paused) {
-      void el.play();
-      setPlayingIds((prev) => new Set(prev).add(item.id));
-    } else {
-      el.pause();
-      setPlayingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(item.id);
-        return next;
-      });
-    }
-  }
-
-  function toggleMute(item: PostMediaItem, el: HTMLVideoElement) {
-    el.muted = !el.muted;
-    setUnmutedIds((prev) => {
-      const next = new Set(prev);
-      if (el.muted) next.delete(item.id);
-      else next.add(item.id);
-      return next;
-    });
-  }
-
-  // Hold anywhere on the right half of a fullscreen video to watch it at 2x
-  // while held, matching TikTok/Instagram Reels — released (or the finger/
-  // cursor leaves) snaps straight back to normal speed. A short delay
-  // before engaging keeps a quick tap-to-play/pause on that same half from
-  // being misread as a hold.
-  function startHold(el: HTMLVideoElement) {
-    if (holdTimerRef.current !== null) window.clearTimeout(holdTimerRef.current);
-    holdTimerRef.current = window.setTimeout(() => {
-      el.playbackRate = 2;
-      wasHoldingRef.current = true;
-      holdTimerRef.current = null;
-    }, HOLD_TO_SPEED_UP_MS);
-  }
-
-  // Releasing after an engaged hold must NOT also toggle play/pause — the
-  // browser fires a click right after pointerup, which would otherwise
-  // pause the video the instant the golfer lets go of a 2x hold.
-  function endHold(el: HTMLVideoElement) {
-    if (holdTimerRef.current !== null) {
-      window.clearTimeout(holdTimerRef.current);
-      holdTimerRef.current = null;
-    }
-    el.playbackRate = 1;
   }
 
   useEffect(() => {
@@ -280,114 +212,23 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0, o
                 poster={item.thumbnailUrl}
                 className={itemClass}
                 fit={wide ? "contain" : "cover"}
-                onClick={(e) => {
-                  // Only a plain tap on the video body (not the native
-                  // controls bar) triggers this — otherwise tapping
-                  // play/pause/scrub would also fire it. Goes straight to
-                  // the native fullscreen player (±10s skip, time bar) in
-                  // one tap, same as Caddie's own video, rather than the
-                  // custom in-app lightbox — that stays reserved for photo
-                  // posts and multi-item posts, where swiping between
-                  // items is the point.
-                  //
-                  // No preventDefault, and bubble phase (not capture) —
-                  // WebKit only treats webkitEnterFullscreen() as a real
-                  // user gesture when nothing upstream in the same event
-                  // called preventDefault and it runs after the browser's
-                  // own handling of the click; either one broke fullscreen
-                  // entirely, not just the glitch/flash this was meant to fix.
-                  if (e.target instanceof HTMLVideoElement) enterNativeVideoFullscreen(e.target);
-                }}
+                onOpen={() => onItemClick?.(i)}
               />
-            ) : item.nativeControls ? (
-              // Chat videos: the platform's own controls (timeline, time,
-              // play/pause, and its fullscreen button into the native
-              // player) instead of the tap/hold/mute layer below.
-              // data-video-controls: scrubbing the timeline mustn't read as
-              // a drag-to-dismiss.
-              <div key={item.id} className="relative h-full w-full shrink-0 snap-center overflow-hidden bg-black" data-video-controls>
-                <LightboxVideo
-                  src={item.url}
-                  poster={item.thumbnailUrl}
-                  controls
-                  elRef={(el) => {
-                    if (el) videoElsRef.current.set(item.id, el);
-                    else videoElsRef.current.delete(item.id);
-                  }}
-                />
-              </div>
             ) : (
-              // Full-bleed, edge to edge, but the video itself is
-              // letterboxed/contained (object-contain on a black backdrop)
-              // so the full frame is always visible instead of cropped.
-              // data-video-controls: tells FullscreenMediaViewer's own drag-
-              // to-dismiss tracking to require a much more deliberate
-              // vertical drag from here before engaging — this area owns
-              // tap-to-pause/hold-for-2x, and ordinary finger tremor during
-              // those was otherwise nudging the whole viewer's drag state
-              // too, producing a visible snap-back jitter on every touch.
-              <div key={item.id} className="relative h-full w-full shrink-0 snap-center overflow-hidden bg-black" data-video-controls>
+              // Platform playback controls, as in Caddie's Original player:
+              // scrub, pause, sound and fullscreen. No competing tap/hold layer.
+              <div key={item.id} inert={i !== activeIndex} className="relative h-full w-full shrink-0 snap-center overflow-hidden bg-black" data-native-video-controls>
                 <LightboxVideo
-                  src={resolveCommunityMediaUrl(item.url)}
+                  src={item.nativeControls ? item.url : resolveCommunityMediaUrl(item.url)}
                   poster={item.thumbnailUrl}
                   elRef={(el) => {
                     if (el) videoElsRef.current.set(item.id, el);
-                    else videoElsRef.current.delete(item.id);
-                  }}
-                  onClick={(e) => togglePlay(item, e.currentTarget)}
-                />
-                {/* Right-half hold-for-2x zone, layered over the video —
-                    left half stays a plain tap-to-play/pause target. */}
-                <div
-                  className="absolute inset-y-0 right-0 w-1/2"
-                  onPointerDown={() => {
-                    const el = videoElsRef.current.get(item.id);
-                    if (el) startHold(el);
-                  }}
-                  onPointerUp={() => {
-                    const el = videoElsRef.current.get(item.id);
-                    if (el) endHold(el);
-                  }}
-                  onPointerLeave={() => {
-                    const el = videoElsRef.current.get(item.id);
-                    if (el) endHold(el);
-                  }}
-                  onPointerCancel={() => {
-                    const el = videoElsRef.current.get(item.id);
-                    if (el) endHold(el);
-                  }}
-                  onClick={() => {
-                    if (wasHoldingRef.current) {
-                      wasHoldingRef.current = false;
-                      return;
+                    else {
+                      videoElsRef.current.get(item.id)?.pause();
+                      videoElsRef.current.delete(item.id);
                     }
-                    const el = videoElsRef.current.get(item.id);
-                    if (el) togglePlay(item, el);
                   }}
                 />
-                {!playingIds.has(item.id) && (
-                  <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                    <span className="flex h-14 w-14 items-center justify-center rounded-full bg-black/40 text-white">
-                      <Play size={24} fill="currentColor" />
-                    </span>
-                  </span>
-                )}
-                {/* Fullscreen opens unmuted on the triggering gesture, but a
-                    normal mute/unmute toggle stays available afterward —
-                    sits above the hold-for-2x zone in stacking order so a
-                    tap here is caught by the button, not read as a hold. */}
-                <button
-                  type="button"
-                  aria-label={unmutedIds.has(item.id) ? "Mute" : "Unmute"}
-                  className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-black/40 text-white"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const el = videoElsRef.current.get(item.id);
-                    if (el) toggleMute(item, el);
-                  }}
-                >
-                  {unmutedIds.has(item.id) ? <Volume2 size={16} /> : <VolumeX size={16} />}
-                </button>
               </div>
             )
           ) : variant === "card" ? (
@@ -468,74 +309,56 @@ function CardImage({ src, className, fit, onClick }: { src: string; className: s
   );
 }
 
-function CardVideo({ src, poster, className, fit, onClick }: {
+function CardVideo({ src, poster, className, fit, onOpen }: {
   src: string;
   poster?: string;
   className: string;
   fit: "cover" | "contain";
-  onClick: (e: React.MouseEvent<HTMLVideoElement>) => void;
+  onOpen: () => void;
 }) {
+  const { t } = useLocale();
   const scan = useBlurredBackdrop(poster);
   const playback = useVideoPlayback(src);
-  // A missing or unloadable thumbnail leaves the poster blank; let the video
-  // paint its own first frame instead of a black box (lib/videoPlayback.ts).
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const nativeVideo = useNativeCommunityVideo(videoRef, src);
   const posterUsable = !!poster && thumbResults.get(poster) !== "load-error";
-  const videoSrc = withFirstFrameHint(src, posterUsable);
-  const videoPoster = posterUsable ? poster : undefined;
-  const events = {
-    ref: playback.ref,
-    onError: playback.handlers.onError,
-    onPlay: playback.handlers.onPlay,
-    onWaiting: playback.handlers.onWaiting,
-    onPlaying: playback.handlers.onPlaying,
-    onPause: playback.handlers.onPause,
-    onCanPlay: playback.handlers.onCanPlay,
-    onLoadedMetadata: playback.handlers.onLoadedMetadata,
-  };
   return (
     <BarCropBox className={className} bars={fit === "cover" ? (scan?.bars ?? null) : null} aspect={scan?.aspect ?? null}>
-      {(style, cls) =>
-        style ? (
-          // Zoomed past its own edges, the native controls bar would sit
-          // outside the box, so a cropped video shows a play badge instead;
-          // a tap opens the native fullscreen player either way.
-          <>
-            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-            <video src={videoSrc} poster={videoPoster} playsInline preload="metadata" style={style} className="cursor-pointer bg-black" onClick={onClick} {...events} />
+      {(style, cls) => (
+        <div className={style ? "h-full w-full" : `${cls} relative`}>
+          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+          <video
+            src={withFirstFrameHint(src, posterUsable)}
+            poster={posterUsable ? poster : undefined}
+            playsInline
+            preload="metadata"
+            style={style}
+            className={style ? "bg-black" : `h-full w-full ${fit === "cover" ? "object-cover" : "object-contain"} bg-black`}
+            ref={(el) => { videoRef.current = el; playback.ref(el); }}
+            {...playback.handlers}
+          />
+          <button
+            type="button"
+            aria-label={t("caddie.replayFullscreen")}
+            onClick={() => nativeVideo.open(onOpen, () => videoRef.current?.pause())}
+            className="absolute inset-0 flex items-center justify-center focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-white"
+          >
             {playback.status.phase === "ok" && (
-              <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/40 text-white">
-                  <Play size={20} fill="currentColor" />
-                </span>
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/40 text-white">
+                <Play size={20} fill="currentColor" aria-hidden="true" />
               </span>
             )}
-            <VideoStatusOverlay status={playback.status} onRetry={playback.retry} />
-          </>
-        ) : (
-          // Wrapped so the status overlay can sit over the video.
-          <div className={`${cls} relative`}>
-            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-            <video
-              src={videoSrc}
-              poster={videoPoster}
-              controls
-              playsInline
-              preload="metadata"
-              className={`h-full w-full ${fit === "cover" ? "object-cover" : "object-contain"} bg-black`}
-              onClick={onClick}
-              {...events}
-            />
-            <VideoStatusOverlay status={playback.status} onRetry={playback.retry} />
-          </div>
-        )
-      }
+          </button>
+          <VideoStatusOverlay status={playback.status} onRetry={playback.retry} />
+        </div>
+      )}
     </BarCropBox>
   );
 }
 
 // The fullscreen viewer's video, with the same loading / error / retry
 // states as the card. Fills its (relative) slide.
-function LightboxVideo({ src, poster, elRef, onClick, controls = false }: {
+function LightboxVideo({ src, poster, elRef }: {
   src: string | undefined;
   poster?: string;
   elRef: (el: HTMLVideoElement | null) => void;
@@ -544,23 +367,26 @@ function LightboxVideo({ src, poster, elRef, onClick, controls = false }: {
   controls?: boolean;
 }) {
   const playback = useVideoPlayback(src);
+  const playbackRef = playback.ref;
+  const forwardedRef = useRef(elRef);
+  forwardedRef.current = elRef;
+  const setVideoRef = useCallback((el: HTMLVideoElement | null) => {
+    forwardedRef.current(el);
+    playbackRef(el);
+  }, [playbackRef]);
   const posterUsable = !!poster && thumbResults.get(poster) !== "load-error";
   return (
     <>
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <video
-        ref={(el) => {
-          elRef(el);
-          playback.ref(el);
-        }}
+        ref={setVideoRef}
         src={withFirstFrameHint(src, posterUsable)}
         poster={posterUsable ? poster : undefined}
         playsInline
-        loop={!controls}
-        controls={controls}
+        controls
+        tabIndex={0}
         preload="metadata"
-        className="h-full w-full object-contain"
-        onClick={onClick}
+        className="absolute inset-x-0 top-[calc(env(safe-area-inset-top)+3.5rem)] h-[calc(100%-env(safe-area-inset-top)-env(safe-area-inset-bottom)-6.5rem)] w-full object-contain"
         onError={playback.handlers.onError}
         onPlay={playback.handlers.onPlay}
         onWaiting={playback.handlers.onWaiting}

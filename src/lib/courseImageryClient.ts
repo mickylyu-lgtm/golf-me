@@ -1,3 +1,4 @@
+import { courseImageryThrottle } from "./courseImageryThrottle.ts";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { useAuth } from "../context/AuthContext";
 import { supabase } from "./supabase";
@@ -10,6 +11,8 @@ import {
   type CoursePhotosResponse,
   type PhotoAuthor,
 } from "../../supabase/functions/_shared/coursePhotoTypes.ts";
+
+courseImageryThrottle.bindAuth(supabase.auth);
 
 // The best real photo of a course, and its outline, for any list row, map
 // card or course page (Micky, 2026-11-05: what the actual course looks
@@ -57,7 +60,7 @@ interface CourseLike {
 }
 
 type Kind = CoursePhotoSize | "outline";
-type Answer = { kind: "photo"; photo: CoursePhoto | null } | { kind: "unresolved" } | { kind: "unavailable" };
+type Answer = { kind: "photo"; photo: CoursePhoto | null } | { kind: "unresolved" } | { kind: "unavailable" } | { kind: "throttled" };
 
 const BATCH_DELAY_MS = 30;
 // A course the server couldn't resolve (cap reached, provider down) isn't
@@ -77,7 +80,7 @@ const keyOf = (kind: Kind, id: string) => `${kind}:${id}`;
 
 function settle(kind: Kind, id: string, answer: Answer) {
   const key = keyOf(kind, id);
-  if (answer.kind !== "unavailable") answers.set(key, { answer, at: Date.now() });
+  if (answer.kind !== "unavailable" && answer.kind !== "throttled") answers.set(key, { answer, at: Date.now() });
   const fns = waiting.get(key) ?? [];
   waiting.delete(key);
   fns.forEach((fn) => fn(answer));
@@ -115,10 +118,15 @@ async function flush() {
     queued[kind].clear();
     for (let i = 0; i < ids.length; i += MAX_COURSE_IDS_PER_REQUEST) {
       const chunk = ids.slice(i, i + MAX_COURSE_IDS_PER_REQUEST);
+      if (courseImageryThrottle.active()) {
+        chunk.forEach((id) => settle(kind, id, { kind: "throttled" }));
+        continue;
+      }
       if (functionUnavailable) {
         chunk.forEach((id) => settle(kind, id, { kind: "unavailable" }));
         continue;
       }
+      const budgetScope = courseImageryThrottle.scope();
       try {
         const body = kind === "outline" ? { courseIds: chunk, outlineOnly: true } : { courseIds: chunk, size: kind };
         const { data, error } = await supabase.functions.invoke("course-photos", { body });
@@ -131,6 +139,10 @@ async function flush() {
           else settle(kind, id, id in res.photos ? { kind: "photo", photo: res.photos[id] ? toPhoto(res.photos[id]!) : null } : { kind: "unresolved" });
         }
       } catch (err) {
+        if (await courseImageryThrottle.record(err, Date.now(), budgetScope)) {
+          chunk.forEach((id) => settle(kind, id, { kind: "throttled" }));
+          continue;
+        }
         // 404 (not deployed), 5xx, network: browser fallback for now.
         functionUnavailable = true;
         console.warn("GolfMe: course-photos unavailable, using the browser lookup.", err);
@@ -146,6 +158,7 @@ function askServer(id: string, kind: Kind): Promise<Answer> {
   if (known && (known.answer.kind === "photo" || Date.now() - known.at < UNRESOLVED_RETRY_MS)) return Promise.resolve(known.answer);
   // An outline already came back with a photo answer: nothing to ask.
   if (kind === "outline" && outlines.has(id)) return Promise.resolve({ kind: "photo", photo: null });
+  if (courseImageryThrottle.active()) return Promise.resolve({ kind: "throttled" });
   if (functionUnavailable) return Promise.resolve({ kind: "unavailable" });
   return new Promise((resolve) => {
     const list = waiting.get(key);
@@ -170,7 +183,7 @@ export async function loadCoursePhoto(course: CourseLike, size: CoursePhotoSize,
   if (useServer && course.id) {
     const answer = await askServer(course.id, size);
     if (answer.kind === "photo") return answer.photo;
-    if (answer.kind === "unresolved") return null;
+    if (answer.kind === "unresolved" || answer.kind === "throttled") return null;
   }
   return browserLookup(course, size);
 }

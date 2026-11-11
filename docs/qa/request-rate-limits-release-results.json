@@ -1,0 +1,104 @@
+{
+  "release_commit": "b6161d99a6dda69dd40e0b46ca235f60603e4b8f",
+  "production_url": "https://golfme.app",
+  "production_deployment": "dpl_ntU5usvoV9s5tdkUezQdr8j1Yts5",
+  "production_source": "git",
+  "production_state": "READY",
+  "staged_verified_deployment": "dpl_9GeuXUGBXQvoxFcjEPQiC8yinLcm",
+  "ci_url": "https://github.com/mickylyu-lgtm/golf-me/actions/runs/43048816582",
+  "ci_status": "success",
+  "local_tests_passed": 1394,
+  "database_assertions_passed": 28,
+  "migration_version": "20261111151846",
+  "migration_sha256": "a620e57832e4faf042ae2c727187beeb97197a7b5086e6bf68fde167dcdb02cb",
+  "schema": {
+    "table": {
+      "rls": true,
+      "anon_access": false,
+      "policy_count": 0,
+      "service_access": false,
+      "authenticated_access": false
+    },
+    "function": {
+      "security_definer": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "arguments": "p_action text",
+      "anon_execute": false,
+      "authenticated_execute": true,
+      "service_execute": false,
+      "body_exact_match": true
+    },
+    "constraints": [
+      "CHECK ((action = ANY (ARRAY['course-search'::text, 'course-enrich'::text, 'course-photos'::text, 'translate-caddie-analysis'::text, 'chat-video'::text])))",
+      "CHECK ((day_used >= 0))",
+      "CHECK ((minute_used >= 0))",
+      "PRIMARY KEY (user_id, action)",
+      "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
+    ]
+  },
+  "edge_functions": [
+    {
+      "slug": "course-search",
+      "version": 39,
+      "active": true,
+      "verify_jwt": true,
+      "exact_source": true,
+      "changed": [],
+      "extra": []
+    },
+    {
+      "slug": "course-enrich",
+      "version": 32,
+      "active": true,
+      "verify_jwt": true,
+      "exact_source": true,
+      "changed": [],
+      "extra": []
+    },
+    {
+      "slug": "course-photos",
+      "version": 5,
+      "active": true,
+      "verify_jwt": true,
+      "exact_source": true,
+      "changed": [],
+      "extra": []
+    },
+    {
+      "slug": "translate-caddie-analysis",
+      "version": 23,
+      "active": true,
+      "verify_jwt": true,
+      "exact_source": true,
+      "changed": [],
+      "extra": []
+    }
+  ],
+  "smoke": {
+    "landing": 200,
+    "chat_video_get": 405,
+    "chat_video_anonymous_post": 401,
+    "extract_frames_anonymous_post": 401,
+    "trim_video_anonymous_post": 401,
+    "edge_anonymous_posts": 401,
+    "rpc_anonymous_post": 401,
+    "rpc_error_code": "42501"
+  },
+  "runtime_error_scan": {
+    "deployment": "dpl_ntU5usvoV9s5tdkUezQdr8j1Yts5",
+    "lookback": "10m",
+    "error_or_fatal_groups_returned": 0
+  },
+  "limitations": [
+    "Authenticated live quota/recovery and physical-iOS test not performed: the authorized break60 simulator session is on the offline Mac. No other GolfMe account used.",
+    "No production flood, real-media processing or paid-provider verification calls.",
+    "Short post-release error scan is not an ongoing monitoring guarantee."
+  ],
+  "advisor_expected_findings": [
+    "Private counter table intentionally has RLS with no direct-access policy.",
+    "Authenticated SECURITY DEFINER budget RPC is intentional and restricted to own caller-derived identity."
+  ],
+  "unrelated_config_changed": false
+}

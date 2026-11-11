@@ -12,6 +12,7 @@
 // the new locale.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { consumeRequestBudget, budgetResponse } from "../_shared/requestBudget.ts";
 import { sanitizeCheckpointCues, sanitizeWorkOnCheckpoint, withSanitizedCheckpointCues } from "../_shared/caddieCues.ts";
 import { withMeasuredCueCheck } from "../_shared/caddieVerdicts.ts";
 import { providerErrorHint, redactDetail, safeErrorName } from "../_shared/caddieReliability.ts";
@@ -146,7 +147,7 @@ Deno.serve(async (req: Request) => {
     data: { user },
     error: userError,
   } = await supabase.auth.getUser();
-  if (userError || !user) return jsonResponse({ error: "Not authenticated." }, 401);
+  if (userError || !user || user.is_anonymous) return jsonResponse({ error: "Not authenticated." }, 401);
 
   let body: RequestBody;
   try {
@@ -185,6 +186,9 @@ Deno.serve(async (req: Request) => {
   if (sourceLanguage === undefined && lastUpdatedAt && Date.now() - lastUpdatedAt < COOLDOWN_SECONDS * 1000) {
     return jsonResponse({ error: "Please wait a moment before translating again." }, 429);
   }
+
+  const limited = budgetResponse(await consumeRequestBudget(supabase, "translate-caddie-analysis"), corsHeaders);
+  if (limited) return limited;
 
   const sourceScore = (source.score as Record<string, { points: number; reason: string }>) ?? {};
   const sourceCues = sanitizeCheckpointCues(source.checkpoint_cues);
