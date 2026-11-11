@@ -1,4 +1,5 @@
 import { test } from "node:test";
+import { execFileSync } from "node:child_process";
 import assert from "node:assert/strict";
 import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } from "node:fs";
 import path from "node:path";
@@ -241,4 +242,11 @@ test("course search never returns provider URL secrets in transport or upstream 
       } finally { f.restore(); }
     }
   } finally { globalThis.fetch = oldFetch; }
+});
+
+
+test("chat-video typechecks with Vercel non-strict discriminator settings", () => {
+  execFileSync(process.execPath, ["node_modules/typescript/bin/tsc", "--ignoreConfig", "--noEmit",
+    "--skipLibCheck", "--target", "es2023", "--module", "nodenext", "--allowImportingTsExtensions",
+    "--strict", "false", "api/chat-video.ts"], { stdio: "pipe" });
 });

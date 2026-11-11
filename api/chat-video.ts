@@ -551,14 +551,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (userError || !userId || userData.user?.is_anonymous) return res.status(401).json({ error: "unauthorized" });
 
   const parsed = parseChatVideoRequest(req.body, userId);
-  if (!parsed.ok) return res.status(400).json({ error: parsed.error });
+  if (parsed.ok === false) return res.status(400).json({ error: parsed.error });
   const request = parsed.value;
   const { videoPath, posterPath } = outputPaths(request);
 
   // Before Storage download or any ffmpeg work. Counts attempts (including
   // retries) so parallel duplicate requests cannot multiply expensive work.
   const budget = await consumeRequestBudget(client, "chat-video");
-  if (!budget.allowed) {
+  if (budget.allowed === false) {
     res.setHeader("Retry-After", String(budget.retryAfter));
     res.setHeader("Cache-Control", "no-store");
     return res.status(budget.status).json({ error: budget.code, retryAfterSeconds: budget.retryAfter });
@@ -617,7 +617,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const result = await transcodeLocal({ input, workDir, trim: request.trim });
-    if (!result.ok) return res.status(result.status).json({ error: result.error });
+    if (result.ok === false) return res.status(result.status).json({ error: result.error });
 
     const posterUp = await videoBucket.upload(posterPath, await readFile(result.poster), { contentType: "image/jpeg", upsert: false, cacheControl: "3600" });
     if (posterUp.error && !isAlreadyThere(posterUp.error as { message?: string; statusCode?: string })) return res.status(403).json({ error: "upload_refused" });
