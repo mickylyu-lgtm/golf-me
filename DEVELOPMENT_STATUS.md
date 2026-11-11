@@ -1,5 +1,15 @@
 # GolfMe — Development Status
 
+
+## Registered Users collapse and search - 2026-11-11 (local only, release held)
+
+- Registered Users on the admin dashboard starts folded, with a keyboard-accessible toggle and always-visible name/username/email search. Typing opens matching results; folding preserves the query, Clear resets it, and loading/error/empty states remain distinct. Errors and Retry stay visible when folded.
+- Search is case-insensitive and filters the entire loaded admin roster before pagination. Full registered emails wrap and can be selected; Show more makes matches beyond the previous 100-row display available. The existing server RPC cap remains 1,000 latest accounts and is disclosed when reached.
+- Admin route/role guards, server RPC, grants, and email authorization are unchanged. Search and results stay in component memory, never URLs, storage, or new network calls. No backend/migration, native build, push, deployment, or production data change.
+- Verification: full npm run check (TypeScript, 26 pre-existing lint warnings/0 errors, all 1,307 tests, build and prerender), seven focused search tests, and 128 synthetic browser assertions at 320/390/1440 px. Browser coverage includes keyboard/repeated fold, search beyond row 100, clear/focus, pagination, refreshed data, loading/error/retry/empty, long emails, cap disclosure, and no query persistence. No external browser requests. Details: docs/qa/admin-user-search-20261111.md.
+- Next: review local commit on feat/admin-user-search-20261111 (based on origin/main f5d3329), then obtain explicit publication approval. Live admin Auth/PostgREST integration and a physical-device check were not run.
+
+
 ## Private social backend applied - 2026-11-11
 
 - Production backend applied and verified: reviewed migration 20261111051406_private_social_controls.sql was recorded as 20261111082608_private_social_controls.sql. Local filename and fixture include now match; SQL bytes are unchanged (SHA-256 69399931ce6f77e9ebbb829fc14729abd1f992a5bcf64c4237042f8b55ca657d). All 18 function bodies, ACLs, policies and schema were verified.
