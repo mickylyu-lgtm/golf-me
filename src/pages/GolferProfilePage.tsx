@@ -9,7 +9,6 @@ import {
   MessageCircle,
   MoreHorizontal,
   Scale,
-  Send,
   ShieldAlert,
   ShieldCheck,
   ShieldOff,
@@ -245,19 +244,15 @@ export function GolferProfilePage() {
 
         {!blocked && (
           <div className="flex w-full max-w-sm flex-col items-center gap-2">
-            {/* Message is the main thing to do here; Invite to play opens the
-                same thread with a suggested message the golfer sends (or
-                edits) themselves. messagingAllowed is false here only when
-                they've blocked us (self and "we blocked them" are already
-                covered by !blocked above) — silently hide rather than
-                surface their block. */}
+            {/* Keep both actions behind the existing messaging/block gates.
+                A round invitation opens an editable, unsent draft, just as before. */}
             {messagingAllowed && (
-              <div className="flex w-full items-center gap-2">
-                <Button className="flex-1" icon={<MessageCircle size={15} />} onClick={() => navigate(`/messages/${golfer.id}`)}>
-                  {t("golferProfile.message")}
-                </Button>
-                <Button className="flex-1" variant="outline" icon={<Send size={15} />} onClick={() => inviteToPlay(golfer)}>
+              <div className="flex w-full flex-col gap-2 min-[360px]:flex-row">
+                <Button className="min-h-11 flex-1" icon={<Flag size={15} className="shrink-0" />} onClick={() => inviteToPlay(golfer)}>
                   {t("golferProfile.inviteToPlay")}
+                </Button>
+                <Button className="min-h-11 flex-1" variant="outline" icon={<MessageCircle size={15} className="shrink-0" />} onClick={() => navigate(`/messages/${golfer.id}`)}>
+                  {t("golferProfile.message")}
                 </Button>
               </div>
             )}
@@ -305,6 +300,35 @@ export function GolferProfilePage() {
         </div>
       )}
 
+      <div className="rounded-2xl border border-slate-100 bg-white p-4">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{t("golferProfile.playingStyle")}</p>
+        <div className="flex flex-wrap gap-1.5">
+          {golfer.vibes.map((v) => (
+            <Badge key={v} tone={VIBE_TONE[v]}>
+              {vibeLabel(v, t)}
+            </Badge>
+          ))}
+          {isEstablished && <Badge tone="outline">{paceLabel(enrichedGolfer.reputation.goodPacePct, t)}</Badge>}
+          <Badge tone="outline" icon={golfer.walkOrCart === "Walking" ? <Footprints size={12} /> : <Car size={12} />}>
+            {walkOrCartLabel(golfer.walkOrCart, t)}
+          </Badge>
+        </div>
+      </div>
+
+      {/* Left out rather than shown as an empty heading for a new golfer. */}
+      {golfer.availability.length > 0 && (
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{t("golferProfile.freeTitle")}</p>
+          <div className="flex flex-wrap gap-1.5">
+            {golfer.availability.map((a) => (
+              <Badge key={a} tone="outline">
+                {availabilityLabel(a, t)}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* No bio yet (a new golfer) means no empty card. */}
       {golfer.bio?.trim() && (
         <div className="rounded-2xl border border-slate-100 bg-white p-4">
@@ -321,21 +345,6 @@ export function GolferProfilePage() {
             {handicapConfidence.level === "high" ? t("golferProfile.handicapConfirmed") : t("golferProfile.handicapQuestioned")}
           </p>
         )}
-      </div>
-
-      <div className="rounded-2xl border border-slate-100 bg-white p-4">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{t("golferProfile.playingStyle")}</p>
-        <div className="flex flex-wrap gap-1.5">
-          {golfer.vibes.map((v) => (
-            <Badge key={v} tone={VIBE_TONE[v]}>
-              {vibeLabel(v, t)}
-            </Badge>
-          ))}
-          {isEstablished && <Badge tone="outline">{paceLabel(enrichedGolfer.reputation.goodPacePct, t)}</Badge>}
-          <Badge tone="outline" icon={golfer.walkOrCart === "Walking" ? <Footprints size={12} /> : <Car size={12} />}>
-            {walkOrCartLabel(golfer.walkOrCart, t)}
-          </Badge>
-        </div>
       </div>
 
       <div className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white p-4">
@@ -385,20 +394,6 @@ export function GolferProfilePage() {
           </p>
         </div>
       </div>
-
-      {/* Left out rather than shown as an empty heading for a new golfer. */}
-      {golfer.availability.length > 0 && (
-        <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{t("golferProfile.freeTitle")}</p>
-          <div className="flex flex-wrap gap-1.5">
-            {golfer.availability.map((a) => (
-              <Badge key={a} tone="outline">
-                {availabilityLabel(a, t)}
-              </Badge>
-            ))}
-          </div>
-        </div>
-      )}
 
       {golfer.favoriteCourses.length > 0 && (
         <div>

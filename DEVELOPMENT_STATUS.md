@@ -1,11 +1,19 @@
 # GolfMe — Development Status
 
+## Golf-first purpose and boundaries — 2026-11-11 (integrated, release authorized)
+
+- Signup/login and intro explicitly say GolfMe is a golf community, not a dating app. Profiles lead with Invite to a round, keep Message secondary, and show playing style/availability ahead of the bio/gallery. Existing unsent-draft and block gates are unchanged.
+- Community links directly to the now six-language guidelines, including no unwanted romantic/sexual messages, advances or pressure, respect for refusal, and accurate report/block instructions. No automated enforcement or new moderation promise.
+- Final integrated npm run check passed TypeScript, 1,445 tests, lint (28 baseline warnings/zero errors), build/prerender. Independent review found no blockers; 648 built-app synthetic browser assertions passed across six languages and 320/360/390/1440 px, including keyboard, enlarged guidelines, invitation/draft preservation and both block directions. Details: docs/qa/golf-first-purpose-20261111.md.
+- No database, backend, native-shell or production changes. Physical iPhone/WebKit/VoiceOver and real-account integration remain unverified. Rebased onto live tutorial main b63a843; only this status file conflicted, and the reviewed application/test patch is byte-identical. The full 648-assertion browser suite passed again after integration. User authorized push when ready and the tutorial release slot is clear. Next: normal fast-forward publication, then verify exact-commit CI and production.
+
 ## Tutorial spotlight and founder-only replay — 2026-11-11 (tested, release authorized)
 
 - Replay Tutorial was previously shown to all real/demo accounts. Settings and the manual replay callback now require the existing authenticated founder ID; email, displayed profile and admin roles cannot grant it. Normal automatic first-time onboarding remains for new real accounts. Account changes reset the walkthrough; synchronous completion prevents a queued Home effect reopening it after Skip.
 - One stable spotlight cutout smoothly tracks moving/lazy targets, with a single instant offscreen scroll instead of competing re-scrolls. Frame sampling plus resize/DOM/scroll observation keeps alignment; all listeners/frames are cleaned up. Reduced motion is instant. No tutorial wording, backend, database or native-shell changes.
 - Final `npm run check` passed TypeScript, lint (28 baseline warnings / 0 errors), all 1,441 tests, build and prerender. Synthetic Chromium passed 77 access/motion/lifecycle checks at 320/390/1440px and the six-locale/30-case narrow, landscape and enlarged-text layout suite. Independent source review found no blocker; screenshots inspected. Physical iPhone/WebKit and real-account persistence remain unverified.
-- Details and reproduction: `docs/qa/tutorial-spotlight-founder-20261111.md`. Release base: remote main and live alias both `72e3d3c`; next: publish normally and verify exact-commit CI plus production assets. No production data or migration action is needed.
+- Details and reproduction: `docs/qa/tutorial-spotlight-founder-20261111.md`. Published `b63a8439e1af1b292e610ca734d892116b843625` is live at golfme.app (READY, deployment `dpl_EFKvxm1kuH8qipeqqt1HtNewg9t2`); exact-commit CI `43104897685` passed. Public HTML, Settings and the new spotlight asset returned 200; no test hooks shipped. No production data or migration action is needed.
+
 
 
 ## Caddie feedback: remove model status leakage — 2026-11-11 (live, verified)

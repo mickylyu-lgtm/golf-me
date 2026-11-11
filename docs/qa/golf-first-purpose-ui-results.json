@@ -1,0 +1,127 @@
+{
+  "assertions": 648,
+  "cases": [
+    {
+      "locale": "en",
+      "width": 320,
+      "passed": true
+    },
+    {
+      "locale": "en",
+      "width": 360,
+      "passed": true
+    },
+    {
+      "locale": "en",
+      "width": 390,
+      "passed": true
+    },
+    {
+      "locale": "en",
+      "width": 1440,
+      "passed": true
+    },
+    {
+      "locale": "es",
+      "width": 320,
+      "passed": true
+    },
+    {
+      "locale": "es",
+      "width": 360,
+      "passed": true
+    },
+    {
+      "locale": "es",
+      "width": 390,
+      "passed": true
+    },
+    {
+      "locale": "es",
+      "width": 1440,
+      "passed": true
+    },
+    {
+      "locale": "ja",
+      "width": 320,
+      "passed": true
+    },
+    {
+      "locale": "ja",
+      "width": 360,
+      "passed": true
+    },
+    {
+      "locale": "ja",
+      "width": 390,
+      "passed": true
+    },
+    {
+      "locale": "ja",
+      "width": 1440,
+      "passed": true
+    },
+    {
+      "locale": "ko",
+      "width": 320,
+      "passed": true
+    },
+    {
+      "locale": "ko",
+      "width": 360,
+      "passed": true
+    },
+    {
+      "locale": "ko",
+      "width": 390,
+      "passed": true
+    },
+    {
+      "locale": "ko",
+      "width": 1440,
+      "passed": true
+    },
+    {
+      "locale": "zh-CN",
+      "width": 320,
+      "passed": true
+    },
+    {
+      "locale": "zh-CN",
+      "width": 360,
+      "passed": true
+    },
+    {
+      "locale": "zh-CN",
+      "width": 390,
+      "passed": true
+    },
+    {
+      "locale": "zh-CN",
+      "width": 1440,
+      "passed": true
+    },
+    {
+      "locale": "zh-TW",
+      "width": 320,
+      "passed": true
+    },
+    {
+      "locale": "zh-TW",
+      "width": 360,
+      "passed": true
+    },
+    {
+      "locale": "zh-TW",
+      "width": 390,
+      "passed": true
+    },
+    {
+      "locale": "zh-TW",
+      "width": 1440,
+      "passed": true
+    }
+  ],
+  "network": "All external requests blocked; synthetic demo data only.",
+  "limits": "Chromium only, no physical device, real Auth/backend or native shell tests."
+}

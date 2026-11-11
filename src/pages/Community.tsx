@@ -95,6 +95,13 @@ export function Community() {
           </div>
         </div>
         <p className="mt-1 text-sm text-slate-500">{t("community.subtitle")}</p>
+        <button
+          type="button"
+          onClick={() => navigate("/community/guidelines")}
+          className="mt-1 min-h-11 rounded-lg py-2 text-sm font-semibold text-fairway-700 underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400"
+        >
+          {t("settings.communityGuidelines")}
+        </button>
       </div>
 
       {showSearch && (

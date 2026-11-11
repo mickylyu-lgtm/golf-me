@@ -915,8 +915,8 @@ export const en = {
   "landing.cta.floating": "Free on the App Store",
 
   // Onboarding (3-screen intro carousel)
-  "onboarding.screen1Title": "Play when you want",
-  "onboarding.screen1Body": "Find open rounds and golfers nearby — no more waiting on your usual group's schedule.",
+  "onboarding.screen1Title": "Find golfers. Join rounds.",
+  "onboarding.screen1Body": "Play more golf with nearby players. GolfMe is a golf community, not a dating app.",
   "onboarding.screen2Title": "Find the right group",
   "onboarding.screen2Body": "GolfMe matches rounds around schedule, distance, skill, and playing style.",
   "onboarding.screen3Title": "Build your golf network",
@@ -963,8 +963,8 @@ export const en = {
   "auth.code.resent": "New email sent. Use the code in the newest one.",
   "auth.code.rateLimited": "Too many tries. Please wait a minute, then try again.",
   "auth.code.changeEmail": "Change email",
-  "auth.welcome.headline": "Never golf alone.",
-  "auth.welcome.subheadline": "Find your next round. Meet golfers nearby.",
+  "auth.welcome.headline": "Find golfers. Play more golf.",
+  "auth.welcome.subheadline": "Join rounds and find playing partners. GolfMe is a golf community, not a dating app.",
   "auth.email.title": "Enter your email",
   "auth.email.body": "We'll send you a {count}-digit code to sign you in or create your account.",
   "auth.email.send": "Send code",
@@ -1523,9 +1523,22 @@ export const en = {
   "notFound.cta": "Go to GolfMe",
 
   // Community
+
+  // Golf-first community expectations
+  "guidelines.intro": "GolfMe is a golf community, not a dating app. Find playing partners, share golf, and enjoy rounds together.",
+  "guidelines.respect": "Keep discussion respectful. Golf disagreements are fine; harassment is not.",
+  "guidelines.unwantedContact": "No unwanted romantic or sexual messages, advances, or pressure. Respect a no and stop contacting someone who asks you to stop.",
+  "guidelines.scams": "No scams or deceptive promotions.",
+  "guidelines.impersonation": "No impersonation. Be who you say you are.",
+  "guidelines.privacy": "Do not post private information about yourself or others.",
+  "guidelines.hate": "No hateful or abusive content.",
+  "guidelines.spam": "No spam.",
+  "guidelines.safety": "Keep in-person golf meetups safe. Respect personal boundaries on and off the course.",
+  "guidelines.reporting": "Report unwanted contact from the menu on a golfer's profile or in your chat. You can also block them there. Report posts and comments from their own menus.",
+
   "community.title": "Community",
   "community.seeAllPosts": "See all posts in Community",
-  "community.subtitle": "Golf talk, memes, course chat, and rounds looking for players.",
+  "community.subtitle": "Golf-first conversations, course tips, and rounds looking for players.",
   "community.tabForYou": "For You",
   "community.tabFollowing": "Following",
   "community.tabNearby": "Nearby",
@@ -1831,7 +1844,7 @@ export const en = {
   "common.inviteFriend": "Invite a friend",
   // Golfer profile
   "golferProfile.notFound": "Golfer not found.",
-  "golferProfile.inviteToPlay": "Invite to play",
+  "golferProfile.inviteToPlay": "Invite to a round",
   "golferProfile.inviteDraft": "Hi {name}! Want to play a round together sometime?",
   "golferProfile.report": "Report {name}",
   "golferProfile.block": "Block {name}",
