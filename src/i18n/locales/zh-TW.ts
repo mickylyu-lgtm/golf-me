@@ -1,6 +1,15 @@
 import type { TranslationKey } from "./en";
 
 export const zhTW: Record<TranslationKey, string> = {
+  "composer.officialPostUncertain": "你的公告可能已發佈，但附件可能不完整。再次嘗試前，請先檢查貼文。",
+  // Official Community announcements.
+  "composer.postAsGolfMe": "以 GolfMe 官方身分發佈",
+  "composer.officialPostHint": "將此貼文標記為 GolfMe 官方公告，仍會顯示你的姓名。",
+  "composer.checkingOfficialAccess": "正在檢查管理員權限…",
+  "composer.officialPostUnavailable": "暫時無法發佈官方公告。請重試，或關閉官方發佈選項以發佈個人貼文。",
+  "composer.postOfficial": "發佈公告",
+  "community.officialPostBadge": "GolfMe 官方公告",
+
   // Follow approval and connection management.
   "profileStats.completedRounds": "已完成球局",
   "profileStats.wouldPlayAgain": "願意再次同場",

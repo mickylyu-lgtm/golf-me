@@ -1,6 +1,15 @@
 import type { TranslationKey } from "./en";
 
 export const ja: Record<TranslationKey, string> = {
+  "composer.officialPostUncertain": "お知らせが一部の添付ファイルなしで投稿された可能性があります。再試行する前に投稿を確認してください。",
+  // Official Community announcements.
+  "composer.postAsGolfMe": "GolfMe として投稿",
+  "composer.officialPostHint": "GolfMe の公式お知らせとして投稿します。あなたの名前も表示されます。",
+  "composer.checkingOfficialAccess": "管理者権限を確認中…",
+  "composer.officialPostUnavailable": "公式投稿を利用できません。再試行するか、GolfMe として投稿をオフにして個人として投稿してください。",
+  "composer.postOfficial": "お知らせを投稿",
+  "community.officialPostBadge": "GolfMe からのお知らせ",
+
   // Follow approval and connection management.
   "profileStats.completedRounds": "完了したラウンド",
   "profileStats.wouldPlayAgain": "またプレーしたい",

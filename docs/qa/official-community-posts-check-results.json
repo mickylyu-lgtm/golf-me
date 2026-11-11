@@ -1,0 +1,44 @@
+{
+  "base": "72e3d3c9de2b31c4c2391fdc09fe99c8f166c666",
+  "command": "npm run check",
+  "typecheck": "passed",
+  "lint": {
+    "errors": 0,
+    "existingWarnings": 28
+  },
+  "tests": {
+    "total": 1447,
+    "passed": 1447,
+    "failed": 0,
+    "skipped": 0
+  },
+  "build": "passed",
+  "prerender": "passed",
+  "focusedTests": 10,
+  "syntheticUiAssertions": 134,
+  "syntheticSqlAssertions": 58,
+  "productionMigrationApplied": false,
+  "physicalDeviceVerified": false,
+  "integratedRelease": {
+    "date": "2026-11-12",
+    "base": "29ced668410aec66870590c93f4c904c99e5fe19",
+    "command": "npm run check",
+    "typecheck": "passed",
+    "lint": {
+      "errors": 0,
+      "existingWarnings": 28
+    },
+    "tests": {
+      "total": 1469,
+      "passed": 1469,
+      "failed": 0,
+      "skipped": 0
+    },
+    "build": "passed",
+    "prerender": "passed",
+    "syntheticUiAssertions": 134,
+    "sourcePatchId": "4f381c26ae498cd4e02477a0889e7197dd7c4bbe",
+    "productionMigrationApplied": false,
+    "physicalDeviceVerified": false
+  }
+}

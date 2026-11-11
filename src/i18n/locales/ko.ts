@@ -1,6 +1,15 @@
 import type { TranslationKey } from "./en";
 
 export const ko: Record<TranslationKey, string> = {
+  "composer.officialPostUncertain": "일부 첨부 파일 없이 공지가 게시되었을 수 있습니다. 다시 시도하기 전에 게시물을 확인하세요.",
+  // Official Community announcements.
+  "composer.postAsGolfMe": "GolfMe 이름으로 게시",
+  "composer.officialPostHint": "이 게시물을 GolfMe 공식 공지로 표시합니다. 내 이름도 계속 표시됩니다.",
+  "composer.checkingOfficialAccess": "관리자 권한 확인 중…",
+  "composer.officialPostUnavailable": "공식 공지를 게시할 수 없습니다. 다시 시도하거나 GolfMe 이름으로 게시를 꺼서 개인 게시물을 올리세요.",
+  "composer.postOfficial": "공지 게시",
+  "community.officialPostBadge": "GolfMe 공지",
+
   // Follow approval and connection management.
   "profileStats.completedRounds": "완료한 라운드",
   "profileStats.wouldPlayAgain": "다시 플레이 의향",

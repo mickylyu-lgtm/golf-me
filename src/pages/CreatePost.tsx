@@ -1,3 +1,6 @@
+import { OfficialPostOption } from "../components/community/OfficialPostOption";
+import { useOfficialPostCapability } from "../lib/useOfficialPostCapability";
+import { isOfficialPostError, OfficialPostPublicationUncertainError } from "../lib/officialPost";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -58,6 +61,12 @@ export function CreatePost() {
   const location = useLocation();
   const { currentUser, golfCalls, createPost } = useData();
   const { isDemo, authUser } = useAuth();
+  const officialCapability = useOfficialPostCapability();
+  // Session-local and keyed to the authenticated account. Never stored in
+  // the shared local draft or inferred from a founder id/demo profile.
+  const [officialForId, setOfficialForId] = useState<string | null>(null);
+  const isOfficial = !isDemo && Boolean(authUser?.id) && officialForId === authUser?.id;
+  useEffect(() => { setOfficialForId(null); }, [isDemo, authUser?.id]);
   const { showToast } = useToast();
   const { t, locale } = useLocale();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -444,7 +453,7 @@ export function CreatePost() {
   const canPost = text.trim().length > 0 && !mediaUploading && !readingPick && (kind !== "swing" || Boolean(videoFile) || Boolean(prefilledVideoUrl) || Boolean(privateShare));
 
   async function handlePost() {
-    if (!canPost || posting) return;
+    if (!canPost || posting || (isOfficial && !officialCapability.canPostOfficial)) return;
     // The disabled button isn't the only guard: refuse a snapshot with
     // uploads still running, more than the cap, or items the slot ledger
     // doesn't know (state that hasn't caught up yet).
@@ -540,7 +549,10 @@ export function CreatePost() {
 
       setUploadProgress("publishing");
       const type: PostType = kind === "none" ? "text" : kind;
+      // Preserve the requested mode through async media preparation. The
+      // context and database recheck it; never retry as a normal post.
       await createPost({
+        isOfficial,
         type,
         text,
         media: kind === "photo" ? mediaItems.map((m) => ({ type: m.kind, url: m.url, thumbnailUrl: m.thumbnailUrl })) : undefined,
@@ -557,9 +569,19 @@ export function CreatePost() {
       showToast("Post published.", "success");
       navigate("/community");
     } catch (err) {
+      if (err instanceof OfficialPostPublicationUncertainError) {
+        // Do not remove potentially published media or invite duplicate
+        // publication. The resumable draft remains available after review.
+        showToast(t("composer.officialPostUncertain"), "warning");
+        navigate(`/community/${err.postId}`);
+        return;
+      }
+      if (isOfficialPostError(err)) void officialCapability.refresh();
       if (createdMediaUrls.length > 0 && authUser) void removeCommunityMediaCreatedForFailedPost(authUser.id, createdMediaUrls);
       showToast(
-        isObjectionableContentError(err)
+        isOfficialPostError(err)
+          ? t("composer.officialPostUnavailable")
+          : isObjectionableContentError(err)
           ? t("moderation.objectionableContent")
           : isAccountSuspendedError(err)
             ? t("moderation.accountSuspended")
@@ -593,6 +615,15 @@ export function CreatePost() {
         <Avatar golfer={currentUser} size="sm" />
         <p className="text-sm font-semibold text-slate-800">{currentUser.name}</p>
       </div>
+
+      <OfficialPostOption
+        allowed={officialCapability.canPostOfficial}
+        selected={isOfficial}
+        loading={officialCapability.loading}
+        disabled={posting}
+        onChange={(selected) => setOfficialForId(selected ? authUser?.id ?? null : null)}
+        onRetry={() => void officialCapability.refresh()}
+      />
 
       <textarea
         autoFocus
@@ -787,8 +818,8 @@ export function CreatePost() {
         </div>
       </div>
 
-      <Button size="lg" fullWidth disabled={!canPost || posting} onClick={handlePost} icon={posting ? <Loader2 size={16} className="animate-spin" /> : undefined}>
-        {posting ? (uploadProgress === "uploading" ? t("composer.uploadingVideo") : t("composer.posting")) : t("composer.post")}
+      <Button size="lg" fullWidth disabled={!canPost || posting || (isOfficial && !officialCapability.canPostOfficial)} onClick={handlePost} icon={posting ? <Loader2 size={16} className="animate-spin" /> : undefined}>
+        {posting ? (uploadProgress === "uploading" ? t("composer.uploadingVideo") : t("composer.posting")) : t(isOfficial ? "composer.postOfficial" : "composer.post")}
       </Button>
 
       {pendingAttach && (

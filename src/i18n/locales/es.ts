@@ -1,6 +1,15 @@
 import type { TranslationKey } from "./en";
 
 export const es: Record<TranslationKey, string> = {
+  "composer.officialPostUncertain": "Es posible que el anuncio se haya publicado sin todos los archivos adjuntos. Revísalo antes de volver a intentarlo.",
+  // Official Community announcements.
+  "composer.postAsGolfMe": "Publicar como GolfMe",
+  "composer.officialPostHint": "Marca esta publicación como un anuncio oficial de GolfMe. Tu nombre seguirá visible.",
+  "composer.checkingOfficialAccess": "Comprobando el acceso de administrador…",
+  "composer.officialPostUnavailable": "No se pueden publicar anuncios oficiales. Reintenta o desactiva Publicar como GolfMe para publicar a título personal.",
+  "composer.postOfficial": "Publicar anuncio",
+  "community.officialPostBadge": "Anuncio de GolfMe",
+
   // Follow approval and connection management.
   "profileStats.completedRounds": "Rondas completadas",
   "profileStats.wouldPlayAgain": "Volverían a jugar",

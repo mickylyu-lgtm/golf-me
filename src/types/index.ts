@@ -495,6 +495,8 @@ export interface PostMediaItem {
 }
 
 export interface CommunityPost {
+  /** Server-authorized at publication; absent/false for ordinary and legacy posts. */
+  isOfficial?: boolean;
   id: string;
   authorId: string;
   type: PostType;

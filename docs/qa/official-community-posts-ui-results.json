@@ -1,0 +1,24 @@
+{
+  "assertions": 134,
+  "synthetic": true,
+  "widths": [
+    320,
+    390,
+    1440
+  ],
+  "locales": [
+    "en",
+    "zh-CN",
+    "zh-TW",
+    "es",
+    "ja",
+    "ko"
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "browser": "Chromium",
+  "runtimeErrors": [],
+  "blockedRequests": []
+}

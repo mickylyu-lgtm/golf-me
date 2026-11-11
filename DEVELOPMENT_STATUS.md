@@ -1,11 +1,11 @@
 # GolfMe — Development Status
 
-## Followers/Following search: stable keyboard layout — 2026-11-11 (tested, release authorized)
+## Followers/Following search: stable keyboard layout — 2026-11-11 (live, verified)
 
 - Both connection tabs use an opt-in SearchModal: search stays anchored while results resize smoothly above the native keyboard. Filtering/empty results cannot resize the sheet. Intentional list scrolling is retained. Default modals, chat/native keyboard, backend and database are unchanged.
 - Web visualViewport follows directly without duplicate offsets. Android blur-before-resize retains its anchor. Landscape/enlarged text prioritizes usable input/Close when a result row cannot fit. Reduced motion is instant.
 - Final integrated npm run check passed TypeScript, all 1,459 tests, lint (28 baseline warnings/zero errors), build and prerender. Chromium and WebKit each passed 178 synthetic assertions, including six locales at 200%, landscape, keyboard interruption, Android blur timing and cleanup. Existing follower keyboard/navigation suite also passed. Independent review is clear; screenshots inspected.
-- Details: docs/qa/follow-search-keyboard-20261111.md. Integrated on verified main 8b562ec; release slot clear and user authorized push when ready. Next: publish normally and verify exact-commit CI/production. Physical iPhone/Capacitor and real-account integration remain unverified.
+- Published 29ced668410aec66870590c93f4c904c99e5fe19 passed exact-commit CI 43112288340 and is live at golfme.app (READY, deployment dpl_GjTvAbeNUAvsi65ECFmrZvSfUNdU). Details: docs/qa/follow-search-keyboard-20261111.md. Physical iPhone/Capacitor and real-account integration remain unverified.
 
 ## Community comments: preserve feed position — 2026-11-11 (live, verified)
 
@@ -29,6 +29,13 @@
 - Details and reproduction: `docs/qa/tutorial-spotlight-founder-20261111.md`. Published `b63a8439e1af1b292e610ca734d892116b843625` is live at golfme.app (READY, deployment `dpl_EFKvxm1kuH8qipeqqt1HtNewg9t2`); exact-commit CI `43104897685` passed. Public HTML, Settings and the new spotlight asset returned 200; no test hooks shipped. No production data or migration action is needed.
 
 
+## Official Community announcements — 2026-11-12 (frontend release authorized; backend NOT applied)
+
+- Adds an admin-only opt-in Post as GolfMe composer mode and GolfMe announcement badge, preserving real authorship, ordinary posting, categories, ordering, visibility and notifications. All six locales supported. No pinning/broadcast.
+- Versioned server capability fails closed before migration; ordinary inserts omit the new field. Account-scoped state and submit-time identity checks prevent stale privilege display. Official draft mode is never persisted; loss of permission never silently publishes a personal post.
+- Unapplied migration adds immutable is_official and database guards for active unsuspended admins, including post/media mutation after revocation. No roles or existing content changed. Failed official media publication verifies rollback before offering retry; uncertain outcomes prompt checking the post.
+- Validation: 10 focused regressions and 134 synthetic Chromium assertions pass, with all external requests blocked. Independently reviewed PostgreSQL fixture passes 58 authorization checks; read-only production catalog compatibility matches. Final npm run check passed TypeScript, lint (28 existing warnings, 0 errors), all 1,447 tests (0 skipped), production build and prerender. No production posts, migration, push or deploy during preparation.
+- Integrated onto verified main 29ced668410aec66870590c93f4c904c99e5fe19; the reviewed application/test/migration patch is unchanged. Final integrated npm run check passes TypeScript, lint (28 existing warnings/0 errors), all 1,469 tests (0 skipped), build and prerender. Synthetic Chromium recheck passes all 134 assertions; screenshots inspected. User authorized push when ready. Publish the frontend only, then verify exact-commit CI and production. The official-post option stays hidden until separately authorized backend installation. No production migration, posts or roles were changed. Details and limits: docs/qa/official-community-posts.md.
 
 ## Caddie feedback: remove model status leakage — 2026-11-11 (live, verified)
 

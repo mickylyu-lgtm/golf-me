@@ -1,3 +1,4 @@
+import { OfficialPostBadge } from "./OfficialPostBadge";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
@@ -386,6 +387,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
       onPointerMove={onCardPointerMove}
       onPointerCancel={onCardPointerCancel}
     >
+      {post.isOfficial === true && <OfficialPostBadge />}
       {isSwingPost && (
         <p className="flex w-fit items-center gap-1 rounded-full bg-fairway-600 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
           <Video size={11} /> {t("community.swingPostBadge")}

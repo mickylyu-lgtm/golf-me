@@ -2,6 +2,15 @@
 // key. Every other locale file is typed against `keyof typeof en`, so a
 // missing key in any language is a compile error, not a silent fallback.
 export const en = {
+  "composer.officialPostUncertain": "Your announcement may have published without all attachments. Check the post before trying again.",
+  // Official Community announcements.
+  "composer.postAsGolfMe": "Post as GolfMe",
+  "composer.officialPostHint": "Mark this post as an official GolfMe announcement. Your name stays visible.",
+  "composer.checkingOfficialAccess": "Checking admin access…",
+  "composer.officialPostUnavailable": "Admin posting is unavailable. Retry, or turn off Post as GolfMe to publish a personal post.",
+  "composer.postOfficial": "Publish announcement",
+  "community.officialPostBadge": "GolfMe announcement",
+
   // Follow approval and connection management.
   "profileStats.completedRounds": "Completed rounds",
   "profileStats.wouldPlayAgain": "Would play again",

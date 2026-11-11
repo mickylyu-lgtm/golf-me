@@ -1,3 +1,4 @@
+import { requireOfficialPostCapability, isOfficialPostRow, officialPostInsertFields, rejectFailedOfficialMedia } from "../lib/officialPost";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { supabase } from "../lib/supabase";
@@ -14,6 +15,7 @@ import type { CommunityPost, PostComment, GolferProfile, PostMediaItem, PostType
 const COMMUNITY_MEDIA_BUCKET = "community-media";
 
 interface PostRow {
+  is_official?: boolean;
   id: string;
   author_id: string;
   type: PostType;
@@ -59,6 +61,7 @@ function rowToPost(row: PostRow, mediaRows: MediaRow[]): CommunityPost {
   return {
     id: row.id,
     authorId: row.author_id,
+    isOfficial: isOfficialPostRow(row),
     type: row.type,
     text: row.text,
     imageUrl: row.image_url ?? undefined,
@@ -92,6 +95,7 @@ export interface CreateRealPostMediaInput {
 }
 
 export interface CreateRealPostInput {
+  isOfficial?: boolean;
   type: PostType;
   text: string;
   imageUrl?: string;
@@ -341,6 +345,12 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
   const createPost = useCallback(
     async (input: CreateRealPostInput): Promise<CommunityPost> => {
       if (!selfId) throw new Error("Not signed in.");
+      if (input.isOfficial) {
+        await requireOfficialPostCapability(
+          () => supabase.rpc("community_post_capabilities"),
+          () => currentSelfRef.current === selfId,
+        );
+      }
       const nowIso = new Date().toISOString();
       const pending: PostRow = {
         id: `pending-${crypto.randomUUID()}`,
@@ -373,6 +383,7 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
       const { data, error } = await supabase
         .from("community_posts")
         .insert({
+          ...officialPostInsertFields(input.isOfficial),
           author_id: selfId,
           type: input.type,
           text: input.text.trim(),
@@ -408,6 +419,19 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
             })),
           )
           .select();
+        // An official announcement must not silently publish without its
+        // attachments when access is revoked between the two writes. Undo
+        // only this newly created row, and verify deletion before offering a
+        // retry. A failed/uncertain rollback is a check-the-post outcome.
+        if (mediaError && input.isOfficial) {
+          try {
+            await rejectFailedOfficialMedia(newPost.id, mediaError, () => supabase.from("community_posts")
+              .delete().eq("id", newPost.id).select("id").maybeSingle());
+          } finally {
+            setPendingPosts((prev) => prev.filter((p) => p.id !== pending.id));
+            setMediaRows((prev) => prev.filter((m) => m.post_id !== pending.id));
+          }
+        }
         // The server's 10-per-post cap refused the media (the app caps at
         // 10 too, so only an older/modified client gets here): take the
         // just-created post back down rather than leave it live without

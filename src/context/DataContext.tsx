@@ -1,3 +1,4 @@
+import { OfficialPostPermissionError } from "../lib/officialPost";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type {
@@ -140,6 +141,7 @@ export interface CreatePostMediaInput {
 }
 
 export interface CreatePostInput {
+  isOfficial?: boolean; // real admin-only; authorization is enforced by the database
   type: PostType;
   text: string;
   imageUrl?: string;
@@ -1833,6 +1835,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
   const demoCreatePost = useCallback(
     (input: CreatePostInput): CommunityPost => {
+      if (input.isOfficial) throw new OfficialPostPermissionError();
       const post: CommunityPost = {
         id: generateId("post"),
         authorId: data.currentUserId,
