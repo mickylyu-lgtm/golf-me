@@ -1,5 +1,16 @@
 # GolfMe — Development Status
 
+## Shared request limits — 2026-11-11 (database applied, service release in progress)
+
+- Added private database-backed per-account budgets for course/place search, uncached course enrichment, course photos/details, Caddie translation and chat-video attempts. Identity is server-derived; concurrent replicas share atomic counters. 429 includes Retry-After; database/migration failure blocks expensive work with 503. No paid service or new dependency.
+- Fixed course-search provider calls before user verification, added explicit course-enrich verification, and sanitized course-search errors that could echo keyed URLs. Existing Caddie allowance, login, storage, database privacy and internal video-auth controls remain unchanged.
+- Independent security review found no core SQL/auth/concurrency blocker. Fixed its imagery retry concern so throttling does not permanently disable server imagery or trigger direct provider fallback.
+- Real local PostgreSQL 17.11 tests passed 28 assertions including 48 concurrent requests admitting exactly 30. Fake data, private Unix socket, no TCP or production connection; server stopped. Offline handler/packaging tests and Node API type checking passed. Integrated release on current main d453266 passed all 1,393 tests with none skipped, typecheck, lint (26 existing warnings/0 errors), build and prerender. Node API typecheck and diff checks passed. Imagery recovery also covers signout/account switching and stale responses.
+- User approved the new database update and matching service deployment. Apply only reviewed migration 20261111151846_request_rate_limits.sql first, verify access/behavior, then deploy four Edge Functions and the dependent Node/frontend patch. A code-only deploy before the migration will deliberately return 503. Production migration applied and verified as 20261111151846 with 5s lock/30s statement timeouts; exact function body, RLS, grants and anonymous REST denial verified. No unrelated migration or service/config change. Source publication and service deployment are pending.
+- Exact limits, false positives, costs, audit evidence, remaining direct-API/DDoS gaps and rollout: docs/qa/request-rate-limits.md. Live entrypoints match baseline 32b39ce: search v38, enrich v31, photos v4, translation v22.
+
+
+
 ## Handicap presentation polish — 2026-11-11 (release authorized, checks passed)
 
 - User requested more rewarding color/flair for lower handicaps and less decoration as handicap rises. Shared styling keeps the existing bands: scratch/plus gold with strongest frame, below 5 violet with a lighter frame, below 10 teal tint, then unframed forest below 20, sage below 30 and neutral. Dedicated light/dark inks preserve readable contrast.

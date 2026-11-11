@@ -906,12 +906,14 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", ...corsHeaders } });
 }
 
-export async function handleRequest(req: Request, deps: Deps & { authenticate: (req: Request) => Promise<boolean> }): Promise<Response> {
+export async function handleRequest(req: Request, deps: Deps & { authenticate: (req: Request) => Promise<boolean | Response> }): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
   // Signed-in golfers only (the anon key alone also passes the gateway's
   // JWT check, so the user is checked here).
-  if (!(await deps.authenticate(req))) return json({ error: "Not authenticated." }, 401);
+  const authorization = await deps.authenticate(req);
+  if (authorization instanceof Response) return authorization;
+  if (!authorization) return json({ error: "Not authenticated." }, 401);
   let body: unknown;
   try {
     body = await req.json();

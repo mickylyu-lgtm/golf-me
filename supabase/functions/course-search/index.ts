@@ -15,6 +15,7 @@
 // transaction, so no caller can create a duplicate canonical course row.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { consumeRequestBudget, budgetResponse } from "../_shared/requestBudget.ts";
 import { COURSE_FILTER_VERSION, geoapifyCourseName, rejectGeoapifyCourse } from "../_shared/courseFilter.ts";
 import {
   cleanQuery,
@@ -87,12 +88,13 @@ async function fetchGeoapify<T>(url: string): Promise<{ body: T } | { error: str
   let res: Response;
   try {
     res = await fetch(url);
-  } catch (err) {
-    return { error: `Could not reach course search provider: ${err instanceof Error ? err.message : String(err)}` };
+  } catch {
+    // Fetch errors can include the URL and its provider API key.
+    return { error: "Could not reach course search provider." };
   }
   if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    return { error: `Course search provider returned an error (${res.status}): ${detail.slice(0, 200)}` };
+    // Provider bodies can echo keyed URLs. Return only the safe HTTP status.
+    return { error: "Course search provider returned an error (" + res.status + ")." };
   }
   try {
     return { body: (await res.json()) as T };
@@ -135,6 +137,18 @@ Deno.serve(async (req: Request) => {
   } catch {
     return jsonResponse({ error: "Invalid request body." }, 400);
   }
+
+  const authHeader = req.headers.get("Authorization") ?? "";
+  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    global: { headers: { Authorization: authHeader } },
+  });
+
+  // Verify a real account before ANY Geoapify call, including place-only
+  // results. A valid public anon key at the gateway is not a signed-in user.
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  if (authError || !authData.user || authData.user.is_anonymous) return jsonResponse({ error: "Not authenticated." }, 401);
+  const limited = budgetResponse(await consumeRequestBudget(supabase, "course-search"), corsHeaders);
+  if (limited) return limited;
 
   // Nearby goes up to 100 for the course map (Micky, 2026-11-04: "way more
   // pins"); search stays at 20.
@@ -189,11 +203,6 @@ Deno.serve(async (req: Request) => {
 
   candidates = candidates.slice(0, limit);
   if (candidates.length === 0) return jsonResponse({ results: [], courseFilter: COURSE_FILTER_VERSION });
-
-  const authHeader = req.headers.get("Authorization") ?? "";
-  const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
-    global: { headers: { Authorization: authHeader } },
-  });
 
   // Geoapify is the location-discovery provider -- it's the one of the two
   // real course-data sources that can actually search by coordinates.

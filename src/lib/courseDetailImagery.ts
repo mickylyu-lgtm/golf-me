@@ -1,3 +1,4 @@
+import { courseImageryThrottle } from "./courseImageryThrottle.ts";
 // Browser side of the course page's extra detail: the one sharp NAIP picture
 // (lib/naipExport) and the OSM layout (_shared/courseLayout). Course pages
 // only (the overview and the still view), never lists.
@@ -42,12 +43,22 @@ export function setDetailServer(fn: DetailServer | null) {
   server = fn;
 }
 
+class ImageryBudgetPause extends Error {}
+
 async function callServer(body: Record<string, unknown>): Promise<CoursePhotosResponse | null> {
-  if (server) return server(body);
-  const { supabase } = await import("./supabase");
-  const { data, error } = await supabase.functions.invoke("course-photos", { body });
-  if (error) throw error;
-  return (data ?? null) as CoursePhotosResponse | null;
+  if (courseImageryThrottle.active()) throw new ImageryBudgetPause("course imagery budget paused");
+  const budgetScope = courseImageryThrottle.scope();
+  try {
+    if (server) return await server(body);
+    const { supabase } = await import("./supabase");
+    courseImageryThrottle.bindAuth(supabase.auth);
+    const { data, error } = await supabase.functions.invoke("course-photos", { body });
+    if (error) throw error;
+    return (data ?? null) as CoursePhotosResponse | null;
+  } catch (error) {
+    if (await courseImageryThrottle.record(error, Date.now(), budgetScope)) throw new ImageryBudgetPause("course imagery budget paused");
+    throw error;
+  }
 }
 
 // ---- NAIP picture ----
@@ -130,8 +141,9 @@ export function coursePicture(course: { id?: string; bounds?: CourseBounds | nul
           return null;
         }
         // An older course-photos without `pictures`: the browser's own render.
-      } catch {
+      } catch (error) {
         pictureAsks.delete(key);
+        if (error instanceof ImageryBudgetPause) return null;
         // course-photos not deployed / down: the browser's own render.
       }
     }
@@ -279,9 +291,10 @@ async function serverLayout(id: string, pollMs: number, budgetMs: number): Promi
     let res: CoursePhotosResponse | null;
     try {
       res = await callServer({ courseIds: [id], layout: true });
-    } catch {
+    } catch (error) {
       // Down / not deployed: direct, unless an earlier ask already reached
       // a server that knows layouts (then a hiccup just ends this wait).
+      if (error instanceof ImageryBudgetPause) return { kind: "answer", answer: null };
       return ask === 0 ? { kind: "old" } : { kind: "answer", answer: null };
     }
     if (!res || !res.layouts || typeof res.layouts !== "object") return ask === 0 ? { kind: "old" } : { kind: "answer", answer: null };
@@ -326,7 +339,7 @@ export function courseLayout(
       layoutFailedAt.delete(key);
       return toResult(answer);
     }
-    layoutFailedAt.set(key, Date.now());
+    if (!courseImageryThrottle.active()) layoutFailedAt.set(key, Date.now());
     return { status: "unavailable" };
   })();
   layoutAsks.set(key, p);

@@ -17,7 +17,8 @@
 // and the quota function, which no client can reach.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { handleRequest, type ImageryRow, type Store } from "./handler.ts";
+import { consumeRequestBudget, budgetResponse } from "../_shared/requestBudget.ts";
+import { corsHeaders, handleRequest, type ImageryRow, type Store } from "./handler.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -76,7 +77,8 @@ Deno.serve((req: Request) =>
       if (!authHeader) return false;
       const caller = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } }, auth: { persistSession: false } });
       const { data, error } = await caller.auth.getUser();
-      return !error && Boolean(data.user);
+      if (error || !data.user || data.user.is_anonymous) return false;
+      return budgetResponse(await consumeRequestBudget(caller, "course-photos"), corsHeaders) ?? true;
     },
   }),
 );
