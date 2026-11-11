@@ -16,7 +16,7 @@ export const ja: Record<TranslationKey, string> = {
   "followers.noResults": "該当するフォロワーはいません。",
   "followers.noMutuals": "共通のフォロワーはまだいません。",
   "followers.empty": "表示するフォロワーはまだいません。",
-  "followers.visibleOnly": "あなたが閲覧できるプロフィールのみ表示されます。",
+  "followers.visibleOnly": "件数にはあなたが閲覧できるプロフィールのみ含まれます。",
 
   "a2hs.title": "GolfMeをインストール",
   "a2hs.iosInstructions": "共有アイコンをタップし、「ホーム画面に追加」を選択 — ログイン状態を維持できます。",

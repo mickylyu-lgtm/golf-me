@@ -16,7 +16,7 @@ export const es: Record<TranslationKey, string> = {
   "followers.noResults": "No hay seguidores que coincidan.",
   "followers.noMutuals": "Aún no hay seguidores en común.",
   "followers.empty": "Aún no hay seguidores para mostrar.",
-  "followers.visibleOnly": "Solo se muestran los perfiles disponibles para ti.",
+  "followers.visibleOnly": "Los recuentos incluyen solo los perfiles que puedes ver.",
 
   "a2hs.title": "Instalar GolfMe",
   "a2hs.iosInstructions": "Toca Compartir y luego \"Agregar a pantalla de inicio\" — te mantiene conectado.",

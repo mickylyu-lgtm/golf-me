@@ -10,8 +10,9 @@ import { Modal } from "../ui/Modal";
 import { inputClass } from "../ui/FormControls";
 
 export function ProfileFollowers({ profileId }: { profileId: string }) {
-  const { getFollowerCount, followingGolfers, isBlockedEitherWay } = useData();
+  const { currentUser, getFollowerCount, followingGolfers, isBlockedEitherWay } = useData();
   const { t, locale } = useLocale();
+  const identity = `${currentUser.id}:${profileId}`;
   const [count, setCount] = useState<{ id: string; value: number } | null>(null);
   const [open, setOpen] = useState(false);
   const [revision, setRevision] = useState(0);
@@ -21,19 +22,25 @@ export function ProfileFollowers({ profileId }: { profileId: string }) {
     setCount(null);
     if (unavailable) return;
     getFollowerCount(profileId).then((value) => {
-      if (!cancelled) setCount({ id: profileId, value });
+      if (!cancelled) setCount({ id: identity, value });
     }).catch(() => { /* Unknown is an em dash, never a fabricated zero. Opening the sheet offers retry. */ });
     return () => { cancelled = true; };
-  }, [profileId, getFollowerCount, followingGolfers, revision, unavailable]);
+  }, [profileId, identity, getFollowerCount, followingGolfers, revision, unavailable]);
+  useEffect(() => {
+    const refresh = () => { if (document.visibilityState === "visible") setRevision((n) => n + 1); };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => { window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", refresh); };
+  }, []);
   if (unavailable) return null;
-  const value = count?.id === profileId ? count.value : null;
+  const value = count?.id === identity ? count.value : null;
   return <>
     <button type="button" onClick={() => setOpen(true)} aria-haspopup="dialog" aria-expanded={open}
       className="-my-2 inline-flex min-h-11 shrink-0 items-center gap-1 rounded-lg px-1 text-sm text-slate-600 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400">
       <strong className="font-semibold text-slate-800">{value === null ? "–" : value.toLocaleString(locale)}</strong>
       {t(value === 1 ? "followers.singular" : "followers.label")}
     </button>
-    {open && <FollowersSheet key={profileId} profileId={profileId} onClose={() => { setOpen(false); setRevision((n) => n + 1); }} />}
+    {open && <FollowersSheet key={identity} profileId={profileId} onClose={() => { setOpen(false); setRevision((n) => n + 1); }} />}
   </>;
 }
 
@@ -54,6 +61,12 @@ function FollowersSheet({ profileId, onClose }: { profileId: string; onClose: ()
       .catch(() => { if (!cancelled) setFailed(true); });
     return () => { cancelled = true; };
   }, [profileId, getProfileFollowers, attempt]);
+  useEffect(() => {
+    const refresh = () => { if (document.visibilityState === "visible") setAttempt((n) => n + 1); };
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => { window.removeEventListener("focus", refresh); document.removeEventListener("visibilitychange", refresh); };
+  }, []);
   const mutualIds = new Set(result?.mutualIds ?? []);
   const isFollowing = (id: string) => mutualIds.has(id);
   const visible = filterProfileFollowers(result?.golfers ?? [], "", false, isFollowing, isBlockedEitherWay);
@@ -95,7 +108,7 @@ function FollowersSheet({ profileId, onClose }: { profileId: string; onClose: ()
             </button>
           </li>)}
         </ul>}
-      {result && result.total > visible.length && <p className="text-xs text-slate-400">{t("followers.visibleOnly")}</p>}
+      {result && <p className="text-xs text-slate-400">{t("followers.visibleOnly")}</p>}
     </div>
   </Modal>;
 }

@@ -17,7 +17,7 @@ export const en = {
   "followers.noResults": "No matching followers.",
   "followers.noMutuals": "No mutual followers yet.",
   "followers.empty": "No followers to show yet.",
-  "followers.visibleOnly": "Only profiles available to you are shown.",
+  "followers.visibleOnly": "Counts include only profiles visible to you.",
 
   // Add to Home Screen prompt
   "a2hs.title": "Install GolfMe",

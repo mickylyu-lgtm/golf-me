@@ -16,7 +16,7 @@ export const ko: Record<TranslationKey, string> = {
   "followers.noResults": "일치하는 팔로워가 없습니다.",
   "followers.noMutuals": "아직 함께 아는 팔로워가 없습니다.",
   "followers.empty": "아직 표시할 팔로워가 없습니다.",
-  "followers.visibleOnly": "내가 볼 수 있는 프로필만 표시됩니다.",
+  "followers.visibleOnly": "내가 볼 수 있는 프로필만 집계됩니다.",
 
   "a2hs.title": "GolfMe 설치하기",
   "a2hs.iosInstructions": "공유 버튼을 누른 후 \"홈 화면에 추가\"를 선택하세요 — 로그인 상태가 유지됩니다.",

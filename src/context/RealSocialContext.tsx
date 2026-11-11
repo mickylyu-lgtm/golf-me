@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { supabase } from "../lib/supabase";
 import { fetchFollowerCount, fetchProfileFollowers } from "../lib/profileFollowersFetch";
 import type { ProfileFollowers } from "../lib/profileFollowers";
+import { requireCurrentFollowerRead } from "../lib/profileFollowers";
 import { isHistoryCut } from "../lib/roundMessagePages";
 import { useAuth } from "./AuthContext";
 import { fetchGolferDirectory, fetchMyBlockedProfiles, fetchPublicProfiles } from "../lib/publicProfilesFetch";
@@ -1054,16 +1055,27 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
   const isFollowing = useCallback((id: string) => followingIds.includes(id), [followingIds]);
   const followingGolfers = useMemo(() => followingIds.map((id) => allProfiles.find((g) => g.id === id)).filter((g): g is GolferProfile => Boolean(g)), [followingIds, allProfiles]);
 
+  // Invalidate in-flight follower reads immediately on identity/block
+  // or follow changes, before the effects which reset the rest of social state run.
+  const followerPrivacyRef = useRef({ selfId, blocks, follows });
+  if (followerPrivacyRef.current.selfId !== selfId || followerPrivacyRef.current.blocks !== blocks || followerPrivacyRef.current.follows !== follows) {
+    followerPrivacyRef.current = { selfId, blocks, follows };
+  }
   const getFollowerCount = useCallback(async (id: string) => {
     if (!selfId) throw new Error("Sign in to view followers");
-    return fetchFollowerCount(id);
-  }, [selfId]);
+    if (isBlocked(id) || isBlockedBy(id)) throw new Error("Followers unavailable");
+    const privacy = followerPrivacyRef.current;
+    if (privacy.selfId !== selfId || privacy.blocks !== blocks || privacy.follows !== follows) throw new Error("Follower visibility changed");
+    return requireCurrentFollowerRead(fetchFollowerCount(id), () => followerPrivacyRef.current === privacy);
+  }, [selfId, blocks, follows, isBlocked, isBlockedBy]);
 
   const getProfileFollowers = useCallback(async (id: string) => {
     if (!selfId) throw new Error("Sign in to view followers");
+    if (isBlocked(id) || isBlockedBy(id)) throw new Error("Followers unavailable");
+    const privacy = followerPrivacyRef.current;
+    if (privacy.selfId !== selfId || privacy.blocks !== blocks || privacy.follows !== follows) throw new Error("Follower visibility changed");
     const generation = generationRef.current;
-    const result = await fetchProfileFollowers(id, selfId);
-    if (generationRef.current !== generation) throw new Error("Account changed");
+    const result = await requireCurrentFollowerRead(fetchProfileFollowers(id), () => generationRef.current === generation && followerPrivacyRef.current === privacy);
     // A follower opened from this list must resolve on /golfer/:id even if
     // not in the discovery directory. Only server-filtered public fields.
     const cache = new Map(profileCacheRef.current);
@@ -1071,7 +1083,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
     profileCacheRef.current = cache;
     setProfileCache((prev) => sameProfileMap(prev, cache) ? prev : cache);
     return result;
-  }, [selfId]);
+  }, [selfId, blocks, follows, isBlocked, isBlockedBy]);
 
   // Optimistic per the product spec: the button flips immediately, then
   // reconciles with the real write. A failed insert/delete rolls the local

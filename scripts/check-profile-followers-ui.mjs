@@ -47,13 +47,21 @@ await dialog.getByRole('searchbox').fill('missing');await dialog.getByText('No m
 await dialog.getByRole('searchbox').fill('');
 await dialog.getByRole('button',{name:/Alex Green/}).click();
 await page.waitForURL('**/golfer/g11');
-await page.getByRole('button',{name:'3 followers',exact:true}).click();
+await page.getByRole('button',{name:'2 followers',exact:true}).click();
 await dialog.getByText('Cam Hill',{exact:true}).waitFor();
 assert.equal(await dialog.locator('li').count(),2);assert.equal(await dialog.getByText('Drew Lake',{exact:true}).count(),0);
 await dialog.getByRole('button',{name:'Mutuals 1',exact:true}).click();
 assert.equal(await dialog.locator('li').count(),1);
 await page.waitForTimeout(350);await page.screenshot({path:'artifacts.local/other-profile-mutuals-mobile.png'});
 await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});
+await page.getByRole('button',{name:'Following',exact:true}).click();
+await page.getByRole('button',{name:'Follow',exact:true}).waitFor();
+await page.goto('http://127.0.0.1:5191/profile');
+await page.getByRole('button',{name:'3 followers',exact:true}).click();
+await dialog.getByRole('button',{name:'Mutuals 1',exact:true}).waitFor();
+assert.equal(await dialog.getByText('Mutual',{exact:true}).count(),1,'unfollow refreshes mutual badges');
+await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});
+
 for(const width of [320,1440]){await page.setViewportSize({width,height:844});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),'no horizontal overflow '+width);}
 await page.setViewportSize({width:1440,height:1000});
 await page.goto('http://127.0.0.1:5191/profile');

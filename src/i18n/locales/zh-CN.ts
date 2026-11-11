@@ -16,7 +16,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "followers.noResults": "没有匹配的粉丝。",
   "followers.noMutuals": "暂无共同关注的人。",
   "followers.empty": "暂无可显示的粉丝。",
-  "followers.visibleOnly": "仅显示你可以查看的个人资料。",
+  "followers.visibleOnly": "人数仅包含你可以查看的个人资料。",
 
   "a2hs.title": "安装 GolfMe",
   "a2hs.iosInstructions": "点击分享按钮，然后选择「添加到主屏幕」— 可保持登录状态。",

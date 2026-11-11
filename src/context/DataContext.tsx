@@ -1320,13 +1320,13 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const { getFollowerCount: realFollowerCount, getProfileFollowers: realProfileFollowers } = realSocial;
   const getFollowerCount = useCallback(async (id: string) => {
     if (!auth.isDemo) return realFollowerCount(id);
-    return data.follows.filter((f) => f.followingId === id).length;
-  }, [auth.isDemo, data.follows, realFollowerCount]);
+    return data.follows.filter((f) => f.followingId === id && !isBlockedEitherWay(f.followerId) && !data.blocks.some((b) => (b.blockerId === id && b.blockedId === f.followerId) || (b.blockedId === id && b.blockerId === f.followerId))).length;
+  }, [auth.isDemo, data.follows, data.blocks, isBlockedEitherWay, realFollowerCount]);
   const getProfileFollowers = useCallback(async (id: string): Promise<ProfileFollowers> => {
     if (!auth.isDemo) return realProfileFollowers(id);
-    const ids = new Set(data.follows.filter((f) => f.followingId === id).map((f) => f.followerId));
+    const ids = new Set(data.follows.filter((f) => f.followingId === id && !isBlockedEitherWay(f.followerId) && !data.blocks.some((b) => (b.blockerId === id && b.blockedId === f.followerId) || (b.blockedId === id && b.blockerId === f.followerId))).map((f) => f.followerId));
     return { total: ids.size, mutualIds: data.follows.filter((f) => f.followerId === currentUser.id && ids.has(f.followingId)).map((f) => f.followingId), golfers: data.golfers.filter((g) => ids.has(g.id) && !isBlockedEitherWay(g.id)) };
-  }, [auth.isDemo, data.follows, data.golfers, currentUser.id, isBlockedEitherWay, realProfileFollowers]);
+  }, [auth.isDemo, data.follows, data.blocks, data.golfers, currentUser.id, isBlockedEitherWay, realProfileFollowers]);
   const followUser = useCallback(
     async (golferId: string) => {
       if (auth.isDemo) {
