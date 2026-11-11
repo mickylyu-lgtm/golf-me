@@ -1,5 +1,12 @@
 # GolfMe — Development Status
 
+## Compare: remove credibility row — 2026-11-11 (release authorized, verification pending)
+
+- User requested removing Building Credibility from Compare and explicitly authorized pushing this fix. Removed the Compare modal's entire Credibility row, including its tier labels. The eight other comparison rows, match reasons, profile reputation, translations and scoring are unchanged.
+- Integrated original removal f2c6eaa onto current main 9fa5f18 in a separate release worktree. Only CompareModal.tsx, three focused regression tests and this status section change. No database, backend, native-shell, auth or secret changes.
+- Previous local checks passed 1,286 tests and synthetic browser checks at 390/1440px. Fresh integrated npm run check passed TypeScript, lint (26 existing warnings/0 errors), all 1,339 tests with none skipped, build and prerender. Synthetic built-app QA passed at 320/390/1440px with external requests blocked: all eight remaining rows, no tier labels for new/established golfers, preserved positive match reason, Close/reopen/Escape, no overflow/runtime errors. Screenshots inspected. Physical-device and real-account writes are not part of this render-only release.
+- Release preflight: remote main and the golfme.app production alias both resolve to 9fa5f18. Next: push as a normal fast-forward, then verify exact-commit CI and production.
+
 ## User-flow scan fixes — 2026-11-11 (local, pending coordinated release)
 
 - Fixes delayed comment/reply responses overwriting drafts, course edits silently losing location/search eligibility, and real-account rounds not linking back to their source post. Includes account/post ownership checks, exact draft revisions, bounded best-effort linking, six-language partial-success copy and no changes to the database.
