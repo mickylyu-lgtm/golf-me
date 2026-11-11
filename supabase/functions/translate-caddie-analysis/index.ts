@@ -11,6 +11,7 @@
 // touched — only the prose changes, and analysis_json.language is set to
 // the new locale.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { cleanCaddieFeedback, hasCompleteCaddieFeedback, CADDIE_FEEDBACK_CONTENT_RULE } from "../_shared/caddieFeedbackText.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { consumeRequestBudget, budgetResponse } from "../_shared/requestBudget.ts";
 import { sanitizeCheckpointCues, sanitizeWorkOnCheckpoint, withSanitizedCheckpointCues } from "../_shared/caddieCues.ts";
@@ -171,7 +172,7 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: "This analysis isn't ready to translate yet." }, 400);
   }
 
-  const source = row.analysis_json as Record<string, unknown>;
+  const source = cleanCaddieFeedback(row.analysis_json as Record<string, unknown>);
   const sourceLanguage = typeof source.language === "string" ? source.language : undefined;
   // Already in this language (a repeat, or the app switched back): nothing
   // to do, no Gemini call.
@@ -185,6 +186,10 @@ Deno.serve(async (req: Request) => {
   const lastUpdatedAt = row.updated_at ? new Date(row.updated_at).getTime() : 0;
   if (sourceLanguage === undefined && lastUpdatedAt && Date.now() - lastUpdatedAt < COOLDOWN_SECONDS * 1000) {
     return jsonResponse({ error: "Please wait a moment before translating again." }, 429);
+  }
+
+  if (!hasCompleteCaddieFeedback(source)) {
+    return jsonResponse({ error: "Caddie couldn't translate this analysis. Please try again." }, 502);
   }
 
   const limited = budgetResponse(await consumeRequestBudget(supabase, "translate-caddie-analysis"), corsHeaders);
@@ -224,7 +229,7 @@ Deno.serve(async (req: Request) => {
         systemInstruction: {
           parts: [
             {
-              text: `You are a translation assistant for GolfMe Caddie, a golf swing feedback app. Translate ONLY the free-text fields of the given JSON into ${localeName} — a faithful, natural translation, not a rewrite. Never add, remove, or alter any factual claim, number, or the JSON's structure. Preserve the exact same field names. Every string value in your output must be in ${localeName}.`,
+              text: `You are a translation assistant for GolfMe Caddie, a golf swing feedback app. Translate ONLY the free-text fields of the given JSON into ${localeName} — a faithful, natural translation, not a rewrite. Never add, remove, or alter any factual claim, number, or the JSON's structure. Preserve the exact same field names. Every string value in your output must be in ${localeName}. ${CADDIE_FEEDBACK_CONTENT_RULE}`,
             },
           ],
         },
@@ -253,7 +258,7 @@ Deno.serve(async (req: Request) => {
     const genBody = await genRes.json();
     const text = genBody?.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!text) return jsonResponse({ error: "Caddie couldn't translate this analysis. Please try again." }, 502);
-    const translated = JSON.parse(text) as {
+    const translated = cleanCaddieFeedback(JSON.parse(text)) as {
       summary: string;
       strengths: string[];
       work_on: { issue: string; why_it_matters: string }[];
@@ -263,6 +268,14 @@ Deno.serve(async (req: Request) => {
       score: Record<string, { reason: string }>;
       checkpoint_cues?: unknown;
     };
+
+    if (!hasCompleteCaddieFeedback(translated)
+      || translated.work_on.length !== (Array.isArray(source.work_on) ? source.work_on.length : 0)
+      || translated.strengths.length !== (Array.isArray(source.strengths) ? source.strengths.length : 0)
+      || translated.limitations.length !== (Array.isArray(source.limitations) ? source.limitations.length : 0)
+      || translated.drill.steps.length !== (Array.isArray((source.drill as Record<string, unknown>)?.steps) ? (source.drill as { steps: unknown[] }).steps.length : 0)) {
+      return jsonResponse({ error: "Caddie couldn't translate this analysis. Please try again." }, 502);
+    }
 
     // Merge translated prose back over the original analysis_json —
     // camera_angle, phases, per-item confidence, and score points are
@@ -275,7 +288,12 @@ Deno.serve(async (req: Request) => {
       return { ...w, confidence: originalWorkOn[i]?.confidence ?? "medium", ...(checkpoint ? { checkpoint } : {}) };
     });
     const mergedScore = Object.fromEntries(
-      Object.entries(sourceScore).map(([k, v]) => [k, { points: v.points, reason: translated.score[k]?.reason ?? v.reason }]),
+      Object.entries(sourceScore).map(([k, v]) => [
+        k,
+        ["setup_and_posture", "backswing", "downswing_sequencing", "balance_and_weight_transfer", "finish"].includes(k)
+          ? { ...v, reason: translated.score[k].reason }
+          : v,
+      ]),
     );
     // Cues: the translated ones only (re-sanitized), never the originals —
     // keeping an untranslated cue would put two languages on one card. If

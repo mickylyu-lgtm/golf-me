@@ -166,7 +166,13 @@ test("translation throttles before Gemini and same-language cached answers do no
         auth: { getUser: async () => ({ data: { user: { id: "fixture", is_anonymous: false } }, error: null }) },
         rpc() { budgets++; return { abortSignal: async () => ({ data: { allowed: false, retry_after_seconds: 41 }, error: null }) }; },
         from() { return { select() { return this; }, eq() { return this; },
-          single: async () => ({ data: { id: "fixture", status: "complete", analysis_json: { language: same ? "en" : "es" } }, error: null }) }; },
+          single: async () => ({ data: { id: "fixture", status: "complete", analysis_json: {
+            language: same ? "en" : "es", summary: "Keep your finish balanced.", strengths: [], work_on: [], limitations: [],
+            focus: { title: "Balance", instruction: "Hold your finish." },
+            drill: { name: "Finish hold", steps: ["Hold your finish."] },
+            score: Object.fromEntries(["setup_and_posture", "backswing", "downswing_sequencing", "balance_and_weight_transfer", "finish"]
+              .map((key) => [key, { points: 12, reason: "You hold your balance." }])),
+          } }, error: null }) }; },
       };
       const f = await edgeHandler("translate-caddie-analysis", fake);
       try {
