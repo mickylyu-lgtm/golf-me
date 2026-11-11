@@ -13,7 +13,14 @@ const listeners = new Set<(key: string | null) => void>();
 export function chatDraftVersion(key: string): string { return `${generation}:${revisions.get(key) ?? 0}`; }
 export function observeChatDrafts(listener: (key: string | null) => void): () => void {
   listeners.add(listener);
-  return () => { listeners.delete(listener); };
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === DRAFTS_KEY || event.key === null) listener(null);
+  };
+  if (typeof window !== "undefined") window.addEventListener?.("storage", onStorage);
+  return () => {
+    listeners.delete(listener);
+    if (typeof window !== "undefined") window.removeEventListener?.("storage", onStorage);
+  };
 }
 function notifyDrafts(key: string | null): void { for (const listener of listeners) listener(key); }
 
@@ -41,8 +48,11 @@ export function saveChatDraft(key: string, text: string): void {
   const drafts = readAll();
   if (text) drafts[key] = text;
   else delete drafts[key];
-  writeAll(drafts);
+  // Even a failed persistence attempt is a newer edit. Invalidate older
+  // submissions before writing, but only notify readers after success so
+  // a quota error cannot replace the new in-memory text with stale storage.
   revisions.set(key, (revisions.get(key) ?? 0) + 1);
+  writeAll(drafts);
   notifyDrafts(key);
 }
 

@@ -151,3 +151,75 @@ test("real draft storage tokens invalidate late account completions and notify m
     else Object.defineProperty(globalThis, "window", { configurable: true, value: original });
   }
 });
+
+
+test("a quota-rejected newer draft survives an old unmounted submission succeeding", async () => {
+  const original = globalThis.window;
+  const values = new Map<string, string>();
+  let rejectLargerWrite = false;
+  Object.defineProperty(globalThis, "window", { configurable: true, value: { localStorage: {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      if (rejectLargerWrite && value.includes("Newer draft")) throw new Error("QuotaExceededError");
+      values.set(key, value);
+    },
+    removeItem: (key: string) => { values.delete(key); },
+  } } });
+  const stops: (() => void)[] = [];
+  try {
+    clearChatDrafts();
+    const io = { load: loadChatDraft, save: saveChatDraft, version: chatDraftVersion, changed: () => {} };
+    const old = createCommentDraftSession(io);
+    old.open("account-a", "post"); old.update("First");
+    const request = deferred(); const pending = old.submit(() => request.promise);
+    old.close();
+    const current = createCommentDraftSession(io);
+    stops.push(observeChatDrafts(current.refresh));
+    current.open("account-a", "post");
+    const versionBefore = chatDraftVersion("post");
+    rejectLargerWrite = true;
+    current.update("Newer draft that exceeds the storage quota");
+    assert.notEqual(chatDraftVersion("post"), versionBefore, "failed persistence still invalidates the old request");
+    assert.equal(loadChatDraft("post"), "First", "storage retains the smaller old draft");
+    assert.equal(current.snapshot().text, "Newer draft that exceeds the storage quota", "no stale-read notification on failed save");
+    request.resolve(); assert.equal((await pending).status, "stale");
+    assert.equal(current.snapshot().text, "Newer draft that exceeds the storage quota", "old completion cannot clear the in-memory edit");
+    assert.equal(loadChatDraft("post"), "First", "old completion did not clear the persisted slot");
+    current.close();
+  } finally {
+    for (const stop of stops) stop();
+    if (original === undefined) delete (globalThis as { window?: Window }).window;
+    else Object.defineProperty(globalThis, "window", { configurable: true, value: original });
+  }
+});
+
+
+for (const leave of [false, true]) {
+  test(`external-tab draft mutation survives ${leave ? "unmounted" : "active"} submission success`, async () => {
+    const original = globalThis.window;
+    const values = new Map<string, string>();
+    Object.defineProperty(globalThis, "window", { configurable: true, value: { localStorage: {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => { values.set(key, value); },
+      removeItem: (key: string) => { values.delete(key); },
+    } } });
+    try {
+      clearChatDrafts();
+      const draft = createCommentDraftSession({ load: loadChatDraft, save: saveChatDraft, version: chatDraftVersion, changed: () => {} });
+      draft.open("account-a", "post"); draft.update("First");
+      const request = deferred(); const pending = draft.submit(() => request.promise);
+      if (leave) draft.close();
+      const token = chatDraftVersion("post");
+      // A second tab changes shared storage without saveChatDraft in this realm.
+      values.set("golfme:chatDrafts", JSON.stringify({ post: "External newer draft" }));
+      assert.equal(chatDraftVersion("post"), token);
+      request.resolve(); assert.equal((await pending).status, leave ? "stale" : "edited");
+      assert.equal(loadChatDraft("post"), "External newer draft");
+      if (!leave) assert.equal(draft.snapshot().text, "External newer draft");
+      draft.close();
+    } finally {
+      if (original === undefined) delete (globalThis as { window?: Window }).window;
+      else Object.defineProperty(globalThis, "window", { configurable: true, value: original });
+    }
+  });
+}

@@ -28,6 +28,16 @@ export function createCommentDraftSession(io: DraftIo) {
     io.changed();
   }
 
+  function refresh(changedKey: string | null) {
+      if (!active || (changedKey !== null && changedKey !== key)) return;
+      let latest: string;
+      try { latest = io.load(key); } catch { return; }
+      if (latest === text) return;
+      text = latest;
+      revision += 1;
+      io.changed();
+  }
+
   return {
     open(nextOwner: string, nextKey: string) {
       if (active && owner === nextOwner && key === nextKey) return;
@@ -40,15 +50,7 @@ export function createCommentDraftSession(io: DraftIo) {
       io.changed();
     },
     close() { active = false; attempt = null; },
-    refresh(changedKey: string | null) {
-      if (!active || (changedKey !== null && changedKey !== key)) return;
-      let latest: string;
-      try { latest = io.load(key); } catch { return; }
-      if (latest === text) return;
-      text = latest;
-      revision += 1;
-      io.changed();
-    },
+    refresh,
     snapshot: () => ({ owner, key, text, submitting: attempt !== null }),
     update,
     async submit(send: (text: string) => Promise<unknown>): Promise<CommentSubmitResult> {
@@ -70,11 +72,27 @@ export function createCommentDraftSession(io: DraftIo) {
           // The version includes the sign-out generation: never clear a
           // newer edit, new send, or the next account's draft.
           if (io.version(submittedKey) === submittedVersion) {
-            try { io.save(submittedKey, ""); } catch { /* Best-effort persistence. */ }
+            try {
+              // Another tab can change storage without this tab's token.
+              if (io.load(submittedKey) === submittedText) io.save(submittedKey, "");
+            } catch { /* Never clear persisted data after an unreadable state. */ }
           }
           return { status: "stale" };
         }
         if (revision !== submittedRevision || io.version(key) !== submittedVersion) return { status: "edited" };
+        try {
+          if (io.load(key) !== submittedText) {
+            refresh(key);
+            return { status: "edited" };
+          }
+        } catch {
+          // The confirmed, unchanged local text can clear, but do not
+          // touch a persisted slot whose current contents cannot be read.
+          text = "";
+          revision += 1;
+          io.changed();
+          return { status: "sent" };
+        }
         update("");
         return { status: "sent" };
       } catch (error) {
