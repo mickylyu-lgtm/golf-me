@@ -24,7 +24,24 @@ import path from "node:path";
 import ffmpegPathImport from "ffmpeg-static";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
-import { caddieDurationRejection, sourceDurationFromFfmpeg } from "../src/lib/caddieUploadLimit.ts";
+// Keep this small guard self-contained in each serverless entry. Vercel emits
+// these routes as JavaScript without packaging the browser src/ TypeScript
+// import. tests/caddieUploadServer.test.ts exercises isolated emitted modules
+// with the same boundary cases as src/lib/caddieUploadLimit.ts.
+// The source file, not only a selected crop, must fit this limit.
+// Exactly 10 seconds is rejected. Unknown/invalid duration fails closed.
+const MAX_CADDIE_UPLOAD_SECONDS = 10;
+type CaddieDurationRejection = "too_long" | "unreadable";
+function caddieDurationRejection(duration: unknown): CaddieDurationRejection | null {
+  if (typeof duration !== "number" || !Number.isFinite(duration) || duration <= 0) return "unreadable";
+  return duration >= MAX_CADDIE_UPLOAD_SECONDS ? "too_long" : null;
+}
+// Server routes inspect source-container metadata, before trusting a crop.
+// Never return/log the input: ffmpeg metadata can contain private information.
+function sourceDurationFromFfmpeg(log: string): number | undefined {
+  const match = /Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/.exec(log);
+  return match ? Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]) : undefined;
+}
 
 const ffmpegPath = ffmpegPathImport as unknown as string;
 

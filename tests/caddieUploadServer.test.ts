@@ -1,15 +1,18 @@
-// Real ffmpeg, generated clips, stubbed source fetches. No customer media or providers.
+// Emitted JavaScript in an isolated function artifact, real ffmpeg, generated clips.
+// No source tree, customer media, storage writes, or AI-provider calls.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
+import ts from "typescript";
 
 const ffmpeg = path.resolve("node_modules/ffmpeg-static/ffmpeg");
 const sourceUrl = "https://caddie-fixture.invalid.supabase.co/storage/v1/object/sign/caddie-media/fixture.mp4";
 type Reply = { status: number; json?: { error?: string; frameCount?: number }; bytes?: Buffer };
-function call(handler: (req: any, res: any) => unknown, body: unknown): Promise<Reply> {
+function call(handler: (req: any, res: any) => unknown, body: unknown, authorized = true, method = "POST"): Promise<Reply> {
   return new Promise((resolve, reject) => {
     const res = {
       statusCode: 200,
@@ -18,11 +21,25 @@ function call(handler: (req: any, res: any) => unknown, body: unknown): Promise<
       json(json: Reply["json"]) { resolve({ status: this.statusCode, json }); return this; },
       send(bytes: Buffer) { resolve({ status: this.statusCode, bytes }); return this; },
     };
-    Promise.resolve(handler({ method: "POST", headers: { authorization: "Bearer test-source-limit" }, body }, res)).catch(reject);
+    Promise.resolve(handler({ method, headers: authorized ? { authorization: "Bearer test-source-limit" } : {}, body }, res)).catch(reject);
   });
 }
 
-test("server accepts a short original and refuses 10s+ before pose analysis, even with a short crop", {
+// Vercel compiles each API entry to JavaScript. Importing the .ts source directly
+// hid a missing relative .ts dependency in production. Run the emitted modules
+// without src/ present, preserving import specifiers like the production build.
+async function packagedHandler(dir: string, route: string) {
+  const source = readFileSync(new URL("../api/" + route + ".ts", import.meta.url), "utf8");
+  const { outputText } = ts.transpileModule(source, {
+    compilerOptions: { target: ts.ScriptTarget.ES2023, module: ts.ModuleKind.ESNext },
+    fileName: route + ".ts",
+  });
+  const output = path.join(dir, "api", route + ".js");
+  writeFileSync(output, outputText);
+  return (await import(pathToFileURL(output).href)).default;
+}
+
+test("packaged server APIs boot, accept short originals, and reject 10s+ even with a short crop", {
   skip: !existsSync(ffmpeg) && "ffmpeg-static not installed", timeout: 120_000,
 }, async () => {
   const dir = mkdtempSync(path.join(tmpdir(), "caddie-source-limit-"));
@@ -30,8 +47,15 @@ test("server accepts a short original and refuses 10s+ before pose analysis, eve
   const oldSecret = process.env.FRAME_EXTRACT_SECRET;
   process.env.FRAME_EXTRACT_SECRET = "test-source-limit";
   try {
-    const { default: extract } = await import("../api/extract-frames.ts");
-    const { default: trim } = await import("../api/trim-video.ts");
+    mkdirSync(path.join(dir, "api"));
+    writeFileSync(path.join(dir, "package.json"), '{"type":"module"}');
+    symlinkSync(path.resolve("node_modules"), path.join(dir, "node_modules"), "dir");
+    const extract = await packagedHandler(dir, "extract-frames");
+    const trim = await packagedHandler(dir, "trim-video");
+    for (const handler of [extract, trim]) {
+      assert.equal((await call(handler, {}, false, "GET")).status, 405, "cold-start method guard");
+      assert.equal((await call(handler, {}, false)).status, 401, "cold-start auth guard");
+    }
     for (const seconds of [9.9, 10, 10.1, 20]) {
       const file = path.join(dir, seconds + ".mp4");
       execFileSync(ffmpeg, ["-y", "-f", "lavfi", "-i", "testsrc2=size=160x90:rate=10:duration=" + seconds,

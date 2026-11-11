@@ -1,5 +1,13 @@
 # GolfMe — Development Status
 
+## Caddie cutoff: serverless packaging correction — 2026-11-11 (full checks passed, staging next)
+
+- The fc4983c cutoff release failed before auth on both video API routes: the emitted JavaScript referenced src/lib/caddieUploadLimit.ts, which was absent from the Vercel function package. Production was rolled back to healthy d081d3a; no database, Edge Function, secret, or provider change.
+- Minimal fix: keep the tiny duration guard/parser self-contained in both API entries, matching the existing deliberate duplication of other ffmpeg helpers. Frontend cutoff behavior and all other features are unchanged.
+- Regression test now compiles both APIs to isolated JavaScript artifacts with no src/ tree. It reproduced the exact ERR_MODULE_NOT_FOUND before the fix, then verified method/auth startup guards, real 9.9-second frame extraction and trimming, 10/10.1/20-second rejection (including a two-second crop), and malformed input rejection after the fix.
+- Full validation: npm run check exited 0 (typecheck, lint: 26 existing warnings/0 errors, 1,273 tests passed/none skipped, Vite build and prerender). Explicit NodeNext typecheck of both API routes also passed.
+- Next: stage the exact corrected commit with production domains unassigned, verify deployed API startup, then publish/promote only after passing. Existing under-10-second release authorization applies; production remains d081d3a until promotion.
+
 ## Caddie: source uploads strictly under 10 seconds — 2026-11-11 (release authorized, awaiting integration)
 
 - User requested source clips under 10 seconds, with several simulator runs before deciding whether to release the restriction. Exactly 10.000 seconds is rejected; 4–8 seconds is recommended.
