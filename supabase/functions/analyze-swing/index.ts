@@ -40,6 +40,7 @@
 // function needs, so there is no reason to bypass them with a service-role
 // client.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { cleanCaddieFeedback, hasCompleteCaddieFeedback, CADDIE_FEEDBACK_CONTENT_RULE } from "../_shared/caddieFeedbackText.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
   DAILY_LIMIT_PER_USER,
@@ -245,6 +246,7 @@ CRITICAL LANGUAGE REQUIREMENT: every piece of free text you write — summary, s
 You are given two things: the swing video itself, and TRUSTED_POSE_DATA — a JSON time series of body-joint pose measurements for this exact swing, produced by a validated computer-vision pipeline (Roboflow) sampled at a fixed rate across the clip. TRUSTED_POSE_DATA is the authoritative source for body position/angle claims, not your own visual estimate of the video — but it only ever tracks BODY joints, never the club or ball.
 
 Rules:
+- ${CADDIE_FEEDBACK_CONTENT_RULE}
 - Prefer TRUSTED_POSE_DATA over your own visual read whenever they could conflict. Never invent a body-angle or position number that isn't backed by TRUSTED_POSE_DATA.
 - TRUSTED_POSE_DATA already had unreliable/occluded/unavailable measurements removed before it reached you — if a frame or metric is simply absent, that means it was not reliably observed. Do not guess a value to fill the gap, and do not treat a gap as "zero" or "unchanged from the last frame."
 - Never estimate or state any of: exact clubface angle, exact club path, exact attack angle, exact swing speed, ball speed, launch angle, spin, strike location, or an exact club-ball contact frame/moment. TRUSTED_POSE_DATA never contains club or ball tracking, so none of these are ever supportable — not even approximately.
@@ -1886,13 +1888,13 @@ Deno.serve(async (req: Request) => {
         if (!text) throw new StepError({ stage: "gemini_generate", category: "model_output_invalid", retryable: true, detail: `no text part, ${finish}` });
         let candidateJson: ParsedAnalysis;
         try {
-          candidateJson = JSON.parse(text);
+          candidateJson = cleanCaddieFeedback(JSON.parse(text));
         } catch {
           // Never the SyntaxError's message: it quotes the model's text.
           throw new StepError({ stage: "output_validation", category: "model_output_invalid", retryable: true, detail: `JSON parse failed, ${finish}` });
         }
         if (
-          !candidateJson?.summary ||
+          !hasCompleteCaddieFeedback(candidateJson) ||
           !Array.isArray(candidateJson.work_on) ||
           !candidateJson.focus ||
           !candidateJson.drill ||

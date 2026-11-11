@@ -1,5 +1,12 @@
 # GolfMe — Development Status
 
+## Caddie feedback: remove model status leakage — 2026-11-11 (live, verified)
+
+- The reported Chinese finish text included model completion/compliance boilerplate, not a missing static UI translation. Saved score reasons previously flowed through generation, translation and rendering without cleanup; same-locale metadata suppressed another translation. The exact originating model call was not inspected.
+- Added a narrow shared prose filter at generation, translation input/output and old-row display, with six-language patterns and preservation tests. Partial translations cannot fall back to old-language score reasons. Genuine coaching, measurements, language selection, job mechanics, quotas and opaque metadata are preserved; no database migration or historical-row rewrite.
+- Independent review findings corrected: boilerplate-only optional lists do not block valid translation, invalid source spends no quota, and extra score metadata is retained. Twelve focused regression tests and 213 local synthetic score-render assertions pass. Both changed Edge Functions typecheck in Deno with a local-only declaration of the existing EdgeRuntime host global.
+- Final npm run check passed TypeScript, lint (26 existing warnings/0 errors), all 1,421 tests with none skipped, build and prerender. Published c4a8d2e is live at golfme.app (READY); exact-commit CI 43064525140 passed. Both Edge Functions are active (analyze-swing v50, translation v24); independent comparison verified all 14 deployed source files against the published commit, with JWT verification unchanged. Public app assets and no-auth rejection checks pass. See docs/qa/caddie-feedback-text-release-results.json. Both existing-row display cleanup and future-output protection are deployed. No production/customer-media/provider call or physical-device QA used. Details and limits: docs/qa/caddie-feedback-text-20261111.md.
+
 ## Fullscreen media: compact Close control — 2026-11-11 (reviewed, release authorized)
 
 - User found the top-left Close button visually too large. Shared photo/video viewer now uses a 32px visible circle and 16px X inside the unchanged 44px semantic button. Keyboard focus has an explicit white outline and dark fill; safe-area position, dismissal and modal behavior are unchanged.

@@ -8,6 +8,7 @@ import { CaddieRequestError, isStaleProcessing } from "../lib/caddieAnalysis";
 import { parseCaddieFailure } from "../lib/caddieFailure";
 import { isMissingSavedColumn } from "../lib/caddieSaved";
 import { checkpointCuesFromJson } from "../lib/coachReplay";
+import { cleanCaddieFeedback, cleanCaddieFeedbackText } from "../../supabase/functions/_shared/caddieFeedbackText.ts";
 import { analysisLanguageFromJson } from "../lib/caddieLanguage";
 import { sanitizeWorkOnCheckpoint } from "../../supabase/functions/_shared/caddieCues.ts";
 import { phasesFromJson, poseDataFromJson } from "../../supabase/functions/_shared/caddieVerdicts.ts";
@@ -92,13 +93,14 @@ function jsonToScore(raw: unknown, total: number | null): CaddieScore | undefine
 
 function jsonToDetails(json: Record<string, unknown> | null, scoreTotal: number | null): CaddieAnalysisDetails | undefined {
   if (!json) return undefined;
+  json = cleanCaddieFeedback(json);
   const workOn = Array.isArray(json.work_on) ? (json.work_on as Record<string, unknown>[]) : [];
   const focus = (json.focus as Record<string, unknown>) ?? {};
   const drill = (json.drill as Record<string, unknown>) ?? {};
   return {
     summary: String(json.summary ?? ""),
     cameraAngle: (json.camera_angle as CaddieAnalysisDetails["cameraAngle"]) ?? "uncertain",
-    strengths: Array.isArray(json.strengths) ? (json.strengths as string[]) : [],
+    strengths: Array.isArray(json.strengths) ? (json.strengths as string[]).filter(Boolean) : [],
     workOn: workOn.map((w) => {
       const checkpoint = sanitizeWorkOnCheckpoint(w.checkpoint);
       return {
@@ -109,8 +111,8 @@ function jsonToDetails(json: Record<string, unknown> | null, scoreTotal: number 
       };
     }),
     focus: { title: String(focus.title ?? ""), instruction: String(focus.instruction ?? "") },
-    drill: { name: String(drill.name ?? ""), steps: Array.isArray(drill.steps) ? (drill.steps as string[]) : [] },
-    limitations: Array.isArray(json.limitations) ? (json.limitations as string[]) : [],
+    drill: { name: String(drill.name ?? ""), steps: Array.isArray(drill.steps) ? (drill.steps as string[]).filter(Boolean) : [] },
+    limitations: Array.isArray(json.limitations) ? (json.limitations as string[]).filter(Boolean) : [],
     phases: phasesFromJson(json.phases),
     checkpointCues: checkpointCuesFromJson(json.checkpoint_cues),
     language: analysisLanguageFromJson(json.language),
@@ -137,11 +139,11 @@ function rowToAnalysis(row: CaddieAnalysisRow, poseData: CaddiePoseData | undefi
     thumbnailPath,
     swingType: row.swing_type ?? undefined,
     status: row.status,
-    analysisSummary: row.analysis_summary ?? undefined,
-    strengths: row.strengths,
-    issues: row.issues,
-    recommendations: row.recommendations,
-    drills: row.drills,
+    analysisSummary: row.analysis_summary == null ? undefined : cleanCaddieFeedbackText(row.analysis_summary),
+    strengths: row.strengths.map(cleanCaddieFeedbackText).filter(Boolean),
+    issues: row.issues.map(cleanCaddieFeedbackText).filter(Boolean),
+    recommendations: row.recommendations.map(cleanCaddieFeedbackText).filter(Boolean),
+    drills: row.drills.map(cleanCaddieFeedbackText).filter(Boolean),
     details: jsonToDetails(row.analysis_json, row.score),
     poseData,
     score: row.score ?? undefined,

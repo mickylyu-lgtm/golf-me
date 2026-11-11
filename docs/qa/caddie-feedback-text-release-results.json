@@ -1,0 +1,65 @@
+{
+  "release_commit": "c4a8d2eaa00d61f09ed85d56ec9bcbf8ec8b00c4",
+  "production_url": "https://golfme.app",
+  "production_deployment": "dpl_F3oFjCQbL5BFrDdBHxUW8bLM1e1W",
+  "production_state": "READY",
+  "ci_url": "https://github.com/mickylyu-lgtm/golf-me/actions/runs/43064525140",
+  "ci_status": "success",
+  "tests_passed": 1421,
+  "synthetic_render_assertions": 213,
+  "edge_functions": [
+    {
+      "slug": "analyze-swing",
+      "version": 50,
+      "status": "ACTIVE",
+      "verify_jwt": true,
+      "import_map": false,
+      "files": [
+        "functions/analyze-swing/index.ts",
+        "functions/_shared/caddieFeedbackText.ts",
+        "functions/_shared/caddieReliability.ts",
+        "functions/_shared/caddiePreprocessing.ts",
+        "functions/_shared/caddieCues.ts",
+        "functions/_shared/caddieVerdicts.ts",
+        "functions/_shared/swingAssessment.ts"
+      ],
+      "exact_source": true,
+      "ezbr_sha256": "d1da7ec8bd7f83a5d93e55678d6c577cd2fdff9479ec336be9d8dd0437f50668"
+    },
+    {
+      "slug": "translate-caddie-analysis",
+      "version": 24,
+      "status": "ACTIVE",
+      "verify_jwt": true,
+      "import_map": false,
+      "files": [
+        "functions/translate-caddie-analysis/index.ts",
+        "functions/_shared/caddieFeedbackText.ts",
+        "functions/_shared/requestBudget.ts",
+        "functions/_shared/caddieCues.ts",
+        "functions/_shared/caddieVerdicts.ts",
+        "functions/_shared/swingAssessment.ts",
+        "functions/_shared/caddieReliability.ts"
+      ],
+      "exact_source": true,
+      "ezbr_sha256": "cbb6dc439a45f10828a04a26cca091192f878466a5d4b6d70e656ed9d644ebec"
+    }
+  ],
+  "smoke": {
+    "caddie_route": 200,
+    "app_entry": 200,
+    "guard_asset": "DataContext-Ez8sQwT6.js",
+    "guard_present": true,
+    "unauthenticated_post": 401,
+    "cors_options": 204
+  },
+  "independent_review": {
+    "published_commit": true,
+    "all_14_edge_files_exact": true,
+    "only_two_function_versions_changed": true
+  },
+  "database_changes": false,
+  "customer_data_mutations": false,
+  "real_provider_test": false,
+  "physical_device_test": false
+}
