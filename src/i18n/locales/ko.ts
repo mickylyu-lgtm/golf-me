@@ -1,6 +1,23 @@
 import type { TranslationKey } from "./en";
 
 export const ko: Record<TranslationKey, string> = {
+  // Profile followers and viewer-relative mutuals.
+  "followers.label": "팔로워",
+  "followers.singular": "팔로워",
+  "followers.title": "팔로워",
+  "followers.mutuals": "함께 아는 사람",
+  "followers.mutual": "함께 아는 사람",
+  "followers.ownMutualsDescription": "나를 팔로우하고 나도 팔로우하는 사람입니다.",
+  "followers.mutualsDescription": "내가 팔로우하는 사람 중 이 골퍼를 팔로우하는 사람입니다.",
+  "followers.search": "팔로워 검색",
+  "followers.loadError": "팔로워를 불러오지 못했습니다. 다시 시도해 주세요.",
+  "followers.retry": "다시 시도",
+  "followers.loading": "팔로워 불러오는 중…",
+  "followers.noResults": "일치하는 팔로워가 없습니다.",
+  "followers.noMutuals": "아직 함께 아는 팔로워가 없습니다.",
+  "followers.empty": "아직 표시할 팔로워가 없습니다.",
+  "followers.visibleOnly": "내가 볼 수 있는 프로필만 표시됩니다.",
+
   "a2hs.title": "GolfMe 설치하기",
   "a2hs.iosInstructions": "공유 버튼을 누른 후 \"홈 화면에 추가\"를 선택하세요 — 로그인 상태가 유지됩니다.",
   "a2hs.androidInstructions": "앱을 설치하면 로그인 상태가 유지됩니다.",

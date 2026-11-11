@@ -36,6 +36,7 @@ import type {
 } from "../types";
 import { AGE_PREF_MAX, AGE_PREF_MIN } from "../types";
 import { generateId } from "../lib/id";
+import type { ProfileFollowers } from "../lib/profileFollowers";
 import { blockedContactRows } from "../lib/blockedContacts";
 import type { BlockedContact } from "../lib/blockedContacts";
 import type { GeoPoint } from "../lib/geo";
@@ -289,6 +290,8 @@ interface DataContextValue {
   // from Golf Circle ("actually played with, would again"). Never
   // auto-syncs into Golf Circle.
   followingGolfers: GolferProfile[];
+  getFollowerCount: (id: string) => Promise<number>;
+  getProfileFollowers: (id: string) => Promise<ProfileFollowers>;
   isFollowing: (golferId: string) => boolean;
   followUser: (golferId: string) => Promise<void>;
   unfollowUser: (golferId: string) => Promise<void>;
@@ -1314,6 +1317,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
   // rollback-on-failure, same as the rest of this file's real/demo split.
   const isFollowing = useCallback((id: string) => (auth.isDemo ? demoIsFollowing(id) : realSocial.isFollowing(id)), [auth.isDemo, demoIsFollowing, realSocial]);
   const followingGolfers = auth.isDemo ? demoFollowingGolfers : realSocial.followingGolfers;
+  const { getFollowerCount: realFollowerCount, getProfileFollowers: realProfileFollowers } = realSocial;
+  const getFollowerCount = useCallback(async (id: string) => {
+    if (!auth.isDemo) return realFollowerCount(id);
+    return data.follows.filter((f) => f.followingId === id).length;
+  }, [auth.isDemo, data.follows, realFollowerCount]);
+  const getProfileFollowers = useCallback(async (id: string): Promise<ProfileFollowers> => {
+    if (!auth.isDemo) return realProfileFollowers(id);
+    const ids = new Set(data.follows.filter((f) => f.followingId === id).map((f) => f.followerId));
+    return { total: ids.size, mutualIds: data.follows.filter((f) => f.followerId === currentUser.id && ids.has(f.followingId)).map((f) => f.followingId), golfers: data.golfers.filter((g) => ids.has(g.id) && !isBlockedEitherWay(g.id)) };
+  }, [auth.isDemo, data.follows, data.golfers, currentUser.id, isBlockedEitherWay, realProfileFollowers]);
   const followUser = useCallback(
     async (golferId: string) => {
       if (auth.isDemo) {
@@ -2317,6 +2330,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       hasPlayedWith,
       playedWithIds,
       followingGolfers,
+      getFollowerCount,
+      getProfileFollowers,
       isFollowing,
       followUser,
       unfollowUser,
@@ -2450,6 +2465,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       hasPlayedWith,
       playedWithIds,
       followingGolfers,
+      getFollowerCount,
+      getProfileFollowers,
       isFollowing,
       followUser,
       unfollowUser,

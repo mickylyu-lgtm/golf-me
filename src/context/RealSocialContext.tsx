@@ -1,6 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { supabase } from "../lib/supabase";
+import { fetchFollowerCount, fetchProfileFollowers } from "../lib/profileFollowersFetch";
+import type { ProfileFollowers } from "../lib/profileFollowers";
 import { isHistoryCut } from "../lib/roundMessagePages";
 import { useAuth } from "./AuthContext";
 import { fetchGolferDirectory, fetchMyBlockedProfiles, fetchPublicProfiles } from "../lib/publicProfilesFetch";
@@ -192,6 +194,8 @@ interface RealSocialContextValue {
 
   isFollowing: (id: string) => boolean;
   followingGolfers: GolferProfile[];
+  getFollowerCount: (id: string) => Promise<number>;
+  getProfileFollowers: (id: string) => Promise<ProfileFollowers>;
   followUser: (id: string) => Promise<void>;
   unfollowUser: (id: string) => Promise<void>;
 
@@ -1049,6 +1053,25 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
   const followingIds = useMemo(() => (selfId ? follows.filter((f) => f.follower_id === selfId).map((f) => f.following_id) : []), [follows, selfId]);
   const isFollowing = useCallback((id: string) => followingIds.includes(id), [followingIds]);
   const followingGolfers = useMemo(() => followingIds.map((id) => allProfiles.find((g) => g.id === id)).filter((g): g is GolferProfile => Boolean(g)), [followingIds, allProfiles]);
+
+  const getFollowerCount = useCallback(async (id: string) => {
+    if (!selfId) throw new Error("Sign in to view followers");
+    return fetchFollowerCount(id);
+  }, [selfId]);
+
+  const getProfileFollowers = useCallback(async (id: string) => {
+    if (!selfId) throw new Error("Sign in to view followers");
+    const generation = generationRef.current;
+    const result = await fetchProfileFollowers(id, selfId);
+    if (generationRef.current !== generation) throw new Error("Account changed");
+    // A follower opened from this list must resolve on /golfer/:id even if
+    // not in the discovery directory. Only server-filtered public fields.
+    const cache = new Map(profileCacheRef.current);
+    for (const golfer of result.golfers) cache.set(golfer.id, golfer);
+    profileCacheRef.current = cache;
+    setProfileCache((prev) => sameProfileMap(prev, cache) ? prev : cache);
+    return result;
+  }, [selfId]);
 
   // Optimistic per the product spec: the button flips immediately, then
   // reconciles with the real write. A failed insert/delete rolls the local
@@ -2000,6 +2023,8 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       unblockUser,
       isFollowing,
       followingGolfers,
+      getFollowerCount,
+      getProfileFollowers,
       followUser,
       unfollowUser,
       dmConversations,
@@ -2053,6 +2078,8 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       unblockUser,
       isFollowing,
       followingGolfers,
+      getFollowerCount,
+      getProfileFollowers,
       followUser,
       unfollowUser,
       dmConversations,

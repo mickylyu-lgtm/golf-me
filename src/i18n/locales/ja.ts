@@ -1,6 +1,23 @@
 import type { TranslationKey } from "./en";
 
 export const ja: Record<TranslationKey, string> = {
+  // Profile followers and viewer-relative mutuals.
+  "followers.label": "フォロワー",
+  "followers.singular": "フォロワー",
+  "followers.title": "フォロワー",
+  "followers.mutuals": "共通",
+  "followers.mutual": "共通",
+  "followers.ownMutualsDescription": "あなたもフォローしているフォロワーです。",
+  "followers.mutualsDescription": "あなたがフォローしていて、このゴルファーもフォローしている人です。",
+  "followers.search": "フォロワーを検索",
+  "followers.loadError": "フォロワーを読み込めませんでした。もう一度お試しください。",
+  "followers.retry": "再試行",
+  "followers.loading": "フォロワーを読み込み中…",
+  "followers.noResults": "該当するフォロワーはいません。",
+  "followers.noMutuals": "共通のフォロワーはまだいません。",
+  "followers.empty": "表示するフォロワーはまだいません。",
+  "followers.visibleOnly": "あなたが閲覧できるプロフィールのみ表示されます。",
+
   "a2hs.title": "GolfMeをインストール",
   "a2hs.iosInstructions": "共有アイコンをタップし、「ホーム画面に追加」を選択 — ログイン状態を維持できます。",
   "a2hs.androidInstructions": "アプリをインストールしてログイン状態を維持しましょう。",

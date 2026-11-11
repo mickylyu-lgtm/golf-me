@@ -2,6 +2,23 @@
 // key. Every other locale file is typed against `keyof typeof en`, so a
 // missing key in any language is a compile error, not a silent fallback.
 export const en = {
+  // Profile followers and viewer-relative mutuals.
+  "followers.label": "followers",
+  "followers.singular": "follower",
+  "followers.title": "Followers",
+  "followers.mutuals": "Mutuals",
+  "followers.mutual": "Mutual",
+  "followers.ownMutualsDescription": "Mutuals are people you follow back.",
+  "followers.mutualsDescription": "Mutuals are people you follow who also follow this golfer.",
+  "followers.search": "Search followers",
+  "followers.loadError": "Could not load followers. Please try again.",
+  "followers.retry": "Try again",
+  "followers.loading": "Loading followers…",
+  "followers.noResults": "No matching followers.",
+  "followers.noMutuals": "No mutual followers yet.",
+  "followers.empty": "No followers to show yet.",
+  "followers.visibleOnly": "Only profiles available to you are shown.",
+
   // Add to Home Screen prompt
   "a2hs.title": "Install GolfMe",
   "a2hs.iosInstructions": "Tap Share, then \"Add to Home Screen\" — keeps you signed in.",

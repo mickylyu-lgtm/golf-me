@@ -27,6 +27,7 @@ import { useRealCommunity } from "../context/RealCommunityContext";
 import { GolfMeLoader } from "../components/loading/GolfMeLoader";
 import { LoadErrorState } from "../components/ui/LoadStates";
 import { useLocale } from "../i18n/LocaleContext";
+import { ProfileFollowers } from "../components/profile/ProfileFollowers";
 import { Avatar } from "../components/ui/Avatar";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
@@ -337,7 +338,7 @@ export function GolferProfilePage() {
 
       <div className="rounded-2xl border border-slate-100 bg-white p-4">
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{t("golferProfile.reputationTitle")}</p>
-        <ReputationRow golfer={enrichedGolfer} />
+        <ReputationRow golfer={enrichedGolfer} followerStat={!blocked ? <ProfileFollowers profileId={golfer.id} /> : undefined} />
         {handicapConfidence.level !== "normal" && (
           <p className="mt-2 flex items-center gap-1 text-xs text-slate-500">
             {handicapConfidence.level === "high" && <ShieldCheck size={12} className="text-fairway-600" />}

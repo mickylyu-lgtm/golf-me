@@ -1,6 +1,23 @@
 import type { TranslationKey } from "./en";
 
 export const es: Record<TranslationKey, string> = {
+  // Profile followers and viewer-relative mutuals.
+  "followers.label": "seguidores",
+  "followers.singular": "seguidor",
+  "followers.title": "Seguidores",
+  "followers.mutuals": "En común",
+  "followers.mutual": "En común",
+  "followers.ownMutualsDescription": "Son personas que te siguen y a quienes también sigues.",
+  "followers.mutualsDescription": "Son personas que sigues y que también siguen a este golfista.",
+  "followers.search": "Buscar seguidores",
+  "followers.loadError": "No se pudieron cargar los seguidores. Inténtalo de nuevo.",
+  "followers.retry": "Reintentar",
+  "followers.loading": "Cargando seguidores…",
+  "followers.noResults": "No hay seguidores que coincidan.",
+  "followers.noMutuals": "Aún no hay seguidores en común.",
+  "followers.empty": "Aún no hay seguidores para mostrar.",
+  "followers.visibleOnly": "Solo se muestran los perfiles disponibles para ti.",
+
   "a2hs.title": "Instalar GolfMe",
   "a2hs.iosInstructions": "Toca Compartir y luego \"Agregar a pantalla de inicio\" — te mantiene conectado.",
   "a2hs.androidInstructions": "Instala la app para mantenerte conectado.",

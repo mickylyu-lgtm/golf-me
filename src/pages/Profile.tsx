@@ -24,6 +24,7 @@ import { Button } from "../components/ui/Button";
 import { Modal } from "../components/ui/Modal";
 import { CLICKABLE_CARD_CLASS } from "../components/ui/cardStyles";
 import { inputClass, labelClass } from "../components/ui/FormControls";
+import { ProfileFollowers } from "../components/profile/ProfileFollowers";
 import { AvatarUpload } from "../components/profile/AvatarUpload";
 import { FullscreenMediaViewer } from "../components/community/FullscreenMediaViewer";
 import { largestPhotoUrl } from "../lib/providerPhoto";
@@ -215,7 +216,7 @@ export function Profile() {
         </Button>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <p className="text-sm text-slate-600">
           {/* Only the handicap NUMBER is colored (golf-ability signal,
               deliberately separate from the GolfMe Reputation badge right
@@ -225,6 +226,8 @@ export function Profile() {
             : t("profile.roundCountPrefix", { count: enrichedUser.reputation.completedRounds })}
           <span className={handicapColorClass(currentUser.handicap)}>{formatHandicapNumber(currentUser.handicap)}</span>
         </p>
+        <span aria-hidden="true" className="text-slate-300">·</span>
+        <ProfileFollowers profileId={currentUser.id} />
         <ReputationBadge tier={reputationState?.tierKey ?? null} size="sm" onClick={() => navigate("/profile/reputation")} />
         {isCoachReviewer && (
           <Badge tone="fairway" icon={<ShieldCheck size={12} />}>

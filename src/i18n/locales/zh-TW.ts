@@ -1,6 +1,23 @@
 import type { TranslationKey } from "./en";
 
 export const zhTW: Record<TranslationKey, string> = {
+  // Profile followers and viewer-relative mutuals.
+  "followers.label": "位粉絲",
+  "followers.singular": "位粉絲",
+  "followers.title": "粉絲",
+  "followers.mutuals": "共同關注",
+  "followers.mutual": "共同關注",
+  "followers.ownMutualsDescription": "指追蹤你、而且你也追蹤的人。",
+  "followers.mutualsDescription": "指你追蹤的人中，也追蹤這位球手的人。",
+  "followers.search": "搜尋粉絲",
+  "followers.loadError": "無法載入粉絲，請重試。",
+  "followers.retry": "重試",
+  "followers.loading": "正在載入粉絲…",
+  "followers.noResults": "沒有符合的粉絲。",
+  "followers.noMutuals": "暫無共同關注的人。",
+  "followers.empty": "暫無可顯示的粉絲。",
+  "followers.visibleOnly": "僅顯示你可以查看的個人資料。",
+
   "a2hs.title": "安裝 GolfMe",
   "a2hs.iosInstructions": "點擊分享按鈕，然後選擇「加入主畫面」— 可保持登入狀態。",
   "a2hs.androidInstructions": "安裝應用程式即可保持登入狀態。",
