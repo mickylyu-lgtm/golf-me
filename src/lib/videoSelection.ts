@@ -15,6 +15,9 @@
 // preview object URL is only created for the winner, so a dropped result
 // has nothing to revoke.
 
+import { caddieDurationRejection } from "./caddieUploadLimit.ts";
+import type { CaddieDurationRejection } from "./caddieUploadLimit.ts";
+
 export interface VideoSelectionGate {
   /** Starts preparing a pick; supersedes any earlier one. Never current while closed. */
   begin(): number;
@@ -81,15 +84,15 @@ export type VideoSelectionOutcome<F> =
   // A newer pick, Remove or leaving the page won: do nothing at all (no
   // draft, no selector, no toast, no loading change).
   | { kind: "stale" }
-  // This pick is still the newest: use it. `duration` is undefined when the
-  // length couldn't be read (let through untrimmed, as before).
-  | { kind: "ready"; file: F; duration: number | undefined };
+  | { kind: "rejected"; reason: CaddieDurationRejection }
+  // Only a known, positive source duration of under 10 seconds is ready.
+  | { kind: "ready"; file: F; duration: number };
 
 /**
  * Reads the length and makes the stable copy for one pick, then answers
- * only if that pick is still the newest. A failing length read or copy is
- * not an error for the pick (same as before: untrimmed / the original
- * file); a stale one is never reported at all.
+ * only if that pick is still the newest. Reject an overlong or unreadable
+ * source before making the in-memory copy. A copy failure keeps the original
+ * file; a stale result is never reported.
  */
 export async function prepareVideoSelection<F>(opts: {
   gate: VideoSelectionGate;
@@ -109,6 +112,8 @@ export async function prepareVideoSelection<F>(opts: {
       duration = undefined;
     }
     if (!gate.isCurrent(token)) return { kind: "stale" };
+    const rejection = caddieDurationRejection(duration);
+    if (rejection) return { kind: "rejected", reason: rejection };
     let stable = file;
     try {
       stable = await opts.stabilize(file);
@@ -116,7 +121,7 @@ export async function prepareVideoSelection<F>(opts: {
       if (gate.isCurrent(token)) opts.onStabilizeError?.(err);
     }
     if (!gate.isCurrent(token)) return { kind: "stale" };
-    return { kind: "ready", file: stable, duration };
+    return { kind: "ready", file: stable, duration: duration! };
   } finally {
     gate.end(token);
   }

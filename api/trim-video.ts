@@ -24,6 +24,8 @@ import path from "node:path";
 import ffmpegPathImport from "ffmpeg-static";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
+import { caddieDurationRejection, sourceDurationFromFfmpeg } from "../src/lib/caddieUploadLimit.ts";
+
 const ffmpegPath = ffmpegPathImport as unknown as string;
 
 export const config = {
@@ -156,6 +158,20 @@ export function rangeInputOptions(protocols = "https,tls,tcp"): string[] {
   ];
 }
 
+class SourceDurationError extends Error {
+  readonly status: number;
+  readonly token: string;
+  constructor(reason: "too_long" | "unreadable") {
+    super("source_duration_rejected");
+    this.status = reason === "too_long" ? 413 : 422;
+    this.token = reason === "too_long" ? "video_too_long" : "duration_unreadable";
+  }
+}
+function checkSourceDuration(log: string): void {
+  const reason = caddieDurationRejection(sourceDurationFromFfmpeg(log));
+  if (reason) throw new SourceDurationError(reason);
+}
+
 export type TrimSource = "range" | "full";
 
 // Trims `videoUrl`'s window into `outputPath`: the range read first, then
@@ -167,15 +183,17 @@ export async function trimWindowToFile(
   duration: number,
   workDir: string,
   outputPath: string,
-  opts: { protocols?: string; rangeTimeoutMs?: number } = {},
+  opts: { protocols?: string; rangeTimeoutMs?: number; enforceSourceLimit?: boolean } = {},
 ): Promise<{ source: TrimSource; rangeFailure?: string }> {
   let rangeFailure: string | undefined;
   try {
-    await runFfmpeg(trimArgs(videoUrl, start, duration, outputPath, rangeInputOptions(opts.protocols)), opts.rangeTimeoutMs ?? RANGE_READ_TIMEOUT_MS);
+    const log = await runFfmpeg(trimArgs(videoUrl, start, duration, outputPath, rangeInputOptions(opts.protocols)), opts.rangeTimeoutMs ?? RANGE_READ_TIMEOUT_MS);
+    if (opts.enforceSourceLimit) checkSourceDuration(log);
     const { size } = await stat(outputPath);
     if (size > 0) return { source: "range" };
     rangeFailure = "empty_output";
   } catch (err) {
+    if (err instanceof SourceDurationError) throw err;
     rangeFailure = err instanceof FfmpegError ? (err.signal === "SIGKILL" ? "timeout" : classifyFfmpegFailure(err).token) : "spawn";
   }
   await rm(outputPath, { force: true }).catch(() => {});
@@ -190,7 +208,8 @@ export async function trimWindowToFile(
   if (!videoRes.ok) throw new SourceFetchError(videoRes.status);
   const inputPath = path.join(workDir, "input.mov");
   await writeFile(inputPath, new Uint8Array(await videoRes.arrayBuffer()));
-  await runFfmpeg(trimArgs(inputPath, start, duration, outputPath));
+  const log = await runFfmpeg(trimArgs(inputPath, start, duration, outputPath));
+  if (opts.enforceSourceLimit) checkSourceDuration(log);
   return { source: "full", rangeFailure };
 }
 
@@ -251,7 +270,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const startedAt = Date.now();
     let trimmed: { source: TrimSource; rangeFailure?: string };
     try {
-      trimmed = await trimWindowToFile(videoUrl, clampedStart, clampedDuration, workDir, outputPath);
+      trimmed = await trimWindowToFile(videoUrl, clampedStart, clampedDuration, workDir, outputPath, { enforceSourceLimit: true });
     } catch (err) {
       if (err instanceof SourceFetchError) {
         return res.status(502).json({ error: "source_fetch_failed", ...(err.sourceStatus ? { sourceStatus: err.sourceStatus } : {}) });
@@ -267,6 +286,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader("X-Trim-Ms", String(Date.now() - startedAt));
     return res.status(200).send(outputBytes);
   } catch (err) {
+    if (err instanceof SourceDurationError) return res.status(err.status).json({ error: err.token });
     // A classified token only — never ffmpeg's stderr or a thrown message.
     const { status, token } = classifyFfmpegFailure(err);
     console.error("[trim-video] failed", {

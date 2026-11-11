@@ -9,7 +9,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createVideoSelectionGate, prepareVideoSelection, videoPickRejection } from "../src/lib/videoSelection.ts";
 
-const MAX_SECONDS = 15;
+const MAX_SECONDS = 10;
 const MAX_BYTES = 200 * 1024 * 1024;
 
 function deferred<T>() {
@@ -71,6 +71,10 @@ function page() {
     });
     if (!gate.pending) state.preparing = false;
     if (outcome.kind === "stale") return;
+    if (outcome.kind === "rejected") {
+      state.toasts.push(outcome.reason === "too_long" ? "caddie.videoTooLong" : "caddie.durationUnreadable");
+      return;
+    }
     const previewUrl = `blob:${outcome.file.name}`;
     state.created.push(previewUrl);
     if (outcome.duration !== undefined && outcome.duration > MAX_SECONDS) {
@@ -104,7 +108,7 @@ function page() {
       for (const d of copies.get(name) ?? []) d.reject(new Error("read"));
       await tick();
     },
-    async ready(name: string, seconds = 10) {
+    async ready(name: string, seconds = 8) {
       await this.duration(name, seconds);
       await this.copy(name);
     },
@@ -240,7 +244,8 @@ test("normal load, unreadable length and a failing copy for the current pick", a
   await q.durationFails("b");
   await q.copy("b");
   await b;
-  assert.equal(q.state.draft?.file.name, "b", "an unreadable length is let through untrimmed");
+  assert.equal(q.state.draft, undefined, "unreadable duration is never uploaded");
+  assert.deepEqual(q.state.toasts, ["caddie.durationUnreadable"]);
 
   const r = page();
   const c = r.pick("c");

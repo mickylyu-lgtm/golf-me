@@ -24,6 +24,8 @@ import path from "node:path";
 import ffmpegPathImport from "ffmpeg-static";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
+import { caddieDurationRejection, sourceDurationFromFfmpeg } from "../src/lib/caddieUploadLimit.ts";
+
 const ffmpegPath = ffmpegPathImport as unknown as string;
 
 export const config = {
@@ -118,8 +120,10 @@ function probeFfmpeg(inputPath: string): Promise<string> {
     proc.stderr?.on("data", (chunk) => {
       stderr += chunk.toString();
     });
-    proc.on("error", () => resolve(stderr));
-    proc.on("close", () => resolve(stderr));
+    const timer = setTimeout(() => { proc.kill("SIGKILL"); resolve(""); }, 10_000);
+    const finish = () => { clearTimeout(timer); resolve(stderr); };
+    proc.on("error", finish);
+    proc.on("close", finish);
   });
 }
 
@@ -317,6 +321,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const inputPath = path.join(workDir, "input.mov");
     await writeFile(inputPath, videoBytes);
 
+    const sourceProbe = await probeFfmpeg(inputPath);
+    const durationRejection = caddieDurationRejection(sourceDurationFromFfmpeg(sourceProbe));
+    if (durationRejection) {
+      return res.status(durationRejection === "too_long" ? 413 : 422).json({ error: durationRejection === "too_long" ? "video_too_long" : "duration_unreadable" });
+    }
+
     // Spends zero Roboflow credits — a decode-only ffmpeg pass over an
     // already-short (<=~11s) clip. Any failure here just means "skip
     // trimming," never blocks the actual extraction below. Skipped
@@ -345,7 +355,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // source size can't be read, frames stay full size (scale 1).
     let sourceLongSide: number | undefined;
     if (targetLongSide) {
-      sourceLongSide = parseVideoLongSide(await probeFfmpeg(inputPath));
+      sourceLongSide = parseVideoLongSide(sourceProbe);
     }
     const downscale = !!targetLongSide && !!sourceLongSide && sourceLongSide > targetLongSide;
     const videoFilter = downscale

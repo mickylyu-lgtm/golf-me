@@ -21,8 +21,9 @@ import { isCatalogClub, restoredDraftClub } from "../lib/clubCatalog";
 import { caddieErrorText } from "../lib/caddieErrorText";
 import { isInMemoryPick, pickMedia } from "../lib/mediaPicker";
 import { createVideoSelectionGate, prepareVideoSelection, videoPickRejection } from "../lib/videoSelection";
+import { caddieDurationRejection, MAX_CADDIE_UPLOAD_SECONDS } from "../lib/caddieUploadLimit";
 const MAX_SWING_VIDEO_BYTES = 200 * 1024 * 1024; // matches the Storage bucket's own file_size_limit
-const MAX_SWING_VIDEO_SECONDS = 10; // max length of the WINDOW actually analyzed (2026-08-22 credit-efficiency pass) — Caddie's Roboflow pass calls once per sampled frame, so a longer clip directly multiplies calls/latency/credit spend; see analyze-swing's ANALYSIS_FPS comment. Was 15s. A source video longer than this is no longer rejected outright — VideoTrimSelector lets the golfer pick which 10s window to analyze instead.
+const MAX_SWING_VIDEO_SECONDS = MAX_CADDIE_UPLOAD_SECONDS; // whole source, not only a selected window
 // Once analyze-swing actually creates the 'processing' row, the real
 // analysis runs server-side (EdgeRuntime.waitUntil) independent of this
 // app staying open — closing the app doesn't stop it. The one real gap is
@@ -85,10 +86,8 @@ export function AnalyzeSwing() {
   const [submitting, setSubmitting] = useState(false);
   // A native pick (one-tap picker) being read into the page.
   const [readingPick, setReadingPick] = useState(false);
-  // A picked video longer than MAX_SWING_VIDEO_SECONDS lands here first
-  // (not directly in draftSwingVideo) so VideoTrimSelector has something to
-  // show without yet committing to an analyzed window — confirming it is
-  // what actually writes the trim range into the real draft.
+  // Existing drafts can still reopen their selected section. New picks
+  // must already be under 10 seconds; submit revalidates the source.
   // `editing`: reopened by "Change section" on the window already in the
   // draft, whose previewUrl the draft still owns (never revoked here).
   const [pendingTrim, setPendingTrim] = useState<
@@ -199,10 +198,7 @@ export function AnalyzeSwing() {
     }
     setPreparingPick(true);
 
-    // A failing metadata read isn't itself disqualifying — the file-size
-    // and format checks above already ran; it's let through as an
-    // untrimmed clip rather than blocking a real, valid file over a
-    // metadata quirk.
+    // Read duration locally before any upload. Unknown duration fails closed.
     //
     // iOS/WKWebView can evict the actual data behind a picked File's handle
     // if it just sits in memory for a while (this draft deliberately
@@ -229,16 +225,16 @@ export function AnalyzeSwing() {
     // A newer pick owns the spinner; otherwise this one is over.
     if (!selectionGate.pending) setPreparingPick(false);
     if (outcome.kind === "stale") return;
-    const { file: stableFile, duration } = outcome;
+    if (outcome.kind === "rejected") {
+      showToast(t(outcome.reason === "too_long" ? "caddie.videoTooLong" : "caddie.durationUnreadable"), "warning");
+      return;
+    }
+    const { file: stableFile } = outcome;
     const previewUrl = URL.createObjectURL(stableFile);
 
     // Read now, not from this call's render: the selector may have changed meanwhile.
     const openTrim = pendingTrimRef.current;
     if (openTrim && !openTrim.editing) URL.revokeObjectURL(openTrim.previewUrl);
-    if (duration !== undefined && duration > MAX_SWING_VIDEO_SECONDS) {
-      setPendingTrim({ file: stableFile, previewUrl, duration });
-      return;
-    }
     setPendingTrim(undefined);
     setDraftSwingVideo({ file: stableFile, previewUrl, swingType: swingTypeRef.current });
   }
@@ -290,9 +286,19 @@ export function AnalyzeSwing() {
   }
 
   async function handleAnalyze() {
+    if (preparingPick || readingPick || selectionGate.pending) return;
     if (!authUser || !canStartAnalysis({ hasVideo: !!videoFile, hasClub, submitting, selectorOpen: !!pendingTrim, reopening: trimReopening || trimReopenGate.pending })) return;
     if (!videoFile) return;
     setSubmitting(true);
+    // Recheck restored drafts and old trim selections before Storage upload.
+    // A selected 10-second window must never authorize a longer original.
+    const duration = await readVideoDuration(videoFile).catch(() => undefined);
+    const rejection = caddieDurationRejection(duration);
+    if (rejection) {
+      showToast(t(rejection === "too_long" ? "caddie.videoTooLong" : "caddie.durationUnreadable"), "warning");
+      setSubmitting(false);
+      return;
+    }
     // Brackets the one real gap where an app exit could genuinely lose a
     // swing with no trace — see UPLOAD_IN_PROGRESS_KEY's own comment.
     // Cleared in every exit from this function below, success or failure;
@@ -456,7 +462,7 @@ export function AnalyzeSwing() {
         <Button
           size="lg"
           fullWidth
-          disabled={blocker !== null}
+          disabled={blocker !== null || preparingPick || readingPick}
           aria-describedby={blocker === "noClub" ? CLUB_REQUIRED_HINT_ID : undefined}
           onClick={handleAnalyze}
           icon={submitting ? <Loader2 size={16} className="animate-spin" /> : <ScanLine size={16} />}
