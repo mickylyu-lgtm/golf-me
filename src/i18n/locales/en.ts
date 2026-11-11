@@ -438,7 +438,7 @@ export const en = {
   "coachReplay.demo.drillName": "Hip depth drill",
   "coachReplay.demo.drillStep1": "Set up with your backside just touching a wall or chair.",
   "coachReplay.demo.drillStep2": "Make slow swings, keeping it touching through impact.",
-  "caddie.noVideoSelected": "Choose a video to get started (10 seconds max).",
+  "caddie.noVideoSelected": "Choose a video under 10 seconds to get started.",
   "caddie.unsupportedVideo": "That file isn't a supported video format.",
   "caddie.videoTooLarge": "That video is too large (200MB max).",
   "caddie.swingTypePlaceholder": "Club Choice",

@@ -426,7 +426,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "coachReplay.demo.drillName": "髋部深度练习",
   "coachReplay.demo.drillStep1": "站位时让臀部轻轻贴住墙或椅子。",
   "coachReplay.demo.drillStep2": "慢速挥杆，击球时臀部保持贴住。",
-  "caddie.noVideoSelected": "选择一段视频开始吧（最长10秒）。",
+  "caddie.noVideoSelected": "选择一段少于10秒的视频开始吧。",
   "caddie.unsupportedVideo": "该文件不是支持的视频格式。",
   "caddie.videoTooLarge": "视频过大（最大 200MB）。",
   "caddie.swingTypePlaceholder": "选择球杆",

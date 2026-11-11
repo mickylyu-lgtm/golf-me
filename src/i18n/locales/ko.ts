@@ -426,7 +426,7 @@ export const ko: Record<TranslationKey, string> = {
   "coachReplay.demo.drillName": "골반 깊이 드릴",
   "coachReplay.demo.drillStep1": "엉덩이가 벽이나 의자에 살짝 닿게 어드레스하세요.",
   "coachReplay.demo.drillStep2": "임팩트까지 닿은 상태를 유지하며 천천히 스윙하세요.",
-  "caddie.noVideoSelected": "시작하려면 영상을 선택하세요 (최대 10초).",
+  "caddie.noVideoSelected": "시작하려면 10초 미만의 영상을 선택하세요.",
   "caddie.unsupportedVideo": "지원되지 않는 영상 형식입니다.",
   "caddie.videoTooLarge": "영상이 너무 큽니다 (최대 200MB).",
   "caddie.swingTypePlaceholder": "클럽 선택",

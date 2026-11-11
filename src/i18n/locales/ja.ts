@@ -426,7 +426,7 @@ export const ja: Record<TranslationKey, string> = {
   "coachReplay.demo.drillName": "腰の深さドリル",
   "coachReplay.demo.drillStep1": "お尻が壁やイスに軽く触れるように構えます。",
   "coachReplay.demo.drillStep2": "インパクトまで触れたままゆっくりスイングします。",
-  "caddie.noVideoSelected": "動画を選択して開始してください（最大10秒）。",
+  "caddie.noVideoSelected": "10秒未満の動画を選択して開始してください。",
   "caddie.unsupportedVideo": "対応していない動画形式です。",
   "caddie.videoTooLarge": "動画のサイズが大きすぎます（最大200MB）。",
   "caddie.swingTypePlaceholder": "クラブを選択",

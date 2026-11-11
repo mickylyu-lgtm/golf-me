@@ -426,7 +426,7 @@ export const es: Record<TranslationKey, string> = {
   "coachReplay.demo.drillName": "Ejercicio de profundidad de cadera",
   "coachReplay.demo.drillStep1": "Colócate con los glúteos rozando una pared o una silla.",
   "coachReplay.demo.drillStep2": "Haz swings lentos sin perder ese contacto en el impacto.",
-  "caddie.noVideoSelected": "Elige un video para comenzar (10 segundos máximo).",
+  "caddie.noVideoSelected": "Elige un video de menos de 10 segundos para comenzar.",
   "caddie.unsupportedVideo": "Ese archivo no es un formato de video compatible.",
   "caddie.videoTooLarge": "Ese video es demasiado grande (máximo 200MB).",
   "caddie.swingTypePlaceholder": "Selección de palo",

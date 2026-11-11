@@ -54,3 +54,12 @@ test("submit revalidates restored originals before Storage upload", () => {
   assert.ok(submit.indexOf("caddieDurationRejection(duration)") < submit.indexOf(".upload(path, videoFile"));
   assert.ok(!src.includes("duration > MAX_SWING_VIDEO_SECONDS"), "no long-source trim-selector escape");
 });
+
+test("all visible English upload duration hints state the strict cutoff", () => {
+  const locale = readFileSync(new URL("../src/i18n/locales/en.ts", import.meta.url), "utf8");
+  for (const key of ["noVideoSelected", "recommendedLength", "videoTooLong", "durationUnreadable"]) {
+    const line = locale.split("\n").find((text) => text.includes('"caddie.' + key + '"'))!;
+    assert.ok(line.includes("under 10 seconds"), key);
+    assert.ok(!line.includes("10 seconds max"), key);
+  }
+});

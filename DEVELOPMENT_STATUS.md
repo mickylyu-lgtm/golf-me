@@ -1,6 +1,6 @@
 # GolfMe — Development Status
 
-## Caddie: source uploads strictly under 10 seconds — 2026-11-11 (local only, not released)
+## Caddie: source uploads strictly under 10 seconds — 2026-11-11 (release authorized, awaiting integration)
 
 - User requested source clips under 10 seconds, with several simulator runs before deciding whether to release the restriction. Exactly 10.000 seconds is rejected; 4–8 seconds is recommended.
 - Browser selection rejects long/unknown/non-finite/zero duration before copying or uploading. Submit rechecks the original File, including restored drafts and old trim selections. A short crop never authorizes uploading a longer original. Copy failure fallback, newest-selection races and upload cleanup remain intact.
@@ -8,7 +8,7 @@
 - Six locale strings explain the limit and trimming in Photos or an editor. Unknown metadata asks for a re-export.
 - Validation: npm run check passed (typecheck, existing lint warnings but no errors, 1,268 tests, Vite build and prerender). Explicit NodeNext typecheck of both API routes passed. Focused upload tests passed twice. Generated 9.9-second MP4 succeeded through extraction and trim; generated 10, 10.1 and 20-second originals were rejected, including a 2-second crop request. Malformed media was rejected. No customer video or AI-provider call used.
 - Limits: server duration uses ffmpeg's source-container metadata (centisecond precision, conservative near 10 seconds). Storage cannot inspect duration before a raw third-party Storage API upload; the supported app blocks it before upload and server processing rejects overlong sources. This is not a fix for the separately diagnosed zero-keypoint pose failure.
-- Next: finish isolated simulator checks, including repeated short uploads, then get release approval. No push/deploy has occurred. Branch fix/caddie-short-upload-20261111 is based on main 07cefa0.
+- Simulator: three approved short uploads completed full feedback on the live app (9.9 s, approximately 3.5 s and 5 s). The patched local picker rejected 10.00 s and 10.10 s, then accepted 9.90 s; this boundary test used a dummy backend. Temporary QA-only form guard was removed. User subsequently authorized setting the restriction live. Corrected the remaining picker line to say under 10 seconds in all six locales. Next: integrate this cutoff-only branch on current production d081d3a, verify checks, then deploy and smoke-test. No push/deploy from this worktree.
 
 
 > Read this file first in any new session (laptop or claude.ai/code on mobile) before making changes. Update it in the same commit as any milestone — new feature, schema change, or architectural decision — so the next session (possibly on another device) has zero context loss.
