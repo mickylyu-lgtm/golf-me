@@ -21,3 +21,13 @@ The previous UI, RealSocialContext and server deliberately required an accepted 
 - Native iOS Safari/WKWebView has not been verified by this worker. Chromium does not establish native parity.
 
 No source was committed or pushed by this worker. No production database, deployment or real accounts were changed.
+
+## Integrated source verification
+
+The reviewed feature was preserved as local commit c6305782103e1fd6b5f5071123bdc6a81907e4fd after a conflict-free rebase onto remote main ea54fac6b2c0b7a4f1b50ffb3d31a0e7b851a898. The integrated npm run check passed 1,317 tests, TypeScript, lint and production build. The seven additional tests came from the already-released dashboard work. No new production SQL, push or deployment occurred.
+
+Independent final review verified the immediate cache-scope check, scope-specific in-flight deduplication, maximum four concurrent follow-state reads across scopes, and rejection of stale queued work. It separately reran ten coordinator/page tests successfully. Total requests still grow with loaded rows; concurrency limiting is not constant total request cost.
+
+Native iOS Safari and WKWebView testing was attempted but could not start: Mouse's Mac was reported offline and attachment returned unavailable/offline. No existing simulator/app/session was changed. The approved break60 simulator session was therefore unavailable for new real Auth/PostgREST checks. Do not treat synthetic Chromium or isolated SQL results as those missing integration checks.
+
+The integrated synthetic Chromium rerun also passed 320/390/1440 layouts, 30/60/65-row paging, literal search, independent profile navigation, delayed/error/stale reads, double load-more, cursor retry, removal and private-request flows. It blocked 52 external requests and shut down its temporary browser/server. Logs: /tmp/golfme-public-social-integrated-check.log and /tmp/golfme-public-social-integrated-ui.log on MGPC/WSL.
