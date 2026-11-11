@@ -1644,6 +1644,7 @@ export const ko: Record<TranslationKey, string> = {
   "tutorial.community.text": "라운드, 사진, 스윙 영상을 게시하고 GolfMe 커뮤니티와 소통해 보세요.",
   "tutorial.caddie.title": "Caddie를 만나보세요",
   "tutorial.caddie.text": "스윙 영상을 업로드하면 AI 기반 피드백을 받고, 실력이 느는 과정을 분석 기록으로 저장할 수 있습니다.",
+  "tutorial.followApproval.text": "새 팔로우 요청을 수락하거나 거절하고 싶다면 이 설정을 켜세요. 기존 팔로워는 유지됩니다. 게시물과 프로필 정보는 계속 공개됩니다. 로그인한 사용자가 내 프로필을 볼 수 있다면 팔로우하지 않아도 팔로워·팔로잉 목록을 볼 수 있습니다. 차단 및 안전 규칙도 계속 적용됩니다.",
   "tutorial.appearance.title": "라이트 또는 다크",
   "tutorial.appearance.text": "라이트, 다크 또는 휴대폰 설정에 맞추기 중에서 고르세요. 설정의 이 화면에서 언제든 바꿀 수 있어요.",
   "tutorial.done.title": "이제 준비됐어요",

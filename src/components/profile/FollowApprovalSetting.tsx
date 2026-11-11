@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { useData } from "../../context/DataContext";
 import { useLocale } from "../../i18n/LocaleContext";
 import { useSocialRead } from "../../lib/useSocialRead";
+import { FOLLOW_APPROVAL_TUTORIAL_ID } from "../../lib/tutorialSteps";
 import { Toggle } from "../ui/Toggle";
 import { Button } from "../ui/Button";
 
@@ -17,7 +18,7 @@ function ViewerFollowApprovalSetting() {
   const lock = useRef(false);
   const read = useCallback(() => getFollowState(currentUser.id), [getFollowState, currentUser.id]);
   const { value, failed, retry } = useSocialRead(read);
-  return <div className="border-b border-slate-100 pb-4">
+  return <div data-tutorial-id={FOLLOW_APPROVAL_TUTORIAL_ID} className="border-b border-slate-100 pb-4">
     <div className="flex items-center gap-3">
       <div className="min-w-0 flex-1"><p className="text-sm font-semibold text-slate-800">{t("socialPrivacy.title")}</p>
         <p className="mt-1 text-xs leading-relaxed text-slate-500">{t("socialPrivacy.description")}</p></div>

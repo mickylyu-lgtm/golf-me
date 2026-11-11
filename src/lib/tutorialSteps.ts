@@ -18,6 +18,8 @@ export const COURSE_MAP_TUTORIAL_ID = "tutorial-course-map";
 // Me -> Reputation -> the Trust & verification card (Verified Golfer badge).
 export const VERIFIED_TUTORIAL_ID = "tutorial-verified-golfer";
 // Settings -> App -> Appearance (Light / Dark / Match iPhone).
+// Settings -> Privacy -> optional approval for new follow requests.
+export const FOLLOW_APPROVAL_TUTORIAL_ID = "tutorial-follow-approval";
 export const APPEARANCE_TUTORIAL_ID = "tutorial-appearance";
 
 export interface TutorialStep {
@@ -27,10 +29,12 @@ export interface TutorialStep {
   targetId: string | null;
   titleKey: TranslationKey;
   textKey: TranslationKey;
+  // Longer explanations can use the existing centered card without changing other steps.
+  cardPlacement?: "center";
 }
 
-// Shortened to 3 short, dismissible, one-time contextual hints (Play / Chat
-// / Caddie) instead of a longer mandatory walkthrough -- no opening welcome
+// Short, dismissible, one-time contextual hints, with requested feature
+// explanations added to the same flow -- no opening welcome
 // screen, no closing screen, straight to spotlighting the real nav tabs.
 // These nav-tab targets stay spotlight-able because RootTabCarousel keeps
 // all 5 root panels mounted at once (see its own header comment) --
@@ -53,6 +57,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   // Micky, 2026-11-06: show light/dark mode in the tour. Opens Settings
   // (lazy page, so TutorialOverlay keeps re-measuring a little longer while
   // a target is missing) and scrolls the Appearance card into view.
+  { route: "/settings", targetId: FOLLOW_APPROVAL_TUTORIAL_ID, titleKey: "socialPrivacy.title", textKey: "tutorial.followApproval.text", cardPlacement: "center" },
   { route: "/settings", targetId: APPEARANCE_TUTORIAL_ID, titleKey: "tutorial.appearance.title", textKey: "tutorial.appearance.text" },
 ];
 

@@ -29,6 +29,15 @@ const CENTERED_CARD_STYLE: CSSProperties = {
   width: `min(${CARD_MAX_WIDTH}px, calc(100vw - ${CARD_MARGIN * 2}px))`,
 };
 
+// Opt-in explanatory step only: retain access to controls on short screens
+// or enlarged text without scrolling the Settings page behind the card.
+const SCROLLABLE_CENTERED_CARD_STYLE: CSSProperties = {
+  ...CENTERED_CARD_STYLE,
+  maxHeight: "calc(100dvh - 32px)",
+  overflowY: "auto",
+  overscrollBehavior: "contain",
+};
+
 function cardStyleForRect(rect: DOMRect): CSSProperties {
   const viewportW = window.innerWidth;
   const viewportH = window.innerHeight;
@@ -137,7 +146,7 @@ export function TutorialOverlay() {
 
       <div
         className="absolute flex flex-col gap-3 rounded-2xl bg-white p-5 shadow-xl shadow-slate-900/20"
-        style={rect ? cardStyleForRect(rect) : CENTERED_CARD_STYLE}
+        style={step.cardPlacement === "center" ? SCROLLABLE_CENTERED_CARD_STYLE : rect ? cardStyleForRect(rect) : CENTERED_CARD_STYLE}
       >
         {showProgress && (
           <p className="text-xs font-bold uppercase tracking-wide text-fairway-600">
@@ -149,7 +158,7 @@ export function TutorialOverlay() {
           <p className="mt-1 text-sm text-slate-600">{t(step.textKey)}</p>
         </div>
 
-        <div className="flex items-center justify-between gap-3 pt-1">
+        <div className={"flex items-center justify-between gap-3 pt-1" + (step.cardPlacement === "center" ? " flex-wrap" : "")}>
           {!isLastStep ? (
             <button
               onClick={skip}
@@ -160,7 +169,7 @@ export function TutorialOverlay() {
           ) : (
             <span />
           )}
-          <div className="flex items-center gap-2">
+          <div className={"flex items-center gap-2" + (step.cardPlacement === "center" ? " max-w-full flex-wrap" : "")}>
             {!isFirstStep && !isLastStep && (
               <button
                 onClick={back}

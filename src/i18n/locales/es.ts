@@ -1644,6 +1644,7 @@ export const es: Record<TranslationKey, string> = {
   "tutorial.community.text": "Publica rondas, fotos y videos de swing, y conéctate con la comunidad de GolfMe.",
   "tutorial.caddie.title": "Conoce a Caddie",
   "tutorial.caddie.text": "Sube un video de tu swing para recibir comentarios con IA y guarda tus análisis a medida que mejoras.",
+  "tutorial.followApproval.text": "Activa esta opción si quieres aceptar o rechazar nuevas solicitudes de seguimiento. Conservas tus seguidores actuales. Las publicaciones y el perfil siguen siendo públicos. Quienes hayan iniciado sesión y puedan ver tu perfil podrán ver tus listas de seguidores y seguidos sin seguirte. Los bloqueos y las reglas de seguridad siguen vigentes.",
   "tutorial.appearance.title": "Claro u oscuro",
   "tutorial.appearance.text": "Elige Claro, Oscuro o el mismo ajuste que tu teléfono. Puedes cambiarlo aquí en Configuración cuando quieras.",
   "tutorial.done.title": "Ya estás listo",
