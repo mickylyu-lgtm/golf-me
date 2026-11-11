@@ -1,6 +1,6 @@
 # Followers isolated test result
 
-Date: 2026-11-11. Feature revision: 1b349cb. No remote/shared migration, live account or production data was used.
+Date: 2026-11-11. Feature revision: 1b349cb plus final explicit service-role grant removal. No remote/shared migration, live account or production data was used.
 
 ## PostgreSQL authorization tests: passed
 
@@ -13,8 +13,8 @@ Passed: target visibility, visible-only counts and mutual totals, hidden direct-
 The entire suite rolled back. Follow-up checks confirmed no fixture profiles table, endpoint function or test roles remained. The backend exited; no network listener or database service remains.
 
 Source SHA256:
-- scripts/staging/profile-followers-authz.sql: d014170a4031c4abbf9fa1eed9a8032d8425db48dd376a9637d9dd5063a86bae
-- supabase/migrations/20261111010730_profile_followers_visibility.sql: 610efca93910d0931aab5d58d96f169278fcef73888a25be469e95a29c5a2f5c
+- scripts/staging/profile-followers-authz.sql: c42630247c3fa1953cc5e6d7e3aff75d18b5fc4fd7ebfa6999cbfce600c5492b
+- supabase/migrations/20261111010730_profile_followers_visibility.sql: cad8ed26a74c79d40e81647f8be82dfb14619c9a2398f73777136450aa80ecce
 
 ## Hands-on UI demo
 
@@ -34,3 +34,11 @@ Independent browser check passed without external test-harness seeding: own/othe
 The standalone SQL run proves the filtered SQL and role/grant assertions in the synthetic schema, not Supabase Auth/PostgREST wiring, full migration ordering, real concurrent requests, or physical iOS. The UI demo exercises the demo context, not the real API path. These two checks complement each other; neither is a live end-to-end staging test.
 
 Next: separately authorize a full-schema isolated Supabase staging environment with synthetic accounts, run real authenticated API/client tests there, and obtain explicit backend rollout/publication approval. No production rollout is implied by this test result.
+
+## Final SQL delivery review
+
+Read-only metadata on the live project confirmed PostgreSQL 17.6 and matching columns, dependency signatures/bodies, postgres ownership/read/schema-create privileges, and no inherited application-role memberships. Its public function default ACL grants anon/authenticated/service_role; the migration now explicitly clears all of these and grants only authenticated. The private helper has no application-role execute grant.
+
+The synthetic suite passed again with matching default grants and a BYPASSRLS service_role; actual service-role execution is denied. A fresh test cluster used postgres as owner. The atomic SQL Editor wrapper also passed ownership/security/search_path/exact-ACL assertions, a second install safely failed on existing functions, and rollback removed only the two new functions while preserving prerequisite tables. Full npm run check remains 1,251 tests: 1,248 passed, 3 existing skips, no failures.
+
+The installer/rollback deliverables are copies in artifacts.local, with BEGIN/COMMIT and metadata verification. No deployment or remote migration has occurred. Manual SQL Editor application does not update CLI migration history; reconcile version 20261111010730 on the correct project before a future CLI db push. Full Supabase Auth/PostgREST staging remains a release gate.

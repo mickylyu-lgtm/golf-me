@@ -15,8 +15,11 @@ create schema private;
 do $$ begin
   if not exists (select 1 from pg_roles where rolname = 'authenticated') then create role authenticated nologin; end if;
   if not exists (select 1 from pg_roles where rolname = 'anon') then create role anon nologin; end if;
+  if not exists (select 1 from pg_roles where rolname = 'service_role') then create role service_role nologin bypassrls; end if;
 end $$;
-grant usage on schema public, auth to authenticated, anon;
+grant usage on schema public, auth to authenticated, anon, service_role;
+-- Match the live postgres default ACL for newly created public functions.
+alter default privileges in schema public grant execute on functions to anon, authenticated, service_role;
 create function auth.uid() returns uuid language sql stable as $$
   select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid;
 $$;
@@ -154,6 +157,15 @@ set local role anon;
 set local request.jwt.claim.sub='00000000-0000-0000-0000-000000000001';
 do $$ begin
  begin perform public.golfer_profile_followers('00000000-0000-0000-0000-000000000002',100,0); raise exception 'FAIL: anon executed endpoint'; exception when insufficient_privilege then null; end;
+end $$;
+reset role;
+select public.check_followers_test(has_function_privilege('authenticated','public.golfer_profile_followers(uuid,integer,integer)','execute'),'authenticated endpoint execute retained');
+select public.check_followers_test(not has_function_privilege('service_role','public.golfer_profile_followers(uuid,integer,integer)','execute'),'service role default execute removed');
+select public.check_followers_test(not has_function_privilege('service_role','private.can_list_follower_profile(uuid,uuid)','execute'),'service role helper execute denied');
+set local role service_role;
+set local request.jwt.claim.sub='00000000-0000-0000-0000-000000000001';
+do $$ begin
+ begin perform public.golfer_profile_followers('00000000-0000-0000-0000-000000000002',100,0); raise exception 'FAIL: service role executed endpoint'; exception when insufficient_privilege then null; end;
 end $$;
 reset role;
 rollback;

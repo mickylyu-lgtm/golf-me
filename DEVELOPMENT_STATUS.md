@@ -1849,3 +1849,10 @@ Supersedes the earlier same-day broad-read followers prototype above. That proto
 - Client now fails closed when the endpoint is missing or denied, with no broad relationship/profile fallback. Viewer-scoped state, block/account/follow response invalidation, strict versioned response checks and consistent pagination protect new UI data. Demo blocked rows no longer count.
 - Full check: 1,251 tests, 1,248 pass, 3 existing skips, 0 failures; typecheck/build/prerender and synthetic browser checks pass. Source review is complete. SQL authorization fixtures subsequently passed on isolated PostgreSQL 17.11 (single-user backend with explicit authenticated/anon role tests and rollback verified). Full Supabase staging verification is still a rollout blocker. No production data/schema changes, push or deploy.
 - Exact contract, remaining legacy API caveat, guarded synthetic SQL command and rollout gates: docs/profile-followers-privacy.md. Next: authorize full-schema Supabase staging verification, then seek backend rollout/publication approval. See docs/profile-followers-local-test.md for the isolated SQL result and MGPC-only synthetic UI test steps.
+
+
+### Followers SQL handoff review (2026-11-11; still not shipped)
+
+- Read-only live schema/dependency/owner inspection matched the new endpoint. Cleared inherited Supabase service_role execution in addition to PUBLIC/anon, leaving only authenticated plus the owner. The synthetic SQL suite now recreates those live default grants and verifies service-role denial.
+- Repeated full check: 1,251 tests, 1,248 pass, 3 existing skips, 0 failures. Fresh isolated PostgreSQL run passed; atomic SQL Editor install, duplicate-run refusal and non-cascading rollback were also verified on synthetic schema.
+- Exact SQL and rollback are prepared for user review. No production changes, push or deploy. Full Supabase Auth/PostgREST staging and final rollout review remain; manually applied SQL must be reconciled with migration history before later CLI db push.

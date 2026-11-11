@@ -56,7 +56,7 @@ as $$
         )
     );
 $$;
-revoke all on function private.can_list_follower_profile(uuid, uuid) from public, anon, authenticated;
+revoke all on function private.can_list_follower_profile(uuid, uuid) from public, anon, authenticated, service_role;
 
 -- SECURITY DEFINER is required to evaluate the private moderation/role
 -- checks and read permitted public profiles after profiles becomes own-row
@@ -124,5 +124,7 @@ end;
 $$;
 comment on function public.golfer_profile_followers(uuid, integer, integer) is
   'Viewer-visible follower rows and counts from one filtered set. Authenticated only. No blocks, suspended/excluded/incomplete profiles. Hidden profiles require a direct follow relationship with the caller. p_limit=0 is count-only. No raw totals or hidden reasons.';
-revoke all on function public.golfer_profile_followers(uuid, integer, integer) from public, anon;
+-- Supabase public-schema default ACLs also grant service_role. Clear all
+-- application-role defaults, then expose this endpoint only to authenticated.
+revoke all on function public.golfer_profile_followers(uuid, integer, integer) from public, anon, authenticated, service_role;
 grant execute on function public.golfer_profile_followers(uuid, integer, integer) to authenticated;

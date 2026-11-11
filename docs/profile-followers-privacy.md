@@ -16,7 +16,7 @@ Mutuals are eligible followers the viewer also follows. On your own profile, the
 
 ## Access boundary
 
-The private eligibility helper is SECURITY INVOKER and has no application-role execute grants. The public read endpoint is SECURITY DEFINER only to evaluate private moderation/role checks and read authorized public fields after profile RLS becomes own-row-only. It uses explicit auth/target checks, empty search_path, no dynamic SQL, revoked PUBLIC/anon execution, and authenticated-only execute.
+The private eligibility helper is SECURITY INVOKER and has no application-role execute grants. The public read endpoint is SECURITY DEFINER only to evaluate private moderation/role checks and read authorized public fields after profile RLS becomes own-row-only. It uses explicit auth/target checks, empty search_path, no dynamic SQL, explicitly revoked PUBLIC/anon/authenticated/service_role defaults, then authenticated-only execute. The helper revokes all four as well.
 
 The endpoint reuses the existing narrow public-profile projection inside the same SQL statement, only for already-authorized page ids. It never returns profile coordinates, roles or suspension rows. Maximum page size is 100, below the projection's 200-id bound. Count-only calls use limit=0. Invalid/negative/too-large offsets raise an error rather than repeating a clamped page.
 

@@ -63,7 +63,7 @@ test("followers client has no raw relationship or broad profile fallback", () =>
 });
 test("SQL declares mandatory exclusions and restricted execute grants", () => {
   const sql = readFileSync(new URL("../supabase/migrations/20261111010730_profile_followers_visibility.sql", import.meta.url), "utf8");
-  for (const fragment of ["and p.has_onboarded", "and not private.is_directory_excluded(p.id)", "and not private.is_suspended(p.id)", "and not private.has_block_between(p_viewer, p.id)", "and not private.has_block_between(p_profile_id, f.follower_id)", "with eligible as materialized", "from eligible where is_mutual", "revoke all on function private.can_list_follower_profile(uuid, uuid) from public, anon, authenticated", "revoke all on function public.golfer_profile_followers(uuid, integer, integer) from public, anon"]) assert.ok(sql.includes(fragment),fragment);
+  for (const fragment of ["and p.has_onboarded", "and not private.is_directory_excluded(p.id)", "and not private.is_suspended(p.id)", "and not private.has_block_between(p_viewer, p.id)", "and not private.has_block_between(p_profile_id, f.follower_id)", "with eligible as materialized", "from eligible where is_mutual", "revoke all on function private.can_list_follower_profile(uuid, uuid) from public, anon, authenticated, service_role", "revoke all on function public.golfer_profile_followers(uuid, integer, integer) from public, anon, authenticated, service_role"]) assert.ok(sql.includes(fragment),fragment);
   assert.doesNotMatch(sql, /grant.*(?:private\.user_suspensions|public\.follows)/i);
 });
 
