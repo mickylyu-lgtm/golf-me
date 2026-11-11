@@ -1,6 +1,6 @@
 # Admin registered-user search and collapse
 
-Local-only change on feat/admin-user-search-20261111, based on f5d3329.
+Dashboard-only change on feat/admin-user-search-20261111, based on f5d3329. User subsequently authorized safe push and go-live.
 
 ## Behavior
 
@@ -34,4 +34,4 @@ The browser harness accepts PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH for an existing 
 
 The first diagnostic browser launch lacked shared runtime libraries; rerunning with the existing local library directory resolved it. The first font pass used fallback fonts because dependency symlinks pointed outside the fixture directory; the harness now allows only its workspace and the resolved bundled Inter font directory, verifies font load, and fails on HTTP errors. The final run passed with real bundled fonts.
 
-No push or deployment. Publication requires explicit approval.
+Release authorized after local verification. Preflight: remote main and live golfme.app both f5d3329, dashboard commit 3fca205 is a direct successor, no server/API/auth/migration changes. Push will be a normal fast-forward, never forced. Exact-commit GitHub CI and Vercel alias verification must complete before reporting the feature live.
