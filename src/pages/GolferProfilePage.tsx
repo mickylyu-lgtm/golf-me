@@ -14,8 +14,6 @@ import {
   ShieldCheck,
   ShieldOff,
   UserPlus,
-  UserRoundCheck,
-  UserRoundPlus,
   Users,
   Wallet,
 } from "lucide-react";
@@ -27,7 +25,8 @@ import { useRealCommunity } from "../context/RealCommunityContext";
 import { GolfMeLoader } from "../components/loading/GolfMeLoader";
 import { LoadErrorState } from "../components/ui/LoadStates";
 import { useLocale } from "../i18n/LocaleContext";
-import { ProfileFollowers } from "../components/profile/ProfileFollowers";
+import { FollowControl } from "../components/profile/FollowControl";
+import { ProfileFollowers, ProfileMutualSummary } from "../components/profile/ProfileFollowers";
 import { Avatar } from "../components/ui/Avatar";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
@@ -74,9 +73,6 @@ export function GolferProfilePage() {
     isInCircle,
     addToCircle,
     reviewsAbout,
-    isFollowing,
-    followUser,
-    unfollowUser,
     canMessage,
   } = useData();
   const realRounds = useRealRounds();
@@ -139,7 +135,6 @@ export function GolferProfilePage() {
   }
 
   const blocked = isBlocked(golfer.id);
-  const following = isFollowing(golfer.id);
   const messagingAllowed = canMessage(golfer.id);
   const tier = compat ? matchTier(compat.overall) : null;
   const reasons = compat ? golferMatchReasons(compat, t, distanceLabel) : [];
@@ -267,26 +262,7 @@ export function GolferProfilePage() {
               </div>
             )}
             <div className="flex flex-wrap items-center justify-center gap-2">
-              <Button
-                size="sm"
-                variant={following || messagingAllowed ? "outline" : "primary"}
-                icon={following ? <UserRoundCheck size={14} /> : <UserRoundPlus size={14} />}
-                onClick={async () => {
-                  try {
-                    if (following) {
-                      await unfollowUser(golfer.id);
-                      showToast(t("golferProfile.unfollowedToast", { name: golfer.name }), "info");
-                    } else {
-                      await followUser(golfer.id);
-                      showToast(t("golferProfile.followingToast", { name: golfer.name }), "success");
-                    }
-                  } catch (err) {
-                    showToast(err instanceof Error ? err.message : t("golferProfile.followFailed"), "warning");
-                  }
-                }}
-              >
-                {following ? t("common.following") : t("common.follow")}
-              </Button>
+              <FollowControl profileId={golfer.id} name={golfer.name} />
               <Button size="sm" variant="outline" icon={<Scale size={14} />} onClick={() => setCompareOpen(true)}>
                 {t("golferProfile.compare")}
               </Button>
@@ -339,6 +315,7 @@ export function GolferProfilePage() {
       <div className="rounded-2xl border border-slate-100 bg-white p-4">
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{t("golferProfile.reputationTitle")}</p>
         <ReputationRow golfer={enrichedGolfer} followerStat={!blocked ? <ProfileFollowers profileId={golfer.id} /> : undefined} />
+        <ProfileMutualSummary profileId={golfer.id} name={golfer.name} />
         {handicapConfidence.level !== "normal" && (
           <p className="mt-2 flex items-center gap-1 text-xs text-slate-500">
             {handicapConfidence.level === "high" && <ShieldCheck size={12} className="text-fairway-600" />}

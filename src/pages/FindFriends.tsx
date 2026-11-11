@@ -1,15 +1,12 @@
 import { useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { ArrowLeft, Search } from "lucide-react";
-import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
-import { useToast } from "../context/ToastContext";
 import { useLocale } from "../i18n/LocaleContext";
 import { EmptyState } from "../components/ui/EmptyState";
 import { GolferSearchResultRow } from "../components/golfer/GolferSearchResultRow";
 import { useFriendSearch } from "../lib/useFriendSearch";
 import { useSuggestedGolfers } from "../lib/useSuggestedGolfers";
-import type { FriendSearchResult } from "../lib/useFriendSearch";
 import { goBack } from "../lib/goBack";
 
 // Real-users-only by construction: search_golfer_profiles() (the RPC this
@@ -20,34 +17,13 @@ import { goBack } from "../lib/goBack";
 // backend to search against — Find Friends has no demo-mode equivalent.
 export function FindFriends() {
   const { isDemo } = useAuth();
-  const { isFollowing, followUser, unfollowUser } = useData();
-  const { showToast } = useToast();
   const { t } = useLocale();
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
-  // Blocks a quick double-tap from following and then immediately
-  // unfollowing before the first request has come back.
-  const [pendingId, setPendingId] = useState<string | null>(null);
   const { results, loading, error } = useFriendSearch(query);
   const { suggestions, loading: suggestionsLoading } = useSuggestedGolfers();
 
   if (isDemo) return <Navigate to="/profile/following" replace />;
-
-  async function handleFollowToggle(golfer: FriendSearchResult) {
-    if (pendingId) return;
-    setPendingId(golfer.id);
-    try {
-      if (isFollowing(golfer.id)) {
-        await unfollowUser(golfer.id);
-      } else {
-        await followUser(golfer.id);
-      }
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : t("findFriends.followFailed"), "warning");
-    } finally {
-      setPendingId(null);
-    }
-  }
 
   return (
     <div className="flex flex-col gap-6 pb-6">
@@ -86,10 +62,7 @@ export function FindFriends() {
                   <GolferSearchResultRow
                     key={golfer.id}
                     golfer={golfer}
-                    following={isFollowing(golfer.id)}
                     onOpenProfile={() => navigate(`/golfer/${golfer.id}`)}
-                    onToggleFollow={() => handleFollowToggle(golfer)}
-                    pending={pendingId === golfer.id}
                   />
                 ))}
               </div>
@@ -108,10 +81,7 @@ export function FindFriends() {
             <GolferSearchResultRow
               key={golfer.id}
               golfer={golfer}
-              following={isFollowing(golfer.id)}
               onOpenProfile={() => navigate(`/golfer/${golfer.id}`)}
-              onToggleFollow={() => handleFollowToggle(golfer)}
-              pending={pendingId === golfer.id}
             />
           ))}
         </div>

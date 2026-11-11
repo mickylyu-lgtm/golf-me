@@ -1,5 +1,15 @@
 # GolfMe — Development Status
 
+## Follow approval and private connection lists - 2026-11-11 (local only, release held)
+
+- Follow-up to the released 29f36dd followers feature. The reported target-profile error was reproduced read-only: the original server policy excludes active test-role targets. The local replacement permits only self or an accepted viewer-to-identity follow for test-only accounts; bot, seeded, app_reviewer, suspended and blocked identities remain excluded. No account roles or real relationships were edited.
+- User confirmed posts and profile details stay public. The new Require follow approval setting affects new follows only, preserves existing followers, and does not auto-accept pending requests when turned off. Request/cancel/accept/reject and owner removal are supported. Removal is not blocking.
+- Followers and Following tabs replace the Mutuals tab. Both lists, counts and the separate profile mutual summary require self or an accepted viewer-to-owner follow. Mutuals means eligible people the viewer follows who also follow the viewed owner. Pending requests confer no graph access.
+- Prepared migration 20261111051406_private_social_controls.sql closes broad raw follows reads and direct INSERT/UPDATE bypasses, preserves existing own-edge unfollow, isolates requests in private schema, and adds scoped authenticated RPCs with explicit grants. Do not apply automatically or repair manually installed migration history. Protective backend must remain if the frontend is rolled back after people enable approval.
+- Frontend validation passed: npm run check, 1,295 tests, TypeScript, 26 existing lint warnings/0 errors, build/prerender. Synthetic local browser checks passed at 320/390/1440px, including uncertain-write recovery, stale responses, account changes and approval/removal flows. Independent source review found no actionable SQL/client blocker. See docs/qa/private-social-controls-backend.md for the contract, validation and rollout gates.
+- SQL validation is NOT complete. The standalone PostgreSQL fixture correctly stopped at raw-table RLS because single-user mode bypasses RLS; rollback was verified and no assertion weakened. Normal-server RLS, concurrent-session races and full Supabase/Auth/Realtime/push integration remain required. Official isolated normal-server setup awaits user approval. Production privilege-metadata query was denied before execution and was not retried.
+- No new push, deployment, production migration, production data mutation or native build. Shared isolated branch feat/private-social-controls-20261111 is based on 29f36dd; the active checkout and unrelated Compare/Caddie work are untouched.
+
 ## Caddie cutoff: serverless packaging correction — 2026-11-11 (full checks passed, staging next)
 
 - The fc4983c cutoff release failed before auth on both video API routes: the emitted JavaScript referenced src/lib/caddieUploadLimit.ts, which was absent from the Vercel function package. Production was rolled back to healthy d081d3a; no database, Edge Function, secret, or provider change.

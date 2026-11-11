@@ -2,6 +2,7 @@ import type React from "react";
 import {
   Bell,
   UserPlus,
+  UserCheck,
   UserMinus,
   Users,
   Ban,
@@ -35,6 +36,8 @@ const ICONS: Record<NotificationType, NotificationIconComponent> = {
   post_reply: MessageCircle,
   comment_reply: MessageCircle,
   new_follower: UserPlus,
+  new_follow_request: UserPlus,
+  follow_request_accepted: UserCheck,
   round_created_from_post: Flag,
   post_became_round: Trophy,
   round_joined: Users,

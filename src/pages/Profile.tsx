@@ -24,6 +24,7 @@ import { Button } from "../components/ui/Button";
 import { Modal } from "../components/ui/Modal";
 import { CLICKABLE_CARD_CLASS } from "../components/ui/cardStyles";
 import { inputClass, labelClass } from "../components/ui/FormControls";
+import { FollowRequests } from "../components/profile/FollowRequests";
 import { ProfileFollowers } from "../components/profile/ProfileFollowers";
 import { AvatarUpload } from "../components/profile/AvatarUpload";
 import { FullscreenMediaViewer } from "../components/community/FullscreenMediaViewer";
@@ -235,6 +236,7 @@ export function Profile() {
           </Badge>
         )}
       </div>
+      <FollowRequests />
 
       {/* Your own bio, shown the way other golfers see it on your profile
           (Instagram-style, under the name and stats). Empty: a quiet prompt

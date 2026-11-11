@@ -739,6 +739,8 @@ export type NotificationType =
   // Demo, and real accounts since migration 20261108150000: "<name> followed
   // you." (once per follower ever, not across a block; link /golfer/<id>).
   | "new_follower"
+  | "new_follow_request"
+  | "follow_request_accepted"
   | "round_created_from_post"
   | "post_became_round"
   // Real-account-only types (Phase 5) — database-trigger-generated, never
@@ -797,6 +799,10 @@ export interface AppData {
   blocks: Block[];
   circle: CircleConnection[];
   follows: FollowConnection[];
+  /** Demo-only approval settings and pending requests; old saves default empty. */
+  privateFollowProfiles?: Record<string, boolean>;
+  closedFollowRequests?: Record<string, number>;
+  followRequests?: { id: string; followerId: string; followingId: string; createdAt: string }[];
   directMessages: DirectMessage[];
   dmReads: DmReadState[];
   posts: CommunityPost[];

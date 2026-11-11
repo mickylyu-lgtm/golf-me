@@ -1,17 +1,12 @@
-import { UserRoundCheck, UserRoundPlus } from "lucide-react";
+import { FollowControl } from "../profile/FollowControl";
 import { useLocale } from "../../i18n/LocaleContext";
 import { Avatar } from "../ui/Avatar";
 import { FoundingMark } from "./FoundingGolfer";
-import { Button } from "../ui/Button";
 import type { FriendSearchResult } from "../../lib/useFriendSearch";
 
 interface GolferSearchResultRowProps {
   golfer: FriendSearchResult;
-  following: boolean;
   onOpenProfile: () => void;
-  onToggleFollow: () => void;
-  /** True while this row's follow/unfollow request is in flight. */
-  pending?: boolean;
 }
 
 // Shared between FindFriends' typed-search results and its "Suggested for
@@ -19,7 +14,7 @@ interface GolferSearchResultRowProps {
 // suggested_golfer_profiles() RPC mirrors search_golfer_profiles()'s field
 // list on purpose), so one row renderer covers both instead of the two
 // lists growing their own slightly-different markup.
-export function GolferSearchResultRow({ golfer, following, onOpenProfile, onToggleFollow, pending = false }: GolferSearchResultRowProps) {
+export function GolferSearchResultRow({ golfer, onOpenProfile }: GolferSearchResultRowProps) {
   const { t } = useLocale();
   return (
     <div className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white p-3">
@@ -45,16 +40,7 @@ export function GolferSearchResultRow({ golfer, following, onOpenProfile, onTogg
           </p>
         </div>
       </button>
-      <Button
-        size="sm"
-        variant={following ? "outline" : "primary"}
-        icon={following ? <UserRoundCheck size={14} /> : <UserRoundPlus size={14} />}
-        onClick={onToggleFollow}
-        disabled={pending}
-        className="shrink-0"
-      >
-        {following ? t("common.following") : t("common.follow")}
-      </Button>
+      <FollowControl profileId={golfer.id} name={golfer.name} />
     </div>
   );
 }

@@ -1,7 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { supabase } from "../lib/supabase";
-import { fetchFollowerCount, fetchProfileFollowers } from "../lib/profileFollowersFetch";
+import { fetchConnections, fetchFollowState, fetchFollowRequests, sendFollow, sendUnfollow, sendRemoveFollower, sendCancelRequest, sendRespondRequest, sendPrivacySetting } from "../lib/socialPrivacyFetch";
+import type { SocialPrivacyApi, ConnectionKind, FollowState } from "../lib/socialPrivacy";
 import type { ProfileFollowers } from "../lib/profileFollowers";
 import { requireCurrentFollowerRead } from "../lib/profileFollowers";
 import { isHistoryCut } from "../lib/roundMessagePages";
@@ -156,7 +157,7 @@ interface NotificationRow {
   created_at: string;
 }
 
-interface RealSocialContextValue {
+interface RealSocialContextValue extends SocialPrivacyApi {
   profilesById: Map<string, GolferProfile>;
   /** More DM messages exist than the newest-N window holds, so older history may be missing (never in demo). */
   messageHistoryCut: boolean;
@@ -197,7 +198,7 @@ interface RealSocialContextValue {
   followingGolfers: GolferProfile[];
   getFollowerCount: (id: string) => Promise<number>;
   getProfileFollowers: (id: string) => Promise<ProfileFollowers>;
-  followUser: (id: string) => Promise<void>;
+  followUser: (id: string) => Promise<FollowState>;
   unfollowUser: (id: string) => Promise<void>;
 
   dmConversations: DmConversation[];
@@ -376,6 +377,9 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
   const [messageHistoryCut, setMessageHistoryCut] = useState(false);
   const [blocks, setBlocks] = useState<BlockRow[]>([]);
   const [follows, setFollows] = useState<FollowRow[]>([]);
+  const [socialRevision, setSocialRevision] = useState(0);
+  const socialWrites = useRef(new Set<string>());
+  const socialMutationVersion = useRef(0);
   const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
   const [notificationRows, setNotificationRows] = useState<NotificationRow[]>([]);
   // Notification ids this device marked read (in flight or confirmed),
@@ -430,6 +434,8 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
   // under the previous account can't write its results into state.
   const generationRef = useRef(0);
   const selfId = authUser?.id;
+  const socialViewerRef = useRef(selfId);
+  socialViewerRef.current = selfId;
 
   // Quick reactions. Loaded separately from messages (and never able to
   // fail the message load): "unknown" until the first fetch, "no" when the
@@ -581,6 +587,7 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       fetchingRef.current = true;
       const generation = generationRef.current;
       const isCurrent = () => generationRef.current === generation;
+      const socialVersion = socialMutationVersion.current;
       lastFetchAtRef.current = Date.now();
       const full = forceFullRef.current || Date.now() - lastFullAtRef.current >= FULL_REFRESH_INTERVAL_MS;
       forceFullRef.current = false;
@@ -630,9 +637,10 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
           setBlockedNames((prev) => (sameProfileMap(prev, next) ? prev : next));
         }
 
-        setBlocks((prev) => keepIfSame(prev, (blockRows ?? []) as BlockRow[]));
+        const socialSnapshotCurrent = socialVersion === socialMutationVersion.current && socialWrites.current.size === 0;
+        if (socialSnapshotCurrent) setBlocks((prev) => keepIfSame(prev, (blockRows ?? []) as BlockRow[]));
         setNotificationRows((prev) => keepIfSame(prev, (notifRows ?? []) as NotificationRow[]));
-        setFollows((prev) => keepIfSame(prev, (followRows ?? []) as FollowRow[]));
+        if (socialSnapshotCurrent) setFollows((prev) => keepIfSame(prev, (followRows ?? []) as FollowRow[]));
 
         const myRows = (myConvIds ?? []) as ConversationParticipantRow[];
         const conversationIds = [...new Set(myRows.map((r) => r.conversation_id))];
@@ -1034,6 +1042,10 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       if (!selfId) return;
       const { error } = await supabase.from("blocks").insert({ blocker_id: selfId, blocked_id: id });
       if (error) throw new Error(error.message);
+      if (socialViewerRef.current !== selfId) return;
+      socialMutationVersion.current++;
+      setBlocks((prev) => [...prev.filter((b) => !(b.blocker_id === selfId && b.blocked_id === id)), { blocker_id: selfId, blocked_id: id }]);
+      setSocialRevision((n) => n + 1);
       // Full: the directory and the blocked-names list both change.
       await refetch({ full: true });
     },
@@ -1045,6 +1057,10 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       if (!selfId) return;
       const { error } = await supabase.from("blocks").delete().eq("blocker_id", selfId).eq("blocked_id", id);
       if (error) throw new Error(error.message);
+      if (socialViewerRef.current !== selfId) return;
+      socialMutationVersion.current++;
+      setBlocks((prev) => prev.filter((b) => !(b.blocker_id === selfId && b.blocked_id === id)));
+      setSocialRevision((n) => n + 1);
       // Full: the unblocked golfer can reappear in the directory.
       await refetch({ full: true });
     },
@@ -1055,69 +1071,129 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
   const isFollowing = useCallback((id: string) => followingIds.includes(id), [followingIds]);
   const followingGolfers = useMemo(() => followingIds.map((id) => allProfiles.find((g) => g.id === id)).filter((g): g is GolferProfile => Boolean(g)), [followingIds, allProfiles]);
 
-  // Invalidate in-flight follower reads immediately on identity/block
-  // or follow changes, before the effects which reset the rest of social state run.
-  const followerPrivacyRef = useRef({ selfId, blocks, follows });
-  if (followerPrivacyRef.current.selfId !== selfId || followerPrivacyRef.current.blocks !== blocks || followerPrivacyRef.current.follows !== follows) {
-    followerPrivacyRef.current = { selfId, blocks, follows };
+  // Scope changes invalidate late reads and render-time UI snapshots. No
+  // shared list cache survives a follow, block, removal or identity change.
+  const followerPrivacyRef = useRef({ selfId, blocks, follows, socialRevision });
+  if (followerPrivacyRef.current.selfId !== selfId || followerPrivacyRef.current.blocks !== blocks || followerPrivacyRef.current.follows !== follows || followerPrivacyRef.current.socialRevision !== socialRevision) {
+    followerPrivacyRef.current = { selfId, blocks, follows, socialRevision };
   }
-  const getFollowerCount = useCallback(async (id: string) => {
-    if (!selfId) throw new Error("Sign in to view followers");
-    if (isBlocked(id) || isBlockedBy(id)) throw new Error("Followers unavailable");
+  const getProfileConnections = useCallback(async (id: string, kind: ConnectionKind) => {
+    if (!selfId || isBlocked(id) || isBlockedBy(id)) throw new Error("Connections unavailable");
+    if (id !== selfId && !follows.some((f) => f.follower_id === selfId && f.following_id === id)) throw new Error("Follow to view connections");
     const privacy = followerPrivacyRef.current;
-    if (privacy.selfId !== selfId || privacy.blocks !== blocks || privacy.follows !== follows) throw new Error("Follower visibility changed");
-    return requireCurrentFollowerRead(fetchFollowerCount(id), () => followerPrivacyRef.current === privacy);
-  }, [selfId, blocks, follows, isBlocked, isBlockedBy]);
-
-  const getProfileFollowers = useCallback(async (id: string) => {
-    if (!selfId) throw new Error("Sign in to view followers");
-    if (isBlocked(id) || isBlockedBy(id)) throw new Error("Followers unavailable");
-    const privacy = followerPrivacyRef.current;
-    if (privacy.selfId !== selfId || privacy.blocks !== blocks || privacy.follows !== follows) throw new Error("Follower visibility changed");
-    const generation = generationRef.current;
-    const result = await requireCurrentFollowerRead(fetchProfileFollowers(id), () => generationRef.current === generation && followerPrivacyRef.current === privacy);
-    // A follower opened from this list must resolve on /golfer/:id even if
-    // not in the discovery directory. Only server-filtered public fields.
+    if (privacy.selfId !== selfId || privacy.blocks !== blocks || privacy.follows !== follows || privacy.socialRevision !== socialRevision) throw new Error("Follower visibility changed");
+    const result = await requireCurrentFollowerRead(fetchConnections(id, kind), () => followerPrivacyRef.current === privacy && socialViewerRef.current === selfId);
     const cache = new Map(profileCacheRef.current);
     for (const golfer of result.golfers) cache.set(golfer.id, golfer);
     profileCacheRef.current = cache;
     setProfileCache((prev) => sameProfileMap(prev, cache) ? prev : cache);
     return result;
-  }, [selfId, blocks, follows, isBlocked, isBlockedBy]);
-
-  // Optimistic per the product spec: the button flips immediately, then
-  // reconciles with the real write. A failed insert/delete rolls the local
-  // state back to what it was before the tap and re-throws so the caller
-  // can show its own error toast — never leaves the button showing a state
-  // the database doesn't actually have.
-  const followUser = useCallback(
-    async (id: string) => {
-      if (!selfId || id === selfId) return;
-      const alreadyFollowing = followingIds.includes(id);
-      if (alreadyFollowing) return;
-      setFollows((prev) => [...prev, { follower_id: selfId, following_id: id }]);
-      const { error } = await supabase.from("follows").insert({ follower_id: selfId, following_id: id });
-      if (error) {
-        setFollows((prev) => prev.filter((f) => !(f.follower_id === selfId && f.following_id === id)));
-        throw new Error(error.message);
-      }
-    },
-    [selfId, followingIds],
-  );
-
-  const unfollowUser = useCallback(
-    async (id: string) => {
-      if (!selfId) return;
-      const previous = follows;
-      setFollows((prev) => prev.filter((f) => !(f.follower_id === selfId && f.following_id === id)));
-      const { error } = await supabase.from("follows").delete().eq("follower_id", selfId).eq("following_id", id);
-      if (error) {
-        setFollows(previous);
-        throw new Error(error.message);
-      }
-    },
-    [selfId, follows],
-  );
+  }, [selfId, blocks, follows, socialRevision, isBlocked, isBlockedBy]);
+  const getConnectionSummary = useCallback(async (id: string, kind: ConnectionKind) => {
+    if (!selfId || isBlocked(id) || isBlockedBy(id)) throw new Error("Connections unavailable");
+    if (id !== selfId && !follows.some((f) => f.follower_id === selfId && f.following_id === id)) throw new Error("Follow to view connections");
+    const privacy = followerPrivacyRef.current;
+    if (privacy.selfId !== selfId || privacy.blocks !== blocks || privacy.follows !== follows || privacy.socialRevision !== socialRevision) throw new Error("Follower visibility changed");
+    return requireCurrentFollowerRead(fetchConnections(id, kind, true), () => followerPrivacyRef.current === privacy && socialViewerRef.current === selfId);
+  }, [selfId, blocks, follows, socialRevision, isBlocked, isBlockedBy]);
+  const getFollowerCount = useCallback(async (id: string) => (await getConnectionSummary(id, "followers")).total, [getConnectionSummary]);
+  const getProfileFollowers = useCallback((id: string) => getProfileConnections(id, "followers"), [getProfileConnections]);
+  const getFollowState = useCallback(async (id: string) => {
+    if (!selfId || isBlocked(id) || isBlockedBy(id)) throw new Error("Follow status unavailable");
+    const privacy = followerPrivacyRef.current;
+    if (privacy.selfId !== selfId || privacy.blocks !== blocks || privacy.follows !== follows || privacy.socialRevision !== socialRevision) throw new Error("Follower visibility changed");
+    const state = await requireCurrentFollowerRead(fetchFollowState(id), () => followerPrivacyRef.current === privacy && socialViewerRef.current === selfId);
+    const accepted = state.state === "following";
+    const localAccepted = follows.some((f) => f.follower_id === selfId && f.following_id === id);
+    if (id !== selfId && accepted !== localAccepted) {
+      socialMutationVersion.current++;
+      followerPrivacyRef.current = { ...privacy };
+      setFollows((prev) => {
+        const withoutTarget = prev.filter((f) => !(f.follower_id === selfId && f.following_id === id));
+        return accepted ? [...withoutTarget, { follower_id: selfId, following_id: id }] : withoutTarget;
+      });
+    }
+    return state;
+  }, [selfId, blocks, follows, socialRevision, isBlocked, isBlockedBy]);
+  const getFollowRequests = useCallback(async () => {
+    if (!selfId) throw new Error("Sign in to view requests");
+    const privacy = followerPrivacyRef.current;
+    if (privacy.selfId !== selfId || privacy.blocks !== blocks || privacy.follows !== follows || privacy.socialRevision !== socialRevision) throw new Error("Follower visibility changed");
+    const result = await requireCurrentFollowerRead(fetchFollowRequests(), () => followerPrivacyRef.current === privacy && socialViewerRef.current === selfId);
+    const cache = new Map(profileCacheRef.current);
+    for (const request of result) cache.set(request.golfer.id, request.golfer);
+    profileCacheRef.current = cache;
+    setProfileCache((prev) => sameProfileMap(prev, cache) ? prev : cache);
+    return result;
+  }, [selfId, blocks, follows, socialRevision]);
+  // Server-confirmed follows only. A pending request never unlocks a list.
+  const followUser = useCallback(async (id: string) => {
+    if (!selfId || id === selfId) throw new Error("Follow unavailable");
+    const key = selfId + ":" + id;
+    if (socialWrites.current.has(key)) throw new Error("Follow already in progress");
+    socialWrites.current.add(key);
+    socialMutationVersion.current++;
+    try {
+      const state = await sendFollow(id);
+      if (socialViewerRef.current !== selfId) throw new Error("Account changed");
+      if (state.state === "following") setFollows((prev) => prev.some((f) => f.follower_id === selfId && f.following_id === id) ? prev : [...prev, { follower_id: selfId, following_id: id }]);
+      setSocialRevision((n) => n + 1);
+      return state;
+    } finally { socialMutationVersion.current++; socialWrites.current.delete(key); }
+  }, [selfId]);
+  const unfollowUser = useCallback(async (id: string) => {
+    if (!selfId) throw new Error("Sign in to unfollow");
+    const key = selfId + ":" + id;
+    if (socialWrites.current.has(key)) throw new Error("Follow already in progress");
+    socialWrites.current.add(key);
+    socialMutationVersion.current++;
+    followerPrivacyRef.current = { ...followerPrivacyRef.current };
+    setFollows((prev) => prev.filter((f) => !(f.follower_id === selfId && f.following_id === id)));
+    try { await sendUnfollow(id); }
+    catch (error) {
+      // Only an authoritative refresh can restore access after an uncertain write.
+      socialWrites.current.delete(key);
+      socialMutationVersion.current++;
+      if (socialViewerRef.current === selfId) await refetch();
+      throw error;
+    } finally { socialWrites.current.delete(key); socialMutationVersion.current++; }
+  }, [selfId, refetch]);
+  const removeFollower = useCallback(async (id: string) => {
+    if (!selfId) throw new Error("Sign in to remove followers");
+    followerPrivacyRef.current = { ...followerPrivacyRef.current };
+    setSocialRevision((n) => n + 1);
+    socialMutationVersion.current++;
+    await sendRemoveFollower(id);
+    socialMutationVersion.current++;
+    if (socialViewerRef.current !== selfId) throw new Error("Account changed");
+    setFollows((prev) => prev.filter((f) => !(f.follower_id === id && f.following_id === selfId)));
+    setSocialRevision((n) => n + 1);
+  }, [selfId]);
+  const cancelFollowRequest = useCallback(async (id: string) => {
+    if (!selfId) throw new Error("Sign in to cancel requests");
+    socialMutationVersion.current++;
+    await sendCancelRequest(id);
+    socialMutationVersion.current++;
+    if (socialViewerRef.current !== selfId) throw new Error("Account changed");
+    setSocialRevision((n) => n + 1);
+  }, [selfId]);
+  const respondToFollowRequest = useCallback(async (id: string, accept: boolean) => {
+    if (!selfId) throw new Error("Sign in to respond");
+    socialMutationVersion.current++;
+    await sendRespondRequest(id, accept);
+    socialMutationVersion.current++;
+    if (socialViewerRef.current !== selfId) throw new Error("Account changed");
+    setSocialRevision((n) => n + 1);
+    await refetch();
+  }, [selfId, refetch]);
+  const setAccountPrivate = useCallback(async (value: boolean) => {
+    if (!selfId) throw new Error("Sign in to change follow approval");
+    const saved = await sendPrivacySetting(value);
+    socialMutationVersion.current++;
+    if (socialViewerRef.current !== selfId) throw new Error("Account changed");
+    setSocialRevision((n) => n + 1);
+    return saved;
+  }, [selfId]);
 
   const conversationIdWith = useCallback(
     (otherId: string) => {
@@ -2035,6 +2111,14 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       unblockUser,
       isFollowing,
       followingGolfers,
+      getProfileConnections,
+      getConnectionSummary,
+      getFollowState,
+      getFollowRequests,
+      removeFollower,
+      cancelFollowRequest,
+      respondToFollowRequest,
+      setAccountPrivate,
       getFollowerCount,
       getProfileFollowers,
       followUser,
@@ -2090,6 +2174,14 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
       unblockUser,
       isFollowing,
       followingGolfers,
+      getProfileConnections,
+      getConnectionSummary,
+      getFollowState,
+      getFollowRequests,
+      removeFollower,
+      cancelFollowRequest,
+      respondToFollowRequest,
+      setAccountPrivate,
       getFollowerCount,
       getProfileFollowers,
       followUser,

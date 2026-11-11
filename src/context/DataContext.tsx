@@ -37,6 +37,8 @@ import type {
 import { AGE_PREF_MAX, AGE_PREF_MIN } from "../types";
 import { generateId } from "../lib/id";
 import type { ProfileFollowers } from "../lib/profileFollowers";
+import type { SocialPrivacyApi, ConnectionKind, FollowState } from "../lib/socialPrivacy";
+import { demoConnections, demoFollowState, demoIncomingRequests, demoBlocked } from "../lib/demoSocialPrivacy";
 import { blockedContactRows } from "../lib/blockedContacts";
 import type { BlockedContact } from "../lib/blockedContacts";
 import type { GeoPoint } from "../lib/geo";
@@ -177,7 +179,7 @@ export interface NewGolferInput {
   genderPreference?: GenderPreference;
 }
 
-interface DataContextValue {
+interface DataContextValue extends SocialPrivacyApi {
   data: AppData;
   isLoading: boolean;
   currentUser: GolferProfile;
@@ -293,7 +295,7 @@ interface DataContextValue {
   getFollowerCount: (id: string) => Promise<number>;
   getProfileFollowers: (id: string) => Promise<ProfileFollowers>;
   isFollowing: (golferId: string) => boolean;
-  followUser: (golferId: string) => Promise<void>;
+  followUser: (golferId: string) => Promise<FollowState>;
   unfollowUser: (golferId: string) => Promise<void>;
 
   // Direct messages between two golfers, gated by canMessage().
@@ -1164,6 +1166,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       setData((prev) => ({
         ...prev,
         blocks: [...prev.blocks, { blockerId: prev.currentUserId, blockedId, createdAt: new Date().toISOString() }],
+        followRequests: (prev.followRequests ?? []).filter((r) => !((r.followerId === prev.currentUserId && r.followingId === blockedId) || (r.followingId === prev.currentUserId && r.followerId === blockedId))),
       }));
     },
     [auth.isDemo, realSocial],
@@ -1317,26 +1320,65 @@ export function DataProvider({ children }: { children: ReactNode }) {
   // rollback-on-failure, same as the rest of this file's real/demo split.
   const isFollowing = useCallback((id: string) => (auth.isDemo ? demoIsFollowing(id) : realSocial.isFollowing(id)), [auth.isDemo, demoIsFollowing, realSocial]);
   const followingGolfers = auth.isDemo ? demoFollowingGolfers : realSocial.followingGolfers;
-  const { getFollowerCount: realFollowerCount, getProfileFollowers: realProfileFollowers } = realSocial;
-  const getFollowerCount = useCallback(async (id: string) => {
-    if (!auth.isDemo) return realFollowerCount(id);
-    return data.follows.filter((f) => f.followingId === id && !isBlockedEitherWay(f.followerId) && !data.blocks.some((b) => (b.blockerId === id && b.blockedId === f.followerId) || (b.blockedId === id && b.blockerId === f.followerId))).length;
-  }, [auth.isDemo, data.follows, data.blocks, isBlockedEitherWay, realFollowerCount]);
-  const getProfileFollowers = useCallback(async (id: string): Promise<ProfileFollowers> => {
-    if (!auth.isDemo) return realProfileFollowers(id);
-    const ids = new Set(data.follows.filter((f) => f.followingId === id && !isBlockedEitherWay(f.followerId) && !data.blocks.some((b) => (b.blockerId === id && b.blockedId === f.followerId) || (b.blockedId === id && b.blockerId === f.followerId))).map((f) => f.followerId));
-    return { total: ids.size, mutualIds: data.follows.filter((f) => f.followerId === currentUser.id && ids.has(f.followingId)).map((f) => f.followingId), golfers: data.golfers.filter((g) => ids.has(g.id) && !isBlockedEitherWay(g.id)) };
-  }, [auth.isDemo, data.follows, data.blocks, data.golfers, currentUser.id, isBlockedEitherWay, realProfileFollowers]);
-  const followUser = useCallback(
-    async (golferId: string) => {
-      if (auth.isDemo) {
-        demoFollowUser(golferId);
-        return;
-      }
-      await realSocial.followUser(golferId);
-    },
-    [auth.isDemo, demoFollowUser, realSocial],
-  );
+  const { getProfileConnections: realConnections, getConnectionSummary: realSummary, getFollowState: realFollowState,
+    getFollowRequests: realRequests, removeFollower: realRemoveFollower, cancelFollowRequest: realCancelRequest,
+    respondToFollowRequest: realRespondRequest, setAccountPrivate: realSetPrivate } = realSocial;
+  const getProfileConnections = useCallback(async (id: string, kind: ConnectionKind) => auth.isDemo
+    ? demoConnections(data, currentUser.id, id, kind) : realConnections(id, kind), [auth.isDemo, data, currentUser.id, realConnections]);
+  const getConnectionSummary = useCallback(async (id: string, kind: ConnectionKind) => auth.isDemo
+    ? demoConnections(data, currentUser.id, id, kind) : realSummary(id, kind), [auth.isDemo, data, currentUser.id, realSummary]);
+  const getFollowerCount = useCallback(async (id: string) => (await getConnectionSummary(id, "followers")).total, [getConnectionSummary]);
+  const getProfileFollowers = useCallback((id: string): Promise<ProfileFollowers> => getProfileConnections(id, "followers"), [getProfileConnections]);
+  const getFollowState = useCallback(async (id: string) => auth.isDemo
+    ? demoFollowState(data, currentUser.id, id) : realFollowState(id), [auth.isDemo, data, currentUser.id, realFollowState]);
+  const getFollowRequests = useCallback(async () => auth.isDemo
+    ? demoIncomingRequests(data, currentUser.id) : realRequests(), [auth.isDemo, data, currentUser.id, realRequests]);
+  const removeFollower = useCallback(async (id: string) => {
+    if (!auth.isDemo) return realRemoveFollower(id);
+    setData((prev) => ({ ...prev, follows: prev.follows.filter((f) => !(f.followerId === id && f.followingId === currentUser.id)) }));
+  }, [auth.isDemo, currentUser.id, realRemoveFollower]);
+  const cancelFollowRequest = useCallback(async (id: string) => {
+    if (!auth.isDemo) return realCancelRequest(id);
+    setData((prev) => {
+      const request = prev.followRequests?.find((r) => r.id === id && r.followerId === currentUser.id);
+      return { ...prev, followRequests: (prev.followRequests ?? []).filter((r) => !(r.id === id && r.followerId === currentUser.id)),
+        closedFollowRequests: request ? { ...prev.closedFollowRequests, [request.followerId + ":" + request.followingId]: Date.now() } : prev.closedFollowRequests };
+    });
+  }, [auth.isDemo, currentUser.id, realCancelRequest]);
+  const respondToFollowRequest = useCallback(async (id: string, accept: boolean) => {
+    if (!auth.isDemo) return realRespondRequest(id, accept);
+    const request = data.followRequests?.find((r) => r.id === id && r.followingId === currentUser.id);
+    if (!request || demoBlocked(data, request.followerId, request.followingId)) throw new Error("Request unavailable");
+    setData((prev) => {
+      const present = prev.followRequests?.some((r) => r.id === id && r.followingId === currentUser.id);
+      if (!present) return prev;
+      return { ...prev, followRequests: prev.followRequests?.filter((r) => r.id !== id),
+        closedFollowRequests: !accept ? { ...prev.closedFollowRequests, [request.followerId + ":" + request.followingId]: Date.now() } : prev.closedFollowRequests,
+        follows: accept && !prev.follows.some((f) => f.followerId === request.followerId && f.followingId === currentUser.id)
+          ? [...prev.follows, { id: generateId("follow"), followerId: request.followerId, followingId: currentUser.id, createdAt: new Date().toISOString() }] : prev.follows };
+    });
+    if (accept) pushNotification(request.followerId, "follow_request_accepted", currentUser.name + " accepted your follow request.", "/golfer/" + currentUser.id, currentUser.id);
+  }, [auth.isDemo, data, currentUser.id, currentUser.name, realRespondRequest, pushNotification]);
+  const setAccountPrivate = useCallback(async (value: boolean) => {
+    if (!auth.isDemo) return realSetPrivate(value);
+    setData((prev) => ({ ...prev, privateFollowProfiles: { ...prev.privateFollowProfiles, [currentUser.id]: value } }));
+    return value;
+  }, [auth.isDemo, currentUser.id, realSetPrivate]);
+  const followUser = useCallback(async (golferId: string): Promise<FollowState> => {
+    if (!auth.isDemo) return realSocial.followUser(golferId);
+    const state = demoFollowState(data, currentUser.id, golferId);
+    if (state.state !== "none") return state;
+    if (state.isPrivate) {
+      const closedAt = data.closedFollowRequests?.[currentUser.id + ":" + golferId];
+      if (closedAt && Date.now() - closedAt < 60_000) throw new Error("Please wait before requesting again");
+      const request = { id: generateId("request"), followerId: currentUser.id, followingId: golferId, createdAt: new Date().toISOString() };
+      setData((prev) => prev.followRequests?.some((r) => r.followerId === currentUser.id && r.followingId === golferId) ? prev : { ...prev, followRequests: [...(prev.followRequests ?? []), request] });
+      pushNotification(golferId, "new_follow_request", currentUser.name + " requested to follow you.", "/profile", currentUser.id);
+      return { ...state, state: "pending", requestId: request.id, canViewConnections: false };
+    }
+    demoFollowUser(golferId);
+    return { ...state, state: "following", canViewConnections: true };
+  }, [auth.isDemo, data, currentUser.id, currentUser.name, demoFollowUser, realSocial, pushNotification]);
   const unfollowUser = useCallback(
     async (golferId: string) => {
       if (auth.isDemo) {
@@ -2330,6 +2372,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
       hasPlayedWith,
       playedWithIds,
       followingGolfers,
+      getProfileConnections,
+      getConnectionSummary,
+      getFollowState,
+      getFollowRequests,
+      removeFollower,
+      cancelFollowRequest,
+      respondToFollowRequest,
+      setAccountPrivate,
       getFollowerCount,
       getProfileFollowers,
       isFollowing,
@@ -2465,6 +2515,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
       hasPlayedWith,
       playedWithIds,
       followingGolfers,
+      getProfileConnections,
+      getConnectionSummary,
+      getFollowState,
+      getFollowRequests,
+      removeFollower,
+      cancelFollowRequest,
+      respondToFollowRequest,
+      setAccountPrivate,
       getFollowerCount,
       getProfileFollowers,
       isFollowing,

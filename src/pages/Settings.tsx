@@ -17,6 +17,7 @@ import { Avatar } from "../components/ui/Avatar";
 import { Button } from "../components/ui/Button";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 import { Toggle } from "../components/ui/Toggle";
+import { FollowApprovalSetting } from "../components/profile/FollowApprovalSetting";
 import { ProfileSwitcher } from "../components/layout/ProfileSwitcher";
 import { AddToHomeScreenPrompt } from "../components/layout/AddToHomeScreenPrompt";
 import { clearOnboardingDraft } from "../lib/onboardingDraft";
@@ -343,6 +344,7 @@ export function Settings() {
         <div className="rounded-2xl border border-slate-100 bg-white p-4">
           <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">{t("settings.privacy")}</p>
           <div className="flex flex-col gap-3">
+            <FollowApprovalSetting />
             <div className="flex items-center gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
               <MapPin size={16} className="text-slate-400" />
               <p className="flex-1 text-xs text-slate-600">{t("settings.locationNote")}</p>
