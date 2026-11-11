@@ -1,5 +1,12 @@
 # GolfMe — Development Status
 
+## Community comments: preserve feed position — 2026-11-11 (tested, release authorized)
+
+- Fixed an unmount race: PostDetail's keyboard cleanup queued a scroll to the old post after navigation had restored the feed. Restoration now belongs only to mounted undocking, cancels on Back/redock/post change, and checks current focus and composer identity. Shared router, chat/native keyboard, backend and database code are unchanged.
+- Eight focused regression tests pass; six original cases fail on old code. Real-component browser baseline reproduces a jump from the saved 1800 px feed position to 701 px. Fixed Chromium and WebKit 26.5 each pass 136 assertions at phone, landscape and desktop sizes, including repeated Back, keyboard dismissal, drafts and interrupted navigation.
+- Final npm run check passed TypeScript, all 1,453 tests, lint (28 existing warnings/zero errors), build and prerender. Independent review found no blocker; screenshots inspected. WebKit uses synthetic native keyboard events, not a physical iPhone. Details and limits: docs/qa/community-comment-scroll-20261111.md.
+- Parent coordinated first release slot on current main 7d74d08. User authorized pushing tested fixes. Next: normal fast-forward publication, verify exact-commit CI and golfme.app, then clear the slot for the separate Following search fix.
+
 ## Golf-first purpose and boundaries — 2026-11-11 (integrated, release authorized)
 
 - Signup/login and intro explicitly say GolfMe is a golf community, not a dating app. Profiles lead with Invite to a round, keep Message secondary, and show playing style/availability ahead of the bio/gallery. Existing unsent-draft and block gates are unchanged.

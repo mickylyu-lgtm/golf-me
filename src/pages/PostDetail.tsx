@@ -74,13 +74,35 @@ export function PostDetail() {
     composerPageTopRef.current = rect ? rect.top + window.scrollY : null;
   }
 
+  // A reused detail route must never inherit the previous post's keyboard
+  // coordinates. This cleanup also forgets them when leaving comments.
+  useLayoutEffect(() => () => {
+    scrollYBeforeKeyboardRef.current = null;
+    composerPageTopRef.current = null;
+  }, [id]);
+
   // Layout effect, not a passive one: the scroll lock and the restore to the
   // saved position must land before the docked layout paints, or the
   // iOS-panned page could flash for a frame before snapping back.
   useLayoutEffect(() => {
-    if (!composerDocked) return;
-    const releaseScroll = lockPageScroll();
     const composerEl = composerRef.current;
+    if (!composerDocked) {
+      const restoreTo = scrollYBeforeKeyboardRef.current;
+      scrollYBeforeKeyboardRef.current = null;
+      composerPageTopRef.current = null;
+      if (restoreTo === null || !composerEl) return;
+      // Restore only after a mounted composer undocks, never from teardown:
+      // on Back, the router has already restored the feed's own position.
+      const frame = requestAnimationFrame(() => {
+        if (!composerEl.isConnected || composerRef.current !== composerEl) return;
+        const active = document.activeElement as HTMLElement | null;
+        if (focusMovedToOtherField(active, !!active && composerEl.contains(active))) return;
+        window.scrollTo(0, restoreTo);
+      });
+      // A quick Back, new post or keyboard reopen owns the next position.
+      return () => cancelAnimationFrame(frame);
+    }
+    const releaseScroll = lockPageScroll();
     // Line the composer's old spot up with the top of the docked bar, so
     // what was right above it stays visible right above the keyboard. The
     // page is put back where it was when the keyboard closes.
@@ -92,20 +114,11 @@ export function PostDetail() {
       const saved = scrollYBeforeKeyboardRef.current;
       if (saved !== null && Math.abs(window.scrollY - saved) > 1) window.scrollTo(0, saved);
     }
-    return () => {
-      releaseScroll();
-      const restoreTo = scrollYBeforeKeyboardRef.current;
-      scrollYBeforeKeyboardRef.current = null;
-      composerPageTopRef.current = null;
-      // Not when another field took the keyboard (it's revealed on its own).
-      const active = document.activeElement as HTMLElement | null;
-      if (focusMovedToOtherField(active, !!active && !!composerEl?.contains(active))) return;
-      if (restoreTo !== null) requestAnimationFrame(() => window.scrollTo(0, restoreTo));
-    };
+    return releaseScroll;
     // keyboardHeight is final when the composer docks (keyboardWillShow);
     // re-running on later height changes would re-scroll mid-typing.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [composerDocked]);
+  }, [composerDocked, id]);
 
   const post = id ? getPost(id) : undefined;
 
