@@ -102,7 +102,7 @@ language sql stable security definer set search_path='' as $$
 -- Real legacy triggers/helpers and prior endpoint, not reimplemented approximations.
 \ir ../../supabase/migrations/20261108150000_follow_notifications.sql
 \ir ../../supabase/migrations/20261111010730_profile_followers_visibility.sql
-\ir ../../supabase/migrations/20261111051406_private_social_controls.sql
+\ir ../../supabase/migrations/20261111082608_private_social_controls.sql
 insert into auth.users(id) select u(i) from generate_series(1,60) i;
 insert into public.profiles(id,name,username,avatar_initials) select u(i),'Fixture '||i,'fixture'||i,'FX' from generate_series(1,60) i;
 create table public.test_results(label text);

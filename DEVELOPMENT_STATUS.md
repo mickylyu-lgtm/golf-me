@@ -1,5 +1,12 @@
 # GolfMe — Development Status
 
+## Private social backend applied - 2026-11-11
+
+- Production backend applied and verified: reviewed migration 20261111051406_private_social_controls.sql was recorded as 20261111082608_private_social_controls.sql. Local filename and fixture include now match; SQL bytes are unchanged (SHA-256 69399931ce6f77e9ebbb829fc14729abd1f992a5bcf64c4237042f8b55ca657d). All 18 function bodies, ACLs, policies and schema were verified.
+- No migration-history repair or reapplication: the earlier manually installed history gap remains. Historical test manifest and source paths are preserved. Matching frontend release is authorized and pending final checks, push and deployment verification. The local-only entries below describe earlier checkpoints.
+- Keep the protective backend on any frontend rollback. Real Auth/PostgREST checks and device notification delivery are separate from synthetic UI checks.
+
+
 ## Profile stat grids and top mutual summary - 2026-11-11 (local only, release held)
 
 - Visual-only follow-up to local private-social checkpoint e9bce9f: own-profile summary and full reputation stats use readable tiles, with two columns on small browsed profiles and three on wider screens. The existing compact card/list reputation row is unchanged; the own Reputation detail screen shares the full grid.
