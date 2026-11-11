@@ -1264,6 +1264,7 @@ export const en = {
   "host.pickUpToPlayer": "Pick up to 1 confirmed player — we'll leave room for the rest.",
   "host.newGolfer": "New golfer",
   "host.hostLabel": "Host",
+  "host.roundLinkFailed": "Your round was posted, but linking it to the post could not be confirmed.",
   "host.postedFreshToast": "Your Golf Call is live!",
   "host.postedFillToast": "Your open spot is posted — we'll help you fill it.",
   "host.notesPlaceholderFresh": "Anything players should know — pace expectations, meeting spot, etc.",

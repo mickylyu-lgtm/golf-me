@@ -1,5 +1,11 @@
 # GolfMe — Development Status
 
+## User-flow scan fixes — 2026-11-11 (local, pending coordinated release)
+
+- Fixes delayed comment/reply responses overwriting drafts, course edits silently losing location/search eligibility, and real-account rounds not linking back to their source post. Includes account/post ownership checks, exact draft revisions, bounded best-effort linking, six-language partial-success copy and no changes to the database.
+- Regression and local synthetic browser coverage: `docs/qa/scan-user-flows-20261111.md`. Final aggregate check passed TypeScript, lint (26 existing warnings/zero errors), all 1,326 tests, build and prerender. Synthetic UI checks passed at 320/390/1440 px. Physical iPhone and real-write testing remain unverified; no production mutation was used for QA.
+- Isolated branch `fix/scan-user-flows-20261111`, based on main `f5d3329`. Integrate only after final independent review and check the then-current main to avoid colliding with other active releases. No push/deployment from this worktree yet.
+
 ## Private social backend applied - 2026-11-11
 
 - Production backend applied and verified: reviewed migration 20261111051406_private_social_controls.sql was recorded as 20261111082608_private_social_controls.sql. Local filename and fixture include now match; SQL bytes are unchanged (SHA-256 69399931ce6f77e9ebbb829fc14729abd1f992a5bcf64c4237042f8b55ca657d). All 18 function bodies, ACLs, policies and schema were verified.

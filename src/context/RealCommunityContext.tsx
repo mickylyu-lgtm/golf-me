@@ -482,11 +482,18 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
 
   const attachGolfCallToPost = useCallback(
     async (postId: string, callId: string) => {
-      const { error } = await supabase.from("community_posts").update({ golf_call_id: callId }).eq("id", postId);
+      if (!selfId) throw new Error("Not signed in.");
+      const { data, error } = await supabase.from("community_posts").update({ golf_call_id: callId })
+        .eq("id", postId).eq("author_id", selfId).is("golf_call_id", null).select("id").maybeSingle();
       if (error) throw new Error(error.message);
-      await refetch();
+      if (!data) throw new Error("The post could not be linked.");
+      if (currentSelfRef.current === selfId) {
+        setPostRows((prev) => prev.map((post) => post.id === postId ? { ...post, golf_call_id: callId } : post));
+        // A confirmed UPDATE must not wait for an unrelated full-feed read.
+        void refetch().catch((err) => console.error("GolfMe: post linked but feed refresh failed.", err));
+      }
     },
-    [refetch],
+    [refetch, selfId],
   );
 
   const isPostUpvoted = useCallback((postId: string) => postVotes.some((v) => v.post_id === postId && v.voter_id === selfId), [postVotes, selfId]);

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { EyeOff, MoreHorizontal, ShieldAlert, ShieldCheck, ShieldX, ThumbsUp, Trash2 } from "lucide-react";
 import { useModeration } from "../../context/ModerationContext";
@@ -12,7 +12,8 @@ import { Avatar } from "../ui/Avatar";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { ReportModal } from "../trust/ReportModal";
 import { formatRelativeTime } from "../../lib/format";
-import { commentReplyDraftKey, loadChatDraft, saveChatDraft } from "../../lib/chatDraft";
+import { commentReplyDraftKey } from "../../lib/chatDraft";
+import { useCommentDraft } from "../../lib/useCommentDraft";
 import { useLocale } from "../../i18n/LocaleContext";
 import { isObjectionableContentError } from "../../lib/objectionableContent";
 import { isSendEnter } from "../../lib/isImeComposing";
@@ -33,7 +34,7 @@ export function CommentItem({ comment, postId, replies }: CommentItemProps) {
   const { t, locale } = useLocale();
   const navigate = useNavigate();
   const [replyOpen, setReplyOpen] = useState(false);
-  const [replyText, setReplyText] = useState(() => loadChatDraft(commentReplyDraftKey(comment.id)));
+  const { text: replyText, submitting: sending, update: updateReplyText, submit: submitDraft } = useCommentDraft(currentUser.id, commentReplyDraftKey(comment.id));
   const [menuOpen, setMenuOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
@@ -41,10 +42,6 @@ export function CommentItem({ comment, postId, replies }: CommentItemProps) {
   const moderation = useModeration();
   const realCommunity = useRealCommunity();
   const [removeOpen, setRemoveOpen] = useState(false);
-  // In-flight guard: a fast double tap / double Enter must post once. A ref,
-  // not only state, so a second press before the re-render is refused too.
-  const sendingRef = useRef(false);
-  const [sending, setSending] = useState(false);
 
   const author = getGolfer(comment.authorId);
   if (!author || isBlocked(comment.authorId)) return null;
@@ -54,23 +51,11 @@ export function CommentItem({ comment, postId, replies }: CommentItemProps) {
   const upvoted = isCommentUpvoted(comment.id);
   const isReply = Boolean(comment.parentCommentId);
 
-  function updateReplyText(value: string) {
-    setReplyText(value);
-    saveChatDraft(commentReplyDraftKey(comment.id), value);
-  }
-
   async function submitReply() {
-    if (!replyText.trim() || sendingRef.current) return;
-    sendingRef.current = true;
-    setSending(true);
-    const text = replyText;
-    updateReplyText("");
-    setReplyOpen(false);
-    try {
-      await createComment(postId, text, comment.id);
-    } catch (err) {
-      // Put the reply back (open, with its draft) so it can be edited and resent.
-      updateReplyText(text);
+    const result = await submitDraft((text) => createComment(postId, text, comment.id));
+    if (result.status === "sent") setReplyOpen(false);
+    if (result.status === "failed") {
+      const err = result.error;
       setReplyOpen(true);
       showToast(
         isObjectionableContentError(err)
@@ -82,9 +67,6 @@ export function CommentItem({ comment, postId, replies }: CommentItemProps) {
             : "Couldn't post your reply. Please try again.",
         "warning",
       );
-    } finally {
-      sendingRef.current = false;
-      setSending(false);
     }
   }
 

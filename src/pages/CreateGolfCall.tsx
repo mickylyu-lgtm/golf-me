@@ -34,6 +34,7 @@ import { parseHostPrefill } from "../lib/hostPrefill";
 import { isObjectionableContentError } from "../lib/objectionableContent";
 import { isAccountSuspendedError } from "../lib/moderation";
 import { tapHaptic } from "../lib/tapFeedback";
+import { linkCreatedRoundToPost } from "../lib/createdRoundPost";
 
 const BOOKING_SOURCES = ["Course Website", "GolfNow", "Lightspeed / Chronogolf", "Phone Reservation", "Other"] as const;
 
@@ -385,12 +386,12 @@ export function CreateGolfCall() {
         notes: notes.trim() || undefined,
         additionalJoinedGolferIds: fillMode ? friendIds : undefined,
       });
-      if (fromPostId) attachGolfCallToPost(fromPostId, call.id).catch((err) => console.error("GolfMe: failed to attach round to post.", err));
+      const postLink = await linkCreatedRoundToPost(fromPostId, call.id, attachGolfCallToPost);
       tapHaptic("success");
       track("first_round_hosted");
       clearHostRoundDraft();
-      showToast(fillMode ? t("host.postedFillToast") : t("host.postedFreshToast"), "success");
-      navigate(fromPostId ? `/community/${fromPostId}` : `/golf-calls/${call.id}`);
+      showToast(postLink === "failed" ? t("host.roundLinkFailed") : fillMode ? t("host.postedFillToast") : t("host.postedFreshToast"), postLink === "failed" ? "warning" : "success");
+      navigate(postLink === "linked" ? `/community/${fromPostId}` : `/golf-calls/${call.id}`);
       return;
     }
 
@@ -436,9 +437,11 @@ export function CreateGolfCall() {
           );
         }
       }
-      showToast(t("host.postedFreshToast"), "success");
-      // justHosted: the round page offers to share it right away.
-      navigate(`/golf-calls/${call.id}`, { state: { justHosted: true } });
+      const postLink = await linkCreatedRoundToPost(fromPostId, call.id, attachGolfCallToPost);
+      showToast(postLink === "failed" ? t("host.roundLinkFailed") : t("host.postedFreshToast"), postLink === "failed" ? "warning" : "success");
+      // Only return to the post when its link was confirmed. A linking
+      // failure still opens the successfully created round, never a retry.
+      navigate(postLink === "linked" ? `/community/${fromPostId}` : `/golf-calls/${call.id}`, { state: { justHosted: true } });
     } catch (err) {
       setSubmitting(false);
       showToast(

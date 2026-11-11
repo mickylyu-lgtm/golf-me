@@ -5,6 +5,18 @@
 // restores exactly what was typed, same idea as onboardingDraft.ts but
 // keyed per-composer instead of a single slot.
 const DRAFTS_KEY = "golfme:chatDrafts";
+// In-memory tokens scope late async completions to the exact persisted
+// draft. Clearing on sign-out invalidates every outstanding token.
+let generation = 0;
+const revisions = new Map<string, number>();
+const listeners = new Set<(key: string | null) => void>();
+export function chatDraftVersion(key: string): string { return `${generation}:${revisions.get(key) ?? 0}`; }
+export function observeChatDrafts(listener: (key: string | null) => void): () => void {
+  listeners.add(listener);
+  return () => { listeners.delete(listener); };
+}
+function notifyDrafts(key: string | null): void { for (const listener of listeners) listener(key); }
+
 
 function readAll(): Record<string, string> {
   if (typeof window === "undefined") return {};
@@ -30,18 +42,23 @@ export function saveChatDraft(key: string, text: string): void {
   if (text) drafts[key] = text;
   else delete drafts[key];
   writeAll(drafts);
+  revisions.set(key, (revisions.get(key) ?? 0) + 1);
+  notifyDrafts(key);
 }
 
 // Drafts aren't stored per account, so signing out (or switching between
 // the demo and a real account) clears them: on a shared phone the next
 // account must not find someone else's half-typed message.
 export function clearChatDrafts(): void {
+  generation += 1;
+  revisions.clear();
   if (typeof window === "undefined") return;
   try {
     window.localStorage.removeItem(DRAFTS_KEY);
   } catch {
     // Storage blocked: there were no saved drafts either.
   }
+  notifyDrafts(null);
 }
 
 export function dmDraftKey(golferId: string): string {

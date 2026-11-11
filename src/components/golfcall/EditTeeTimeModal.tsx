@@ -4,6 +4,8 @@ import { useRealRounds } from "../../context/RealRoundsContext";
 import { useToast } from "../../context/ToastContext";
 import { useLocale } from "../../i18n/LocaleContext";
 import { CourseAutocomplete } from "./CourseAutocomplete";
+import { LocationPicker } from "../location/LocationPicker";
+import { hasRoundCourseLocation } from "../../lib/roundCourseLocation";
 import { Button } from "../ui/Button";
 import { Modal } from "../ui/Modal";
 import { inputClass, labelClass } from "../ui/FormControls";
@@ -38,13 +40,16 @@ export function EditTeeTimeModal({ call, onClose }: EditTeeTimeModalProps) {
   const [date, setDate] = useState(() => toDateInputValue(call.dateISO));
   const [timeLabel, setTimeLabel] = useState(call.timeLabel);
   const [saving, setSaving] = useState(false);
+  const [townPickerOpen, setTownPickerOpen] = useState(false);
+  const [courseTownLabel, setCourseTownLabel] = useState<string | null>(null);
 
   const hasProof = call.teeTimeSource === "user_verified";
   // Server model: a booked round's booking becomes "changed" on a real edit.
   const marksChanged = call.bookingStatus === "booked";
   // Moving a round into the past would make it instantly unjoinable.
   const startsInPast = isPastRoundStart(date, timeLabel);
-  const canSave = Boolean(course.trim() && areaLabel.trim() && date && timeLabel.trim()) && !startsInPast;
+  const courseHasLocation = hasRoundCourseLocation(courseLat, courseLng);
+  const canSave = Boolean(course.trim() && areaLabel.trim() && date && timeLabel.trim()) && courseHasLocation && !startsInPast;
 
   async function handleSave() {
     if (!canSave || saving) return;
@@ -99,16 +104,29 @@ export function EditTeeTimeModal({ call, onClose }: EditTeeTimeModalProps) {
             onChange={(v) => {
               setCourse(v);
               setCourseId(null);
-              setCourseLat(null);
-              setCourseLng(null);
+              if (!courseTownLabel || !v.trim()) {
+                setCourseLat(null);
+                setCourseLng(null);
+              }
+              if (!v.trim()) setCourseTownLabel(null);
             }}
             onPickKnownCourse={(pick) => {
+              setCourseTownLabel(null);
               if (pick.area) setAreaLabel(pick.area);
               setCourseId(pick.id ?? null);
               setCourseLat(pick.lat ?? null);
               setCourseLng(pick.lng ?? null);
             }}
           />
+          {course.trim() && !courseHasLocation && (
+            <div className="mt-3 flex flex-col gap-2 rounded-xl bg-amber-50 p-3">
+              <p className="text-xs text-amber-800">{t("host.courseTownPrompt")}</p>
+              <Button size="sm" variant="outline" onClick={() => setTownPickerOpen(true)}>{t("host.chooseCourseTown")}</Button>
+            </div>
+          )}
+          {courseTownLabel && (
+            <button className="mt-2 text-xs font-semibold text-fairway-700" onClick={() => setTownPickerOpen(true)}>{courseTownLabel}</button>
+          )}
         </div>
         <div>
           <label className={labelClass}>{t("host.generalArea")}</label>
@@ -143,6 +161,19 @@ export function EditTeeTimeModal({ call, onClose }: EditTeeTimeModalProps) {
           </div>
         </div>
         {startsInPast && <p className="-mt-2 text-xs font-medium text-red-600">{t("host.pastStartError")}</p>}
+        {townPickerOpen && (
+          <LocationPicker title={t("host.chooseCourseTown")} onClose={() => setTownPickerOpen(false)} onSelect={(area) => {
+            if (!area.coords || !hasRoundCourseLocation(area.coords.lat, area.coords.lng)) {
+              showToast(t("autoMatch.locationNoCoords"), "warning");
+              return;
+            }
+            setCourseLat(area.coords.lat);
+            setCourseLng(area.coords.lng);
+            setAreaLabel(area.label);
+            setCourseTownLabel(area.label);
+            setTownPickerOpen(false);
+          }} />
+        )}
       </div>
     </Modal>
   );

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { useData } from "../context/DataContext";
@@ -12,7 +12,8 @@ import { Avatar } from "../components/ui/Avatar";
 import { PostCard } from "../components/community/PostCard";
 import { CommentItem } from "../components/community/CommentItem";
 import { CoachReviewSection } from "../components/community/CoachReviewSection";
-import { loadChatDraft, postCommentDraftKey, saveChatDraft } from "../lib/chatDraft";
+import { postCommentDraftKey } from "../lib/chatDraft";
+import { useCommentDraft } from "../lib/useCommentDraft";
 import { isObjectionableContentError } from "../lib/objectionableContent";
 import { isAccountSuspendedError } from "../lib/moderation";
 import { useKeyboardHeight } from "../lib/useKeyboardHeight";
@@ -29,8 +30,7 @@ export function PostDetail() {
   const { hasLoaded: communityLoaded, loadError: communityLoadError, isLoading: communityLoading, retry: retryCommunity } = useRealCommunity();
   const { showToast } = useToast();
   const { t } = useLocale();
-  const [commentText, setCommentText] = useState(() => (id ? loadChatDraft(postCommentDraftKey(id)) : ""));
-  const [submitting, setSubmitting] = useState(false);
+  const { text: commentText, submitting, update: updateCommentText, submit: submitDraft } = useCommentDraft(currentUser.id, postCommentDraftKey(id ?? ""));
 
   // iOS keyboard (capacitor.config.ts Keyboard resize:"body"): that mode
   // only shrinks document.body's inline height -- the WebView, 100dvh and
@@ -109,19 +109,6 @@ export function PostDetail() {
 
   const post = id ? getPost(id) : undefined;
 
-  // Following a link straight from one post to another reuses this same
-  // mounted component (only the `id` route param changes) — without this,
-  // whatever was typed for the previous post would carry over into the new
-  // one's comment box instead of that post's own draft.
-  useEffect(() => {
-    setCommentText(id ? loadChatDraft(postCommentDraftKey(id)) : "");
-  }, [id]);
-
-  function updateCommentText(value: string) {
-    setCommentText(value);
-    if (id) saveChatDraft(postCommentDraftKey(id), value);
-  }
-
   // Opened cold (shared link, refresh) the feed may not have loaded yet —
   // wait rather than flash "not found".
   if (!post && !communityLoaded) return <GolfMeLoader className="py-12" />;
@@ -146,13 +133,9 @@ export function PostDetail() {
 
   async function submitComment() {
     if (!commentText.trim() || !post || submitting) return;
-    setSubmitting(true);
-    const text = commentText;
-    updateCommentText("");
-    try {
-      await createComment(post.id, text);
-    } catch (err) {
-      updateCommentText(text);
+    const result = await submitDraft((text) => createComment(post.id, text));
+    if (result.status === "failed") {
+      const err = result.error;
       showToast(
         isObjectionableContentError(err)
           ? t("moderation.objectionableContent")
@@ -163,8 +146,6 @@ export function PostDetail() {
               : "Couldn't post your comment. Please try again.",
         "warning",
       );
-    } finally {
-      setSubmitting(false);
     }
   }
 
@@ -181,7 +162,7 @@ export function PostDetail() {
 
       <CoachReviewSection post={post} />
 
-      {!post.golfCallId && (
+      {post.authorId === currentUser.id && !post.golfCallId && (
         <Button
           variant="outline"
           onClick={() =>
