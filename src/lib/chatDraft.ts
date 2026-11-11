@@ -13,14 +13,7 @@ const listeners = new Set<(key: string | null) => void>();
 export function chatDraftVersion(key: string): string { return `${generation}:${revisions.get(key) ?? 0}`; }
 export function observeChatDrafts(listener: (key: string | null) => void): () => void {
   listeners.add(listener);
-  const onStorage = (event: StorageEvent) => {
-    if (event.key === DRAFTS_KEY || event.key === null) listener(null);
-  };
-  if (typeof window !== "undefined") window.addEventListener?.("storage", onStorage);
-  return () => {
-    listeners.delete(listener);
-    if (typeof window !== "undefined") window.removeEventListener?.("storage", onStorage);
-  };
+  return () => { listeners.delete(listener); };
 }
 function notifyDrafts(key: string | null): void { for (const listener of listeners) listener(key); }
 
