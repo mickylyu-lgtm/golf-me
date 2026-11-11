@@ -5,6 +5,7 @@ import { useLocale } from "../i18n/LocaleContext";
 import { EmptyState } from "../components/ui/EmptyState";
 import { Button } from "../components/ui/Button";
 import { PostCard } from "../components/community/PostCard";
+import { PostFeedGrid } from "../components/community/PostFeedGrid";
 import { goBack } from "../lib/goBack";
 
 export function MyPosts() {
@@ -47,11 +48,11 @@ export function MyPosts() {
           }
         />
       ) : (
-        <div className="flex flex-col gap-3 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4">
+        <PostFeedGrid>
           {myPosts.map((post) => (
             <PostCard key={post.id} post={post} />
           ))}
-        </div>
+        </PostFeedGrid>
       )}
     </div>
   );

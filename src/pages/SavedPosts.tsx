@@ -3,6 +3,7 @@ import { ArrowLeft, Bookmark } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { EmptyState } from "../components/ui/EmptyState";
 import { PostCard } from "../components/community/PostCard";
+import { PostFeedGrid } from "../components/community/PostFeedGrid";
 import { goBack } from "../lib/goBack";
 import { useLocale } from "../i18n/LocaleContext";
 
@@ -37,11 +38,11 @@ export function SavedPosts() {
           }
         />
       ) : (
-        <div className="flex flex-col gap-3 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4">
+        <PostFeedGrid>
           {savedPostsList.map((post) => (
             <PostCard key={post.id} post={post} />
           ))}
-        </div>
+        </PostFeedGrid>
       )}
     </div>
   );

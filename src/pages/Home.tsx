@@ -8,6 +8,7 @@ import { useLocale } from "../i18n/LocaleContext";
 import { useTutorial, useTutorialEligibility } from "../context/TutorialContext";
 import { GolfCallCard } from "../components/golfcall/GolfCallCard";
 import { PostCard } from "../components/community/PostCard";
+import { PostFeedGrid } from "../components/community/PostFeedGrid";
 import { AddToHomeScreenPrompt } from "../components/layout/AddToHomeScreenPrompt";
 import { Button } from "../components/ui/Button";
 import { Badge } from "../components/ui/Badge";
@@ -409,16 +410,18 @@ export function Home() {
           </div>
         </div>
         {recentPosts.length > 0 ? (
-          <div className="flex flex-col gap-3 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4 xl:max-[1399px]:grid-cols-1">
-            {recentPosts.map((post) => (
-              <PostCard key={post.id} post={post} />
-            ))}
+          <div className="flex flex-col gap-3 lg:gap-0">
+            <PostFeedGrid className="xl:max-[1399px]:grid-cols-1">
+              {recentPosts.map((post) => (
+                <PostCard key={post.id} post={post} />
+              ))}
+            </PostFeedGrid>
             {morePosts ? (
-              <div ref={postsEndRef} aria-hidden="true" className="h-px lg:col-span-full" />
+              <div ref={postsEndRef} aria-hidden="true" className="h-px" />
             ) : (
               <button
                 onClick={() => navigate("/community")}
-                className="mt-1 flex min-h-11 items-center justify-center gap-1.5 self-center rounded-full px-4 text-sm font-semibold text-fairway-700 transition-colors duration-200 hover:bg-fairway-50 hover:text-fairway-800 lg:col-span-full lg:justify-self-center"
+                className="mt-1 flex min-h-11 items-center justify-center gap-1.5 self-center rounded-full px-4 text-sm font-semibold text-fairway-700 transition-colors duration-200 hover:bg-fairway-50 hover:text-fairway-800"
               >
                 {t("community.seeAllPosts")} <ArrowRight size={14} aria-hidden="true" />
               </button>

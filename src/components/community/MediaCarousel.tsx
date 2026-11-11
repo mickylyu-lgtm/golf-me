@@ -223,32 +223,37 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0, o
   // taller or wider is trimmed evenly to the limit, as Instagram does.
   // Until the first photo's size is known the box is 4:5 (the common
   // phone-photo shape), and sizes are remembered so a revisit never jumps.
-  const firstPhoto = variant === "card" && !wide ? media.find((m) => m.type !== "video") : undefined;
-  const firstPhotoSrc = firstPhoto ? firstPhoto.url : undefined;
-  const [photoAspect, setPhotoAspect] = useState<number | null>(() => (firstPhotoSrc ? (photoAspectCache.get(firstPhotoSrc) ?? null) : null));
+  // Desktop follows the selected photo's own proportions. A fixed 576px
+  // contain box left broad gray bands around landscape photos. Phone feed
+  // cropping stays unchanged; the fullscreen viewer still shows everything.
+  const sizingItem = variant === "card" ? (wide ? media[activeIndex] : media.find((m) => m.type !== "video")) : undefined;
+  const photoSrc = sizingItem?.type !== "video" ? sizingItem?.url : undefined;
+  const [loadedPhoto, setLoadedPhoto] = useState<{ src: string; aspect: number } | null>(null);
+  // Tag async measurements with their source, so fast album changes never
+  // apply the previous photo's dimensions to the newly selected one.
+  const photoAspect = photoSrc
+    ? (photoAspectCache.get(photoSrc) ?? (loadedPhoto?.src === photoSrc ? loadedPhoto.aspect : null))
+    : null;
   useEffect(() => {
-    if (!firstPhotoSrc) return;
-    const cached = photoAspectCache.get(firstPhotoSrc);
-    if (cached) {
-      setPhotoAspect(cached);
-      return;
-    }
+    if (!photoSrc || photoAspectCache.has(photoSrc)) return;
     let live = true;
     const probe = new Image();
     probe.onload = () => {
       if (!probe.naturalWidth || !probe.naturalHeight) return;
-      const a = probe.naturalWidth / probe.naturalHeight;
-      photoAspectCache.set(firstPhotoSrc, a);
-      if (live) setPhotoAspect(a);
+      const aspect = probe.naturalWidth / probe.naturalHeight;
+      photoAspectCache.set(photoSrc, aspect);
+      if (live) setLoadedPhoto({ src: photoSrc, aspect });
     };
-    probe.src = firstPhotoSrc;
+    probe.src = photoSrc;
     return () => {
       live = false;
     };
-  }, [firstPhotoSrc]);
-  const boxAspect = feedPhotoBoxAspect(photoAspect);
-  const itemClass =
-    variant !== "card" ? "" : wide ? "h-[min(70vh,36rem)] w-full shrink-0 snap-center object-contain" : "h-full w-full shrink-0 snap-center object-cover";
+  }, [photoSrc]);
+  const fitCardToPhoto = variant === "card" && (!wide || !!photoSrc);
+  const boxAspect = wide ? (photoAspect ?? FEED_PHOTO_MIN_ASPECT) : feedPhotoBoxAspect(photoAspect);
+  const itemClass = variant !== "card" ? "" : wide
+    ? `${fitCardToPhoto ? "h-full" : "h-[min(70vh,36rem)]"} w-full shrink-0 snap-center object-contain`
+    : "h-full w-full shrink-0 snap-center object-cover";
 
   return (
     <div className="relative">
@@ -264,7 +269,7 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0, o
         // and briefly reporting the slides passed on the way to the target.
         // Native touch momentum and scroll-snap remain browser-managed.
         className={`no-scrollbar flex w-full snap-x snap-mandatory overflow-x-auto ${variant === "card" ? "rounded-xl" : "h-dvh"}`}
-        style={variant === "card" && !wide ? { aspectRatio: String(boxAspect) } : undefined}
+        style={fitCardToPhoto ? { aspectRatio: String(boxAspect) } : undefined}
       >
         {media.map((item, i) =>
           item.type === "video" ? (

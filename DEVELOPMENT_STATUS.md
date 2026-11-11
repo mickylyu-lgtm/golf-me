@@ -7,6 +7,14 @@ Last updated: 2026-11-09 (**Desktop (Mac browser) layout**: split sign-in, wider
 Note: Phases between Phase 20/21 (see below) and Phase 22 span roughly 31 commits (2026-09-16 through 2026-09-21) that also never got a numbered write-up as they landed — Phase 22 below reconstructs them from `git log`/code review (that session's own commit messages are unusually detailed, so this is a faithful summary, not a guess) rather than live session narration. Older gap, still not backfilled: Phases between Phase 6 and Phase 20 (chat keyboard/Capacitor Keyboard native linking, floating swipeable BottomNav + auto-collapse + centering fixes, tee-time booking fallback hero image, and everything else through 2026-09-15) — see `git log` for that range (commits from "Prefer GolfCourseAPI v1.1 coordinates..." through "Floating pill bottom nav with press-and-slide tab selection, haptics, Caddie unify").
 
 
+## Compact Community desktop feeds - 2026-11-11 (local only)
+
+- Branch `fix/community-desktop-layout-20261111` starts from clean preview `c5bb6c0`. It contains no followers feature or privacy-held changes. Claude's active checkout is untouched.
+- Fixed the Home Community feed shown in the screenshot, plus Community, My Posts and Saved Posts. Unequal-height cards pack with 16px spacing without CSS columns, dense reordering, or changing chronological DOM/keyboard order. Home's narrow-desktop one-column breakpoint and load-more/footer behavior are preserved.
+- Desktop/tablet card photos now use the selected photo's natural proportions, removing the fixed-height gray bands without cropping. Phone feed aspect limits, fullscreen controls, and video sizing are unchanged.
+- Verification: 44 synthetic Chromium browser checks passed across 390-1920px, including mixed albums, keyboard order, asynchronous height changes, Home pagination and a 168-card feed. Eight added regressions cover layout spans, integrations and photo ratios. See `docs/qa/community-desktop-layout-20261111.md` for the full gate and screenshots.
+- Local only: no push, deployment, production data, backend/migration or native-shell change. Safari and physical-device checks remain pending. Review before integrating into the clean preview.
+
 ## Completed fixes preview - 2026-11-11 (preview branch only)
 
 - `preview/completed-fixes-20261111` is based on verified remote `main` `04b30e3` and contains only round-chat switch reset (`294e06c`), Community photo scrolling (`48e3db0`), and compact inline message editing (cherry-picked `30106bb` as `b4d0e64`). The older compact-edit base was already an ancestor of main; unrelated work was not merged.

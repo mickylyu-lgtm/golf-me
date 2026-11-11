@@ -11,6 +11,7 @@ import { LoadErrorState, StaleDataNotice } from "../components/ui/LoadStates";
 import { GolfMeLoader } from "../components/loading/GolfMeLoader";
 import { listView } from "../lib/loadStatus";
 import { PostCard } from "../components/community/PostCard";
+import { PostFeedGrid } from "../components/community/PostFeedGrid";
 import { rankForYou, rankFollowing, rankNearby } from "../lib/communityFeed";
 import type { FeedContext } from "../lib/communityFeed";
 import { goBack } from "../lib/goBack";
@@ -142,12 +143,12 @@ export function Community() {
           }
         />
       ) : (
-        // lg+: two posts per row.
-        <div className="flex flex-col gap-3 lg:grid lg:grid-cols-2 lg:items-start lg:gap-4">
+        // Compact desktop columns retain the feed's DOM and reading order.
+        <PostFeedGrid>
           {feed.map((post) => (
             <PostCard key={post.id} post={post} />
           ))}
-        </div>
+        </PostFeedGrid>
       )}
     </div>
   );
