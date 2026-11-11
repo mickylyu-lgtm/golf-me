@@ -1,5 +1,12 @@
 # GolfMe — Development Status
 
+## Community video: platform playback controls — 2026-11-11 (release authorized, checks passed)
+
+- Tapping a swing or gallery video uses the shared native player lifecycle: platform controls and sound, no loop while open, current feed position retained, muted preview restored on exit. Accessible tap buttons replace bare video click targets. No Caddie analysis, media URL/security, backend, database or native-shell changes.
+- Refused/unavailable fullscreen opens a controlled in-app viewer with a timeline, play/pause and sound instead of the old tap/hold-only overlay. Inactive slides are inert and stop playing; every detached video pauses. Native dialog cancellation handles Escape from browser-owned media controls, retains modal-stack/scroll-lock behavior, and returns focus to the opener. Timeline gestures cannot dismiss the viewer. Close is 44 px and safe-area-aware.
+- Validation: 15 new native-session tests; npm run check passed all 1,409 tests, TypeScript, lint without errors, build and prerender. Local synthetic browser checks passed at 320×844, 390×844, 1440×844 and 844×390, including refused fullscreen, quick exit, timeline seeking, keyboard focus, mixed galleries, nested fullscreen and photo-sheet dismissal. Screenshots use a generated test clip, not a physical iPhone.
+- Independent review approved the exact player source. Integrated rate-limit main b6161d9 without player-source changes; final aggregate/UI reruns passed. User reviewed screenshots and authorized pushing. Next: coordinated fast-forward publication and exact-commit CI/production verification. Physical iPhone/WebKit playback, PiP/AirPlay and safe-area/rotation feel remain device checks. No push/deployment from this worktree yet. See docs/qa/community-video-player.md.
+
 ## Shared request limits — 2026-11-11 (database applied, service release in progress)
 
 - Added private database-backed per-account budgets for course/place search, uncached course enrichment, course photos/details, Caddie translation and chat-video attempts. Identity is server-derived; concurrent replicas share atomic counters. 429 includes Retry-After; database/migration failure blocks expensive work with 503. No paid service or new dependency.

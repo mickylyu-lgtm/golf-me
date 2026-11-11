@@ -1399,3 +1399,14 @@ html.gm-hold-lock textarea {
 :root.dark .gm-handicap--forest { --gm-hcp-ink: #8fd6a8; }
 :root.dark .gm-handicap--sage { --gm-hcp-ink: #a7b7ad; }
 :root.dark .gm-handicap--neutral { --gm-hcp-ink: #98a59e; }
+
+
+/* A cropped feed video must show its whole frame in the browser's native
+   fullscreen player. iPhone's OS player handles its own geometry. */
+video[data-native-video-player]:fullscreen {
+  width: 100% !important;
+  height: 100% !important;
+  position: static !important;
+  transform: none !important;
+  object-fit: contain !important;
+}
