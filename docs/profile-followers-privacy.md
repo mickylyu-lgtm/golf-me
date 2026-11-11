@@ -1,6 +1,6 @@
 # Profile followers: local privacy hardening
 
-Status: local implementation, source review and isolated PostgreSQL authorization tests passed. No remote/shared migration applied. Do not release the earlier broad-read prototype.
+Status: user manually installed the reviewed backend functions in production on 2026-11-11; read-only verification matched the final definitions and grants exactly. Frontend integration is local and not pushed. Do not release the earlier broad-read prototype. The rollout record below supersedes historical NOT APPLIED wording in the unchanged migration artifact.
 
 ## Visible rows and counts
 
@@ -22,7 +22,7 @@ The endpoint reuses the existing narrow public-profile projection inside the sam
 
 The client uses only this versioned endpoint. Missing function, permission, transport, malformed response, inconsistent multi-page counts, duplicate identities or truncated pages fail closed. No raw follows/table/public-profile fallback is allowed. Account/target/block/follow changes invalidate late results; reopening or refocusing the sheet rechecks permission. Offset pages are independently authorized snapshots; same-count membership swaps between pages are not detected. This is not a realtime moderation subscription or a whole-system cache revocation mechanism.
 
-Existing broad authenticated SELECT on follows and supplied-id golfer_public_profiles remain separate legacy surfaces. This change prevents new UI exposure; it does not claim to close those pre-existing API paths.
+Existing broad authenticated SELECT on profiles/follows and supplied-id golfer_public_profiles remain separate legacy surfaces. This change prevents new UI exposure; it does not claim to close those pre-existing API paths.
 
 ## Validation and rollout gates
 
@@ -31,6 +31,8 @@ Existing broad authenticated SELECT on follows and supplied-id golfer_public_pro
 - Independent source review found no required SQL changes. Isolated PostgreSQL role/grant tests now pass; full Supabase integration remains untested.
 - `scripts/staging/profile-followers-authz.sql` is a rollback-only synthetic suite. It refuses any database except an EMPTY disposable database named exactly `golfme_followers_test`. It creates fake schemas, roles and identities, applies the local function definitions inside the transaction, tests authenticated/anon behavior, then rolls everything back.
 - SQL suite PASSED on PostgreSQL 17.11 in a disposable cloud workspace, using single-user mode because the runtime blocked sockets. Explicit authenticated/anon role tests passed; rollback and non-superuser role switching were verified. No network or live database connection. See profile-followers-local-test.md for exact scope and evidence. The projection fixture mirrors the existing auth/block contract but cannot validate deployed schema/ownership/configuration.
-- Next, validate on a separately authorized staging backend with its full migrations, then run real authenticated client and physical-iOS tests. Obtain explicit backend rollout/publication approval before applying any migration, pushing a deploy branch, or deploying. Never run the fixture script against a linked/production project.
+- Integrated on current main f0a6b39: 1,283 tests passed, no skips/failures; typecheck/lint/build/prerender and synthetic browser checks passed. Current Caddie/API packaging is unchanged. Independent review found no actionable integration regression.
+- Read-only production smoke using the existing approved test account passed Auth identity and PostgREST count/page/error checks. Anonymous endpoint access is denied; the private helper is not exposed. Exact new-client helper execution is pending session-use permission. This is not full-schema Supabase staging, cross-account mutation testing or visual/physical-device verification.
+- No staging branch exists and no full-schema Supabase staging run is claimed. Never run the synthetic fixture against a linked/production project. The user authorized the frontend push when ready; no additional migration or history repair is authorized.
 
-Migration: `supabase/migrations/20261111010730_profile_followers_visibility.sql` (CLI-generated, unapplied). Rollback commands are in its header.
+Migration artifact: `supabase/migrations/20261111010730_profile_followers_visibility.sql` (CLI-generated; user manually applied its reviewed installer). Version 20261111010730 is absent from CLI migration history. Do not replay it or run CLI db push until separately authorized history reconciliation. The source file is preserved byte-for-byte, including its historical status comment. Rollback commands are in its header; rollback makes the client fail closed. CI and Vercel build scripts do not run migrations.

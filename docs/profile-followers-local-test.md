@@ -29,7 +29,7 @@ While that process is running, open http://127.0.0.1:5192/profile on MGPC. It ca
 
 Independent browser check passed without external test-harness seeding: own/other counts, mutuals, search, navigation, Escape and 320/390/1440px layouts. No page errors or successful external responses. Windows localhost access also passed.
 
-## Remaining limits before release
+## Original isolated-test limits
 
 The standalone SQL run proves the filtered SQL and role/grant assertions in the synthetic schema, not Supabase Auth/PostgREST wiring, full migration ordering, real concurrent requests, or physical iOS. The UI demo exercises the demo context, not the real API path. These two checks complement each other; neither is a live end-to-end staging test.
 
@@ -42,3 +42,11 @@ Read-only metadata on the live project confirmed PostgreSQL 17.6 and matching co
 The synthetic suite passed again with matching default grants and a BYPASSRLS service_role; actual service-role execution is denied. A fresh test cluster used postgres as owner. The atomic SQL Editor wrapper also passed ownership/security/search_path/exact-ACL assertions, a second install safely failed on existing functions, and rollback removed only the two new functions while preserving prerequisite tables. Full npm run check remains 1,251 tests: 1,248 passed, 3 existing skips, no failures.
 
 The installer/rollback deliverables are copies in artifacts.local, with BEGIN/COMMIT and metadata verification. No deployment or remote migration has occurred. Manual SQL Editor application does not update CLI migration history; reconcile version 20261111010730 on the correct project before a future CLI db push. Full Supabase Auth/PostgREST staging remains a release gate.
+
+## Subsequent production-read and integration checks
+
+The user later ran the reviewed installer in production. Read-only verification matched both function bodies and all signatures/ownership/security/search_path/grants. No migration-history row was added. Do not replay the installer or repair history without separate approval.
+
+The existing approved test-account session passed Auth and PostgREST read-only checks: matching identity; count-only and paged v1 responses; visible totals/mutuals; unique narrow profile rows; empty end page with stable totals; generic unavailable and parameter-bound errors. Anonymous endpoint access is denied and the private helper has no exposed route. No business data was modified. This is production read-only smoke, not full Supabase staging.
+
+The integrated frontend on main f0a6b39 passed npm run check (1,283/1,283 tests; no skips/failures), plus the synthetic UI harness at 320/390/1440px. Typecheck/lint/build/prerender passed with 26 existing lint warnings. An independent integration review found no actionable regression, and current Caddie/API code remained unchanged. Exact new-client helper execution with the approved session is pending explicit session-use permission. Visual new-UI real-account, full-schema staging, cross-account mutations and physical-iOS checks remain unverified. No frontend push has occurred at this milestone.
