@@ -1,11 +1,18 @@
 # GolfMe — Development Status
 
-## Community comments: preserve feed position — 2026-11-11 (tested, release authorized)
+## Followers/Following search: stable keyboard layout — 2026-11-11 (tested, release authorized)
+
+- Both connection tabs use an opt-in SearchModal: search stays anchored while results resize smoothly above the native keyboard. Filtering/empty results cannot resize the sheet. Intentional list scrolling is retained. Default modals, chat/native keyboard, backend and database are unchanged.
+- Web visualViewport follows directly without duplicate offsets. Android blur-before-resize retains its anchor. Landscape/enlarged text prioritizes usable input/Close when a result row cannot fit. Reduced motion is instant.
+- Final integrated npm run check passed TypeScript, all 1,459 tests, lint (28 baseline warnings/zero errors), build and prerender. Chromium and WebKit each passed 178 synthetic assertions, including six locales at 200%, landscape, keyboard interruption, Android blur timing and cleanup. Existing follower keyboard/navigation suite also passed. Independent review is clear; screenshots inspected.
+- Details: docs/qa/follow-search-keyboard-20261111.md. Integrated on verified main 8b562ec; release slot clear and user authorized push when ready. Next: publish normally and verify exact-commit CI/production. Physical iPhone/Capacitor and real-account integration remain unverified.
+
+## Community comments: preserve feed position — 2026-11-11 (live, verified)
 
 - Fixed an unmount race: PostDetail's keyboard cleanup queued a scroll to the old post after navigation had restored the feed. Restoration now belongs only to mounted undocking, cancels on Back/redock/post change, and checks current focus and composer identity. Shared router, chat/native keyboard, backend and database code are unchanged.
 - Eight focused regression tests pass; six original cases fail on old code. Real-component browser baseline reproduces a jump from the saved 1800 px feed position to 701 px. Fixed Chromium and WebKit 26.5 each pass 136 assertions at phone, landscape and desktop sizes, including repeated Back, keyboard dismissal, drafts and interrupted navigation.
 - Final npm run check passed TypeScript, all 1,453 tests, lint (28 existing warnings/zero errors), build and prerender. Independent review found no blocker; screenshots inspected. WebKit uses synthetic native keyboard events, not a physical iPhone. Details and limits: docs/qa/community-comment-scroll-20261111.md.
-- Parent coordinated first release slot on current main 7d74d08. User authorized pushing tested fixes. Next: normal fast-forward publication, verify exact-commit CI and golfme.app, then clear the slot for the separate Following search fix.
+- Published 8b562ec75508931def245880645f9961d4ddb3a4 passed exact-commit CI 43109303950 and is live at golfme.app (READY, deployment dpl_BqT2ricopCa3KjKhykimK6BSvcX1). Public landing, Community and app assets returned 200; test hooks absent. Release slot cleared for Following search.
 
 ## Golf-first purpose and boundaries — 2026-11-11 (integrated, release authorized)
 

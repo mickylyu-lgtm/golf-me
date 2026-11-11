@@ -7,6 +7,7 @@ import { KEYBOARD_GAP_PX, revealFocusedField } from "../../lib/revealFocusedFiel
 import { wasKeyboardDismissedByDrag } from "../../lib/useDismissKeyboardOnDrag";
 import { pushModal } from "../../lib/modalStack";
 import { lockPageScroll } from "../../lib/scrollLock";
+import { useSearchSheetLayout } from "../../lib/useSearchSheetLayout";
 
 interface ModalProps {
   title: string;
@@ -47,9 +48,15 @@ interface ModalFrameProps extends Omit<ModalProps, "keyboardAware"> {
   overlayStyle?: CSSProperties;
   sheetStyle?: CSSProperties;
   scrollerRef?: RefObject<HTMLDivElement | null>;
+  searchHeader?: ReactNode;
+  chromeRef?: RefObject<HTMLDivElement | null>;
+  searchHeaderRef?: RefObject<HTMLDivElement | null>;
+  headingStyle?: CSSProperties;
+  chromeStyle?: CSSProperties;
+  resultsStyle?: CSSProperties;
 }
 
-function ModalFrame({ title, onClose, children, footer, overlayStyle, sheetStyle, scrollerRef }: ModalFrameProps) {
+function ModalFrame({ title, onClose, children, footer, overlayStyle, sheetStyle, scrollerRef, searchHeader, chromeRef, searchHeaderRef, chromeStyle, resultsStyle, headingStyle }: ModalFrameProps) {
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
@@ -90,6 +97,14 @@ function ModalFrame({ title, onClose, children, footer, overlayStyle, sheetStyle
   // closed it too.
   const pressStartedOnBackdropRef = useRef(false);
 
+  const heading = <div style={headingStyle} className={"flex items-center justify-between border-b border-slate-100 px-5" + (searchHeader ? " shrink-0 py-2" : " py-4")}>
+    <h2 id={titleId} className="text-base font-bold text-slate-900">{title}</h2>
+    <button onClick={onClose} aria-label="Close"
+      className="-m-1.5 rounded-full p-2.5 text-slate-400 transition-all duration-200 ease-out hover:bg-slate-100 hover:text-slate-700 active:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none">
+      <X size={18} />
+    </button>
+  </div>;
+
   return createPortal(
     <div
       className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-900/50 backdrop-blur-sm sm:items-center sm:p-4"
@@ -111,19 +126,11 @@ function ModalFrame({ title, onClose, children, footer, overlayStyle, sheetStyle
         aria-modal="true"
         aria-labelledby={titleId}
       >
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-          <h2 id={titleId} className="text-base font-bold text-slate-900">
-            {title}
-          </h2>
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            className="-m-1.5 rounded-full p-2.5 text-slate-400 transition-all duration-200 ease-out hover:bg-slate-100 hover:text-slate-700 active:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none"
-          >
-            <X size={18} />
-          </button>
-        </div>
-        <div ref={scrollerRef} className="flex-1 overflow-y-auto px-5 py-4">
+        {searchHeader ? <div ref={chromeRef} className="flex min-h-0 shrink-0 flex-col" style={chromeStyle}>
+          {heading}
+          <div ref={searchHeaderRef} className="min-h-0 overflow-y-auto overscroll-contain border-b border-slate-100 px-5 py-2">{searchHeader}</div>
+        </div> : heading}
+        <div ref={scrollerRef} style={resultsStyle} className={"flex-1 overflow-y-auto px-5" + (searchHeader ? " min-h-0 overscroll-contain py-2" : " py-4")}>
           {children}
         </div>
         {footer && <div className="border-t border-slate-100 px-5 py-4">{footer}</div>}
@@ -218,4 +225,16 @@ function KeyboardAwareModal(props: Omit<ModalProps, "keyboardAware">) {
       }
     />
   );
+}
+
+// Search stays in a stable header; only results shrink above the keyboard.
+// Separate opt-in surface so forms, nested confirms and chat keep their layout.
+export function SearchModal({ searchHeader, ...props }: Omit<ModalProps, "keyboardAware"> & { searchHeader: ReactNode }) {
+  const chromeRef = useRef<HTMLDivElement>(null);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const searchHeaderRef = useRef<HTMLDivElement>(null);
+  const { overlayStyle, sheetStyle, chromeStyle, resultsStyle, headingStyle } = useSearchSheetLayout(chromeRef, searchHeaderRef);
+  useEffect(() => lockPageScroll(), []);
+  return <ModalFrame {...props} searchHeader={searchHeader} chromeRef={chromeRef} searchHeaderRef={searchHeaderRef}
+    scrollerRef={scrollerRef} overlayStyle={overlayStyle} sheetStyle={sheetStyle} chromeStyle={chromeStyle} resultsStyle={resultsStyle} headingStyle={headingStyle} />;
 }

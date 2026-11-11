@@ -10,7 +10,7 @@ import { useSocialRead } from "../../lib/useSocialRead";
 import type { ConnectionKind } from "../../lib/socialPrivacy";
 import type { GolferProfile } from "../../types";
 import { Avatar } from "../ui/Avatar";
-import { Modal } from "../ui/Modal";
+import { SearchModal } from "../ui/Modal";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { inputClass } from "../ui/FormControls";
 
@@ -76,8 +76,7 @@ function FollowersSheet({ profileId, onClose }: { profileId: string; onClose: ()
   const { value: result, failed, busy, retry, loadMore } = useConnectionPages(read, permitted);
   const { value: totals, retry: retryTotals } = useSocialRead(readTotals, permitted);
   const rows = (result?.golfers ?? []).filter((g) => !isBlockedEitherWay(g.id));
-  return <Modal keyboardAware title={t("followers.connectionsTitle")} onClose={onClose}>
-    <div className="flex flex-col gap-4">
+  return <SearchModal title={t("followers.connectionsTitle")} onClose={onClose} searchHeader={<div className="flex flex-col gap-4">
       <div className="flex rounded-xl bg-slate-100 p-1" aria-label={t("followers.connectionsTitle")}>
         {(["followers", "following"] as const).map((tab, i) => <button key={tab} type="button" aria-pressed={kind === tab}
           onClick={() => { setKind(tab); setQuery(""); setRemoveFailed(false); }}
@@ -85,12 +84,14 @@ function FollowersSheet({ profileId, onClose }: { profileId: string; onClose: ()
           {t(tab === "followers" ? "followers.title" : "followers.following")} {totals && !failed && <span className="ml-1.5 text-xs text-slate-400">{tab === kind && result ? result.total : totals[i].total}</span>}
         </button>)}
       </div>
-      {!permitted ? <p role="status" className="py-6 text-center text-sm text-slate-500">{t("followers.loadError")}</p> : <>
-        <label className="relative block">
+      {permitted && <label className="relative block">
           <Search size={16} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input value={query} onChange={(event) => setQuery(event.target.value)} type="search" maxLength={100} autoComplete="off"
             aria-label={t("followers.searchConnections")} placeholder={t("followers.searchConnections")} className={inputClass + " pl-9"} />
-        </label>
+        </label>}
+    </div>}>
+    <div className="flex flex-col gap-4">
+      {!permitted ? <p role="status" className="py-6 text-center text-sm text-slate-500">{t("followers.loadError")}</p> : <>
         {removeFailed && <p role="alert" className="text-sm text-rose-600">{t("followers.removeFailed")}</p>}
         {failed ? <div role="alert" className="py-6 text-center text-sm text-slate-500">
           <p>{t("followers.loadError")}</p>
@@ -129,5 +130,5 @@ function FollowersSheet({ profileId, onClose }: { profileId: string; onClose: ()
         catch { setRemoving(null); setRemoveFailed(true); retry(); retryTotals(); }
         finally { writeRef.current = false; }
       }} />}
-  </Modal>;
+  </SearchModal>;
 }

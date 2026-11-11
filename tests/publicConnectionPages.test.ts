@@ -51,7 +51,7 @@ test("page rows populate public navigation cache only after current-scope valida
 
 test("searchable followers sheet opts into existing body-resize keyboard handling", () => {
  const ui=readFileSync(new URL("../src/components/profile/ProfileFollowers.tsx",import.meta.url),"utf8");
- assert.match(ui,/<Modal keyboardAware title=\{t\("followers.connectionsTitle"\)\}/);
+ assert.match(ui,/<SearchModal title=\{t\("followers.connectionsTitle"\)\}/);
  const modal=readFileSync(new URL("../src/components/ui/Modal.tsx",import.meta.url),"utf8");
  assert.match(modal,/useKeyboardHeight\(\)/);assert.match(modal,/lockPageScroll\(\)/);
  assert.match(modal,/scrollTopBeforeKeyboardRef/);
