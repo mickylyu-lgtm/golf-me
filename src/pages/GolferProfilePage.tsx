@@ -67,6 +67,7 @@ export function GolferProfilePage() {
     currentUser,
     getGolfer,
     isBlocked,
+    isBlockedEitherWay,
     blockUser,
     unblockUser,
     hasPlayedWith,
@@ -235,6 +236,7 @@ export function GolferProfilePage() {
             </p>
           )}
         </div>
+        <ProfileMutualSummary profileId={golfer.id} name={golfer.name} />
         <ReputationBadge tier={reputationState?.tierKey ?? null} size="sm" />
         {isCoachReviewer && (
           <Badge tone="fairway" icon={<ShieldCheck size={12} />}>
@@ -314,8 +316,7 @@ export function GolferProfilePage() {
 
       <div className="rounded-2xl border border-slate-100 bg-white p-4">
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{t("golferProfile.reputationTitle")}</p>
-        <ReputationRow golfer={enrichedGolfer} followerStat={!blocked ? <ProfileFollowers profileId={golfer.id} /> : undefined} />
-        <ProfileMutualSummary profileId={golfer.id} name={golfer.name} />
+        <ReputationRow golfer={enrichedGolfer} followerStat={!isBlockedEitherWay(golfer.id) ? <ProfileFollowers profileId={golfer.id} layout="stat" /> : undefined} />
         {handicapConfidence.level !== "normal" && (
           <p className="mt-2 flex items-center gap-1 text-xs text-slate-500">
             {handicapConfidence.level === "high" && <ShieldCheck size={12} className="text-fairway-600" />}

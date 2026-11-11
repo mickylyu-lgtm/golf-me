@@ -1,5 +1,12 @@
 # GolfMe — Development Status
 
+## Profile stat grids and top mutual summary - 2026-11-11 (local only, release held)
+
+- Visual-only follow-up to local private-social checkpoint e9bce9f: own-profile summary and full reputation stats use readable tiles, with two columns on small browsed profiles and three on wider screens. The existing compact card/list reputation row is unchanged; the own Reputation detail screen shares the full grid.
+- The existing privacy-gated mutual summary now appears below the browsed golfer identity, before badges and action buttons. Its meaning, eligible counts and access gates are unchanged. The approved Followers/Following sheet, request controls and public posts/profile behavior are unchanged.
+- Validation: npm run check passed TypeScript, lint (26 existing warnings/0 errors), all 1,300 tests, build and prerender. Synthetic local browser checks passed at 320/390/1440px, including first-load mutual visibility without scrolling at 320/390px, long-name wrapping, six browsed stat tiles, own summary/detail grids, hidden stats for new golfers, blocked profiles and the existing privacy/request/removal regression suite. External requests were blocked; all screenshots use synthetic data.
+- No backend/API or privacy semantics change, push, deployment, production migration or native build. The private-social release gates below still apply, including normal-server RLS/concurrency and full Supabase integration validation. This presentation-only follow-up does not make that release ready.
+
 ## Follow approval and private connection lists - 2026-11-11 (local only, release held)
 
 - Follow-up to the released 29f36dd followers feature. The reported target-profile error was reproduced read-only: the original server policy excludes active test-role targets. The local replacement permits only self or an accepted viewer-to-identity follow for test-only accounts; bot, seeded, app_reviewer, suspended and blocked identities remain excluded. No account roles or real relationships were edited.

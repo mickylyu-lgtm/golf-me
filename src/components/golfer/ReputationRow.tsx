@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { GolferProfile } from "../../types";
 import { isNewAccount, memberSinceLabel } from "../../lib/format";
 import { useLocale } from "../../i18n/LocaleContext";
+import { ProfileStatCell, ProfileStatTile } from "../profile/ProfileStatTile";
 
 interface ReputationRowProps {
   golfer: GolferProfile;
@@ -12,6 +13,23 @@ interface ReputationRowProps {
 export function ReputationRow({ golfer, compact, followerStat }: ReputationRowProps) {
   const { t, locale } = useLocale();
   const isNew = isNewAccount(golfer.reputation.completedRounds);
+
+  if (!compact) {
+    const membership = memberSinceLabel(golfer.memberSince, t, locale);
+    return <div>
+      {isNew && <p className="mb-2 text-xs font-medium text-slate-500">{t("member.new")}</p>}
+      <div data-testid="profile-stats-grid" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <ProfileStatTile value={golfer.reputation.completedRounds.toLocaleString(locale)} label={t("profileStats.completedRounds")} />
+        {followerStat && <ProfileStatCell>{followerStat}</ProfileStatCell>}
+        {!isNew && <>
+          <ProfileStatTile value={golfer.reputation.wouldPlayAgainPct + "%"} label={t("profileStats.wouldPlayAgain")} />
+          <ProfileStatTile value={golfer.reputation.showUpRatePct + "%"} label={t("profileStats.showUpRate")} />
+          <ProfileStatTile value={golfer.reputation.onTimePct + "%"} label={t("profileStats.onTime")} />
+          {membership && <ProfileStatTile value={membership} label={t("profileStats.membership")} valueClassName="text-sm leading-snug" />}
+        </>}
+      </div>
+    </div>;
+  }
 
   if (isNew) {
     return (

@@ -25,6 +25,7 @@ import { Modal } from "../components/ui/Modal";
 import { CLICKABLE_CARD_CLASS } from "../components/ui/cardStyles";
 import { inputClass, labelClass } from "../components/ui/FormControls";
 import { FollowRequests } from "../components/profile/FollowRequests";
+import { ProfileStatCell, ProfileStatTile } from "../components/profile/ProfileStatTile";
 import { ProfileFollowers } from "../components/profile/ProfileFollowers";
 import { AvatarUpload } from "../components/profile/AvatarUpload";
 import { FullscreenMediaViewer } from "../components/community/FullscreenMediaViewer";
@@ -217,18 +218,12 @@ export function Profile() {
         </Button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <p className="text-sm text-slate-600">
-          {/* Only the handicap NUMBER is colored (golf-ability signal,
-              deliberately separate from the GolfMe Reputation badge right
-              next to it) -- "Handicap"/round-count text stays neutral. */}
-          {enrichedUser.reputation.completedRounds === 1
-            ? t("profile.roundCountSingularPrefix")
-            : t("profile.roundCountPrefix", { count: enrichedUser.reputation.completedRounds })}
-          <span className={handicapColorClass(currentUser.handicap)}>{formatHandicapNumber(currentUser.handicap)}</span>
-        </p>
-        <span aria-hidden="true" className="text-slate-300">·</span>
-        <ProfileFollowers profileId={currentUser.id} />
+      <div data-testid="own-profile-stats-grid" className="grid grid-cols-3 gap-2">
+        <ProfileStatTile value={enrichedUser.reputation.completedRounds} label={t("profileStats.completedRounds")} />
+        <ProfileStatTile value={<span className={handicapColorClass(currentUser.handicap)}>{formatHandicapNumber(currentUser.handicap)}</span>} label={t("profile.handicap")} />
+        <ProfileStatCell><ProfileFollowers profileId={currentUser.id} layout="stat" /></ProfileStatCell>
+      </div>
+      <div className="-mt-3 flex flex-wrap items-center gap-2">
         <ReputationBadge tier={reputationState?.tierKey ?? null} size="sm" onClick={() => navigate("/profile/reputation")} />
         {isCoachReviewer && (
           <Badge tone="fairway" icon={<ShieldCheck size={12} />}>

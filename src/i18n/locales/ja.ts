@@ -2,6 +2,11 @@ import type { TranslationKey } from "./en";
 
 export const ja: Record<TranslationKey, string> = {
   // Follow approval and connection management.
+  "profileStats.completedRounds": "完了したラウンド",
+  "profileStats.wouldPlayAgain": "またプレーしたい",
+  "profileStats.showUpRate": "参加率",
+  "profileStats.onTime": "時間厳守",
+  "profileStats.membership": "GolfMe メンバー",
   "followers.following": "フォロー中",
   "followers.noFollowing": "まだ誰もフォローしていません。",
   "followers.searchConnections": "ゴルファーを検索",

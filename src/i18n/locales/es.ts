@@ -2,6 +2,11 @@ import type { TranslationKey } from "./en";
 
 export const es: Record<TranslationKey, string> = {
   // Follow approval and connection management.
+  "profileStats.completedRounds": "Rondas completadas",
+  "profileStats.wouldPlayAgain": "Volverían a jugar",
+  "profileStats.showUpRate": "Asistencia",
+  "profileStats.onTime": "Puntualidad",
+  "profileStats.membership": "Miembro de GolfMe",
   "followers.following": "Siguiendo",
   "followers.noFollowing": "Aún no sigues a nadie.",
   "followers.searchConnections": "Buscar golfistas",

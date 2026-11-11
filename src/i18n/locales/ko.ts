@@ -2,6 +2,11 @@ import type { TranslationKey } from "./en";
 
 export const ko: Record<TranslationKey, string> = {
   // Follow approval and connection management.
+  "profileStats.completedRounds": "완료한 라운드",
+  "profileStats.wouldPlayAgain": "다시 플레이 의향",
+  "profileStats.showUpRate": "참석률",
+  "profileStats.onTime": "시간 준수",
+  "profileStats.membership": "GolfMe 회원",
   "followers.following": "팔로잉",
   "followers.noFollowing": "아직 팔로우하는 사람이 없습니다.",
   "followers.searchConnections": "골퍼 검색",

@@ -41,6 +41,9 @@ const switchViewer=async(id)=>{
 };
 fs.mkdirSync('artifacts.local',{recursive:true});
 await page.goto(base+'/profile');
+await page.getByTestId('own-profile-stats-grid').waitFor();
+assert.equal(await page.getByTestId('own-profile-stats-grid').locator(':scope > *').count(),3);
+await page.waitForTimeout(350);await page.screenshot({path:'artifacts.local/profile-grid-own-390.png'});
 await page.getByRole('button',{name:'3 followers',exact:true}).click();
 await dialog.getByText('Bea Park',{exact:true}).waitFor();
 assert.equal(await dialog.locator('li').count(),3);
@@ -83,6 +86,47 @@ await page.waitForTimeout(350);await page.screenshot({path:'artifacts.local/foll
 
 await page.goto(base+'/golfer/g11');
 await page.getByText('You have 1 mutual with Alex Green',{exact:true}).waitFor();
+for (const width of [320,390]) {
+  await page.setViewportSize({width,height:844});
+  await page.goto(base+'/golfer/g11');
+  await page.getByTestId('mutual-summary').waitFor();
+  const mutualTop=await page.getByTestId('mutual-summary').boundingBox();
+  assert.equal(await page.evaluate(()=>window.scrollY),0,'fresh profile has not scrolled '+width);
+  assert.ok(mutualTop && mutualTop.y>=0 && mutualTop.y+mutualTop.height<650,'mutual summary visible near profile identity on opening '+width);
+}
+await page.waitForTimeout(350);await page.screenshot({path:'artifacts.local/profile-mutual-top-390.png'});
+await page.evaluate(()=>{
+  const d=JSON.parse(localStorage.getItem('golfme:data:v8'));
+  d.golfers=d.golfers.map(g=>g.id==='g11'?{...g,name:'Alexandria Montgomery-Wellington'}:g);
+  localStorage.setItem('golfme:data:v8',JSON.stringify(d));
+});
+await page.setViewportSize({width:320,height:844});
+await page.reload();
+await page.getByTestId('mutual-summary').getByText('You have 1 mutual with Alexandria Montgomery-Wellington',{exact:true}).waitFor();
+assert.equal(await page.evaluate(()=>window.scrollY),0,'long-name profile has not scrolled');
+const longSummary=await page.getByTestId('mutual-summary').boundingBox();
+assert.ok(longSummary && longSummary.y+longSummary.height<650,'long-name summary stays visible');
+assert.ok(await page.getByTestId('mutual-summary').evaluate(e=>e.scrollWidth<=e.clientWidth+1),'long-name summary wraps without clipping');
+assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'long-name profile no horizontal overflow');
+await page.waitForTimeout(350);await page.screenshot({path:'artifacts.local/profile-mutual-top-long-name-320.png'});
+await page.evaluate(()=>{
+  const d=JSON.parse(localStorage.getItem('golfme:data:v8'));
+  d.golfers=d.golfers.map(g=>g.id==='g11'?{...g,name:'Alex Green'}:g);
+  localStorage.setItem('golfme:data:v8',JSON.stringify(d));
+});
+await page.reload();await page.getByTestId('mutual-summary').waitFor();
+for(const width of [320,390,1440]){
+  await page.setViewportSize({width,height:844});
+  const grid=page.getByTestId('profile-stats-grid');
+  await grid.scrollIntoViewIfNeeded();
+  assert.equal(await grid.locator(':scope > *').count(),6,'six existing stats preserved');
+  assert.equal(await grid.evaluate(e=>getComputedStyle(e).gridTemplateColumns.split(' ').length),width<640?2:3);
+  assert.ok(await grid.evaluate(e=>e.scrollWidth<=e.clientWidth+1),'stat grid no overflow '+width);
+  assert.ok(await grid.locator(':scope > *').evaluateAll(nodes=>nodes.every(e=>e.scrollWidth<=e.clientWidth+1)),'stat cells no overflow '+width);
+  await page.waitForTimeout(350);await page.screenshot({path:'artifacts.local/profile-grid-other-'+width+'.png'});
+}
+await page.setViewportSize({width:390,height:844});
+
 await page.getByRole('button',{name:'2 followers',exact:true}).click();
 await dialog.getByText('Cam Hill',{exact:true}).waitFor();
 assert.equal(await dialog.getByText('Drew Lake',{exact:true}).count(),0);
@@ -141,6 +185,24 @@ for(const width of [320,390,1440]){
   await page.waitForTimeout(350);await page.screenshot({path:'artifacts.local/connections-'+width+'.png'});
   await close();
 }
+await page.goto(base+'/profile/reputation');
+await page.getByTestId('profile-stats-grid').waitFor();
+assert.equal(await page.getByTestId('profile-stats-grid').locator(':scope > *').count(),5,'own reputation view uses same grid without adding social stats');
+await page.getByTestId('profile-stats-grid').scrollIntoViewIfNeeded();
+await page.waitForTimeout(350);await page.screenshot({path:'artifacts.local/profile-grid-own-reputation.png'});
+await page.evaluate(()=>{
+  const d=JSON.parse(localStorage.getItem('golfme:data:v8'));
+  d.golfers=d.golfers.map(g=>g.id==='g4'?{...g,reputation:{...g.reputation,completedRounds:0}}:g);
+  localStorage.setItem('golfme:data:v8',JSON.stringify(d));
+});
+await page.goto(base+'/golfer/g4');
+await page.getByTestId('profile-stats-grid').waitFor();
+assert.equal(await page.getByTestId('profile-stats-grid').locator(':scope > *').count(),2,'new golfer keeps only rounds and gated followers, no invented percentages');
+assert.equal(await page.getByTestId('mutual-summary').count(),0,'new/nonfollowed profile has no private summary');
+await page.goto(base+'/golfer/g3');
+await page.getByTestId('profile-stats-grid').waitFor();
+assert.equal(await page.getByTestId('profile-stats-grid').getByRole('button',{name:/follower/}).count(),0,'blocked follower control remains absent');
+console.log('PASS: shared two/three-column reputation grid, own summary grid, six original stats, near-top gated mutuals, new golfer and blocked variants.');
 // Exercise the production read hook with delayed/error results and no backend.
 await page.goto(base+'/');
 await page.evaluate(async()=>{ document.getElementById('root')?.remove(); const {mountFixture}=await import('/scripts/social-privacy-read-fixture.tsx'); window.socialReadFixture=mountFixture(); });

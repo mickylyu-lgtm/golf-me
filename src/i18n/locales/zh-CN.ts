@@ -2,6 +2,11 @@ import type { TranslationKey } from "./en";
 
 export const zhCN: Record<TranslationKey, string> = {
   // Follow approval and connection management.
+  "profileStats.completedRounds": "已完成球局",
+  "profileStats.wouldPlayAgain": "愿意再次同场",
+  "profileStats.showUpRate": "出席率",
+  "profileStats.onTime": "准时率",
+  "profileStats.membership": "GolfMe 会员",
   "followers.following": "正在关注",
   "followers.noFollowing": "还没有关注任何人。",
   "followers.searchConnections": "搜索球友",

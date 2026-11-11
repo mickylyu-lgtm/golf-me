@@ -3,6 +3,11 @@
 // missing key in any language is a compile error, not a silent fallback.
 export const en = {
   // Follow approval and connection management.
+  "profileStats.completedRounds": "Completed rounds",
+  "profileStats.wouldPlayAgain": "Would play again",
+  "profileStats.showUpRate": "Show-up rate",
+  "profileStats.onTime": "On time",
+  "profileStats.membership": "GolfMe member",
   "followers.following": "Following",
   "followers.noFollowing": "Not following anyone yet.",
   "followers.searchConnections": "Search golfers",

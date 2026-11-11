@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronRight, Search, Users } from "lucide-react";
+import { ChevronRight, LockKeyhole, Search, Users } from "lucide-react";
 import { useData } from "../../context/DataContext";
 import { useLocale } from "../../i18n/LocaleContext";
 import { useSocialRead } from "../../lib/useSocialRead";
@@ -11,7 +11,7 @@ import { Modal } from "../ui/Modal";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { inputClass } from "../ui/FormControls";
 
-export function ProfileFollowers({ profileId }: { profileId: string }) {
+export function ProfileFollowers({ profileId, layout = "inline" }: { profileId: string; layout?: "inline" | "stat" }) {
   const { currentUser, getConnectionSummary, isFollowing, isBlockedEitherWay } = useData();
   const { t, locale } = useLocale();
   const [open, setOpen] = useState(false);
@@ -22,9 +22,12 @@ export function ProfileFollowers({ profileId }: { profileId: string }) {
   if (blocked) return null;
   return <>
     <button type="button" onClick={() => setOpen(true)} aria-haspopup="dialog" aria-expanded={open}
-      className="-my-2 inline-flex min-h-11 shrink-0 items-center gap-1 rounded-lg px-1 text-sm text-slate-600 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400">
-      {permitted && <strong className="font-semibold text-slate-800">{value === undefined ? "–" : value.total.toLocaleString(locale)}</strong>}
-      {t(value?.total === 1 ? "followers.singular" : "followers.label")}
+      className={layout === "stat"
+        ? "flex min-h-20 w-full min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-2 py-3 text-center transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400"
+        : "-my-2 inline-flex min-h-11 shrink-0 items-center gap-1 rounded-lg px-1 text-sm text-slate-600 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400"}>
+      {permitted ? <strong className={layout === "stat" ? "text-xl font-bold leading-tight tabular-nums text-slate-900" : "font-semibold text-slate-800"}>{value === undefined ? "–" : value.total.toLocaleString(locale)}</strong>
+        : layout === "stat" ? <LockKeyhole size={20} aria-hidden="true" className="text-slate-400" /> : null}
+      <span className={layout === "stat" ? "max-w-full break-words text-xs leading-snug text-slate-500" : undefined}>{t(value?.total === 1 ? "followers.singular" : "followers.label")}</span>
     </button>
     {open && <FollowersSheet key={currentUser.id + ":" + profileId} profileId={profileId} onClose={() => { setOpen(false); retry(); }} />}
   </>;
@@ -37,9 +40,9 @@ export function ProfileMutualSummary({ profileId, name }: { profileId: string; n
   const read = useCallback(() => getConnectionSummary(profileId, "followers"), [getConnectionSummary, profileId]);
   const { value } = useSocialRead(read, permitted);
   if (!permitted || value === undefined) return null;
-  return <div className="mt-3 border-t border-slate-100 pt-3" data-testid="mutual-summary">
-    <p className="text-sm text-slate-700">{t(value.mutualTotal === 1 ? "followers.mutualSummaryOne" : "followers.mutualSummary", { count: value.mutualTotal.toLocaleString(locale), name })}</p>
-    <p className="mt-1 text-xs text-slate-500">{t("followers.mutualSummaryHelp")}</p>
+  return <div className="my-1 max-w-sm rounded-xl bg-fairway-50/70 px-3 py-2 text-center" data-testid="mutual-summary">
+    <p className="text-sm font-medium text-fairway-800">{t(value.mutualTotal === 1 ? "followers.mutualSummaryOne" : "followers.mutualSummary", { count: value.mutualTotal.toLocaleString(locale), name })}</p>
+    <p className="mt-1 text-[11px] leading-snug text-slate-500">{t("followers.mutualSummaryHelp")}</p>
   </div>;
 }
 
