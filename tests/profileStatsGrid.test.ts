@@ -42,7 +42,7 @@ test("mutuals are prominent before accepted follow, compact after, with no fabri
   const summary=source.slice(source.indexOf("export function ProfileMutualSummary"),source.indexOf("function FollowersSheet"));
   assert.match(summary,/const compact = isFollowing\(profileId\)/);
   assert.match(summary,/data-presentation=\{compact \? "compact" : "prominent"\}/);
-  assert.match(summary,/if \(!permitted \|\| value === undefined\) return null/);
+  assert.match(summary,/if \(!permitted \|\| value === undefined \|\| value.mutualTotal < 1\) return null/);
   assert.match(summary,/currentUser.id !== profileId && !isBlockedEitherWay\(profileId\)/);
   assert.match(summary,/compact \? "sr-only"/);
   assert.doesNotMatch(summary,/getFollowState|state === "pending"|mutualTotal \?\? 0/);

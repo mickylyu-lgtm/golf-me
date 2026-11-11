@@ -44,7 +44,7 @@ export function ProfileMutualSummary({ profileId, name }: { profileId: string; n
   const compact = isFollowing(profileId);
   const read = useCallback(() => getConnectionSummary(profileId, "followers"), [getConnectionSummary, profileId]);
   const { value } = useSocialRead(read, permitted);
-  if (!permitted || value === undefined) return null;
+  if (!permitted || value === undefined || value.mutualTotal < 1) return null;
   return <div data-testid="mutual-summary" data-presentation={compact ? "compact" : "prominent"}
     className={compact
       ? "my-1 flex max-w-sm items-start justify-center gap-1.5 px-2 py-1 text-center"

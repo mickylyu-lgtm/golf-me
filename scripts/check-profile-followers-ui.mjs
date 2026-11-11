@@ -89,7 +89,7 @@ await page.goto(base+'/golfer/g11');
 await page.getByText('You have 1 mutual with Alex Green',{exact:true}).waitFor();
 assert.equal(await page.getByTestId('mutual-summary').getAttribute('data-presentation'),'compact');
 const compactMutualHeight=(await page.getByTestId('mutual-summary').boundingBox()).height;
-await page.evaluate(()=>{let node=document.querySelector('[data-testid=mutual-summary]');while(node){node.scrollTo({top:0,behavior:'instant'});node=node.parentElement;}window.scrollTo({top:0,behavior:'instant'});});await page.waitForTimeout(350);await page.screenshot({path:'artifacts.local/mutual-after-follow-390.png'});
+await page.evaluate(()=>{let node=document.querySelector('[data-testid=mutual-summary]');while(node){node.scrollTo({top:0,behavior:'instant'});node=node.parentElement;}window.scrollTo({top:0,behavior:'instant'});});await page.waitForTimeout(350);if(!fs.existsSync('artifacts.local/mutual-after-follow-390.png')) await page.screenshot({path:'artifacts.local/mutual-after-follow-390.png'});
 for (const width of [320,390]) {
   await page.setViewportSize({width,height:844});
   await page.goto(base+'/golfer/g11');
@@ -152,7 +152,7 @@ for(const width of [320,390]) {
   assert.ok(await summary.evaluate(e=>e.scrollWidth<=e.clientWidth+1),'prominent summary fits '+width);
   const box=await summary.boundingBox();assert.ok(box.y>=0 && box.y+box.height<650,'prominent summary near top '+width);
 }
-await page.waitForTimeout(3600);await page.screenshot({path:'artifacts.local/mutual-before-follow-390.png'});
+await page.waitForTimeout(3600);if(!fs.existsSync('artifacts.local/mutual-before-follow-390.png')) await page.screenshot({path:'artifacts.local/mutual-before-follow-390.png'});
 await page.getByRole('button',{name:'1 follower',exact:true}).click();
 await dialog.getByText('Cam Hill',{exact:true}).waitFor();
 assert.equal(await dialog.locator('li').count(),1);
@@ -163,7 +163,8 @@ await camRow.getByRole('button',{name:'Following',exact:true}).click();
 await camRow.getByRole('button',{name:'Follow',exact:true}).waitFor();
 assert.ok(!(await data()).follows.some(f=>f.followerId==='g1'&&f.followingId==='g2'));
 await close();
-await page.getByText('You have 0 mutuals with Alex Green',{exact:true}).waitFor();
+await page.getByTestId('mutual-summary').waitFor({state:'hidden'});
+assert.equal(await page.getByText('You have 0 mutuals with Alex Green',{exact:true}).count(),0,'mutation to zero hides nonfollowing summary');
 await page.getByRole('button',{name:'1 follower',exact:true}).click();
 await dialog.locator('li').filter({hasText:'Cam Hill'}).getByRole('button',{name:'Follow',exact:true}).click();
 await dialog.locator('li').filter({hasText:'Cam Hill'}).getByRole('button',{name:'Following',exact:true}).waitFor();
@@ -202,7 +203,7 @@ await page.getByRole('button',{name:'Following',exact:true}).waitFor();
 await page.getByRole('button',{name:'1 follower',exact:true}).click();
 await dialog.getByText('Jordan Lee',{exact:true}).waitFor();
 await close();
-await page.getByTestId('mutual-summary').waitFor();
+assert.equal(await page.getByTestId('mutual-summary').count(),0,'accepted follow with zero mutuals stays hidden');
 
 for(const width of [320,390,1440]){
   await page.setViewportSize({width,height:1000});
@@ -227,7 +228,30 @@ await page.evaluate(()=>{
 await page.goto(base+'/golfer/g4');
 await page.getByTestId('profile-stats-grid').waitFor();
 assert.equal(await page.getByTestId('profile-stats-grid').locator(':scope > *').count(),2,'new golfer keeps only rounds and public followers, no invented percentages');
-await page.getByTestId('mutual-summary').waitFor();
+assert.equal(await page.getByTestId('mutual-summary').count(),0,'nonfollowing zero mutuals hidden');
+await page.evaluate(()=>{
+ const d=JSON.parse(localStorage.getItem('golfme:data:v8'));
+ d.follows.push(...[['g1','g5'],['g1','g6'],['g5','g4'],['g6','g4']].map(([followerId,followingId],i)=>({id:'positive-mutual-'+i,followerId,followingId,createdAt:'2026-01-01T00:00:00Z'})));
+ localStorage.setItem('golfme:data:v8',JSON.stringify(d));
+});
+await page.reload();
+await page.getByTestId('mutual-summary').getByText(/You have 2 mutuals with/).waitFor();
+assert.equal(await page.getByTestId('mutual-summary').getAttribute('data-presentation'),'prominent');
+await page.getByRole('button',{name:'Follow',exact:true}).click();
+await page.getByRole('button',{name:'Following',exact:true}).waitFor();
+assert.equal(await page.getByTestId('mutual-summary').getAttribute('data-presentation'),'compact');
+await page.getByRole('button',{name:'3 followers',exact:true}).click();
+await dialog.locator('li').filter({hasText:'Eli River'}).getByRole('button',{name:'Following',exact:true}).click();
+await dialog.locator('li').filter({hasText:'Eli River'}).getByRole('button',{name:'Follow',exact:true}).waitFor();
+await close();
+await page.getByTestId('mutual-summary').getByText(/You have 1 mutual with/).waitFor();
+assert.equal(await page.getByTestId('mutual-summary').getAttribute('data-presentation'),'compact');
+await page.getByRole('button',{name:'3 followers',exact:true}).click();
+await dialog.locator('li').filter({hasText:'Fran Moss'}).getByRole('button',{name:'Following',exact:true}).click();
+await dialog.locator('li').filter({hasText:'Fran Moss'}).getByRole('button',{name:'Follow',exact:true}).waitFor();
+await close();await page.getByTestId('mutual-summary').waitFor({state:'hidden'});
+await page.getByRole('button',{name:'Following',exact:true}).waitFor();
+console.log('PASS: zero mutuals hidden in both modes;2→1→0 mutations;positive follow transition compact.');
 await page.goto(base+'/golfer/g3');
 await page.getByTestId('profile-stats-grid').waitFor();
 assert.equal(await page.getByTestId('profile-stats-grid').getByRole('button',{name:/follower/}).count(),0,'blocked follower control remains absent');
