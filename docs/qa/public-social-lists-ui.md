@@ -61,3 +61,16 @@ FollowersSheet now opts into the existing Modal keyboardAware path. This uses th
 Full npm run check passed1,421 tests plus types/lint/build. The complete synthetic social browser suite passed. scripts/check-profile-keyboard-ui.mjs tests real Modal/store layout with scripts/synthetic-keyboard-plugin.mjs as an explicitly synthetic keyboard source: show/hide, mount while open, search/results/Load more/Close reachability, background lock and scroll restoration, nested removal cancellation, reopen/navigation and320/390 sizes. Nested confirmation coverage verifies focus leaves search, then explicitly injects hide; it does not prove native hide delivery. Test plugin is not configured in shipping vite.config.ts.
 
 These synthetic events and bare WKWebView checks do not establish actual Capacitor keyboard-plugin delivery. Final native test evidence must state that limitation separately.
+
+
+## Latest-main verification: 7f52596
+
+Fetched and merged verified main 7f5259626e919ce2a702486f174692ca77831cf3 into candidate ae203293abb567f1e43e14f0253e9cd218a4bf8f, producing local merge 1a83ce36d6334b5ddc2fc57e01c34e2b1efd5eb5. The merge was conflict-free and preserved both histories. Incoming changes were Caddie feedback, package scripts, tests and documentation; no social/profile or shared Modal source changed.
+
+Fresh npm run check passed 1,433 tests, TypeScript, lint and production build (existing large-chunk warnings remain). The full synthetic social Chromium suite passed 320/390/1440 layouts, zero/positive mutuals and transitions, private follow requests, removal, search, 30/60/65 paging, stale/error/cursor handling and navigation; 53 external requests were blocked. The separate synthetic keyboard suite passed show/hide, mount-open, search/Load more/Close, nested cancellation, background lock/restoration and reopen/navigation at 320/390; 9 external requests were blocked. Aggregate log: /tmp/golfme-main-7f52596-check.log on MGPC/WSL.
+
+Prior native evidence in public-social-lists-native.md remains tied to source d84360a3d4b4208723e24f62524aee42351fd4b9, not this latest merge. Native tests were not rerun here, and synthetic keyboard events do not prove actual Capacitor plugin delivery. Existing font-packaging/live-parity qualifications remain unchanged.
+
+Migration supabase/migrations/20261111085135_public_social_lists.sql remains unchanged, SHA-256 c985e9fbbbdd51aa7360ef374c0e1e850b0d63fbd479d6d0efd518d55f06d3c1. It remains unapproved/unapplied by this work. No push, deployment, production SQL, session refresh or sign-in occurred.
+
+Frontend-only extraction assessment (not performed): the authoritative zero-count hide guard and FollowersSheet keyboardAware opt-in are independent of new RPC/schema; minimum FollowControl touch height is also independent. Compact positive-summary styling can retain main's existing accepted-follow gate but cannot provide pre-follow visibility. Public list/mutual access, new cursor/search client and approval-description changes still depend on the feature migration and must not be published alone. Any extraction needs its own scoped review/tests.
