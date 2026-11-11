@@ -45,7 +45,7 @@ Current own-edge DELETE remains for older clients. It never creates a request or
 - Block INSERT obtains the same pair locks and cancels pending requests in both directions. Unblocking does not revive them. Existing accepted edges retain prior block behavior, becoming inaccessible while blocked rather than being silently deleted.
 - Acceptance after a concurrent cancellation/remove has to recheck current request status. Concurrent cancellation after acceptance returns unchanged; the client must refresh and can then offer Unfollow.
 
-No actual concurrent-session race execution is claimed by the single-user synthetic test. A two-connection disposable PostgreSQL test must still exercise lock ordering, privacy toggle vs follow, block vs request/accept, cancellation vs acceptance, and removal vs stale acceptance before release.
+The normal PostgreSQL 17.11 two-session harness now passed all ten lock-contention scenarios twice, including these orderings. The earlier single-user run was only a superseded diagnostic, not concurrency or RLS evidence. Full Supabase/API integration remains separate.
 
 ## API contract
 
@@ -94,16 +94,18 @@ Before release:
 Safe rollback after users enable approval is a frontend rollback/disable plus the protective backend retained, or a forward fix. Never restore broad graph SELECT or direct INSERT, drop saved privacy choices, or silently approve/delete pending requests to make an old client work. Rolling back an uncommitted migration transaction is safe.
 
 
-## Current execution results (2026-11-11)
+## Current execution results (2026-11-11, verified normal server)
 
-- Independent source security review found no actionable authorization blocker, including the direct own-DELETE compatibility path. This is a source-review result, not proof of runtime isolation.
-- The first byte-verified PostgreSQL 17.11 standalone run passed the initial graph endpoint assertions, then correctly stopped at the raw follows SELECT assertion. Diagnostics showed current_user=authenticated, rolsuper=false, but row_security_active=false and all 17 fixture edges readable: PostgreSQL single-user mode grants implicit superuser powers. The test transaction was rolled back and rollback was verified. The source assertion has **not** been weakened.
-- The full SQL authorization/state-transition/notification suite has **NOT passed**. Checks after that raw-SELECT assertion have not yet executed successfully under a permission-enforcing server.
-- An isolated normal Windows/MGPC PostgreSQL server is awaiting user approval. No normal server has been started by this backend worker. Normal-server RLS/grant execution and actual two-session races remain release gates.
-- The optional local-only race harness is scripts/staging/private-social-controls-races.mjs. node --check passed; the harness has **not been run**. It starts no server, installs nothing, refuses nonlocal hosts or a differently named database, and requires an explicit preparation flag before committing synthetic fixtures. It observes actual lock waits using pg_stat_activity rather than claiming a race from sequential calls.
-- Full-schema Supabase, real Auth/PostgREST, Realtime, real push delivery and physical-device validation remain unverified. The synthetic push helper is only a local sink.
-- No production SQL, migration-history repair, real-user write, push or deployment has occurred. Protective backend rules must remain in place if a frontend rollback is later needed.
-
+- Tested committed source: 5a2eeab9234f5acede37117a64c1f62d244a0888. Migration SHA-256 remains 69399931ce6f77e9ebbb829fc14729abd1f992a5bcf64c4237042f8b55ca657d. No implementation or assertion changes were needed to pass.
+- After explicit user approval, official PGDG Ubuntu packages were signature/index/checksum verified and extracted into a fresh temporary workspace on MGPC/Ubuntu-24.04 WSL. Server and psql are PostgreSQL 17.11; compatible libpq is 18.6. The server ran as nonroot shmick, with no system installation, service registration or firewall change.
+- The complete unchanged authorization fixture passed **139/139 assertions**, exit 0, on a normal permission-enforcing server. Its transaction rolled back; the synthetic profiles table and authenticated/anon/service_role roles were then verified absent.
+- The opt-in race harness prepared only synthetic fixtures in that same dedicated cluster and passed **all ten real concurrent-session scenarios twice**, exit 0 both times. Every scenario observed the competing session's actual Lock wait before releasing the first transaction.
+- Explicit RLS evidence: current_user=authenticated, session_user=postgres, row_security_active=true, rolsuper=false, rolbypassrls=false. Raw target-graph SELECT returned only the caller's one participant edge; direct INSERT permission was false.
+- The server used a private mode-0700 Unix socket with listen_addresses empty. Shutdown completed successfully; pg_ctl status returned 3 (no server running), and both postmaster.pid and the Unix-socket file were absent. The stopped synthetic cluster, extracted packages and logs remain in the temporary workspace for review.
+- Independent source review found no actionable SQL/client blocker. The earlier standalone PostgreSQL run correctly stopped because single-user mode bypassed RLS; it is retained as a **superseded diagnostic**, not the current database-test blocker. No assertion was weakened.
+- Evidence manifest: docs/qa/private-social-controls-db-results.json. It records the exact commit, source/package/log hashes, execution timestamp, RLS evidence and shutdown proof. Logs are under /tmp/golfme-private-social-pg17-EybDk1 on MGPC/WSL.
+- Remaining gaps: full-schema Supabase integration/advisors, real Auth/PostgREST end-to-end, Realtime/APNs delivery and physical-device cross-account behavior. The synthetic auth helper and push sink do not prove those integrations. The held production privilege-metadata query was not retried.
+- No production metadata/database call, real-user write, migration-history repair, push or deployment occurred during this validation. Local test approval does not authorize a production migration or publication. Protective backend rules must remain if a frontend rollback is later needed.
 
 ### Hardened test-harness setup requirements
 
@@ -116,4 +118,4 @@ The harness also requires the explicit flag `--acknowledge-dedicated-disposable-
 
 Pending session timers are cleared on child error, exit and close; an ended session rejects new work. Temporary-file cleanup checks the resolved directory first.
 
-Ten race scenarios are now prepared: privacy/follow in both orders, cancellation/acceptance in both orders, block/acceptance, acceptance/removal plus stale replay, opposite-direction follows, duplicate pending requests, and block/new-request in both orders. The harness observes the competing session's real Lock wait before releasing the first transaction. The added cases and hardened guards have passed static JavaScript syntax checking only. **Neither the harness nor normal-server SQL suite has run.** Setup approval is still pending; no server was started and the source migration is unchanged.
+Ten race scenarios are now prepared: privacy/follow in both orders, cancellation/acceptance in both orders, block/acceptance, acceptance/removal plus stale replay, opposite-direction follows, duplicate pending requests, and block/new-request in both orders. The harness observes the competing session's real Lock wait before releasing the first transaction. The hardened guards and all ten scenarios have now run successfully on the explicitly approved normal PostgreSQL 17.11 server, with two passing race-suite runs. The server is stopped, and the source migration is unchanged. The remaining Supabase/API/device gaps and release-approval requirements above still apply.

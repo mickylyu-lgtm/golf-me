@@ -1,0 +1,121 @@
+{
+  "tested_commit": "5a2eeab9234f5acede37117a64c1f62d244a0888",
+  "execution_environment": "MGPC / Ubuntu-24.04 WSL, nonroot shmick",
+  "postgresql_server": "17.11 (Ubuntu 17.11-1.pgdg24.04+2)",
+  "postgresql_client": "17.11 (Ubuntu 17.11-1.pgdg24.04+2)",
+  "package_source": "https://apt.postgresql.org/pub/repos/apt/",
+  "package_index_signature_fingerprint": "B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8",
+  "official_package_manifest": [
+    {
+      "Package": "libpq5",
+      "Version": "18.6-1.pgdg24.04+2",
+      "Filename": "pool/main/p/postgresql-18/libpq5_18.6-1.pgdg24.04+2_amd64.deb",
+      "SHA256": "b487c5ed2ceb9244c6a9d6ae65818ed6707c3c44a2e14488394ae4194c52c53b"
+    },
+    {
+      "Package": "postgresql-17",
+      "Version": "17.11-1.pgdg24.04+2",
+      "Filename": "pool/main/p/postgresql-17/postgresql-17_17.11-1.pgdg24.04+2_amd64.deb",
+      "SHA256": "d5b58058a82a3f344f832aea2cc54badc4f6265c25c960752cb1f5df5d2180ee"
+    },
+    {
+      "Package": "postgresql-client-17",
+      "Version": "17.11-1.pgdg24.04+2",
+      "Filename": "pool/main/p/postgresql-17/postgresql-client-17_17.11-1.pgdg24.04+2_amd64.deb",
+      "SHA256": "b3b071b67a814a382516d6f6241b529c52f909672457e2f48083acce047b634f"
+    }
+  ],
+  "source_sha256": {
+    "supabase/migrations/20261111051406_private_social_controls.sql": "69399931ce6f77e9ebbb829fc14729abd1f992a5bcf64c4237042f8b55ca657d",
+    "scripts/staging/private-social-controls-authz.sql": "43d126d08ec879fa8d53d05c041c5ddfc7f85081dd6a179601aaa4a3870bab08",
+    "scripts/staging/private-social-controls-races.mjs": "c3c649dc8c621c484bae85ef1839c03eb6ee2ea9688582ccccbce18fc1348175",
+    "supabase/migrations/20261108150000_follow_notifications.sql": "d7f698f002fb1db970127feed9229f95ee3c541a7f02ba64f0d442ac6a4c1038",
+    "supabase/migrations/20261111010730_profile_followers_visibility.sql": "cad8ed26a74c79d40e81647f8be82dfb14619c9a2398f73777136450aa80ecce"
+  },
+  "authorization_assertions_passed": 139,
+  "authorization_exit": 0,
+  "authorization_rolled_back_and_roles_removed": true,
+  "race_runs": [
+    {
+      "run": 1,
+      "scenarios_passed": 10,
+      "exit": 0,
+      "observed_lock_waits": true
+    },
+    {
+      "run": 2,
+      "scenarios_passed": 10,
+      "exit": 0,
+      "observed_lock_waits": true
+    }
+  ],
+  "execution_evidence": {
+    "rls": {
+      "current_user": "authenticated",
+      "session_user": "postgres",
+      "row_security_active": true,
+      "target_follower_rows_readable": 1,
+      "direct_insert_allowed": false,
+      "role_superuser": false,
+      "role_bypassrls": false
+    },
+    "network": {
+      "listen_addresses": "",
+      "unix_socket_directories": "/tmp/golfme-private-social-pg17-EybDk1/socket",
+      "unix_socket_permissions": "0700",
+      "port": "55439"
+    },
+    "race_repeat_exit": 0,
+    "stop_exit": 0,
+    "post_stop_status_exit": 3,
+    "postmaster_pid_file_present": false,
+    "socket_file_present": false,
+    "finished_at_utc": "2026-11-11T06:55:32.928002+00:00"
+  },
+  "scratch_root": "/tmp/golfme-private-social-pg17-EybDk1",
+  "logs": {
+    "authorization-run1.log": {
+      "path": "/tmp/golfme-private-social-pg17-EybDk1/authorization-run1.log",
+      "sha256": "db79365ae77209c543d874881d95679af8a33da46ffb706ccb3c95cc95a608a3"
+    },
+    "concurrency-run1.log": {
+      "path": "/tmp/golfme-private-social-pg17-EybDk1/concurrency-run1.log",
+      "sha256": "241f058c3bf7782a5b5da3e76e21604cf0346669cdc6ccad5febe936cdb9fd57"
+    },
+    "concurrency-run2.log": {
+      "path": "/tmp/golfme-private-social-pg17-EybDk1/concurrency-run2.log",
+      "sha256": "241f058c3bf7782a5b5da3e76e21604cf0346669cdc6ccad5febe936cdb9fd57"
+    },
+    "server.log": {
+      "path": "/tmp/golfme-private-social-pg17-EybDk1/server.log",
+      "sha256": "7f80df258a1d823b75600c45d9210c841cf8a8d35fe938b1a1666134089ed46b"
+    },
+    "initdb.log": {
+      "path": "/tmp/golfme-private-social-pg17-EybDk1/initdb.log",
+      "sha256": "2b8017a3a282ad5f5cdfb35cbcbe131d15021e03dd1836a3d9332efa3b70bd63"
+    },
+    "execution-evidence.json": {
+      "path": "/tmp/golfme-private-social-pg17-EybDk1/execution-evidence.json",
+      "sha256": "cdb08a6f61b1426a9dbcdfb892c5076308e3c43aca08884698d7d9615e58f962"
+    },
+    "package-manifest.json": {
+      "path": "/tmp/golfme-private-social-pg17-EybDk1/package-manifest.json",
+      "sha256": "aa3839774643315c4572bf30839c9f7883ec511e425a8c783c178d21e2eba087"
+    },
+    "InRelease": {
+      "path": "/tmp/golfme-private-social-pg17-EybDk1/InRelease",
+      "sha256": "136cf8d078315857e66c1fc6f30e9a3c667ec4c625e82a1d5fd56107071f9379"
+    }
+  },
+  "source_implementation_changed_for_tests": false,
+  "no_production_connections_or_writes": true,
+  "remaining_unverified": [
+    "Full Supabase schema integration and advisors",
+    "Real Auth/PostgREST API end-to-end",
+    "Realtime and actual APNs/push delivery",
+    "Physical device cross-account flows",
+    "Held production privilege-metadata query"
+  ],
+  "release_authorization": "No migration apply, push or deploy authorized by these local tests",
+  "cleanup": "Dedicated server stopped; PID and Unix-socket files absent; no TCP listener or system service. Extracted packages, stopped fake-data cluster and logs retained in temporary workspace for review."
+}
