@@ -1,6 +1,6 @@
 # Request rate limits: review and rollout
 
-Status: database migration approved, applied and verified on 2026-11-11. Matching service/frontend release is approved and in progress. No unrelated migration or security-setting changes.
+Status: released and verified on 2026-11-11. Main b6161d99a6dda69dd40e0b46ca235f60603e4b8f is live at golfme.app and exact-commit CI passed. Migration and four Edge Function bundles are verified. See request-rate-limits-release-results.json. No unrelated migration or security-setting changes.
 
 ## Threats and scope
 
