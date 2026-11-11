@@ -8,7 +8,7 @@ import { Modal } from "../src/components/ui/Modal";
 import { FullscreenMediaViewer } from "../src/components/community/FullscreenMediaViewer";
 import "../src/index.css";
 const video = "/artifacts.local/community-video.mp4";
-const photo = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="400" height="300" fill="#24664a"/><text x="60" y="150" font-size="25" fill="white">Synthetic gallery photo</text></svg>');
+const photo = "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="390" height="844"><rect width="390" height="844" fill="#24664a"/><text x="60" y="150" font-size="25" fill="white">Synthetic gallery photo</text></svg>');
 const media = [{ id: "one", type: "video", url: video }, { id: "photo", type: "image", url: photo }, { id: "two", type: "video", url: video }];
 const base = { authorId: "qa-author", text: "Synthetic local playback test", createdAt: new Date().toISOString(), category: "General" };
 export function Fixture() {

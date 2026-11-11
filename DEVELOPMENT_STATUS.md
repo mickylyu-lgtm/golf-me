@@ -1,11 +1,18 @@
 # GolfMe — Development Status
 
-## Community video: platform playback controls — 2026-11-11 (release authorized, checks passed)
+## Fullscreen media: compact Close control — 2026-11-11 (reviewed, release authorized)
+
+- User found the top-left Close button visually too large. Shared photo/video viewer now uses a 32px visible circle and 16px X inside the unchanged 44px semantic button. Keyboard focus has an explicit white outline and dark fill; safe-area position, dismissal and modal behavior are unchanged.
+- Full npm run check passed TypeScript, all 1,409 tests, lint (26 existing warnings/0 errors), build and prerender. Independent four-viewport browser rerun passed photo/video dimensions, keyboard focus, clicking the invisible outer hit area, nested Escape/focus and existing playback/gesture cases.
+- Screenshots show actual Chromium rendering with synthetic media. Physical iPhone/WebKit/VoiceOver checks remain unverified. No backend, database, native-shell or API changes. Release slot cleared; latest remote main verified as 3d946a8 before publication.
+
+
+## Community video: platform playback controls — 2026-11-11 (live, verification complete)
 
 - Tapping a swing or gallery video uses the shared native player lifecycle: platform controls and sound, no loop while open, current feed position retained, muted preview restored on exit. Accessible tap buttons replace bare video click targets. No Caddie analysis, media URL/security, backend, database or native-shell changes.
 - Refused/unavailable fullscreen opens a controlled in-app viewer with a timeline, play/pause and sound instead of the old tap/hold-only overlay. Inactive slides are inert and stop playing; every detached video pauses. Native dialog cancellation handles Escape from browser-owned media controls, retains modal-stack/scroll-lock behavior, and returns focus to the opener. Timeline gestures cannot dismiss the viewer. Close is 44 px and safe-area-aware.
 - Validation: 15 new native-session tests; npm run check passed all 1,409 tests, TypeScript, lint without errors, build and prerender. Local synthetic browser checks passed at 320×844, 390×844, 1440×844 and 844×390, including refused fullscreen, quick exit, timeline seeking, keyboard focus, mixed galleries, nested fullscreen and photo-sheet dismissal. Screenshots use a generated test clip, not a physical iPhone.
-- Independent review approved the exact player source. Integrated rate-limit main b6161d9 without player-source changes; final aggregate/UI reruns passed. User reviewed screenshots and authorized pushing. Next: coordinated fast-forward publication and exact-commit CI/production verification. Physical iPhone/WebKit playback, PiP/AirPlay and safe-area/rotation feel remain device checks. No push/deployment from this worktree yet. See docs/qa/community-video-player.md.
+- Independent review approved the exact player source. Integrated rate-limit main b6161d9 without player-source changes; final aggregate/UI reruns passed. User reviewed screenshots and authorized pushing. Published main 3d946a83ee870c1fcd524f3ad45178f00f41e6d5 and verified golfme.app READY at that exact commit (deployment dpl_5YNcTXazGwLdbKdPwYeF7A5wn4sE). GitHub CI 43049511106 passed; live /community and matching player assets returned 200. Physical iPhone/WebKit playback, PiP/AirPlay and safe-area/rotation feel remain device checks. See docs/qa/community-video-player.md.
 
 ## Shared request limits — 2026-11-11 (live, verification complete)
 

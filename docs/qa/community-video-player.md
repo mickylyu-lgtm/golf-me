@@ -26,4 +26,12 @@ WebKit events, refusal and PiP are modeled in unit tests. Physical iPhone/TestFl
 
 ## Release
 
-Independent review approved a3b6e6c; the final candidate includes origin/main b6161d9 with byte-identical player sources and fresh aggregate/UI passes. User reviewed screenshots and authorized publication. Do not claim pushed/live until remote and deployment are verified.
+Independent review approved a3b6e6c; the final candidate includes origin/main b6161d9 with byte-identical player sources and fresh aggregate/UI passes. User reviewed screenshots and authorized publication. Published main 3d946a83ee870c1fcd524f3ad45178f00f41e6d5; exact-commit CI 43049511106 passed, golfme.app deployment dpl_5YNcTXazGwLdbKdPwYeF7A5wn4sE was READY, and public /community plus matching player assets returned 200.
+
+## Compact Close follow-up
+
+User feedback requested a smaller top-left button. The visible background is now 32×32px with a 16px X, centered in the existing 44×44px button. The button has a white 2px focus-visible outline and dark focus fill. Existing positioning, safe-area offsets, modal stack, dismissal and touch gestures are unchanged.
+
+Fresh full check passed all 1,409 tests, TypeScript, lint (26 baseline warnings/0 errors), build and prerender. Independent browser runs passed all four viewports listed above. Added checks measure visible and hit-target geometry on photo and video viewers, verify the keyboard outline, and click outside the 32px circle but inside the 44px button to close only the nested photo viewer. All original playback, gesture, Escape and focus tests still pass.
+
+Screenshots artifacts.local/community-close-{photo,video}-{width}.png use actual Chromium rendering with synthetic media. They are not physical-device captures. This follow-up does not change native iOS player chrome or establish physical iPhone/VoiceOver validation.

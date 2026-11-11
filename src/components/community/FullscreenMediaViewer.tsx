@@ -239,16 +239,18 @@ export function FullscreenMediaViewer({ media, initialIndex = 0, onClose: onClos
         const activeVideo = [...(surfaceRef.current?.querySelectorAll("video") ?? [])].find((video) => !video.closest("[inert]"));
         (activeVideo ?? closeRef.current)?.focus({ preventScroll: true });
       }} />
-      {/* Top-left: a video's mute toggle owns the top-right corner. */}
+      {/* Compact visible control, with a full 44px touch/focus target. */}
       <button
         ref={closeRef}
         type="button"
         aria-label={t("common.close")}
         onClick={onClose}
-        className="absolute z-20 left-[max(1rem,env(safe-area-inset-left))] top-[calc(env(safe-area-inset-top)+1rem)] flex h-11 w-11 items-center justify-center rounded-full bg-black/40 text-white transition-colors duration-150 hover:bg-black/60"
+        className="group absolute z-20 left-[max(1rem,env(safe-area-inset-left))] top-[calc(env(safe-area-inset-top)+1rem)] flex h-11 w-11 items-center justify-center rounded-full text-white focus-visible:bg-black/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
         style={{ opacity: backdropOpacity }}
       >
-        <X size={18} />
+        <span aria-hidden="true" className="flex h-8 w-8 items-center justify-center rounded-full bg-black/40 transition-colors duration-150 group-hover:bg-black/60">
+          <X size={16} />
+        </span>
       </button>
       <div
         ref={surfaceRef}

@@ -50,6 +50,12 @@ try {
     assert.equal(await viewerVideo.evaluate(v => v.controls && !v.loop), true);
     assert.equal(await feed.evaluate(v => v.paused), true);
     assert.equal(await page.evaluate(() => document.activeElement?.getAttribute("aria-label")), "Close");
+    const close = page.getByRole("button", { name: "Close", exact: true });
+    const closeBox = await close.boundingBox();
+    const visibleCircle = await close.locator("span").boundingBox();
+    assert.equal(closeBox.width, 44); assert.equal(closeBox.height, 44);
+    assert.equal(visibleCircle.width, 32); assert.equal(visibleCircle.height, 32);
+    assert.equal(await close.locator("svg").getAttribute("width"), "16");
     await page.keyboard.press("Tab");
     assert.equal(await page.evaluate(() => document.activeElement?.tagName), "VIDEO", "Tab from Close reaches media, not background");
     for (let tab = 0; tab < 12; tab++) {
@@ -60,6 +66,7 @@ try {
     await viewerVideo.evaluate(v => { v.currentTime = 3; v.pause(); });
     assert.ok(Math.abs(await viewerVideo.evaluate(v => v.currentTime) - 3) < 0.1);
     await page.screenshot({ path: "artifacts.local/community-video-fallback-" + width + ".png" });
+    await page.screenshot({ path: "artifacts.local/community-close-video-" + width + ".png" });
     await viewerVideo.evaluate(v => v.requestFullscreen());
     await page.waitForFunction(() => !!document.fullscreenElement);
     await page.evaluate(() => document.querySelector("dialog").dispatchEvent(new Event("cancel", { cancelable: true })));
@@ -95,6 +102,7 @@ try {
     const albumOpen = page.getByTestId("album").getByRole("button", { name: "Full screen", exact: true }).first();
     await albumOpen.focus(); await page.keyboard.press("Enter"); await dialog.waitFor();
     assert.equal(await dialog.locator("video").first().evaluate(v => v.controls), true);
+    assert.equal(await page.getByRole("button", { name: "Close", exact: true }).evaluate(b => b.matches(":focus-visible") && getComputedStyle(b).outlineWidth === "2px"), true, "keyboard opener receives visible Close focus ring");
     await page.getByRole("button", { name: "Close", exact: true }).click();
     // Native timeline touches must never dismiss; a deliberate body drag can.
     await page.getByRole("button", { name: "Open gallery", exact: true }).click();
@@ -113,6 +121,13 @@ try {
     await page.getByRole("button", { name: "Open photo sheet", exact: true }).click();
     await page.getByRole("button", { name: "View photo", exact: true }).click();
     assert.equal(await page.getByRole("dialog", { includeHidden: true }).count(), 2);
+    const photoClose = page.locator("dialog").getByRole("button", { name: "Close", exact: true });
+    assert.equal((await photoClose.boundingBox()).width, 44);
+    assert.equal((await photoClose.locator("span").boundingBox()).width, 32);
+    await page.screenshot({ path: "artifacts.local/community-close-photo-" + width + ".png" });
+    await photoClose.click({ position: { x: 2, y: 22 } });
+    assert.equal(await page.getByRole("dialog", { includeHidden: true }).count(), 1, "invisible outer touch target still closes");
+    await page.getByRole("button", { name: "View photo", exact: true }).click();
     await page.keyboard.press("Escape");
     assert.equal(await page.getByRole("dialog", { includeHidden: true }).count(), 1, "photo Escape preserves the parent sheet");
     assert.equal(await page.getByRole("button", { name: "View photo", exact: true }).evaluate(b => document.activeElement === b), true);
