@@ -16,6 +16,7 @@ import {
   isTextMessage,
   normalizeEditText,
   parseEditResponse,
+  messagesWithEditor,
 } from "../src/lib/messageEdit.ts";
 import { UNSEND_WINDOW_MS } from "../src/lib/unsend.ts";
 import { messageActions } from "../src/lib/messageLongPress.ts";
@@ -134,4 +135,15 @@ test("edit: menu order Reply, Copy, Edit, Unsend; Edit only when allowed", () =>
   assert.deepEqual(messageActions({ canReply: true, canUnsend: true, canEdit: true }), ["reply", "copy", "edit", "unsend"]);
   assert.deepEqual(messageActions({ canReply: true, canUnsend: true }), ["reply", "copy", "unsend"]);
   assert.deepEqual(messageActions({ canReply: false, canUnsend: false, canEdit: true, canCopy: false }), ["edit"]);
+});
+
+test("inline edit: a removed message keeps its editor row without changing the source list", () => {
+  const rows = [{ id: "a" }, { id: "b" }];
+  const editing = { message: { id: "removed" }, index: 1 };
+  assert.deepEqual(messagesWithEditor(rows, editing).map((row) => row.id), ["a", "removed", "b"]);
+  assert.deepEqual(rows.map((row) => row.id), ["a", "b"]);
+  assert.equal(messagesWithEditor(rows, null), rows);
+  assert.equal(messagesWithEditor(rows, { message: rows[0], index: 0 }), rows);
+  assert.deepEqual(messagesWithEditor([], editing), [editing.message]);
+  assert.deepEqual(messagesWithEditor(rows, { ...editing, index: 100 }).map((row) => row.id), ["a", "b", "removed"]);
 });

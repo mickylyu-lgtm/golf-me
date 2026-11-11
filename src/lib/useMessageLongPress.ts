@@ -200,6 +200,9 @@ export function useMessageLongPress(
       open(bubble);
     };
     const onClickCapture = (e: MouseEvent) => {
+      // Editing is opened by a separate menu tap; its controls must work
+      // immediately even while the original hold suppresses its release.
+      if (e.target instanceof Element && e.target.closest("[data-chat-edit]")) return;
       if (Date.now() - firedAt < 700) {
         e.preventDefault();
         e.stopPropagation();

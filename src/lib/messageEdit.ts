@@ -7,7 +7,7 @@
 // never moves it). This file only decides whether to OFFER Edit, and how to
 // read the RPC's answer. The device clock is used for the offer only: a slow
 // phone may offer Edit a little late and the server then answers "expired";
-// the edit sheet stays open with the golfer's text so nothing typed is lost.
+// the inline editor stays open with the golfer's text so nothing typed is lost.
 // No React imports, so tests/messageEdit.test.ts runs under plain node.
 
 export const EDIT_WINDOW_MS = 5 * 60 * 1000;
@@ -134,4 +134,19 @@ export function demoEdit(
   if (next === target.text) return { result: "unchanged" };
   if (expectedText !== undefined && expectedText !== target.text) return { result: "conflict" };
   return { result: "edited", text: next, editedAt: new Date(nowMs).toISOString() };
+}
+
+// Keep an editor in its original row if realtime removes the message while
+// the golfer is typing. The mounted field keeps its draft and shows the
+// existing unsent/unavailable notice; it never recreates a persisted row.
+export interface EditingMessage<T extends { id: string }> {
+  message: T;
+  index: number;
+}
+
+export function messagesWithEditor<T extends { id: string }>(messages: T[], editing: EditingMessage<T> | null): T[] {
+  if (!editing || messages.some((message) => message.id === editing.message.id)) return messages;
+  const rows = [...messages];
+  rows.splice(Math.max(0, Math.min(editing.index, rows.length)), 0, editing.message);
+  return rows;
 }

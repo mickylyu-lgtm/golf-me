@@ -28,8 +28,8 @@ import { useExitPresence } from "../lib/useExitPresence";
 import { FOCUS_EXIT_MS } from "../lib/messageFocus";
 import { ReactionPill } from "../components/chat/ReactionPill";
 import { canUnsendMessage, unsendRemainingMs } from "../lib/unsend";
-import { canEditMessage, editRemainingMs } from "../lib/messageEdit";
-import { EditMessageSheet } from "../components/chat/EditMessageSheet";
+import { canEditMessage, editRemainingMs, messagesWithEditor, type EditingMessage } from "../lib/messageEdit";
+import { EditMessageBubble } from "../components/chat/EditMessageBubble";
 import { EditedMark } from "../components/chat/ChatBubbleParts";
 import { messageActions } from "../lib/messageLongPress";
 import { QUICK_REACTIONS, canReactToMessage, groupReactionsByMessage, myReaction, nextReaction, summarizeReactions, type QuickReaction } from "../lib/reactions";
@@ -267,7 +267,7 @@ export function DirectMessageThread() {
   }, [nextUnsendExpiry]);
   // Edit (lib/messageEdit.ts): my own text message within 5 minutes, only
   // where I can still post here. Same clock tick as Unsend; the server
-  // decides. The sheet (EditMessageSheet) is its own modal: the composer,
+  // decides. The editor replaces only this message row; the composer,
   // its draft and this thread's layout/keyboard code are untouched.
   const editEnabled = Boolean(other) && eligible && !blocked && canEditMessages;
   const editableIds = new Set(editEnabled ? messages.filter((m) => canEditMessage(m, currentUser.id, nowMs)).map((m) => m.id) : []);
@@ -279,7 +279,7 @@ export function DirectMessageThread() {
     const t = window.setTimeout(() => setNowMs(Date.now()), nextEditExpiry + 50);
     return () => window.clearTimeout(t);
   }, [nextEditExpiry]);
-  const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
+  const [editing, setEditing] = useState<EditingMessage<DirectMessage> | null>(null);
   useMessageLongPress(listRef, Boolean(other), (messageId, bubble) => {
     const m = messages.find((x) => x.id === messageId);
     // A photo still sending / not sent isn't a message yet.
@@ -819,7 +819,24 @@ export function DirectMessageThread() {
             </p>
           )}
           <div ref={rowsRef} className="flex flex-col gap-3">
-            {messages.map((m) => {
+            {messagesWithEditor(messages, editing).map((m) => {
+              if (editing?.message.id === m.id) {
+                return (
+                  <div key={m.id} data-reply-row={m.id} className="relative flex flex-row-reverse items-start gap-2">
+                    <ChatAvatarButton golfer={currentUser} isMe replyAvatar />
+                    <div className="min-w-0 max-w-[75%]">
+                      <EditMessageBubble
+                        key={m.id}
+                        initialText={editing.message.text}
+                        currentText={messagesById.get(m.id)?.text ?? editing.message.text}
+                        gone={!messagesById.get(m.id) || Boolean(messagesById.get(m.id)?.unsentAt)}
+                        onSave={(text, expected) => editDirectMessage(m.id, text, expected)}
+                        onClose={() => setEditing(null)}
+                      />
+                    </div>
+                  </div>
+                );
+              }
               const isMe = m.senderId === currentUser.id;
               const sent = formatMessageTime(m.createdAt, locale, t);
               const quoted = m.replyToId ? messagesById.get(m.replyToId) : undefined;
@@ -1179,23 +1196,14 @@ export function DirectMessageThread() {
           }}
           onEdit={() => {
             setActionsFor(null);
-            setEditing({ id: actionsMessage.id, text: actionsMessage.text });
+            setEditing({ message: actionsMessage, index: messages.findIndex((m) => m.id === actionsMessage.id) });
           }}
           onUnsend={() => handleUnsend(actionsMessage.id)}
           onCopy={() => handleCopy(actionsMessage.id)}
           onClose={closeActions}
         />
       )}
-      {editing && (
-        <EditMessageSheet
-          key={editing.id}
-          initialText={editing.text}
-          currentText={messagesById.get(editing.id)?.text ?? editing.text}
-          gone={!messagesById.get(editing.id) || Boolean(messagesById.get(editing.id)?.unsentAt)}
-          onSave={(text, expected) => editDirectMessage(editing.id, text, expected)}
-          onClose={() => setEditing(null)}
-        />
-      )}
+
       {reportOpen && <ReportModal reportedId={other.id} reportedName={other.name} context="chat" onClose={() => setReportOpen(false)} />}
       {clearConfirmOpen && (
         <ConfirmDialog

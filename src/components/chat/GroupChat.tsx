@@ -15,7 +15,7 @@ import { NewMessagesPill } from "./NewMessagesPill";
 import { MessageActionsMenu } from "./MessageActionsMenu";
 import { ReactionPill } from "./ReactionPill";
 import { EditedMark, MessageQuote, ReplyBar, RevealedTime } from "./ChatBubbleParts";
-import { EditMessageSheet } from "./EditMessageSheet";
+import { EditMessageBubble } from "./EditMessageBubble";
 import { useMessageLongPress } from "../../lib/useMessageLongPress";
 import { useSwipeToReply } from "../../lib/useSwipeToReply";
 import { useSwipeToRevealTimes } from "../../lib/useSwipeToRevealTimes";
@@ -23,7 +23,7 @@ import { useExitPresence } from "../../lib/useExitPresence";
 import { FOCUS_EXIT_MS } from "../../lib/messageFocus";
 import { messageActions } from "../../lib/messageLongPress";
 import { canUnsendMessage, unsendRemainingMs } from "../../lib/unsend";
-import { canEditMessage, editRemainingMs } from "../../lib/messageEdit";
+import { canEditMessage, editRemainingMs, messagesWithEditor, type EditingMessage } from "../../lib/messageEdit";
 import { QUICK_REACTIONS, groupReactionsByMessage, myReaction, nextReaction, summarizeReactions, type QuickReaction } from "../../lib/reactions";
 import { canRetryRoundMessage, editRejectedOutcome, isActionableRoundMessage } from "../../lib/roundChat";
 import { formatMessageTime } from "../../lib/messageTime";
@@ -353,7 +353,7 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
   }, [nextUnsendExpiry]);
   // Edit (lib/messageEdit.ts): my own stored text message within 5 minutes,
   // only while the chat takes posts (not read-only). The server decides
-  // (public.edit_round_message). The sheet is its own modal; the composer,
+  // (public.edit_round_message). Editing replaces only its row; the composer,
   // its draft and the docking / keyboard code are untouched.
   const editEnabled = !readOnly && canEditRoundMessages;
   const editableIds = new Set(
@@ -367,7 +367,7 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
     const timer = window.setTimeout(() => setNowMs(Date.now()), nextEditExpiry + 50);
     return () => window.clearTimeout(timer);
   }, [nextEditExpiry]);
-  const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
+  const [editing, setEditing] = useState<EditingMessage<ChatMessage> | null>(null);
   // Hold (touch) / right-click (mouse) any bubble that has one (not a system
   // line, not unsent, not a failed send) -> the focus menu.
   useMessageLongPress(listRef, true, (messageId, bubble) => {
@@ -623,7 +623,24 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
         )}
         {messages.length === 0 && <p className="text-center text-sm text-slate-400">{t("chat.noMessagesYet")}</p>}
         <div ref={rowsRef} className="flex flex-col gap-3">
-        {messages.map((m) => {
+        {messagesWithEditor(messages, editing).map((m) => {
+          if (editing?.message.id === m.id) {
+            return (
+              <div key={m.clientId ?? m.id} data-reply-row={m.id} className="relative flex flex-row-reverse items-start gap-2">
+                <ChatAvatarButton golfer={currentUser} isMe replyAvatar />
+                <div className="min-w-0 max-w-[75%]">
+                  <EditMessageBubble
+                    key={m.id}
+                    initialText={editing.message.text}
+                    currentText={messagesById.get(m.id)?.text ?? editing.message.text}
+                    gone={!messagesById.get(m.id) || Boolean(messagesById.get(m.id)?.unsentAt)}
+                    onSave={(text, expected) => editRoundMessage(m.id, text, expected)}
+                    onClose={() => setEditing(null)}
+                  />
+                </div>
+              </div>
+            );
+          }
           if (m.system) {
             return (
               <p key={m.id} className="text-center text-xs text-slate-400">
@@ -939,21 +956,11 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
           }}
           onEdit={() => {
             setActionsFor(null);
-            setEditing({ id: actionsMessage.id, text: actionsMessage.text });
+            setEditing({ message: actionsMessage, index: messages.findIndex((m) => m.id === actionsMessage.id) });
           }}
           onUnsend={() => handleUnsend(actionsMessage.id)}
           onCopy={() => handleCopy(actionsMessage.id)}
           onClose={closeActions}
-        />
-      )}
-      {editing && (
-        <EditMessageSheet
-          key={editing.id}
-          initialText={editing.text}
-          currentText={messagesById.get(editing.id)?.text ?? editing.text}
-          gone={!messagesById.get(editing.id) || Boolean(messagesById.get(editing.id)?.unsentAt)}
-          onSave={(text, expected) => editRoundMessage(editing.id, text, expected)}
-          onClose={() => setEditing(null)}
         />
       )}
     </div>
