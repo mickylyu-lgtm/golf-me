@@ -53,3 +53,11 @@ After integrating main146e928, the summary renders only when the loaded authorit
 Regression coverage includes hidden zero in accepted/nonfollowing states, positive2→1→0 mutations,1→0→1 restoration, pending positive prominence, accepted positive compaction and existing blocked/loading/error checks. The existing finalized paired screenshots are preserved without rewriting them.
 
 Final integrated validation: npm run check passed1,420 tests, TypeScript, lint and production build. Expanded synthetic Chromium suite passed zero in both modes and2→1→0, with53 nonlocal requests blocked.
+
+
+## Search-sheet keyboard opt-in
+FollowersSheet now opts into the existing Modal keyboardAware path. This uses the shared keyboard-height store to lift/shrink the sheet for Capacitor KeyboardResize.Body, lock background scrolling and restore sheet scroll after hide. No global Modal or native plugin behavior changed.
+
+Full npm run check passed1,421 tests plus types/lint/build. The complete synthetic social browser suite passed. scripts/check-profile-keyboard-ui.mjs tests real Modal/store layout with scripts/synthetic-keyboard-plugin.mjs as an explicitly synthetic keyboard source: show/hide, mount while open, search/results/Load more/Close reachability, background lock and scroll restoration, nested removal cancellation, reopen/navigation and320/390 sizes. Nested confirmation coverage verifies focus leaves search, then explicitly injects hide; it does not prove native hide delivery. Test plugin is not configured in shipping vite.config.ts.
+
+These synthetic events and bare WKWebView checks do not establish actual Capacitor keyboard-plugin delivery. Final native test evidence must state that limitation separately.

@@ -76,7 +76,7 @@ function FollowersSheet({ profileId, onClose }: { profileId: string; onClose: ()
   const { value: result, failed, busy, retry, loadMore } = useConnectionPages(read, permitted);
   const { value: totals, retry: retryTotals } = useSocialRead(readTotals, permitted);
   const rows = (result?.golfers ?? []).filter((g) => !isBlockedEitherWay(g.id));
-  return <Modal title={t("followers.connectionsTitle")} onClose={onClose}>
+  return <Modal keyboardAware title={t("followers.connectionsTitle")} onClose={onClose}>
     <div className="flex flex-col gap-4">
       <div className="flex rounded-xl bg-slate-100 p-1" aria-label={t("followers.connectionsTitle")}>
         {(["followers", "following"] as const).map((tab, i) => <button key={tab} type="button" aria-pressed={kind === tab}

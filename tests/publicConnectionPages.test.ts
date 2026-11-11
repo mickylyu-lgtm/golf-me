@@ -48,3 +48,11 @@ test("page rows populate public navigation cache only after current-scope valida
   assert.ok(pageRead.indexOf("await requireCurrentFollowerRead") < pageRead.indexOf("cache.set(golfer.id, golfer)"));
   assert.match(pageRead,/setProfileCache/);
 });
+
+test("searchable followers sheet opts into existing body-resize keyboard handling", () => {
+ const ui=readFileSync(new URL("../src/components/profile/ProfileFollowers.tsx",import.meta.url),"utf8");
+ assert.match(ui,/<Modal keyboardAware title=\{t\("followers.connectionsTitle"\)\}/);
+ const modal=readFileSync(new URL("../src/components/ui/Modal.tsx",import.meta.url),"utf8");
+ assert.match(modal,/useKeyboardHeight\(\)/);assert.match(modal,/lockPageScroll\(\)/);
+ assert.match(modal,/scrollTopBeforeKeyboardRef/);
+});
