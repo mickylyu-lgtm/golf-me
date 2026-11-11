@@ -7,6 +7,13 @@ Last updated: 2026-11-09 (**Desktop (Mac browser) layout**: split sign-in, wider
 Note: Phases between Phase 20/21 (see below) and Phase 22 span roughly 31 commits (2026-09-16 through 2026-09-21) that also never got a numbered write-up as they landed — Phase 22 below reconstructs them from `git log`/code review (that session's own commit messages are unusually detailed, so this is a faithful summary, not a guess) rather than live session narration. Older gap, still not backfilled: Phases between Phase 6 and Phase 20 (chat keyboard/Capacitor Keyboard native linking, floating swipeable BottomNav + auto-collapse + centering fixes, tee-time booking fallback hero image, and everything else through 2026-09-15) — see `git log` for that range (commits from "Prefer GolfCourseAPI v1.1 coordinates..." through "Floating pill bottom nav with press-and-slide tab selection, haptics, Caddie unify").
 
 
+## Exclusive inline editing - 2026-11-11 (local only, not deployed)
+
+- Follow-up to the compact inline editor: while Edit is open, the send composer is visibly dimmed and completely inactive. The inline edit field is the only accessible text input. The existing composer stays mounted, retaining its text, reply, picked media, voice mode and height; Save, Cancel or Escape restores it.
+- DM and round chat (fullscreen and embedded card) share the pause wrapper. Inert controls, a focus-preserving pointer shield, disabled textarea/Send and early send-handler guards prevent draft sends during editing without claiming the duplicate-send guard. Any open emoji popup closes. Server ownership and the five-minute edit limit are unchanged.
+- Branch `fix/exclusive-message-edit` starts at `07cefa0`; no unrelated checkout changes are included. Verification and synthetic screenshots are documented in `docs/qa/exclusive-message-edit-20261111.md`.
+- Local review only. No push, deployment, production data or migration change. Before release, check physical iPhone keyboard transfer and card undocking using the checklist below; Chromium cannot validate the native keyboard.
+
 ## Compact Community desktop feeds - 2026-11-11 (local only)
 
 - Branch `fix/community-desktop-layout-20261111` starts from clean preview `c5bb6c0`. It contains no followers feature or privacy-held changes. Claude's active checkout is untouched.

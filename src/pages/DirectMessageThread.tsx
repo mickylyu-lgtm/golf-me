@@ -7,6 +7,7 @@ import { Avatar } from "../components/ui/Avatar";
 import { Button } from "../components/ui/Button";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 import { ReportModal } from "../components/trust/ReportModal";
+import { PausedChatComposer } from "../components/chat/PausedChatComposer";
 import { ChatComposer } from "../components/chat/ChatComposer";
 import { FounderBadge } from "../components/golfer/TrustBadges";
 import { dmDraftKey, loadChatDraft, saveChatDraft } from "../lib/chatDraft";
@@ -613,6 +614,7 @@ export function DirectMessageThread() {
   // text goes back into the composer only if it is still empty with no
   // reply picked; otherwise it stays as a "Not sent" bubble below.
   async function handleSend() {
+    if (editing) return;
     if (!other) return;
     // With a photo: one message (photo + optional text + quote). It shows at
     // once with upload progress; a failure stays as a "Not sent" photo
@@ -1101,7 +1103,7 @@ export function DirectMessageThread() {
               You can't message this golfer right now.
             </p>
           ) : (
-            <>
+            <PausedChatComposer paused={Boolean(editing)}>
               {/* Rendered inside this same composer container, so the
                   list's existing ResizeObserver sees it exactly like the
                   composer growing a line (re-pins only if near bottom). */}
@@ -1132,6 +1134,7 @@ export function DirectMessageThread() {
               <MediaAttachmentStrip items={photo.state} onRemove={photo.remove} labels={mediaText.strip} />
               <ChatComposer
                 value={text}
+                disabled={Boolean(editing)}
                 onChange={handleComposerChange}
                 onSend={handleSend}
                 onBlur={stopTyping}
@@ -1144,7 +1147,7 @@ export function DirectMessageThread() {
                 photoBusy={photo.busy}
                 voice={voiceProps}
               />
-            </>
+            </PausedChatComposer>
           )}
         </div>
       </div>

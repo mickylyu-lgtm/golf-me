@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { AlertCircle, Lock, Reply } from "lucide-react";
 import { useData } from "../../context/DataContext";
 import { useToast } from "../../context/ToastContext";
+import { PausedChatComposer } from "./PausedChatComposer";
 import { ChatComposer } from "./ChatComposer";
 import { groupChatDraftKey, loadChatDraft, saveChatDraft } from "../../lib/chatDraft";
 import { useLocale } from "../../i18n/LocaleContext";
@@ -426,6 +427,7 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
   }
 
   async function handleSend() {
+    if (editing) return;
     const sending = text;
     if (readOnly) return;
     const roundId = callId;
@@ -881,33 +883,36 @@ export function GroupChat({ callId, layout = "card" }: { callId: string; layout?
         }
         style={composerDocked ? { bottom: `${keyboardHeight}px` } : undefined}
       >
-        {/* Inside the composer's own wrapper: docked, it rides on the
-            keyboard with the composer (the docked bar's ResizeObserver
-            above grows the spacer); on the page, the list's
-            ResizeObserver re-pins like a composer growing a line. */}
-        {replyTarget && replyEnabled && (
-          <ReplyBar
-            title={replyTarget.senderId === currentUser.id ? t("chat.replyingToSelf") : t("chat.replyingTo", { name: senderName(replyTarget.senderId) })}
-            text={replyTarget.unsentAt ? t("chat.messageUnsent") : previewOf(replyTarget)}
-            cancelLabel={t("chat.cancelReply")}
-            onCancel={() => setReplyToId(null)}
+        <PausedChatComposer paused={Boolean(editing)}>
+          {/* Inside the composer's own wrapper: docked, it rides on the
+              keyboard with the composer (the docked bar's ResizeObserver
+              above grows the spacer); on the page, the list's
+              ResizeObserver re-pins like a composer growing a line. */}
+          {replyTarget && replyEnabled && (
+            <ReplyBar
+              title={replyTarget.senderId === currentUser.id ? t("chat.replyingToSelf") : t("chat.replyingTo", { name: senderName(replyTarget.senderId) })}
+              text={replyTarget.unsentAt ? t("chat.messageUnsent") : previewOf(replyTarget)}
+              cancelLabel={t("chat.cancelReply")}
+              onCancel={() => setReplyToId(null)}
+            />
+          )}
+          <MediaAttachmentStrip items={photo.state} onRemove={photo.remove} labels={mediaText.strip} />
+          <ChatComposer
+            value={text}
+            disabled={Boolean(editing)}
+            onChange={updateText}
+            onSend={handleSend}
+            placeholder={t("chat.messagePlaceholder")}
+            onPickFiles={canSendRoundImages ? photo.pick : undefined}
+            mediaAccept={canSendRoundMedia ? "image/*,video/*" : "image/*"}
+            mediaMultiple={canSendRoundMedia}
+            onMediaTooLarge={() => showToast(mediaText.pickError("videoTooLarge"), "warning")}
+            photoLabel={canSendRoundMedia ? mediaText.addLabel : t("chat.addPhoto")}
+            photoKey={photo.sendKey}
+            photoBusy={photo.busy}
+            voice={voiceProps}
           />
-        )}
-        <MediaAttachmentStrip items={photo.state} onRemove={photo.remove} labels={mediaText.strip} />
-        <ChatComposer
-          value={text}
-          onChange={updateText}
-          onSend={handleSend}
-          placeholder={t("chat.messagePlaceholder")}
-          onPickFiles={canSendRoundImages ? photo.pick : undefined}
-          mediaAccept={canSendRoundMedia ? "image/*,video/*" : "image/*"}
-          mediaMultiple={canSendRoundMedia}
-          onMediaTooLarge={() => showToast(mediaText.pickError("videoTooLarge"), "warning")}
-          photoLabel={canSendRoundMedia ? mediaText.addLabel : t("chat.addPhoto")}
-          photoKey={photo.sendKey}
-          photoBusy={photo.busy}
-          voice={voiceProps}
-        />
+        </PausedChatComposer>
       </div>
       )}
       {viewerUrl && <FullscreenMediaViewer media={[{ id: "chat-photo", type: "image", url: viewerUrl }]} onClose={() => setViewerUrl(null)} />}

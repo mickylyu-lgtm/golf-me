@@ -19,6 +19,8 @@ interface ChatComposerProps {
   value: string;
   onChange: (value: string) => void;
   onSend: () => void;
+  // An inline edit owns text entry; retain this composer and its draft.
+  disabled?: boolean;
   placeholder?: string;
   onBlur?: () => void;
   // Photos (lib/chatImages.ts). The photo button shows only when the page
@@ -66,6 +68,7 @@ export function ChatComposer({
   value,
   onChange,
   onSend,
+  disabled = false,
   placeholder = "Type a message...",
   onBlur,
   onPickImage,
@@ -141,6 +144,10 @@ export function ChatComposer({
     return () => ro.disconnect();
   }, [value]);
 
+  useLayoutEffect(() => {
+    if (disabled) setEmojiOpen(false);
+  }, [disabled]);
+
   // A different photo (picked, removed, or taken by a send) is a new draft.
   useLayoutEffect(() => {
     sendGuardRef.current.release();
@@ -149,7 +156,7 @@ export function ChatComposer({
   function send() {
     // One send per draft (lib/sendGuard.ts): Enter and the button can't
     // both send the same text (or the same photo) before the page clears it.
-    if (photoBusy) return;
+    if (disabled || photoBusy) return;
     if (!sendGuardRef.current.claim(draftSendKey(value, photoKey))) return;
     onSend();
   }
@@ -172,6 +179,7 @@ export function ChatComposer({
   // keyboard for a focus() made within a user gesture -- and only when it
   // had focus at press time, so a send never opens a closed keyboard.
   function handleSendClick() {
+    if (disabled) return;
     const wasFocused = focusedAtPressRef.current;
     focusedAtPressRef.current = false;
     send();
@@ -291,6 +299,7 @@ export function ChatComposer({
         <textarea
           ref={textareaRef}
           value={value}
+          disabled={disabled}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={handleKeyDown}
           onBlur={onBlur}
@@ -318,7 +327,7 @@ export function ChatComposer({
         }}
         onMouseDown={(e) => e.preventDefault()}
         onClick={handleSendClick}
-        disabled={photoBusy || (!value.trim() && !photoKey)}
+        disabled={disabled || photoBusy || (!value.trim() && !photoKey)}
         // Medium haptic per send in the native app. Only an attribute read by
         // lib/tapFeedback's document click listener: no handler, no focus or
         // keyboard effect.
