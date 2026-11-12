@@ -1,5 +1,13 @@
 # GolfMe — Development Status
 
+## Host Round: course results above keyboard — 2026-11-12 (tested, release authorized)
+
+- Fixes the mismatch between 132px reveal space and a 256px results panel. Inline search now sizes the scrollable options to the actual native/Safari visible area, with minimal reveal, stable query/status updates and internal active-option scrolling.
+- Retains scroll room until delayed web keyboard recovery, preserves desktop selection focus and cancels motion on dismissal/unmount. No frozen chat/native plugin, modal, backend or database change.
+- Actual-component Chromium/WebKit synthetic checks cover portrait, landscape, desktop, last-result selection, delayed keyboard dismissal, query states, keyboard navigation and interrupted cleanup. Final npm run check passes TypeScript, lint (28 baseline warnings/zero errors), 1,511 tests, build/prerender; Chromium and WebKit each pass 99 assertions. Independent review has no remaining blocker. No physical iPhone or live-account test claimed.
+- User standing authorization and parent release clearance confirmed. Next: publish, then verify exact-commit CI and production. Details: docs/qa/host-course-keyboard-20261112.md.
+
+
 ## Caddie translation retry backoff — 2026-11-12 (tested locally, not published)
 
 - Fixed the existing immediate auto-translation retry loop exposed by long-lived request-budget 429 responses. The detail page now honors Retry-After/header/body deadlines, including the daily budget, uses bounded fallback backoff for missing metadata, and retains one cancellable timer. No quota, database, Edge Function, language/content, or native-shell changes.

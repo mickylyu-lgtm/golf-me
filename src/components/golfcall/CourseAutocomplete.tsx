@@ -4,7 +4,7 @@ import { Check, Plus } from "lucide-react";
 import { useNearbyCourses, useCourseTextSearch } from "../../lib/useCourseSearch";
 import { Capacitor } from "@capacitor/core";
 import { useKeyboardHeight } from "../../lib/useKeyboardHeight";
-import { KEYBOARD_GAP_PX } from "../../lib/revealFocusedField";
+import { courseSearchViewport, courseSearchListHeight } from "../../lib/courseSearchViewport";
 import { revealDelta } from "../../lib/minimalReveal";
 import { createFrameScheduler } from "../../lib/frameScheduler";
 import { animateWindowBy } from "../../lib/keyboard/smoothScroll";
@@ -32,16 +32,13 @@ interface CourseAutocompleteProps {
   recentCourses?: string[];
   preferredCourses?: string[];
   location?: PlayingArea;
-  /** On a normal page in the iOS app, this component keeps the field and
-   * its first suggestions above the keyboard itself (see below) instead of
-   * the app-wide reveal. Leave off inside a modal: the sheet's own scroller
-   * handles it there. */
+  /** On a normal page, keep the field and a scrollable results window above
+   * native or web keyboards instead of the app-wide field-only reveal.
+   * Leave off inside a modal: the sheet owns its scrolling there. */
   inlineSuggestions?: boolean;
 }
 
 const NEARBY_RADIUS_MILES = 30;
-// Gap kept between the app header and the field.
-const REVEAL_GAP_PX = 12;
 // Room wanted under the field for suggestions: about two and a half rows,
 // enough to see there are results without pushing the field far up.
 const SUGGESTION_ROOM_PX = 132;
@@ -92,68 +89,103 @@ export function CourseAutocomplete({ value, onChange, onPickKnownCourse, recentC
   const noResults = hasQuery && !searchState.loading && !searchState.error && filtered.length === 0;
   const showDropdown = focused && !dismissed && hasQuery && (searchState.loading || Boolean(searchState.error) || filtered.length > 0 || noResults);
 
-  // ── Keeping the field above the iOS keyboard (inlineSuggestions only) ──
-  // capacitor.config.ts uses Keyboard resize:"body", which only sets
-  // document.body's inline height: window.innerHeight and the document's
-  // scroll range don't change for the keyboard, and Host a Round's step is
-  // shorter than the screen (scroll range ~0). So, while the field has
-  // focus, an invisible absolutely-positioned spacer hangs off it to give
-  // the page room to scroll (it moves nothing in the layout).
-  //
-  // The page is then scrolled by the SMALLEST amount that puts the field and
-  // ~2.5 suggestion rows between the header and the keyboard
-  // (lib/minimalReveal), and not at all when they already fit. It's checked
-  // again only when something actually moved: the keyboard height changed,
-  // or content above the field resized (the nearby-course chips arriving).
-  // No timed re-scroll and no snapping back to an older position on close
-  // (Micky, 2026-11-04: the field "jumps toward the top"). Nothing here
-  // runs on web/PWA, where the browser handles the keyboard itself.
+  // Own only this inline search. Native resize:body reports keyboard height;
+  // Safari reports a smaller visualViewport. Use their intersection, never
+  // subtract both. Chat and modal keyboard handling are deliberately untouched.
   const isNative = Capacitor.isNativePlatform();
   const keyboardHeight = useKeyboardHeight();
-  const revealing = inlineSuggestions && isNative && focused && keyboardHeight > 0;
-  const rootRef = useRef<HTMLDivElement>(null);
+  const picksRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const [listHeight, setListHeight] = useState<number | undefined>();
+  const [webKeyboardOpen, setWebKeyboardOpen] = useState(false);
+  useLayoutEffect(() => {
+    if (!inlineSuggestions || isNative) return;
+    const viewport = window.visualViewport;
+    const update = () => setWebKeyboardOpen((viewport?.height ?? window.innerHeight) < window.innerHeight - 100);
+    update();
+    viewport?.addEventListener("resize", update);
+    window.addEventListener("resize", update);
+    return () => {
+      viewport?.removeEventListener("resize", update);
+      window.removeEventListener("resize", update);
+    };
+  }, [inlineSuggestions, isNative]);
 
   useLayoutEffect(() => {
-    if (!revealing) return;
-    // The scroll itself is a short motion (lib/keyboard/smoothScroll.ts,
-    // instant with reduced motion) to the same position; a re-check while it
-    // runs measures the rest of the way, i.e. the same target, so it just
-    // continues. It stops once this effect is cleaned up (blur, keyboard
-    // closed or resized, unmount) or the field loses focus.
+    if (!inlineSuggestions || !focused || dismissed) {
+      setListHeight(undefined);
+      return;
+    }
     let live = true;
+    const bounds = () => courseSearchViewport({
+      height: window.innerHeight,
+      keyboardHeight: isNative ? keyboardHeight : 0,
+      viewportTop: window.visualViewport?.offsetTop ?? 0,
+      viewportHeight: window.visualViewport?.height ?? window.innerHeight,
+      headerBottom: document.querySelector("header")?.getBoundingClientRect().bottom ?? 0,
+    });
+    const measureList = () => {
+      if (!live) return;
+      const list = listRef.current;
+      if (list) {
+        const height = courseSearchListHeight(list.getBoundingClientRect().top, bounds().bottom);
+        setListHeight((previous) => previous === height ? previous : height);
+      }
+    };
     const keep = () => {
       const input = inputRef.current;
-      // Only while this field still has the keyboard: a check that arrives
-      // after it lost focus must never move the page.
       if (!input || document.activeElement !== input) return;
       const rect = input.getBoundingClientRect();
-      const headerBottom = document.querySelector("header")?.getBoundingClientRect().bottom ?? 0;
+      const band = bounds();
       const delta = revealDelta({
         fieldTop: rect.top,
         fieldBottom: rect.bottom,
         room: SUGGESTION_ROOM_PX,
-        visibleTop: Math.max(headerBottom, 0) + REVEAL_GAP_PX,
-        visibleBottom: window.innerHeight - keyboardHeight - KEYBOARD_GAP_PX,
+        visibleTop: band.top,
+        visibleBottom: band.bottom,
       });
       if (delta !== 0) animateWindowBy(delta, { guard: () => live && document.activeElement === input });
+      measureList();
     };
+    // Resizes may reveal the field; ordinary scroll only resizes the list.
+    // Never fight an intentional page/list drag or re-scroll on each letter.
+    const reveal = createFrameScheduler(keep, (cb) => window.requestAnimationFrame(cb), (id) => window.cancelAnimationFrame(id));
+    const measure = createFrameScheduler(measureList, (cb) => window.requestAnimationFrame(cb), (id) => window.cancelAnimationFrame(id));
+    const viewport = window.visualViewport;
+    const onResize = () => reveal.schedule();
+    const onScroll = () => measure.schedule();
+    viewport?.addEventListener("resize", onResize);
+    viewport?.addEventListener("scroll", onScroll);
+    window.addEventListener("resize", onResize);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    const observer = new ResizeObserver(onResize);
+    if (picksRef.current) observer.observe(picksRef.current);
+    if (inputRef.current) observer.observe(inputRef.current);
     keep();
-    // Content above the field resizing (chips, status rows) and the
-    // plugin's body resize after the keyboard opens are the only things
-    // that can move the field from here; re-check on those, at most once a
-    // frame. Cleanup (blur, keyboard closed or resized, unmount) cancels a
-    // queued check so it can't fire late with the old keyboard height.
-    const scheduler = createFrameScheduler(keep, (cb) => window.requestAnimationFrame(cb), (id) => window.cancelAnimationFrame(id));
-    const observer = new ResizeObserver(() => scheduler.schedule());
-    if (rootRef.current) observer.observe(rootRef.current);
-    observer.observe(document.body);
     return () => {
       live = false;
       observer.disconnect();
-      scheduler.dispose();
+      reveal.dispose();
+      measure.dispose();
+      viewport?.removeEventListener("resize", onResize);
+      viewport?.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("scroll", onScroll);
     };
-  }, [revealing, keyboardHeight]);
+  }, [inlineSuggestions, focused, dismissed, keyboardHeight, isNative, showDropdown]);
+
+  // aria-activedescendant does not scroll options automatically. Reveal only
+  // inside the results, not scrollIntoView (which can pan the whole page).
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    const option = list?.children[activeIndex] as HTMLElement | undefined;
+    if (!list || !option || activeIndex < 0) return;
+    const top = option.offsetTop;
+    if (top < list.scrollTop) list.scrollTop = top;
+    else if (top + option.offsetHeight > list.scrollTop + list.clientHeight)
+      list.scrollTop = top + option.offsetHeight - list.clientHeight;
+  }, [activeIndex]);
 
   // A blur closes the list a moment later (so a tap on a suggestion still
   // lands); refocusing in that moment keeps it open.
@@ -188,7 +220,7 @@ export function CourseAutocomplete({ value, onChange, onPickKnownCourse, recentC
     setActiveIndex(-1);
     // A pick while the keyboard is up is the end of the search: close the
     // keyboard so the page comes back with the course filled in.
-    if (revealing) inputRef.current?.blur();
+    if (inlineSuggestions && (keyboardHeight > 0 || (window.visualViewport?.height ?? window.innerHeight) < window.innerHeight - 100)) inputRef.current?.blur();
   }
 
   function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {
@@ -217,36 +249,38 @@ export function CourseAutocomplete({ value, onChange, onPickKnownCourse, recentC
   const optionId = (i: number) => `${listId}-opt-${i}`;
 
   return (
-    <div ref={rootRef} className="flex flex-col gap-2">
-      <CourseSearchStatus loading={nearbyState.loading} error={nearbyState.error} onRetry={nearbyState.retry} />
-      {quickPicks.length > 0 ? (
-        <div>
-          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t("courseAutocomplete.quickPicks")}</p>
-          <div className="flex flex-wrap gap-1.5">
-            {quickPicks.map((p) => (
-              <button
-                key={p.id ?? p.name}
-                type="button"
-                // Tapping the selected pick again unselects it (Micky, 2026-11-03).
-                onClick={() => (value === p.name ? onChange("") : pick(p))}
-                aria-pressed={value === p.name}
-                className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors duration-150 ${
-                  value === p.name
-                    ? "border-transparent bg-fairway-600 text-white"
-                    : "border-fairway-200 bg-fairway-50/70 text-fairway-700 hover:bg-fairway-100"
-                }`}
-              >
-                {value === p.name ? <Check size={12} /> : <Plus size={12} />}
-                {p.name} <span className="opacity-60">· {p.label}</span>
-              </button>
-            ))}
+    <div className="flex flex-col gap-2">
+      <div ref={picksRef}>
+        <CourseSearchStatus loading={nearbyState.loading} error={nearbyState.error} onRetry={nearbyState.retry} />
+        {quickPicks.length > 0 ? (
+          <div>
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t("courseAutocomplete.quickPicks")}</p>
+            <div className="flex flex-wrap gap-1.5">
+              {quickPicks.map((p) => (
+                <button
+                  key={p.id ?? p.name}
+                  type="button"
+                  // Tapping the selected pick again unselects it (Micky, 2026-11-03).
+                  onClick={() => (value === p.name ? onChange("") : pick(p))}
+                  aria-pressed={value === p.name}
+                  className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors duration-150 ${
+                    value === p.name
+                      ? "border-transparent bg-fairway-600 text-white"
+                      : "border-fairway-200 bg-fairway-50/70 text-fairway-700 hover:bg-fairway-100"
+                  }`}
+                >
+                  {value === p.name ? <Check size={12} /> : <Plus size={12} />}
+                  {p.name} <span className="opacity-60">· {p.label}</span>
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-      ) : (
-        location?.coords && !nearbyState.loading && !nearbyState.error && (
-          <p className="text-xs text-slate-500">{t("courseAutocomplete.noNearbyCourses")}</p>
-        )
-      )}
+        ) : (
+          location?.coords && !nearbyState.loading && !nearbyState.error && (
+            <p className="text-xs text-slate-500">{t("courseAutocomplete.noNearbyCourses")}</p>
+          )
+        )}
+      </div>
       {/* Opted out of useDismissKeyboardOnDrag: the suggestions only show
           while the field has focus, so dragging this list to reach a course
           keeps the keyboard up. A drag elsewhere still closes it. The input
@@ -255,15 +289,17 @@ export function CourseAutocomplete({ value, onChange, onPickKnownCourse, recentC
           itself above the keyboard, so it opts out of the app-wide reveal
           (useRevealFocusedFieldAboveKeyboard). */}
       <div data-keyboard-drag-dismiss="off" data-keyboard-reveal={inlineSuggestions ? "off" : undefined} className="relative">
-        {inlineSuggestions && isNative && (focused || keyboardHeight > 0) && (
+        {inlineSuggestions && (focused || keyboardHeight > 0 || webKeyboardOpen) && (
           // Invisible scroll room (see above): absolutely positioned, so it
           // adds to the page's scroll range without moving anything. Kept
           // until the keyboard has finished closing, so the page settles
           // back together with the keyboard rather than jumping after it.
           <div aria-hidden className="pointer-events-none invisible absolute inset-x-0 top-0" style={{ height: window.innerHeight }} />
         )}
-        {quickPicks.length > 0 && <label className={labelClass}>{t("courseAutocomplete.searchAllCourses")}</label>}
+        {quickPicks.length > 0 && <label htmlFor={`${listId}-input`} className={labelClass}>{t("courseAutocomplete.searchAllCourses")}</label>}
         <input
+          id={`${listId}-input`}
+          aria-label={t("courseAutocomplete.searchAllCourses")}
           ref={inputRef}
           className={inputClass}
           value={value}
@@ -291,7 +327,7 @@ export function CourseAutocomplete({ value, onChange, onPickKnownCourse, recentC
           // In normal flow under the field everywhere (a floating list was
           // clipped inside sheets), and bounded: it scrolls itself instead
           // of growing the page.
-          <div id={listId} role="listbox" className="relative mt-1.5 max-h-64 overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white">
+          <div ref={listRef} style={listHeight === undefined ? undefined : { maxHeight: listHeight }} id={listId} role="listbox" className="relative mt-1.5 max-h-64 overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white">
             {/* Real search refetches 300 ms after each keystroke: keep the
                 previous suggestions tappable meanwhile instead of blanking
                 the list to a spinner on every letter. */}
@@ -316,8 +352,8 @@ export function CourseAutocomplete({ value, onChange, onPickKnownCourse, recentC
                   }`}
                 >
                   <Plus size={13} className="text-fairway-600 shrink-0" />
-                  <span className="flex-1">{c.name}</span>
-                  {c.area && <span className="shrink-0 text-xs text-slate-400">{c.area}</span>}
+                  <span className="min-w-0 flex-1 break-words">{c.name}</span>
+                  {c.area && <span className="max-w-[45%] text-right text-xs text-slate-400 break-words">{c.area}</span>}
                 </button>
               ))
             )}
