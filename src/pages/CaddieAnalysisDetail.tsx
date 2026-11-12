@@ -590,7 +590,7 @@ export function CaddieAnalysisDetail() {
         <div className="flex flex-col gap-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 px-4 py-3.5">
           {/* Real rows: the persisted stage + elapsed, honest long-wait copy and Check again. Demo rows have no job columns. */}
           <CaddieThinking job={isDemo ? undefined : analysis} onCheckAgain={isDemo ? undefined : checkStatus} />
-          <p className="pl-16 text-xs text-slate-500">{t("swingAnalysis.processingDescription")}</p>
+          <p className="text-xs text-slate-500">{t("swingAnalysis.processingDescription")}</p>
         </div>
       )}
 

@@ -1,0 +1,114 @@
+/* Caddie processing scene (CaddieWaitScene.tsx). Decorative only: these
+   overlays never say how far along an analysis is; the stage they show is
+   the one the server saved. Transforms and opacity only. The static base
+   styles below are also the reduced-motion composition. */
+.gm-wait-scene {
+  display: block;
+  width: 100%;
+  height: auto;
+  pointer-events: none;
+}
+
+.gm-wait-film,
+.gm-wait-scan,
+.gm-wait-line,
+.gm-wait-save {
+  transform-box: fill-box;
+}
+
+.gm-wait-line,
+.gm-wait-save {
+  transform-origin: left center;
+}
+
+.gm-wait-scan {
+  opacity: 0;
+}
+
+.gm-wait-halo {
+  opacity: 0.32;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Reading frames: the strip ticks by one frame at a time. */
+  .gm-wait-film {
+    animation: gm-wait-film 4.8s steps(8, end) infinite;
+  }
+
+  /* Finding the body: a soft band sweeps the golfer, joints breathe. */
+  .gm-wait-scan {
+    animation: gm-wait-scan 3.2s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  }
+
+  .gm-wait-halo {
+    animation: gm-wait-halo 1.6s ease-in-out infinite;
+  }
+
+  /* Writing feedback: lines type in one after another. */
+  .gm-wait-line {
+    animation: var(--gm-wait-line-anim) 6s cubic-bezier(0.3, 0, 0.3, 1) infinite;
+  }
+
+  /* Saving: one slow fill, then it stays. */
+  .gm-wait-save {
+    animation: gm-wait-save 2.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+}
+
+@keyframes gm-wait-film {
+  from { transform: translateX(0); }
+  to { transform: translateX(-208px); }
+}
+
+@keyframes gm-wait-scan {
+  0% { transform: translateX(0); opacity: 0; }
+  12% { opacity: 1; }
+  50% { transform: translateX(118px); opacity: 1; }
+  62%, 100% { transform: translateX(118px); opacity: 0; }
+}
+
+@keyframes gm-wait-halo {
+  0%, 100% { opacity: 0.12; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes gm-wait-line-1 {
+  0% { transform: scaleX(0); opacity: 1; }
+  12%, 88% { transform: scaleX(1); opacity: 1; }
+  96%, 100% { transform: scaleX(1); opacity: 0; }
+}
+
+@keyframes gm-wait-line-2 {
+  0%, 16% { transform: scaleX(0); opacity: 1; }
+  28%, 88% { transform: scaleX(1); opacity: 1; }
+  96%, 100% { transform: scaleX(1); opacity: 0; }
+}
+
+@keyframes gm-wait-line-3 {
+  0%, 32% { transform: scaleX(0); opacity: 1; }
+  44%, 88% { transform: scaleX(1); opacity: 1; }
+  96%, 100% { transform: scaleX(1); opacity: 0; }
+}
+
+@keyframes gm-wait-line-4 {
+  0%, 48% { transform: scaleX(0); opacity: 1; }
+  56%, 88% { transform: scaleX(1); opacity: 1; }
+  96%, 100% { transform: scaleX(1); opacity: 0; }
+}
+
+@keyframes gm-wait-save {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+/* Tip swap */
+@media (prefers-reduced-motion: no-preference) {
+  .gm-wait-tip {
+    animation: gm-wait-tip 600ms ease-out both;
+  }
+}
+
+@keyframes gm-wait-tip {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
