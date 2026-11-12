@@ -1,5 +1,11 @@
 # GolfMe — Development Status
 
+## Auto-Match two-second radar minimum — 2026-11-12 (tested, release authorized)
+
+- Micky explicitly requested two seconds to inspect the selected radar. Each Auto-Match entry/search now shows the radar for at least two seconds, including cached/demo/empty outcomes. Lazy-route loading contributes to the same deadline; real loading that takes longer continues normally and does not add another two seconds after completion.
+- Errors and eligible location prompts bypass the presentation hold. Retry/new searches start a fresh window; Back/unmount cancels the timer and stale callbacks cannot release a newer visit/search. Show Another, preference-sheet dismissal and ordinary rerenders do not restart it. Reduced motion keeps the scene static. Fetches, ranking, data, navigation controls and all translations remain unchanged.
+- Base 4bca641. Full npm run check passes TypeScript, 1,493 tests (zero failing/skipped), lint (28 baseline warnings/zero errors), build and prerender. Independent review passes all 19 focused tests. Chromium and WebKit each pass 199 synthetic assertions covering fast/cached/demo/empty outcomes, slow requests, retry, cancelled lazy navigation, rapid re-entry, fresh searches, reduced motion and the prior responsive/locale states. No runtime errors. No database/backend/native-shell changes. Next: publish within the authorized release, verify exact-commit CI and production. Details: docs/qa/auto-match-motion-20261112.md.
+
 ## Round-completion success haptic — 2026-11-12 (tested, release authorized)
 
 - Moves the existing success haptic from celebration-card mounting into a once-per-account/round completion gate. Real writes must return a matching completed row; zero-row, failed and repeated transitions do not claim success. Late route/account callbacks and repeated mounts cannot buzz again, including blocked local storage.

@@ -17,6 +17,7 @@ import { LocationPicker } from "../components/location/LocationPicker";
 import { LoadErrorState } from "../components/ui/LoadStates";
 import { AutoMatchLoader, AutoMatchScene } from "../components/find/AutoMatchScene";
 import { listView } from "../lib/loadStatus";
+import { useAutoMatchPresentation } from "../lib/useAutoMatchPresentation";
 import { SharedPreferencesBadge } from "../components/golfcall/SharedPreferencesBadge";
 import { rankCallsWithPreferences } from "../lib/autoMatch";
 import { effectiveNewPreferences } from "../lib/matchPreferences";
@@ -221,6 +222,9 @@ export function AutoMatch() {
   const preferenceHeaderKey = current && currentIsStrong ? preferenceTierKey(current.preferenceTier) : null;
   // Real golfers load separately from rounds; don't call it empty early.
   const golfersPending = (!isDemo && !social.hasLoaded) || golferSource === "pending";
+  const matchPending = roundsView === "loading" || (plan.kind !== "rounds" && golfersPending);
+  const matchInterrupted = roundsView === "error" || (roundsView !== "loading" && plan.kind === "needsLocation");
+  const showRadar = useAutoMatchPresentation(JSON.stringify([currentUser.id, searchParams.toString()]), matchPending, matchInterrupted);
   // Why no golfers are suggested for a "Playing Somewhere Else?" area.
   const golfersHiddenNote = golfersHiddenForArea ? (
     <p className="flex items-start gap-1.5 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600" role="note">
@@ -351,7 +355,7 @@ export function AutoMatch() {
         </p>
       </div>
 
-      {roundsView === "loading" ? (
+      {showRadar ? (
         <AutoMatchLoader />
       ) : roundsView === "error" ? (
         <LoadErrorState onRetry={rounds.retry} />
@@ -432,8 +436,6 @@ export function AutoMatch() {
 
           {prefsNudge}
         </div>
-      ) : golfersPending ? (
-        <AutoMatchLoader />
       ) : plan.kind === "golfers" ? (
         <div className="gm-automatch-results flex flex-col gap-4">
           <div className="rounded-2xl border border-fairway-200 bg-fairway-50 px-4 py-3">

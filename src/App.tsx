@@ -27,6 +27,7 @@ import { PushPrePermissionPrompt } from "./components/notifications/PushPrePermi
 import { ScrollToTop } from "./components/layout/ScrollToTop";
 import { GolfMeLoader } from "./components/loading/GolfMeLoader";
 import { AutoMatchLoader } from "./components/find/AutoMatchScene";
+import { AutoMatchEntry } from "./components/find/AutoMatchEntry";
 import { Button } from "./components/ui/Button";
 import { Welcome } from "./pages/Welcome";
 import { Splash } from "./pages/Splash";
@@ -134,9 +135,13 @@ function AuthedLayout() {
     <TutorialProvider>
       <FirstRoundPromptProvider>
         <AppShell>
-          <Suspense fallback={location.pathname === "/auto-match" ? <AutoMatchLoader /> : <GolfMeLoader className="py-12" />}>
-            <Outlet />
-          </Suspense>
+          {location.pathname === "/auto-match" ? (
+            <AutoMatchEntry key={location.key}>
+              <Suspense fallback={<AutoMatchLoader />}><Outlet /></Suspense>
+            </AutoMatchEntry>
+          ) : (
+            <Suspense fallback={<GolfMeLoader className="py-12" />}><Outlet /></Suspense>
+          )}
         </AppShell>
         <TutorialOverlay />
         <PushPrePermissionPrompt />

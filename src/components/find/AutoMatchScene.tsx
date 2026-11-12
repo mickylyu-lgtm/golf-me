@@ -9,7 +9,7 @@ const BALLS = [
 ];
 
 /** The selected fairway-radar concept: a decorative search sweep, never a
- * match count or progress meter. The header is still; only a real wait loops.
+ * match count or progress meter. The header is still; the search presentation loops.
  * CSS-only motion keeps results independent of animation timing. */
 export function AutoMatchScene({ searching = false, compact = false }: { searching?: boolean; compact?: boolean }) {
   // Header and loading scene coexist. Each gradient needs its own identity.

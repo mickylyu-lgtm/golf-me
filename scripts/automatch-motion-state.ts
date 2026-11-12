@@ -19,7 +19,7 @@ export function useFixtureData<T extends { currentUser: { playingAreaCoords?: un
 }
 export function useFixtureAuth<T extends { isDemo: boolean }>(auth: T): T {
   const state = useMode();
-  return { ...auth, isDemo: state === "demo" || state === "rounds" || state === "golfers" || state === "needsLocation" };
+  return { ...auth, isDemo: state === "demo" };
 }
 export function useFixtureRounds<T>(rounds: T) {
   const state = useMode();

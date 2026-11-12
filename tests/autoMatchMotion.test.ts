@@ -9,24 +9,26 @@ const scene = read("src/components/find/AutoMatchScene.tsx");
 const css = read("src/components/find/AutoMatchScene.css");
 
 test("Auto-Match has its own scene for both data waits and the lazy route", () => {
-  assert.equal(page.match(/<AutoMatchLoader \/>/g)?.length, 2);
+  assert.equal(page.match(/<AutoMatchLoader \/>/g)?.length, 1);
   assert.doesNotMatch(page, /GolfMeLoader/);
-  assert.match(read("src/App.tsx"), /location.pathname === "\/auto-match" \? <AutoMatchLoader \/> : <GolfMeLoader/);
+  assert.match(read("src/App.tsx"), /<AutoMatchEntry key=\{location.key\}>\s*<Suspense fallback=\{<AutoMatchLoader \/>\}>/);
 });
 
-test("cached rounds and demo data never wait for the animation", () => {
+test("presentation holds cached/demo results without changing the data-loading policy", () => {
   assert.equal(listView({ count: 1, isDemo: false, hasLoaded: false, loadError: false, isLoading: true }), "list");
   assert.equal(listView({ count: 0, isDemo: true, hasLoaded: false, loadError: false, isLoading: true }), "empty");
-  assert.match(page, /roundsView === "loading" \? \(\s*<AutoMatchLoader/);
-  assert.match(page, /\) : golfersPending \? \(\s*<AutoMatchLoader/);
+  assert.match(page, /showRadar \? \(\s*<AutoMatchLoader/);
+  assert.match(page, /useAutoMatchPresentation\(JSON.stringify\(\[currentUser.id, searchParams.toString\(\)\]\)/);
   assert.doesNotMatch(scene + page, /setTimeout|setInterval|onAnimationEnd|requestAnimationFrame|animationComplete/);
 });
 
-test("error and missing-location states remain ahead of golfer loading", () => {
-  const loading = page.indexOf(') : golfersPending ?');
-  assert.ok(page.indexOf(') : roundsView === "error" ?') < loading);
-  assert.ok(page.indexOf(') : plan.kind === "needsLocation" ?') < loading);
+test("errors and missing-location prompts interrupt the presentation", () => {
+  assert.match(page, /matchInterrupted = roundsView === "error" \|\| \(roundsView !== "loading" && plan.kind === "needsLocation"\)/);
   assert.match(page, /<LoadErrorState onRetry=\{rounds.retry\}/);
+  const hook = read("src/lib/useAutoMatchPresentation.ts");
+  assert.match(hook, /active = false;\s*window.clearTimeout\(timer\)/);
+  assert.match(hook, /current === state \? \{ \.\.\.current, elapsed: true \} : current/);
+  assert.match(hook, /startedAt \?\? performance.now\(\)/);
 });
 
 test("decorative SVG is hidden while the real wait has a localized status", () => {
@@ -40,7 +42,7 @@ test("decorative SVG is hidden while the real wait has a localized status", () =
   }
 });
 
-test("the selected radar keeps the header static and loops only during a real wait", () => {
+test("the selected radar keeps the header static and loops during search presentation", () => {
   assert.match(page, /<AutoMatchScene compact \/>/);
   assert.match(scene, /<AutoMatchScene searching \/>/);
   assert.match(css, /\.gm-automatch-searching \.gm-automatch-sweep\s*\{\s*animation: gm-automatch-radar 4s linear infinite;/);

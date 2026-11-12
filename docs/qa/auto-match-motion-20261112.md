@@ -1,5 +1,16 @@
 # Auto-Match golf animation
 
+## Requested two-second minimum revision
+
+Micky explicitly requested a minimum two-second radar display after selecting the radar. This supersedes the immediate-cached-results policy in the historical sections below. The selected artwork, 4-second sweep cycle and pulses are unchanged; two seconds is the minimum display window, not a network timeout or an additional wait after loading finishes.
+
+A route-scoped AutoMatchEntry sits outside Suspense and supplies its monotonic start time. The lazy-module radar counts toward the same window rather than triggering another two seconds when the page mounts. The page-local presentation hook holds cached/demo, round, golfer and empty outcomes until the window expires, while data fetching/ranking continue unchanged. Longer actual waits remain pending and release as soon as ready. Errors and location prompts retain their existing precedence and do not wait for the artificial minimum; initial rounds loading can still precede a location prompt, as before.
+
+New entries/search/account identities and new actual waits (including Retry) start a fresh deadline. Ready data preserves the existing deadline. Ordinary rerenders, result-card changes and preference-sheet dismissal do not restart it. Cleanup clears the timeout; an active flag and exact state identity reject stale callbacks after interruption, a newer search or unmount. No percentages, fake data, delayed requests, animation-end dependency or JavaScript frame loop. Reduced-motion users get the same static scene and no animated reveal. Back and the app navigation remain available.
+
+Base: 4bca64105e06eaefd43d0d5519dc1c07ff032555. Full npm run check passes TypeScript, all 1,493 tests (zero skipped/failing), lint (28 baseline warnings/zero errors), build and prerender. All 19 focused tests pass independently. Chromium and WebKit each pass 199 synthetic assertions with zero runtime errors, all external requests blocked. New checks cover cached-real/demo/golfer/empty minimums, a lazy-route wait longer than two seconds without an extra hold, slow data resolving immediately after the minimum, early errors and location interruption, fast retry, cancellation during lazy loading, rapid Back/re-entry, replacement search deadlines and static reduced-motion entry. Existing four viewport, six-locale/200% text, dark mode, live motion-preference, gradient identity and responsive control checks still pass. Timing assertions use monotonic performance.now; virtual-machine wall-clock adjustments must not influence duration tests. No production data, database/backend or native-shell change.
+
+
 ## Selected radar revision
 
 Micky selected Fairway radar and authorized this revision after viewing two animated local concepts. The radar replaces the initial gathering artwork described below. Its green/flag geometry, ball positions, staggered delays, 4-second rotating sweep and 4-second point pulses match the approved preview. The header is static, as previewed. Production omits the temporary option/preview labels.

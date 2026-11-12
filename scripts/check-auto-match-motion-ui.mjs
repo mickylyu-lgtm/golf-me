@@ -41,7 +41,7 @@ try {
     headless: true,
     ...(engine === "chromium" ? { executablePath: process.env.CHROMIUM_EXECUTABLE, args: ["--no-sandbox"] } : { executablePath: process.env.WEBKIT_EXECUTABLE }),
   });
-  for (const [width, height] of [[320,844], [390,844], [844,390], [1440,900]]) {
+  for (const [width, height] of [[320,844], [390,844], [844,390], [1440,900]].filter(([width]) => !process.env.AUTO_MATCH_WIDTH || width === Number(process.env.AUTO_MATCH_WIDTH))) {
     const context = await browser.newContext({ viewport: { width, height } });
     await context.route("**/*", route => {
       if (route.request().url().startsWith(origin + "/")) return route.continue();
@@ -66,15 +66,32 @@ try {
     let heldRoute;
     const hold = new Promise(resolve => { heldRoute = resolve; });
     const lazyPattern = "**/src/pages/AutoMatch.tsx";
-    await page.route(lazyPattern, async route => { await hold; await route.continue(); });
+    let routeFinished;
+    const finished = new Promise(resolve => { routeFinished = resolve; });
+    await page.route(lazyPattern, async route => { await hold; await route.continue(); routeFinished(); });
     await page.getByRole("button", { name: /Auto-Match Me Rounds picked for you/ }).click();
     await page.locator(".gm-automatch-searching").waitFor();
     equal(await page.locator(".gm-automatch-searching").count(), 1, "lazy route uses special loader " + width);
+    if (width === 390) await page.waitForTimeout(2200);
+    if (width === 844) {
+      await page.goBack();
+      await page.waitForURL(origin + "/find");
+      equal(await page.locator(".gm-automatch-scene").count(), 0, "cancelling lazy navigation removes its radar");
+      heldRoute();
+      await finished;
+      await page.unroute(lazyPattern);
+      await page.getByRole("button", { name: /Auto-Match Me Rounds picked for you/ }).click();
+      await page.locator(".gm-automatch-searching").waitFor();
+      equal(await page.locator(".gm-automatch-searching").count(), 1, "re-entry after cancelled lazy navigation starts normally");
+    }
     heldRoute();
+    await finished;
     await page.getByRole("heading", { name: "Auto-Match", exact: true }).waitFor();
     await page.unroute(lazyPattern);
+    const moduleReady = performance.now();
     await page.locator(".gm-automatch-results").waitFor();
-    equal(await page.locator(".gm-automatch-searching").count(), 0, "cached results shown immediately " + width);
+    if (width === 390) check(performance.now() - moduleReady < 700, "long lazy-route radar does not add another two seconds");
+    equal(await page.locator(".gm-automatch-searching").count(), 0, "cached results settle after the presentation " + width);
     equal(await page.locator(".gm-automatch-mark").count(), 1, "cached mode has one entrance scene");
     const status = () => page.locator('[role="status"]').filter({ has: page.locator(".gm-automatch-searching") });
     const setMode = async mode => {
@@ -118,6 +135,7 @@ try {
       equal(await page.locator(selector).first().evaluate(el => getComputedStyle(el).transform), "none", "reduced motion uses settled position");
     }
     await setMode("rounds");
+    await page.locator(".gm-automatch-results").waitFor();
     equal(await page.locator(".gm-automatch-results").evaluate(el => getComputedStyle(el).animationName), "none", "reduced-motion result is instant");
     await page.emulateMedia({ reducedMotion: "no-preference" });
 
@@ -126,7 +144,7 @@ try {
     const retry = page.getByRole("button", { name: "Try again", exact: true });
     await retry.click();
     await status().waitFor();
-    equal(await page.locator(".gm-automatch-searching").count(), 1, "retry resumes only actual wait");
+    equal(await page.locator(".gm-automatch-searching").count(), 1, "retry starts its own radar window");
     await setMode("needsLocation");
     equal(await page.locator(".gm-automatch-searching").count(), 0, "missing location not hidden by loader");
     await page.getByRole("button", { name: "Set location", exact: true }).waitFor();
@@ -137,6 +155,7 @@ try {
     await page.getByText("No open rounds near you yet", { exact: true }).waitFor();
     check(await page.getByRole("button", { name: "View profile", exact: true }).count() > 0, "golfer-only fallback remains usable");
     await setMode("rounds");
+    await page.locator(".gm-automatch-results").waitFor();
 
     check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "no horizontal overflow " + width);
     await page.screenshot({ path: `artifacts.local/automatch/${engine}-results-${width}.png` });
@@ -154,8 +173,96 @@ try {
       await setMode("rounds");
       await page.goForward();
       await page.locator(".gm-automatch-results").waitFor();
-      equal(await page.locator(".gm-automatch-searching").count(), 0, "forward uses current settled state");
+      equal(await page.locator(".gm-automatch-searching").count(), 0, "forward settles current data after its new window");
       equal(await page.evaluate(() => document.body.style.overflow), "", "navigation leaves no scroll lock");
+      // Use monotonic time: VM wall-clock adjustments must not affect duration assertions.
+      const results = page.locator(".gm-automatch-results");
+      const radar = page.locator(".gm-automatch-searching");
+      const startVisit = async (mode = "rounds") => {
+        await page.getByRole("button", { name: "Back", exact: true }).click();
+        await page.waitForURL(origin + "/find");
+        await setMode(mode);
+        const started = performance.now();
+        await page.getByRole("button", { name: /Auto-Match Me Rounds picked for you/ }).click();
+        await page.getByRole("heading", { name: "Auto-Match", exact: true }).waitFor();
+        await radar.waitFor();
+        return started;
+      };
+      // Cached real, demo, golfer-only and empty entry have no result flash.
+      for (const mode of ["rounds", "demo", "golfers", "empty"]) {
+        const start = await startVisit(mode);
+        equal(await results.count(), 0, "entry hides early results " + mode);
+        await page.waitForTimeout(1500);
+        equal(await radar.count(), 1, "radar remains visible through the minimum " + mode);
+        await radar.waitFor({ state: "detached" });
+        const duration = performance.now() - start;
+        console.log("entry timing", mode, duration);
+        check(duration >= 1950, "entry lasts two seconds: " + mode + " " + duration);
+        if (mode === "empty") await page.getByText("No rounds or golfers near you yet", { exact: true }).waitFor();
+        else await results.waitFor();
+      }
+      // Minimum must not become an extra delay once a slow real load finishes.
+      await setMode("roundsLoading");
+      await radar.waitFor();
+      await page.waitForTimeout(2200);
+      equal(await radar.count(), 1, "slow network remains pending beyond the minimum");
+      const resolved = performance.now();
+      await setMode("rounds");
+      await results.waitFor();
+      check(performance.now() - resolved < 500, "long wait settles without a second minimum");
+
+      await startVisit();
+      await page.waitForTimeout(200);
+      await setMode("error");
+      equal(await radar.count(), 0, "error interrupts a fresh minimum immediately");
+      const retryStart = performance.now();
+      await page.getByRole("button", { name: "Try again", exact: true }).click();
+      await radar.waitFor();
+      await page.waitForTimeout(200);
+      await setMode("rounds");
+      equal(await radar.count(), 1, "fast retry retains its minimum after data arrives");
+      await page.waitForTimeout(1200);
+      equal(await results.count(), 0, "old entry timer cannot finish a newer retry");
+      await results.waitFor();
+      check(performance.now() - retryStart >= 1950, "retry minimum is two seconds: " + (performance.now() - retryStart));
+
+      await startVisit();
+      await setMode("needsLocation");
+      equal(await radar.count(), 0, "missing location interrupts a fresh minimum immediately");
+      await page.getByRole("button", { name: "Set location", exact: true }).waitFor();
+      await setMode("rounds");
+      await results.waitFor();
+
+      // Cancel and quickly re-enter: the old timeout cannot reveal early data.
+      await startVisit();
+      await page.waitForTimeout(800);
+      const reentry = await startVisit();
+      await page.waitForTimeout(1400);
+      equal(await radar.count(), 1, "cancelled entry timer cannot release a newer visit");
+      await results.waitFor();
+      check(performance.now() - reentry >= 1900, "quick re-entry receives its full window");
+
+      // A route/search identity change replaces the timer, not the old deadline.
+      await startVisit();
+      await page.waitForTimeout(800);
+      const newSearch = performance.now();
+      await page.evaluate(() => {
+        history.pushState({ ...history.state, idx: history.state.idx + 1, key: "radar-new-search" }, "", "/auto-match?radius=50");
+        dispatchEvent(new PopStateEvent("popstate"));
+      });
+      await page.waitForTimeout(1400);
+      equal(await radar.count(), 1, "new search outlives the previous timer");
+      await results.waitFor();
+      check(performance.now() - newSearch >= 1950, "new search receives a two-second window");
+
+      await page.goBack();
+      await results.waitFor();
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await startVisit();
+      equal(await radar.evaluate(el => el.getAnimations({ subtree: true }).length), 0, "minimum display is static with reduced motion");
+      await results.waitFor();
+      equal(await results.evaluate(el => getComputedStyle(el).animationName), "none", "minimum completion does not animate reduced-motion results");
+      await page.emulateMedia({ reducedMotion: "no-preference" });
     }
     if (width === 320) {
       for (const locale of ["en", "zh-CN", "zh-TW", "es", "ko", "ja"]) {
