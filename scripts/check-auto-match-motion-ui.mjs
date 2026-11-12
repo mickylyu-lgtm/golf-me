@@ -75,7 +75,7 @@ try {
     await page.unroute(lazyPattern);
     await page.locator(".gm-automatch-results").waitFor();
     equal(await page.locator(".gm-automatch-searching").count(), 0, "cached results shown immediately " + width);
-    equal(await page.locator(".gm-automatch-arrival").count(), 1, "cached mode has one entrance scene");
+    equal(await page.locator(".gm-automatch-mark").count(), 1, "cached mode has one entrance scene");
     const status = () => page.locator('[role="status"]').filter({ has: page.locator(".gm-automatch-searching") });
     const setMode = async mode => {
       await page.evaluate(async mode => { const fixture = await import("/scripts/automatch-motion-state.ts"); fixture.setMode(mode); }, mode);
@@ -91,7 +91,7 @@ try {
     equal(await page.getByRole("dialog").count(), 0, "preference dialog dismisses");
     check((await page.locator(".gm-automatch-results").textContent()).includes("3 of 3"), "preference close preserves displayed match");
     await page.waitForTimeout(1100);
-    equal(await page.locator(".gm-automatch-arrival").evaluate(el => el.getAnimations({ subtree: true }).filter(a => a.playState === "running").length), 0, "header settles, no idle looping");
+    equal(await page.locator(".gm-automatch-mark").evaluate(el => el.getAnimations({ subtree: true }).filter(a => a.playState === "running").length), 0, "selected header stays still, no idle looping");
 
     for (const mode of ["roundsLoading", "golfersLoading"]) {
       await setMode(mode);
@@ -99,17 +99,21 @@ try {
       equal(await page.locator(".gm-automatch-results").count(), 0, "pending cannot display false results");
       equal(await status().getAttribute("aria-live"), "polite", "loader has polite status");
       equal(await page.locator(".gm-automatch-searching").getAttribute("aria-hidden"), "true", "decorative scene not announced");
+      const gradientIds = await page.locator(".gm-automatch-scene linearGradient").evaluateAll(nodes => nodes.map(node => node.id));
+      equal(new Set(gradientIds).size, 2, "header and loading radar gradients are distinct");
+      equal(await page.locator(".gm-automatch-mark").evaluate(el => el.getAnimations({ subtree: true }).length), 0, "static header matches selected preview");
       const balls = page.locator(".gm-automatch-searching .gm-automatch-ball");
       equal(await balls.first().evaluate(el => getComputedStyle(el).animationIterationCount), "infinite", "real wait loops");
-      const before = await balls.first().evaluate(el => getComputedStyle(el).transform);
+      const sweep = page.locator(".gm-automatch-searching .gm-automatch-sweep");
+      const before = await sweep.evaluate(el => getComputedStyle(el).transform);
       await page.waitForTimeout(500);
-      check(before !== await balls.first().evaluate(el => getComputedStyle(el).transform), "golf balls visibly travel");
+      check(before !== await sweep.evaluate(el => getComputedStyle(el).transform), "radar visibly sweeps");
       const back = page.getByRole("button", { name: "Back", exact: true });
       equal(await back.isEnabled(), true, "back is usable during a wait");
     }
     await page.screenshot({ path: `artifacts.local/automatch/${engine}-loading-${width}.png` });
     await page.emulateMedia({ reducedMotion: "reduce" });
-    for (const selector of [".gm-automatch-searching .gm-automatch-ball", ".gm-automatch-arrival .gm-automatch-ball"]) {
+    for (const selector of [".gm-automatch-searching .gm-automatch-ball", ".gm-automatch-searching .gm-automatch-sweep", ".gm-automatch-mark .gm-automatch-ball"]) {
       equal(await page.locator(selector).first().evaluate(el => getComputedStyle(el).animationName), "none", "reduced motion stops live animation");
       equal(await page.locator(selector).first().evaluate(el => getComputedStyle(el).transform), "none", "reduced motion uses settled position");
     }
@@ -141,7 +145,7 @@ try {
       await page.screenshot({ path: `artifacts.local/automatch/${engine}-dark.png` });
       await setMode("roundsLoading");
       await page.screenshot({ path: `artifacts.local/automatch/${engine}-dark-loading.png` });
-      check(await page.locator(".gm-automatch-searching > ellipse").first().evaluate(el => getComputedStyle(el).fill) !== "rgb(229, 242, 232)", "dark scene uses dusk greens");
+      check(await page.locator(".gm-automatch-searching > path").first().evaluate(el => getComputedStyle(el).fill) !== "rgb(229, 242, 232)", "dark scene uses dusk greens");
       await page.evaluate(() => document.documentElement.classList.remove("dark"));
       // Back during search, then Forward cannot leave a stale overlay or loader.
       await page.getByRole("button", { name: "Back", exact: true }).click();
@@ -160,7 +164,7 @@ try {
         await page.locator(".gm-automatch-results").waitFor();
         await page.evaluate(() => document.documentElement.style.fontSize = "200%");
         await page.screenshot({ path: `artifacts.local/automatch/${engine}-enlarged-${locale}.png` });
-        const headerOverflow = await page.locator(".gm-automatch-arrival").evaluate(el => {
+        const headerOverflow = await page.locator(".gm-automatch-mark").evaluate(el => {
           const header = el.parentElement.parentElement;
           return [header, ...header.querySelectorAll("h1, p")].filter(node => node.scrollWidth > node.clientWidth + 1).map(node => ({ tag: node.tagName, text: node.textContent, width: node.clientWidth, scroll: node.scrollWidth }));
         });

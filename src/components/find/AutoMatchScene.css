@@ -1,18 +1,26 @@
-/* All motion is decorative: no timers, result gating, fake progress, or
-   invisible click blockers. Base styles are the static final composition. */
+/* Decorative only: no timers, result gating, fake progress or click blockers.
+   These static base styles are also the reduced-motion composition. */
 .gm-automatch-scene {
   display: block;
   overflow: visible;
   pointer-events: none;
 }
 
+.gm-automatch-sweep {
+  transform-origin: 120px 100px;
+}
+
+.gm-automatch-ball {
+  transform-origin: 0 0;
+}
+
 @media (prefers-reduced-motion: no-preference) {
-  .gm-automatch-arrival .gm-automatch-ball {
-    animation: gm-automatch-arrive 760ms cubic-bezier(.22, 1, .36, 1) both;
+  .gm-automatch-searching .gm-automatch-sweep {
+    animation: gm-automatch-radar 4s linear infinite;
   }
 
   .gm-automatch-searching .gm-automatch-ball {
-    animation: gm-automatch-gather 2.8s ease-in-out infinite both;
+    animation: gm-automatch-signal 4s ease-in-out infinite;
   }
 
   .gm-automatch-results {
@@ -20,15 +28,13 @@
   }
 }
 
-@keyframes gm-automatch-arrive {
-  from { transform: translate(var(--gm-match-from-x), var(--gm-match-from-y)); opacity: .25; }
-  to { transform: translate(0, 0); opacity: 1; }
+@keyframes gm-automatch-radar {
+  to { transform: rotate(360deg); }
 }
 
-@keyframes gm-automatch-gather {
-  0%, 12% { transform: translate(var(--gm-match-from-x), var(--gm-match-from-y)); opacity: .35; }
-  48%, 76% { transform: translate(0, 0); opacity: 1; }
-  100% { transform: translate(var(--gm-match-from-x), var(--gm-match-from-y)); opacity: .35; }
+@keyframes gm-automatch-signal {
+  0%, 28%, 100% { opacity: .6; transform: scale(.9); }
+  12% { opacity: 1; transform: scale(1.15); }
 }
 
 @keyframes gm-automatch-reveal {
@@ -36,8 +42,10 @@
   to { transform: translateY(0); opacity: 1; }
 }
 
-/* Explicitly static, including a live preference change mid-animation. */
+/* Stop even when the preference changes mid-sweep. Only animated inner
+   groups are reset: the outer SVG translations still position each ball. */
 @media (prefers-reduced-motion: reduce) {
+  .gm-automatch-sweep,
   .gm-automatch-ball,
   .gm-automatch-results {
     animation: none !important;

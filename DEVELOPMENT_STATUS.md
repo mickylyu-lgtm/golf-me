@@ -7,13 +7,12 @@
 - Full npm run check passed TypeScript, 1,474 tests, build/prerender; final lint has 28 baseline warnings and zero errors. Chromium and WebKit each passed 62 synthetic lifecycle/accessibility assertions. Independent review is clear. Physical-device vibration and production account writes remain unverified.
 - Integrated onto verified auto-match main 23d60434; only this status document conflicted and both entries were retained. Final npm run check passes all 1,483 tests, TypeScript, lint (28 baseline warnings/zero errors), build/prerender. Both browser suites again passed 62 assertions. User authorized push when ready. Next: publish normally, then verify exact-commit CI and production. Details: docs/qa/round-completion-haptic-20261112.md.
 
-## Auto-Match golf animation — 2026-11-12 (tested, release authorized)
+## Auto-Match selected fairway radar — 2026-11-12 (tested, release authorized)
 
-- Auto-Match now has a dedicated green/flag/ball gathering scene: a brief header entrance, looping only for existing route/data waits, plus a short result reveal. Cached results remain immediate. No matching logic, timers, fake progress, backend, database or native-shell changes.
-- Static reduced motion, dusk colors in dark mode and localized loading status in all six languages. Full-width subtitle and wrapping title preserve narrow/enlarged layouts.
-- Final npm run check passed TypeScript, all 1,478 tests (none skipped/failing), lint (28 baseline warnings/zero errors), build and prerender. Chromium and WebKit each passed 147 local-only assertions for loading/cached/error/location/empty/golfer fallback, repeated controls, preferences close, Back/Forward, reduced motion, dark mode and six locales at 200%. Independent review is clear; actual synthetic-demo screenshots inspected.
-- User authorized push when ready and requested screenshots. Coordinate normal fast-forward publication, then verify exact-commit CI and production. Physical-device, VoiceOver and real-account fetch/join checks remain unverified. Details: docs/qa/auto-match-motion-20261112.md.
-
+- Micky chose Fairway radar from two animated alternatives and authorized pushing it. Replaces the earlier gathering scene with the approved green/flag geometry, 4-second sweep and subtle ball pulses. Header is static as previewed; motion runs only during existing real waits. Cached results, the result reveal, matching, errors and navigation stay unchanged.
+- Both coexisting scenes use unique SVG gradient IDs. Reduced motion is fully static without moving the balls; dark mode uses dusk greens. Existing six-language loading copy and responsive header are preserved.
+- Integrated on main 8088362, preserving the verified round-completion haptic. Final npm run check passes TypeScript, all 1,484 tests (zero skipped/failing), lint (28 baseline warnings/zero errors), build/prerender. Chromium and WebKit each pass 171 assertions, including unique gradients, static header, interrupted navigation, live reduced-motion changes, dark mode and six locales at 200%. Independent review confirms visual/motion parity with the selected preview; final screenshots inspected.
+- User authorized this radar push. Next: fast-forward publication, exact-commit CI and production-asset verification. No database/backend/native-shell changes. Physical iPhone/VoiceOver and real-account fetch/join behavior remain unverified. Details: docs/qa/auto-match-motion-20261112.md.
 
 ## Followers/Following search: stable keyboard layout — 2026-11-11 (live, verified)
 

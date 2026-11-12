@@ -1,48 +1,56 @@
-import type { CSSProperties } from "react";
+import { useId } from "react";
 import { useLocale } from "../../i18n/LocaleContext";
 import "./AutoMatchScene.css";
 
 const BALLS = [
-  { x: 95, y: 108, fromX: -49, fromY: -32, delay: "0ms" },
-  { x: 122, y: 121, fromX: -20, fromY: 28, delay: "100ms" },
-  { x: 147, y: 104, fromX: 48, fromY: 13, delay: "200ms" },
+  { x: 76, y: 82, delay: "0ms" },
+  { x: 151, y: 65, delay: "1000ms" },
+  { x: 162, y: 125, delay: "2000ms" },
 ];
 
-/** A decorative group coming together on the green, never a match count or
- * progress meter. The header settles once; only a real wait loops. CSS-only
- * motion keeps results independent of animation timing and needs no cleanup. */
+/** The selected fairway-radar concept: a decorative search sweep, never a
+ * match count or progress meter. The header is still; only a real wait loops.
+ * CSS-only motion keeps results independent of animation timing. */
 export function AutoMatchScene({ searching = false, compact = false }: { searching?: boolean; compact?: boolean }) {
+  // Header and loading scene coexist. Each gradient needs its own identity.
+  const sweepId = useId();
   return (
     <svg
       viewBox="0 0 240 168"
       width={compact ? 72 : 240}
       height={compact ? 50 : 168}
-      className={`gm-automatch-scene ${searching ? "gm-automatch-searching" : "gm-automatch-arrival"} ${compact ? "shrink-0" : "w-full max-w-60"}`}
+      className={`gm-automatch-scene ${searching ? "gm-automatch-searching" : "gm-automatch-mark"} ${compact ? "shrink-0" : "w-full max-w-60"}`}
       aria-hidden="true"
       focusable="false"
     >
-      <ellipse cx="120" cy="109" rx="100" ry="47" fill="#e5f2e8" className="dark:fill-[#172b20]" />
-      <ellipse cx="120" cy="109" rx="83" ry="36" fill="#c8e5cf" className="dark:fill-[#234632]" />
-      <ellipse cx="120" cy="109" rx="65" ry="27" fill="#aad4b5" className="dark:fill-[#2b563b]" />
-      <path d="M49 82 Q63 99 95 108 M102 148 Q109 134 122 121 M195 117 Q173 114 147 104"
-        fill="none" stroke="#5d956c" strokeWidth="1.5" strokeDasharray="2 5" strokeLinecap="round" opacity=".5" />
-      <ellipse cx="128" cy="90" rx="8" ry="3" fill="#315e3e" />
-      <path d="M128 89V35" stroke="#315e3e" strokeWidth="2.5" strokeLinecap="round" className="dark:stroke-[#b6d4be]" />
-      <path d="M130 36 Q142 30 155 39 L151 56 Q141 48 130 53Z" fill="#f4b942" />
-      <path d="M130 36V53" stroke="#c88f2e" strokeWidth="1.5" />
-      {BALLS.map(({ x, y, fromX, fromY, delay }) => (
+      <defs>
+        <linearGradient id={sweepId}>
+          <stop stopColor="#c8e5cf" stopOpacity=".08" />
+          <stop offset="1" stopColor="#4c9b66" stopOpacity=".32" />
+        </linearGradient>
+      </defs>
+      <path d="M31 104C31 55 77 32 117 42C153 22 209 63 211 105C209 145 158 159 121 148C72 167 27 143 31 104Z"
+        fill="#e5f2e8" className="dark:fill-[#172b20]" />
+      <path d="M47 104C47 66 83 48 117 58C146 40 194 70 195 105C195 134 155 143 123 133C81 149 44 132 47 104Z"
+        fill="#c8e5cf" className="dark:fill-[#234632]" />
+      <circle cx="120" cy="100" r="57" fill="none" stroke="#83b592" strokeWidth="1" opacity=".5" />
+      <circle cx="120" cy="100" r="34" fill="none" stroke="#83b592" strokeWidth="1" opacity=".5" />
+      <g className="gm-automatch-sweep">
+        <path d="M120 100L120 43A57 57 0 0 1 177 100Z" fill={`url(#${sweepId})`} />
+        <path d="M120 100H177" stroke="#4d9361" strokeWidth="1.5" opacity=".55" />
+      </g>
+      {BALLS.map(({ x, y, delay }) => (
         <g key={x} transform={`translate(${x} ${y})`}>
-          <g className="gm-automatch-ball" style={{
-            "--gm-match-from-x": `${fromX}px`,
-            "--gm-match-from-y": `${fromY}px`,
-            animationDelay: delay,
-          } as CSSProperties}>
-            <ellipse cy="6" rx="8" ry="2.6" fill="#315e3e" opacity=".2" />
-            <circle r="7" fill="#fff" stroke="#c8d8cd" strokeWidth="1" />
-            <path d="M-3-2h.1 M2-3h.1 M0 1h.1 M3 2h.1 M-3 3h.1" stroke="#adc0b2" strokeWidth="1.6" strokeLinecap="round" />
+          <g className="gm-automatch-ball" style={{ animationDelay: delay }}>
+            <ellipse cy="6" rx="7" ry="2" fill="#315e3e" opacity=".18" />
+            <circle r="6" fill="#fff" stroke="#b9cec0" />
+            <path d="M-2-2h.1 M2-2h.1 M0 1h.1 M-2 3h.1 M3 2h.1" stroke="#afc3b5" strokeWidth="1.3" strokeLinecap="round" />
           </g>
         </g>
       ))}
+      <ellipse cx="120" cy="102" rx="6" ry="2.5" fill="#315e3e" />
+      <path d="M120 100V52" stroke="#315e3e" strokeWidth="2.5" strokeLinecap="round" className="dark:stroke-[#b6d4be]" />
+      <path d="M122 52Q134 47 148 55L144 70Q133 63 122 68Z" fill="#f4b942" />
     </svg>
   );
 }

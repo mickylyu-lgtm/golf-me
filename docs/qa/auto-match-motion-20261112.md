@@ -1,5 +1,17 @@
 # Auto-Match golf animation
 
+## Selected radar revision
+
+Micky selected Fairway radar and authorized this revision after viewing two animated local concepts. The radar replaces the initial gathering artwork described below. Its green/flag geometry, ball positions, staggered delays, 4-second rotating sweep and 4-second point pulses match the approved preview. The header is static, as previewed. Production omits the temporary option/preview labels.
+
+The revision adds unique useId gradients for simultaneous header/loading SVGs, dusk colors and an explicit static reduced-motion fallback which resets only animated inner groups. Existing loading-state gates, immediate cached results, result reveal, controls, error/retry and all six translations remain unchanged.
+
+Integrated base: 808836228856e88caa158737914a5de7dd35220d, preserving the round-completion haptic.
+Final npm run check passes TypeScript, all 1,484 tests (zero skipped/failing), lint with 28 baseline warnings/zero errors, build and prerender. Ten focused motion tests pass. Chromium and WebKit each pass 171 assertions, adding distinct gradient IDs, a static header and the radar sweep to the original full state/navigation/accessibility coverage. Independent review confirms parity with the approved preview and finds no blocker; final light/dark screenshots inspected. No backend, database or native-shell changes. Physical-device and real-account limits below still apply.
+
+## Initial gathering release (superseded by selected radar)
+
+
 ## Change and boundaries
 
 Auto-Match has its own small green, gold pin and three golf balls gathering together. The header entrance finishes in under a second and rests as a static mode mark. A larger version repeats only while the existing route/data loading condition is true. Results receive a 280ms reveal without remounting cards or blocking input. Cached results remain immediate: there are no timers, progress percentages, fake matches, minimum waits or animation-completion gates.

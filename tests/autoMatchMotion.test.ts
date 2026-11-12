@@ -40,11 +40,21 @@ test("decorative SVG is hidden while the real wait has a localized status", () =
   }
 });
 
-test("mode mark settles once and only an actual wait repeats", () => {
+test("the selected radar keeps the header static and loops only during a real wait", () => {
   assert.match(page, /<AutoMatchScene compact \/>/);
   assert.match(scene, /<AutoMatchScene searching \/>/);
-  assert.match(css, /\.gm-automatch-arrival \.gm-automatch-ball\s*\{\s*animation: gm-automatch-arrive 760ms[^}]+both;/);
-  assert.match(css, /\.gm-automatch-searching \.gm-automatch-ball\s*\{\s*animation: gm-automatch-gather 2.8s[^}]+infinite both;/);
+  assert.match(css, /\.gm-automatch-searching \.gm-automatch-sweep\s*\{\s*animation: gm-automatch-radar 4s linear infinite;/);
+  assert.match(css, /\.gm-automatch-searching \.gm-automatch-ball\s*\{\s*animation: gm-automatch-signal 4s ease-in-out infinite;/);
+  assert.doesNotMatch(css, /\.gm-automatch-mark[^{]*\{/);
+  assert.doesNotMatch(css + scene, /gm-automatch-gather|gm-automatch-arriv/);
+});
+
+test("coexisting radar scenes have unique gradients and retain static ball positions", () => {
+  assert.match(scene, /const sweepId = useId\(\)/);
+  assert.match(scene, /<linearGradient id=\{sweepId\}/);
+  assert.match(scene, /transform=\{\x60translate\(/);
+  assert.match(css, /transform-origin: 120px 100px/);
+  assert.doesNotMatch(css, /\.gm-automatch-scene \*/);
 });
 
 test("reduced motion is static, including preference changes mid-animation", () => {
