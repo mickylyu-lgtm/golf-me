@@ -1,5 +1,12 @@
 # GolfMe — Development Status
 
+## Caddie translation retry backoff — 2026-11-12 (tested locally, not published)
+
+- Fixed the existing immediate auto-translation retry loop exposed by long-lived request-budget 429 responses. The detail page now honors Retry-After/header/body deadlines, including the daily budget, uses bounded fallback backoff for missing metadata, and retains one cancellable timer. No quota, database, Edge Function, language/content, or native-shell changes.
+- Account, analysis, language changes and unmount cancel or invalidate old retries/queued work. Pending local request completion includes error handling before another effect can retry. Non-HTTP fetch/relay failures preserve their original error and do not automatically retry.
+- Isolated branch starts at b8eb513. Synthetic actual-source tests cover minute/day limits, malformed metadata, successful recovery, rerender timing, cancellation, stale responses and network errors. Real React StrictMode Chromium fixture passes 39 assertions, including effect replay, in-flight rerender, rapid language reversal, signout and unmount. All external browser requests are blocked; no production quota or provider call used.
+- Final npm run check passed TypeScript, lint (28 baseline warnings/zero errors), all 1,506 tests (zero failures/skips), build and prerender. The final focused suite passes 13 tests and the formatted StrictMode browser harness again passes all 39 assertions. Publication and exact-commit CI/deployment verification remain pending. Physical iPhone and live authenticated rate-limit recovery are not claimed.
+
 ## Auto-Match two-second radar minimum — 2026-11-12 (tested, release authorized)
 
 - Micky explicitly requested two seconds to inspect the selected radar. Each Auto-Match entry/search now shows the radar for at least two seconds, including cached/demo/empty outcomes. Lazy-route loading contributes to the same deadline; real loading that takes longer continues normally and does not add another two seconds after completion.

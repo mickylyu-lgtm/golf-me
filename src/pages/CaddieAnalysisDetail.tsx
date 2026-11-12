@@ -20,7 +20,8 @@ import { Badge } from "../components/ui/Badge";
 import { formatShortDate } from "../lib/format";
 import { postFeedbackThenMark } from "../lib/caddieShare";
 import { isStaleProcessing, usePeriodicRerender } from "../lib/caddieAnalysis";
-import { AUTO_TRANSLATE_RETRY_MS, claimAutoTranslateAttempt, feedbackSampleText, isTooSoonError, needsAutoTranslate, releaseAutoTranslateAttempt, translateOffer } from "../lib/caddieLanguage";
+import { claimAutoTranslateAttempt, feedbackSampleText, needsAutoTranslate, releaseAutoTranslateAttempt, translateOffer } from "../lib/caddieLanguage";
+import { translationRetryDelay } from "../lib/caddieTranslationRetry";
 import { caddieErrorText } from "../lib/caddieErrorText";
 import { demoLegacyFeedback } from "../data/caddie";
 import { isExplicitCaddieLocale, isTranslationRunning, queueAutoTranslation, queueTranslation, whenTranslationSettled } from "../lib/caddieAutoTranslate";
@@ -81,7 +82,7 @@ export function CaddieAnalysisDetail() {
   } = useData();
   const savingRef = useRef(false);
   const { hasLoaded: caddieHasLoaded, loadPoseData, refreshMediaUrls, checkStatus } = useRealCaddie();
-  const { isDemo } = useAuth();
+  const { isDemo, authUser } = useAuth();
   const coachEnabled = useCoachReplayEnabled();
   // Inside CaddieLocaleScope: `t` and `dateLocale` are the Caddie feedback
   // language, like `locale` below (translation, the notice and Translate).
@@ -152,53 +153,79 @@ export function CaddieAnalysisDetail() {
   const autoSample = feedbackSampleText(autoDetails);
   const autoLanguage = autoDetails?.language;
   const autoId = analysis?.id;
-  const autoRetryTimerRef = useRef<number | null>(null);
-  // The app's language right now, for queued jobs deciding whether they're stale.
-  const localeRef = useRef(locale);
-  localeRef.current = locale;
+  // Scope both queued work and late responses to this account/page/language.
+  const autoScopeKey = `${isDemo ? "demo" : authUser?.id ?? ""}:${autoId ?? ""}:${locale}`;
+  const autoScopeRef = useRef({ key: autoScopeKey });
+  if (autoScopeRef.current.key !== autoScopeKey) autoScopeRef.current = { key: autoScopeKey };
+  const autoScope = autoScopeRef.current;
+  const autoRetryRef = useRef({ scope: autoScope, until: 0, failures: 0 });
+  const autoRequestRef = useRef<{ id: string; promise: Promise<void> } | null>(null);
   const [autoTick, setAutoTick] = useState(0);
   useEffect(() => {
-    if (isDemo || !autoId || !autoSample) return;
-    if (isTranslationRunning(autoId)) {
+    if (autoRetryRef.current.scope !== autoScope) autoRetryRef.current = { scope: autoScope, until: 0, failures: 0 };
+    const retry = autoRetryRef.current;
+    let disposed = false;
+    let timer: ReturnType<typeof window.setTimeout> | undefined;
+    const current = () => !disposed && autoScopeRef.current === autoScope;
+    const cleanup = () => {
+      disposed = true;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+    const wakeAfter = (delay: number) => {
+      if (timer !== undefined) window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        if (current()) setAutoTick((n) => n + 1);
+      }, delay);
+    };
+    setTranslating(false);
+    if (isDemo || !authUser?.id || !autoId || !autoSample) return cleanup;
+    if (!needsAutoTranslate({ language: autoLanguage, sampleText: autoSample }, locale, isExplicitCaddieLocale(locale))) return cleanup;
+    // A rerender cannot bypass an already scheduled server cooldown.
+    if (retry.until > Date.now()) {
+      wakeAfter(retry.until - Date.now());
+      return cleanup;
+    }
+    if (autoRequestRef.current?.id === autoId || isTranslationRunning(autoId)) {
       setTranslating(true);
-      void whenTranslationSettled(autoId).then(() => {
+      const pending = autoRequestRef.current?.id === autoId ? autoRequestRef.current.promise : whenTranslationSettled(autoId);
+      void pending.then(() => {
+        if (!current()) return;
         setTranslating(false);
         setAutoTick((n) => n + 1);
       });
-      return;
+      return cleanup;
     }
-    if (!needsAutoTranslate({ language: autoLanguage, sampleText: autoSample }, locale, isExplicitCaddieLocale(locale))) return;
-    if (!claimAutoTranslateAttempt(autoId, locale)) return;
+    if (!claimAutoTranslateAttempt(autoId, locale)) return cleanup;
     setTranslating(true);
     const target = locale;
-    // Skipped if the app has moved to another language before this job's
-    // turn in the queue: the last language picked is the one that counts.
-    queueAutoTranslation(autoId, target, () => localeRef.current, translateCaddieAnalysis)
-      // A translation that went through (or was skipped) gives the attempt
-      // back: the stored language now says where the text is, so coming back
-      // to this language later translates again instead of being refused as
-      // "already tried" (Micky, 2026-11-04: switching fast still missed).
-      // Only real failures keep it used, so they can't loop.
-      .then(() => releaseAutoTranslateAttempt(autoId, target))
+    const request = queueAutoTranslation(autoId, target, () => autoScopeRef.current === autoScope && !disposed ? target : "", translateCaddieAnalysis)
+      .then(() => {
+        releaseAutoTranslateAttempt(autoId, target);
+        if (autoScopeRef.current === autoScope) { retry.until = 0; retry.failures = 0; }
+      })
       .catch((err) => {
-        if (isTooSoonError(err)) {
-          releaseAutoTranslateAttempt(autoId, target);
-          autoRetryTimerRef.current = window.setTimeout(() => setAutoTick((n) => n + 1), AUTO_TRANSLATE_RETRY_MS);
+        const delay = translationRetryDelay(err, retry.failures + 1);
+        if (delay !== null || autoScopeRef.current !== autoScope) releaseAutoTranslateAttempt(autoId, target);
+        if (autoScopeRef.current !== autoScope) return;
+        if (delay !== null) {
+          retry.failures++;
+          retry.until = Date.now() + delay;
+          if (current()) wakeAfter(delay);
         } else {
           console.error("GolfMe: automatic feedback translation failed.", err);
         }
       })
       .finally(() => {
-        setTranslating(false);
-        setAutoTick((n) => n + 1);
+        if (current()) setTranslating(false);
+        // Success updates the row/language. A refusal wakes ONLY at its
+        // deadline; an unconditional autoTick here would bypass that wait.
       });
-  }, [isDemo, autoId, autoSample, autoLanguage, locale, translateCaddieAnalysis, autoTick]);
-  useEffect(
-    () => () => {
-      if (autoRetryTimerRef.current !== null) window.clearTimeout(autoRetryTimerRef.current);
-    },
-    [],
-  );
+    autoRequestRef.current = { id: autoId, promise: request };
+    void request.then(() => {
+      if (autoRequestRef.current?.promise === request) autoRequestRef.current = null;
+    });
+    return cleanup;
+  }, [isDemo, authUser?.id, autoScope, autoId, autoSample, autoLanguage, locale, translateCaddieAnalysis, autoTick]);
 
   // Opened cold (push tap from a killed app, web refresh) the list hasn't
   // loaded yet — wait for the first fetch before deciding the row is gone.

@@ -10,6 +10,7 @@ import { isMissingSavedColumn } from "../lib/caddieSaved";
 import { checkpointCuesFromJson } from "../lib/coachReplay";
 import { cleanCaddieFeedback, cleanCaddieFeedbackText } from "../../supabase/functions/_shared/caddieFeedbackText.ts";
 import { analysisLanguageFromJson } from "../lib/caddieLanguage";
+import { translationRequestError } from "../lib/caddieTranslationRetry";
 import { sanitizeWorkOnCheckpoint } from "../../supabase/functions/_shared/caddieCues.ts";
 import { phasesFromJson, poseDataFromJson } from "../../supabase/functions/_shared/caddieVerdicts.ts";
 import { useAuth } from "./AuthContext";
@@ -736,17 +737,7 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
     // up the change without a page reload.
     const { data, error } = await supabase.functions.invoke("translate-caddie-analysis", { body: { analysisId: id, locale } });
     if (error) {
-      let message = error.message;
-      const status = typeof error.context?.status === "number" ? (error.context.status as number) : undefined;
-      try {
-        const body = await error.context?.json();
-        if (body?.error) message = body.error;
-      } catch {
-        // Falls back to error.message below.
-      }
-      // The HTTP status rides along so automatic translation can tell
-      // "too soon, retry" (429) from a real failure.
-      throw Object.assign(new Error(message), { status });
+      throw await translationRequestError(error);
     }
     const row = (data as { analysis: CaddieAnalysisRow }).analysis;
     cachePoseFromFullRow(row);
