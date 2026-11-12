@@ -76,6 +76,7 @@ import type { ThinkingArm } from "../_shared/caddiePreprocessing.ts";
 import type { CaddieStage, PosePassName, PoseSignalTally, RequestFailureKind, StepFailure, TrimWindow } from "../_shared/caddieReliability.ts";
 import { CUE_MAX_CHARS, WORK_ON_CHECKPOINTS, withSanitizedCheckpointCues, withSanitizedWorkOnCheckpoints } from "../_shared/caddieCues.ts";
 import { withMeasuredCueCheck } from "../_shared/caddieVerdicts.ts";
+import { PoseCallLog, poseCallOutcome } from "../_shared/poseTelemetry.ts";
 
 // ---- Centralized config — change these, nothing else, to retune Caddie. ----
 const GEMINI_MODEL = "gemini-3.6-flash"; // gemini-2.5-flash was retired for new API keys/projects (Gemini API started 404ing it with "no longer available to new users" on 2026-08-21); 3.6-flash is Google's named replacement, same video-understanding + structured-JSON-output support
@@ -1408,7 +1409,8 @@ Deno.serve(async (req: Request) => {
       // scale: the coordinateScale of the extraction this frame came from.
       // tally: raw (pre-filter) counts for the pose gate's diagnostics; only
       // the coarse passes pass one.
-      type RoboflowCallContext = { scale: unknown; tally?: PoseSignalTally };
+      // log: per-call timing for this pass (_shared/poseTelemetry.ts).
+      type RoboflowCallContext = { scale: unknown; tally?: PoseSignalTally; log?: PoseCallLog };
       async function callRoboflowOnce(frame: ExtractedFrame, ctx: RoboflowCallContext): Promise<TrustedFrame | null> {
         const res = await fetch(ROBOFLOW_ENDPOINT, {
           method: "POST",
@@ -1437,10 +1439,14 @@ Deno.serve(async (req: Request) => {
         let lastErr: unknown;
         for (let attempt = 1; attempt <= ROBOFLOW_FRAME_RETRY_ATTEMPTS; attempt++) {
           if (settled) return { frame: null, error: lastErr };
+          const callStart = Date.now();
           try {
-            return { frame: await callRoboflowOnce(frame, ctx) };
+            const result = await callRoboflowOnce(frame, ctx);
+            ctx.log?.record(Date.now() - callStart, "ok");
+            return { frame: result };
           } catch (err) {
             lastErr = err;
+            ctx.log?.record(Date.now() - callStart, poseCallOutcome(err instanceof ProviderHttpError ? err.status : undefined, safeErrorName(err)));
             // A hard 4xx (auth, credit cap, bad request) fails the same way
             // every time: don't spend a second call on it.
             const transient = !(err instanceof ProviderHttpError) || isRetryableStatus(err.status);
@@ -1451,7 +1457,9 @@ Deno.serve(async (req: Request) => {
             if (attempt < ROBOFLOW_FRAME_RETRY_ATTEMPTS && transient) {
               onRetry();
               if (err instanceof ProviderHttpError) {
-                await sleep(backoffMs(attempt, ROBOFLOW_BACKOFF_BASE_MS, ROBOFLOW_BACKOFF_CAP_MS, err.retryAfter));
+                const wait = backoffMs(attempt, ROBOFLOW_BACKOFF_BASE_MS, ROBOFLOW_BACKOFF_CAP_MS, err.retryAfter);
+                ctx.log?.addBackoff(wait);
+                await sleep(wait);
               }
             } else {
               break;
@@ -1466,11 +1474,13 @@ Deno.serve(async (req: Request) => {
       // Returns null once the deadline has settled the row.
       async function runCoarsePosePass(passFrames: ExtractedFrame[], ctx: RoboflowCallContext): Promise<TrustedFrame[] | null> {
       const roboflowResults: (TrustedFrame | null)[] = new Array(passFrames.length).fill(null);
+      const passLog = new PoseCallLog();
+      const passCtx: RoboflowCallContext = { ...ctx, log: passLog };
       for (let pass = 1; ; pass++) {
         let passError: unknown;
         const pending = passFrames.map((frame, index) => ({ frame, index })).filter(({ index }) => roboflowResults[index] === null);
         await mapWithAdaptiveConcurrency(pending, roboflowGate, async ({ frame, index }) => {
-          const result = await callRoboflowWithRetry(frame, ctx, () => roboflowRetryCount++);
+          const result = await callRoboflowWithRetry(frame, passCtx, () => roboflowRetryCount++);
           if (result.frame) roboflowResults[index] = result.frame;
           else if (passError === undefined && result.error !== undefined) passError = result.error;
         });
@@ -1505,6 +1515,8 @@ Deno.serve(async (req: Request) => {
         requested: passFrames.length,
         succeeded: passTrusted.length,
         frame_retries: roboflowRetryCount,
+        concurrency: roboflowGate.limit,
+        ...passLog.summary(),
       });
       return passTrusted;
       }
@@ -1629,6 +1641,7 @@ Deno.serve(async (req: Request) => {
           const denseEnd = Math.min(coarseWindowEnd, peakFrame.timestamp_seconds + DENSE_IMPACT_WINDOW_SECONDS);
           if (denseEnd - denseStart >= 0.2) {
             try {
+              const denseExtractStart = Date.now();
               const denseExtractRes = await fetch(FRAME_EXTRACT_URL, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${frameExtractSecret}` },
@@ -1648,12 +1661,15 @@ Deno.serve(async (req: Request) => {
                     base64: f.base64,
                   }),
                 );
+                const denseExtractMs = Date.now() - denseExtractStart;
+                const denseLog = new PoseCallLog();
                 const denseResults = await mapWithAdaptiveConcurrency(denseFrames, roboflowGate, async (frame) => {
-                  const result = await callRoboflowWithRetry(frame, { scale: coordinateScale }, () => denseRetryCount++);
+                  const result = await callRoboflowWithRetry(frame, { scale: coordinateScale, log: denseLog }, () => denseRetryCount++);
                   if (!result.frame) devLog("dense frame failed after retries", { error: result.error instanceof ProviderHttpError ? result.error.message : safeErrorName(result.error) });
                   return result.frame;
                 });
                 denseTrustedFrames = denseResults.filter((f): f is TrustedFrame => f !== null);
+                logEvent("pose_dense_complete", { requested: denseFrames.length, succeeded: denseTrustedFrames.length, frame_retries: denseRetryCount, concurrency: roboflowGate.limit, extract_ms: denseExtractMs, ...denseLog.summary() });
                 devLog("dense impact-window pass complete", {
                   windowStart: denseStart,
                   windowEnd: denseEnd,
