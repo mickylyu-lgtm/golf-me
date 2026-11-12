@@ -13,7 +13,8 @@ import { VideoTrimSelector } from "../components/caddie/VideoTrimSelector";
 import { FilmingTips } from "../components/caddie/FilmingTips";
 import { captureVideoThumbnail, readVideoDuration } from "../lib/image";
 import { analysisBlocker, canStartAnalysis, createTrimReopenGate, resolveTrimReopen } from "../lib/trimReopen";
-import { formatClock } from "../lib/format";
+import { SelectedClipPreview } from "../components/caddie/SelectedClipPreview";
+import { startOptionalUpload } from "../lib/optionalUpload";
 import { supabase } from "../lib/supabase";
 import { CADDIE_MEDIA_BUCKET } from "../lib/caddieMedia";
 import { CaddieRequestError } from "../lib/caddieAnalysis";
@@ -34,6 +35,9 @@ const MAX_SWING_VIDEO_SECONDS = MAX_CADDIE_UPLOAD_SECONDS; // whole source, not 
 // the app after an interruption gets an honest "that didn't finish, try
 // again" instead of silence that reads as data loss.
 const UPLOAD_IN_PROGRESS_KEY = "golfme:caddieUploadInProgress";
+// How long Ask Caddie waits, once the video is uploaded, for the optional
+// thumbnail still in flight before going ahead without it.
+const THUMBNAIL_GRACE_MS = 1500;
 
 // "Choose a club to continue" under Ask Caddie, tied to it by aria-describedby.
 const CLUB_REQUIRED_HINT_ID = "caddie-club-required-hint";
@@ -123,33 +127,9 @@ export function AnalyzeSwing() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Reported live as "pitch black" — a <video> with no poster and nothing
-  // forcing a decode doesn't paint any frame at all on some mobile
-  // WebViews until playback actually starts (same root cause already
-  // fixed in VideoTrimSelector's own preview). A picked video sits here,
-  // unplayed, for a while before anyone taps Ask Caddie, so it needs the
-  // same forced seek+play+pause treatment, not just VideoTrimSelector's.
-  useEffect(() => {
-    const video = previewVideoRef.current;
-    if (!video || !videoPreviewUrl) return;
-    let cancelled = false;
-    async function showFrame() {
-      if (!video) return;
-      video.currentTime = draftSwingVideo?.trimStartSeconds ?? 0;
-      try {
-        await video.play();
-        if (!cancelled) video.pause();
-      } catch {
-        // Best effort — nothing else to do if autoplay is blocked here.
-      }
-    }
-    if (video.readyState >= 1) showFrame();
-    else video.addEventListener("loadedmetadata", showFrame, { once: true });
-    return () => {
-      cancelled = true;
-      video.removeEventListener("loadedmetadata", showFrame);
-    };
-  }, [videoPreviewUrl, draftSwingVideo?.trimStartSeconds]);
+  // The picked clip's first frame is painted by SelectedClipPreview, inline
+  // (lib/clipPreview.ts: the old play() here, on a <video> without
+  // playsinline, is what opened iOS's fullscreen player after Use This Clip).
 
   if (isDemo || !authUser) {
     return (
@@ -315,22 +295,37 @@ export function AnalyzeSwing() {
       const rawExt = (videoFile.name.split(".").pop() ?? "").toLowerCase();
       const ext = /^[a-z0-9]{1,8}$/.test(rawExt) ? rawExt : "mp4";
       const path = `${authUser.id}/caddie-${crypto.randomUUID()}.${ext}`;
+      // The thumbnail is optional and never holds the analysis back: it is
+      // captured and uploaded alongside the video (it used to run only
+      // after the video upload, adding up to its 8 s capture timeout plus
+      // an upload before analyze-swing was even called), and one that isn't
+      // ready shortly after the video is skipped and cleaned up
+      // (lib/optionalUpload.ts).
+      const userId = authUser.id;
+      const trimStart = draftSwingVideo?.trimStartSeconds;
+      const file = videoFile;
+      const thumb = startOptionalUpload({
+        produce: async () => {
+          const thumbBlob = await captureVideoThumbnail(file, 640, trimStart);
+          const thumbPath = `${userId}/caddie-thumb-${crypto.randomUUID()}.jpg`;
+          const { error } = await supabase.storage.from(CADDIE_MEDIA_BUCKET).upload(thumbPath, thumbBlob, { contentType: "image/jpeg" });
+          if (error) throw error;
+          return thumbPath;
+        },
+        discard: (late) => {
+          void supabase.storage.from(CADDIE_MEDIA_BUCKET).remove([late]);
+        },
+        onError: (thumbErr) => console.error("GolfMe: failed to capture a video thumbnail.", thumbErr),
+      });
       const { error: uploadError } = await supabase.storage.from(CADDIE_MEDIA_BUCKET).upload(path, videoFile, { contentType: videoFile.type || "video/mp4" });
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        thumb.abandon();
+        throw uploadError;
+      }
       uploadedPaths.push(path);
 
-      let thumbnailPath: string | undefined;
-      try {
-        const thumbBlob = await captureVideoThumbnail(videoFile, 640, draftSwingVideo?.trimStartSeconds);
-        const thumbPath = `${authUser.id}/caddie-thumb-${crypto.randomUUID()}.jpg`;
-        const { error: thumbUploadError } = await supabase.storage.from(CADDIE_MEDIA_BUCKET).upload(thumbPath, thumbBlob, { contentType: "image/jpeg" });
-        if (!thumbUploadError) {
-          thumbnailPath = thumbPath;
-          uploadedPaths.push(thumbPath);
-        }
-      } catch (thumbErr) {
-        console.error("GolfMe: failed to capture a video thumbnail.", thumbErr);
-      }
+      const thumbnailPath = await thumb.settle(THUMBNAIL_GRACE_MS);
+      if (thumbnailPath) uploadedPaths.push(thumbnailPath);
 
       phase = "analyze";
       const created = await createCaddieAnalysis({
@@ -407,10 +402,26 @@ export function AnalyzeSwing() {
         />
       ) : videoFile && videoPreviewUrl ? (
         <div className="flex flex-col gap-2.5 rounded-2xl border border-fairway-200 bg-fairway-50/40 p-3">
-          <div className="overflow-hidden rounded-xl">
-            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-            <video ref={previewVideoRef} src={videoPreviewUrl} controls className="max-h-72 w-full rounded-xl bg-black" />
-          </div>
+          <SelectedClipPreview
+            key={videoPreviewUrl}
+            previewUrl={videoPreviewUrl}
+            trimStart={draftSwingVideo?.trimStartSeconds}
+            trimEnd={draftSwingVideo?.trimEndSeconds}
+            videoRef={previewVideoRef}
+            action={
+              draftSwingVideo?.trimStartSeconds !== undefined && draftSwingVideo?.trimEndSeconds !== undefined ? (
+                <button
+                  type="button"
+                  onClick={changeTrim}
+                  disabled={submitting || trimReopening}
+                  aria-busy={trimReopening || undefined}
+                  className="-my-1.5 flex min-h-11 items-center gap-1 px-3 text-xs font-semibold text-fairway-700 underline-offset-2 hover:underline disabled:opacity-40 motion-safe:transition-opacity"
+                >
+                  <Scissors size={12} aria-hidden="true" /> {t("caddie.trimChange")}
+                </button>
+              ) : null
+            }
+          />
           <div className="flex items-center justify-between gap-2">
             <span className="min-w-0 truncate text-xs font-semibold text-fairway-700">{videoFile.name}</span>
             <button
@@ -421,25 +432,6 @@ export function AnalyzeSwing() {
               <X size={12} /> {t("composer.remove")}
             </button>
           </div>
-          {draftSwingVideo?.trimStartSeconds !== undefined && draftSwingVideo?.trimEndSeconds !== undefined && (
-            <div className="flex flex-wrap items-center justify-center gap-x-2">
-              <p className="text-center text-xs font-semibold text-fairway-700">
-                {t("caddie.trimSelectedLabel", {
-                  start: formatClock(draftSwingVideo.trimStartSeconds),
-                  end: formatClock(draftSwingVideo.trimEndSeconds),
-                })}
-              </p>
-              <button
-                type="button"
-                onClick={changeTrim}
-                disabled={submitting || trimReopening}
-                aria-busy={trimReopening || undefined}
-                className="-my-1.5 flex min-h-11 items-center gap-1 px-3 text-xs font-semibold text-fairway-700 underline-offset-2 hover:underline disabled:opacity-40 motion-safe:transition-opacity"
-              >
-                <Scissors size={12} aria-hidden="true" /> {t("caddie.trimChange")}
-              </button>
-            </div>
-          )}
         </div>
       ) : (
         <button
@@ -458,7 +450,21 @@ export function AnalyzeSwing() {
 
       <ClubPicker value={swingType} onChange={setSwingType} disabled={submitting} />
 
-      <div className="flex flex-col gap-2">
+      {/* Ask Caddie stays reachable above the phone's fixed bottom nav (it
+          used to sit under it until the page was scrolled, Micky
+          2026-11-09): sticky, so it rests in place at the end of the form
+          and otherwise floats just above the nav. The offset is the nav's
+          own footprint (BottomNav: 8px above the safe area, 57px tall
+          expanded) plus a gap. Not while the trim screen is open, so it
+          never covers Use This Clip; sm+ has no bottom nav. */}
+      <div
+        className={`flex flex-col gap-2 ${
+          pendingTrim
+            ? ""
+            : "sticky bottom-[calc(env(safe-area-inset-bottom)+73px)] z-20 -mx-4 bg-page/95 px-4 py-2 backdrop-blur-sm sm:static sm:mx-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none"
+        }`}
+        data-ask-caddie-bar
+      >
         <Button
           size="lg"
           fullWidth
