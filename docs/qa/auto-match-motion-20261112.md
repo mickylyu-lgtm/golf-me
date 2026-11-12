@@ -1,0 +1,31 @@
+# Auto-Match golf animation
+
+## Change and boundaries
+
+Auto-Match has its own small green, gold pin and three golf balls gathering together. The header entrance finishes in under a second and rests as a static mode mark. A larger version repeats only while the existing route/data loading condition is true. Results receive a 280ms reveal without remounting cards or blocking input. Cached results remain immediate: there are no timers, progress percentages, fake matches, minimum waits or animation-completion gates.
+
+The ordinary app/cart loader is unchanged. The route-specific fallback applies only to /auto-match inside the authenticated shell. Existing matching, widening, account/demo behavior, errors, Retry, location and preference flows are unchanged. No backend, production data, migration or native-shell work.
+
+CSS motion uses only transform and opacity, with three small SVG groups and no JavaScript frame loop. Reduced motion is fully static, including a setting change during a running animation. The decorative SVG is hidden from assistive technology; real loading has a polite localized status in all six languages. Dark mode uses the same scene in dusk greens. The title wraps long localized words; subtitle copy remains full-width on narrow/enlarged layouts.
+
+## Verification
+
+- Base: ca96e208e932a5701b863dc596d425b9f144127e.
+- Final npm run check passed TypeScript, all 1,478 tests (zero skipped/failing), lint with 28 existing warnings / zero errors, production build and landing prerender. Existing large-chunk build warnings remain.
+- Nine dedicated regression tests cover route/data wiring, cached/demo timing, error/location precedence, accessibility/localization, finite entrance versus loading loop, reduced motion, transform/opacity-only motion, responsive header, and unchanged result controls. Included in test:play and the full test suite.
+- scripts/check-auto-match-motion-ui.mjs passed 147 assertions each in Chromium and WebKit at 320x844, 390x844, 844x390 landscape and 1440x900.
+- Browser coverage: delayed lazy-module fallback; immediate cached results; repeated next-match taps; preferences open/close with selection retained; rounds/golfers pending; error/Retry; missing location; empty and golfer-only results; Back during search and Forward after completion; header animation settling; actual motion; live reduced-motion changes; dark mode; and six locales with 200% root text.
+- Independent source review found an enlarged-title/copy-layout issue in the first draft. Fixed by keeping subtitle full-width and wrapping long title words; re-review found no remaining blocker.
+- Actual rendered search/results/dark screenshots were inspected. They show synthetic demo data, not real customers or a live production session.
+
+## Reproduction
+
+Run npm run check and node scripts/check-auto-match-motion-ui.mjs. AUTO_MATCH_ENGINE=webkit chooses WebKit. Optional CHROMIUM_EXECUTABLE / WEBKIT_EXECUTABLE can point to an existing browser. This machine uses pre-existing cached browser libraries through LD_LIBRARY_PATH; the headless WebKit MiniBrowser additionally needs WEBKIT_EXEC_PATH, WEBKIT_INJECTED_BUNDLE_PATH and WEBKIT_INSPECTOR_RESOURCES_PATH from its installed bundle. No browser/system package was installed for this change.
+
+The test-only state module is injected by the local Vite QA script, never by production config. All external browser requests are blocked and Vite uses a dummy backend. Browser result JSON/screenshots are under artifacts.local/automatch and are not committed. At 200% root text, existing app TopBar/other legacy content can overflow independently; regression bounds target the changed header and loader.
+
+## Limitations and release
+
+Synthetic WebKit is not a physical iPhone/Capacitor or VoiceOver check. Real-account fetches and real joining were not exercised. No production writes are needed.
+
+Prepared on an isolated worktree; publish only within the parent's coordinated, user-authorized release. Verify remote main, exact-commit CI and the production asset before calling it live.

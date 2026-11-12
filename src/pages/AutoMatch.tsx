@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Info, MapPin, Plus, Share2, Target, Users } from "lucide-react";
+import { ArrowLeft, Info, MapPin, Plus, Share2, Users } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
 import { useRealRounds } from "../context/RealRoundsContext";
@@ -15,7 +15,7 @@ import { EditMatchPreferencesSheet } from "../components/find/EditMatchPreferenc
 import { AutoMatchGolferCard } from "../components/find/AutoMatchGolferCard";
 import { LocationPicker } from "../components/location/LocationPicker";
 import { LoadErrorState } from "../components/ui/LoadStates";
-import { GolfMeLoader } from "../components/loading/GolfMeLoader";
+import { AutoMatchLoader, AutoMatchScene } from "../components/find/AutoMatchScene";
 import { listView } from "../lib/loadStatus";
 import { SharedPreferencesBadge } from "../components/golfcall/SharedPreferencesBadge";
 import { rankCallsWithPreferences } from "../lib/autoMatch";
@@ -339,10 +339,12 @@ export function AutoMatch() {
       </button>
 
       <div>
-        <h1 className="flex items-center gap-2 text-xl font-bold text-slate-900">
-          <Target size={20} className="text-fairway-600" /> {t("autoMatch.title")}
-        </h1>
-        {/* Names the chosen day only when the results are still for it;
+        <div className="flex items-center gap-2">
+          <AutoMatchScene compact />
+          <h1 className="min-w-0 text-xl font-bold text-slate-900 [overflow-wrap:anywhere]">{t("autoMatch.title")}</h1>
+        </div>
+        {/* Keep the subtitle full-width, including enlarged text on a phone.
+            Names the chosen day only when the results are still for it;
             once the date widened (or there are no rounds) it stays neutral. */}
         <p className="text-sm text-slate-500">
           {when && plan.kind === "rounds" && plan.widened.date === null ? t("autoMatch.subtitle", { when: whenLabel }) : t("autoMatch.subtitleAnyDay")}
@@ -350,7 +352,7 @@ export function AutoMatch() {
       </div>
 
       {roundsView === "loading" ? (
-        <GolfMeLoader className="py-12" />
+        <AutoMatchLoader />
       ) : roundsView === "error" ? (
         <LoadErrorState onRetry={rounds.retry} />
       ) : plan.kind === "needsLocation" ? (
@@ -365,7 +367,7 @@ export function AutoMatch() {
           }
         />
       ) : plan.kind === "rounds" && current ? (
-        <div className="flex flex-col gap-4">
+        <div className="gm-automatch-results flex flex-col gap-4">
           {notes.length > 0 && (
             <div className="flex items-start gap-2 rounded-2xl border border-sun-100 bg-sun-50 px-3.5 py-3 text-sm text-slate-700" role="status">
               <Info size={16} className="mt-0.5 shrink-0 text-sun-700" />
@@ -431,9 +433,9 @@ export function AutoMatch() {
           {prefsNudge}
         </div>
       ) : golfersPending ? (
-        <GolfMeLoader className="py-12" />
+        <AutoMatchLoader />
       ) : plan.kind === "golfers" ? (
-        <div className="flex flex-col gap-4">
+        <div className="gm-automatch-results flex flex-col gap-4">
           <div className="rounded-2xl border border-fairway-200 bg-fairway-50 px-4 py-3">
             <p className="text-sm font-bold text-fairway-800">{t("autoMatch.noRoundsGolfersTitle")}</p>
             <p className="mt-0.5 text-sm text-fairway-800/80">{t("autoMatch.noRoundsGolfersDesc")}</p>

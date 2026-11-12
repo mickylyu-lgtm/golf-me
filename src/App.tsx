@@ -26,6 +26,7 @@ import { TutorialOverlay } from "./components/tutorial/TutorialOverlay";
 import { PushPrePermissionPrompt } from "./components/notifications/PushPrePermissionPrompt";
 import { ScrollToTop } from "./components/layout/ScrollToTop";
 import { GolfMeLoader } from "./components/loading/GolfMeLoader";
+import { AutoMatchLoader } from "./components/find/AutoMatchScene";
 import { Button } from "./components/ui/Button";
 import { Welcome } from "./pages/Welcome";
 import { Splash } from "./pages/Splash";
@@ -133,7 +134,7 @@ function AuthedLayout() {
     <TutorialProvider>
       <FirstRoundPromptProvider>
         <AppShell>
-          <Suspense fallback={<GolfMeLoader className="py-12" />}>
+          <Suspense fallback={location.pathname === "/auto-match" ? <AutoMatchLoader /> : <GolfMeLoader className="py-12" />}>
             <Outlet />
           </Suspense>
         </AppShell>

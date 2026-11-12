@@ -1343,6 +1343,7 @@ export const ja: Record<TranslationKey, string> = {
   "matchPrefs.noBudgetPreference": "予算指定なし",
   "matchPrefs.howFar": "距離は？",
 
+  "autoMatch.searching": "あなたに合うラウンドやゴルファーを探しています...",
   "autoMatch.title": "オートマッチ",
   "autoMatch.subtitle": "あなたのマッチング設定をもとに、{when}に最適なラウンドをおすすめします。",
   "autoMatch.subtitleAnyDay": "あなたのマッチング設定をもとに、これからのラウンドから最適なものをおすすめします。",

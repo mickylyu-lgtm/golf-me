@@ -1343,6 +1343,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "matchPrefs.noBudgetPreference": "不限预算",
   "matchPrefs.howFar": "距离多远？",
 
+  "autoMatch.searching": "正在为你寻找球局和球友...",
   "autoMatch.title": "自动匹配",
   "autoMatch.subtitle": "我们会根据你的匹配偏好，为{when}推荐最合适的球局。",
   "autoMatch.subtitleAnyDay": "我们会根据你的匹配偏好，推荐最合适的近期球局。",

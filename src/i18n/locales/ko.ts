@@ -1343,6 +1343,7 @@ export const ko: Record<TranslationKey, string> = {
   "matchPrefs.noBudgetPreference": "예산 무관",
   "matchPrefs.howFar": "거리는 얼마나?",
 
+  "autoMatch.searching": "나에게 맞는 라운드와 골퍼를 찾고 있어요...",
   "autoMatch.title": "자동 매칭",
   "autoMatch.subtitle": "매칭 선호도를 바탕으로 {when} 가장 알맞은 라운드를 추천해드릴게요.",
   "autoMatch.subtitleAnyDay": "매칭 선호도를 바탕으로 다가오는 라운드 중 가장 알맞은 라운드를 추천해드릴게요.",

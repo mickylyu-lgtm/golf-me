@@ -1343,6 +1343,7 @@ export const es: Record<TranslationKey, string> = {
   "matchPrefs.noBudgetPreference": "Sin Preferencia de Presupuesto",
   "matchPrefs.howFar": "¿A qué distancia?",
 
+  "autoMatch.searching": "Buscando rondas y golfistas para ti...",
   "autoMatch.title": "Emparejamiento Automático",
   "autoMatch.subtitle": "Te recomendaremos la mejor ronda disponible para {when}, usando tus Preferencias de Coincidencia.",
   "autoMatch.subtitleAnyDay": "Te recomendaremos las mejores rondas próximas, usando tus Preferencias de Coincidencia.",

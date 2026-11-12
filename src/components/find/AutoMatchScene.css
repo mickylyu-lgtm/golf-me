@@ -1,0 +1,47 @@
+/* All motion is decorative: no timers, result gating, fake progress, or
+   invisible click blockers. Base styles are the static final composition. */
+.gm-automatch-scene {
+  display: block;
+  overflow: visible;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .gm-automatch-arrival .gm-automatch-ball {
+    animation: gm-automatch-arrive 760ms cubic-bezier(.22, 1, .36, 1) both;
+  }
+
+  .gm-automatch-searching .gm-automatch-ball {
+    animation: gm-automatch-gather 2.8s ease-in-out infinite both;
+  }
+
+  .gm-automatch-results {
+    animation: gm-automatch-reveal 280ms ease-out both;
+  }
+}
+
+@keyframes gm-automatch-arrive {
+  from { transform: translate(var(--gm-match-from-x), var(--gm-match-from-y)); opacity: .25; }
+  to { transform: translate(0, 0); opacity: 1; }
+}
+
+@keyframes gm-automatch-gather {
+  0%, 12% { transform: translate(var(--gm-match-from-x), var(--gm-match-from-y)); opacity: .35; }
+  48%, 76% { transform: translate(0, 0); opacity: 1; }
+  100% { transform: translate(var(--gm-match-from-x), var(--gm-match-from-y)); opacity: .35; }
+}
+
+@keyframes gm-automatch-reveal {
+  from { transform: translateY(6px); opacity: .65; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Explicitly static, including a live preference change mid-animation. */
+@media (prefers-reduced-motion: reduce) {
+  .gm-automatch-ball,
+  .gm-automatch-results {
+    animation: none !important;
+    transform: none;
+    opacity: 1;
+  }
+}

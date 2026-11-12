@@ -1,5 +1,13 @@
 # GolfMe — Development Status
 
+## Auto-Match golf animation — 2026-11-12 (tested, release authorized)
+
+- Auto-Match now has a dedicated green/flag/ball gathering scene: a brief header entrance, looping only for existing route/data waits, plus a short result reveal. Cached results remain immediate. No matching logic, timers, fake progress, backend, database or native-shell changes.
+- Static reduced motion, dusk colors in dark mode and localized loading status in all six languages. Full-width subtitle and wrapping title preserve narrow/enlarged layouts.
+- Final npm run check passed TypeScript, all 1,478 tests (none skipped/failing), lint (28 baseline warnings/zero errors), build and prerender. Chromium and WebKit each passed 147 local-only assertions for loading/cached/error/location/empty/golfer fallback, repeated controls, preferences close, Back/Forward, reduced motion, dark mode and six locales at 200%. Independent review is clear; actual synthetic-demo screenshots inspected.
+- User authorized push when ready and requested screenshots. Coordinate normal fast-forward publication, then verify exact-commit CI and production. Physical-device, VoiceOver and real-account fetch/join checks remain unverified. Details: docs/qa/auto-match-motion-20261112.md.
+
+
 ## Followers/Following search: stable keyboard layout — 2026-11-11 (live, verified)
 
 - Both connection tabs use an opt-in SearchModal: search stays anchored while results resize smoothly above the native keyboard. Filtering/empty results cannot resize the sheet. Intentional list scrolling is retained. Default modals, chat/native keyboard, backend and database are unchanged.

@@ -1191,6 +1191,7 @@ export const en = {
   "matchPrefs.howFar": "How far?",
 
   // Auto-Match
+  "autoMatch.searching": "Finding rounds and golfers for you...",
   "autoMatch.title": "Auto-Match",
   "autoMatch.subtitle": "We'll recommend the best available round for {when}, using your Match Preferences.",
   "autoMatch.subtitleAnyDay": "We'll recommend the best upcoming rounds, using your Match Preferences.",
