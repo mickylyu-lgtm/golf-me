@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { supabase } from "../lib/supabase";
 import { refetchOnResume } from "../lib/resumeRefetch";
 import { useAuth } from "./AuthContext";
+import { markRoundCompleted } from "../lib/completeRound";
 import { realRoundToGolfCall } from "../lib/golfCall";
 import type { RoundRow, ParticipantRow } from "../lib/golfCall";
 import { fetchPublicProfiles } from "../lib/publicProfilesFetch";
@@ -100,7 +101,7 @@ interface RealRoundsContextValue {
   joinRound: (roundId: string) => Promise<void>;
   leaveRound: (roundId: string) => Promise<void>;
   cancelRound: (roundId: string) => Promise<void>;
-  completeRound: (roundId: string) => Promise<void>;
+  completeRound: (roundId: string) => Promise<boolean>;
   editTeeTime: (roundId: string, input: EditTeeTimeInput) => Promise<{ proofInvalidated: boolean }>;
   hasReviewed: (roundId: string, revieweeId: string) => boolean;
   submitReview: (roundId: string, revieweeId: string, input: ReviewInput) => Promise<void>;
@@ -541,9 +542,11 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
   const completeRound = useCallback(
     async (roundId: string) => {
       if (!authUser) throw new Error("Not signed in.");
-      const { error } = await supabase.from("golf_calls").update({ status: "completed" }).eq("id", roundId).eq("host_user_id", authUser.id);
-      if (error) throw new Error(error.message);
+      const forUser = authUser.id;
+      const completed = await markRoundCompleted(supabase, roundId, forUser);
+      if (userIdRef.current !== forUser) return false;
       await refetch();
+      return completed && userIdRef.current === forUser;
     },
     [refetch, authUser],
   );

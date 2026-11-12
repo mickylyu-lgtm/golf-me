@@ -216,7 +216,7 @@ interface DataContextValue extends SocialPrivacyApi {
   createGolfCall: (input: CreateGolfCallInput) => GolfCall;
   cancelGolfCall: (callId: string) => Promise<void>;
   simulateCallCompletion: (callId: string) => void;
-  completeGolfCall: (callId: string) => Promise<void>;
+  completeGolfCall: (callId: string) => Promise<boolean>;
   joinGolfCall: (callId: string) => Promise<void>;
   cancelJoinRequest: (callId: string) => void;
   leaveGolfCall: (callId: string) => Promise<void>;
@@ -751,12 +751,14 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const completeGolfCall = useCallback(
     async (callId: string) => {
       if (!auth.isDemo) {
-        await realRounds.completeRound(callId);
-        return;
+        return realRounds.completeRound(callId);
       }
+      const call = data.golfCalls.find((c) => c.id === callId);
+      if (!call || (call.status !== "open" && call.status !== "full")) return false;
       simulateCallCompletion(callId);
+      return true;
     },
-    [auth.isDemo, realRounds, simulateCallCompletion],
+    [auth.isDemo, realRounds, simulateCallCompletion, data.golfCalls],
   );
 
   const joinGolfCall = useCallback(

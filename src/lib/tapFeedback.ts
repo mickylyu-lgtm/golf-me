@@ -10,7 +10,7 @@ import { Haptics, ImpactStyle, NotificationType } from "@capacitor/haptics";
 //              Skipped when the tapped option is already the selected one.
 //   medium     medium impact: sending a message
 //   success    the success notification: joined a round, hosted a round,
-//              published a post, a Caddie analysis finished
+//              completed a round, published a post, a Caddie analysis finished
 //              (components/caddie/CaddieDoneHaptic)
 //
 // Web: nothing. iOS Safari has no vibration API at all, and buzzing Android

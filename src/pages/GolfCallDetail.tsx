@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -98,6 +98,7 @@ export function GolfCallDetail() {
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [completeConfirmOpen, setCompleteConfirmOpen] = useState(false);
+  const completingRef = useRef(false);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
   const [joinConfirmOpen, setJoinConfirmOpen] = useState(false);
   const [proofExplainerOpen, setProofExplainerOpen] = useState(false);
@@ -565,12 +566,15 @@ export function GolfCallDetail() {
           message={t("golfCallDetail.markCompletedConfirmMessage")}
           confirmLabel={t("golfCallDetail.markCompleted")}
           onConfirm={async () => {
+            if (completingRef.current) return;
+            completingRef.current = true;
             try {
-              await completeGolfCall(call.id);
-              celebrate();
+              if (await completeGolfCall(call.id)) celebrate();
+              else showToast(t("golfCallDetail.markCompletedError"), "warning");
             } catch (err) {
               showToast(err instanceof Error ? err.message : t("golfCallDetail.markCompletedError"), "warning");
             } finally {
+              completingRef.current = false;
               setCompleteConfirmOpen(false);
             }
           }}

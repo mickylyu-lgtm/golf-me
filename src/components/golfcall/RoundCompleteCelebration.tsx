@@ -1,9 +1,8 @@
 import { useEffect, useRef } from "react";
 import { useLocale } from "../../i18n/LocaleContext";
-import { tapHaptic } from "../../lib/tapFeedback";
 import { CONFETTI_MS, confettiAlpha, makeConfetti, stepPiece } from "../../lib/roundCelebration";
 
-// The moment a round is completed: a success haptic, a confetti burst and a
+// The moment a round is completed: a confetti burst and a
 // short "Round complete" card. Never blocks the page (pointer-events: none
 // on the confetti; the card dismisses on tap or by itself). With
 // prefers-reduced-motion the confetti is skipped and the card simply fades.
@@ -21,7 +20,6 @@ export function RoundCompleteCelebration({ onDone }: { onDone: () => void }) {
   doneRef.current = onDone;
 
   useEffect(() => {
-    tapHaptic("success");
     const timer = window.setTimeout(() => doneRef.current(), CARD_MS);
     return () => window.clearTimeout(timer);
   }, []);

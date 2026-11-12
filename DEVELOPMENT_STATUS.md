@@ -1,5 +1,12 @@
 # GolfMe — Development Status
 
+## Round-completion success haptic — 2026-11-12 (tested, release authorized)
+
+- Moves the existing success haptic from celebration-card mounting into a once-per-account/round completion gate. Real writes must return a matching completed row; zero-row, failed and repeated transitions do not claim success. Late route/account callbacks and repeated mounts cannot buzz again, including blocked local storage.
+- Existing native success pattern, silent web behavior, localized visual status, recent-round group celebration and reduced-motion treatment remain. No native-shell, database, schema or scoring changes.
+- Full npm run check passed TypeScript, 1,474 tests, build/prerender; final lint has 28 baseline warnings and zero errors. Chromium and WebKit each passed 62 synthetic lifecycle/accessibility assertions. Independent review is clear. Physical-device vibration and production account writes remain unverified.
+- Integrated onto verified auto-match main 23d60434; only this status document conflicted and both entries were retained. Final npm run check passes all 1,483 tests, TypeScript, lint (28 baseline warnings/zero errors), build/prerender. Both browser suites again passed 62 assertions. User authorized push when ready. Next: publish normally, then verify exact-commit CI and production. Details: docs/qa/round-completion-haptic-20261112.md.
+
 ## Auto-Match golf animation — 2026-11-12 (tested, release authorized)
 
 - Auto-Match now has a dedicated green/flag/ball gathering scene: a brief header entrance, looping only for existing route/data waits, plus a short result reveal. Cached results remain immediate. No matching logic, timers, fake progress, backend, database or native-shell changes.
