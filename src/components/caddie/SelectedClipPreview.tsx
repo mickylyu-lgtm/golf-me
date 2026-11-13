@@ -119,6 +119,23 @@ export function SelectedClipPreview({
     };
   }, [previewUrl, videoRef]);
 
+  // Standard fullscreen promotes only <video>, not its sibling Play button.
+  // Supply browser controls there, but retain the compact custom controls
+  // inline. WebKit's native player supplies its own controls independently.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const syncControls = () => {
+      video.controls = document.fullscreenElement === video;
+    };
+    document.addEventListener("fullscreenchange", syncControls);
+    syncControls();
+    return () => {
+      document.removeEventListener("fullscreenchange", syncControls);
+      video.controls = false;
+    };
+  }, [previewUrl, videoRef]);
+
   function togglePlay() {
     const video = videoRef.current;
     if (!video || !range) return;

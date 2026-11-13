@@ -1,5 +1,12 @@
 # GolfMe — Development Status
 
+## Caddie selected-clip fullscreen controls — 2026-11-12 (tested; publication authorized)
+
+- Current main dc2dc4b requested standard fullscreen on the video element while its Play/Pause button remained a sibling outside fullscreen. Chromium reproduced a paused fullscreen video with controls=false, leaving no visible playback control.
+- SelectedClipPreview now enables browser controls only while that video is the standard fullscreen element; leaving fullscreen or removing the preview restores the compact inline UI. WebKit native-player invocation, inline playback/trim behavior, upload and analysis code are unchanged.
+- Actual-component React StrictMode Chromium test with generated local media passes 7 assertions: inline, paused/playing fullscreen, exit, denied request, unmount cleanup and runtime errors. The same harness fails on the original component at paused fullscreen. All external browser requests blocked. Harness: scripts/check-clip-fullscreen-ui.mjs; CHROME_EXECUTABLE may point to installed Chrome.
+- npm run check passed TypeScript, lint (existing warnings), all 1,530 tests, build and prerender. Physical iPhone, WKWebView and real-account uploads are not verified by this test. No database, native-shell or provider change. User explicitly requested automatic safe bug-fix pushes; exact remote/CI/deployment verification follows publication.
+
 ## Caddie picked-clip preview: no surprise fullscreen, Ask Caddie above the nav, thumbnail off the critical path, pose timing logs — 2026-11-12 (local commits on branch `fix/caddie-trim-ux-main` off origin/main 7a992d9; NOT pushed/deployed; golfme-architect; web bundle + one analyze-swing log change; no migration, no native change)
 
 From Micky's 2026-11-09 trim-test brief, re-based onto main's newer rule (6b32116: sources must be under 10 s, so a new long pick is refused and the trim screen only opens from an older trimmed draft's "Change section"). The older branch `fix/caddie-trim-ux` (on `fix/caddie-draft`, with 5e59fb8's long-pick draft) is kept but conflicts with that rule; use this one.
