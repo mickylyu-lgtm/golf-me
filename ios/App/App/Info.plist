@@ -78,6 +78,10 @@
 	<string>GolfMe uses the camera so you can take photos and record swing videos for posts, chats, Caddie and your profile picture.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>GolfMe uses the microphone to record swing videos and voice messages.</string>
+	<key>NSUserActivityTypes</key>
+	<array>
+		<string>INSendMessageIntent</string>
+	</array>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
