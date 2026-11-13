@@ -12,7 +12,7 @@ import {
   v1Moments,
   v1Summary,
   v2Moments,
-  weakestCheckpoint,
+  coachingPriority,
 } from "../src/lib/coachReplay.ts";
 import type { CoachFinding, CoachMoment, V1Coaching } from "../src/lib/coachReplay.ts";
 import type { SwingAssessment, SwingSegmentAssessment } from "../src/lib/swingAssessment.ts";
@@ -282,32 +282,16 @@ function coaching(overrides: Partial<V1Coaching> = {}): V1Coaching {
 }
 const FOCUS_BODY = { kind: "stored", text: "Turn the lead hip before the shoulders unwind." };
 
-test("a mid-band-only analysis now yields a fix (the focus, on the weakest checkpoint) and a summary card", () => {
-  const plan = coachPlanFromV1({
-    phases: phases(),
-    score: score({ setupAndPosture: 13, backswing: 12, downswingSequencing: 11, finish: 14, balanceAndWeightTransfer: 3 }),
-    coaching: coaching(),
-  });
-  assert.deepEqual(plan.checkpoints.map((c) => [c.id, c.fix?.source, c.good]), [["impact", "details.focus", undefined]]);
-  assert.deepEqual(plan.checkpoints[0].fix?.title, { kind: "stored", text: "Hips first" });
-  assert.deepEqual(plan.checkpoints[0].fix?.body, FOCUS_BODY);
-  const s = plan.summary!;
-  assert.equal(s.focus, undefined, "the focus is already on a card");
-  assert.deepEqual(s.workOn.map((c) => c.source), ["details.workOn.0", "details.workOn.1"], "high/medium only, in stored order");
-  assert.deepEqual(s.workOn[0].title, { kind: "stored", text: "Upper body starts the downswing" });
-  assert.deepEqual(s.drill?.name, { kind: "stored", text: "Pump drill" });
-  assert.equal(s.drill?.steps.length, 3, "at most three drill steps");
-});
-
-test("focus placement: ties go to the earlier checkpoint; balance never counts", () => {
-  assert.equal(weakestCheckpoint(score({ setupAndPosture: 10, backswing: 10, downswingSequencing: 12, finish: 15, balanceAndWeightTransfer: 1 })), "address");
-  assert.equal(weakestCheckpoint(score({ setupAndPosture: 15, backswing: 9, downswingSequencing: 9, finish: 9 })), "top");
-  assert.equal(weakestCheckpoint(undefined), undefined);
+test("untagged focus never acquires a timestamp from the weakest score", () => {
+  const plan = coachPlanFromV1({ phases: phases(), score: score({ downswingSequencing: 9 }), coaching: coaching() });
+  assert.deepEqual(plan.checkpoints, []);
+  assert.deepEqual(plan.summary?.focus?.body, FOCUS_BODY);
+  assert.equal(coachingPriority(coaching(), phases())?.moment, undefined);
+  assert.deepEqual(plan.summary?.drill?.name, { kind: "stored", text: "Pump drill" });
 });
 
 test("no fix on a moment when every checkpoint criterion is >= 16; the focus moves to the summary", () => {
   const s = score({ setupAndPosture: 16, backswing: 18, downswingSequencing: 17, finish: 16, balanceAndWeightTransfer: 4 });
-  assert.equal(weakestCheckpoint(s), undefined);
   const plan = coachPlanFromV1({ phases: phases(), score: s, coaching: coaching() });
   assert.ok(plan.checkpoints.length > 0);
   assert.ok(plan.checkpoints.every((c) => c.fix === undefined && c.good !== undefined));
@@ -323,7 +307,7 @@ test("old rows without a work_on tag: items stay off the moments and go to the s
   assert.deepEqual(plan.summary?.workOn.map((c) => c.source), ["details.workOn.0", "details.workOn.1"]);
 });
 
-test("a tagged high/medium work_on item is a fix on its checkpoint, ahead of the focus fallback", () => {
+test("a tagged high/medium work_on item is a fix on its checkpoint, while untagged focus stays whole-swing", () => {
   const c = coaching();
   c.workOn[0] = { ...c.workOn[0], checkpoint: "impact" };
   c.workOn[1] = { ...c.workOn[1], checkpoint: "follow_through" };
@@ -359,10 +343,12 @@ test("a tag for a moment that wasn't placed falls back to the summary", () => {
 
 test("a checkpoint with both a strength and a fix shows both", () => {
   const assessment: SwingAssessment = { segments: [seg("hip_sway", "impact", "good")] };
-  const plan = coachPlanFromV1({ phases: phases(), assessment, score: score({ downswingSequencing: 10 }), coaching: coaching() });
+  const c = coaching();
+  c.workOn![0].checkpoint = "impact";
+  const plan = coachPlanFromV1({ phases: phases(), assessment, score: score({ downswingSequencing: 10 }), coaching: c });
   assert.equal(plan.checkpoints[0].id, "impact");
   assert.equal(plan.checkpoints[0].good?.source, "assessment.hip_sway");
-  assert.equal(plan.checkpoints[0].fix?.source, "details.focus");
+  assert.equal(plan.checkpoints[0].fix?.source, "details.workOn.0");
 });
 
 test("measured faults and clear-flaw score reasons still outrank the focus", () => {
@@ -403,4 +389,25 @@ test("coachDwellMs: calm floor, capped for long text", () => {
   assert.equal(coachDwellMs(0), 3500);
   assert.equal(coachDwellMs(10_000), 8000);
   assert.ok(coachDwellMs(80) > 3500 && coachDwellMs(80) < 8000);
+});
+
+
+test("priority is stored focus first, then first nonempty trusted work-on; never a guessed cue", () => {
+  assert.equal(coachingPriority(undefined), undefined);
+  assert.equal(coachingPriority({ workOn: [{ issue: "Low", whyItMatters: "", confidence: "low" }] }), undefined);
+  assert.equal(coachingPriority({ focus: { title: "", instruction: "Instruction only" } })?.claim.source, "details.focus");
+  const c = coaching({ focus: undefined });
+  c.workOn![0].checkpoint = "top";
+  assert.equal(coachingPriority(c, phases())?.moment?.timeSeconds, 1.3);
+  c.workOn![0].confidence = "medium";
+  assert.equal(coachingPriority(c, phases())?.moment?.id, "top");
+  assert.equal(coachingPriority(c)?.moment, undefined);
+  assert.equal(coachingPriority(c, phases({ top: { timestampSeconds: 1.3, confidence: "low" } }))?.moment, undefined);
+  assert.equal(coachingPriority(c, phases({ top: { timestampSeconds: null, confidence: "high" } }))?.moment, undefined);
+  assert.equal(coachingPriority(c, phases({ top: { timestampSeconds: 0.2, confidence: "high" } }))?.moment, undefined);
+  assert.equal(coachingPriority(c, phases({ top: { timestampSeconds: NaN, confidence: "high" } }))?.moment, undefined);
+  c.workOn![0].checkpoint = "whole_swing";
+  assert.equal(coachingPriority(c, phases())?.moment, undefined);
+  delete c.workOn![0].checkpoint;
+  assert.equal(coachingPriority(c, phases())?.moment, undefined);
 });

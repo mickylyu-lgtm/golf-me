@@ -6,7 +6,7 @@ import { TipList } from "../components/caddie/FilmingTips";
 import { DeleteAnalysisDialog } from "../components/caddie/DeleteAnalysisDialog";
 import { CaddieNavIcon } from "../components/icons/CaddieNavIcon";
 import { CaddieThinking } from "../components/caddie/CaddieThinking";
-import { CaddieSwingReplay } from "../components/caddie/CaddieSwingReplay";
+import { CaddieCoachingResult } from "../components/caddie/CaddieCoachingResult";
 import { CoachReplayDemo } from "../components/caddie/CoachReplayDemo";
 import { DEMO_COACH_ANALYSIS_ID } from "../data/caddieCoachDemo";
 import { useAuth } from "../context/AuthContext";
@@ -432,8 +432,9 @@ export function CaddieAnalysisDetail() {
         )}
       </div>
 
-      {analysis.sourceMediaUrl && (
-        <CaddieSwingReplay
+      {(analysis.sourceMediaUrl || (analysis.status === "complete" && details)) && (
+        <CaddieCoachingResult
+          key={analysis.id}
           sourceMediaUrl={analysis.sourceMediaUrl}
           thumbnailUrl={analysis.thumbnailUrl}
           onMediaError={analysis.sourceMediaPath ? () => refreshMediaUrls([analysis.sourceMediaPath, analysis.thumbnailPath]) : undefined}
@@ -443,7 +444,7 @@ export function CaddieAnalysisDetail() {
           coachEnabled={coachEnabled && analysis.status === "complete"}
           score={details?.score}
           checkpointCues={details?.checkpointCues}
-          coaching={details}
+          coaching={analysis.status === "complete" ? details : undefined}
         />
       )}
       {/* Demo accounts have no swing video: Coach Replay plays over the
@@ -473,32 +474,8 @@ export function CaddieAnalysisDetail() {
               {translateButton}
             </div>
           )}
-          {/* What to practise first: the analysis's own focus and drill,
-              exactly as Caddie wrote them (nothing added, no rep counts:
-              the pipeline has none). The score and the explanation follow. */}
-          {(details.focus.title || details.drill.name) && (
-            <div className="rounded-xl border border-fairway-200 bg-white p-3" data-testid="caddie-work-on-next">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-forest">{t("caddie.workOnNext")}</p>
-              {details.focus.title && <p className="mt-1 text-base font-bold text-slate-900">{details.focus.title}</p>}
-              {details.focus.instruction && <p className="mt-0.5 text-sm text-slate-600">{details.focus.instruction}</p>}
-              {details.drill.name && (
-                <div className="mt-3 border-t border-slate-100 pt-2.5">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t("caddie.drill")}</p>
-                  <p className="mt-0.5 text-sm font-semibold text-slate-800">{details.drill.name}</p>
-                  {details.drill.steps.length > 0 && (
-                    <ol className="mt-1.5 flex list-decimal flex-col gap-1 pl-4 text-sm text-slate-600">
-                      {details.drill.steps.map((step, i) => (
-                        <li key={i}>{step}</li>
-                      ))}
-                    </ol>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
           {details.score && (
             <div>
-              <p className="text-3xl font-bold text-brand-forest">{t("caddie.scoreOutOf100", { score: details.score.total })}</p>
               <p className="mb-1.5 mt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t("caddie.scoreBreakdown")}</p>
               <div className="flex flex-col gap-2">
                 {SCORE_CRITERIA_ORDER.map(([key, labelKey]) => {

@@ -243,6 +243,9 @@ const COLLAPSE_UNKNOWN_THRESHOLD = 2;
 
 export interface CaddieSwingReplayProps {
   sourceMediaUrl: string;
+  inspectMoment?: { timeSeconds: number };
+  onInspectionUnavailable?: () => void;
+  onInspectionReady?: () => void;
   thumbnailUrl?: string;
   // Called when the video fails to load — for a private upload that's most
   // likely an expired signed link; the parent re-signs and passes a new
@@ -300,7 +303,7 @@ const REPLAY_MODES = [
   { speed: 0.25, labelKey: "caddie.replaySlowAnalysis", showOverlay: true },
 ] as const;
 
-export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, poseData, phases, cameraAngle, coachEnabled = false, score, checkpointCues, coaching }: CaddieSwingReplayProps) {
+export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, poseData, phases, cameraAngle, coachEnabled = false, score, checkpointCues, coaching, inspectMoment, onInspectionUnavailable, onInspectionReady }: CaddieSwingReplayProps) {
   const { t } = useLocale();
   const videoRef = useRef<HTMLVideoElement>(null);
   const resumeAtRef = useRef<number | null>(null);
@@ -394,6 +397,62 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
   useEffect(() => {
     if (coachAvailable && !pickedModeRef.current) setMode(REPLAY_MODES[1]);
   }, [coachAvailable]);
+
+  // Explicit priority evidence inspection uses the original paused frame.
+  // Do not substitute a different measured fault or auto-start a coached pass.
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !inspectMoment) return;
+    pickedModeRef.current = true;
+    setMode(REPLAY_MODES[0]);
+    const requestedUrl = new URL(sourceMediaUrl, document.baseURI).href;
+    let didSeek = false;
+    let settled = false;
+    const timer = setTimeout(() => unavailable(), 10000);
+    const unavailable = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      onInspectionUnavailable?.();
+    };
+    const confirm = () => {
+      if (settled || !didSeek || video.currentSrc !== requestedUrl || video.seeking || video.readyState < 2 || Math.abs(video.currentTime - inspectMoment.timeSeconds) > 0.05) return;
+      settled = true;
+      clearTimeout(timer);
+      video.focus();
+      video.scrollIntoView({ block: "center" });
+      onInspectionReady?.();
+    };
+    const seek = () => {
+      if (video.currentSrc !== requestedUrl) return;
+      const time = inspectMoment.timeSeconds;
+      if (!Number.isFinite(time) || time < 0 || !Number.isFinite(video.duration) || time > video.duration) {
+        unavailable();
+        return;
+      }
+      video.pause();
+      try {
+        didSeek = true;
+        video.currentTime = time;
+        confirm();
+      } catch {
+        unavailable();
+      }
+    };
+    video.addEventListener("error", unavailable);
+    video.addEventListener("seeked", confirm);
+    video.addEventListener("loadeddata", confirm);
+    if (video.error) unavailable();
+    else if (video.readyState >= 1 && video.currentSrc === requestedUrl) seek();
+    else video.addEventListener("loadedmetadata", seek, { once: true });
+    return () => {
+      clearTimeout(timer);
+      video.removeEventListener("loadedmetadata", seek);
+      video.removeEventListener("seeked", confirm);
+      video.removeEventListener("loadeddata", confirm);
+      video.removeEventListener("error", unavailable);
+    };
+  }, [inspectMoment, sourceMediaUrl, onInspectionUnavailable, onInspectionReady]);
 
   // Which phase's breakdown the Swing Check card below shows — driven by
   // an explicit tap on one of the phase buttons, not by continuous video
@@ -934,6 +993,7 @@ export function CaddieSwingReplay({ sourceMediaUrl, thumbnailUrl, onMediaError, 
         {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
         <video
           ref={videoRef}
+          tabIndex={customControls ? -1 : 0}
           src={sourceMediaUrl}
           poster={thumbnailUrl}
           preload="metadata"

@@ -37,8 +37,7 @@ import { sanitizeCheckpointCues } from "../../supabase/functions/_shared/caddieC
 //     verdict or the analysis's own stored sentence, verbatim.
 //   - "Nothing to fix" is never asserted: the card says nothing was FLAGGED.
 //   - Every plan with a usable analysis ends on what to work on: the main
-//     focus sits on the weakest-scoring checkpoint (when one is below the
-//     "good" band), and a closing summary card carries the top work_on
+//     focus stays whole-swing; a closing summary carries the top work_on
 //     items and the drill (see v1Summary).
 
 export type CoachCheckpointId = "address" | "top" | "impact" | "finish";
@@ -233,10 +232,8 @@ const SCORE_CRITERION_FOR: Record<CoachCheckpointId, CaddieScoreCriterionKey> = 
 export const SCORE_GOOD_MIN_POINTS = 16;
 export const SCORE_FIX_MAX_POINTS = 8;
 const SCORE_RANK = 100; // measured geometry first, Gemini's sentence second
-// Then a work_on item Gemini itself tagged with this moment, then the main
-// focus placed by score (the fallback for rows without tags).
+// Then a work_on item Gemini itself tagged with this moment.
 const WORK_ON_RANK = 200;
-const FOCUS_RANK = 300;
 
 // The analysis's free-text coaching (details.workOn/focus/drill).
 export interface V1Coaching {
@@ -276,22 +273,22 @@ function focusClaim(focus: CaddieFocus | undefined): CoachClaim | undefined {
   return title && instruction ? { title: stored(title), body: stored(instruction), source: "details.focus" } : { body: stored(title || instruction), source: "details.focus" };
 }
 
-// The checkpoint whose criterion scored lowest, if any is below the "good"
-// band. Ties go to the earlier checkpoint. balance_and_weight_transfer has
-// no moment (see SCORE_CRITERION_FOR), so it never counts.
-export function weakestCheckpoint(score: CaddieScore | undefined): CoachCheckpointId | undefined {
-  if (!score) return undefined;
-  let weakest: CoachCheckpointId | undefined;
-  let lowest = SCORE_GOOD_MIN_POINTS;
-  for (const id of COACH_CHECKPOINT_ORDER) {
-    const points = score.criteria[SCORE_CRITERION_FOR[id]]?.points;
-    if (typeof points !== "number" || !Number.isFinite(points)) continue;
-    if (points < lowest) {
-      lowest = points;
-      weakest = id;
-    }
+// Stored focus has no phase tag. Never infer one from scores, similar text,
+// or the drill. A fallback work-on priority can link only its explicit tag
+// after the same confidence, finite-time and swing-order checks as replay.
+export function coachingPriority(coaching: V1Coaching | undefined, phases?: CaddieSwingPhases): { claim: CoachClaim; moment?: CoachMoment } | undefined {
+  const focus = focusClaim(coaching?.focus);
+  if (focus) return { claim: focus };
+  const items = coaching?.workOn ?? [];
+  for (let i = 0; i < items.length; i++) {
+    if (!isSure(items[i].confidence)) continue;
+    const claim = workOnClaim(items[i], i);
+    if (!claim) continue;
+    const plan = buildCoachPlan("v1", v1Moments(phases), v1Findings(undefined, undefined, { workOn: items }));
+    const moment = plan.checkpoints.find(c => c.fix?.source === claim.source);
+    return { claim, moment };
   }
-  return weakest;
+  return undefined;
 }
 
 export function v1Findings(assessment: SwingAssessment | undefined, score: CaddieScore | undefined, coaching?: V1Coaching): CoachFinding[] {
@@ -328,12 +325,6 @@ export function v1Findings(assessment: SwingAssessment | undefined, score: Caddi
     if (!checkpoint || !claim || !isSure(item.confidence)) return;
     findings.push({ checkpoint, kind: "fix", rank: WORK_ON_RANK + i, claim });
   });
-  // The main focus goes on the weakest-scoring checkpoint. The typical swing
-  // scores 9-15 everywhere (the silent middle band above), so without this
-  // most cards would only ever say what's going well.
-  const weakest = weakestCheckpoint(score);
-  const focus = focusClaim(coaching?.focus);
-  if (weakest && focus) findings.push({ checkpoint: weakest, kind: "fix", rank: FOCUS_RANK, claim: focus });
   return findings;
 }
 
