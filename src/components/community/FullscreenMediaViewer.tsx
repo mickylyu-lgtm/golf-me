@@ -245,7 +245,7 @@ export function FullscreenMediaViewer({ media, initialIndex = 0, onClose: onClos
         type="button"
         aria-label={t("common.close")}
         onClick={onClose}
-        className="group absolute z-20 left-[max(1rem,env(safe-area-inset-left))] top-[calc(env(safe-area-inset-top)+1rem)] flex h-11 w-11 items-center justify-center rounded-full text-white focus-visible:bg-black/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+        className="gm-media-close group absolute z-20 left-[max(1rem,env(safe-area-inset-left))] top-[calc(env(safe-area-inset-top)+1rem)] flex h-11 w-11 items-center justify-center rounded-full text-white focus-visible:bg-black/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
         style={{ opacity: backdropOpacity }}
       >
         <span aria-hidden="true" className="flex h-8 w-8 items-center justify-center rounded-full bg-black/40 transition-colors duration-150 group-hover:bg-black/60">

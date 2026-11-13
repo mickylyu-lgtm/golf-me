@@ -14,6 +14,7 @@ import { FilmingTips } from "../components/caddie/FilmingTips";
 import { captureVideoThumbnail, readVideoDuration } from "../lib/image";
 import { analysisBlocker, canStartAnalysis, createTrimReopenGate, resolveTrimReopen } from "../lib/trimReopen";
 import { SelectedClipPreview } from "../components/caddie/SelectedClipPreview";
+import { caddieUploadSession } from "../lib/caddieUploadSession";
 import { startOptionalUpload } from "../lib/optionalUpload";
 import { supabase } from "../lib/supabase";
 import { CADDIE_MEDIA_BUCKET } from "../lib/caddieMedia";
@@ -34,7 +35,7 @@ const MAX_SWING_VIDEO_SECONDS = MAX_CADDIE_UPLOAD_SECONDS; // whole source, not 
 // attempted. This flag brackets that exact window so a golfer who reopens
 // the app after an interruption gets an honest "that didn't finish, try
 // again" instead of silence that reads as data loss.
-const UPLOAD_IN_PROGRESS_KEY = "golfme:caddieUploadInProgress";
+// Marker and active-request ownership: caddieUploadSession.
 // How long Ask Caddie waits, once the video is uploaded, for the optional
 // thumbnail still in flight before going ahead without it.
 const THUMBNAIL_GRACE_MS = 1500;
@@ -88,6 +89,12 @@ export function AnalyzeSwing() {
     }
   }
   const [submitting, setSubmitting] = useState(false);
+  // Departing suppresses UI effects, not the durable server job.
+  const submitGate = useRef(createVideoSelectionGate()).current;
+  useEffect(() => {
+    submitGate.open();
+    return () => submitGate.close();
+  }, [submitGate, authUser?.id]);
   // A native pick (one-tap picker) being read into the page.
   const [readingPick, setReadingPick] = useState(false);
   // Existing drafts can still reopen their selected section. New picks
@@ -118,8 +125,7 @@ export function AnalyzeSwing() {
   }, [selectionGate]);
 
   useEffect(() => {
-    if (localStorage.getItem(UPLOAD_IN_PROGRESS_KEY)) {
-      localStorage.removeItem(UPLOAD_IN_PROGRESS_KEY);
+    if (caddieUploadSession.consumeInterrupted()) {
       showToast(t("caddie.uploadInterrupted"), "warning");
     }
     // Only ever meant to catch the PREVIOUS session's interruption once, on
@@ -266,24 +272,32 @@ export function AnalyzeSwing() {
   }
 
   async function handleAnalyze() {
-    if (preparingPick || readingPick || selectionGate.pending) return;
+    if (preparingPick || readingPick || selectionGate.pending || submitGate.pending) return;
     if (!authUser || !canStartAnalysis({ hasVideo: !!videoFile, hasClub, submitting, selectorOpen: !!pendingTrim, reopening: trimReopening || trimReopenGate.pending })) return;
     if (!videoFile) return;
+    const submitToken = submitGate.begin();
+    const submittedDraft = draftSwingVideo;
+    const ownsView = () => submitGate.isCurrent(submitToken) && currentDraftRef.current === submittedDraft;
     setSubmitting(true);
     // Recheck restored drafts and old trim selections before Storage upload.
     // A selected 10-second window must never authorize a longer original.
     const duration = await readVideoDuration(videoFile).catch(() => undefined);
+    if (!ownsView()) {
+      submitGate.end(submitToken);
+      return;
+    }
     const rejection = caddieDurationRejection(duration);
     if (rejection) {
       showToast(t(rejection === "too_long" ? "caddie.videoTooLong" : "caddie.durationUnreadable"), "warning");
       setSubmitting(false);
+      submitGate.end(submitToken);
       return;
     }
     // Brackets the one real gap where an app exit could genuinely lose a
-    // swing with no trace — see UPLOAD_IN_PROGRESS_KEY's own comment.
+    // swing with no trace — see the session marker's comment above.
     // Cleared in every exit from this function below, success or failure;
     // only stays set if the app itself was killed before either happened.
-    localStorage.setItem(UPLOAD_IN_PROGRESS_KEY, "1");
+    const finishUpload = caddieUploadSession.begin();
     // Private uploads made by this attempt — removed again only if the
     // server definitively refused to create the analysis (see below).
     const uploadedPaths: string[] = [];
@@ -336,11 +350,11 @@ export function AnalyzeSwing() {
         startSeconds: draftSwingVideo?.trimStartSeconds,
         endSeconds: draftSwingVideo?.trimEndSeconds,
       });
-      localStorage.removeItem(UPLOAD_IN_PROGRESS_KEY);
-      setDraftSwingVideo(undefined);
-      navigate(`/caddie/${created.id}`, { replace: true });
+      if (ownsView()) {
+        setDraftSwingVideo(undefined);
+        navigate(`/caddie/${created.id}`, { replace: true });
+      }
     } catch (err) {
-      localStorage.removeItem(UPLOAD_IN_PROGRESS_KEY);
       // A 400/401/403/429 from analyze-swing means no row was created, so
       // nothing will ever reference these files — remove them rather than
       // leaving private orphans (e.g. hitting the daily limit). Any other
@@ -365,8 +379,13 @@ export function AnalyzeSwing() {
       // In the Caddie language (this screen is inside CaddieLocaleScope):
       // the upload half gets its own line, an analyze-swing refusal is read
       // by its stable code (caddieErrorText), never the server's English.
-      showToast(phase === "upload" ? t("caddie.error.uploadFailed") : caddieErrorText(err, t), "warning");
-      setSubmitting(false);
+      if (ownsView()) {
+        showToast(phase === "upload" ? t("caddie.error.uploadFailed") : caddieErrorText(err, t), "warning");
+        setSubmitting(false);
+      }
+    } finally {
+      finishUpload();
+      submitGate.end(submitToken);
     }
   }
 

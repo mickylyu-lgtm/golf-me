@@ -122,8 +122,10 @@ export function CaddieThinking({ job, onCheckAgain }: { job?: Parameters<typeof 
       <div className="min-w-0">
         <p className="text-sm font-semibold text-slate-700">{t("swingAnalysis.processingTitle")}</p>
         {progress ? (
-          <p className="text-xs text-slate-500" aria-live="polite">
-            {t(STEP_KEYS[progress.step])} <span className="tabular-nums text-slate-400">· {formatElapsed(progress.elapsedSeconds)}</span>
+          <p className="text-xs text-slate-500">
+            {/* Announce stage changes, not the clock's once-per-second ticks. */}
+            <span aria-live="polite" aria-atomic="true">{t(STEP_KEYS[progress.step])}</span>{" "}
+            <span className="tabular-nums text-slate-400">· {formatElapsed(progress.elapsedSeconds)}</span>
           </p>
         ) : (
           <p key={index} className={`text-xs text-slate-500 ${reducedMotion ? "" : "animate-fade-in"}`}>

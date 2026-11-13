@@ -1,4 +1,29 @@
+## 2026-11-13 — Chat draft preview and media close focus
+
+Selected ready chat photos/videos now open the existing fullscreen viewer without sending; closing preserves draft text and attachments. Stale selections are invalidated. Media close button removes pointer focus ring while retaining white keyboard focus and 44px hit target. Independent synthetic Chromium tests passed; physical iPhone remains untested. Combined release checks and required review run before publication.
+
 # GolfMe — Development Status
+
+## Fullscreen media close control: neutral focus — 2026-11-13 (local, not published)
+
+- The unlayered global green focus outline overrode the viewer's white Tailwind focus utility. A scoped unlayered rule now keeps this close control neutral, with no pointer-only outline and a white visible keyboard cue. The 44px hit target, 16px X, Escape/close behavior and other app focus indicators are unchanged.
+- Full npm run check passes TypeScript, lint, all 1,541 tests, build and prerender. The existing browser harness now asserts a white keyboard outline and no pointer-opened photo outline; browser rerun/physical iPhone verification remains pending.
+- Publication is blocked by the existing required reviewer credential HTTP 401. No commit, push, deployment, database or native-shell changes.
+
+## Caddie upload route ownership — 2026-11-13 (local, awaiting release verification)
+
+- Synthetic reproduction using the actual upload handler: start clip A, leave the form while its request waits, reopen and choose B. A's completion previously erased B and redirected the golfer to A.
+- Route/attempt ownership now gates draft clearing, navigation and error toasts. Leaving during duration validation stops before upload; once uploading has begun, the server job is allowed to finish and remains available in Recent. No server job or data-contract changes.
+- Same-session active requests no longer falsely trigger the interrupted-upload notice on remount; storage being unavailable no longer prevents submission. The interruption marker's cross-tab behavior is unchanged.
+- Ten focused tests cover actual-handler late success/failure, ordinary success, early departure, duplicate submission, StrictMode epochs and marker ownership/storage failure. Combined npm run check passed TypeScript, lint, all 1,541 tests, build and prerender. Physical iPhone/WKWebView and live-account uploads are not verified by these synthetic tests.
+
+
+## Caddie progress screen-reader announcements — 2026-11-13 (local, awaiting release verification)
+
+- Processing progress previously put the once-per-second elapsed clock inside the polite live region. That sends repeated accessibility updates throughout analysis rather than only announcing persisted stage changes.
+- The stage is now its own atomic polite live region; elapsed time remains visible and readable outside it. No upload, analysis, database, native-shell, or visual behavior changes.
+- Added a TypeScript-AST regression test for the live-region boundary. Focused test and complete baseline check passed (1,531 tests); combined release checks follow lifecycle integration. Physical iPhone VoiceOver announcement behavior is not verified.
+
 
 ## Caddie selected-clip fullscreen controls — 2026-11-12 (tested; publication authorized)
 

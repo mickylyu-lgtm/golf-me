@@ -1,8 +1,10 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Loader2, Play, Scissors, X } from "lucide-react";
 import { VideoTrimSelector } from "../caddie/VideoTrimSelector";
 import { VIDEO_MAX_MS, formatVideoDuration, videoDurationToSend, type MediaAttachmentItem } from "../../lib/chatMedia";
+import { FullscreenMediaViewer } from "../community/FullscreenMediaViewer";
+import { draftMediaPreview } from "../../lib/draftMediaPreview";
 import { pushModal } from "../../lib/modalStack";
 
 // The picked photos / videos above the composer, before sending: a
@@ -11,7 +13,7 @@ import { pushModal } from "../../lib/modalStack";
 // container like the reply bar (and the single-photo chip before it), so
 // the thread's list / docked-bar ResizeObservers see it as the composer
 // growing; one row tall whatever the count (it scrolls sideways). Its
-// buttons never take focus off the textarea.
+// remove buttons preserve composer focus; opening a preview moves focus into the dialog.
 export function MediaAttachmentStrip({
   items,
   onRemove,
@@ -19,11 +21,20 @@ export function MediaAttachmentStrip({
 }: {
   items: readonly MediaAttachmentItem[];
   onRemove: (key: string) => void;
-  labels: { removePhoto: string; removeVideo: string; processing: string; photoReady: string; videoReady: string; needsTrim: string; count: (n: number) => string };
+  labels: { openPhoto: string; openVideo: string; removePhoto: string; removeVideo: string; processing: string; photoReady: string; videoReady: string; needsTrim: string; count: (n: number) => string };
 }) {
+  // Keep only an identity, never a second attachment or object URL owner.
+  // Removal, send, or a conversation change invalidates the preview immediately.
+  const [selected, setSelected] = useState<MediaAttachmentItem | null>(null);
+  const preview = draftMediaPreview(items, selected);
+  useEffect(() => {
+    // Do not retain a removed video's File in the still-mounted composer.
+    if (selected && !items.includes(selected)) setSelected(null);
+  }, [items, selected]);
   if (items.length === 0) return null;
   const single = items.length === 1;
   return (
+    <>
     <div data-chat-attachment className="flex items-center gap-2 border-t border-slate-100 py-2 pr-2 pl-3">
       <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto overscroll-x-contain [scrollbar-width:none]" data-no-swipe>
         {items.map((it) => {
@@ -31,6 +42,14 @@ export function MediaAttachmentStrip({
           const isVideo = it.kind === "video";
           return (
             <div key={it.key} data-media-chip={it.kind} className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-slate-100">
+              <button
+                type="button"
+                disabled={it.state !== "ready"}
+                aria-label={isVideo ? labels.openVideo : labels.openPhoto}
+                aria-haspopup="dialog"
+                onClick={() => setSelected(it)}
+                className="block h-full w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-fairway-400 disabled:cursor-default"
+              >
               {it.state === "processing" ? (
                 <span className="flex h-full w-full items-center justify-center text-slate-400" role="status" aria-label={labels.processing}>
                   <Loader2 size={18} className="animate-spin motion-reduce:animate-none" aria-hidden="true" />
@@ -48,6 +67,7 @@ export function MediaAttachmentStrip({
                   {it.state === "trimming" ? formatVideoDuration(VIDEO_MAX_MS) : formatVideoDuration(videoDurationToSend(it.video))}
                 </span>
               )}
+              </button>
               {!single && (
                 <button
                   type="button"
@@ -88,6 +108,8 @@ export function MediaAttachmentStrip({
         <span className="shrink-0 text-[11px] font-semibold text-slate-500 tabular-nums">{labels.count(items.length)}</span>
       )}
     </div>
+    {preview && <FullscreenMediaViewer media={[preview]} onClose={() => setSelected(null)} />}
+    </>
   );
 }
 

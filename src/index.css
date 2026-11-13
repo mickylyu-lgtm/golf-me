@@ -769,6 +769,17 @@ select {
   outline-offset: 2px;
 }
 
+/* Unlayered, like the baseline above: Tailwind utility-layer outline colors
+   cannot override that baseline. Keep the photo viewer neutral and retain
+   a high-contrast keyboard cue without a ring after ordinary touch/click. */
+.gm-media-close:focus:not(:focus-visible) {
+  outline: none;
+}
+.gm-media-close:focus-visible {
+  outline: 2px solid white;
+  outline-offset: 2px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

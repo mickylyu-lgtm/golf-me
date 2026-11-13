@@ -35,6 +35,8 @@ export function useChatMediaText() {
         list: (inner) => t("chat.mediaList", { inner }),
       });
     const strip = {
+      openPhoto: t("chat.openPhoto"),
+      openVideo: t("chat.videoFullscreen"),
       removePhoto: t("chat.removePhoto"),
       removeVideo: t("chat.removeVideo"),
       processing: t("chat.mediaPreparing"),

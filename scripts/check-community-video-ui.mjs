@@ -102,7 +102,7 @@ try {
     const albumOpen = page.getByTestId("album").getByRole("button", { name: "Full screen", exact: true }).first();
     await albumOpen.focus(); await page.keyboard.press("Enter"); await dialog.waitFor();
     assert.equal(await dialog.locator("video").first().evaluate(v => v.controls), true);
-    assert.equal(await page.getByRole("button", { name: "Close", exact: true }).evaluate(b => b.matches(":focus-visible") && getComputedStyle(b).outlineWidth === "2px"), true, "keyboard opener receives visible Close focus ring");
+    assert.equal(await page.getByRole("button", { name: "Close", exact: true }).evaluate(b => b.matches(":focus-visible") && getComputedStyle(b).outlineWidth === "2px" && getComputedStyle(b).outlineColor === "rgb(255, 255, 255)"), true, "keyboard opener receives visible Close focus ring");
     await page.getByRole("button", { name: "Close", exact: true }).click();
     // Native timeline touches must never dismiss; a deliberate body drag can.
     await page.getByRole("button", { name: "Open gallery", exact: true }).click();
@@ -122,6 +122,7 @@ try {
     await page.getByRole("button", { name: "View photo", exact: true }).click();
     assert.equal(await page.getByRole("dialog", { includeHidden: true }).count(), 2);
     const photoClose = page.locator("dialog").getByRole("button", { name: "Close", exact: true });
+    assert.equal(await photoClose.evaluate(b => getComputedStyle(b).outlineStyle), "none", "pointer-opened photo has no close ring");
     assert.equal((await photoClose.boundingBox()).width, 44);
     assert.equal((await photoClose.locator("span").boundingBox()).width, 32);
     await page.screenshot({ path: "artifacts.local/community-close-photo-" + width + ".png" });
