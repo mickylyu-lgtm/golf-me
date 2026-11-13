@@ -30,6 +30,7 @@
 // sending, only the push notification about it.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { buildApnsPayload, communicationSender, isUuid, type CommunicationSender } from "../_shared/communicationPush.ts";
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -144,7 +145,7 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: "Unauthorized" }, 401);
   }
 
-  let payloadIn: { user_id?: string; title?: string; body?: string; link_to?: string; collapse_id?: unknown };
+  let payloadIn: { user_id?: string; title?: string; body?: string; link_to?: string; collapse_id?: unknown; sender_id?: unknown };
   try {
     const parsed: unknown = await req.json();
     // JSON can legally be null, an array or a scalar; only a plain object is a valid request.
@@ -194,6 +195,7 @@ Deno.serve(async (req: Request) => {
     topic: Deno.env.get("APNS_TOPIC") ?? null,
     missing_config: [] as string[],
     failures: [] as unknown[],
+    communication: null as string | null,
   };
 
   if (tokensError) {
@@ -223,10 +225,28 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: "APNs provider token signing failed" }, 500);
   }
 
-  const payload = JSON.stringify({
-    aps: { alert: { title, body }, sound: "default" },
-    link_to: link_to ?? null,
-  });
+  // Optional, set only by person-originated triggers (DMs, joins, comments,
+  // likes, follows; migration 20261113120000). Turns the push into an iOS
+  // Communication Notification: the app's Notification Service Extension
+  // shows the sender's photo (or monogram) instead of the app icon. Any
+  // problem here just sends the plain push, exactly as before; it never
+  // blocks or delays delivery beyond one indexed profile read.
+  let sender: CommunicationSender | null = null;
+  if (isUuid(payloadIn.sender_id)) {
+    const { data: profile, error: profileError } = await adminClient
+      .from("profiles")
+      .select("name, photo_url, avatar_initials, avatar_color")
+      .eq("id", payloadIn.sender_id)
+      .maybeSingle();
+    if (profileError) {
+      console.error("send-push: sender profile lookup failed; sending a plain push.", profileError.message);
+    } else if (profile) {
+      sender = communicationSender(payloadIn.sender_id, profile, supabaseUrl);
+    }
+  }
+  base.communication = sender ? (sender.avatar_url ? "photo" : "monogram") : "none";
+
+  const payload = JSON.stringify(buildApnsPayload({ title, body, linkTo: link_to, sender }));
 
   let sent = 0;
   const staleTokens: string[] = [];
