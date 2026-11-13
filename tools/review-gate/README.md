@@ -59,3 +59,15 @@ node tools/review-gate/review.mjs --dry-run                 # build the sanitize
 - Real calls only: set `realCallsEnabled` to `false` in `policy.json` (human-gated edit).
 - Whole gate: delete `.claude/settings.local.json` outside Claude, restart Claude.
 - Removal: delete `.claude/settings.local.json`, `tools/review-gate/`, `.review-gate/`, the `.gitignore` lines and `.vercelignore`; also `%USERPROFILE%\.golfme-review\` and revoke the reviewer key.
+
+## Approved Caddie-review edit scope (2026-11-13)
+
+On Micky's WSL checkout only, ordinary Markdown under Caddie-review docs,
+test source/fixtures, and static UI CSS/HTML/JavaScript may be edited without
+repeat prompts. Absolute paths are required; symlinks, hardlinks, hidden
+paths and instruction files are excluded. No active review task may be bypassed.
+
+Ownership/authorization, credential redaction, backend service code, configuration,
+deployment scripts, secrets, raw test execution and external Discord actions
+retain existing approval restrictions. This does not grant blanket Bash access.
+The exception is inert when the exact companion-project directory is absent.

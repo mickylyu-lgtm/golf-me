@@ -1,6 +1,7 @@
 // PreToolUse decision: classify the call, add task/hash requirements, audit.
-// Returns null (stay silent -> normal auto mode) | { decision: "ask"|"deny", reason }.
-// NEVER returns "allow".
+// Returns null (stay silent -> normal auto mode) | { decision: "allow"|"ask"|"deny", reason }.
+// Allows only the owner-approved ordinary companion-project edit scope.
+import { caddieEditAllowed } from "./caddie-scope.mjs";
 import { classifyToolCall, NEEDS_DONE_CLASSES } from "./classify.mjs";
 import { computeWorkHash, specHash } from "./hash.mjs";
 import { audit, hasDone, readActiveTask } from "./state.mjs";
@@ -17,7 +18,7 @@ export async function decide(input) {
   const c = classifyToolCall(input.tool_name ?? "", input.tool_input ?? {}, ctx);
   const tag = task ? `[${task.task_id}] ` : "";
 
-  const log = (decision, extra = {}) => audit(repoRoot, { event: decision === "deny" ? "gate_deny" : "gate_ask", task_id: task?.task_id, tool: input.tool_name, action_class: c.cls, tier: c.tier, decision, reason: c.reason, ...extra });
+  const log = (decision, extra = {}) => audit(repoRoot, { event: decision === "deny" ? "gate_deny" : decision === "allow" ? "gate_allow" : "gate_ask", task_id: task?.task_id, tool: input.tool_name, action_class: c.cls, tier: c.tier, decision, reason: c.reason, ...extra });
 
   if (c.tier === "prohibited") {
     log("deny");
@@ -29,6 +30,13 @@ export async function decide(input) {
   if (taskError && (c.tier === "human" || c.tier === "reviewer" || c.cls === "git-commit")) {
     log("deny", { reason: `review task state unreadable: ${taskError}` });
     return { decision: "deny", reason: "GolfMe Review Gate: review-task state is unreadable, so gated actions are refused until it is fixed or the task is cancelled." };
+  }
+
+  // Exact approved companion-project scope; never bypass prohibited calls or task state.
+  if (!taskError && !task && c.cls === "outside-repo" &&
+      caddieEditAllowed(input.tool_name, input.tool_input)) {
+    log("allow", { action_class: "caddie-local-edit", reason: "approved ordinary Caddie test/docs/static UI edit" });
+    return { decision: "allow", reason: "Approved local Caddie test/docs/static UI edit; security and service controls remain gated." };
   }
 
   const needsDone = c.tier === "reviewer" || (c.tier === "human" && task && NEEDS_DONE_CLASSES.has(c.cls));
