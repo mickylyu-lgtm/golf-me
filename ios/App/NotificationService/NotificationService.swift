@@ -19,14 +19,12 @@
 //     serviceExtensionTimeWillExpire first, the original content goes out.
 //   * The image is downsampled with ImageIO (never fully decoded), so a huge
 //     file can't push the extension over its small memory limit.
-//   * Only https URLs under <project>.supabase.co/storage/v1/object/public/
-//     avatars/ are fetched; no cookies, no cache, no auth.
+//   * Only this project's HTTPS public avatar objects owned by the sender
+//     are fetched; no redirects, cookies, cache, or auth.
 // No photo -> a monogram (the golfer's initials on their in-app avatar
 // gradient), not the app icon: it reads as a person, like Contacts/iMessage.
 //
-// Setup (one time, on the Mac): see DEVELOPMENT_STATUS.md, "Sender photo on
-// native pushes". Copy this file and Info.plist over the ones Xcode generates
-// for the new "NotificationService" target.
+// Built by the embedded NotificationService target.
 
 import ImageIO
 import Intents
@@ -34,22 +32,24 @@ import UIKit
 import UserNotifications
 
 final class NotificationService: UNNotificationServiceExtension {
-    private static let downloadTimeout: TimeInterval = 8
-    private static let maxAvatarBytes = 1_500_000
     private static let imagePixels: CGFloat = 256
 
     private let lock = NSLock()
     private var contentHandler: ((UNNotificationContent) -> Void)?
     private var originalContent: UNNotificationContent?
     private var finished = false
-    private var avatarTask: URLSessionDataTask?
+    private var avatarDownload: AvatarDownload?
+    private var deadline: DispatchWorkItem?
 
     override func didReceive(_ request: UNNotificationRequest,
                              withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void) {
         lock.lock()
         self.contentHandler = contentHandler
         self.originalContent = request.content
+        let timeout = DispatchWorkItem { [weak self] in self?.finish(with: request.content) }
+        deadline = timeout
         lock.unlock()
+        DispatchQueue.global().asyncAfter(deadline: .now() + 10, execute: timeout)
 
         guard let sender = Sender(userInfo: request.content.userInfo), !request.content.title.isEmpty else {
             finish(with: request.content)
@@ -61,43 +61,34 @@ final class NotificationService: UNNotificationServiceExtension {
             return
         }
 
-        let config = URLSessionConfiguration.ephemeral
-        config.timeoutIntervalForRequest = Self.downloadTimeout
-        config.timeoutIntervalForResource = Self.downloadTimeout
-        config.waitsForConnectivity = false
-        config.requestCachePolicy = .reloadIgnoringLocalCacheData
-        config.httpShouldSetCookies = false
-        let session = URLSession(configuration: config)
-        let task = session.dataTask(with: url) { data, response, error in
-            var photo: INImage?
-            if error == nil,
-               let http = response as? HTTPURLResponse, http.statusCode == 200,
-               (http.mimeType ?? "").hasPrefix("image/"),
-               let data, !data.isEmpty, data.count <= Self.maxAvatarBytes {
-                photo = Self.downsampledImage(from: data)
+        let download = AvatarDownload()
+        lock.lock()
+        guard !finished else { lock.unlock(); return }
+        avatarDownload = download
+        lock.unlock()
+        download.start(url: url) { data in
+            guard let data, let photo = Self.downsampledImage(from: data) else {
+                self.finish(with: request.content)
+                return
             }
-            // Photo failed -> still a person notification, with the monogram.
             self.present(request.content, sender: sender, photo: photo)
         }
-        lock.lock()
-        avatarTask = task
-        lock.unlock()
-        task.resume()
-        session.finishTasksAndInvalidate()
     }
 
     override func serviceExtensionTimeWillExpire() {
         lock.lock()
-        let task = avatarTask
         let original = originalContent
         lock.unlock()
-        task?.cancel()
         if let original { finish(with: original) }
     }
 
     // MARK: - Delivery
 
     private func present(_ content: UNNotificationContent, sender: Sender, photo: INImage?) {
+        lock.lock()
+        let alreadyFinished = finished
+        lock.unlock()
+        guard !alreadyFinished else { return }
         let image = photo ?? Self.monogram(initials: sender.initials, colors: sender.colors)
         let person = INPerson(
             personHandle: INPersonHandle(value: sender.id, type: .unknown),
@@ -141,7 +132,14 @@ final class NotificationService: UNNotificationServiceExtension {
             return
         }
         finished = true
+        contentHandler = nil
+        let download = avatarDownload
+        avatarDownload = nil
+        let timeout = deadline
+        deadline = nil
         lock.unlock()
+        timeout?.cancel()
+        download?.cancel()
         handler(content)
     }
 
@@ -222,7 +220,7 @@ private struct Sender {
         guard let raw = userInfo["sender"] as? [String: Any],
               let id = raw["id"] as? String, !id.isEmpty, id.count <= 64 else { return nil }
         self.id = id
-        self.avatarURL = (raw["avatar_url"] as? String).flatMap(Sender.trustedAvatarURL)
+        self.avatarURL = (raw["avatar_url"] as? String).flatMap { AvatarDownload.trustedURL($0, senderID: id) }
         let initials = ((raw["initials"] as? String) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         self.initials = String(initials.prefix(3))
         let hex = (raw["colors"] as? [String]) ?? []
@@ -233,17 +231,6 @@ private struct Sender {
         let aps = userInfo["aps"] as? [String: Any]
         let thread = (aps?["thread-id"] as? String) ?? ""
         self.threadId = thread.isEmpty ? "person-\(id)" : thread
-    }
-
-    /// The public avatars bucket of a Supabase project, over https, only.
-    static func trustedAvatarURL(_ string: String) -> URL? {
-        guard string.count <= 512,
-              let url = URL(string: string),
-              url.scheme?.lowercased() == "https",
-              let host = url.host?.lowercased(), host.hasSuffix(".supabase.co"),
-              url.user == nil, url.password == nil,
-              url.path.hasPrefix("/storage/v1/object/public/avatars/") else { return nil }
-        return url
     }
 
     static func color(hex: String?) -> UIColor? {
