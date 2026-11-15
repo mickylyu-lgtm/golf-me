@@ -1,6 +1,7 @@
 import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { LocaleProvider } from "../src/i18n/LocaleContext";
+import { FullscreenMediaViewer } from "../src/components/community/FullscreenMediaViewer";
 import { MediaAttachmentStrip } from "../src/components/chat/MediaAttachmentStrip";
 import { useChatMediaText } from "../src/lib/useChatMediaText";
 import type { MediaAttachmentItem } from "../src/lib/chatMedia";
@@ -12,10 +13,14 @@ const initial = [
   { key: "video", kind: "video", state: "ready", video: { localUrl: "/artifacts.local/community-video.mp4", posterUrl: null, sourceDurationMs: 6000, trim: { startMs: 1000, endMs: 4000 } } },
 ] as MediaAttachmentItem[];
 function Fixture() {
+  const [sent, setSent] = useState<"image" | "video" | null>(null);
   const [items, setItems] = useState(initial);
   const [text, setText] = useState("Keep my draft");
   const labels = useChatMediaText();
   return <main className="mx-auto max-w-lg pt-20">
+    <button onClick={() => setSent("image")}>Sent photo</button>
+    <button onClick={() => setSent("video")}>Sent video</button>
+    {sent && <FullscreenMediaViewer media={[{ id: "sent", type: sent, url: sent === "image" ? photo : "/artifacts.local/community-video.mp4", nativeControls: true }]} onClose={() => setSent(null)} />}
     <textarea aria-label="Draft" value={text} onChange={e => setText(e.target.value)} />
     <output data-testid="attachment-count">{items.length}</output>
     <button onClick={() => setItems(initial)}>Reset fixture</button>

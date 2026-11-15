@@ -1,3 +1,10 @@
+## 2026-11-15 — Plain fullscreen media close X (local review only)
+
+- Removed the close control's circular backing, hover fill and round outline shape. The white X retains a subtle glyph shadow, localized accessible label and 44px touch target. Shared viewer consumers include DM/round-chat photos and videos, pending attachments, and community/avatar media.
+- Track keyboard/pointer input before mounting the native dialog: its autofocus and focus restoration can otherwise leave `:focus-visible` active after a pointer opening. Keyboard opening/navigation retains a square white focus outline; pointer/touch entry has no outline. Escape, modal focus containment, focus restoration and playback behavior are unchanged.
+- Validation: `npm run check` passed TypeScript, lint (29 existing warnings), all 1,562 tests, production build and prerender (existing large-chunk warning). Expanded `scripts/check-chat-draft-preview-ui.mjs` passed actual-component StrictMode Chromium checks at 390x844 (touch) and 1440x900 (mouse): sent-media-shaped photo/video fixtures, repeated pending photo/video previews, Close/Escape, keyboard entry and pointer-to-Tab focus, 44px target, transparent background/no circle, restored focus, retained draft text/attachments and explicit removal. External network requests were blocked; screenshots are under ignored `artifacts.local/`.
+- Limits: synthetic media/component testing, not real-account chats or physical iPhone/WKWebView. No native notification/TestFlight, backend, production data or policy changes. Next: review the local diff and mobile screenshots; no push or deployment authorized.
+
 ## 2026-11-14 — Native sender notification extension built and archived
 
 - Created the embedded `NotificationService` target, iOS 15, Swift, automatic signing with App's team. Migrated the supplied sources into `ios/App/NotificationService`; App and extension are version 2.5, build 2026.11.14. Original dirty Mac checkout was preserved; work started from verified main 706ff6a in an isolated checkout.

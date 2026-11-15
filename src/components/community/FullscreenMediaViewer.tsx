@@ -8,6 +8,21 @@ import { perfHudViewer } from "../../lib/perfHud";
 import { lockPageScroll } from "../../lib/scrollLock";
 import { pushModal } from "../../lib/modalStack";
 
+// Track the opening gesture before the dialog mounts. Browser :focus-visible
+// can survive focus restoration and a subsequent click on the same opener.
+// Keep this shared across viewer instances; it contains no user/media data.
+let keyboardInput = false;
+if (typeof document !== "undefined") {
+  const onKey = () => { keyboardInput = true; };
+  const onPointer = () => { keyboardInput = false; };
+  document.addEventListener("keydown", onKey, true);
+  document.addEventListener("pointerdown", onPointer, true);
+  import.meta.hot?.dispose(() => {
+    document.removeEventListener("keydown", onKey, true);
+    document.removeEventListener("pointerdown", onPointer, true);
+  });
+}
+
 interface FullscreenMediaViewerProps {
   media: PostMediaItem[];
   initialIndex?: number;
@@ -63,6 +78,7 @@ export function FullscreenMediaViewer({ media, initialIndex = 0, onClose: onClos
   const onClose = useCallback(() => onClosePropRef.current(lastIndexRef.current), []);
   const [dragY, setDragY] = useState(0);
   const [dragging, setDragging] = useState(false);
+  const [keyboardFocus, setKeyboardFocus] = useState(() => keyboardInput);
   const mountedAtRef = useRef(Date.now());
   const dragStateRef = useRef<{
     startX: number;
@@ -231,6 +247,8 @@ export function FullscreenMediaViewer({ media, initialIndex = 0, onClose: onClos
       aria-modal="true"
       aria-label={media.some((item) => item.type === "video") ? t("caddie.replayControls") : t("chat.photoAlt")}
       data-gm-media
+      onKeyDownCapture={() => setKeyboardFocus(true)}
+      onPointerDownCapture={() => setKeyboardFocus(false)}
       data-no-swipe
       className="fixed inset-0 z-[95] m-0 h-dvh w-screen max-h-none max-w-none overflow-hidden border-0 p-0 backdrop:bg-transparent"
       style={{ backgroundColor: `rgba(0,0,0,${backdropOpacity})` }}
@@ -244,13 +262,12 @@ export function FullscreenMediaViewer({ media, initialIndex = 0, onClose: onClos
         ref={closeRef}
         type="button"
         aria-label={t("common.close")}
+        data-keyboard-focus={keyboardFocus || undefined}
         onClick={onClose}
-        className="gm-media-close group absolute z-20 left-[max(1rem,env(safe-area-inset-left))] top-[calc(env(safe-area-inset-top)+1rem)] flex h-11 w-11 items-center justify-center rounded-full text-white focus-visible:bg-black/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+        className="gm-media-close absolute z-20 left-[max(1rem,env(safe-area-inset-left))] top-[calc(env(safe-area-inset-top)+1rem)] flex h-11 w-11 items-center justify-center text-white"
         style={{ opacity: backdropOpacity }}
       >
-        <span aria-hidden="true" className="flex h-8 w-8 items-center justify-center rounded-full bg-black/40 transition-colors duration-150 group-hover:bg-black/60">
-          <X size={16} />
-        </span>
+        <X size={16} aria-hidden="true" className="drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]" />
       </button>
       <div
         ref={surfaceRef}

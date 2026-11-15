@@ -771,11 +771,13 @@ select {
 
 /* Unlayered, like the baseline above: Tailwind utility-layer outline colors
    cannot override that baseline. Keep the photo viewer neutral and retain
-   a high-contrast keyboard cue without a ring after ordinary touch/click. */
-.gm-media-close:focus:not(:focus-visible) {
+   a high-contrast keyboard cue without a ring after ordinary touch/click.
+   Native dialog autofocus can match :focus-visible after pointer entry;
+   the viewer records keyboard intent before moving focus. */
+.gm-media-close:focus {
   outline: none;
 }
-.gm-media-close:focus-visible {
+.gm-media-close[data-keyboard-focus]:focus-visible {
   outline: 2px solid white;
   outline-offset: 2px;
 }
