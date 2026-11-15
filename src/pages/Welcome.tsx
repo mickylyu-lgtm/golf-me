@@ -276,8 +276,7 @@ export function Welcome() {
             <Reveal delayMs={200}>
               <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-fairway-800 to-fairway-950 p-6 text-white shadow-xl shadow-fairway-950/20 sm:p-8">
                 <div aria-hidden="true" className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-sun-400/20 blur-2xl" />
-                <Kicker tone="dark">{t("landing.founding.kicker")}</Kicker>
-                <h3 className="mt-2 text-2xl font-extrabold tracking-tight sm:text-3xl">{t("landing.founding.title")}</h3>
+                <h3 className="text-2xl font-extrabold tracking-tight sm:text-3xl">{t("landing.founding.title")}</h3>
                 <p className="mt-3 text-sm text-fairway-100 sm:text-base">{t("landing.founding.body")}</p>
                 <FoundingCounter className="mt-6" />
                 <div className="mt-6">

@@ -917,7 +917,6 @@ export const en = {
   "landing.nyc.title": "The first GolfMe community is NYC.",
   "landing.nyc.body": "From Van Cortlandt to Dyker Beach, GolfMe is starting out in New York City, built for the golfers who play its public courses — students included. Beginners welcome: nobody asks your handicap before you tee it up.",
   "landing.nyc.coursesLabel": "NYC public courses you'll find in GolfMe",
-  "landing.founding.kicker": "Launch hook",
   "landing.founding.title": "Be a Founding Golfer.",
   "landing.founding.body": "The first 250 NYC golfers get a permanent, numbered Founding Golfer badge on their profile. Your number is yours forever — it can't be bought, reassigned or reused.",
   "landing.founding.counterLabel": "Founding Golfer spots",

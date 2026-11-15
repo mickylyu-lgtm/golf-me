@@ -901,7 +901,6 @@ export const zhTW: Record<TranslationKey, string> = {
   "landing.nyc.title": "第一個 GolfMe 社群在紐約。",
   "landing.nyc.body": "從 Van Cortlandt 到 Dyker Beach，GolfMe 從紐約起步，為在這座城市公共球場打球的球友而打造，學生也不例外。歡迎新手：開球前沒人會問你的差點。",
   "landing.nyc.coursesLabel": "GolfMe 中可找到的紐約公共球場",
-  "landing.founding.kicker": "上線福利",
   "landing.founding.title": "成為創始球友。",
   "landing.founding.body": "紐約的前 250 位球友將在個人檔案上獲得永久、附編號的創始球友徽章。這個編號永遠屬於你——不能購買、轉讓或重複使用。",
   "landing.founding.counterLabel": "創始球友名額",

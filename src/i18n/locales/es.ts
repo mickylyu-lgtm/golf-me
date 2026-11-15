@@ -901,7 +901,6 @@ export const es: Record<TranslationKey, string> = {
   "landing.nyc.title": "La primera comunidad GolfMe es NYC.",
   "landing.nyc.body": "De Van Cortlandt a Dyker Beach, GolfMe empieza en Nueva York, pensado para los golfistas que juegan en sus campos públicos, estudiantes incluidos. Principiantes bienvenidos: nadie te pregunta el hándicap antes de salir a jugar.",
   "landing.nyc.coursesLabel": "Campos públicos de NYC que encontrarás en GolfMe",
-  "landing.founding.kicker": "Lanzamiento",
   "landing.founding.title": "Sé un Golfista Fundador.",
   "landing.founding.body": "Los primeros 250 golfistas de NYC reciben una insignia permanente y numerada de Golfista Fundador en su perfil. Tu número es tuyo para siempre: no se puede comprar, reasignar ni reutilizar.",
   "landing.founding.counterLabel": "Plazas de Golfista Fundador",

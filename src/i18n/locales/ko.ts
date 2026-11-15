@@ -901,7 +901,6 @@ export const ko: Record<TranslationKey, string> = {
   "landing.nyc.title": "첫 GolfMe 커뮤니티는 NYC입니다.",
   "landing.nyc.body": "Van Cortlandt부터 Dyker Beach까지, GolfMe는 뉴욕에서 시작합니다. 뉴욕의 퍼블릭 코스에서 치는 골퍼들을 위해, 물론 학생도 포함해서요. 초보자 환영: 티오프 전에 핸디캡을 묻는 사람은 없습니다.",
   "landing.nyc.coursesLabel": "GolfMe에서 찾을 수 있는 NYC 퍼블릭 코스",
-  "landing.founding.kicker": "런칭 혜택",
   "landing.founding.title": "Founding Golfer가 되세요.",
   "landing.founding.body": "NYC의 첫 250명 골퍼에게는 프로필에 영구적인 번호가 매겨진 Founding Golfer 배지가 주어집니다. 그 번호는 영원히 당신의 것으로, 구매·양도·재사용이 불가능합니다.",
   "landing.founding.counterLabel": "Founding Golfer 자리",

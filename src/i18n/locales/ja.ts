@@ -901,7 +901,6 @@ export const ja: Record<TranslationKey, string> = {
   "landing.nyc.title": "最初のGolfMeコミュニティはNYC。",
   "landing.nyc.body": "Van CortlandtからDyker Beachまで、GolfMeはニューヨークから始まります。市内のパブリックコースでプレーするゴルファーのために、もちろん学生も。初心者歓迎。ティーオフの前にハンディキャップを聞かれることはありません。",
   "landing.nyc.coursesLabel": "GolfMeで見つかるNYCのパブリックコース",
-  "landing.founding.kicker": "ローンチ特典",
   "landing.founding.title": "Founding Golferになろう。",
   "landing.founding.body": "NYCの最初の250人のゴルファーには、プロフィールに永久の番号付きFounding Golferバッジが付きます。その番号はずっとあなたのもの。購入も譲渡も再利用もできません。",
   "landing.founding.counterLabel": "Founding Golferの枠",
