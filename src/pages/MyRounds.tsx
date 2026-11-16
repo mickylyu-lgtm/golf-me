@@ -76,7 +76,7 @@ export function MyRounds() {
                   {t("home.findRound")}
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => navigate("/golf-calls/new")}>
-                  {t("find.hostGolfCall")}
+                  {t("home.hostRound")}
                 </Button>
               </div>
             }

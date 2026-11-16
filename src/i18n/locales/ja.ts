@@ -1007,7 +1007,7 @@ export const ja: Record<TranslationKey, string> = {
   "ready.intentImproveSwing": "スイングを上達させる",
 
   "home.completeProfile": "プロフィールを完成させましょう",
-  "home.optionalPreferencesRemaining": "あと少し設定すると、よりよいマッチングになります",
+  "home.optionalPreferencesRemaining": "任意：好きなプレースタイルを選べます。",
   "home.updatePreferences": "設定を更新",
 
 

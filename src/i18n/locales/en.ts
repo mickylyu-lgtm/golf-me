@@ -1027,7 +1027,7 @@ export const en = {
 
   // New-user Home nudge
   "home.completeProfile": "Complete your profile",
-  "home.optionalPreferencesRemaining": "A couple quick preferences left for better matches",
+  "home.optionalPreferencesRemaining": "Optional — choose how you like to play.",
   "home.updatePreferences": "Update Preferences",
 
   // Auto-Match graceful under-3-preferences flow

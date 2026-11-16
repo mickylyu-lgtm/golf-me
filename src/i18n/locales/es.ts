@@ -1007,7 +1007,7 @@ export const es: Record<TranslationKey, string> = {
   "ready.intentImproveSwing": "Mejorar mi swing",
 
   "home.completeProfile": "Completa tu perfil",
-  "home.optionalPreferencesRemaining": "Faltan un par de preferencias rápidas para mejores coincidencias",
+  "home.optionalPreferencesRemaining": "Opcional: elige cómo te gusta jugar.",
   "home.updatePreferences": "Actualizar Preferencias",
 
 

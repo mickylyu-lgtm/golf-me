@@ -260,7 +260,7 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
                   {t("find.clearSearchText")}
                 </Button>
                 <Button size="sm" onClick={() => navigate("/golf-calls/new")}>
-                  {t("find.hostGolfCall")}
+                  {t("home.hostRound")}
                 </Button>
               </div>
             }
@@ -268,13 +268,13 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
         ) : (
           <EmptyState
             icon={<Plus size={20} />}
-            title={t("find.emptyNoMatches")}
-            description={t("find.emptyNoResults")}
+            title={t("home.noRoundsYetTitle")}
+            description={t("home.noRoundsYetBody")}
             action={
               <div className="flex w-full flex-col items-center gap-3">
                 <div className="flex flex-wrap items-center justify-center gap-2">
                   <Button size="sm" onClick={() => navigate("/golf-calls/new")}>
-                    {t("find.hostGolfCall")}
+                    {t("home.hostRound")}
                   </Button>
                   <Button size="sm" variant="outline" icon={<Share2 size={14} />} onClick={() => void shareApp()}>
                     {t("common.inviteFriend")}

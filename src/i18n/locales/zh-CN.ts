@@ -1007,7 +1007,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "ready.intentImproveSwing": "提升我的挥杆",
 
   "home.completeProfile": "完善你的资料",
-  "home.optionalPreferencesRemaining": "还差几项快速偏好，匹配会更精准",
+  "home.optionalPreferencesRemaining": "可选：选择你喜欢的打球方式。",
   "home.updatePreferences": "更新偏好",
 
 

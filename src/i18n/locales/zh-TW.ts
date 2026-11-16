@@ -1007,7 +1007,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "ready.intentImproveSwing": "提升我的揮桿",
 
   "home.completeProfile": "完善你的資料",
-  "home.optionalPreferencesRemaining": "還差幾項快速偏好，配對會更精準",
+  "home.optionalPreferencesRemaining": "選填：選擇你喜歡的打球方式。",
   "home.updatePreferences": "更新偏好",
 
 

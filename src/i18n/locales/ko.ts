@@ -1007,7 +1007,7 @@ export const ko: Record<TranslationKey, string> = {
   "ready.intentImproveSwing": "스윙 실력 늘리기",
 
   "home.completeProfile": "프로필을 완성하세요",
-  "home.optionalPreferencesRemaining": "몇 가지 선호도만 더 채우면 매칭이 더 정확해져요",
+  "home.optionalPreferencesRemaining": "선택 사항: 선호하는 플레이 방식을 골라 보세요.",
   "home.updatePreferences": "선호도 업데이트",
 
 

@@ -82,7 +82,7 @@ function SmallPrompt({ icon, title, detail, onClick }: { icon: ReactNode; title:
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-fairway-50 text-fairway-700">{icon}</span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-semibold text-slate-900">{title}</span>
-        {detail && <span className="block truncate text-xs text-slate-500">{detail}</span>}
+        {detail && <span className="block text-xs text-slate-500">{detail}</span>}
       </span>
       <ChevronRight size={16} className="shrink-0 text-slate-300" />
     </button>
@@ -282,7 +282,7 @@ export function Home() {
           {preferencesRemaining > 0 && (
             <SmallPrompt
               icon={<SlidersHorizontal size={15} />}
-              title={t("home.completeProfile")}
+              title={t("profile.matchPreferences")}
               detail={t("home.optionalPreferencesRemaining")}
               onClick={() => navigate("/profile/preferences")}
             />

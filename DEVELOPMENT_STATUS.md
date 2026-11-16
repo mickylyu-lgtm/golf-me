@@ -1,3 +1,12 @@
+## 2026-11-16 - First-use clarity follow-up (approved for publication)
+
+- Based on Claude's completed cleanup commit 563bce2e1fc9b91a795691997bd5bea5867b7ff6 (screenshot baseline), then fast-forwarded to main 54421e90ea59bef322839e84aacfdde3622e3808 before publication. Isolated Windows copy; Claude's worktree untouched.
+- Home names the optional Match Preferences destination accurately; helper copy is explicit in all six locales and wraps instead of truncating.
+- Play distinguishes an unfiltered empty round list from no search matches. Play and Me use the existing Host a Round label consistently. Existing routes, controls and behavior remain.
+- Validation: TypeScript, lint (existing warnings), 79 Play tests + 5 profile-tab tests; local Chromium screenshots at 390x844, desktop 1440x900 and six locales at 320px without document overflow. Browser checks opened preferences, host forms from Play/Me, and golfer search; no page errors. Production build/prerender passed.
+- Screenshots use synthetic demo data with external requests blocked. No real-account, physical iPhone or retention measurement. Micky reviewed the six screenshots and explicitly approved pushing this pass. No native/TestFlight or production data changes.
+
+
 ## 2026-11-16 - Removed the get-tee-times Edge Function
 
 Approved by Micky ("yes remove"). Source folder `supabase/functions/get-tee-times` deleted; nothing in the app calls it since the UI cleanup below. Deleting the deployed function is Micky's step: `supabase functions delete get-tee-times --project-ref adokdenbmpshqgjbzshb` (the CLI on the laptop needs `supabase login` first). APP_STORE_PRIVACY.md updated.
