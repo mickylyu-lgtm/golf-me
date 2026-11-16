@@ -1,3 +1,10 @@
+## 2026-11-16 - Quick Profile survives unavailable draft storage
+
+- Catch localStorage quota/access failures in the optional onboarding draft save. Previously the mount/change effect threw into the app error boundary and prevented profile completion; normal persistence and existing draft contents remain unchanged.
+- Regression covers normal resume, quota failure without overwriting the old draft, later recovery, blocked storage access and no-window execution. 72 focused onboarding/auth tests passed; TypeScript, lint (existing warnings) and production build/prerender passed.
+- Actual local app in Chromium at 390x844 and 1440x844 retained Quick Profile after simulated quota failure and reload, then completed synthetic onboarding to Ready. External browser requests were blocked. No real-account writes or physical iPhone testing.
+- The earlier aggregate Windows baseline has CRLF/path/symlink test portability failures and missing-ffmpeg skips; exact-commit Linux CI must be checked after publication. User authorized pushing this scoped bug fix. No native/TestFlight, backend or production data change.
+
 ## 2026-11-15 — Plain fullscreen media close X (local review only)
 
 - Removed the close control's circular backing, hover fill and round outline shape. The white X retains a subtle glyph shadow, localized accessible label and 44px touch target. Shared viewer consumers include DM/round-chat photos and videos, pending attachments, and community/avatar media.

@@ -33,7 +33,12 @@ export function loadOnboardingDraft(): OnboardingDraft | null {
 
 export function saveOnboardingDraft(draft: OnboardingDraft): void {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+  try {
+    window.localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+  } catch {
+    // Draft persistence is optional: full or blocked storage must not crash
+    // Quick Profile's effect and prevent the golfer from finishing setup.
+  }
 }
 
 export function clearOnboardingDraft(): void {
