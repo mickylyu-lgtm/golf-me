@@ -21,7 +21,9 @@ export function ProfileFollowers({ profileId, layout = "inline" }: { profileId: 
   const blocked = isBlockedEitherWay(profileId);
   const permitted = !blocked;
   const read = useCallback(() => getConnectionSummary(profileId, "followers"), [getConnectionSummary, profileId]);
-  const { value, retry } = useSocialRead(read, permitted);
+  // Closing the sheet/focus refreshes the count without blanking a known value.
+  // A changed read closure still invalidates account/profile/relationship scope.
+  const { value, retry } = useSocialRead(read, permitted, true);
   if (blocked) return null;
   return <>
     <button type="button" onClick={() => setOpen(true)} aria-haspopup="dialog" aria-expanded={open}

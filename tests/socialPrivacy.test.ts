@@ -86,7 +86,9 @@ test("client mutations use dedicated RPCs and never raw insert/privacy fallback"
 });
 test("render-time snapshots never reuse cached private rows across read scope changes", () => {
   const source=readFileSync(new URL("../src/lib/useSocialRead.ts",import.meta.url),"utf8");
-  assert.match(source,/enabled && result\?\.scope === scope/);
+  assert.match(source,/enabled && \(result\?\.scope === scope/);
+  assert.match(source,/retainOnRefresh = false/);
+  assert.match(source,/result\?\.scope.identity === identity/);
   assert.match(source,/scopeRef.current.enabled !== enabled/);
   const ui=readFileSync(new URL("../src/components/profile/ProfileFollowers.tsx",import.meta.url),"utf8");
   assert.doesNotMatch(ui,/followers\.mutuals|mutualsOnly/);
