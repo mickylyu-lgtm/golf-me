@@ -20,7 +20,7 @@ const ROOT_PATHS = new Set<string>(MOBILE_NAV_ITEMS.map((item) => item.path));
 // use the room: up to 72rem, with their own two-column grids. Everything
 // else (detail pages, forms, settings, a conversation) keeps the 48rem
 // reading column. Phones never see the difference: these are lg: classes.
-const WIDE_EXACT = new Set<string>(["/", "/find", "/caddie", "/profile", "/community", "/golf-calls", "/my-rounds", "/saved-posts", "/profile/posts", "/courses/nearby"]);
+const WIDE_EXACT = new Set<string>(["/", "/find", "/caddie", "/profile", "/community", "/golf-calls", "/saved-posts", "/courses/nearby"]);
 
 // Two-pane chat needs room for a 340px list plus a conversation at least
 // as wide as a phone, so it starts at xl (1280px); below that, chat keeps

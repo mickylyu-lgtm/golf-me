@@ -17,11 +17,12 @@ test("mutual summary is near identity before actions, separate from the stats gr
   assert.ok(source.indexOf("<ProfileMutualSummary ")<source.indexOf("<ReputationRow "));
   assert.match(source,/followerStat=\{!isBlockedEitherWay\(golfer.id\)/);
 });
-test("own summary tiles retain rounds, handicap and the existing follower control",()=>{
+test("own summary tiles retain rounds and the existing follower control; handicap sits in the header",()=>{
   const source=read("pages/Profile.tsx");
   assert.match(source,/data-testid="own-profile-stats-grid"/);
-  assert.match(source,/label=\{t\("profile.handicap"\)\}/);
+  assert.match(source,/label=\{t\("profileStats.completedRounds"\)\}/);
   assert.match(source,/<ProfileFollowers profileId=\{currentUser.id\} layout="stat"/);
+  assert.ok(source.indexOf('t("profile.handicap")')<source.indexOf('data-testid="own-profile-stats-grid"'));
 });
 test("grid presentation never substitutes a count for blocked or unknown followers",()=>{
   const source=read("components/profile/ProfileFollowers.tsx");

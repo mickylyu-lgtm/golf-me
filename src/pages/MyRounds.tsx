@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, CalendarDays, ClipboardList, MapPin, Search, Users } from "lucide-react";
+import { CalendarDays, ClipboardList, MapPin, Search, Users } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
 import { useRealRounds } from "../context/RealRoundsContext";
@@ -19,9 +19,11 @@ import { formatDate, formatMoney } from "../lib/format";
 import { vibeLabel } from "../lib/enumLabels";
 import { VIBE_TONE } from "../lib/theme";
 import type { GolfCall } from "../types";
-import { goBack } from "../lib/goBack";
 import { isUpcomingRound } from "../lib/golfCall";
+import { findTabPath } from "../lib/findTab";
 
+// Me > Rounds. Rendered inside the profile (Profile.tsx); the old /my-rounds
+// URL redirects there.
 export function MyRounds() {
   const { currentUser, golfCalls, getGolfer, hasReviewed } = useData();
   const { isDemo } = useAuth();
@@ -55,19 +57,7 @@ export function MyRounds() {
   const sectionsVisible = view === "list" || view === "empty";
 
   return (
-    <div className="flex flex-col gap-8">
-      <button
-        onClick={() => goBack(navigate)}
-        className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
-      >
-        <ArrowLeft size={16} /> {t("common.back")}
-      </button>
-
-      <div>
-        <h1 className="text-xl font-bold text-slate-900">{t("myGolf.title")}</h1>
-        <p className="text-sm text-slate-500">{t("myGolf.subtitle")}</p>
-      </div>
-
+    <div className="flex flex-col gap-6">
       {rounds.refreshFailed && <StaleDataNotice onRetry={rounds.retry} />}
 
       {view === "loading" && <GolfMeLoader className="py-12" />}
@@ -82,7 +72,7 @@ export function MyRounds() {
             description={t("myGolf.emptyUpcomingDesc")}
             action={
               <div className="flex flex-wrap justify-center gap-2">
-                <Button size="sm" icon={<Search size={14} />} onClick={() => navigate("/golf-calls")}>
+                <Button size="sm" icon={<Search size={14} />} onClick={() => navigate(findTabPath("rounds"))}>
                   {t("home.findRound")}
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => navigate("/golf-calls/new")}>

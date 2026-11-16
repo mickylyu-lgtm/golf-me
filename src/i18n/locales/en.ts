@@ -593,7 +593,6 @@ export const en = {
   "caddie.demo.two.issue1": "Trail foot lifting early in the downswing",
   "caddie.demo.two.rec1": "Step-through drill",
   "caddie.demo.two.rec2": "Slow-motion transition reps",
-  "profile.myGolf": "My Golf",
   "composer.swingVideo": "Swing Video",
   "composer.uploaded": "Uploaded",
   "composer.requestCoachReview": "Request Coach Review",
@@ -1263,8 +1262,6 @@ export const en = {
   "host.notesPlaceholderFill": "e.g. Playing a casual morning round. Any skill level welcome.",
 
   // My Golf
-  "myGolf.title": "My Rounds",
-  "myGolf.subtitle": "Everything you're hosting or playing in, in one place.",
   "myGolf.upcoming": "Upcoming",
   "myGolf.past": "Past",
   "myGolf.emptyUpcoming": "Nothing on the books yet.",
@@ -1281,12 +1278,15 @@ export const en = {
   "myGolf.leaveReview": "Leave a review ({done}/{total} done)",
 
   // Profile
-  "profile.reputation": "GolfMe Reputation",
   "profile.golfCircle": "Golf Circle",
   "profile.following": "Following",
-  "profile.myPosts": "My Community Posts",
   "profile.matchPreferences": "Match Preferences",
   "profile.settings": "Settings",
+  "profile.tabRounds": "Rounds",
+  "profile.tabSwings": "Swings",
+  "profile.tabPosts": "Posts",
+  "profile.tabsLabel": "Your activity",
+  "profile.menuTitle": "Settings and more",
   "profile.sectionGolf": "Golf",
   "profile.sectionSocial": "Social",
   "profile.sectionAccount": "Account",
@@ -1303,8 +1303,6 @@ export const en = {
   "profile.handicapPrefix": "Handicap ",
   "profile.golferCount": "{count} golfers",
   "profile.golferCountSingular": "1 golfer",
-  "profile.postCount": "{count} posts",
-  "profile.postCountSingular": "1 post",
   "profile.changePhoto": "Change profile photo",
   "profile.profilePhoto": "Profile photo",
   "profile.profileUpdated": "Profile updated.",
@@ -1402,8 +1400,6 @@ export const en = {
   "following.unfollow": "Unfollow",
 
   // My Posts
-  "myPosts.title": "My Community Posts",
-  "myPosts.subtitle": "Everything you've posted to the Community.",
   "myPosts.savedPosts": "Saved posts →",
   "myPosts.empty": "Nothing posted yet.",
   "myPosts.emptyDesc": "Share a round story, a question, or a photo with the Community.",

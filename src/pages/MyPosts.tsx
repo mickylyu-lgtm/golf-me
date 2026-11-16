@@ -1,13 +1,14 @@
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, MessageSquareText } from "lucide-react";
+import { Bookmark, MessageSquareText, Plus } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useLocale } from "../i18n/LocaleContext";
 import { EmptyState } from "../components/ui/EmptyState";
 import { Button } from "../components/ui/Button";
 import { PostCard } from "../components/community/PostCard";
 import { PostFeedGrid } from "../components/community/PostFeedGrid";
-import { goBack } from "../lib/goBack";
 
+// Me > Posts. Rendered inside the profile (Profile.tsx); the old
+// /profile/posts URL redirects there. Saved posts open from here.
 export function MyPosts() {
   const { currentUser, posts } = useData();
   const { t } = useLocale();
@@ -15,24 +16,20 @@ export function MyPosts() {
   const myPosts = posts.filter((p) => p.authorId === currentUser.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
   return (
-    <div className="flex flex-col gap-6 pb-6">
-      <button
-        onClick={() => goBack(navigate)}
-        className="-my-2.5 flex items-center gap-1.5 self-start py-2.5 pr-3 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
-      >
-        <ArrowLeft size={16} /> {t("common.back")}
-      </button>
-
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">{t("myPosts.title")}</h1>
-          <p className="text-sm text-slate-500">{t("myPosts.subtitle")}</p>
-        </div>
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between gap-3">
+        {myPosts.length > 0 ? (
+          <Button size="sm" variant="outline" icon={<Plus size={14} />} onClick={() => navigate("/community/new")}>
+            {t("myPosts.createPost")}
+          </Button>
+        ) : (
+          <span />
+        )}
         <button
           onClick={() => navigate("/saved-posts")}
-          className="shrink-0 text-sm font-semibold text-fairway-700 transition-colors duration-200 hover:text-fairway-800 hover:underline"
+          className="flex min-h-10 shrink-0 items-center gap-1.5 text-sm font-semibold text-fairway-700 transition-colors duration-200 hover:text-fairway-800"
         >
-          {t("myPosts.savedPosts")}
+          <Bookmark size={14} /> {t("myPosts.savedPosts")}
         </button>
       </div>
 

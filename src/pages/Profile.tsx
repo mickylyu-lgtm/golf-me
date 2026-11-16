@@ -1,13 +1,12 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import type { ReactNode } from "react";
 import {
-  Award,
+  Bookmark,
   ChevronRight,
-  ClipboardList,
   Clock,
   LayoutDashboard,
-  MessageSquareText,
+  Menu,
   Settings as SettingsIcon,
   ShieldCheck,
   SlidersHorizontal,
@@ -37,12 +36,17 @@ import { AGE_RANGES, GENDER_OPTIONS } from "../types";
 import type { AgeRange } from "../types";
 import { memberSinceLabel } from "../lib/format";
 import { useCredibilityStats } from "../lib/useCredibility";
-import { tierDisplayName } from "../lib/reputationTiers";
 import { useReputationState } from "../lib/useReputationState";
-import { formatHandicapNumber, handicapColorClass } from "../lib/handicapColor";
+import { formatHandicapNumber, handicapColorClass, hasHandicap } from "../lib/handicapColor";
 import { useRoles } from "../lib/useRoles";
 import { isObjectionableContentError } from "../lib/objectionableContent";
 import { isAccountSuspendedError } from "../lib/moderation";
+import { useSessionState } from "../lib/useSessionState";
+import { PROFILE_TAB_PARAM, PROFILE_TAB_STORAGE_KEY, isProfileTab, resolveProfileTab } from "../lib/profileTab";
+import type { ProfileTab } from "../lib/profileTab";
+import { MyRounds } from "./MyRounds";
+import { MyPosts } from "./MyPosts";
+import { ProfileSwings } from "../components/profile/ProfileSwings";
 
 // Same cap as the profiles_bio_length database check.
 const BIO_MAX_LENGTH = 150;
@@ -70,13 +74,35 @@ function ProfileSection({ title, children }: { title: string; children: ReactNod
 }
 
 export function Profile() {
-  const { currentUser, updateCurrentUserProfile, circleGolfers, followingGolfers, posts } = useData();
+  const { currentUser, updateCurrentUserProfile, circleGolfers, followingGolfers } = useData();
   const { isDemo, saveProfile } = useAuth();
   const { showToast } = useToast();
   const { t, locale } = useLocale();
   const navigate = useNavigate();
   const { isCoachReviewer, isAdmin } = useRoles();
-  const myPostCount = posts.filter((p) => p.authorId === currentUser.id).length;
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // Rounds | Swings | Posts, remembered for the session; ?tab= (from the old
+  // /my-rounds and /profile/posts URLs) picks one. RootTabCarousel keeps Me
+  // mounted under every root tab, so ?tab= is only read while Me is showing.
+  const [rememberedTab, setTab] = useSessionState<ProfileTab>(PROFILE_TAB_STORAGE_KEY, "rounds", isProfileTab);
+  const { pathname } = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedTab = pathname === "/profile" ? searchParams.get(PROFILE_TAB_PARAM) : null;
+  const tab = resolveProfileTab(requestedTab, rememberedTab);
+  // Adopt the request, then drop it from the URL (replace, no new history entry).
+  useEffect(() => {
+    if (requestedTab === null) return;
+    if (isProfileTab(requestedTab)) setTab(requestedTab);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete(PROFILE_TAB_PARAM);
+        return next;
+      },
+      { replace: true },
+    );
+  }, [requestedTab, setTab, setSearchParams]);
 
   const [editing, setEditing] = useState(false);
   const [avatarModalOpen, setAvatarModalOpen] = useState(false);
@@ -183,15 +209,29 @@ export function Profile() {
   const enrichedUser = { ...currentUser, reputation: realReputation };
   const { state: reputationState } = useReputationState(currentUser);
 
+  const tabs: { id: ProfileTab; label: string }[] = [
+    { id: "rounds", label: t("profile.tabRounds") },
+    { id: "swings", label: t("profile.tabSwings") },
+    { id: "posts", label: t("profile.tabPosts") },
+  ];
+
+  // From the settings-and-more sheet: close it, then go.
+  function openFromMenu(path: string) {
+    setMenuOpen(false);
+    navigate(path);
+  }
+
   return (
-    <div className="flex flex-col gap-6 pb-6">
-      <div className="flex items-center gap-3">
+    <div className="flex flex-col gap-5 pb-6">
+      {/* Profile header: who you are at a glance (Beli-style). Reputation is
+          linked once, from the tier badge. */}
+      <div className="flex items-start gap-3.5">
         {/* Your photo opens fullscreen and zoomable first ("Change photo"
             from there opens the photo sheet); no photo yet opens the sheet. */}
         <button
           onClick={() => (currentUser.photoUrl ? setPhotoViewerOpen(true) : setAvatarModalOpen(true))}
           aria-label={currentUser.photoUrl ? t("avatarUpload.viewPhoto") : t("profile.changePhoto")}
-          className="rounded-full transition-transform duration-200 ease-out hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2"
+          className="shrink-0 rounded-full transition-transform duration-200 ease-out hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2"
         >
           <Avatar golfer={currentUser} size="lg" />
         </button>
@@ -200,102 +240,135 @@ export function Profile() {
             <span className="truncate">{currentUser.name}</span>
             <FoundingMark golfer={currentUser} />
           </h1>
-          <FoundingGolferBadge golfer={currentUser} className="mr-1.5 mt-1" />
-          {/* Was plain gray text -- reads as a stray line, not really part
-              of the identity block. A badge (same pattern as the
-              reputation tag below it) makes it read as one deliberate
-              piece of profile metadata, not leftover text. Plain text, not
-              HighlightGolfMe -- this metadata is intentionally one neutral
-              color throughout; the logo elsewhere already carries brand
-              emphasis, this line shouldn't compete with the name/rounds/
-              reputation above and beside it. */}
-          <Badge tone="slate" icon={<Clock size={11} />} className="mt-1">
-            {memberSinceLabel(currentUser.memberSince, t, locale)}
-          </Badge>
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+            <span className="text-sm text-slate-500">
+              {hasHandicap(currentUser.handicap) ? (
+                <>
+                  {t("profile.handicap")}{" "}
+                  <span className={`font-bold ${handicapColorClass(currentUser.handicap)}`}>{formatHandicapNumber(currentUser.handicap)}</span>
+                </>
+              ) : (
+                t("profile.noHandicapYet")
+              )}
+            </span>
+            <ReputationBadge tier={reputationState?.tierKey ?? null} size="sm" onClick={() => navigate("/profile/reputation")} />
+          </div>
         </div>
-        <Button size="sm" variant="outline" onClick={startEditing}>
-          {t("common.edit")}
-        </Button>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <Button size="sm" variant="outline" onClick={startEditing}>
+            {t("common.edit")}
+          </Button>
+          <button
+            type="button"
+            onClick={() => setMenuOpen(true)}
+            aria-label={t("profile.menuTitle")}
+            aria-haspopup="dialog"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition-colors duration-200 hover:border-fairway-300 hover:text-fairway-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2"
+          >
+            <Menu size={17} />
+          </button>
+        </div>
       </div>
 
-      <div data-testid="own-profile-stats-grid" className="grid grid-cols-3 gap-2">
-        <ProfileStatTile value={enrichedUser.reputation.completedRounds} label={t("profileStats.completedRounds")} />
-        <ProfileStatTile value={<span className={handicapColorClass(currentUser.handicap)}>{formatHandicapNumber(currentUser.handicap)}</span>} label={t("profile.handicap")} />
-        <ProfileStatCell><ProfileFollowers profileId={currentUser.id} layout="stat" /></ProfileStatCell>
-      </div>
-      <div className="-mt-3 flex flex-wrap items-center gap-2">
-        <ReputationBadge tier={reputationState?.tierKey ?? null} size="sm" onClick={() => navigate("/profile/reputation")} />
+      <div className="-mt-2 flex flex-wrap items-center gap-2">
+        <FoundingGolferBadge golfer={currentUser} />
+        {/* A badge, not stray gray text: one deliberate piece of metadata. */}
+        <Badge tone="slate" icon={<Clock size={11} />}>
+          {memberSinceLabel(currentUser.memberSince, t, locale)}
+        </Badge>
         {isCoachReviewer && (
           <Badge tone="fairway" icon={<ShieldCheck size={12} />}>
             Coach Reviewer
           </Badge>
         )}
       </div>
-      <FollowRequests />
 
-      {/* Your own bio, shown the way other golfers see it on your profile
-          (Instagram-style, under the name and stats). Empty: a quiet prompt
-          that opens the same Edit Profile popup. */}
+      {/* Your own bio, shown the way other golfers see it. Empty: a quiet
+          prompt that opens the same Edit Profile popup. */}
       {currentUser.bio?.trim() ? (
-        <p className="-mt-3 whitespace-pre-line break-words text-sm leading-relaxed text-slate-700 lg:max-w-2xl">{currentUser.bio}</p>
+        <p className="-mt-2 whitespace-pre-line break-words text-sm leading-relaxed text-slate-700 lg:max-w-2xl">{currentUser.bio}</p>
       ) : (
-        <button
-          onClick={startEditing}
-          className="-mt-3 self-start text-sm font-semibold text-fairway-700 hover:underline"
-        >
+        <button onClick={startEditing} className="-mt-2 self-start text-sm font-semibold text-fairway-700 hover:underline">
           {t("profile.addBio")}
         </button>
       )}
 
-      <div className="flex flex-col gap-5 lg:grid lg:grid-cols-2 lg:items-start lg:gap-x-6 lg:gap-y-7">
-        <ProfileSection title={t("profile.sectionGolf")}>
-          <ProfileRow icon={<ClipboardList size={16} />} label={t("profile.myGolf")} onClick={() => navigate("/my-rounds")} />
-          <ProfileRow icon={<SlidersHorizontal size={16} />} label={t("profile.matchPreferences")} onClick={() => navigate("/profile/preferences")} />
-        </ProfileSection>
-
-        <ProfileSection title={t("profile.sectionSocial")}>
-          <ProfileRow
-            icon={<Award size={16} />}
-            label={t("profile.reputation")}
-            value={reputationState ? tierDisplayName(reputationState.tierKey, t) : undefined}
-            onClick={() => navigate("/profile/reputation")}
-          />
-          <ProfileRow
-            icon={<Users size={16} />}
-            label={t("profile.golfCircle")}
-            value={circleGolfers.length === 1 ? t("profile.golferCountSingular") : t("profile.golferCount", { count: circleGolfers.length })}
-            onClick={() => navigate("/profile/circle")}
-          />
-          <ProfileRow
-            icon={<UserRoundPlus size={16} />}
-            label={t("profile.following")}
-            value={`${followingGolfers.length}`}
+      <div data-testid="own-profile-stats-grid" className="grid grid-cols-3 gap-2 lg:max-w-2xl">
+        <ProfileStatTile value={enrichedUser.reputation.completedRounds} label={t("profileStats.completedRounds")} />
+        <ProfileStatCell><ProfileFollowers profileId={currentUser.id} layout="stat" /></ProfileStatCell>
+        <ProfileStatCell>
+          <button
+            type="button"
             onClick={() => navigate("/profile/following")}
-          />
-          <ProfileRow
-            icon={<MessageSquareText size={16} />}
-            label={t("profile.myPosts")}
-            value={myPostCount === 1 ? t("profile.postCountSingular") : t("profile.postCount", { count: myPostCount })}
-            onClick={() => navigate("/profile/posts")}
-          />
-        </ProfileSection>
-
-        <ProfileSection title={t("profile.sectionAccount")}>
-          <ProfileRow icon={<SettingsIcon size={16} />} label={t("profile.settings")} onClick={() => navigate("/settings")} />
-        </ProfileSection>
-
-        {(isCoachReviewer || isAdmin) && (
-          <ProfileSection title={t("profile.sectionAdmin")}>
-            {isCoachReviewer && <ProfileRow icon={<ShieldCheck size={16} />} label="Coach Review Queue" onClick={() => navigate("/coach-reviews")} />}
-            {isAdmin && (
-              <>
-                <ProfileRow icon={<ShieldCheck size={16} />} label="Coach Reviewers" onClick={() => navigate("/admin/coach-reviewers")} />
-                <ProfileRow icon={<LayoutDashboard size={16} />} label="Platform Dashboard" onClick={() => navigate("/admin/dashboard")} />
-              </>
-            )}
-          </ProfileSection>
-        )}
+            className="flex min-h-20 w-full min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-2 py-3 text-center transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400"
+          >
+            <strong className="text-xl font-bold leading-tight tabular-nums text-slate-900">{followingGolfers.length.toLocaleString(locale)}</strong>
+            <span className="max-w-full break-words text-xs leading-snug text-slate-500">{t("profile.following")}</span>
+          </button>
+        </ProfileStatCell>
       </div>
+
+      <FollowRequests />
+
+      <div role="tablist" aria-label={t("profile.tabsLabel")} className="flex rounded-full border border-slate-200 bg-white p-1 lg:w-full lg:max-w-md">
+        {tabs.map(({ id, label }) => (
+          <button
+            key={id}
+            role="tab"
+            aria-selected={tab === id}
+            onClick={() => setTab(id)}
+            data-haptic="selection"
+            className={`flex-1 rounded-full py-2 text-sm font-semibold transition ${
+              tab === id ? "bg-gradient-to-br from-brand-forest to-brand-forest-deep text-white" : "text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div role="tabpanel">
+        {tab === "rounds" ? <MyRounds /> : tab === "swings" ? <ProfileSwings /> : <MyPosts />}
+      </div>
+
+      {menuOpen && (
+        <Modal title={t("profile.menuTitle")} onClose={() => setMenuOpen(false)}>
+          <div className="flex flex-col gap-5">
+            <ProfileSection title={t("profile.sectionGolf")}>
+              <ProfileRow icon={<SlidersHorizontal size={16} />} label={t("profile.matchPreferences")} onClick={() => openFromMenu("/profile/preferences")} />
+            </ProfileSection>
+            <ProfileSection title={t("profile.sectionSocial")}>
+              <ProfileRow
+                icon={<UserRoundPlus size={16} />}
+                label={t("profile.following")}
+                value={`${followingGolfers.length}`}
+                onClick={() => openFromMenu("/profile/following")}
+              />
+              <ProfileRow
+                icon={<Users size={16} />}
+                label={t("profile.golfCircle")}
+                value={circleGolfers.length === 1 ? t("profile.golferCountSingular") : t("profile.golferCount", { count: circleGolfers.length })}
+                onClick={() => openFromMenu("/profile/circle")}
+              />
+              <ProfileRow icon={<Bookmark size={16} />} label={t("myPosts.savedPosts")} onClick={() => openFromMenu("/saved-posts")} />
+            </ProfileSection>
+            <ProfileSection title={t("profile.sectionAccount")}>
+              <ProfileRow icon={<SettingsIcon size={16} />} label={t("profile.settings")} onClick={() => openFromMenu("/settings")} />
+            </ProfileSection>
+            {(isCoachReviewer || isAdmin) && (
+              <ProfileSection title={t("profile.sectionAdmin")}>
+                {isCoachReviewer && <ProfileRow icon={<ShieldCheck size={16} />} label="Coach Review Queue" onClick={() => openFromMenu("/coach-reviews")} />}
+                {isAdmin && (
+                  <>
+                    <ProfileRow icon={<ShieldCheck size={16} />} label="Coach Reviewers" onClick={() => openFromMenu("/admin/coach-reviewers")} />
+                    <ProfileRow icon={<LayoutDashboard size={16} />} label="Platform Dashboard" onClick={() => openFromMenu("/admin/dashboard")} />
+                  </>
+                )}
+              </ProfileSection>
+            )}
+          </div>
+        </Modal>
+      )}
 
       {photoViewerOpen && currentUser.photoUrl && (
         <FullscreenMediaViewer

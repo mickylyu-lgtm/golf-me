@@ -38,12 +38,12 @@ import { Auth } from "./pages/Auth";
 import { ProfileSetup } from "./pages/ProfileSetup";
 import { Home } from "./pages/Home";
 import { findTabPath } from "./lib/findTab";
+import { profileTabPath } from "./lib/profileTab";
 import { Find } from "./pages/Find";
 import { Caddie } from "./pages/Caddie";
 import { CaddieLocaleScope } from "./components/caddie/CaddieLocaleScope";
 import { GolfCalls } from "./pages/GolfCalls";
 import { GolfCallDetail } from "./pages/GolfCallDetail";
-import { MyRounds } from "./pages/MyRounds";
 import { Profile } from "./pages/Profile";
 import { GolferProfilePage } from "./pages/GolferProfilePage";
 import { Inbox } from "./pages/Inbox";
@@ -73,7 +73,6 @@ const CreateGolfCall = lazyPage(() => import("./pages/CreateGolfCall"), "CreateG
 const ReputationDetail = lazyPage(() => import("./pages/ReputationDetail"), "ReputationDetail");
 const GolfCircleDetail = lazyPage(() => import("./pages/GolfCircleDetail"), "GolfCircleDetail");
 const FollowingDetail = lazyPage(() => import("./pages/FollowingDetail"), "FollowingDetail");
-const MyPosts = lazyPage(() => import("./pages/MyPosts"), "MyPosts");
 const MatchPreferencesDetail = lazyPage(() => import("./pages/MatchPreferencesDetail"), "MatchPreferencesDetail");
 const Settings = lazyPage(() => import("./pages/Settings"), "Settings");
 const LanguageSettings = lazyPage(() => import("./pages/LanguageSettings"), "LanguageSettings");
@@ -449,14 +448,15 @@ export default function App() {
                   <Route path="/golf-calls" element={<GolfCalls />} />
                   <Route path="/golf-calls/new" element={<CreateGolfCall />} />
                   <Route path="/golf-calls/:id" element={<GolfCallDetail />} />
-                  <Route path="/my-rounds" element={<MyRounds />} />
+                  {/* My Golf and My Posts are tabs on Me now; old links land on them. */}
+                  <Route path="/my-rounds" element={<Navigate to={profileTabPath("rounds")} replace />} />
                   <Route path="/profile" element={<Profile />} />
                   <Route path="/profile/reputation" element={<ReputationDetail />} />
                   <Route path="/profile/circle" element={<GolfCircleDetail />} />
                   <Route path="/profile/following" element={<FollowingDetail />} />
                   {/* The golfer search lives in Play > Golfers now. */}
                   <Route path="/profile/following/find" element={<Navigate to={findTabPath("golfers")} replace />} />
-                  <Route path="/profile/posts" element={<MyPosts />} />
+                  <Route path="/profile/posts" element={<Navigate to={profileTabPath("posts")} replace />} />
                   <Route path="/profile/preferences" element={<MatchPreferencesDetail />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route path="/settings/language" element={<LanguageSettings />} />
