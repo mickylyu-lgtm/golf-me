@@ -1648,7 +1648,13 @@ export function RealSocialProvider({ children }: { children: ReactNode }) {
         patchPhoto(tempId, { path, progress: 1, failure: undefined }, { sent: true, serverId: job.messageId });
         return "sent";
       };
-      const promise = run().finally(() => photoInFlightRef.current.delete(tempId));
+      // Auth/storage/transport can reject rather than return an error object.
+      // Keep the job and its uploaded flag so Retry resumes the same message.
+      const promise = run().catch((): SendMessageResult => {
+        const job = photoJobsRef.current.get(tempId);
+        if (job && job.generation === generationRef.current) patchPhoto(tempId, { state: "failed", failure: "network" });
+        return "failed";
+      }).finally(() => photoInFlightRef.current.delete(tempId));
       photoInFlightRef.current.set(tempId, promise);
       return promise;
     },

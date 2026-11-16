@@ -6,6 +6,7 @@
 // unsend / discard, and the signed-URL cache for the private chat-video
 // bucket.
 import { supabase } from "./supabase";
+import { readChatUploadToken } from "./chatUploadSession";
 import { uploadChatImage } from "./chatImageClient";
 import { createChatImageUrlCache, type ChatImageUrlCache } from "./chatImageUrlCache";
 import {
@@ -117,8 +118,7 @@ function b64(value: string): string {
 }
 
 async function accessToken(): Promise<string | null> {
-  const { data } = await supabase.auth.getSession();
-  return data.session?.access_token ?? null;
+  return readChatUploadToken(() => supabase.auth.getSession());
 }
 
 function storageBase(): string {

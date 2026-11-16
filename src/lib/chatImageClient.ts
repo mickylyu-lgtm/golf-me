@@ -2,6 +2,7 @@
 // progress), removal after unsend, the shared signed-URL cache and copying a
 // photo to the clipboard. The rules live in lib/chatImages.ts.
 import { supabase } from "./supabase";
+import { readChatUploadToken } from "./chatUploadSession";
 import {
   CHAT_IMAGE_MAX_BYTES,
   CHAT_IMAGE_URL_TTL_S,
@@ -143,8 +144,7 @@ export async function uploadChatImage(
   // Album photos go to chat-video (lib/chatMedia.ts), same rules.
   bucket: "chat-media" | "chat-video" = CHAT_MEDIA_BUCKET,
 ): Promise<"uploaded" | ImageSendFailure> {
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
+  const token = await readChatUploadToken(() => supabase.auth.getSession());
   if (!token) return "rejected";
   const base = String(import.meta.env.VITE_SUPABASE_URL ?? "").replace(/\/+$/, "");
   const url = `${base}/storage/v1/object/${bucket}/${path}`;

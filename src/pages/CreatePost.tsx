@@ -1,3 +1,4 @@
+import { PostPublicationUncertainError } from "../lib/postPublication";
 import { OfficialPostOption } from "../components/community/OfficialPostOption";
 import { useOfficialPostCapability } from "../lib/useOfficialPostCapability";
 import { isOfficialPostError, OfficialPostPublicationUncertainError } from "../lib/officialPost";
@@ -569,6 +570,11 @@ export function CreatePost() {
       showToast("Post published.", "success");
       navigate("/community");
     } catch (err) {
+      if (err instanceof PostPublicationUncertainError) {
+        showToast("Couldn't confirm all attachments. Check this post before trying again; your draft is saved.", "warning");
+        navigate(`/community/${err.postId}`);
+        return;
+      }
       if (err instanceof OfficialPostPublicationUncertainError) {
         // Do not remove potentially published media or invite duplicate
         // publication. The resumable draft remains available after review.

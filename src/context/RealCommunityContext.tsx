@@ -1,3 +1,4 @@
+import { rejectFailedPostMedia } from "../lib/postPublication";
 import { requireOfficialPostCapability, officialPostInsertFields, rejectFailedOfficialMedia } from "../lib/officialPost";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -419,7 +420,7 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
 
       let insertedMedia: MediaRow[] = [];
       if (input.media && input.media.length > 0) {
-        const { data: mediaData, error: mediaError } = await supabase
+        const { data: mediaData, error: mediaError } = await Promise.resolve(supabase
           .from("community_post_media")
           .insert(
             input.media.map((m, i) => ({
@@ -430,7 +431,7 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
               position: i,
             })),
           )
-          .select();
+          .select()).catch((error: unknown) => ({ data: null, error: { message: error instanceof Error ? error.message : "Attachment request failed" } }));
         // An official announcement must not silently publish without its
         // attachments when access is revoked between the two writes. Undo
         // only this newly created row, and verify deletion before offering a
@@ -444,24 +445,20 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
             setMediaRows((prev) => prev.filter((m) => m.post_id !== pending.id));
           }
         }
-        // The server's 10-per-post cap refused the media (the app caps at
-        // 10 too, so only an older/modified client gets here): take the
-        // just-created post back down rather than leave it live without
-        // its photos, and let the composer say why (draft kept).
-        if (mediaError && isPostMediaCapError(mediaError)) {
-          const { error: undoError } = await supabase.from("community_posts").delete().eq("id", newPost.id);
-          if (undoError) console.error("GolfMe: couldn't remove a post whose media was refused.", undoError);
-          setPendingPosts((prev) => prev.filter((p) => p.id !== pending.id));
-          setMediaRows((prev) => prev.filter((m) => m.post_id !== pending.id));
-          throw new PostMediaCapError();
+        // Never report success after losing the requested attachments. A
+        // confirmed rollback keeps the draft retryable; an uncertain one
+        // directs the golfer to the existing post instead of duplicating it.
+        if (mediaError || mediaData?.length !== input.media.length) {
+          try {
+            await rejectFailedPostMedia(newPost.id,
+              isPostMediaCapError(mediaError) ? new PostMediaCapError() : new Error("Couldn't attach your photos or videos. Your draft is saved; please try again."),
+              () => supabase.from("community_posts").delete().eq("id", newPost.id).select("id").maybeSingle());
+          } finally {
+            setPendingPosts((prev) => prev.filter((p) => p.id !== pending.id));
+            setMediaRows((prev) => prev.filter((m) => m.post_id !== pending.id));
+          }
         }
-        // The post itself is already live at this point — any other
-        // media-insert failure must never look like the whole post failed
-        // to publish. Falls back to the optimistic pendingMedia rows (still
-        // keyed to the old pending.id) via the reconciliation effect below,
-        // same as any other refetch-driven cleanup.
-        if (mediaError) console.error("GolfMe: failed to attach post media.", mediaError);
-        else insertedMedia = (mediaData ?? []) as MediaRow[];
+        insertedMedia = (mediaData ?? []) as MediaRow[];
       }
       setMediaRows((prev) => [...insertedMedia, ...prev.filter((m) => m.post_id !== pending.id)]);
 

@@ -901,7 +901,15 @@ export function RealRoundsProvider({ children }: { children: ReactNode }) {
         setPendingMessages((prev) => patchRoundPhoto(markRoundMessageSent(prev, clientId, data as { id: string; created_at: string } | null), clientId, { path, progress: 1, failure: undefined }));
         return "sent";
       };
-      const promise = run().finally(() => photoInFlightRef.current.delete(clientId));
+      // Preserve the retryable job when auth/storage throws instead of
+      // returning an error. Never leave its bubble stuck in "sending".
+      const promise = run().catch((): SendMessageResult => {
+        const job = photoJobsRef.current.get(clientId);
+        if (job && userIdRef.current === job.user) {
+          setPendingMessages((prev) => patchRoundPhoto(markRoundMessageFailed(prev, clientId, "network"), clientId, { failure: "network" }));
+        }
+        return "failed";
+      }).finally(() => photoInFlightRef.current.delete(clientId));
       photoInFlightRef.current.set(clientId, promise);
       return promise;
     },
