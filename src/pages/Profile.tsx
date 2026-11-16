@@ -343,7 +343,7 @@ export function Profile() {
                 value={`${followingGolfers.length}`}
                 onClick={() => openFromMenu("/profile/following")}
               />
-              <ProfileRow icon={<Bookmark size={16} />} label={t("myPosts.savedPosts")} onClick={() => openFromMenu("/saved-posts")} />
+              <ProfileRow icon={<Bookmark size={16} />} label={t("savedPosts.title")} onClick={() => openFromMenu("/saved-posts")} />
             </ProfileSection>
             <ProfileSection title={t("profile.sectionAccount")}>
               <ProfileRow icon={<SettingsIcon size={16} />} label={t("profile.settings")} onClick={() => openFromMenu("/settings")} />
