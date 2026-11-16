@@ -17,7 +17,7 @@ const data = {
 export function useData(){return data;}
 export function useAuth(){return {isDemo:!['loading','error','empty','stale','server'].includes(scenario),authUser:{id:'self'}};}
 export function useModeration(){return {available:false,isAdmin:false};}
-export function useRealCommunity(){return {hasLoaded:!['loading','error'].includes(scenario),isLoading:scenario === 'loading',loadError:scenario === 'error',refreshFailed:scenario === 'stale',retry:()=>{(window as any).__retried=true;}};}
+export function useRealCommunity(){return {posts,hasMorePosts:false,isPaging:false,pageError:false,loadOlderPosts:async()=>{},hasLoaded:!['loading','error'].includes(scenario),isLoading:scenario === 'loading',loadError:scenario === 'error',refreshFailed:scenario === 'stale',retry:()=>{(window as any).__retried=true;}};}
 export function useTutorial(){return {start:()=>{}};}
 export function useTutorialEligibility(){return {eligible:false};}
 export function useFirstRoundPrompt(){return {showReminderCard:false,startHosting:()=>{}};}

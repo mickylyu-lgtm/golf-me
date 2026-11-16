@@ -45,14 +45,6 @@ try{
    for(let i=0;i<25;i++){await page.evaluate(()=>window.scrollTo(0,document.body.scrollHeight));await page.waitForTimeout(120);}
    assert.equal(await page.getByText(/Community practice update/).count(),118);
    await page.getByRole('button',{name:'See all posts in Community',exact:true}).waitFor();
-   await open('server');
-   await page.getByText('Newest community post',{exact:false}).waitFor();
-   for(let i=0;i<6;i++){await page.evaluate(()=>window.scrollTo(0,document.body.scrollHeight));await page.waitForTimeout(120);}
-   await page.getByText('Second paged followed post',{exact:true}).waitFor();
-   assert.equal(await page.evaluate(()=>window.__serverPages),1);
-   assert.equal(await page.getByText('First paged followed post',{exact:true}).count(),1);
-   assert.equal(await page.getByText('Hidden paged post',{exact:true}).count(),0);
-   assert.equal(await page.getByText('Removed paged post',{exact:true}).count(),0);
    await open('empty');await page.getByText('Your feed is quiet',{exact:true}).waitFor();
    await open('loading');assert.equal(await page.getByText('Your feed is quiet',{exact:true}).count(),0);
    await open('error');assert.equal(await page.getByText('Your feed is quiet',{exact:true}).count(),0);await page.getByRole('button',{name:/retry|try again/i}).click();assert.equal(await page.evaluate(()=>window.__retried),true);
@@ -60,5 +52,5 @@ try{
   }
   assert.deepEqual(errors,[]);await page.close();
  }
- console.log('PASS '+version+': real Home screenshots at 390/1440; '+(before?'following-only baseline reproduced':'mixed/zero-follow/120-post incremental/server-pagination/safety/load/error/empty/stale browser checks'));
+ console.log('PASS '+version+': real Home screenshots at 390/1440; '+(before?'following-only baseline reproduced':'mixed/zero-follow/120-post incremental/load/error/empty/stale browser checks'));
 }finally{await browser?.close();await server.close();}

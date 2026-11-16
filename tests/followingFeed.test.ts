@@ -207,10 +207,11 @@ test("rowToPost maps an RPC row exactly like a community_posts row (media ordere
 
 // ---- Wiring and migration guards ---------------------------------------
 
-test("Home uses the server feed for real accounts only and keeps a filtered supplemental list", () => {
+test("Home uses the all-author provider pager while Community retains its Following filter", () => {
   const home = read("src/pages/Home.tsx");
-  assert.match(home, /useFollowingFeed\(!isDemo && Boolean\(authUser\)/);
-  assert.match(home, /allPosts\.filter\(\(post\) => followingIds\.has\(post\.authorId\)\)/);
+  assert.match(home, /community.loadOlderPosts/);
+  assert.doesNotMatch(home, /useFollowingFeed/);
+  assert.match(read("src/pages/Community.tsx"), /rankFollowing/);
   const hook = read("src/lib/useFollowingFeed.ts");
   assert.match(hook, /result\.kind === "missing"[\s\S]*markMissing[\s\S]*setState\(LOCAL\)/);
 });

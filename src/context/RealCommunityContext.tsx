@@ -13,6 +13,9 @@ import { PostMediaCapError, isPostMediaCapError } from "../lib/postMediaLedger";
 import { isLikeAlreadyDone, runOncePerId, type PostVoteRow } from "../lib/likeFeedback";
 import type { CommunityPost, PostComment, GolferProfile, PostType, PostCategory } from "../types";
 
+import { CommunityPageGuard, CommunityPreferenceQueue, applyCommunityPreferences, readCommunityOwnedPostIds, readCommunityPage, readCommunityDetails, refreshCommunityRange, mergeCommunityRows } from "../lib/communityPaging";
+import { appendPage, cursorAfter, type FeedCursor } from "../lib/followingFeed";
+
 const COMMUNITY_MEDIA_BUCKET = "community-media";
 
 interface CommentRow {
@@ -67,6 +70,10 @@ interface RealCommunityContextValue {
   refreshFailed: boolean;
   /** Re-runs the fetch (isLoading is true while it runs). */
   retry: () => Promise<void>;
+  hasMorePosts: boolean;
+  isPaging: boolean;
+  pageError: boolean;
+  loadOlderPosts: () => Promise<void>;
   profilesById: Map<string, GolferProfile>;
 
   getPost: (id: string) => CommunityPost | undefined;
@@ -109,6 +116,16 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(false);
   const [loadStatus, setLoadStatus] = useState(INITIAL_LOAD_STATUS);
   const selfId = authUser?.id;
+  const [dataOwner, setDataOwner] = useState<string>();
+  const [hasMorePosts, setHasMorePosts] = useState(false);
+  const [isPaging, setIsPaging] = useState(false);
+  const [pageError, setPageError] = useState(false);
+  const floorRef = useRef<FeedCursor | null>(null);
+  const preferenceQueue = useRef(new CommunityPreferenceQueue());
+  const pendingSaved = useRef(new Map<string, {value:boolean; token:symbol}>());
+  const pendingHidden = useRef(new Map<string, {value:boolean; token:symbol}>());
+  const pagedIdsRef = useRef(new Set<string>());
+  const guard = useRef(new CommunityPageGuard());
   // The account the provider currently shows: a fetch that finishes after a
   // sign-out / account switch must not write the previous account's feed.
   const currentSelfRef = useRef<string | undefined>(undefined);
@@ -127,6 +144,7 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
   // (lib/feedSync.ts createRefetchCoalescer).
   const fetchOnce = useCallback(async () => {
     if (!selfId || currentSelfRef.current !== selfId) return;
+    const ticket = guard.current.snapshot();
     try {
       const [
         { data: posts, error: postsErr },
@@ -137,13 +155,13 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
         { data: saved, error: savedErr },
         { data: hidden, error: hiddenErr },
       ] = await Promise.all([
-        supabase.from("community_posts").select("*").order("created_at", { ascending: false }),
+        supabase.from("community_posts").select("*").order("created_at", { ascending: false }).order("id", { ascending: false }),
         supabase.from("community_post_media").select("*"),
         supabase.from("community_comments").select("*").order("created_at", { ascending: true }),
         supabase.from("community_post_votes").select("post_id, voter_id"),
         supabase.from("community_comment_votes").select("comment_id, voter_id"),
-        supabase.from("saved_posts").select("post_id").eq("owner_id", selfId),
-        supabase.from("hidden_posts").select("post_id").eq("owner_id", selfId),
+        readCommunityOwnedPostIds(supabase, "saved_posts", selfId),
+        readCommunityOwnedPostIds(supabase, "hidden_posts", selfId),
       ]);
       if (postsErr) throw postsErr;
       if (mediaErr) throw mediaErr;
@@ -154,35 +172,38 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
       if (hiddenErr) throw hiddenErr;
       if (currentSelfRef.current !== selfId) return;
 
-      const nextPosts = (posts ?? []) as PostRow[];
-      const nextComments = (comments ?? []) as CommentRow[];
-      setPostRows(nextPosts);
-      setMediaRows((media ?? []) as MediaRow[]);
-      setCommentRows(nextComments);
-      setPostVotes((pVotes ?? []) as { post_id: string; voter_id: string }[]);
-      setCommentVotes((cVotes ?? []) as { comment_id: string; voter_id: string }[]);
-      setSavedPostIds((saved ?? []).map((s) => s.post_id));
-      setHiddenPostIds((hidden ?? []).map((h) => h.post_id));
-
+      const range = await refreshCommunityRange(supabase, (posts ?? []) as PostRow[], floorRef.current);
+      const extraIds = new Set(range.extra.map((p) => p.id));
+      const hydrated = range.posts.filter((p) => extraIds.has(p.id) || pagedIdsRef.current.has(p.id));
+      const details = await readCommunityDetails(supabase, hydrated, selfId);
+      const nextPosts = range.posts;
+      const nextComments = mergeCommunityRows((comments ?? []) as CommentRow[], details.comments, (row) => row.id);
       const ids = new Set<string>();
       for (const p of nextPosts) ids.add(p.author_id);
       for (const c of nextComments) ids.add(c.author_id);
-      if (ids.size > 0) {
-        // Authors by id (golfer_public_profiles): a hidden golfer's posts
-        // still show their name; blocked either way is absent (their posts
-        // are filtered out in DataContext.visiblePosts anyway).
-        const { profiles, error: profErr } = await fetchPublicProfiles(Array.from(ids));
-        if (profErr) throw profErr;
-        if (currentSelfRef.current !== selfId) return;
-        const map = new Map<string, GolferProfile>();
-        for (const g of profiles) map.set(g.id, g);
-        setProfilesById(map);
-      }
+      const { profiles, error: profErr } = await fetchPublicProfiles(Array.from(ids));
+      if (profErr) throw profErr;
+      if (currentSelfRef.current !== selfId || !guard.current.current(ticket)) return;
+      // Commit only after every hydration read succeeds, in the same React batch.
+      setPostRows(nextPosts);
+      setMediaRows(mergeCommunityRows((media ?? []) as MediaRow[], details.media, (row) => row.id));
+      setCommentRows(nextComments.sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)));
+      setPostVotes(mergeCommunityRows((pVotes ?? []) as {post_id:string;voter_id:string}[], details.postVotes, (row) => row.post_id + ":" + row.voter_id));
+      setCommentVotes(mergeCommunityRows((cVotes ?? []) as {comment_id:string;voter_id:string}[], details.commentVotes, (row) => row.comment_id + ":" + row.voter_id));
+      setSavedPostIds(applyCommunityPreferences([...(saved ?? []), ...details.saved].map((row) => row.post_id), pendingSaved.current));
+      setHiddenPostIds(applyCommunityPreferences([...(hidden ?? []), ...details.hidden].map((row) => row.post_id), pendingHidden.current));
+      setProfilesById(new Map(profiles.map((g) => [g.id, g])));
+      floorRef.current = cursorAfter(nextPosts);
+      pagedIdsRef.current = new Set(hydrated.map((p) => p.id));
+      // A short initial response can be a server cap: one empty older read
+      // confirms exhaustion rather than assuming the configured cap is 1000.
+      setHasMorePosts(nextPosts.length > 0);
+      setDataOwner(selfId);
       setLoadStatus((prev) => applyLoadOutcome(prev, true));
     } catch (err) {
       console.error("GolfMe: failed to load Community.", err);
       // State is left as it was: a failed refresh keeps the last good feed.
-      if (currentSelfRef.current === selfId) setLoadStatus((prev) => applyLoadOutcome(prev, false));
+      if (currentSelfRef.current === selfId && guard.current.current(ticket)) setLoadStatus((prev) => applyLoadOutcome(prev, false));
     }
   }, [selfId]);
   const fetchOnceRef = useRef(fetchOnce);
@@ -190,22 +211,66 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
     fetchOnceRef.current = fetchOnce;
   }, [fetchOnce]);
   const [coalescer] = useState(() => createRefetchCoalescer(() => fetchOnceRef.current()));
-  const refetch = useCallback(() => coalescer.request(), [coalescer]);
+  const refetch = useCallback(async () => {
+    const ticket = guard.current.refresh();
+    setIsPaging(true);
+    setPageError(false);
+    try { await coalescer.request(); }
+    finally { if (guard.current.finishRefresh(ticket)) setIsPaging(false); }
+  }, [coalescer]);
+
+  const loadOlderPosts = useCallback(async () => {
+    const cursor = floorRef.current;
+    if (isDemo || !selfId || !hasMorePosts || !cursor) return;
+    const ticket = guard.current.page();
+    if (!ticket) return;
+    setIsPaging(true);
+    setPageError(false);
+    try {
+      const page = await readCommunityPage(supabase, cursor);
+      const details = await readCommunityDetails(supabase, page, selfId);
+      const authorIds = new Set([...page.map((p) => p.author_id), ...details.comments.map((c) => c.author_id)]);
+      const { profiles, error } = await fetchPublicProfiles([...authorIds]);
+      if (error) throw error;
+      if (currentSelfRef.current !== selfId || !guard.current.current(ticket)) return;
+      setPostRows((prev) => appendPage(prev, page));
+      setMediaRows((prev) => mergeCommunityRows(prev, details.media, (row) => row.id));
+      setCommentRows((prev) => mergeCommunityRows(prev, details.comments, (row) => row.id).sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)));
+      setPostVotes((prev) => mergeCommunityRows(prev, details.postVotes, (row) => row.post_id + ":" + row.voter_id));
+      setCommentVotes((prev) => mergeCommunityRows(prev, details.commentVotes, (row) => row.comment_id + ":" + row.voter_id));
+      const pageIds = new Set(page.map((p) => p.id));
+      setSavedPostIds((prev) => applyCommunityPreferences([...prev.filter((id) => !pageIds.has(id)), ...details.saved.map((row) => row.post_id)], pendingSaved.current));
+      setHiddenPostIds((prev) => applyCommunityPreferences([...prev.filter((id) => !pageIds.has(id)), ...details.hidden.map((row) => row.post_id)], pendingHidden.current));
+      setProfilesById((prev) => new Map([...prev, ...profiles.map((g) => [g.id, g] as const)]));
+      if (page.length) floorRef.current = cursorAfter(page);
+      for (const post of page) pagedIdsRef.current.add(post.id);
+      setHasMorePosts(page.length > 0);
+    } catch (error) {
+      if (guard.current.current(ticket)) { console.error("GolfMe: failed to load older Community posts.", error); setPageError(true); }
+    } finally { if (guard.current.finishPage(ticket)) setIsPaging(false); }
+  }, [isDemo, selfId, hasMorePosts]);
 
   useEffect(() => {
-    if (isDemo || !selfId) {
-      setPostRows([]);
-      setMediaRows([]);
-      setCommentRows([]);
-      setPostVotes([]);
-      setCommentVotes([]);
-      setSavedPostIds([]);
-      setHiddenPostIds([]);
-      setProfilesById(new Map());
-      setPendingPosts([]);
-      setLoadStatus(INITIAL_LOAD_STATUS);
-      return;
-    }
+    guard.current.reset(isDemo ? "" : selfId ?? "");
+    floorRef.current = null;
+    pagedIdsRef.current = new Set();
+    pendingSaved.current.clear();
+    pendingHidden.current.clear();
+    setDataOwner(undefined);
+    setHasMorePosts(false);
+    setPageError(false);
+    setIsPaging(false);
+    setPostRows([]);
+    setMediaRows([]);
+    setCommentRows([]);
+    setPostVotes([]);
+    setCommentVotes([]);
+    setSavedPostIds([]);
+    setHiddenPostIds([]);
+    setProfilesById(new Map());
+    setPendingPosts([]);
+    setLoadStatus(INITIAL_LOAD_STATUS);
+    if (isDemo || !selfId) return;
 
     setIsLoading(true);
     setLoadStatus(INITIAL_LOAD_STATUS);
@@ -287,7 +352,7 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
   const posts = useMemo(() => [...pendingPosts, ...postRows].map((row) => rowToPost(row, mediaRows)), [pendingPosts, postRows, mediaRows]);
   const comments = useMemo(() => commentRows.map(rowToComment), [commentRows]);
 
-  const getPost = useCallback((id: string) => posts.find((p) => p.id === id), [posts]);
+  const getPost = useCallback((id: string) => dataOwner === selfId ? posts.find((p) => p.id === id) : undefined, [posts, dataOwner, selfId]);
 
   const createPost = useCallback(
     async (input: CreateRealPostInput): Promise<CommunityPost> => {
@@ -497,46 +562,44 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
   );
 
   const isPostSaved = useCallback((postId: string) => savedPostIds.includes(postId), [savedPostIds]);
-  const savePost = useCallback(
-    async (postId: string) => {
-      if (!selfId || savedPostIds.includes(postId)) return;
-      setSavedPostIds((prev) => [...prev, postId]);
-      const { error } = await supabase.from("saved_posts").insert({ owner_id: selfId, post_id: postId });
-      if (error) {
-        setSavedPostIds((prev) => prev.filter((id) => id !== postId));
-        throw new Error(error.message);
+  const changePostPreference = useCallback(async (table: "saved_posts" | "hidden_posts", postId: string, value: boolean) => {
+    if (!selfId) return;
+    const pending = table === "saved_posts" ? pendingSaved.current : pendingHidden.current;
+    const previous = pending.get(postId)?.value ?? (table === "saved_posts" ? savedPostIds : hiddenPostIds).includes(postId);
+    if (previous === value) return;
+    const change = {value, token: Symbol(postId)};
+    pending.set(postId, change);
+    guard.current.refresh();
+    setIsPaging(true);
+    const update = table === "saved_posts" ? setSavedPostIds : setHiddenPostIds;
+    update((prev) => applyCommunityPreferences(prev, pending));
+    try {
+      await preferenceQueue.current.run(`${selfId}:${table}:${postId}`, async () => {
+        if (currentSelfRef.current !== selfId) return;
+        const { error } = value
+          ? await supabase.from(table).insert({owner_id: selfId, post_id: postId})
+          : await supabase.from(table).delete().eq("owner_id", selfId).eq("post_id", postId);
+        if (error) throw new Error(error.message);
+      });
+    } catch (error) {
+      if (currentSelfRef.current === selfId && pending.get(postId) === change) {
+        update((prev) => applyCommunityPreferences(prev, new Map([[postId, {value: previous}]])));
       }
-    },
-    [selfId, savedPostIds],
-  );
-  const unsavePost = useCallback(
-    async (postId: string) => {
-      if (!selfId) return;
-      setSavedPostIds((prev) => prev.filter((id) => id !== postId));
-      const { error } = await supabase.from("saved_posts").delete().eq("owner_id", selfId).eq("post_id", postId);
-      if (error) {
-        setSavedPostIds((prev) => [...prev, postId]);
-        throw new Error(error.message);
+      throw error;
+    } finally {
+      if (currentSelfRef.current === selfId) {
+        if (pending.get(postId) === change) pending.delete(postId);
+        // Also invalidates any refresh begun while the write was in flight.
+        await refetch();
       }
-    },
-    [selfId],
-  );
-
+    }
+  }, [selfId, refetch, savedPostIds, hiddenPostIds]);
+  const savePost = useCallback((postId: string) => changePostPreference("saved_posts", postId, true), [changePostPreference]);
+  const unsavePost = useCallback((postId: string) => changePostPreference("saved_posts", postId, false), [changePostPreference]);
   const isPostHidden = useCallback((postId: string) => hiddenPostIds.includes(postId), [hiddenPostIds]);
-  const hidePost = useCallback(
-    async (postId: string) => {
-      if (!selfId || hiddenPostIds.includes(postId)) return;
-      setHiddenPostIds((prev) => [...prev, postId]);
-      const { error } = await supabase.from("hidden_posts").insert({ owner_id: selfId, post_id: postId });
-      if (error) {
-        setHiddenPostIds((prev) => prev.filter((id) => id !== postId));
-        throw new Error(error.message);
-      }
-    },
-    [selfId, hiddenPostIds],
-  );
+  const hidePost = useCallback((postId: string) => changePostPreference("hidden_posts", postId, true), [changePostPreference]);
 
-  const commentsForPost = useCallback((postId: string) => comments.filter((c) => c.postId === postId), [comments]);
+  const commentsForPost = useCallback((postId: string) => comments.filter((c) => c.postId === postId).sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)), [comments]);
 
   const createComment = useCallback(
     async (postId: string, text: string, parentCommentId?: string) => {
@@ -581,14 +644,18 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
   );
 
   const value: RealCommunityContextValue = {
-    posts,
-    comments,
+    posts: dataOwner === selfId ? posts : [],
+    comments: dataOwner === selfId ? comments : [],
     isLoading,
     hasLoaded: isDemo || loadStatus.settled,
     loadError: !isDemo && isFirstLoadError(loadStatus),
     refreshFailed: !isDemo && isRefreshError(loadStatus),
     retry,
-    profilesById,
+    profilesById: dataOwner === selfId ? profilesById : new Map(),
+    hasMorePosts: !isDemo && dataOwner === selfId && hasMorePosts,
+    isPaging,
+    pageError,
+    loadOlderPosts,
     getPost,
     createPost,
     deletePost,

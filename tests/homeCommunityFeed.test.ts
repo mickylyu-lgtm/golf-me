@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
-import { feedCutoff, mergeFollowingPosts } from "../src/lib/followingFeed.ts";
+import { feedCutoff } from "../src/lib/followingFeed.ts";
 import { listView } from "../src/lib/loadStatus.ts";
 const read = (p: string) => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const home = read('src/pages/Home.tsx');
@@ -20,9 +20,9 @@ function callback(source: string, name: string) {
   assert.ok(body, name);
   return ts.transpile('const callback = ' + body, { target: ts.ScriptTarget.ES2022 });
 }
-const build = new Function('allPosts', 'golfCalls', 'followingIds', 'currentUser', 'getGolfer', 'isPastRound', 'followedPosts', 'serverHasMore', 'feedCutoff', callback(home, 'feed') + '; return callback();');
+const build = new Function('allPosts', 'golfCalls', 'followingIds', 'currentUser', 'getGolfer', 'isPastRound', 'followedPosts', 'serverHasMore', 'feedCutoff', 'community', callback(home, 'feed') + '; return callback();');
 const post = (id: string, authorId: string, at: number) => ({ id, authorId, createdAt: new Date(at * 1000).toISOString() });
-const run = (posts: unknown[], following: string[] = [], rounds: unknown[] = [], supplemental: unknown[] = [], hasMore = false) => build(posts, rounds, new Set(following), { id: 'self' }, (id: string) => id === 'missing' ? undefined : { id }, (r: { past?: boolean }) => r.past, supplemental, hasMore, feedCutoff);
+const run = (posts: unknown[], following: string[] = [], rounds: unknown[] = [], supplemental: unknown[] = [], hasMore = false) => build(posts, rounds, new Set(following), { id: 'self' }, (id: string) => id === 'missing' ? undefined : { id }, (r: { past?: boolean }) => r.past, supplemental, hasMore, feedCutoff, {posts});
 
 test('newer non-followed and own posts appear before older followed posts', () => {
   assert.deepEqual(run([post('old', 'friend', 1), post('new', 'stranger', 3), post('own', 'self', 2)], ['friend']).map((x: {key:string}) => x.key), ['post-new','post-own','post-old']);
@@ -77,19 +77,12 @@ test('existing database boundaries remain authoritative: removed posts, hidden s
 });
 
 
-test('RPC pages supplement all visible community posts without duplicates or a following cutoff', () => {
-  const context = [post('new','stranger',9),post('older','stranger',1),post('friend','friend',8)];
-  const supplemental = mergeFollowingPosts({serverPosts:[post('friend','friend',8),post('old-followed','friend',0)],contextPosts:context,contextLoaded:true,followingIds:new Set(['friend']),isVisible:()=>true});
-  const result = run(context,['friend'],[],supplemental,true);
-  assert.deepEqual(result.map((x: {key:string}) => x.key),['post-new','post-friend','post-older','post-old-followed']);
-  assert.equal(result.find((x: {key:string}) => x.key === 'post-friend').post,context[2]);
-});
-test('server mode retains community posts older than its page while preserving round cutoff and release', () => {
-  const context = [post('older-community','stranger',1)];
-  const server = [post('followed','friend',8)];
+test('all-author pager keeps loaded community posts visible while preserving round cutoff and release', () => {
+  const context = [post('community','stranger',8)];
   const rounds = [{id:'older-round',hostId:'friend',status:'open',joinedGolferIds:[],createdAt:new Date(2000).toISOString()}];
-  assert.deepEqual(run(context,['friend'],rounds,server,true).map((x: {key:string}) => x.key),['post-followed','post-older-community']);
-  assert.deepEqual(run(context,['friend'],rounds,server,false).map((x: {key:string}) => x.key),['post-followed','round-older-round','post-older-community']);
-  assert.match(home,/if \(feedShown \+ FEED_STEP >= feedLength\) loadMoreServer\(\)/);
+  assert.deepEqual(run(context,['friend'],rounds,[],true).map((x: {key:string}) => x.key),['post-community']);
+  assert.deepEqual(run(context,['friend'],rounds,[],false).map((x: {key:string}) => x.key),['post-community','round-older-round']);
+  assert.match(home,/community.loadOlderPosts/);
+  assert.match(home,/community.pageError/);
   assert.match(home,/const moreFeed = feedShown < feed.length \|\| serverHasMore/);
 });

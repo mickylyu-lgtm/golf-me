@@ -28,9 +28,7 @@ import { useFirstRoundPrompt } from "../context/FirstRoundPromptContext";
 import { clubLabel } from "../lib/clubLabel";
 import { useShareActions } from "../lib/useShareActions";
 import { homeFocus, readOnboardingIntents } from "../lib/onboardingIntent";
-import { rowToPost } from "../lib/communityPostRow";
-import { feedCutoff, mergeFollowingPosts } from "../lib/followingFeed";
-import { useFollowingFeed } from "../lib/useFollowingFeed";
+import { feedCutoff } from "../lib/followingFeed";
 import type { CommunityPost, GolfCall, GolferProfile } from "../types";
 
 const HOME_RADIUS_MILES = 25;
@@ -95,7 +93,7 @@ function SmallPrompt({ icon, title, detail, onClick }: { icon: ReactNode; title:
 }
 
 export function Home() {
-  const { currentUser, golfCalls, visiblePosts, caddieAnalyses, followingGolfers, getGolfer, isBlockedEitherWay, isPostHidden } = useData();
+  const { currentUser, golfCalls, visiblePosts, caddieAnalyses, followingGolfers, getGolfer } = useData();
   const { isDemo, authUser } = useAuth();
   const { t, locale } = useLocale();
   const navigate = useNavigate();
@@ -158,43 +156,18 @@ export function Home() {
     return { nearby: nearby.length > 0, rounds: nearby.length > 0 ? newest(nearby) : newest(openCalls) };
   }, [openCalls]);
 
-  // All loaded visible Community posts, plus paged followed posts and round
-  // activity. The existing RPC only supplements older followed posts; it
-  // never gates or delays the community posts already available to us.
-
+  // One authoritative provider owns pages, author/media hydration and refreshes.
+  // Following only selects round activity; every eligible post joins this feed.
   const followingIds = useMemo(() => new Set(followingGolfers.map((g) => g.id)), [followingGolfers]);
-  const followKey = useMemo(() => [...followingIds].sort().join(","), [followingIds]);
-  const serverFeed = useFollowingFeed(!isDemo && Boolean(authUser), authUser?.id, followKey);
   const community = useRealCommunity();
-  const { hasLoaded: communityLoaded, loadError: communityLoadError, refreshFailed: communityRefreshFailed } = community;
   const allPosts = useMemo(
-    () => [...visiblePosts()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    () => [...visiblePosts()].sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id)),
     [visiblePosts],
   );
-  const serverPosts = useMemo(() => serverFeed.rows.map((row) => rowToPost(row, serverFeed.media)), [serverFeed.rows, serverFeed.media]);
-  const usingServer = serverFeed.mode === "server";
-  const followedPosts = useMemo(
-    () =>
-      usingServer
-        ? mergeFollowingPosts({
-            serverPosts,
-            contextPosts: allPosts,
-            contextLoaded: communityLoaded && !communityLoadError && !communityRefreshFailed,
-            followingIds,
-            isVisible: (post) => !isBlockedEitherWay(post.authorId) && !isPostHidden(post.id),
-          })
-        : allPosts.filter((post) => followingIds.has(post.authorId)),
-    [usingServer, serverPosts, allPosts, communityLoaded, communityLoadError, communityRefreshFailed, followingIds, isBlockedEitherWay, isPostHidden],
-  );
-  const serverHasMore = usingServer && serverFeed.hasMore;
+  const serverHasMore = !isDemo && community.hasMorePosts;
   const feed = useMemo<FeedItem[]>(() => {
     const items: FeedItem[] = [];
-    // Context copies win, and the existing server merge removes stale,
-    // blocked, hidden and unfollowed supplemental posts before they reach here.
-    const postsById = new Map(followedPosts.map((post) => [post.id, post]));
-    for (const post of allPosts) postsById.set(post.id, post);
-    for (const post of postsById.values()) items.push({ kind: "post", key: `post-${post.id}`, at: post.createdAt, post });
-
+    for (const post of allPosts) items.push({ kind: "post", key: `post-${post.id}`, at: post.createdAt, post });
     for (const call of golfCalls) {
       if (call.hostId === currentUser.id || call.status === "cancelled" || isPastRound(call)) continue;
       const hosting = followingIds.has(call.hostId);
@@ -205,21 +178,22 @@ export function Home() {
     items.sort((a, b) => b.at.localeCompare(a.at));
     // Preserve the existing round-activity cutoff while server pages remain.
     // Loaded community posts must be visible regardless of the followed page.
-    const cutoff = feedCutoff(followedPosts, serverHasMore);
+    const cutoff = feedCutoff(community.posts, serverHasMore);
     return items.filter((item) => item.kind === "post" || cutoff === null || item.at >= cutoff);
-  }, [allPosts, followedPosts, serverHasMore, golfCalls, followingIds, currentUser.id, getGolfer]);
+  }, [allPosts, community.posts, serverHasMore, golfCalls, followingIds, currentUser.id, getGolfer]);
 
-  const view = listView({ count: feed.length, isDemo, hasLoaded: community.hasLoaded, loadError: community.loadError, isLoading: community.isLoading });
+  const view = feed.length === 0 && community.pageError ? "error" : listView({ count: feed.length, isDemo, hasLoaded: community.hasLoaded && !serverHasMore, loadError: community.loadError, isLoading: community.isLoading || community.isPaging });
 
   const [feedShown, setFeedShown] = useState(FEED_STEP);
+  useEffect(() => setFeedShown(FEED_STEP), [currentUser.id]);
   const shownFeed = feed.slice(0, feedShown);
   const moreFeed = feedShown < feed.length || serverHasMore;
-  const loadMoreServer = serverFeed.loadMore;
+  const loadMoreServer = community.loadOlderPosts;
   const feedLength = feed.length;
   const feedEndRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const end = feedEndRef.current;
-    if (!end || !moreFeed || typeof IntersectionObserver === "undefined") return;
+    if (!end || !moreFeed || community.isPaging || community.pageError || typeof IntersectionObserver === "undefined") return;
     // Starts loading the next step a little before the end is on screen;
     // once the loaded items run out, fetches the next server page.
     const observer = new IntersectionObserver(
@@ -228,13 +202,13 @@ export function Home() {
         // No state change while everything loaded is shown and a page is on
         // its way: the page's arrival (feedLength) re-runs this effect.
         if (feedShown < feedLength) setFeedShown((n) => n + FEED_STEP);
-        if (feedShown + FEED_STEP >= feedLength) loadMoreServer();
+        if (serverHasMore && feedShown + FEED_STEP >= feedLength) void loadMoreServer();
       },
       { rootMargin: "0px 0px 600px 0px" },
     );
     observer.observe(end);
     return () => observer.disconnect();
-  }, [moreFeed, feedShown, feedLength, serverFeed.loading, loadMoreServer]);
+  }, [moreFeed, serverHasMore, feedShown, feedLength, community.isPaging, community.pageError, loadMoreServer]);
 
   // Self-resolving nudge: only while under the same threshold Auto-Match
   // gates on, so it disappears without separate dismiss state.
@@ -354,7 +328,7 @@ export function Home() {
         {view === "loading" ? (
           <GolfMeLoader className="py-12" />
         ) : view === "error" ? (
-          <LoadErrorState onRetry={community.retry} />
+          <LoadErrorState onRetry={community.pageError ? community.loadOlderPosts : community.retry} />
         ) : feed.length > 0 ? (
           <div className="flex flex-col gap-3">
             {shownFeed.map((item) =>
@@ -376,7 +350,7 @@ export function Home() {
                 </div>
               ),
             )}
-            {moreFeed ? <div ref={feedEndRef} aria-hidden="true" className="h-px" /> : seeAllPosts}
+            {!moreFeed && seeAllPosts}
           </div>
         ) : (
           <div className="flex flex-col gap-4">
@@ -400,6 +374,8 @@ export function Home() {
 
           </div>
         )}
+        {feed.length > 0 && community.pageError && <LoadErrorState onRetry={community.loadOlderPosts} />}
+        {moreFeed && <div ref={feedEndRef} aria-hidden="true" className="h-px" />}
       </section>
     </div>
   );
