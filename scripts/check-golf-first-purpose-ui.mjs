@@ -20,14 +20,9 @@ try {
     await context.addInitScript(locale => { localStorage.setItem("golfme:locale", locale); }, locale);
     const page = await context.newPage(); const errors = [];
     page.on("pageerror", error => errors.push(error.message));
-    await page.goto(base + "/onboarding");
-    await page.getByRole("heading", { name: dict["onboarding.screen1Title"], exact: true }).waitFor();
-    ok(await page.getByText(dict["onboarding.screen1Body"], { exact: true }).isVisible(), "purpose on first screen");
-    equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, "onboarding no overflow");
-    await page.getByRole("button", { name: dict["onboarding.next"], exact: true }).click();
-    await page.getByRole("heading", { name: dict["onboarding.screen2Title"], exact: true }).waitFor();
-    await page.getByRole("button", { name: dict["common.skip"], exact: true }).click();
-    await page.waitForURL(base + "/signup");
+    // The /onboarding intro carousel was removed (2026-11-16); signup itself
+    // carries the golf-first purpose line.
+    await page.goto(base + "/signup");
     await page.getByText(dict["auth.welcome.subheadline"], { exact: true }).filter({ visible: true }).waitFor();
     ok(true, "direct signup retains golf purpose");
     equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, "signup no overflow");

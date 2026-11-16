@@ -12,10 +12,10 @@
 export const NAV_RELATED_PREFIXES: Readonly<Record<string, readonly string[]>> = {
   "/": [],
   "/messages": ["/messages"],
-  // Play merges Golf Calls (browse, host, detail), Golfers (/discover),
-  // Auto-Match, Tee Times and course pages -- all of them reached from
+  // Play merges Golf Calls (browse, host, detail), Golfers (/find?tab=golfers),
+  // Auto-Match and course pages -- all of them reached from
   // Find or its Home shortcuts, none a nav destination of its own.
-  "/find": ["/find", "/golf-calls", "/auto-match", "/discover", "/tee-times", "/courses"],
+  "/find": ["/find", "/golf-calls", "/auto-match", "/courses"],
   "/caddie": ["/caddie"],
   // Me: the profile sub-pages plus the screens only reachable from Me
   // (Settings and its Help/About, My Golf, saved posts, coach reviews).

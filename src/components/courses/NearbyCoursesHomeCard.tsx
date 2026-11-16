@@ -8,7 +8,7 @@ import { LocationPicker } from "../location/LocationPicker";
 import { useNearbyCourses } from "../../lib/useCourseSearch";
 import { resolveTravelRadiusMiles } from "../../lib/matchPreferences";
 import { formatDistanceMiles } from "../../lib/geo";
-import { matchSupportedTeeTimeCourse } from "../../services/teeTimes/types";
+import { matchHandpickedCourse } from "../../lib/handpickedCourses";
 import { CourseThumb, PhotoAttribution, SatelliteAttribution } from "./CourseThumb";
 import { useCourseImageMode } from "../../lib/coursePhotos";
 import { satelliteImageryEnabled } from "../../lib/courseImagery";
@@ -84,7 +84,7 @@ export function NearbyCoursesHomeCard() {
         {results.slice(0, HOME_PREVIEW_COUNT).map((r) => {
           // Same rule as the full Nearby screen: every course opens a page
           // (see openCourse).
-          const supported = matchSupportedTeeTimeCourse(r.name);
+          const supported = matchHandpickedCourse(r.name);
           const content = (
             <>
               <CourseThumb name={r.name} courseId={r.id} imageUrl={supported?.heroImageUrl} lat={r.lat} lng={r.lng} bounds={r.bounds} country={r.country} sizePx={48} className="h-12 w-12" />
@@ -101,7 +101,7 @@ export function NearbyCoursesHomeCard() {
           return (
             <button
               key={r.id ?? r.name}
-              onClick={() => openCourse(navigate, r, supported?.id)}
+              onClick={() => openCourse(navigate, r)}
               className="flex w-full items-center gap-3 rounded-2xl border border-slate-100 bg-white p-3.5 text-left transition-colors duration-150 hover:border-fairway-300"
             >
               {content}

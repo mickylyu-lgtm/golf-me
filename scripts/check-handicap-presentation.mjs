@@ -91,7 +91,7 @@ try {
       await dialog.waitFor({ state: "detached" });
       equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, "page no horizontal overflow");
     }
-    await page.goto(base + "/discover");
+    await page.goto(base + "/find?tab=golfers");
     await page.locator(".gm-handicap").first().waitFor();
     const cardStyles = await verifyStyles(page.locator(".gm-handicap"), appearance);
     equal([...new Set(cardStyles.map(s => s.tone))].sort(), ["forest", "gold", "neutral", "sage", "teal", "violet"], "cards show all six bands");

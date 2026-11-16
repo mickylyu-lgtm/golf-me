@@ -6,7 +6,7 @@ import { aerialCredit, courseSatelliteImageUrl, courseTileSource } from "../../l
 import { useBestCoursePhoto, type CoursePhoto } from "../../lib/courseImageryClient";
 import { courseMediaTabs, overviewAvailable, pickCourseMediaTab, type MediaTab } from "../../lib/courseImageSelect";
 import { POINT_HERO_ZOOM } from "../../../supabase/functions/_shared/courseBounds.ts";
-import { matchSupportedTeeTimeCourse } from "../../services/teeTimes/types";
+import { matchHandpickedCourse } from "../../lib/handpickedCourses";
 import { CourseOverviewMap } from "./CourseOverviewMap";
 import { supportsWebGL } from "../../lib/webgl";
 import { FittedSatelliteTiles, type StillDetail } from "./SatelliteTiles";
@@ -81,7 +81,7 @@ export function CourseMedia({ course }: { course: DisplayCourseResult }) {
   // Real courses: the detail comes from course-photos (warm, stored once).
   const useServer = !isDemo && Boolean(course.id);
 
-  const handpicked = matchSupportedTeeTimeCourse(course.name);
+  const handpicked = matchHandpickedCourse(course.name);
   const handpickedUrl = handpicked?.heroImageUrl;
   const { photo, settled, bounds } = useBestCoursePhoto(course, "hero", !handpickedUrl);
 

@@ -17,7 +17,7 @@ import type { DisplayCourseResult } from "../lib/useCourseSearch";
 import { resolveTravelRadiusMiles } from "../lib/matchPreferences";
 import { formatDistanceMiles } from "../lib/geo";
 import type { PlayingArea } from "../lib/geo";
-import { TEE_TIMES_VISIBLE, matchSupportedTeeTimeCourse } from "../services/teeTimes/types";
+import { matchHandpickedCourse } from "../lib/handpickedCourses";
 import { goBack } from "../lib/goBack";
 import { initialBrowseArea, withBrowseArea } from "../lib/browseArea";
 import { loadMapCamera, prefersReducedMotion, saveMapCamera } from "../lib/courseMapCamera";
@@ -79,7 +79,7 @@ function CardThumbAndName({ course }: { course: DisplayCourseResult }) {
       <CourseThumb
         name={course.name}
         courseId={course.id}
-        imageUrl={matchSupportedTeeTimeCourse(course.name)?.heroImageUrl}
+        imageUrl={matchHandpickedCourse(course.name)?.heroImageUrl}
         lat={course.lat}
         lng={course.lng}
         bounds={course.bounds}
@@ -458,12 +458,6 @@ export function CourseMap() {
   }, [selectedKey, mappedKeys]);
 
   function openSheet(course: DisplayCourseResult) {
-    const supportedId = TEE_TIMES_VISIBLE ? matchSupportedTeeTimeCourse(course.name)?.id : undefined;
-    if (supportedId) {
-      // Hand-picked courses keep their own tee-time page (official booking link).
-      navigate(`/tee-times/${supportedId}`);
-      return;
-    }
     navigate("/courses/map", { state: { area, sheet: courseKey(course) } satisfies CourseMapState });
   }
   // The sheet is its own history entry: closing it is a plain Back.

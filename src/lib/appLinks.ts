@@ -87,8 +87,6 @@ const INCLUDED_PATHS = [
   "/community/*",
   "/saved-posts",
   "/coach-reviews",
-  "/tee-times",
-  "/tee-times/*",
   "/courses/*",
   "/caddie",
   "/caddie/*",

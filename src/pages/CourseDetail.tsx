@@ -13,9 +13,7 @@ export interface CourseDetailState {
   course: DisplayCourseResult;
 }
 
-// Course page for any nearby course that isn't one of the hand-picked
-// SUPPORTED_TEE_TIME_COURSES (those keep /tee-times/:id with their official
-// booking link). Micky, 2026-10-23: every course should open a page with at
+// Course page for every nearby course. Micky, 2026-10-23: every course should open a page with at
 // least an image. GolfMe has no booking link for these, so the page never
 // pretends to: Directions, a plain web search for tee times, and Host a
 // Round with this course filled in. The body lives in CourseDetailContent,

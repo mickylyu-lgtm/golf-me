@@ -1,18 +1,15 @@
 import { useEffect } from "react";
-import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { CalendarClock, ChevronRight } from "lucide-react";
+import { useLocation, useSearchParams } from "react-router-dom";
 import { GolfCalls } from "./GolfCalls";
 import { Discover } from "./Discover";
 import { useLocale } from "../i18n/LocaleContext";
 import { useSessionState } from "../lib/useSessionState";
 import { FIND_TAB_PARAM, FIND_TAB_STORAGE_KEY, isFindTab, resolveFindTab } from "../lib/findTab";
 import type { FindTab } from "../lib/findTab";
-import { TEE_TIMES_VISIBLE } from "../services/teeTimes/types";
 
 export function Find() {
   const [rememberedTab, setTab] = useSessionState<FindTab>(FIND_TAB_STORAGE_KEY, "rounds", isFindTab);
   const { t } = useLocale();
-  const navigate = useNavigate();
   const { pathname } = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -73,23 +70,7 @@ export function Find() {
         </button>
       </div>
 
-      {/* Secondary now that Home has its own primary Tee Times entry point
-          (see Home.tsx) — a plain small link, not a card, so it never
-          competes with the Rounds/Golfers tab content below it. Still
-          visible on both tabs since it's a general utility, not specific
-          to either. */}
-      {TEE_TIMES_VISIBLE && (
-        <button
-          onClick={() => navigate("/tee-times")}
-          className="flex items-center gap-1.5 self-start text-sm font-semibold text-fairway-700 transition-colors duration-200 hover:text-fairway-800"
-        >
-          <CalendarClock size={14} />
-          {t("teeTimes.title")}
-          <ChevronRight size={14} />
-        </button>
-      )}
-
-      {tab === "rounds" ? <GolfCalls embedded /> : <Discover embedded />}
+      {tab === "rounds" ? <GolfCalls embedded /> : <Discover />}
     </div>
   );
 }

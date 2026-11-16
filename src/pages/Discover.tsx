@@ -30,11 +30,9 @@ import {
 } from "../lib/discoverFilters";
 import type { SortMode } from "../lib/discoverFilters";
 
-interface DiscoverProps {
-  embedded?: boolean;
-}
-
-export function Discover({ embedded = false }: DiscoverProps) {
+// The Golfers tab inside Play (Find.tsx). The old standalone /discover page
+// was removed (2026-11-16); that URL now redirects to Play > Golfers.
+export function Discover() {
   const { currentUser, visibleGolfers } = useData();
   const { isDemo } = useAuth();
   const { t } = useLocale();
@@ -84,13 +82,6 @@ export function Discover({ embedded = false }: DiscoverProps) {
 
   return (
     <div className="flex flex-col gap-5">
-      {!embedded && (
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">{t("discover.title")}</h1>
-          <p className="text-sm text-slate-500">{t("discover.subtitle")}</p>
-        </div>
-      )}
-
       {/* A fast entry point into FindFriends' own dedicated golfer-search
           screen (search_golfer_profiles(), by name/username) — not a second
           search implementation. This used to be a real inline <input> that
@@ -116,7 +107,7 @@ export function Discover({ embedded = false }: DiscoverProps) {
           inside Play that's a tab switch, so it replaces rather than adds a
           Back step, same as tapping the Rounds tab. */}
       <button
-        onClick={() => navigate(findTabPath("rounds"), { replace: embedded })}
+        onClick={() => navigate(findTabPath("rounds"), { replace: true })}
         className="flex items-center justify-between gap-3 rounded-2xl border border-fairway-200 bg-fairway-50 px-4 py-3 text-left transition hover:border-fairway-300"
       >
         <span className="flex items-center gap-2">
@@ -195,7 +186,7 @@ export function Discover({ embedded = false }: DiscoverProps) {
                 <Button size="sm" icon={<Share2 size={14} />} onClick={() => void shareApp()}>
                   {t("common.inviteFriend")}
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => navigate(findTabPath("rounds"), { replace: embedded })}>
+                <Button size="sm" variant="outline" onClick={() => navigate(findTabPath("rounds"), { replace: true })}>
                   {t("find.seeOpenRounds")}
                 </Button>
               </div>

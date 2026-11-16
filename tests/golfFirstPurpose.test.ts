@@ -16,13 +16,12 @@ test("all six languages explain golf-first purpose and unwanted-contact boundari
   const keys = Object.keys(en).filter(k => k.startsWith("guidelines."));
   assert.equal(keys.length, 10);
   for (const [locale, dict] of Object.entries({ en, es, ja, ko, zhCN, zhTW })) {
-    for (const key of [...keys, "onboarding.screen1Title", "onboarding.screen1Body", "auth.welcome.headline", "auth.welcome.subheadline", "golferProfile.inviteToPlay", "community.subtitle"]) {
+    for (const key of [...keys, "auth.welcome.headline", "auth.welcome.subheadline", "golferProfile.inviteToPlay", "community.subtitle"]) {
       const text = (dict as Record<string, string>)[key];
       assert.ok(text?.trim(), locale + ": " + key);
       if (locale !== "en") assert.notEqual(text, (en as Record<string, string>)[key], locale + " must not silently fall back to English");
     }
   }
-  assert.match(en["onboarding.screen1Body"], /golf community, not a dating app/);
   assert.match(en["auth.welcome.subheadline"], /golf community, not a dating app/);
   assert.match(en["guidelines.unwantedContact"], /unwanted romantic or sexual messages/);
   assert.match(en["guidelines.unwantedContact"], /asks you to stop/);

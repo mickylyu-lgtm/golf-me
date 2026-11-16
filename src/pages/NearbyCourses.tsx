@@ -4,7 +4,6 @@ import { ArrowLeft, ChevronRight, LocateFixed, Map as MapIcon, MapPin, Search } 
 import { useData } from "../context/DataContext";
 import { useLocale } from "../i18n/LocaleContext";
 import { Button } from "../components/ui/Button";
-import { Badge } from "../components/ui/Badge";
 import { EmptyState } from "../components/ui/EmptyState";
 import { CourseSearchStatus } from "../components/ui/CourseSearchStatus";
 import { LocationPicker } from "../components/location/LocationPicker";
@@ -12,7 +11,7 @@ import { useNearbyCourses } from "../lib/useCourseSearch";
 import { resolveTravelRadiusMiles } from "../lib/matchPreferences";
 import { formatDistanceMiles } from "../lib/geo";
 import type { PlayingArea } from "../lib/geo";
-import { TEE_TIMES_VISIBLE, matchSupportedTeeTimeCourse } from "../services/teeTimes/types";
+import { matchHandpickedCourse } from "../lib/handpickedCourses";
 import { CourseImageModeToggle, CourseThumb, PhotoAttribution, SatelliteAttribution } from "../components/courses/CourseThumb";
 import { useCourseImageMode } from "../lib/coursePhotos";
 import { satelliteImageryEnabled } from "../lib/courseImagery";
@@ -116,14 +115,13 @@ export function NearbyCourses() {
           {!loading && !error && results.length > 0 && (
             <div className="flex flex-col gap-3">
               {results.map((r) => {
-                const supported = matchSupportedTeeTimeCourse(r.name);
+                const supported = matchHandpickedCourse(r.name);
                 const content = (
                   <>
                     <CourseThumb name={r.name} courseId={r.id} imageUrl={supported?.heroImageUrl} lat={r.lat} lng={r.lng} bounds={r.bounds} country={r.country} sizePx={56} className="h-14 w-14" />
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-1.5">
                         <span className="truncate text-sm font-bold text-slate-900">{r.name}</span>
-                        {TEE_TIMES_VISIBLE && supported && <Badge tone="fairway">{t("nearbyCourses.teeTimesAvailable")}</Badge>}
                       </span>
                       {r.area && <span className="block truncate text-xs text-slate-500">{r.area}</span>}
                     </span>
@@ -133,16 +131,13 @@ export function NearbyCourses() {
                     <ChevronRight size={16} className="shrink-0 text-slate-400" />
                   </>
                 );
-                // Every course opens a page: the hand-picked ones keep their
-                // tee-time page with the official booking link; the rest get
-                // the general course page (satellite image, directions,
-                // tee-time web search, host here), which never claims a
-                // booking GolfMe doesn't have (same truthfulness rule as
-                // Phase 8).
+                // Every course opens the general course page (satellite
+                // image, directions, tee-time web search, host here), which
+                // never claims a booking GolfMe doesn't have.
                 return (
                   <button
                     key={r.id ?? r.name}
-                    onClick={() => openCourse(navigate, r, supported?.id)}
+                    onClick={() => openCourse(navigate, r)}
                     className="flex w-full items-center gap-3 rounded-2xl border border-slate-100 bg-white p-3.5 text-left transition-colors duration-150 hover:border-fairway-300"
                   >
                     {content}

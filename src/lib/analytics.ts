@@ -4,8 +4,6 @@ import { supabase } from "./supabase";
 // optional properties, which are only ever logged in dev, never sent).
 //
 // Names say exactly what fired them:
-//   intro_started / intro_completed  the signed-out intro carousel (Next on
-//                                    the first screen / its last Next or Skip)
 //   onboarding_completed             Ready's "Start golfing", i.e. after the
 //                                    profile was set up (once per account)
 //   round_viewed / round_joined      every round page view / every
@@ -33,8 +31,6 @@ export type AnalyticsEvent =
   | "code_requested"
   | "auth_completed"
   | "auth_failed"
-  | "intro_started"
-  | "intro_completed"
   | "onboarding_completed"
   | "location_selected"
   | "profile_basic_completed"

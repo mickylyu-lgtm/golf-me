@@ -84,7 +84,6 @@ const ROUTED: [string, string][] = [
   ["/community/new", "/community/new"],
   ["/saved-posts", "/saved-posts"],
   ["/coach-reviews", "/coach-reviews"],
-  ["/tee-times", "/tee-times"],
   ["/courses/nearby", "/courses/nearby"],
   ["/courses/map", "/courses/map"],
   ["/courses/geo%3A123", "/courses/geo%3A123"],

@@ -171,8 +171,6 @@ const BOOKING_KEYS = [
   "golfCallDetail.foursomeFull",
   "golfCallDetail.joinedInstantToast",
   "coursePage.teeTimesNote",
-  "teeTimes.subtitle",
-  "teeTimes.liveInsideGolfMe",
 ];
 const BANNED_EN = /verif|confirmed|guarantee|live availab|\byet\b|✓/i;
 

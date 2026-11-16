@@ -37,7 +37,7 @@ import { isEntryEnabled } from "./components/loading/entryFlag";
 import { Auth } from "./pages/Auth";
 import { ProfileSetup } from "./pages/ProfileSetup";
 import { Home } from "./pages/Home";
-import { Discover } from "./pages/Discover";
+import { findTabPath } from "./lib/findTab";
 import { Find } from "./pages/Find";
 import { Caddie } from "./pages/Caddie";
 import { CaddieLocaleScope } from "./components/caddie/CaddieLocaleScope";
@@ -62,10 +62,7 @@ import { isOnboardingFinishing } from "./lib/onboardingHandoff";
 // Code-split routes (Health Audit P3-4): pages not needed on first open load
 // on demand. Main tabs, detail pages reached from push/deep links that are
 // already hot, and the frozen DM thread stay in the main bundle.
-const Onboarding = lazyPage(() => import("./pages/Onboarding"), "Onboarding");
 const Ready = lazyPage(() => import("./pages/Ready"), "Ready");
-const TeeTimes = lazyPage(() => import("./pages/TeeTimes"), "TeeTimes");
-const TeeTimeCourseDetail = lazyPage(() => import("./pages/TeeTimeCourseDetail"), "TeeTimeCourseDetail");
 const NearbyCourses = lazyPage(() => import("./pages/NearbyCourses"), "NearbyCourses");
 const CourseMap = lazyPage(() => import("./pages/CourseMap"), "CourseMap");
 const CourseDetail = lazyPage(() => import("./pages/CourseDetail"), "CourseDetail");
@@ -437,7 +434,8 @@ export default function App() {
                 <Route element={<GuestOnly />}>
                   <Route path="/welcome" element={<Welcome />} />
                   <Route path="/splash" element={isEntryEnabled() ? <Navigate to="/login" replace /> : <Splash />} />
-                  <Route path="/onboarding" element={<Onboarding />} />
+                  {/* The old intro carousel was removed (2026-11-16); nothing linked to it. */}
+                  <Route path="/onboarding" element={<Navigate to="/welcome" replace />} />
                   <Route path="/login" element={<Auth mode="login" />} />
                   <Route path="/signup" element={<Auth mode="signup" />} />
                   <Route path="/profile-setup" element={<ProfileSetup />} />
@@ -445,7 +443,8 @@ export default function App() {
 
                 <Route element={<AuthedLayout />}>
                   <Route path="/" element={<Home />} />
-                  <Route path="/discover" element={<Discover />} />
+                  {/* Golfers live in Play; the old standalone page's URL lands there. */}
+                  <Route path="/discover" element={<Navigate to={findTabPath("golfers")} replace />} />
                   <Route path="/find" element={<Find />} />
                   <Route path="/auto-match" element={<AutoMatch />} />
                   <Route path="/golf-calls" element={<GolfCalls />} />
@@ -483,8 +482,8 @@ export default function App() {
                       it calls). */}
                   <Route path="/admin/coach-reviewers" element={<AdminReviewers />} />
                   <Route path="/admin/dashboard" element={<AdminDashboard />} />
-                  <Route path="/tee-times" element={<TeeTimes />} />
-                  <Route path="/tee-times/:courseId" element={<TeeTimeCourseDetail />} />
+                  {/* Tee Times was removed (2026-11-16); old links land on the course list. */}
+                  <Route path="/tee-times/*" element={<Navigate to="/courses/nearby" replace />} />
                   <Route path="/courses/nearby" element={<NearbyCourses />} />
                   <Route path="/courses/map" element={<CourseMap />} />
                   <Route path="/courses/:courseId" element={<CourseDetail />} />

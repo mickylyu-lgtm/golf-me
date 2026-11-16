@@ -16,7 +16,7 @@ export type ThumbSource =
 export interface ThumbInput {
   /** The golfer's "Photo | Satellite" choice. */
   mode: "photo" | "satellite";
-  /** A hand-verified photo (SUPPORTED_TEE_TIME_COURSES). */
+  /** A hand-verified photo (HANDPICKED_COURSES). */
   handpickedUrl?: string;
   /** The best real photo found (Google Places, else Wikimedia). */
   photo?: { url: string; source: PhotoSource } | null;

@@ -14,9 +14,6 @@ const PLAY_ROUTES = [
   "/golf-calls/new",
   "/golf-calls/3f1c2a9e-8b7d-4c6e-9a51-0d2e4f6a8b10",
   "/auto-match",
-  "/discover",
-  "/tee-times",
-  "/tee-times/bethpage-black",
   "/courses/nearby",
   "/courses/abc123",
 ];

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { Activity, ArrowRight, CalendarClock, Plus, Search, Share2, Target, UserPlus, Users } from "lucide-react";
+import { Activity, ArrowRight, Plus, Search, Share2, Target, UserPlus, Users } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
 import { useLocale } from "../i18n/LocaleContext";
@@ -11,7 +11,6 @@ import { PostCard } from "../components/community/PostCard";
 import { PostFeedGrid } from "../components/community/PostFeedGrid";
 import { AddToHomeScreenPrompt } from "../components/layout/AddToHomeScreenPrompt";
 import { Button } from "../components/ui/Button";
-import { Badge } from "../components/ui/Badge";
 import { CLICKABLE_CARD_CLASS } from "../components/ui/cardStyles";
 import { firstName, greetingKeyForHour, isThisWeekend } from "../lib/greeting";
 import { MIN_PREFERENCES_FOR_AUTO_MATCH, selectedPreferenceCount } from "../lib/preferenceMatch";
@@ -20,7 +19,6 @@ import { isPastRound } from "../lib/golfCall";
 import { COMMUNITY_TUTORIAL_ID } from "../lib/tutorialSteps";
 import { findTabPath } from "../lib/findTab";
 import { quickAutoMatchSearch } from "../lib/roundSearchParams";
-import { SUPPORTED_TEE_TIME_COURSES, TEE_TIMES_VISIBLE } from "../services/teeTimes/types";
 import { NearbyCoursesHomeCard } from "../components/courses/NearbyCoursesHomeCard";
 import { HostReminderCard } from "../components/onboarding/HostReminderCard";
 import { useFirstRoundPrompt } from "../context/FirstRoundPromptContext";
@@ -281,35 +279,12 @@ export function Home() {
         />
         </div>
 
-        {/* GolfMe's tee-time integration is deliberately narrow — see
-            SUPPORTED_TEE_TIME_COURSES — so this badge is always the real,
-            current count, never a hardcoded "2" that would go stale the
-            moment a third course is added. */}
-        {TEE_TIMES_VISIBLE && (
-          <button
-            onClick={() => navigate("/tee-times")}
-            className={`flex w-full items-center gap-3 px-4 py-3 text-left ${CLICKABLE_CARD_CLASS}`}
-          >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-fairway-50 text-fairway-700">
-              <CalendarClock size={16} />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="flex items-center gap-2">
-                <span className="block text-base font-bold text-slate-900">{t("teeTimes.title")}</span>
-                <Badge tone="fairway">{t("home.teeTimesCourseCount", { count: SUPPORTED_TEE_TIME_COURSES.length })}</Badge>
-              </span>
-              <span className="block text-sm text-slate-500">{t("teeTimes.subtitle")}</span>
-            </span>
-            <ArrowRight size={16} className="shrink-0 text-slate-400" />
-          </button>
-        )}
-
         {/* After the first-round popup was closed: a quiet nudge that stays
             until the first round is created (real accounts only). */}
         {showHostReminder && <HostReminderCard onHost={startHosting} />}
       </div>
 
-      {/* Available rounds, right below the Tee Times card (per product
+      {/* Available rounds, right below the action cards (per product
           direction): nearby when there are any, otherwise the newest open
           rounds anywhere, otherwise an invitation to host the first one. */}
       <section className="xl:col-start-1">

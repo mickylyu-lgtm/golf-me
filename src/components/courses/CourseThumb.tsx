@@ -12,7 +12,7 @@ interface CourseThumbProps {
   name: string;
   /** courses.id for real courses: their photo comes from course-photos. */
   courseId?: string;
-  /** Hand-picked course photo (SUPPORTED_TEE_TIME_COURSES), preferred. */
+  /** Hand-picked course photo (HANDPICKED_COURSES), preferred. */
   imageUrl?: string;
   lat?: number;
   lng?: number;
