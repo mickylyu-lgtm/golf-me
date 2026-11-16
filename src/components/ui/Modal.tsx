@@ -57,6 +57,10 @@ interface ModalFrameProps extends Omit<ModalProps, "keyboardAware"> {
 }
 
 function ModalFrame({ title, onClose, children, footer, overlayStyle, sheetStyle, scrollerRef, searchHeader, chromeRef, searchHeaderRef, chromeStyle, resultsStyle, headingStyle }: ModalFrameProps) {
+  // Every sheet locks the page, including non-keyboard menus like Settings.
+  // The shared counted lock preserves other dialogs/docks when this one closes.
+  useLayoutEffect(() => lockPageScroll(), []);
+
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
@@ -130,7 +134,7 @@ function ModalFrame({ title, onClose, children, footer, overlayStyle, sheetStyle
           {heading}
           <div ref={searchHeaderRef} className="min-h-0 overflow-y-auto overscroll-contain border-b border-slate-100 px-5 py-2">{searchHeader}</div>
         </div> : heading}
-        <div ref={scrollerRef} style={resultsStyle} className={"flex-1 overflow-y-auto px-5" + (searchHeader ? " min-h-0 overscroll-contain py-2" : " py-4")}>
+        <div ref={scrollerRef} style={resultsStyle} className={"min-h-0 flex-1 overflow-y-auto overscroll-contain px-5" + (searchHeader ? " py-2" : " py-4")}>
           {children}
         </div>
         {footer && <div className="border-t border-slate-100 px-5 py-4">{footer}</div>}
@@ -156,11 +160,6 @@ function ModalFrame({ title, onClose, children, footer, overlayStyle, sheetStyle
 function KeyboardAwareModal(props: Omit<ModalProps, "keyboardAware">) {
   const keyboardHeight = useKeyboardHeight();
   const scrollerRef = useRef<HTMLDivElement>(null);
-
-  // The page behind never scrolls while the sheet is open. Counted with
-  // every other page lock (lib/scrollLock), so closing in any order never
-  // leaves the page stuck.
-  useEffect(() => lockPageScroll(), []);
 
   // Scroller position from just before the keyboard opened, restored when
   // it closes. Deliberately the PRE-keyboard position even if the golfer
@@ -234,7 +233,6 @@ export function SearchModal({ searchHeader, ...props }: Omit<ModalProps, "keyboa
   const scrollerRef = useRef<HTMLDivElement>(null);
   const searchHeaderRef = useRef<HTMLDivElement>(null);
   const { overlayStyle, sheetStyle, chromeStyle, resultsStyle, headingStyle } = useSearchSheetLayout(chromeRef, searchHeaderRef);
-  useEffect(() => lockPageScroll(), []);
   return <ModalFrame {...props} searchHeader={searchHeader} chromeRef={chromeRef} searchHeaderRef={searchHeaderRef}
     scrollerRef={scrollerRef} overlayStyle={overlayStyle} sheetStyle={sheetStyle} chromeStyle={chromeStyle} resultsStyle={resultsStyle} headingStyle={headingStyle} />;
 }

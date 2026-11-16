@@ -1,3 +1,19 @@
+## 2026-11-16 — Settings scroll and Auto-Match tutorial publication approved
+
+Micky explicitly approved pushing both changes. Reconciled the Settings modal scroll lock and Auto-Match tutorial onto main d154385, retaining the chat and Community upload fixes. Combined checks: TypeScript/lint, 1,625 passing tests with six ffmpeg-dependent skips, production build and prerender. Browser/device limitations in the local-review entries below still apply. No backend, policy, production-data or native-shell changes. Verify GitHub CI and Vercel production against the exact release commit after push.
+
+## Local review — Settings sheet background scroll (2026-11-16)
+
+Prepared on main fde6ce7; not pushed/deployed. Settings and more uses the default Modal, which lacked the page lock previously held only by keyboard-aware and search variants. The shared ModalFrame now takes exactly one counted page lock in layout effect; specialized variants no longer duplicate it. All sheet content scrollers use min-h-0 and overscroll containment. Existing global lock semantics and native keyboard geometry remain unchanged.
+
+Validation: TypeScript, lint, production build/prerender passed. Final aggregate test run: 1,610 passed, zero failures, six ffmpeg-dependent tests skipped because the optional binary was not installed. Two added Modal regression tests plus four existing lock/stack tests passed, including original overflow restoration, reversed close order and idempotent release. Real-component desktop/touch browser harness is in scripts/check-settings-scroll-ui.mjs but could not execute: local Chromium aborts at socket() with Operation not permitted, including the approved escalation attempt. Physical iPhone/WKWebView and browser interaction verification are still required; no screenshot or actual touch success claimed.
+
+## Local review — Auto-Match tutorial replaces privacy explanation (2026-11-16)
+
+Requested by Micky. The former follow-approval tutorial step now opens Play's Rounds tab and spotlights its real Auto-Match Me button. Copy in all six locales explains suggestions based on playing area and Match Preferences and makes clear users choose a round to join. The tour does not launch a search or join anything. Privacy settings, other steps, completion persistence and founder-only manual replay remain unchanged.
+
+Validation: 71 onboarding tests pass; full `npm run check` passes TypeScript, lint (existing warnings), 1,608 tests with 6 ffmpeg-dependent skips, production build and prerender. Updated the old follow-approval browser harness to `scripts/check-auto-match-tutorial-ui.mjs`; its syntax check passes. Chromium execution is blocked by this cloud environment's Unix-socket restriction, including an approved escalation attempt; no screenshot or physical-iPhone verification claimed. No push or deployment. Next: browser/device review and explicit publication approval; reconcile with current main before integration.
+
 ## 2026-11-16 — Community feed and pagination release approved
 
 Micky reviewed the before/after and older-post screenshots, was told no real-account or physical iPhone test had been performed, and explicitly approved pushing the complete combined feed and pagination fix. Reconciled onto e86926a with location/follower work intact. Pre-push release checks passed all 1,606 tests, TypeScript, lint (29 existing warnings, zero errors), build and prerender. GitHub CI and the production Vercel deployment must be verified against the exact pushed SHA. No TestFlight upload or production-data mutation is part of this release; no SQL migration is needed.

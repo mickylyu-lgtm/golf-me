@@ -22,7 +22,7 @@ import { isImeComposing } from "../lib/isImeComposing";
 import { effectiveLocation } from "../lib/travelLocation";
 import { resolveCallDistanceMiles } from "../lib/courseSearch";
 import { useSessionState } from "../lib/useSessionState";
-import { COURSE_MAP_TUTORIAL_ID } from "../lib/tutorialSteps";
+import { AUTO_MATCH_TUTORIAL_ID, COURSE_MAP_TUTORIAL_ID } from "../lib/tutorialSteps";
 import { useShareActions } from "../lib/useShareActions";
 import { hostedFirst } from "../lib/hostedFirst";
 
@@ -145,6 +145,7 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
           preferences and travel radius, any upcoming day -- the filter
           sheet is still there for a specific day or area. */}
       <button
+        data-tutorial-id={AUTO_MATCH_TUTORIAL_ID}
         onClick={() => navigate(`/auto-match?${quickAutoMatchSearch(currentUser.travelRadiusMiles).toString()}`)}
         className="flex items-center gap-3 rounded-2xl bg-gradient-to-br from-brand-forest to-brand-forest-deep px-4 py-3.5 text-left text-white shadow-sm transition active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2"
       >

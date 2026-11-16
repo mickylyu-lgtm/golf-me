@@ -12,6 +12,8 @@ export const NAV_TUTORIAL_ID_BY_PATH: Record<string, string> = {
   "/profile": "nav-me",
 };
 
+// Play -> Rounds -> Auto-Match Me. Opening the tour never starts a match.
+export const AUTO_MATCH_TUTORIAL_ID = "tutorial-auto-match";
 export const COMMUNITY_TUTORIAL_ID = "tutorial-community";
 // The course map button beside Play's search bar (Rounds tab).
 export const COURSE_MAP_TUTORIAL_ID = "tutorial-course-map";
@@ -54,10 +56,11 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
   // pre-migration email-only fallback), so the target can't go missing.
   { route: "/profile/reputation", targetId: VERIFIED_TUTORIAL_ID, titleKey: "tutorial.verified.title", textKey: "tutorial.verified.text" },
   { route: "/caddie", targetId: "nav-caddie", titleKey: "tutorial.caddie.title", textKey: "tutorial.caddie.text" },
+  // Introduce Auto-Match instead of the privacy setting; keep privacy controls unchanged.
+  { route: "/find?tab=rounds", targetId: AUTO_MATCH_TUTORIAL_ID, titleKey: "autoMatch.title", textKey: "tutorial.autoMatch.text" },
   // Micky, 2026-11-06: show light/dark mode in the tour. Opens Settings
   // (lazy page, so TutorialOverlay keeps re-measuring a little longer while
   // a target is missing) and scrolls the Appearance card into view.
-  { route: "/settings", targetId: FOLLOW_APPROVAL_TUTORIAL_ID, titleKey: "socialPrivacy.title", textKey: "tutorial.followApproval.text", cardPlacement: "center" },
   { route: "/settings", targetId: APPEARANCE_TUTORIAL_ID, titleKey: "tutorial.appearance.title", textKey: "tutorial.appearance.text" },
 ];
 

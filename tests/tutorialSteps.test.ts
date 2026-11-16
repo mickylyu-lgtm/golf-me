@@ -5,6 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   APPEARANCE_TUTORIAL_ID,
+  AUTO_MATCH_TUTORIAL_ID,
   FOLLOW_APPROVAL_TUTORIAL_ID,
   COURSE_MAP_TUTORIAL_ID,
   NAV_TUTORIAL_ID_BY_PATH,
@@ -29,10 +30,10 @@ function srcFiles(dir: string): string[] {
   });
 }
 
-test("the tour ends on Settings -> Appearance, after Play, the course map, Chat, Verified Golfer, Caddie and follow approval", () => {
+test("the tour ends on Settings -> Appearance, after Play, the course map, Chat, Verified Golfer, Caddie and Auto-Match", () => {
   assert.deepEqual(
     TUTORIAL_STEPS.map((s) => s.targetId),
-    ["nav-play", COURSE_MAP_TUTORIAL_ID, "nav-messages", VERIFIED_TUTORIAL_ID, "nav-caddie", FOLLOW_APPROVAL_TUTORIAL_ID, APPEARANCE_TUTORIAL_ID],
+    ["nav-play", COURSE_MAP_TUTORIAL_ID, "nav-messages", VERIFIED_TUTORIAL_ID, "nav-caddie", AUTO_MATCH_TUTORIAL_ID, APPEARANCE_TUTORIAL_ID],
   );
   const last = TUTORIAL_STEPS[TUTORIAL_LAST_INDEX];
   assert.equal(last.route, "/settings");
@@ -58,7 +59,7 @@ test("every non-nav target id is put on an element by some screen", () => {
     [COURSE_MAP_TUTORIAL_ID]: "COURSE_MAP_TUTORIAL_ID",
     [APPEARANCE_TUTORIAL_ID]: "APPEARANCE_TUTORIAL_ID",
     [VERIFIED_TUTORIAL_ID]: "VERIFIED_TUTORIAL_ID",
-    [FOLLOW_APPROVAL_TUTORIAL_ID]: "FOLLOW_APPROVAL_TUTORIAL_ID",
+    [AUTO_MATCH_TUTORIAL_ID]: "AUTO_MATCH_TUTORIAL_ID",
   };
   for (const { targetId } of TUTORIAL_STEPS) {
     if (!targetId || navIds.has(targetId)) continue;
@@ -90,14 +91,20 @@ test("the Appearance card in Settings carries the target id", () => {
   assert.match(picker.slice(0, picker.indexOf('role="radiogroup"')), /data-tutorial-id=\{APPEARANCE_TUTORIAL_ID\}/);
 });
 
-test("follow approval spotlights its always-rendered setting with the exact label",()=>{
- const step=TUTORIAL_STEPS.find(s=>s.targetId===FOLLOW_APPROVAL_TUTORIAL_ID);assert.ok(step);
- assert.equal(step.route,"/settings");assert.equal(step.titleKey,"socialPrivacy.title");assert.equal(step.textKey,"tutorial.followApproval.text");
- const setting=fs.readFileSync(path.join(import.meta.dirname,"..","src","components","profile","FollowApprovalSetting.tsx"),"utf8");
- assert.ok(setting.indexOf("data-tutorial-id={FOLLOW_APPROVAL_TUTORIAL_ID}")<setting.indexOf("{value &&"));
- assert.match(en["tutorial.followApproval.text"],/Turn this on if you want to accept or reject.*Existing followers stay/);
- assert.match(en["tutorial.followApproval.text"],/remain public.*Signed-in.*Followers and Following.*without following you.*Blocks and safety/);
- assert.doesNotMatch(en["tutorial.followApproval.text"],/private account|posts are hidden/i);
+test("Auto-Match replaces the privacy explanation and targets the real entry without running a search", () => {
+  const step = TUTORIAL_STEPS.find(s => s.targetId === AUTO_MATCH_TUTORIAL_ID);
+  assert.ok(step);
+  assert.equal(step.route, "/find?tab=rounds");
+  assert.equal(step.titleKey, "autoMatch.title");
+  assert.equal(step.textKey, "tutorial.autoMatch.text");
+  assert.equal(step.cardPlacement, undefined);
+  assert.ok(!TUTORIAL_STEPS.some(s => s.targetId === FOLLOW_APPROVAL_TUTORIAL_ID));
+  const page = fs.readFileSync(path.join(import.meta.dirname, "..", "src", "pages", "GolfCalls.tsx"), "utf8");
+  assert.match(page, /<button\s+data-tutorial-id=\{AUTO_MATCH_TUTORIAL_ID\}\s+onClick=\{\(\) => navigate\(`\/auto-match/);
+  assert.match(en["tutorial.autoMatch.text"], /playing area and Match Preferences/);
+  assert.match(en["tutorial.autoMatch.text"], /choose a round to join/);
+  const settings = fs.readFileSync(path.join(import.meta.dirname, "..", "src", "pages", "Settings.tsx"), "utf8");
+  assert.match(settings, /<FollowApprovalSetting/);
 });
 test("new tutorial step does not reset completion or force replay",()=>{
  const context=fs.readFileSync(path.join(import.meta.dirname,"..","src","context","TutorialContext.tsx"),"utf8");
@@ -106,8 +113,8 @@ test("new tutorial step does not reset completion or force replay",()=>{
  assert.doesNotMatch(context,/tutorial_version|onboarding_tutorial_completed: false/);
 });
 
-test("approval explanation alone uses centered placement and Settings exposes explicit replay",()=>{
- const centered=TUTORIAL_STEPS.filter(s=>s.cardPlacement==="center");assert.equal(centered.length,1);assert.equal(centered[0].targetId,FOLLOW_APPROVAL_TUTORIAL_ID);
+test("Auto-Match uses the spotlight and Settings retains explicit replay",()=>{
+ assert.equal(TUTORIAL_STEPS.filter(s=>s.cardPlacement==="center").length,0);
  const settings=fs.readFileSync(path.join(import.meta.dirname,"..","src","pages","Settings.tsx"),"utf8");
  assert.match(settings,/onClick=\{startTutorial\}/);assert.match(settings,/t\("settings.replayTutorial"\)/);
  assert.doesNotMatch(settings,/onboarding_tutorial_completed: false/);

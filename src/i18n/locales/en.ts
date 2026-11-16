@@ -1489,6 +1489,7 @@ export const en = {
   "tutorial.community.text": "Post rounds, photos and swing videos, and connect with the GolfMe community.",
   "tutorial.caddie.title": "Meet Caddie",
   "tutorial.caddie.text": "Upload a swing video to get AI-powered feedback and save your analyses as you improve.",
+  "tutorial.autoMatch.text": "Find suggested rounds using your playing area and Match Preferences. Tap Auto-Match Me on Play, then browse the suggestions and choose a round to join.",
   "tutorial.followApproval.text": "Turn this on if you want to accept or reject new follow requests. Existing followers stay. Posts and profile details remain public. Signed-in people who can view your profile can see your Followers and Following lists without following you. Blocks and safety rules still apply.",
   "tutorial.appearance.title": "Light or Dark",
   "tutorial.appearance.text": "Choose Light, Dark, or match your phone's setting. You can change it here in Settings anytime.",

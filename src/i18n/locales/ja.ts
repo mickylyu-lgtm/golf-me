@@ -1628,6 +1628,7 @@ export const ja: Record<TranslationKey, string> = {
   "tutorial.community.text": "ラウンドや写真、スイング動画を投稿して、GolfMeコミュニティとつながりましょう。",
   "tutorial.caddie.title": "Caddieを紹介します",
   "tutorial.caddie.text": "スイング動画をアップロードするとAIによるフィードバックが受けられ、上達の記録として分析結果を保存できます。",
+  "tutorial.autoMatch.text": "プレーするエリアとマッチの好みに合ったラウンドを探せます。「プレー」で自動マッチをタップし、候補を見て参加するラウンドを選びましょう。",
   "tutorial.followApproval.text": "新しいフォローリクエストを承認・拒否したい場合は、この設定をオンにします。既存のフォロワーはそのままです。投稿とプロフィール情報は公開されたままです。プロフィールを閲覧できるログイン済みユーザーは、フォロー前でもフォロワー・フォロー中の一覧を見られます。ブロックなどの安全ルールも適用されます。",
   "tutorial.appearance.title": "ライトとダーク",
   "tutorial.appearance.text": "ライト、ダーク、またはスマートフォンの設定に合わせるかを選べます。この設定画面からいつでも変更できます。",

@@ -1628,6 +1628,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "tutorial.community.text": "發布球局、照片和揮桿影片，與 GolfMe 社群互動。",
   "tutorial.caddie.title": "認識 Caddie",
   "tutorial.caddie.text": "上傳揮桿影片即可獲得 AI 回饋，並保存分析紀錄，見證自己的進步。",
+  "tutorial.autoMatch.text": "根據你的打球地區和配對偏好尋找推薦球局。在「約球」中點選「自動配對」，瀏覽推薦並選擇想加入的球局。",
   "tutorial.followApproval.text": "如果你想接受或拒絕新的追蹤請求，可以開啟此設定。現有粉絲不受影響。貼文和個人資料仍然公開。已登入且有權查看你資料的使用者，不必追蹤也可查看你的粉絲和追蹤名單。封鎖及其他安全規則仍然適用。",
   "tutorial.appearance.title": "淺色或深色",
   "tutorial.appearance.text": "可選擇淺色、深色，或跟隨手機設定。隨時都能在設定的這裡更改。",
