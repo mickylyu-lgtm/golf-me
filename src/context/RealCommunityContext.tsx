@@ -1,4 +1,4 @@
-import { requireOfficialPostCapability, isOfficialPostRow, officialPostInsertFields, rejectFailedOfficialMedia } from "../lib/officialPost";
+import { requireOfficialPostCapability, officialPostInsertFields, rejectFailedOfficialMedia } from "../lib/officialPost";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { supabase } from "../lib/supabase";
@@ -8,37 +8,12 @@ import { privatizeAnalysesOfPost } from "../lib/caddieMedia";
 import { useAuth } from "./AuthContext";
 import { fetchPublicProfiles } from "../lib/publicProfilesFetch";
 import { INITIAL_LOAD_STATUS, applyLoadOutcome, isFirstLoadError, isRefreshError } from "../lib/loadStatus";
+import { rowToPost, type MediaRow, type PostRow } from "../lib/communityPostRow";
 import { PostMediaCapError, isPostMediaCapError } from "../lib/postMediaLedger";
 import { isLikeAlreadyDone, runOncePerId, type PostVoteRow } from "../lib/likeFeedback";
-import type { CommunityPost, PostComment, GolferProfile, PostMediaItem, PostType, PostCategory, SwingAnalysisStatus } from "../types";
+import type { CommunityPost, PostComment, GolferProfile, PostType, PostCategory } from "../types";
 
 const COMMUNITY_MEDIA_BUCKET = "community-media";
-
-interface PostRow {
-  is_official?: boolean;
-  id: string;
-  author_id: string;
-  type: PostType;
-  text: string;
-  image_url: string | null;
-  video_url: string | null;
-  video_thumbnail_url: string | null;
-  course_tag: string | null;
-  golf_call_id: string | null;
-  category: PostCategory;
-  swing_analysis_status: SwingAnalysisStatus | "not_applicable";
-  coach_review_requested: boolean;
-  created_at: string;
-}
-
-interface MediaRow {
-  id: string;
-  post_id: string;
-  media_type: "image" | "video";
-  media_url: string;
-  thumbnail_url: string | null;
-  position: number;
-}
 
 interface CommentRow {
   id: string;
@@ -47,34 +22,6 @@ interface CommentRow {
   text: string;
   parent_comment_id: string | null;
   created_at: string;
-}
-
-function rowToMediaItem(row: MediaRow): PostMediaItem {
-  return { id: row.id, type: row.media_type, url: row.media_url, thumbnailUrl: row.thumbnail_url ?? undefined };
-}
-
-function rowToPost(row: PostRow, mediaRows: MediaRow[]): CommunityPost {
-  const media = mediaRows
-    .filter((m) => m.post_id === row.id)
-    .sort((a, b) => a.position - b.position)
-    .map(rowToMediaItem);
-  return {
-    id: row.id,
-    authorId: row.author_id,
-    isOfficial: isOfficialPostRow(row),
-    type: row.type,
-    text: row.text,
-    imageUrl: row.image_url ?? undefined,
-    media: media.length > 0 ? media : undefined,
-    videoUrl: row.video_url ?? undefined,
-    videoThumbnailUrl: row.video_thumbnail_url ?? undefined,
-    swingAnalysisStatus: row.swing_analysis_status === "not_applicable" ? undefined : row.swing_analysis_status,
-    courseTag: row.course_tag ?? undefined,
-    golfCallId: row.golf_call_id ?? undefined,
-    category: row.category,
-    coachReviewRequested: row.coach_review_requested,
-    createdAt: row.created_at,
-  };
 }
 
 function rowToComment(row: CommentRow): PostComment {

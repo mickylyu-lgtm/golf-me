@@ -61,7 +61,9 @@ test("official mode stays out of shared drafts and demo posts reject it", () => 
   assert.match(data, /if \(input\.isOfficial\) throw new OfficialPostPermissionError\(\);/);
   const real = readFileSync("src/context/RealCommunityContext.tsx", "utf8");
   assert.match(real, /\.\.\.officialPostInsertFields\(input\.isOfficial\)/);
-  assert.match(real, /isOfficial: isOfficialPostRow\(row\)/);
+  // The row mapper moved to lib/communityPostRow (shared with Home's following feed).
+  assert.match(real, /import \{ rowToPost, type MediaRow, type PostRow \} from "\.\.\/lib\/communityPostRow";/);
+  assert.match(readFileSync("src/lib/communityPostRow.ts", "utf8"), /isOfficial: isOfficialPostRow\(row\)/);
 });
 
 test("post designation does not alter the feed ranking or category set", () => {

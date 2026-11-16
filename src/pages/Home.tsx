@@ -24,6 +24,10 @@ import { useFirstRoundPrompt } from "../context/FirstRoundPromptContext";
 import { clubLabel } from "../lib/clubLabel";
 import { useShareActions } from "../lib/useShareActions";
 import { homeFocus, readOnboardingIntents } from "../lib/onboardingIntent";
+import { useRealCommunity } from "../context/RealCommunityContext";
+import { rowToPost } from "../lib/communityPostRow";
+import { feedCutoff, mergeFollowingPosts, withinCutoff } from "../lib/followingFeed";
+import { useFollowingFeed } from "../lib/useFollowingFeed";
 import type { CommunityPost, GolfCall, GolferProfile } from "../types";
 
 const HOME_RADIUS_MILES = 25;
@@ -90,7 +94,7 @@ function SmallPrompt({ icon, title, detail, onClick }: { icon: ReactNode; title:
 }
 
 export function Home() {
-  const { currentUser, golfCalls, visiblePosts, caddieAnalyses, followingGolfers, getGolfer } = useData();
+  const { currentUser, golfCalls, visiblePosts, caddieAnalyses, followingGolfers, getGolfer, isBlockedEitherWay, isPostHidden } = useData();
   const { isDemo, authUser } = useAuth();
   const { t, locale } = useLocale();
   const navigate = useNavigate();
@@ -154,20 +158,37 @@ export function Home() {
   }, [openCalls]);
 
   // The feed: posts (including swing posts) by golfers you follow, plus
-  // upcoming rounds they host or have joined. Built from the posts and
-  // rounds already loaded for Community and Play; there is no server-side
-  // following feed, so older posts beyond the loaded Community pages aren't
-  // here (Community itself still has everything).
+  // upcoming rounds they host or have joined. Real accounts page posts from
+  // get_following_feed and merge them with Community's loaded posts
+  // (lib/followingFeed.ts). Demo, and real accounts until that migration is
+  // applied, filter the posts already loaded for Community.
   const followingIds = useMemo(() => new Set(followingGolfers.map((g) => g.id)), [followingGolfers]);
+  const followKey = useMemo(() => [...followingIds].sort().join(","), [followingIds]);
+  const serverFeed = useFollowingFeed(!isDemo && Boolean(authUser), authUser?.id, followKey);
+  const { hasLoaded: communityLoaded, loadError: communityLoadError, refreshFailed: communityRefreshFailed } = useRealCommunity();
   const allPosts = useMemo(
     () => [...visiblePosts()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     [visiblePosts],
   );
+  const serverPosts = useMemo(() => serverFeed.rows.map((row) => rowToPost(row, serverFeed.media)), [serverFeed.rows, serverFeed.media]);
+  const usingServer = serverFeed.mode === "server";
+  const followedPosts = useMemo(
+    () =>
+      usingServer
+        ? mergeFollowingPosts({
+            serverPosts,
+            contextPosts: allPosts,
+            contextLoaded: communityLoaded && !communityLoadError && !communityRefreshFailed,
+            followingIds,
+            isVisible: (post) => !isBlockedEitherWay(post.authorId) && !isPostHidden(post.id),
+          })
+        : allPosts.filter((post) => followingIds.has(post.authorId)),
+    [usingServer, serverPosts, allPosts, communityLoaded, communityLoadError, communityRefreshFailed, followingIds, isBlockedEitherWay, isPostHidden],
+  );
+  const serverHasMore = usingServer && serverFeed.hasMore;
   const feed = useMemo<FeedItem[]>(() => {
     const items: FeedItem[] = [];
-    for (const post of allPosts) {
-      if (followingIds.has(post.authorId)) items.push({ kind: "post", key: `post-${post.id}`, at: post.createdAt, post });
-    }
+    for (const post of followedPosts) items.push({ kind: "post", key: `post-${post.id}`, at: post.createdAt, post });
     for (const call of golfCalls) {
       if (call.hostId === currentUser.id || call.status === "cancelled" || isPastRound(call)) continue;
       const hosting = followingIds.has(call.hostId);
@@ -175,26 +196,36 @@ export function Home() {
       const actor = actorId ? getGolfer(actorId) : undefined;
       if (actor) items.push({ kind: "round", key: `round-${call.id}`, at: call.createdAt, call, actor, hosting });
     }
-    return items.sort((a, b) => b.at.localeCompare(a.at));
-  }, [allPosts, golfCalls, followingIds, currentUser.id, getGolfer]);
+    items.sort((a, b) => b.at.localeCompare(a.at));
+    // While older server pages remain, hold back anything older than the
+    // last loaded post so it can't sit above posts not fetched yet.
+    return withinCutoff(items, feedCutoff(followedPosts, serverHasMore));
+  }, [followedPosts, serverHasMore, golfCalls, followingIds, currentUser.id, getGolfer]);
 
   const [feedShown, setFeedShown] = useState(FEED_STEP);
   const shownFeed = feed.slice(0, feedShown);
-  const moreFeed = feedShown < feed.length;
+  const moreFeed = feedShown < feed.length || serverHasMore;
+  const loadMoreServer = serverFeed.loadMore;
+  const feedLength = feed.length;
   const feedEndRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const end = feedEndRef.current;
     if (!end || !moreFeed || typeof IntersectionObserver === "undefined") return;
-    // Starts loading the next step a little before the end is on screen.
+    // Starts loading the next step a little before the end is on screen;
+    // once the loaded items run out, fetches the next server page.
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries.some((e) => e.isIntersecting)) setFeedShown((n) => n + FEED_STEP);
+        if (!entries.some((e) => e.isIntersecting)) return;
+        // No state change while everything loaded is shown and a page is on
+        // its way: the page's arrival (feedLength) re-runs this effect.
+        if (feedShown < feedLength) setFeedShown((n) => n + FEED_STEP);
+        if (feedShown + FEED_STEP >= feedLength) loadMoreServer();
       },
       { rootMargin: "0px 0px 600px 0px" },
     );
     observer.observe(end);
     return () => observer.disconnect();
-  }, [moreFeed, feedShown]);
+  }, [moreFeed, feedShown, feedLength, serverFeed.loading, loadMoreServer]);
 
   // Self-resolving nudge: only while under the same threshold Auto-Match
   // gates on, so it disappears without separate dismiss state.
