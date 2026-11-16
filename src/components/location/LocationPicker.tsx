@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { LocateFixed, MapPin, Search } from "lucide-react";
-import { Modal } from "../ui/Modal";
+import { SearchModal } from "../ui/Modal";
 import { Button } from "../ui/Button";
 import { inputClass } from "../ui/FormControls";
 import { REGIONS, searchRegions } from "../../data/regions";
@@ -52,8 +52,8 @@ function nearestRegion(lat: number, lng: number): Region | undefined {
 // General area only — city/region granularity, never an exact address.
 // Real navigator.geolocation permission flow (no mock), with a graceful,
 // non-blocking fallback to manual search when denied/unsupported. Reuses
-// the shared Modal, which is already a full-screen sheet on mobile and a
-// centered dialog on desktop.
+// the shared search sheet: the field stays in its header while results
+// use the remaining space above the keyboard.
 export function LocationPicker({ title = "Where do you usually play?", onSelect, onClose, autoRequestLocation = false }: LocationPickerProps) {
   const { t } = useLocale();
   const [query, setQuery] = useState("");
@@ -155,7 +155,7 @@ export function LocationPicker({ title = "Where do you usually play?", onSelect,
   }
 
   return (
-    <Modal title={title} onClose={onClose} keyboardAware>
+    <SearchModal title={title} onClose={onClose} searchHeader={
       <div className="flex flex-col gap-4">
         <Button variant="outline" fullWidth icon={<LocateFixed size={16} />} onClick={requestCurrentLocation} disabled={geoStatus === "requesting"}>
           {geoStatus === "requesting" ? t("locationPicker.gettingLocation") : t("locationPicker.useCurrent")}
@@ -172,7 +172,7 @@ export function LocationPicker({ title = "Where do you usually play?", onSelect,
         <div className="relative">
           <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
-            autoFocus
+            aria-label={t("locationPicker.searchPlaceholder")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={t("locationPicker.searchPlaceholder")}
@@ -186,7 +186,8 @@ export function LocationPicker({ title = "Where do you usually play?", onSelect,
           />
         </div>
 
-        <div className="flex max-h-72 flex-col gap-1 overflow-y-auto">
+      </div>}>
+        <div className="flex flex-col gap-1">
           {results.map((r) => (
             <button
               key={r.id}
@@ -231,7 +232,6 @@ export function LocationPicker({ title = "Where do you usually play?", onSelect,
           )}
           {results.length === 0 && !trimmedQuery && <p className="px-3 py-2.5 text-sm text-slate-400">{t("locationPicker.startTyping")}</p>}
         </div>
-      </div>
-    </Modal>
+    </SearchModal>
   );
 }
