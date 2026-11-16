@@ -1,4 +1,8 @@
-## 2026-11-16 - UI cleanup: Beli-style Home and Me, one golfer search (branch ui-cleanup-beli; local commits, NOT pushed, NOT deployed)
+## 2026-11-16 - Removed the get-tee-times Edge Function
+
+Approved by Micky ("yes remove"). Source folder `supabase/functions/get-tee-times` deleted; nothing in the app calls it since the UI cleanup below. Deleting the deployed function is Micky's step: `supabase functions delete get-tee-times --project-ref adokdenbmpshqgjbzshb` (the CLI on the laptop needs `supabase login` first). APP_STORE_PRIVACY.md updated.
+
+## 2026-11-16 - UI cleanup: Beli-style Home and Me, one golfer search (pushed to main 563bce2 and deployed 2026-11-16)
 
 Approved by Micky ("go all", plus step 7). Client and copy only: no schema, migration, RLS, notification-semantics, Reputation, native or frozen-file change.
 
