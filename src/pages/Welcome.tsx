@@ -223,7 +223,7 @@ export function Welcome() {
               <div className="mt-3 grid grid-cols-3 gap-2" aria-hidden="true">
                 {[
                   { icon: <MessageCircle size={14} />, label: "Chat" },
-                  { icon: <Users size={14} />, label: "Golf Circle" },
+                  { icon: <Users size={14} />, label: "Following" },
                   { icon: <Video size={14} />, label: "Swing Posts" },
                 ].map((c) => (
                   <div key={c.label} className="flex items-center justify-center gap-1.5 rounded-xl border border-slate-100 bg-white px-2 py-2 text-[11px] font-semibold text-slate-700 shadow-sm">

@@ -3,11 +3,14 @@ import { ChevronRight } from "lucide-react";
 import { Modal } from "../ui/Modal";
 import type { PreferenceCheck } from "../../lib/preferenceMatch";
 import { PREFERENCE_KEY_LABEL } from "../../lib/preferenceMatch";
+import { groupTypeLabel } from "../../lib/enumLabels";
+import { useLocale } from "../../i18n/LocaleContext";
 
 // Tappable "N Shared Preferences" line — Part D of the spec: never just a
 // bare score, always an honest MATCHED / NOT MATCHED breakdown a tap away.
 export function SharedPreferencesBadge({ checks }: { checks: PreferenceCheck[] }) {
   const [open, setOpen] = useState(false);
+  const { t } = useLocale();
   if (checks.length === 0) return null;
 
   const matched = checks.filter((c) => c.matched);
@@ -38,7 +41,7 @@ export function SharedPreferencesBadge({ checks }: { checks: PreferenceCheck[] }
                       <span aria-hidden className="font-bold">
                         ✓
                       </span>
-                      {c.label}
+                      {groupTypeLabel(c.label, t)}
                     </li>
                   ))}
                 </ul>

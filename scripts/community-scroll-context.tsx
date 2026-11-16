@@ -14,7 +14,7 @@ export function useData() {
   return {
     currentUser: { ...golfer, id: "qa-viewer" }, getGolfer: () => golfer,
     getPost: (id: string) => posts.find(p => p.id === id), visiblePosts: () => posts,
-    followingGolfers: [], getGolfCall: () => null, isInCircle: () => false,
+    followingGolfers: [], getGolfCall: () => null, isInCircle: () => false, hasPlayedWith: () => false,
     isPostUpvoted: () => false, postUpvoteCount: () => 0, isPostSaved: () => false,
     commentsForPost: () => comments, isBlocked: () => false, caddieAnalyses: [],
     isCommentUpvoted: () => false, commentUpvoteCount: () => 0,

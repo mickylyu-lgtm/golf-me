@@ -12,7 +12,6 @@ import {
   ShieldAlert,
   ShieldCheck,
   ShieldOff,
-  UserPlus,
   Users,
   Wallet,
 } from "lucide-react";
@@ -70,8 +69,6 @@ export function GolferProfilePage() {
     blockUser,
     unblockUser,
     hasPlayedWith,
-    isInCircle,
-    addToCircle,
     reviewsAbout,
     canMessage,
   } = useData();
@@ -265,24 +262,12 @@ export function GolferProfilePage() {
           </div>
         )}
 
-        {hasPlayedWith(golfer.id) &&
-          (isInCircle(golfer.id) ? (
-            <Badge tone="fairway" icon={<Users size={12} />}>
-              {t("golferProfile.inYourCircle")}
-            </Badge>
-          ) : (
-            <Button
-              size="sm"
-              variant="outline"
-              icon={<UserPlus size={14} />}
-              onClick={() => {
-                addToCircle(golfer.id);
-                showToast(t("golferProfile.addedToCircle", { name: golfer.name }), "success");
-              }}
-            >
-              {t("golferProfile.addToCircle")}
-            </Button>
-          ))}
+        {/* You've played a round together (Following, above, is the friend list). */}
+        {hasPlayedWith(golfer.id) && (
+          <Badge tone="fairway" icon={<Users size={12} />}>
+            {t("common.playedWith")}
+          </Badge>
+        )}
       </div>
 
       {blocked && (
@@ -345,20 +330,6 @@ export function GolferProfilePage() {
             {handicapConfidence.level === "high" ? t("golferProfile.handicapConfirmed") : t("golferProfile.handicapQuestioned")}
           </p>
         )}
-      </div>
-
-      <div className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white p-4">
-        <Users size={18} className="text-fairway-600" />
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t("golferProfile.circleTitle")}</p>
-          <p className="font-bold text-slate-800">
-            {golfer.circleSize === 0
-              ? t("golferProfile.circleNone")
-              : golfer.circleSize === 1
-                ? t("golferProfile.circleOne")
-                : t("golferProfile.circleMany", { count: golfer.circleSize })}
-          </p>
-        </div>
       </div>
 
       {feedbackTags.length > 0 && (

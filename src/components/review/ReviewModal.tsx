@@ -71,12 +71,13 @@ interface ReviewModalProps {
 }
 
 export function ReviewModal({ callId, reviewee, onClose, onSubmitted }: ReviewModalProps) {
-  const { submitReview, isInCircle, addToCircle } = useData();
+  const { submitReview, isFollowing, followUser } = useData();
   const { showToast } = useToast();
   const { t } = useLocale();
   const [state, setState] = useState<State>({ privateNote: "" });
-  const alreadyInCircle = isInCircle(reviewee.id);
-  const [addCircle, setAddCircle] = useState(true);
+  // Following is GolfMe's one friend list: after a good round, offer it.
+  const alreadyFollowing = isFollowing(reviewee.id);
+  const [followAfter, setFollowAfter] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -84,7 +85,7 @@ export function ReviewModal({ callId, reviewee, onClose, onSubmitted }: ReviewMo
   const secondaryAnswered = showedUp !== true || (state.onTime !== undefined && state.handicapAccuracy !== undefined);
   const canSubmit = state.wouldPlayAgain !== undefined && showedUp !== undefined && state.respectful !== undefined && secondaryAnswered;
 
-  // Waits for the server: success (and the Circle add, and the share
+  // Waits for the server: success (and the follow, and the share
   // prompt) only once the review is saved. A failure keeps every answer
   // and the private note, says so, and the button retries.
   async function submit() {
@@ -108,7 +109,9 @@ export function ReviewModal({ callId, reviewee, onClose, onSubmitted }: ReviewMo
       setSubmitting(false);
       return;
     }
-    if (!alreadyInCircle && addCircle && state.wouldPlayAgain) addToCircle(reviewee.id);
+    if (!alreadyFollowing && followAfter && state.wouldPlayAgain) {
+      followUser(reviewee.id).catch((err) => console.error("GolfMe: failed to follow after review.", err));
+    }
     showToast(t("review.submittedToast", { name: reviewee.name }), "success");
     onClose();
     onSubmitted?.();
@@ -205,19 +208,19 @@ export function ReviewModal({ callId, reviewee, onClose, onSubmitted }: ReviewMo
           />
         </div>
 
-        {alreadyInCircle ? (
+        {alreadyFollowing ? (
           <p className="flex items-center gap-1.5 text-xs font-medium text-fairway-700">
-            <Users size={13} /> {t("review.alreadyInCircle", { name: reviewee.name })}
+            <Users size={13} /> {t("review.alreadyFollowing", { name: reviewee.name })}
           </p>
         ) : (
           state.wouldPlayAgain === true && (
             <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-fairway-200 bg-fairway-50 px-3.5 py-3">
-              <input type="checkbox" checked={addCircle} onChange={() => setAddCircle((v) => !v)} className="mt-0.5 h-4 w-4 accent-fairway-600" />
+              <input type="checkbox" checked={followAfter} onChange={() => setFollowAfter((v) => !v)} className="mt-0.5 h-4 w-4 accent-fairway-600" />
               <span>
                 <span className="flex items-center gap-1.5 text-sm font-semibold text-fairway-800">
-                  <Users size={14} /> {t("review.addToCircle", { name: reviewee.name })}
+                  <Users size={14} /> {t("review.followAfter", { name: reviewee.name })}
                 </span>
-                <span className="block text-xs text-fairway-700">{t("review.addToCircleDesc")}</span>
+                <span className="block text-xs text-fairway-700">{t("review.followAfterDesc")}</span>
               </span>
             </label>
           )

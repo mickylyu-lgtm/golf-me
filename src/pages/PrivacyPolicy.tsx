@@ -142,7 +142,7 @@ export function PrivacyPolicy() {
           If you turn on push notifications, a device token from Apple that lets us send notifications to your phone, and your
           notification settings. We send push notifications for messages, people joining your rounds and changes to rounds you've joined,
           finished Caddie analyses, likes and comments on your posts, replies to your comments, and, if you switch them on in Settings, new
-          rounds near you and posts from your Golf Circle.
+          rounds near you and posts from golfers you follow.
         </Item>
         <Item label="Waitlist">
           If you joined our waitlist, your email address, home golf area and how you heard about us.

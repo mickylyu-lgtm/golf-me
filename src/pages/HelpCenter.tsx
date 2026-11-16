@@ -10,11 +10,11 @@ const FAQS = [
   },
   {
     q: "How does Auto-Match work?",
-    a: "Auto-Match uses your saved Match Preferences (Profile → Match Preferences) to recommend the best open round for you — no need to browse manually.",
+    a: "Auto-Match uses your saved Match Preferences (Me → Settings and more → Match Preferences) to recommend the best open round for you — no need to browse manually.",
   },
   {
-    q: "What's the difference between Golf Circle and Following?",
-    a: "Golf Circle is golfers you've actually played with and would play with again. Following just means you want to keep up with someone.",
+    q: "What do Following and \"Played with\" mean?",
+    a: "Following is your golf friends list: follow someone to see their rounds, swings and posts on Home. \"Played with\" is a small badge on a golfer's profile and posts when you've finished a round together.",
   },
   {
     q: "How is my location shared?",

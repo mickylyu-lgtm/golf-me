@@ -19,7 +19,7 @@ export function useData() {
   return {
     currentUser: { ...golfer, id: auth.id }, golfCalls: [],
     getGolfer: () => golfer, getGolfCall: () => null,
-    isInCircle: () => false, isPostUpvoted: () => false, postUpvoteCount: () => 0,
+    isInCircle: () => false, hasPlayedWith: () => false, isPostUpvoted: () => false, postUpvoteCount: () => 0,
     isPostSaved: () => false, commentsForPost: () => [], isBlocked: () => false,
     caddieAnalyses: [], createPost: async (input: any) => {
       qa.submissions.push(input);

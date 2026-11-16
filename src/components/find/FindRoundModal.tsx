@@ -15,7 +15,7 @@ import { BUDGET_PREF_MAX, BUDGET_PREF_MIN, GOLF_VIBES, TRAVEL_RADIUS_MAX, TRAVEL
 import type { GolfVibe, SkillFilter, WalkOrCart } from "../../types";
 import { SKILL_FILTERS, WALK_FILTERS, findRoundDraft, findRoundSearch } from "../../lib/roundSearchParams";
 import type { WhenChoice } from "../../lib/roundSearchParams";
-import { skillLabel, vibeLabel, walkOrCartLabel } from "../../lib/enumLabels";
+import { groupTypeLabel, skillLabel, vibeLabel, walkOrCartLabel } from "../../lib/enumLabels";
 import {
   GAME_FORMAT_OPTIONS,
   GENDER_OPTIONS_MATCH,
@@ -187,7 +187,7 @@ export function FindRoundModal({ onClose, searchParams }: { onClose: () => void;
             <div className="flex flex-wrap gap-1.5">
               {GROUP_TYPE_OPTIONS.map((g) => (
                 <Pill key={g} active={draftPrefs.groupTypePreference === g} onClick={() => setDraftPrefs((p) => ({ ...p, groupTypePreference: g }))}>
-                  {g}
+                  {groupTypeLabel(g, t)}
                 </Pill>
               ))}
             </div>
@@ -297,7 +297,7 @@ export function FindRoundModal({ onClose, searchParams }: { onClose: () => void;
             <div className="flex flex-wrap gap-1.5">
               {preferenceLabels.map((label) => (
                 <Badge key={label} tone="fairway">
-                  {label}
+                  {groupTypeLabel(label, t)}
                 </Badge>
               ))}
             </div>

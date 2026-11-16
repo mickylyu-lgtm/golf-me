@@ -10,7 +10,6 @@ import {
   Settings as SettingsIcon,
   ShieldCheck,
   SlidersHorizontal,
-  Users,
   UserRoundPlus,
 } from "lucide-react";
 import { useData } from "../context/DataContext";
@@ -74,7 +73,7 @@ function ProfileSection({ title, children }: { title: string; children: ReactNod
 }
 
 export function Profile() {
-  const { currentUser, updateCurrentUserProfile, circleGolfers, followingGolfers } = useData();
+  const { currentUser, updateCurrentUserProfile, followingGolfers } = useData();
   const { isDemo, saveProfile } = useAuth();
   const { showToast } = useToast();
   const { t, locale } = useLocale();
@@ -343,12 +342,6 @@ export function Profile() {
                 label={t("profile.following")}
                 value={`${followingGolfers.length}`}
                 onClick={() => openFromMenu("/profile/following")}
-              />
-              <ProfileRow
-                icon={<Users size={16} />}
-                label={t("profile.golfCircle")}
-                value={circleGolfers.length === 1 ? t("profile.golferCountSingular") : t("profile.golferCount", { count: circleGolfers.length })}
-                onClick={() => openFromMenu("/profile/circle")}
               />
               <ProfileRow icon={<Bookmark size={16} />} label={t("myPosts.savedPosts")} onClick={() => openFromMenu("/saved-posts")} />
             </ProfileSection>

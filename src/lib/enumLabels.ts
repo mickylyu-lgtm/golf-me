@@ -68,3 +68,11 @@ export function walkOrCartLabel(walkOrCart: WalkOrCart, t: TFn): string {
 export function postCategoryLabel(category: PostCategory, t: TFn): string {
   return t(POST_CATEGORY_KEYS[category]);
 }
+
+// The Group Type preference keeps "Golf Circle" as its stored value (a
+// database CHECK value), but Golf Circle is now shown as "Played with".
+// Use this wherever a group-type value (or a preference label that may be
+// one) is displayed as raw text.
+export function groupTypeLabel(value: string, t: TFn): string {
+  return value === "Golf Circle" ? t("common.playedWith") : value;
+}

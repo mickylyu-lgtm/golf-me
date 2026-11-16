@@ -71,7 +71,6 @@ const CaddieAnalysisDetail = lazyPage(() => import("./pages/CaddieAnalysisDetail
 const AutoMatch = lazyPage(() => import("./pages/AutoMatch"), "AutoMatch");
 const CreateGolfCall = lazyPage(() => import("./pages/CreateGolfCall"), "CreateGolfCall");
 const ReputationDetail = lazyPage(() => import("./pages/ReputationDetail"), "ReputationDetail");
-const GolfCircleDetail = lazyPage(() => import("./pages/GolfCircleDetail"), "GolfCircleDetail");
 const FollowingDetail = lazyPage(() => import("./pages/FollowingDetail"), "FollowingDetail");
 const MatchPreferencesDetail = lazyPage(() => import("./pages/MatchPreferencesDetail"), "MatchPreferencesDetail");
 const Settings = lazyPage(() => import("./pages/Settings"), "Settings");
@@ -452,7 +451,8 @@ export default function App() {
                   <Route path="/my-rounds" element={<Navigate to={profileTabPath("rounds")} replace />} />
                   <Route path="/profile" element={<Profile />} />
                   <Route path="/profile/reputation" element={<ReputationDetail />} />
-                  <Route path="/profile/circle" element={<GolfCircleDetail />} />
+                  {/* Golf Circle became the "Played with" badge; Following is the one friend list. */}
+                  <Route path="/profile/circle" element={<Navigate to="/profile/following" replace />} />
                   <Route path="/profile/following" element={<FollowingDetail />} />
                   {/* The golfer search lives in Play > Golfers now. */}
                   <Route path="/profile/following/find" element={<Navigate to={findTabPath("golfers")} replace />} />

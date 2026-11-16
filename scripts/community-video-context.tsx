@@ -3,7 +3,7 @@ const golfer = { id: "qa-author", name: "Synthetic Golfer", avatarColor: "#285c4
 export function useData() {
   return {
     currentUser: { ...golfer, id: "qa-viewer" }, getGolfer: () => golfer,
-    getGolfCall: () => null, isInCircle: () => false, isPostUpvoted: () => false,
+    getGolfCall: () => null, isInCircle: () => false, hasPlayedWith: () => false, isPostUpvoted: () => false,
     postUpvoteCount: () => 0, isPostSaved: () => false, commentsForPost: () => [],
     isBlocked: () => false, caddieAnalyses: [],
   };

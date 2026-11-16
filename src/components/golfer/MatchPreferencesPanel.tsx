@@ -16,7 +16,7 @@ import {
   TRAVEL_RADIUS_MIN,
 } from "../../types";
 import type { WalkOrCart } from "../../types";
-import { vibeLabel, walkOrCartLabel } from "../../lib/enumLabels";
+import { groupTypeLabel, vibeLabel, walkOrCartLabel } from "../../lib/enumLabels";
 import type { PlayingArea } from "../../lib/geo";
 import {
   GAME_FORMAT_OPTIONS,
@@ -122,7 +122,7 @@ export function MatchPreferencesPanel({ value, onChange, nearLocation }: MatchPr
           <div className="flex flex-wrap gap-1.5">
             {GROUP_TYPE_OPTIONS.map((g) => (
               <Pill key={g} active={value.groupTypePreference === g} onClick={() => onChange({ groupTypePreference: g })}>
-                {g}
+                {groupTypeLabel(g, t)}
               </Pill>
             ))}
           </div>

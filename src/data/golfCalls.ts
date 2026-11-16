@@ -540,6 +540,11 @@ export function buildGolfCallsBundle(): SeedBundle {
     { id: generateId("flw"), followerId: "g1", followingId: "g11", createdAt: isoDaysAgo(10) },
     { id: generateId("flw"), followerId: "g11", followingId: "g1", createdAt: isoDaysAgo(9) },
     { id: generateId("flw"), followerId: "g12", followingId: "g1", createdAt: isoDaysAgo(6) },
+    // Following is GolfMe's one friend list (2026-11-16): the two golfers
+    // Jordan added to his Circle after call-c2 are followed too, so the demo
+    // Home feed and Following list reflect them.
+    { id: generateId("flw"), followerId: "g1", followingId: "g9", createdAt: isoDaysAgo(29) },
+    { id: generateId("flw"), followerId: "g1", followingId: "g4", createdAt: isoDaysAgo(29) },
   ];
 
   const directMessages: DirectMessage[] = [

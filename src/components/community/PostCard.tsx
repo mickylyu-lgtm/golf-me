@@ -86,7 +86,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
     getGolfer,
     getGolfCall,
     currentUser,
-    isInCircle,
+    hasPlayedWith,
     isPostUpvoted,
     postUpvoteCount,
     togglePostUpvote,
@@ -400,9 +400,9 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
             <p className="flex items-center gap-1 text-sm font-semibold text-slate-800">
               <span className="truncate">{author.name}</span>
               {author.verification.verifiedGolfer && <ShieldCheck size={13} className="shrink-0 text-fairway-500" />}
-              {isInCircle(author.id) && (
+              {author.id !== currentUser.id && hasPlayedWith(author.id) && (
                 <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-fairway-50 px-1.5 py-0.5 text-[10px] font-semibold text-fairway-700 ring-1 ring-fairway-200">
-                  <Users size={10} aria-hidden /> {t("profile.golfCircle")}
+                  <Users size={10} aria-hidden /> {t("common.playedWith")}
                 </span>
               )}
             </p>
