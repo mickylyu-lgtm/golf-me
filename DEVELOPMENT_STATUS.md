@@ -2,6 +2,8 @@
 
 Approved by Micky ("go courses tab"). Play now has Rounds | Golfers | Courses; Courses embeds NearbyCourses (no Back/heading, map opens as a new history entry), so nearby courses, the course map and course pages (drone orbit) are one tap from Play again after the Home card was removed. `find.tabCourses` + new `find.subtitle` in all 6 locales. Micky deleted the deployed `get-tee-times` function in the dashboard (verified: the endpoint now returns 404).
 
+Shipped 2026-11-16: main 0e8ce6a deployed; Micky applied feed_1_apply.sql in production and feed_2_check.sql returned all 7 checks true. Remaining: a real-account check of Home's Following feed paging.
+
 ## 2026-11-16 - Server-side Following feed for Home (branch following-feed-rpc off origin/main 563bce2; local commits, NOT pushed, NOT deployed, migration NOT applied)
 
 Approved by Micky. golfme-architect.
