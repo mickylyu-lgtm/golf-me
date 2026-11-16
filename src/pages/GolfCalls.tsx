@@ -19,6 +19,8 @@ import { computeCallCompatibility } from "../lib/compatibility";
 import { matchesWhen } from "../lib/roundFilters";
 import { isPastRound } from "../lib/golfCall";
 import { isImeComposing } from "../lib/isImeComposing";
+import { effectiveNewPreferences } from "../lib/matchPreferences";
+import { evaluatePreferenceMatch } from "../lib/preferenceMatch";
 import { effectiveLocation } from "../lib/travelLocation";
 import { resolveCallDistanceMiles } from "../lib/courseSearch";
 import { useSessionState } from "../lib/useSessionState";
@@ -31,7 +33,7 @@ interface GolfCallsProps {
 }
 
 export function GolfCalls({ embedded = false }: GolfCallsProps) {
-  const { currentUser, golfCalls } = useData();
+  const { currentUser, golfCalls, getGolfer, followingGolfers, circleGolfers, playedWithIds } = useData();
   const { isDemo } = useAuth();
   const rounds = useRealRounds();
   const { t } = useLocale();
@@ -52,6 +54,13 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
   );
   const effectiveLoc = useMemo(() => effectiveLocation(currentUser, searchParams), [currentUser, searchParams]);
 
+  const effectivePrefs = useMemo(() => effectiveNewPreferences(currentUser, searchParams), [currentUser, searchParams]);
+  const preferenceContext = useMemo(() => ({
+    followingIds: new Set(followingGolfers.map((g) => g.id)),
+    circleIds: new Set(circleGolfers.map((g) => g.id)),
+    playedWithIds,
+  }), [followingGolfers, circleGolfers, playedWithIds]);
+
   const trimmedQuery = query.trim().toLowerCase();
   const baseResults = useMemo(
     () =>
@@ -66,11 +75,12 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
 
   const matchedResults = useMemo(() => {
     if (!isMatched) return null;
-    let list = [...baseResults];
+    // Use one distance for filtering, ranking and rendering, without mutating provider rows.
+    let list = baseResults.map((call) => ({ ...call, distanceMiles: resolveCallDistanceMiles(call, effectiveLoc) }));
 
     if (radius) {
       list = list.filter((c) => {
-        const distance = resolveCallDistanceMiles(c, effectiveLoc);
+        const distance = c.distanceMiles;
         return distance !== undefined && distance <= radius;
       });
     }
@@ -85,15 +95,20 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
     const scored = list
       .map((call) => ({
         call,
-        // Compatibility only. The old +2 for an attached booking
+        // Compatibility breaks preference-count ties. The old +2 for an attached booking
         // confirmation is gone: nobody reviews those, so an unreviewed
         // upload (or a forged attach) must not rank a round higher.
         matchScore: computeCallCompatibility(currentUser, call).overall,
+        preferenceMatches: evaluatePreferenceMatch(
+          effectivePrefs, currentUser.id, call,
+          call.joinedGolferIds.flatMap((id) => { const golfer = getGolfer(id); return golfer ? [golfer] : []; }),
+          preferenceContext,
+        ).filter((check) => check.matched).length,
       }))
-      .sort((a, b) => b.matchScore - a.matchScore);
+      .sort((a, b) => b.preferenceMatches - a.preferenceMatches || b.matchScore - a.matchScore);
     // Rounds you host stay on top, whatever their score.
     return hostedFirst(scored, currentUser.id, (x) => x.call);
-  }, [isMatched, baseResults, radius, when, customDate, intent, budgetMax, skill, vibeFilter, walk, currentUser, effectiveLoc]);
+  }, [isMatched, baseResults, radius, when, customDate, intent, budgetMax, skill, vibeFilter, walk, currentUser, effectiveLoc, effectivePrefs, getGolfer, preferenceContext]);
 
   // Newest-posted first (not soonest tee time) -- a freshly hosted round
   // should show up at the top of the feed immediately, the same
@@ -293,7 +308,7 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
             <h2 className="text-sm font-bold uppercase tracking-wide text-fairway-700 lg:col-span-2">{t("find.yourHostedRounds")}</h2>
           )}
           {myHosted.map((call) => (
-            <GolfCallCard key={call.id} call={call} />
+            <GolfCallCard key={call.id} call={call} matchPreferences={isMatched ? effectivePrefs : undefined} />
           ))}
           {myHosted.length > 0 && otherRounds.length > 0 && (
             <h2 className="mt-3 text-sm font-bold uppercase tracking-wide text-slate-400 lg:col-span-2 lg:mt-4">
@@ -301,7 +316,7 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
             </h2>
           )}
           {otherRounds.map((call) => (
-            <GolfCallCard key={call.id} call={call} />
+            <GolfCallCard key={call.id} call={call} matchPreferences={isMatched ? effectivePrefs : undefined} />
           ))}
         </div>
       )}

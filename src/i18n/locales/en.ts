@@ -1263,6 +1263,7 @@ export const en = {
   "host.pickUpToPlayer": "Pick up to 1 confirmed player — we'll leave room for the rest.",
   "host.newGolfer": "New golfer",
   "host.hostLabel": "Host",
+  "host.roundProofUnconfirmed": "Your round was posted. Booking proof could not be confirmed; check its status on the round before adding it again.",
   "host.roundLinkFailed": "Your round was posted, but linking it to the post could not be confirmed.",
   "host.postedFreshToast": "Your Golf Call is live!",
   "host.postedFillToast": "Your open spot is posted — we'll help you fill it.",

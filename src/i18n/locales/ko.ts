@@ -1410,6 +1410,7 @@ export const ko: Record<TranslationKey, string> = {
   "host.pickUpToPlayer": "최대 1명까지 확정 인원을 선택하세요 — 나머지는 모집으로 채울게요.",
   "host.newGolfer": "신규 골퍼",
   "host.hostLabel": "주최자",
+  "host.roundProofUnconfirmed": "라운드는 게시되었어요. 예약 증빙을 확인하지 못했어요. 다시 추가하기 전에 라운드 화면에서 상태를 확인해 주세요.",
   "host.roundLinkFailed": "라운드는 게시되었지만 게시물과의 연결을 확인하지 못했어요.",
   "host.postedFreshToast": "라운드가 게시됐어요!",
   "host.postedFillToast": "빈자리가 게시됐어요 — 채우는 걸 도와드릴게요.",

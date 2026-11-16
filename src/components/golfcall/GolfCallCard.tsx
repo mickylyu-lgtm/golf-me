@@ -20,7 +20,7 @@ import { isPastRound } from "../../lib/golfCall";
 import { roundedMiles } from "../../lib/geo";
 import { useJoinRound } from "../../lib/useJoinRound";
 import { ConfirmJoinModal } from "./ConfirmJoinModal";
-import type { PreferenceMatchContext } from "../../lib/preferenceMatch";
+import type { NewPreferenceSelections, PreferenceMatchContext } from "../../lib/preferenceMatch";
 import { useLocale } from "../../i18n/LocaleContext";
 
 interface GolfCallCardProps {
@@ -28,9 +28,10 @@ interface GolfCallCardProps {
   showMatch?: boolean;
   // Off where the page shows the same shared preferences itself (Auto-Match).
   showSharedPreferences?: boolean;
+  matchPreferences?: NewPreferenceSelections;
 }
 
-export function GolfCallCard({ call, showMatch = true, showSharedPreferences = true }: GolfCallCardProps) {
+export function GolfCallCard({ call, showMatch = true, showSharedPreferences = true, matchPreferences }: GolfCallCardProps) {
   const { currentUser, getGolfer, followingGolfers, circleGolfers, playedWithIds } = useData();
   const { t, locale } = useLocale();
   const navigate = useNavigate();
@@ -61,8 +62,8 @@ export function GolfCallCard({ call, showMatch = true, showSharedPreferences = t
       circleIds: new Set(circleGolfers.map((g) => g.id)),
       playedWithIds,
     };
-    return evaluatePreferenceMatch(currentUser, currentUser.id, call, roster, ctx);
-  }, [showMatch, showSharedPreferences, isHost, call, getGolfer, followingGolfers, circleGolfers, playedWithIds, currentUser]);
+    return evaluatePreferenceMatch(matchPreferences ?? currentUser, currentUser.id, call, roster, ctx);
+  }, [showMatch, showSharedPreferences, isHost, call, getGolfer, followingGolfers, circleGolfers, playedWithIds, currentUser, matchPreferences]);
 
   // Same confirm sheet and join path as the round page (lib/useJoinRound):
   // Join opens "You're joining" with who's playing; only its confirm joins.

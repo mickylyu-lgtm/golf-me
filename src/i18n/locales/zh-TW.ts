@@ -1410,6 +1410,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "host.pickUpToPlayer": "最多選擇 1 位確定球友——其餘名額留給招募。",
   "host.newGolfer": "新球友",
   "host.hostLabel": "發起人",
+  "host.roundProofUnconfirmed": "球局已發佈。預訂憑證暫未確認；再次新增前，請在球局頁面檢查狀態。",
   "host.roundLinkFailed": "球局已發佈，但無法確認是否已連結至貼文。",
   "host.postedFreshToast": "你的球局已發布！",
   "host.postedFillToast": "空位已發布，我們會協助你招募球友。",

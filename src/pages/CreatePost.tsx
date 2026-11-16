@@ -58,6 +58,21 @@ export interface CreatePostSwingPrefill {
 }
 
 export function CreatePost() {
+  const { isDemo, authUser } = useAuth();
+  const route = useLocation();
+  const owner = isDemo ? "demo" : authUser?.id ? `user:${authUser.id}` : null;
+  const handoff = useRef({ key: route.key, owner });
+  if (handoff.current.key !== route.key) handoff.current = { key: route.key, owner };
+  // Remount state and async upload ledger across account/demo transitions.
+  return <CreatePostForOwner key={owner ?? "signed-out"} draftOwner={owner} allowPrefill={Boolean(owner) && handoff.current.owner === owner} />;
+}
+
+function CreatePostForOwner({ draftOwner, allowPrefill }: { draftOwner: string | null; allowPrefill: boolean }) {
+  const activeInstance = useRef(true);
+  useEffect(() => {
+    activeInstance.current = true;
+    return () => { activeInstance.current = false; };
+  }, []);
   const navigate = useNavigate();
   const location = useLocation();
   const { currentUser, golfCalls, createPost } = useData();
@@ -73,14 +88,14 @@ export function CreatePost() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
 
-  const prefill = location.state as CreatePostSwingPrefill | null;
+  const prefill = allowPrefill ? location.state as CreatePostSwingPrefill | null : null;
   // A fresh Caddie "Share to Community" handoff always wins over an old
   // abandoned draft — it's a deliberate new action, not something to
   // silently bury under whatever was left over from before. Otherwise,
   // resumes a draft left by leaving this screen (photo picker round trip,
   // a call, closing the app) and coming back — same idea as
   // hostRoundDraft.ts. Only consulted once per mount.
-  const draft = prefill ? null : loadCommunityPostDraft();
+  const draft = prefill ? null : loadCommunityPostDraft(draftOwner);
 
   const [text, setText] = useState(prefill?.caption ?? draft?.text ?? "");
   // activeTool is UI-only — which picker panel is currently expanded below
@@ -139,7 +154,7 @@ export function CreatePost() {
   // own state comment above). Cleared only once the post actually
   // publishes (see handlePost).
   useEffect(() => {
-    saveCommunityPostDraft({
+    saveCommunityPostDraft(draftOwner, {
       text,
       activeTool,
       mediaItems,
@@ -152,7 +167,7 @@ export function CreatePost() {
       category,
       requestCoachReview,
     });
-  }, [text, activeTool, mediaItems, prefilledVideoUrl, prefilledThumbnailUrl, privateShare, courseTag, golfCallId, category, requestCoachReview]);
+  }, [draftOwner, text, activeTool, mediaItems, prefilledVideoUrl, prefilledThumbnailUrl, privateShare, courseTag, golfCallId, category, requestCoachReview]);
 
   // A private share restored from a draft (or handed over before its
   // signed URL was ready) needs a fresh preview link.
@@ -454,7 +469,7 @@ export function CreatePost() {
   const canPost = text.trim().length > 0 && !mediaUploading && !readingPick && (kind !== "swing" || Boolean(videoFile) || Boolean(prefilledVideoUrl) || Boolean(privateShare));
 
   async function handlePost() {
-    if (!canPost || posting || (isOfficial && !officialCapability.canPostOfficial)) return;
+    if (!activeInstance.current || !canPost || posting || (isOfficial && !officialCapability.canPostOfficial)) return;
     // The disabled button isn't the only guard: refuse a snapshot with
     // uploads still running, more than the cap, or items the slot ledger
     // doesn't know (state that hasn't caught up yet).
@@ -474,6 +489,13 @@ export function CreatePost() {
     // removed again (never the private Caddie original, never a
     // pre-existing URL such as prefilledVideoUrl).
     const createdMediaUrls: string[] = [];
+    const abandoned = () => {
+      if (activeInstance.current) return false;
+      // No post has been attempted yet. Existing helper verifies ownership
+      // and references before deleting only this attempt's public copies.
+      if (createdMediaUrls.length > 0 && authUser) void removeCommunityMediaCreatedForFailedPost(authUser.id, createdMediaUrls);
+      return true;
+    };
     try {
       let videoUrl: string | undefined;
       let videoThumbnailUrl: string | undefined;
@@ -491,6 +513,7 @@ export function CreatePost() {
         setUploadProgress("uploading");
         videoUrl = await copyCaddieMediaToCommunity(authUser.id, privateShare.videoPath, "video");
         createdMediaUrls.push(videoUrl);
+        if (abandoned()) return;
         if (privateShare.thumbnailPath) {
           try {
             videoThumbnailUrl = await copyCaddieMediaToCommunity(authUser.id, privateShare.thumbnailPath, "thumb");
@@ -527,6 +550,7 @@ export function CreatePost() {
         const { data } = supabase.storage.from(COMMUNITY_MEDIA_BUCKET).getPublicUrl(path);
         videoUrl = data.publicUrl;
         createdMediaUrls.push(videoUrl);
+        if (abandoned()) return;
 
         // Best-effort: a real captured frame from the actual video, so the
         // post shows something other than a black rectangle before anyone
@@ -535,6 +559,7 @@ export function CreatePost() {
         // itself, since the video already uploaded successfully.
         try {
           const thumbBlob = await captureVideoThumbnail(videoFile);
+          if (abandoned()) return;
           const thumbPath = `${authUser.id}/swing-thumb-${crypto.randomUUID()}.jpg`;
           const { error: thumbUploadError } = await supabase.storage
             .from(COMMUNITY_MEDIA_BUCKET)
@@ -548,6 +573,7 @@ export function CreatePost() {
         }
       }
 
+      if (abandoned()) return;
       setUploadProgress("publishing");
       const type: PostType = kind === "none" ? "text" : kind;
       // Preserve the requested mode through async media preparation. The
@@ -565,11 +591,13 @@ export function CreatePost() {
         coachReviewRequested: kind === "swing" ? requestCoachReview : undefined,
       });
 
+      if (!activeInstance.current) return;
       tapHaptic("success");
-      clearCommunityPostDraft();
+      clearCommunityPostDraft(draftOwner);
       showToast("Post published.", "success");
       navigate("/community");
     } catch (err) {
+      if (!activeInstance.current) return;
       if (err instanceof PostPublicationUncertainError) {
         showToast("Couldn't confirm all attachments. Check this post before trying again; your draft is saved.", "warning");
         navigate(`/community/${err.postId}`);

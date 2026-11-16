@@ -26,14 +26,15 @@ import { skillTierFromHandicap } from "../lib/format";
 import { coordsForCourse } from "../lib/courses";
 import { haversineMiles } from "../lib/geo";
 import { track } from "../lib/analytics";
-import { attachBookingProofDirect, BookingProofFileError } from "../lib/useBookingProof";
-import { BookingActionError, bookAndSubmitAtCreation } from "../lib/useBookingEvidence";
+import { attachBookingProofDirect } from "../lib/useBookingProof";
+import { bookAndSubmitAtCreation } from "../lib/useBookingEvidence";
 import { clearHostRoundDraft, loadHostRoundDraft, saveHostRoundDraft } from "../lib/hostRoundDraft";
 import type { LookingFor, WhenChoice } from "../lib/hostRoundDraft";
 import { parseHostPrefill } from "../lib/hostPrefill";
 import { isObjectionableContentError } from "../lib/objectionableContent";
 import { isAccountSuspendedError } from "../lib/moderation";
 import { tapHaptic } from "../lib/tapFeedback";
+import { completeCreatedRoundProof } from "../lib/createdRoundProof";
 import { linkCreatedRoundToPost } from "../lib/createdRoundPost";
 
 const BOOKING_SOURCES = ["Course Website", "GolfNow", "Lightspeed / Chronogolf", "Phone Reservation", "Other"] as const;
@@ -423,25 +424,19 @@ export function CreateGolfCall() {
       // hosting action failed, since from the golfer's perspective it
       // didn't. They can always add proof later from the round's detail
       // page (see BookingProofHostControls).
-      if (proofFile && authUser) {
-        try {
-          // Server model (migration 20261107150000) when the new round row
-          // carries booking_status; else the Stage 1 attach.
-          if (call.bookingStatus !== undefined) await bookAndSubmitAtCreation(authUser.id, call.id, proofFile, proofSource);
-          else await attachBookingProofDirect(authUser.id, call.id, proofFile, proofSource);
-        } catch (err) {
-          console.error("GolfMe: failed to attach booking proof at creation time.", err);
-          showToast(
-            err instanceof BookingProofFileError || err instanceof BookingActionError ? t(err.key) : t("golfCallDetail.bookingProofSaveError"),
-            "warning",
-          );
-        }
-      }
+      const proofConfirmed = !proofFile || !authUser || await completeCreatedRoundProof(() =>
+        call.bookingStatus !== undefined
+          ? bookAndSubmitAtCreation(authUser.id, call.id, proofFile, proofSource)
+          : attachBookingProofDirect(authUser.id, call.id, proofFile, proofSource),
+      );
       const postLink = await linkCreatedRoundToPost(fromPostId, call.id, attachGolfCallToPost);
-      showToast(postLink === "failed" ? t("host.roundLinkFailed") : t("host.postedFreshToast"), postLink === "failed" ? "warning" : "success");
+      showToast(
+        !proofConfirmed ? t("host.roundProofUnconfirmed") : postLink === "failed" ? t("host.roundLinkFailed") : t("host.postedFreshToast"),
+        !proofConfirmed || postLink === "failed" ? "warning" : "success",
+      );
       // Only return to the post when its link was confirmed. A linking
       // failure still opens the successfully created round, never a retry.
-      navigate(postLink === "linked" ? `/community/${fromPostId}` : `/golf-calls/${call.id}`, { state: { justHosted: true } });
+      navigate(proofConfirmed && postLink === "linked" ? `/community/${fromPostId}` : `/golf-calls/${call.id}`, { state: { justHosted: true } });
     } catch (err) {
       setSubmitting(false);
       showToast(

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, MessageSquareText, Plus, Search } from "lucide-react";
 import { useData } from "../context/DataContext";
@@ -65,6 +65,24 @@ export function Community() {
     return rankForYou(searched);
   }, [tab, searched, ctx, getGolfer]);
 
+  const hasOlder = !isDemo && community.hasMorePosts;
+  const endRef = useRef<HTMLDivElement>(null);
+  const loadOlder = community.loadOlderPosts;
+  useEffect(() => {
+    const end = endRef.current;
+    if (!end || !hasOlder || community.isPaging || community.pageError || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) void loadOlder();
+    }, { rootMargin: "0px 0px 400px 0px" });
+    observer.observe(end);
+    return () => observer.disconnect();
+  }, [hasOlder, community.isPaging, community.pageError, basePosts.length, tab, search, loadOlder]);
+
+  function toggleSearch() {
+    if (showSearch) setSearch("");
+    setShowSearch(!showSearch);
+  }
+
   return (
     <div className="flex flex-col gap-5 pb-6">
       <button
@@ -81,7 +99,7 @@ export function Community() {
           <h1 className="min-w-0 text-xl font-bold text-slate-900">{t("community.title")}</h1>
           <div className="flex shrink-0 gap-2">
             <button
-              onClick={() => setShowSearch((v) => !v)}
+              onClick={toggleSearch}
               aria-label="Search Community"
               className={`flex h-9 w-9 items-center justify-center rounded-full border transition-colors duration-150 ${
                 showSearch ? "border-fairway-300 bg-fairway-50 text-fairway-700" : "border-slate-200 text-slate-500 hover:border-slate-300"
@@ -136,7 +154,7 @@ export function Community() {
         <GolfMeLoader className="py-12" />
       ) : view === "error" ? (
         <LoadErrorState onRetry={community.retry} />
-      ) : feed.length === 0 ? (
+      ) : feed.length === 0 && !hasOlder && !community.isPaging ? (
         <EmptyState
           icon={<MessageSquareText size={20} />}
           title={search ? t("community.emptyNoSearch") : t("community.emptyDefault")}
@@ -156,6 +174,14 @@ export function Community() {
             <PostCard key={post.id} post={post} />
           ))}
         </PostFeedGrid>
+      )}
+      {community.pageError && <LoadErrorState onRetry={loadOlder} />}
+      {hasOlder && !community.pageError && (
+        <div ref={endRef} className="flex justify-center">
+          <Button variant="ghost" disabled={community.isPaging} onClick={() => void loadOlder()}>
+            {t("followers.loadMore")}
+          </Button>
+        </div>
       )}
     </div>
   );

@@ -1410,6 +1410,7 @@ export const es: Record<TranslationKey, string> = {
   "host.pickUpToPlayer": "Elige hasta 1 jugador confirmado — dejaremos espacio para el resto.",
   "host.newGolfer": "Golfista nuevo",
   "host.hostLabel": "Organizador",
+  "host.roundProofUnconfirmed": "Tu ronda se publicó. No se pudo confirmar el comprobante de reserva; revisa su estado en la ronda antes de añadirlo otra vez.",
   "host.roundLinkFailed": "Tu ronda se publicó, pero no se pudo confirmar el enlace con la publicación.",
   "host.postedFreshToast": "¡Tu Ronda ya está activa!",
   "host.postedFillToast": "Tu cupo abierto está publicado — te ayudaremos a completarlo.",

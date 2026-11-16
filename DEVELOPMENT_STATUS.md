@@ -1,3 +1,20 @@
+## November 16: approved host, browse and Community reliability release
+
+Micky approved fixing and pushing the six findings. Integrated the optional booking-proof deadline, travel-area distance consistency, temporary Match Preferences ranking, visible-only Community search, older-page loading and account-scoped Community drafts on release 8dbcc888. Account transitions remount the composer; late async completion cannot publish after preparation, clear a draft or navigate the next account. Legacy unowned draft bytes are preserved but not automatically adopted, because ownership cannot be safely inferred. No database, policy or production-data changes.
+
+Validation uses actual callback and isolated regression tests plus the aggregate check. Physical-iPhone touch and authenticated real-account hosting/joining/posting remain unverified; do not equate synthetic coverage with device smoothness. Verify exact remote commit, CI and Vercel before reporting live.
+
+## November 16: optional hosting proof cannot strand a created round
+
+- Reproduced the actual host submit callback remaining pending after a successful round creation when the optional booking-proof operation never settles. The draft was already cleared and navigation never occurred.
+- Bound the optional proof wait to 15 seconds. On rejection or timeout, open the existing round and retain an explicit proof-unconfirmed warning; never show a generic hosting failure, re-enable the host action, retry attachment automatically, or retry round creation. The existing upload may complete later, so the user is asked to check the round before adding proof again.
+- Focused actual-callback regressions cover both legacy and versioned proof paths, success, rejection, stalled attachment, and late success/rejection without duplicate finalization. No production data or backend changes. Physical-iPhone behavior is not verified; browser automation was blocked by Chromium socket restrictions.
+## 2026-11-16 — Browse search distance and preference consistency
+
+Approved scan fixes, prepared for combined integration (not independently pushed). Matched round Browse now uses the effective search-area distance consistently for radius filtering, compatibility and displayed cards without mutating provider rows. Per-search Match Preferences rank matches ahead of compatibility ties, and card badges use the same temporary preferences. Plain newest-first Browse and hosted-first grouping are preserved; mismatched preferences do not remove otherwise eligible rounds. No saved profile or backend changes.
+
+Validation: three actual matched-results callback regressions cover temporary preference changes/clearing, consistent distance, immutable source rows and unknown-distance exclusion. Full check passed TypeScript/lint, 1,628 tests with six optional ffmpeg skips, build and prerender. Physical iPhone and authenticated joining remain untested.
+
 ## 2026-11-16 — Settings scroll and Auto-Match tutorial publication approved
 
 Micky explicitly approved pushing both changes. Reconciled the Settings modal scroll lock and Auto-Match tutorial onto main d154385, retaining the chat and Community upload fixes. Combined checks: TypeScript/lint, 1,625 passing tests with six ffmpeg-dependent skips, production build and prerender. Browser/device limitations in the local-review entries below still apply. No backend, policy, production-data or native-shell changes. Verify GitHub CI and Vercel production against the exact release commit after push.

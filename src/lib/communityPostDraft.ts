@@ -40,24 +40,31 @@ export interface CommunityPostDraft {
   requestCoachReview: boolean;
 }
 
-const DRAFT_KEY = "golfme:communityPostDraft";
+// Legacy unowned drafts are deliberately not adopted by whichever account logs
+// in next. Leave their bytes untouched; authorship cannot be safely inferred.
+function draftKey(owner: string | null): string | null {
+  return owner ? `golfme:communityPostDraft:v2:${encodeURIComponent(owner)}` : null;
+}
 
-export function loadCommunityPostDraft(): CommunityPostDraft | null {
-  if (typeof window === "undefined") return null;
+export function loadCommunityPostDraft(owner: string | null): CommunityPostDraft | null {
+  const key = draftKey(owner);
+  if (!key || typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(DRAFT_KEY);
+    const raw = window.localStorage.getItem(key);
     return raw ? (JSON.parse(raw) as CommunityPostDraft) : null;
   } catch {
     return null;
   }
 }
 
-export function saveCommunityPostDraft(draft: CommunityPostDraft): void {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+export function saveCommunityPostDraft(owner: string | null, draft: CommunityPostDraft): void {
+  const key = draftKey(owner);
+  if (!key || typeof window === "undefined") return;
+  try { window.localStorage.setItem(key, JSON.stringify(draft)); } catch { /* Keep the in-memory draft when storage is full or unavailable. */ }
 }
 
-export function clearCommunityPostDraft(): void {
-  if (typeof window === "undefined") return;
-  window.localStorage.removeItem(DRAFT_KEY);
+export function clearCommunityPostDraft(owner: string | null): void {
+  const key = draftKey(owner);
+  if (!key || typeof window === "undefined") return;
+  try { window.localStorage.removeItem(key); } catch { /* Storage unavailable. */ }
 }

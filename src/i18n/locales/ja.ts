@@ -1410,6 +1410,7 @@ export const ja: Record<TranslationKey, string> = {
   "host.pickUpToPlayer": "確定メンバーを最大1人まで選べます — 残りは募集で埋めます。",
   "host.newGolfer": "新規ゴルファー",
   "host.hostLabel": "主催者",
+  "host.roundProofUnconfirmed": "ラウンドは公開されました。予約証明を確認できませんでした。再度追加する前にラウンド画面で状態をご確認ください。",
   "host.roundLinkFailed": "ラウンドは公開されましたが、投稿とのリンクを確認できませんでした。",
   "host.postedFreshToast": "ラウンドを公開しました！",
   "host.postedFillToast": "空き枠を公開しました — メンバー集めをサポートします。",

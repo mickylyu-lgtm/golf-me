@@ -1410,6 +1410,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "host.pickUpToPlayer": "最多选择 1 位确定球友——其余名额留给招募。",
   "host.newGolfer": "新球友",
   "host.hostLabel": "发起人",
+  "host.roundProofUnconfirmed": "球局已发布。预订凭证暂未确认；再次添加前，请在球局页面检查状态。",
   "host.roundLinkFailed": "球局已发布，但无法确认是否已关联到帖子。",
   "host.postedFreshToast": "你的球局已发布！",
   "host.postedFillToast": "空位已发布，我们会帮你招募球友。",
