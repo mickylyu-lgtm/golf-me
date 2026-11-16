@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
 import { GolfCalls } from "./GolfCalls";
 import { Discover } from "./Discover";
+import { NearbyCourses } from "./NearbyCourses";
 import { useLocale } from "../i18n/LocaleContext";
 import { useSessionState } from "../lib/useSessionState";
 import { FIND_TAB_PARAM, FIND_TAB_STORAGE_KEY, isFindTab, resolveFindTab } from "../lib/findTab";
@@ -68,9 +69,19 @@ export function Find() {
         >
           {t("find.tabGolfers")}
         </button>
+        <button
+          onClick={() => setTab("courses")}
+          data-haptic="selection"
+          aria-pressed={tab === "courses"}
+          className={`flex-1 rounded-full py-2 text-sm font-semibold transition ${
+            tab === "courses" ? "bg-gradient-to-br from-brand-forest to-brand-forest-deep text-white" : "text-slate-500 hover:text-slate-800"
+          }`}
+        >
+          {t("find.tabCourses")}
+        </button>
       </div>
 
-      {tab === "rounds" ? <GolfCalls embedded /> : <Discover />}
+      {tab === "rounds" ? <GolfCalls embedded /> : tab === "golfers" ? <Discover /> : <NearbyCourses embedded />}
     </div>
   );
 }

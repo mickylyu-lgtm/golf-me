@@ -1036,9 +1036,10 @@ export const ja: Record<TranslationKey, string> = {
   "home.noRoundsYetBody": "最初のラウンドを主催すると、ゴルファーが参加できます。",
 
   "find.title": "近くのゴルフを探す",
-  "find.subtitle": "メンバーを募集中のラウンドと、そのゴルファーたち。",
+  "find.subtitle": "近くのラウンド、ゴルファー、コース。",
   "find.tabRounds": "ラウンド",
   "find.tabGolfers": "ゴルファー",
+  "find.tabCourses": "コース",
   "find.searchPlaceholder": "ラウンドやコースを検索",
   "find.filters": "フィルター",
   "find.hideFilters": "フィルターを隠す",

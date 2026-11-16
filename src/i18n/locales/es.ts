@@ -1036,9 +1036,10 @@ export const es: Record<TranslationKey, string> = {
   "home.noRoundsYetBody": "Organiza la primera y otros golfistas podrán unirse.",
 
   "find.title": "Encuentra golf cerca de ti",
-  "find.subtitle": "Rondas que buscan jugadores, y los golfistas detrás de ellas.",
+  "find.subtitle": "Rondas, golfistas y campos cerca de ti.",
   "find.tabRounds": "Rondas",
   "find.tabGolfers": "Golfistas",
+  "find.tabCourses": "Campos",
   "find.searchPlaceholder": "Buscar rondas o campos",
   "find.filters": "Filtros",
   "find.hideFilters": "Ocultar filtros",

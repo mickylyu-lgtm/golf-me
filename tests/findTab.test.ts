@@ -6,6 +6,7 @@ import { findTabPath, isFindTab, resolveFindTab } from "../src/lib/findTab.ts";
 test("an explicit tab param picks the tab", () => {
   assert.equal(resolveFindTab("rounds", "rounds"), "rounds");
   assert.equal(resolveFindTab("golfers", "rounds"), "golfers");
+  assert.equal(resolveFindTab("courses", "rounds"), "courses");
 });
 
 test("the explicit param beats the remembered tab", () => {
@@ -24,6 +25,7 @@ test("no param, or a junk one, falls back to the remembered tab", () => {
 test("tab paths stay on the /find root route", () => {
   assert.equal(findTabPath("rounds"), "/find?tab=rounds");
   assert.equal(findTabPath("golfers"), "/find?tab=golfers");
+  assert.equal(findTabPath("courses"), "/find?tab=courses");
   // RootTabCarousel/AppShell match ROOT_PATHS on pathname only.
   assert.equal(new URL(findTabPath("rounds"), "https://golfme.app").pathname, "/find");
   assert.equal(isFindTab("rounds"), true);

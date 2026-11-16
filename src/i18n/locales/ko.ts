@@ -1036,9 +1036,10 @@ export const ko: Record<TranslationKey, string> = {
   "home.noRoundsYetBody": "첫 라운드를 열면 다른 골퍼들이 참여할 수 있어요.",
 
   "find.title": "근처 골프 찾기",
-  "find.subtitle": "플레이어를 찾는 라운드와 그 뒤의 골퍼들.",
+  "find.subtitle": "내 주변 라운드, 골퍼, 골프장.",
   "find.tabRounds": "라운드",
   "find.tabGolfers": "골퍼",
+  "find.tabCourses": "골프장",
   "find.searchPlaceholder": "라운드 또는 골프장 검색",
   "find.filters": "필터",
   "find.hideFilters": "필터 숨기기",

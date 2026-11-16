@@ -1036,9 +1036,10 @@ export const zhCN: Record<TranslationKey, string> = {
   "home.noRoundsYetBody": "发起第一场球局，其他球友就能加入。",
 
   "find.title": "寻找附近的球局",
-  "find.subtitle": "正在招募球友的球局，以及背后的球友。",
+  "find.subtitle": "附近的球局、球友和球场。",
   "find.tabRounds": "球局",
   "find.tabGolfers": "球友",
+  "find.tabCourses": "球场",
   "find.searchPlaceholder": "搜索球局或球场",
   "find.filters": "筛选",
   "find.hideFilters": "隐藏筛选",

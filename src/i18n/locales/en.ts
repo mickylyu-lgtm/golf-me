@@ -1061,9 +1061,10 @@ export const en = {
 
   // Find
   "find.title": "Find golf near you",
-  "find.subtitle": "Rounds looking for players, and the golfers behind them.",
+  "find.subtitle": "Rounds, golfers and courses near you.",
   "find.tabRounds": "Rounds",
   "find.tabGolfers": "Golfers",
+  "find.tabCourses": "Courses",
   "find.searchPlaceholder": "Search rounds or courses",
   "find.filters": "Filters",
   "find.hideFilters": "Hide filters",

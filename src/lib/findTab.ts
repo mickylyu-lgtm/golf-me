@@ -1,15 +1,15 @@
-// Find (the Play tab) has two sub-tabs. The last one used is remembered for
+// Find (the Play tab) has three sub-tabs: Rounds, Golfers, Courses. The last one used is remembered for
 // the app session, which is right for a plain return to Play (bottom-nav
 // tap, swipe, Back) -- but "Find a Round", "View more" and the Back
 // fallback from a round page always mean Rounds, so they ask for it with
 // ?tab=rounds and the request beats the remembered tab.
-export type FindTab = "rounds" | "golfers";
+export type FindTab = "rounds" | "golfers" | "courses";
 
 export const FIND_TAB_PARAM = "tab";
 export const FIND_TAB_STORAGE_KEY = "golfme:findTab";
 
 export function isFindTab(v: string | null | undefined): v is FindTab {
-  return v === "rounds" || v === "golfers";
+  return v === "rounds" || v === "golfers" || v === "courses";
 }
 
 // The URL for Play opened on a specific sub-tab.

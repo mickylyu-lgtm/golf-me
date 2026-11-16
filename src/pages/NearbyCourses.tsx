@@ -26,7 +26,10 @@ import { initialBrowseArea, withBrowseArea } from "../lib/browseArea";
 // freshly-picked location via router state when the golfer doesn't have
 // one saved yet) or directly, in which case it falls back to the golfer's
 // saved playing area, or its own copy of the same "Use My Location" prompt.
-export function NearbyCourses() {
+// embedded: rendered as Play's Courses tab (Find.tsx), which already has its
+// own title and is a root tab, so no Back button or page heading, and the map
+// opens as a new history entry (Back returns to Play).
+export function NearbyCourses({ embedded = false }: { embedded?: boolean } = {}) {
   const { currentUser } = useData();
   const { t } = useLocale();
   const navigate = useNavigate();
@@ -56,23 +59,31 @@ export function NearbyCourses() {
   }
 
   return (
-    <div className="flex flex-col gap-5 pb-6">
-      <button
-        onClick={() => goBack(navigate, "/")}
-        className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
-      >
-        <ArrowLeft size={16} /> {t("common.back")}
-      </button>
+    <div className={embedded ? "flex flex-col gap-4 pb-6" : "flex flex-col gap-5 pb-6"}>
+      {!embedded && (
+        <button
+          onClick={() => goBack(navigate, "/")}
+          className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
+        >
+          <ArrowLeft size={16} /> {t("common.back")}
+        </button>
+      )}
 
-      <div className="flex items-start justify-between gap-3">
+      <div className={embedded ? "flex items-center justify-between gap-3" : "flex items-start justify-between gap-3"}>
         <div className="min-w-0">
-          <h1 className="text-xl font-bold text-slate-900">{t("nearbyCourses.title")}</h1>
-          <p className="text-sm text-slate-500">{t("nearbyCourses.subtitle")}</p>
+          {embedded ? (
+            <p className="text-sm text-slate-500">{t("nearbyCourses.subtitle")}</p>
+          ) : (
+            <>
+              <h1 className="text-xl font-bold text-slate-900">{t("nearbyCourses.title")}</h1>
+              <p className="text-sm text-slate-500">{t("nearbyCourses.subtitle")}</p>
+            </>
+          )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {area && <CourseImageModeToggle />}
           <button
-            onClick={() => navigate("/courses/map", { replace: true, state: area ? { area } : undefined })}
+            onClick={() => navigate("/courses/map", { replace: !embedded, state: area ? { area } : undefined })}
             aria-label={t("courseMap.showMap")}
             className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-colors hover:border-fairway-300 hover:text-fairway-700"
           >
