@@ -3,6 +3,10 @@ import { useNavigate } from "react-router-dom";
 import type { ReactNode } from "react";
 import { Activity, ArrowRight, ChevronRight, Flag, Plus, Share2, SlidersHorizontal, Users } from "lucide-react";
 import { useData } from "../context/DataContext";
+import { useRealCommunity } from "../context/RealCommunityContext";
+import { listView } from "../lib/loadStatus";
+import { LoadErrorState, StaleDataNotice } from "../components/ui/LoadStates";
+import { GolfMeLoader } from "../components/loading/GolfMeLoader";
 import { useAuth } from "../context/AuthContext";
 import { useLocale } from "../i18n/LocaleContext";
 import { useTutorial, useTutorialEligibility } from "../context/TutorialContext";
@@ -24,9 +28,8 @@ import { useFirstRoundPrompt } from "../context/FirstRoundPromptContext";
 import { clubLabel } from "../lib/clubLabel";
 import { useShareActions } from "../lib/useShareActions";
 import { homeFocus, readOnboardingIntents } from "../lib/onboardingIntent";
-import { useRealCommunity } from "../context/RealCommunityContext";
 import { rowToPost } from "../lib/communityPostRow";
-import { feedCutoff, mergeFollowingPosts, withinCutoff } from "../lib/followingFeed";
+import { feedCutoff, mergeFollowingPosts } from "../lib/followingFeed";
 import { useFollowingFeed } from "../lib/useFollowingFeed";
 import type { CommunityPost, GolfCall, GolferProfile } from "../types";
 
@@ -37,8 +40,6 @@ const ROUND_STRIP_COUNT = 6;
 // just scroll to the end"): this many at first, this many more each time the
 // end of the list comes near, until every loaded item is shown.
 const FEED_STEP = 6;
-// New golfers who follow no one still see a little of the community.
-const COMMUNITY_PREVIEW_COUNT = 3;
 
 // Same dark-green gradient as the shared Button / app icon. A standalone
 // class list: Tailwind's stylesheet order doesn't follow class order, so
@@ -46,7 +47,7 @@ const COMMUNITY_PREVIEW_COUNT = 3;
 const PRIMARY_ACTION_CLASS =
   "rounded-2xl bg-gradient-to-br from-brand-forest to-brand-forest-deep shadow-sm shadow-fairway-900/10 transition-all duration-200 ease-out hover:-translate-y-0.5 hover:brightness-110 hover:shadow-md active:translate-y-0 active:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 motion-reduce:transition-none motion-reduce:hover:translate-y-0";
 
-// One entry in the following feed: a post, or a round a followed golfer is
+// One entry in the community feed: a post, or a round a followed golfer is
 // hosting or has joined. Ordered by when it was created.
 type FeedItem =
   | { kind: "post"; key: string; at: string; post: CommunityPost }
@@ -157,15 +158,15 @@ export function Home() {
     return { nearby: nearby.length > 0, rounds: nearby.length > 0 ? newest(nearby) : newest(openCalls) };
   }, [openCalls]);
 
-  // The feed: posts (including swing posts) by golfers you follow, plus
-  // upcoming rounds they host or have joined. Real accounts page posts from
-  // get_following_feed and merge them with Community's loaded posts
-  // (lib/followingFeed.ts). Demo, and real accounts until that migration is
-  // applied, filter the posts already loaded for Community.
+  // All loaded visible Community posts, plus paged followed posts and round
+  // activity. The existing RPC only supplements older followed posts; it
+  // never gates or delays the community posts already available to us.
+
   const followingIds = useMemo(() => new Set(followingGolfers.map((g) => g.id)), [followingGolfers]);
   const followKey = useMemo(() => [...followingIds].sort().join(","), [followingIds]);
   const serverFeed = useFollowingFeed(!isDemo && Boolean(authUser), authUser?.id, followKey);
-  const { hasLoaded: communityLoaded, loadError: communityLoadError, refreshFailed: communityRefreshFailed } = useRealCommunity();
+  const community = useRealCommunity();
+  const { hasLoaded: communityLoaded, loadError: communityLoadError, refreshFailed: communityRefreshFailed } = community;
   const allPosts = useMemo(
     () => [...visiblePosts()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     [visiblePosts],
@@ -188,7 +189,12 @@ export function Home() {
   const serverHasMore = usingServer && serverFeed.hasMore;
   const feed = useMemo<FeedItem[]>(() => {
     const items: FeedItem[] = [];
-    for (const post of followedPosts) items.push({ kind: "post", key: `post-${post.id}`, at: post.createdAt, post });
+    // Context copies win, and the existing server merge removes stale,
+    // blocked, hidden and unfollowed supplemental posts before they reach here.
+    const postsById = new Map(followedPosts.map((post) => [post.id, post]));
+    for (const post of allPosts) postsById.set(post.id, post);
+    for (const post of postsById.values()) items.push({ kind: "post", key: `post-${post.id}`, at: post.createdAt, post });
+
     for (const call of golfCalls) {
       if (call.hostId === currentUser.id || call.status === "cancelled" || isPastRound(call)) continue;
       const hosting = followingIds.has(call.hostId);
@@ -197,10 +203,13 @@ export function Home() {
       if (actor) items.push({ kind: "round", key: `round-${call.id}`, at: call.createdAt, call, actor, hosting });
     }
     items.sort((a, b) => b.at.localeCompare(a.at));
-    // While older server pages remain, hold back anything older than the
-    // last loaded post so it can't sit above posts not fetched yet.
-    return withinCutoff(items, feedCutoff(followedPosts, serverHasMore));
-  }, [followedPosts, serverHasMore, golfCalls, followingIds, currentUser.id, getGolfer]);
+    // Preserve the existing round-activity cutoff while server pages remain.
+    // Loaded community posts must be visible regardless of the followed page.
+    const cutoff = feedCutoff(followedPosts, serverHasMore);
+    return items.filter((item) => item.kind === "post" || cutoff === null || item.at >= cutoff);
+  }, [allPosts, followedPosts, serverHasMore, golfCalls, followingIds, currentUser.id, getGolfer]);
+
+  const view = listView({ count: feed.length, isDemo, hasLoaded: community.hasLoaded, loadError: community.loadError, isLoading: community.isLoading });
 
   const [feedShown, setFeedShown] = useState(FEED_STEP);
   const shownFeed = feed.slice(0, feedShown);
@@ -341,7 +350,12 @@ export function Home() {
           </Button>
         </div>
 
-        {feed.length > 0 ? (
+        {community.refreshFailed && <StaleDataNotice onRetry={community.retry} />}
+        {view === "loading" ? (
+          <GolfMeLoader className="py-12" />
+        ) : view === "error" ? (
+          <LoadErrorState onRetry={community.retry} />
+        ) : feed.length > 0 ? (
           <div className="flex flex-col gap-3">
             {shownFeed.map((item) =>
               item.kind === "post" ? (
@@ -383,15 +397,7 @@ export function Home() {
                 </Button>
               </span>
             </div>
-            {allPosts.length > 0 && (
-              <div className="flex flex-col gap-3">
-                <h3 className="text-sm font-bold uppercase tracking-wide text-slate-400">{t("home.fromCommunity")}</h3>
-                {allPosts.slice(0, COMMUNITY_PREVIEW_COUNT).map((post) => (
-                  <PostCard key={post.id} post={post} />
-                ))}
-                {seeAllPosts}
-              </div>
-            )}
+
           </div>
         )}
       </section>

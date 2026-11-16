@@ -41,7 +41,7 @@ test("all desktop post lists use the same compact grid", () => {
   }
 });
 
-test("Home's following feed is one column that keeps loading as you scroll", () => {
+test("Home's community feed is one column that keeps loading as you scroll", () => {
   const home = read("src/pages/Home.tsx");
   assert.match(home, /max-w-2xl/);
   assert.ok(home.indexOf("shownFeed.map") < home.indexOf("ref={feedEndRef}"));

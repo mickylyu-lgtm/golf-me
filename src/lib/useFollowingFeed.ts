@@ -1,12 +1,12 @@
-// Network side of Home's Following feed (pure parts: lib/followingFeed.ts).
+// Network side of Home's supplemental Following feed (pure parts: lib/followingFeed.ts).
 //
 // mode "server": pages of get_following_feed are loaded; Home merges them
 //   with Community's posts (mergeFollowingPosts).
 // mode "local": demo, signed out, the RPC isn't deployed yet (missing
-//   function), or the first page failed: Home filters Community's loaded
-//   posts as it did before the RPC existed.
+//   function), or the first page failed: Home shows all visible Community
+//   posts without supplemental pages.
 // mode "pending": the first page is on its way; Home shows the local
-//   filtering meanwhile, so the feed never flashes empty.
+//   Community posts meanwhile, so the feed never flashes empty.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "./supabase";
 import { RpcAvailability } from "./publicDirectory";

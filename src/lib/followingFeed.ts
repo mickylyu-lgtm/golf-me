@@ -1,11 +1,11 @@
-// Home's Following feed: the pure parts (paging, outcome classification,
+// Home's supplemental Following feed: the pure parts (paging, outcome classification,
 // merging with what Community and Play already loaded). The network side is
 // lib/useFollowingFeed.ts.
 //
 // Real accounts page through get_following_feed (migration
 // 20261116120000). Until that migration is applied the RPC is missing, and
-// Home falls back to filtering the posts Community already loaded (the
-// behaviour before the RPC). The demo account always uses that filtering.
+// Home still shows every visible post Community already loaded. Following
+// filtering here applies only to supplemental paged posts and round activity.
 import { isMissingFunctionError } from "./publicDirectory.ts";
 
 export const FOLLOWING_FEED_RPC = "get_following_feed";

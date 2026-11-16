@@ -207,7 +207,7 @@ test("rowToPost maps an RPC row exactly like a community_posts row (media ordere
 
 // ---- Wiring and migration guards ---------------------------------------
 
-test("Home uses the server feed for real accounts only and keeps the local filter as fallback", () => {
+test("Home uses the server feed for real accounts only and keeps a filtered supplemental list", () => {
   const home = read("src/pages/Home.tsx");
   assert.match(home, /useFollowingFeed\(!isDemo && Boolean\(authUser\)/);
   assert.match(home, /allPosts\.filter\(\(post\) => followingIds\.has\(post\.authorId\)\)/);

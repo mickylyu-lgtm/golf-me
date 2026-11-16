@@ -1,3 +1,15 @@
+## Local review — Home community feed reconciled (2026-11-16)
+
+Prepared from main `0e8ce6adf0c1374c089732e25f6493a5469b0642`, not pushed or deployed. Home now includes every loaded `visiblePosts()` entry, merged newest-first with the existing safety-filtered paged Following posts and followed-golfer round activity. Context copies win deduplication. The server pager and six-item incremental rendering remain intact; the existing server cutoff still controls round activity but never hides loaded community posts. Removed the three-post preview, corrected six locales, and reused Community loading/error/retry/stale states. The Courses tab and all unrelated changes remain untouched.
+
+No query, RPC, context filter, RLS, storage or follow-graph permissions changed. Existing moderation hides removed posts and suspension-hidden content (including its own-author exception); deleted authors cascade; private accounts restrict follow approval/connections, not public posts. The Following RPC still only supplements followed authors beyond the loaded Community range. This does not add server pagination for non-followed Community posts or widen backend access.
+
+Validation: `npm run check` passed: TypeScript, lint (29 existing warnings, zero errors), all 1,596 tests, production build and prerender. Focused Home/Following regressions: 27 passed. Real Home/PostCard browser harness passed at 390 and 1440 pixels: zero follows, loading/error/empty/stale states, 120-post incremental rendering, second server page, deduplication, and hidden/deleted supplemental posts. External requests are blocked. Existing font-resolution/chunk-size build warnings remain. No physical-device, live-account or live-database verification claimed.
+
+Actual before/after screenshots against this main are in `artifacts.local/home-community-{before,after}-{390,1440}.png`, labeled synthetic local data, and saved to Library. Reproduce with `QA_BASELINE=1 node scripts/check-home-community-ui.mjs`, then `node scripts/check-home-community-ui.mjs`, using Playwright Chromium (optional `CHROMIUM_EXECUTABLE`).
+
+Next action: Micky reviews the screenshots and isolated diff before any push/deployment. The older Following-feed notes below describe the prior design; its RPC migration is unchanged by this fix.
+
 ## 2026-11-16 - Course-location search keyboard correction (approved for publication)
 
 - Prepared from main 7766e56 in an isolated clone, then reconciled onto a82a83a. Only this picker fix, its regression harness and this log are added. No native shell or production-data change.
@@ -16,6 +28,7 @@
 - Regression harness: `scripts/check-follower-count-ui.mjs` (`BEFORE=1` reproduces old behavior). Actual app, synthetic 17 followers / 2 following, 1.2-second summary delay, external requests blocked, Chromium 390x844. Verified two dismissals and focus; controlled production-hook responses cover visibility refresh, changed/zero totals, overlapping responses, viewer changes, revoke/re-grant, failure/retry and unmount. Visually inspected before/after screenshots in `artifacts.local/follower-count/`. Browser evidence is not physical iPhone/WKWebView or real-account validation.
 - Focused social tests: 26 passed. TypeScript/lint and production build/prerender passed. Initial full run: 1,568/1,569 passed, video trim test transiently reported `no_video_stream` instead of `decode_failed`; isolated repeat passed. Final `npm run check` rerun passed all 1,569 tests, TypeScript, lint (existing warnings), build and prerender. The existing comprehensive profile-followers browser suite also passed (follow/unfollow/remove, approval, blocks, account switch, pagination, default read behavior, 320/390/1440px).
 - Micky reviewed the screenshots and explicitly approved pushing this fix. Reconciled onto current main; CI and production verification follow the scoped push. No backend, production data, policy, native-shell or unrelated worktree changes.
+
 
 ## 2026-11-16 - Play gets a Courses tab; get-tee-times deleted live
 
