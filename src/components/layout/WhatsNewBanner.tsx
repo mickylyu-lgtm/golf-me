@@ -2,7 +2,7 @@ import { useState } from "react";
 import { X } from "lucide-react";
 import { useData } from "../../context/DataContext";
 import { useLocale } from "../../i18n/LocaleContext";
-import { CURRENT_WHATS_NEW, readDismissedWhatsNew, shouldShowWhatsNew, storeDismissedWhatsNew } from "../../lib/whatsNew";
+import { CURRENT_WHATS_NEW, readDismissedWhatsNew, shouldShowWhatsNew, splitBold, storeDismissedWhatsNew } from "../../lib/whatsNew";
 
 // The "What's new" card at the top of the main tabs (see lib/whatsNew.ts for
 // how to announce a change). Closing it stores the entry's id on this
@@ -36,7 +36,17 @@ export function WhatsNewBanner() {
           {entry.items.map((key) => (
             <li key={key} className="flex gap-2 text-sm leading-snug text-fairway-900/85">
               <span aria-hidden className="mt-[0.45rem] h-1 w-1 shrink-0 rounded-full bg-fairway-600" />
-              <span className="min-w-0">{t(key)}</span>
+              <span className="min-w-0">
+                {splitBold(t(key)).map((part, i) =>
+                  part.bold ? (
+                    <strong key={i} className="font-semibold text-fairway-900">
+                      {part.text}
+                    </strong>
+                  ) : (
+                    part.text
+                  ),
+                )}
+              </span>
             </li>
           ))}
         </ul>

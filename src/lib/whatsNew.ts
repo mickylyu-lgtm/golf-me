@@ -24,6 +24,28 @@ export const CURRENT_WHATS_NEW: WhatsNewEntry | null = {
   items: ["whatsNew.item.homeFeed", "whatsNew.item.profileTabs", "whatsNew.item.playCourses", "whatsNew.item.following"],
 };
 
+// Item copy marks key terms with **double asterisks** so people can skim
+// (Micky, 2026-11-16): bold the tab, screen or feature name, not whole
+// sentences. Split into plain/bold runs; no HTML is ever injected. An
+// unmatched ** is shown as plain text.
+export function splitBold(text: string): { text: string; bold: boolean }[] {
+  const parts: { text: string; bold: boolean }[] = [];
+  let rest = text;
+  while (rest.length > 0) {
+    const open = rest.indexOf("**");
+    const close = open === -1 ? -1 : rest.indexOf("**", open + 2);
+    if (open === -1 || close === -1) {
+      parts.push({ text: rest, bold: false });
+      break;
+    }
+    if (open > 0) parts.push({ text: rest.slice(0, open), bold: false });
+    const inner = rest.slice(open + 2, close);
+    if (inner) parts.push({ text: inner, bold: true });
+    rest = rest.slice(close + 2);
+  }
+  return parts;
+}
+
 export const WHATS_NEW_DISMISSED_KEY = "golfme:whatsNewDismissed";
 
 const DAY_MS = 24 * 60 * 60 * 1000;

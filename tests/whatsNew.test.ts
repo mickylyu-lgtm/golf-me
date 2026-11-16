@@ -1,7 +1,7 @@
 // Run: node --test tests/whatsNew.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { CURRENT_WHATS_NEW, shouldShowWhatsNew, type WhatsNewEntry } from "../src/lib/whatsNew.ts";
+import { CURRENT_WHATS_NEW, shouldShowWhatsNew, splitBold, type WhatsNewEntry } from "../src/lib/whatsNew.ts";
 
 const entry: WhatsNewEntry = { id: "x1", publishedAt: "2026-11-16", showForDays: 14, items: ["whatsNew.item.homeFeed"] };
 const day = 24 * 60 * 60 * 1000;
@@ -31,6 +31,34 @@ test("nothing to announce, or a bad date, shows nothing", () => {
   assert.equal(shouldShowWhatsNew(null, { dismissedId: null, now: pub }), false);
   assert.equal(shouldShowWhatsNew({ ...entry, items: [] }, { dismissedId: null, now: pub }), false);
   assert.equal(shouldShowWhatsNew({ ...entry, publishedAt: "soon" }, { dismissedId: null, now: pub }), false);
+});
+
+test("splitBold turns **terms** into bold runs, never HTML", () => {
+  assert.deepEqual(splitBold("**Play** has a new **Courses** tab."), [
+    { text: "Play", bold: true },
+    { text: " has a new ", bold: false },
+    { text: "Courses", bold: true },
+    { text: " tab.", bold: false },
+  ]);
+  assert.deepEqual(splitBold("plain"), [{ text: "plain", bold: false }]);
+  assert.deepEqual(splitBold("a **dangling"), [{ text: "a **dangling", bold: false }]);
+  assert.deepEqual(splitBold("<b>x</b>"), [{ text: "<b>x</b>", bold: false }]);
+  assert.deepEqual(splitBold("****"), []);
+});
+
+test("every locale's items bold at least one key term and close every **", async () => {
+  const locales = ["en", "es", "ja", "ko", "zh-CN", "zh-TW"];
+  for (const l of locales) {
+    const mod = await import(`../src/i18n/locales/${l}.ts`);
+    const dict = Object.values(mod).find((v) => v && typeof v === "object" && "whatsNew.title" in (v as object)) as Record<string, string>;
+    assert.ok(dict, `${l} dictionary`);
+    for (const key of CURRENT_WHATS_NEW?.items ?? []) {
+      const text = dict[key];
+      assert.ok(text, `${l} ${key}`);
+      assert.equal((text.match(/\*\*/g) ?? []).length % 2, 0, `${l} ${key} has an unclosed **`);
+      assert.ok(splitBold(text).some((p) => p.bold), `${l} ${key} has no bold term`);
+    }
+  }
 });
 
 test("the current entry is well formed", () => {
