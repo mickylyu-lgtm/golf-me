@@ -30,7 +30,7 @@ export function ProfileFollowers({ profileId, layout = "inline" }: { profileId: 
         : "-my-2 inline-flex min-h-11 shrink-0 items-center gap-1 rounded-lg px-1 text-sm text-slate-600 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400"}>
       {permitted ? <strong className={layout === "stat" ? "text-xl font-bold leading-tight tabular-nums text-slate-900" : "font-semibold text-slate-800"}>{value === undefined ? "–" : value.total.toLocaleString(locale)}</strong>
         : null}
-      <span className={layout === "stat" ? "max-w-full break-words text-xs leading-snug text-slate-500" : undefined}>{t(value?.total === 1 ? "followers.singular" : "followers.label")}</span>
+      <span className={layout === "stat" ? "max-w-full break-words text-xs leading-snug text-slate-500 first-letter:uppercase" : undefined}>{t(value?.total === 1 ? "followers.singular" : "followers.label")}</span>
     </button>
     {open && <FollowersSheet key={currentUser.id + ":" + profileId} profileId={profileId} onClose={() => { setOpen(false); retry(); }} />}
   </>;
