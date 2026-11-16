@@ -10,6 +10,7 @@ import { NotificationRouteClearer } from "../notifications/NotificationRouteClea
 import { FoundingRevealHost } from "../golfer/FoundingRevealHost";
 import { CaddieDoneHaptic } from "../caddie/CaddieDoneHaptic";
 import { SuspensionBanner } from "../moderation/SuspensionBanner";
+import { WhatsNewBanner } from "./WhatsNewBanner";
 import { MOBILE_NAV_ITEMS } from "../../lib/nav";
 import { useChatRouteMotion } from "../../lib/useChatRouteMotion";
 import { useIsDesktop } from "../../lib/useIsDesktop";
@@ -65,6 +66,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         <TopBar />
         <main className="flex flex-1 flex-col pb-24 sm:pb-10">
           <SuspensionBanner />
+          {/* Main tabs only: never above a chat thread or a form. */}
+          {isRootTab && <WhatsNewBanner />}
           {/* flex-1 on both this wrapper and, for root tabs, on
               RootTabCarousel's own root — lets the swipe-detection region
               fill any leftover viewport space below a short tab's actual
