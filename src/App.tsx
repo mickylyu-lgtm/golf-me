@@ -73,7 +73,6 @@ const CreateGolfCall = lazyPage(() => import("./pages/CreateGolfCall"), "CreateG
 const ReputationDetail = lazyPage(() => import("./pages/ReputationDetail"), "ReputationDetail");
 const GolfCircleDetail = lazyPage(() => import("./pages/GolfCircleDetail"), "GolfCircleDetail");
 const FollowingDetail = lazyPage(() => import("./pages/FollowingDetail"), "FollowingDetail");
-const FindFriends = lazyPage(() => import("./pages/FindFriends"), "FindFriends");
 const MyPosts = lazyPage(() => import("./pages/MyPosts"), "MyPosts");
 const MatchPreferencesDetail = lazyPage(() => import("./pages/MatchPreferencesDetail"), "MatchPreferencesDetail");
 const Settings = lazyPage(() => import("./pages/Settings"), "Settings");
@@ -455,7 +454,8 @@ export default function App() {
                   <Route path="/profile/reputation" element={<ReputationDetail />} />
                   <Route path="/profile/circle" element={<GolfCircleDetail />} />
                   <Route path="/profile/following" element={<FollowingDetail />} />
-                  <Route path="/profile/following/find" element={<FindFriends />} />
+                  {/* The golfer search lives in Play > Golfers now. */}
+                  <Route path="/profile/following/find" element={<Navigate to={findTabPath("golfers")} replace />} />
                   <Route path="/profile/posts" element={<MyPosts />} />
                   <Route path="/profile/preferences" element={<MatchPreferencesDetail />} />
                   <Route path="/settings" element={<Settings />} />

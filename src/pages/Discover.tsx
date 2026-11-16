@@ -1,10 +1,11 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Flag, Search, Share2, SlidersHorizontal, Users } from "lucide-react";
+import { Search, Share2, SlidersHorizontal, Users } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
 import { useLocale } from "../i18n/LocaleContext";
 import { GolferCard } from "../components/golfer/GolferCard";
+import { GolferSearchResultRow } from "../components/golfer/GolferSearchResultRow";
 import { EmptyState } from "../components/ui/EmptyState";
 import { Button } from "../components/ui/Button";
 import { LoadErrorState } from "../components/ui/LoadStates";
@@ -18,8 +19,11 @@ import type { GolfVibe } from "../types";
 import { vibeLabel } from "../lib/enumLabels";
 import { useCredibilityForGolfers } from "../lib/useCredibility";
 import { useSessionState } from "../lib/useSessionState";
+import { useFriendSearch } from "../lib/useFriendSearch";
+import { isImeComposing } from "../lib/isImeComposing";
 import {
   DISCOVER_FILTERS_OPEN_KEY,
+  DISCOVER_QUERY_KEY,
   DISCOVER_SORT_KEY,
   DISCOVER_VIBES_KEY,
   isOpenFlag,
@@ -52,6 +56,14 @@ export function Discover() {
     setStoredVibes((prev) => serializeVibes(toggledVibes(parseVibes(prev), v)));
   }
 
+  // The name search. Kept for the session like the filters, so Back from a
+  // golfer opened from the results returns to them.
+  const [query, setQuery] = useSessionState<string>(DISCOVER_QUERY_KEY, "");
+  const searchText = query.trim().toLowerCase();
+  const searching = searchText.length > 0;
+  // Real accounts only (the RPC needs a session); an empty query never calls it.
+  const friendSearch = useFriendSearch(isDemo ? "" : query);
+
   const rawCandidates = visibleGolfers();
   // Real accounts: server stats for the reputation sort, not the
   // never-updated profile counters (demo: fixture numbers).
@@ -61,6 +73,13 @@ export function Discover() {
     let list = rawCandidates.map((g) => ({ golfer: g, compat: computeCompatibility(currentUser, g) }));
     if (activeVibes.length > 0) {
       list = list.filter(({ golfer }) => golfer.vibes.some((v) => activeVibes.includes(v)));
+    }
+    // Demo: the name search filters the local golfers (real accounts show
+    // the server results instead of this list while searching).
+    if (searchText) {
+      list = list.filter(
+        ({ golfer }) => golfer.name.toLowerCase().includes(searchText) || (golfer.username ?? "").toLowerCase().includes(searchText.replace(/^@/, "")),
+      );
     }
     switch (sortMode) {
       case "distance":
@@ -78,53 +97,63 @@ export function Discover() {
         list.sort((a, b) => b.compat.overall - a.compat.overall);
     }
     return list;
-  }, [rawCandidates, reputations, currentUser, activeVibes, sortMode]);
+  }, [rawCandidates, reputations, currentUser, activeVibes, sortMode, searchText]);
 
   return (
     <div className="flex flex-col gap-5">
-      {/* A fast entry point into FindFriends' own dedicated golfer-search
-          screen (search_golfer_profiles(), by name/username) — not a second
-          search implementation. This used to be a real inline <input> that
-          called the same search RPC and rendered its own separate result
-          list right here, which was exactly a duplicate search system
-          living inside Discover (product direction: reuse the existing
-          flow, don't build a second one). A plain button styled like a
-          search bar, rather than a real input, is deliberate: tapping it
-          always navigates away immediately, so there's never a moment
-          where two different golfer-search UIs are both live at once. */}
-      {!isDemo && (
+      {/* GolfMe's one golfer search (the old Find Golfers page now lands
+          here). Real accounts search every discoverable golfer by name or
+          @username on the server (search_golfer_profiles); the demo account
+          filters its local golfers. */}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search size={15} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t("findFriends.searchPlaceholder")}
+            aria-label={t("findFriends.searchPlaceholder")}
+            type="search"
+            maxLength={80}
+            autoCapitalize="none"
+            autoComplete="off"
+            autoCorrect="off"
+            enterKeyHint="search"
+            onKeyDown={(e) => {
+              // Search is live as you type; Return just closes the keyboard.
+              if (e.key === "Enter" && !isImeComposing(e)) e.currentTarget.blur();
+            }}
+            className="w-full rounded-full border border-slate-200 bg-white py-2.5 pl-9 pr-4 text-sm outline-none transition focus:border-fairway-400"
+          />
+        </div>
         <button
-          type="button"
-          onClick={() => navigate("/profile/following/find")}
-          className="relative w-full rounded-2xl border border-slate-200 bg-white py-3 pl-10 pr-3.5 text-left text-sm text-slate-400 transition hover:border-fairway-300"
+          onClick={() => setShowFilters((v) => !v)}
+          aria-label={showFilters ? t("find.hideFilters") : t("find.filters")}
+          aria-pressed={showFilters}
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border bg-white transition-all duration-200 ease-out hover:border-fairway-300 hover:text-fairway-700 active:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400 focus-visible:ring-offset-2 ${
+            showFilters || activeVibes.length > 0 ? "border-fairway-300 text-fairway-700" : "border-slate-200 text-slate-500"
+          }`}
         >
-          <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          {t("discover.searchPlaceholder")}
+          <SlidersHorizontal size={16} />
         </button>
-      )}
+      </div>
 
-      {/* Switches Play to its Rounds tab (Find adopts ?tab= and drops it);
-          inside Play that's a tab switch, so it replaces rather than adds a
-          Back step, same as tapping the Rounds tab. */}
-      <button
-        onClick={() => navigate(findTabPath("rounds"), { replace: true })}
-        className="flex items-center justify-between gap-3 rounded-2xl border border-fairway-200 bg-fairway-50 px-4 py-3 text-left transition hover:border-fairway-300"
-      >
-        <span className="flex items-center gap-2">
-          <Flag size={15} className="text-fairway-600" />
-          <span className="text-sm font-semibold text-fairway-800">{t("find.browseGolfCalls")}</span>
-        </span>
-        <ArrowRight size={15} className="shrink-0 text-fairway-600" />
-      </button>
-
-      <button
-        onClick={() => setShowFilters((v) => !v)}
-        className="-my-2 flex min-h-10 items-center gap-1.5 self-start text-sm font-semibold text-fairway-700 transition-colors duration-200 hover:text-fairway-800"
-      >
-        <SlidersHorizontal size={14} />
-        {showFilters ? t("find.hideFilters") : t("find.filters")}
-      </button>
-
+      {searching && !isDemo ? (
+        friendSearch.loading ? (
+          <p className="py-6 text-center text-sm text-slate-400">{t("findFriends.searching")}</p>
+        ) : friendSearch.error ? (
+          <LoadErrorState onRetry={friendSearch.retry} />
+        ) : friendSearch.results.length === 0 ? (
+          <EmptyState icon={<Search size={20} />} title={t("findFriends.noResults")} description={t("findFriends.noResultsDesc")} />
+        ) : (
+          <div className="flex flex-col gap-2 lg:grid lg:grid-cols-2 lg:gap-3">
+            {friendSearch.results.map((golfer) => (
+              <GolferSearchResultRow key={golfer.id} golfer={golfer} onOpenProfile={() => navigate(`/golfer/${golfer.id}`)} />
+            ))}
+          </div>
+        )
+      ) : (
+        <>
       {showFilters && (
         <div className="flex flex-col gap-3 rounded-2xl border border-slate-100 bg-slate-50/60 p-3.5">
           <div>
@@ -192,6 +221,8 @@ export function Discover() {
               </div>
             }
           />
+        ) : searching ? (
+          <EmptyState icon={<Search size={20} />} title={t("findFriends.noResults")} description={t("findFriends.noResultsDesc")} />
         ) : (
           <EmptyState
             icon={<SlidersHorizontal size={20} />}
@@ -212,6 +243,8 @@ export function Discover() {
             <GolferCard key={golfer.id} golfer={golfer} compatibility={compat} onClick={() => navigate(`/golfer/${golfer.id}`)} />
           ))}
         </div>
+      )}
+        </>
       )}
     </div>
   );

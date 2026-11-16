@@ -174,8 +174,7 @@ function DirectList() {
           title={t("chatInbox.emptyTitle")}
           description={t("chatInbox.emptyDescription")}
           action={
-            // The Golfers tab works for real and demo accounts alike (the
-            // name search at /profile/following/find sends demo straight back).
+            // Play > Golfers: GolfMe's golfer search, real and demo alike.
             <div className="flex flex-wrap items-center justify-center gap-2">
               <Button size="sm" onClick={() => navigate(findTabPath("golfers"))}>
                 {t("findFriends.entryPoint")}

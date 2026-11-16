@@ -10,6 +10,8 @@ export type SortMode = "compatibility" | "distance" | "reputation";
 export const DISCOVER_VIBES_KEY = "golfme:discoverVibes";
 export const DISCOVER_SORT_KEY = "golfme:discoverSort";
 export const DISCOVER_FILTERS_OPEN_KEY = "golfme:discoverFiltersOpen";
+// The Golfers tab name search (Play's one golfer search).
+export const DISCOVER_QUERY_KEY = "golfme:discoverQuery";
 
 export function isSortMode(v: string): v is SortMode {
   return v === "compatibility" || v === "distance" || v === "reputation";

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "./supabase";
 
 // Search result shape from search_golfer_profiles() — deliberately narrower
@@ -45,6 +45,8 @@ export function useFriendSearch(query: string) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
+  // Bumped by retry() to run the same query again after a failure.
+  const [attempt, setAttempt] = useState(0);
 
   const trimmed = query.trim();
   useEffect(() => {
@@ -87,7 +89,8 @@ export function useFriendSearch(query: string) {
     }, DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
     // The trimmed text: a trailing space isn't a new search.
-  }, [trimmed]);
+  }, [trimmed, attempt]);
 
-  return { results, loading, error };
+  const retry = useCallback(() => setAttempt((n) => n + 1), []);
+  return { results, loading, error, retry };
 }

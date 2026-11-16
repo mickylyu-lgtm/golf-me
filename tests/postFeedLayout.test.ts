@@ -35,13 +35,16 @@ test("cards are measured before paint and repacked after asynchronous size chang
   assert.match(grid, /getBoundingClientRect\(\)\.height/);
 });
 
-test("Home and all desktop post lists use the same compact grid", () => {
-  for (const page of ["Home", "Community", "MyPosts", "SavedPosts"]) {
+test("all desktop post lists use the same compact grid", () => {
+  for (const page of ["Community", "MyPosts", "SavedPosts"]) {
     assert.match(read("src/pages/" + page + ".tsx"), /<PostFeedGrid/, page);
   }
+});
+
+test("Home's following feed is one column that keeps loading as you scroll", () => {
   const home = read("src/pages/Home.tsx");
-  assert.match(home, /<PostFeedGrid className="xl:max-\[1399px\]:grid-cols-1"/);
-  assert.ok(home.indexOf("</PostFeedGrid>") < home.indexOf("ref={postsEndRef}"));
+  assert.match(home, /max-w-2xl/);
+  assert.ok(home.indexOf("shownFeed.map") < home.indexOf("ref={feedEndRef}"));
   assert.match(home, /observer\.observe\(end\)/, "load-more sentinel is still observed");
 });
 

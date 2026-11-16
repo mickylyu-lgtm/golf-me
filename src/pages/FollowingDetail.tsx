@@ -1,7 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Search, UserRoundPlus } from "lucide-react";
 import { useData } from "../context/DataContext";
-import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { useLocale } from "../i18n/LocaleContext";
 import { Avatar } from "../components/ui/Avatar";
@@ -10,10 +9,10 @@ import { Button } from "../components/ui/Button";
 import { EmptyState } from "../components/ui/EmptyState";
 import { useCredibilityForGolfers } from "../lib/useCredibility";
 import { goBack } from "../lib/goBack";
+import { findTabPath } from "../lib/findTab";
 
 export function FollowingDetail() {
   const { followingGolfers, unfollowUser } = useData();
-  const { isDemo } = useAuth();
   const { showToast } = useToast();
   const { t } = useLocale();
   const navigate = useNavigate();
@@ -34,14 +33,10 @@ export function FollowingDetail() {
         <p className="text-sm text-slate-500">{t("following.subtitle")}</p>
       </div>
 
-      {/* Real accounts only — Find Friends has no demo-mode equivalent
-          (search_golfer_profiles is a real Supabase RPC), same reasoning as
-          FindFriends.tsx's own isDemo redirect. */}
-      {!isDemo && (
-        <Button variant="outline" icon={<Search size={15} />} onClick={() => navigate("/profile/following/find")}>
-          {t("findFriends.entryPoint")}
-        </Button>
-      )}
+      {/* GolfMe's one golfer search, in Play > Golfers (real and demo). */}
+      <Button variant="outline" icon={<Search size={15} />} onClick={() => navigate(findTabPath("golfers"))}>
+        {t("findFriends.entryPoint")}
+      </Button>
 
       {followingGolfers.length === 0 ? (
         <EmptyState icon={<UserRoundPlus size={20} />} title={t("following.empty")} description={t("following.emptyDesc")} />

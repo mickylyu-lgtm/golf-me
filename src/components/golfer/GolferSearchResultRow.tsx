@@ -9,11 +9,8 @@ interface GolferSearchResultRowProps {
   onOpenProfile: () => void;
 }
 
-// Shared between FindFriends' typed-search results and its "Suggested for
-// you" list — both return the exact same FriendSearchResult shape (the
-// suggested_golfer_profiles() RPC mirrors search_golfer_profiles()'s field
-// list on purpose), so one row renderer covers both instead of the two
-// lists growing their own slightly-different markup.
+// One row of Play > Golfers' name-search results (search_golfer_profiles()'s
+// FriendSearchResult shape).
 export function GolferSearchResultRow({ golfer, onOpenProfile }: GolferSearchResultRowProps) {
   const { t } = useLocale();
   return (
