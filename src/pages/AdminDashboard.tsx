@@ -584,7 +584,7 @@ export function AdminDashboard() {
         )}
       </section>
 
-      <SafetyReview />
+      <SafetyReview canSuspend={canSuspend} />
 
       <ModerationPanel data={moderationData} />
 

@@ -65,7 +65,7 @@ function fmt(iso: string | null) {
 const chip = (on: boolean) =>
   `rounded-full border px-2.5 py-1 text-xs font-semibold ${on ? "border-fairway-300 bg-fairway-50 text-fairway-800" : "border-slate-200 bg-white text-slate-600"}`;
 
-export function SafetyReview() {
+export function SafetyReview({ canSuspend }: { canSuspend: (userId: string) => boolean }) {
   const [availability, setAvailability] = useState<SafetyAvailability | null>(null);
   const [flags, setFlags] = useState<FlagRow[]>([]);
   const [listError, setListError] = useState<string | null>(null);
@@ -221,7 +221,7 @@ export function SafetyReview() {
           ) : (
             <ul className="flex flex-col gap-2">
               {flags.map((f) => (
-                <FlagCard key={f.id} flag={f} onChanged={() => void Promise.all([loadFlags(), loadStatus()])} />
+                <FlagCard key={`${f.id}:${f.subject_user_id}`} canSuspend={canSuspend(f.subject_user_id)} flag={f} onChanged={() => void Promise.all([loadFlags(), loadStatus()])} />
               ))}
             </ul>
           )}
@@ -290,7 +290,7 @@ function DetectorPanel({
   );
 }
 
-function FlagCard({ flag: f, onChanged }: { flag: FlagRow; onChanged: () => void }) {
+function FlagCard({ flag: f, onChanged, canSuspend }: { flag: FlagRow; onChanged: () => void; canSuspend: boolean }) {
   const meta = SIGNAL_LABELS[f.signal];
   const [pending, setPending] = useState<SafetyStatus | null>(null);
   const [reason, setReason] = useState("");
@@ -321,13 +321,17 @@ function FlagCard({ flag: f, onChanged }: { flag: FlagRow; onChanged: () => void
   }
 
   async function loadEvidence() {
-    const { data, error: e } = await supabase.rpc("admin_safety_flag_evidence", { p_flag_id: f.id });
-    if (e) {
-      setEvidenceError(e.message);
-      return;
+    try {
+      const { data, error: e } = await supabase.rpc("admin_safety_flag_evidence", { p_flag_id: f.id });
+      if (e) {
+        setEvidenceError(e.message);
+        return;
+      }
+      setEvidenceError(null);
+      setEvidence((data ?? []) as EvidenceRow[]);
+    } catch {
+      setEvidenceError("Evidence could not be loaded. Close this dialog and retry from the flag card.");
     }
-    setEvidenceError(null);
-    setEvidence((data ?? []) as EvidenceRow[]);
   }
 
   return (
@@ -372,9 +376,9 @@ function FlagCard({ flag: f, onChanged }: { flag: FlagRow; onChanged: () => void
             {TRANSITION_LABELS[to]}
           </button>
         ))}
-        {(f.status === "actioned" || f.status === "appealed") && !f.subject_suspended && (
-          <button type="button" onClick={() => setSuspendOpen(true)} className="rounded-full border border-red-200 bg-white px-2.5 py-1 text-xs font-semibold text-red-600">
-            Suspend…
+        {canSuspend && !f.subject_suspended && (
+          <button type="button" onClick={() => { void loadEvidence(); setSuspendOpen(true); }} className="rounded-full border border-red-200 bg-white px-2.5 py-1 text-xs font-semibold text-red-600">
+            Ban account…
           </button>
         )}
       </div>
@@ -440,10 +444,12 @@ function FlagCard({ flag: f, onChanged }: { flag: FlagRow; onChanged: () => void
         </div>
       )}
 
-      {suspendOpen && (
+      {suspendOpen && canSuspend && !f.subject_suspended && (
         <SuspendUserDialog
           userId={f.subject_user_id}
-          name={f.subject_name ?? "this user"}
+          name={name}
+          ban
+          context={<div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-700"><p className="font-semibold">{name}</p><p className="break-all text-xs">Account: {f.subject_user_id}</p><p>{meta.title}: {flagSummary(f)}</p><p className="text-xs">Last observed {fmt(f.last_observed_at)}. This may be historical activity; review before acting.</p><p className="text-xs">{evidenceError ? `Evidence could not load: ${evidenceError}` : evidence ? `${evidence.length} evidence entries available.` : "Loading evidence…"}</p>{evidence && <ul className="mt-2 space-y-1 text-xs">{evidence.map((entry, i) => <li key={i}>{fmt(entry.at)} · {entry.kind === "minute" ? `${entry.count} new conversations (no message content)` : `${entry.kind}${entry.label ? `: ${entry.label}` : ""}`}</li>)}</ul>}</div>}
           onClose={() => setSuspendOpen(false)}
           onSuspended={() => {
             setSuspendOpen(false);
