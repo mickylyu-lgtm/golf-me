@@ -1,6 +1,8 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
+import { isShareablePostId } from "../lib/postShare";
 import { useData } from "../context/DataContext";
 import { useToast } from "../context/ToastContext";
 import { useRealCommunity } from "../context/RealCommunityContext";
@@ -26,8 +28,16 @@ import { goBack } from "../lib/goBack";
 export function PostDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { getPost, commentsForPost, createComment, currentUser } = useData();
-  const { hasLoaded: communityLoaded, loadError: communityLoadError, isLoading: communityLoading, retry: retryCommunity } = useRealCommunity();
+  const { getPost, commentsForPost, createComment, currentUser, visiblePosts } = useData();
+  const { hasLoaded: communityLoaded, loadError: communityLoadError, isLoading: communityLoading, refreshFailed, watchPost, retry: retryCommunity } = useRealCommunity();
+  const { isDemo } = useAuth();
+  const [checkedPost, setCheckedPost] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    void watchPost(id ?? null).finally(() => { if (active) setCheckedPost(id ?? null); });
+    return () => { active = false; void watchPost(null); };
+  }, [id, watchPost]);
+  const checkingSharedPost = !isDemo && !!id && isShareablePostId(id) && checkedPost !== id;
   const { showToast } = useToast();
   const { t } = useLocale();
   const { text: commentText, submitting, update: updateCommentText, submit: submitDraft } = useCommentDraft(currentUser.id, postCommentDraftKey(id ?? ""));
@@ -120,13 +130,16 @@ export function PostDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [composerDocked, id]);
 
-  const post = id ? getPost(id) : undefined;
+  const candidate = id ? getPost(id) : undefined;
+  // Match feed visibility for the ENTIRE detail, including comments/media.
+  const post = candidate && visiblePosts().some((p) => p.id === candidate.id) ? candidate : undefined;
 
   // Opened cold (shared link, refresh) the feed may not have loaded yet —
   // wait rather than flash "not found".
+  if (checkingSharedPost) return <GolfMeLoader className="py-12" />;
   if (!post && !communityLoaded) return <GolfMeLoader className="py-12" />;
   // The feed never loaded: that's a connection problem, not "not found".
-  if (!post && communityLoadError) return communityLoading ? <GolfMeLoader className="py-12" /> : <LoadErrorState onRetry={retryCommunity} />;
+  if (communityLoadError || (!isDemo && refreshFailed)) return communityLoading ? <GolfMeLoader className="py-12" /> : <LoadErrorState onRetry={retryCommunity} />;
   if (!post) {
     return (
       <div className="py-12 text-center text-slate-500">

@@ -11,14 +11,14 @@
 // on a different device/browser lands on Home there (nothing stored), which
 // is the safe default.
 //
-// Only a real round path is accepted (no open redirect), and it expires.
+// Only a real round or Community post path is accepted (no open redirect), and it expires.
 
 const KEY = "golfme:returnTo";
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const ROUND_PATH_RE = /^\/golf-calls\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function isAllowedReturnPath(path: string): boolean {
-  return ROUND_PATH_RE.test(path);
+  return ROUND_PATH_RE.test(path) || /^\/community\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(path);
 }
 
 export function saveReturnTo(path: string): void {

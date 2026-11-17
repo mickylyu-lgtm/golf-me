@@ -1,3 +1,4 @@
+import { PostShareButton } from "./PostShareButton";
 import { OfficialPostBadge } from "./OfficialPostBadge";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -726,6 +727,8 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
           </button>
         </div>
       </div>
+
+      <div className="flex justify-end" onClick={stop}><PostShareButton postId={post.id} /></div>
 
       {mediaLightboxIndex !== null && displayMedia.length > 0 && (
         <div onClick={stop}>

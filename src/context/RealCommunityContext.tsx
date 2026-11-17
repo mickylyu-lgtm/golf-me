@@ -1,3 +1,5 @@
+import { isShareablePostId } from "../lib/postShare";
+import { readSharedCommunityPost } from "../lib/sharedCommunityPost";
 import { rejectFailedPostMedia } from "../lib/postPublication";
 import { requireOfficialPostCapability, officialPostInsertFields, rejectFailedOfficialMedia } from "../lib/officialPost";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
@@ -77,6 +79,7 @@ interface RealCommunityContextValue {
   loadOlderPosts: () => Promise<void>;
   profilesById: Map<string, GolferProfile>;
 
+  watchPost: (id: string | null) => Promise<void>;
   getPost: (id: string) => CommunityPost | undefined;
   createPost: (input: CreateRealPostInput) => Promise<CommunityPost>;
   deletePost: (postId: string) => Promise<void>;
@@ -106,6 +109,7 @@ const RealCommunityContext = createContext<RealCommunityContextValue | null>(nul
 
 export function RealCommunityProvider({ children }: { children: ReactNode }) {
   const { isDemo, authUser } = useAuth();
+  const requestedPostId = useRef<string | null>(null);
   const [postRows, setPostRows] = useState<PostRow[]>([]);
   const [mediaRows, setMediaRows] = useState<MediaRow[]>([]);
   const [commentRows, setCommentRows] = useState<CommentRow[]>([]);
@@ -146,6 +150,7 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
   const fetchOnce = useCallback(async () => {
     if (!selfId || currentSelfRef.current !== selfId) return;
     const ticket = guard.current.snapshot();
+    const detailId = requestedPostId.current;
     try {
       const [
         { data: posts, error: postsErr },
@@ -174,17 +179,21 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
       if (currentSelfRef.current !== selfId) return;
 
       const range = await refreshCommunityRange(supabase, (posts ?? []) as PostRow[], floorRef.current);
-      const extraIds = new Set(range.extra.map((p) => p.id));
-      const hydrated = range.posts.filter((p) => extraIds.has(p.id) || pagedIdsRef.current.has(p.id));
+      // A shared post may be older than the feed cap. Read exactly that id
+      // through the SAME authenticated client/RLS, not an admin endpoint.
+      const detail = detailId ? await readSharedCommunityPost(supabase, detailId) : null;
+      const detailRows = detail ? [detail] : [];
+      const extraIds = new Set([...range.extra.map((p) => p.id), ...detailRows.map((p) => p.id)]);
+      const nextPosts = mergeCommunityRows(range.posts.filter((p) => p.id !== detailId), detailRows, (p) => p.id);
+      const hydrated = nextPosts.filter((p) => extraIds.has(p.id) || pagedIdsRef.current.has(p.id));
       const details = await readCommunityDetails(supabase, hydrated, selfId);
-      const nextPosts = range.posts;
       const nextComments = mergeCommunityRows((comments ?? []) as CommentRow[], details.comments, (row) => row.id);
       const ids = new Set<string>();
       for (const p of nextPosts) ids.add(p.author_id);
       for (const c of nextComments) ids.add(c.author_id);
       const { profiles, error: profErr } = await fetchPublicProfiles(Array.from(ids));
       if (profErr) throw profErr;
-      if (currentSelfRef.current !== selfId || !guard.current.current(ticket)) return;
+      if (currentSelfRef.current !== selfId || !guard.current.current(ticket) || detailId !== requestedPostId.current) return;
       // Commit only after every hydration read succeeds, in the same React batch.
       setPostRows(nextPosts);
       setMediaRows(mergeCommunityRows((media ?? []) as MediaRow[], details.media, (row) => row.id));
@@ -194,11 +203,11 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
       setSavedPostIds(applyCommunityPreferences([...(saved ?? []), ...details.saved].map((row) => row.post_id), pendingSaved.current));
       setHiddenPostIds(applyCommunityPreferences([...(hidden ?? []), ...details.hidden].map((row) => row.post_id), pendingHidden.current));
       setProfilesById(new Map(profiles.map((g) => [g.id, g])));
-      floorRef.current = cursorAfter(nextPosts);
+      floorRef.current = cursorAfter(range.posts);
       pagedIdsRef.current = new Set(hydrated.map((p) => p.id));
       // A short initial response can be a server cap: one empty older read
       // confirms exhaustion rather than assuming the configured cap is 1000.
-      setHasMorePosts(nextPosts.length > 0);
+      setHasMorePosts(range.posts.length > 0);
       setDataOwner(selfId);
       setLoadStatus((prev) => applyLoadOutcome(prev, true));
     } catch (err) {
@@ -219,6 +228,14 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
     try { await coalescer.request(); }
     finally { if (guard.current.finishRefresh(ticket)) setIsPaging(false); }
   }, [coalescer]);
+
+  const watchPost = useCallback(async (id: string | null) => {
+    const previous = requestedPostId.current;
+    requestedPostId.current = id && isShareablePostId(id) ? id : null;
+    // Leaving while a detail read is in flight must queue a feed refresh;
+    // otherwise its stale-route guard could leave the feed never loaded.
+    if (!isDemo && selfId && (requestedPostId.current || previous)) await refetch();
+  }, [isDemo, selfId, refetch]);
 
   const loadOlderPosts = useCallback(async () => {
     const cursor = floorRef.current;
@@ -653,6 +670,7 @@ export function RealCommunityProvider({ children }: { children: ReactNode }) {
     isPaging,
     pageError,
     loadOlderPosts,
+    watchPost,
     getPost,
     createPost,
     deletePost,
