@@ -78,3 +78,37 @@ test("screen-level dedup: a second tap after a mark failure does not post again"
   assert.equal(await share("a1"), "skipped");
   assert.equal(posts, 1);
 });
+
+import { shareFeedbackAtomically } from "../src/lib/caddieShare.ts";
+test("atomic share returns the confirmed post without legacy confirmation", async () => {
+  const calls: boolean[] = [];
+  assert.deepEqual(await shareFeedbackAtomically(async confirm => {
+    calls.push(confirm); return { data: {post_id: "post-1", outcome: "created"}, error: null };
+  }, () => { throw new Error("unexpected confirmation"); }), {post_id: "post-1", outcome: "created"});
+  assert.deepEqual(calls, [false]);
+});
+test("unknown historical share is never silently reposted", async () => {
+  const calls: boolean[] = [];
+  assert.deepEqual(await shareFeedbackAtomically(async confirm => {
+    calls.push(confirm); return { data: null, error: { message: "unknown", hint: "caddie_legacy_share_confirmation" } };
+  }, () => false), null);
+  assert.deepEqual(calls, [false]);
+});
+test("explicit historical confirmation retries the atomic RPC only", async () => {
+  const calls: boolean[] = [];
+  assert.deepEqual(await shareFeedbackAtomically(async confirm => {
+    calls.push(confirm); return confirm ? { data: {post_id: "new-post", outcome: "created"}, error: null } :
+      { data: null, error: { message: "unknown", hint: "caddie_legacy_share_confirmation" } };
+  }, () => true), {post_id: "new-post", outcome: "created"});
+  assert.deepEqual(calls, [false, true]);
+});
+test("unavailable RPC and lost responses fail closed, never fallback to createPost", async () => {
+  await assert.rejects(shareFeedbackAtomically(async () => ({ data: null, error: { message: "RPC unavailable" } }), () => true), /RPC unavailable/);
+  await assert.rejects(shareFeedbackAtomically(async () => ({ data: null, error: null }), () => true), /Missing feedback/);
+});
+
+test("existing and moderated outcomes are distinct, with no recreated post", async () => {
+  for (const outcome of [{post_id: "post-1", outcome: "existing"}, {post_id: null, outcome: "unavailable"}]) {
+    assert.deepEqual(await shareFeedbackAtomically(async () => ({data: outcome, error: null}), () => false), outcome);
+  }
+});

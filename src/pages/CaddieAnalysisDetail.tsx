@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { AlertCircle, ArrowLeft, ArrowUpRight, Bookmark, BookmarkCheck, Check, Languages, Loader2, Share2, Trash2, Video } from "lucide-react";
+import { supabase } from "../lib/supabase";
 import { canSaveAnalysis } from "../lib/caddieSaved";
 import { TipList } from "../components/caddie/FilmingTips";
 import { DeleteAnalysisDialog } from "../components/caddie/DeleteAnalysisDialog";
@@ -18,7 +19,7 @@ import { useLocale, LOCALES } from "../i18n/LocaleContext";
 import { Button } from "../components/ui/Button";
 import { Badge } from "../components/ui/Badge";
 import { formatShortDate } from "../lib/format";
-import { postFeedbackThenMark } from "../lib/caddieShare";
+import { postFeedbackThenMark, shareFeedbackAtomically } from "../lib/caddieShare";
 import { isStaleProcessing, usePeriodicRerender } from "../lib/caddieAnalysis";
 import { claimAutoTranslateAttempt, feedbackSampleText, needsAutoTranslate, releaseAutoTranslateAttempt, translateOffer } from "../lib/caddieLanguage";
 import { translationRetryDelay } from "../lib/caddieTranslationRetry";
@@ -328,7 +329,7 @@ export function CaddieAnalysisDetail() {
   // never the full structured breakdown. shared_to_community only flips via
   // this explicit tap, never automatically.
   async function shareFeedback() {
-    if (!analysis || !details || sharingFeedbackRef.current || analysis.sharedToCommunity || feedbackPostedIds.has(analysis.id)) return;
+    if (!analysis || !details || sharingFeedbackRef.current || (isDemo && feedbackPostedIds.has(analysis.id))) return;
     // A ref, not just state: a fast double tap lands before the re-render.
     sharingFeedbackRef.current = true;
     setSharingFeedback(true);
@@ -343,16 +344,35 @@ export function CaddieAnalysisDetail() {
         "",
         `${t("caddie.shareFeedbackFocusLabel")} ${details.focus.title}`,
       ];
-      // Rejects only if createPost failed (nothing posted, safe to retry).
-      // Once the post is out it counts as shared here even if the mark
-      // fails; postFeedbackThenMark retries the mark once, then logs.
-      await postFeedbackThenMark({
-        createPost: async () => {
-          await createPost({ type: "text", text: lines.join("\n"), category: "General" });
-          setFeedbackPostedIds((prev) => new Set(prev).add(analysisId));
-        },
-        markShared: () => markCaddieAnalysisShared(analysisId),
-      });
+      if (isDemo) {
+        // Demo only: real accounts must use the atomic server operation.
+        await postFeedbackThenMark({
+          createPost: async () => {
+            await createPost({ type: "text", text: lines.join("\n"), category: "General" });
+            setFeedbackPostedIds((prev) => new Set(prev).add(analysisId));
+          },
+          markShared: () => markCaddieAnalysisShared(analysisId),
+        });
+      } else {
+        const shareResult = await shareFeedbackAtomically(
+          async (confirmLegacy) => await supabase.rpc("share_caddie_feedback", {
+            p_analysis_id: analysisId, p_text: lines.join("\n"), p_confirm_legacy: confirmLegacy,
+          }),
+          () => window.confirm(t("caddie.confirmLegacyShare")),
+        );
+        if (!shareResult) return;
+        if (shareResult.outcome === "unavailable") {
+          showToast(t("caddie.feedbackUnavailable"), "warning");
+          return;
+        }
+        if (shareResult.outcome === "existing") {
+          showToast(t("caddie.feedbackAlreadyShared"), "success");
+          return;
+        }
+        // The RPC is idempotent; refreshing is presentation only. A lost
+        // response or failed refresh can never make another active post.
+        void checkStatus().catch(() => {});
+      }
       showToast(t("caddie.feedbackShared"), "success");
     } catch (err) {
       showToast(caddieErrorText(err, t, "caddie.error.shareFailed"), "warning");
@@ -576,15 +596,15 @@ export function CaddieAnalysisDetail() {
           variant="outline"
           icon={feedbackShared ? <Check size={15} /> : sharingFeedback ? <Loader2 size={15} className="animate-spin" /> : <Share2 size={15} />}
           onClick={shareFeedback}
-          disabled={sharingFeedback || feedbackShared}
+          disabled={sharingFeedback || (isDemo && feedbackShared)}
         >
-          {feedbackShared ? t("caddie.feedbackShared") : t("caddie.shareFeedback")}
+          {feedbackShared ? t("caddie.checkFeedbackShare") : t("caddie.shareFeedback")}
         </Button>
       )}
 
       {analysis.sourceType === "direct_upload" && (
         <Button variant="outline" icon={<Share2 size={15} />} onClick={shareToCommunity}>
-          {t("caddie.shareToCommunity")}
+          {t("caddie.shareSwingVideo")}
         </Button>
       )}
 

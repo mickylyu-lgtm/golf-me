@@ -40,3 +40,26 @@ export async function postFeedbackThenMark(deps: ShareFeedbackDeps): Promise<Sha
   }
   return { posted: true, marked: false };
 }
+
+export type FeedbackShareOutcome =
+  | { post_id: string; outcome: "created" | "existing" }
+  | { post_id: null; outcome: "unavailable" };
+
+/** No non-atomic fallback: an unavailable migration must fail closed. */
+export async function shareFeedbackAtomically(
+  share: (confirmLegacy: boolean) => Promise<{ data: unknown; error: { message: string; hint?: string } | null }>,
+  confirmLegacy: () => boolean,
+): Promise<FeedbackShareOutcome | null> {
+  let result = await share(false);
+  if (result.error?.hint === "caddie_legacy_share_confirmation") {
+    if (!confirmLegacy()) return null;
+    result = await share(true);
+  }
+  if (result.error) throw new Error(result.error.message);
+  const value = result.data as Partial<FeedbackShareOutcome> | null;
+  if (value?.outcome === "unavailable" && value.post_id === null) return { outcome: "unavailable", post_id: null };
+  if ((value?.outcome === "created" || value?.outcome === "existing") && typeof value.post_id === "string" && value.post_id) {
+    return { outcome: value.outcome, post_id: value.post_id };
+  }
+  throw new Error("Missing feedback post confirmation.");
+}
