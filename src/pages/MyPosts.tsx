@@ -1,3 +1,8 @@
+import { useAuth } from "../context/AuthContext";
+import { useRealCommunity } from "../context/RealCommunityContext";
+import { listView } from "../lib/loadStatus";
+import { LoadErrorState, StaleDataNotice } from "../components/ui/LoadStates";
+import { GolfMeLoader } from "../components/loading/GolfMeLoader";
 import { useNavigate } from "react-router-dom";
 import { Bookmark, MessageSquareText, Plus } from "lucide-react";
 import { useData } from "../context/DataContext";
@@ -14,6 +19,10 @@ export function MyPosts() {
   const { t } = useLocale();
   const navigate = useNavigate();
   const myPosts = posts.filter((p) => p.authorId === currentUser.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+  const { isDemo } = useAuth();
+  const community = useRealCommunity();
+  const view = listView({ count: myPosts.length, isDemo, hasLoaded: community.hasLoaded, loadError: community.loadError, isLoading: community.isLoading });
 
   return (
     <div className="flex flex-col gap-4">
@@ -33,7 +42,12 @@ export function MyPosts() {
         </button>
       </div>
 
-      {myPosts.length === 0 ? (
+      {!isDemo && community.refreshFailed && <StaleDataNotice onRetry={community.retry} />}
+      {view === "loading" ? (
+        <GolfMeLoader className="py-12" />
+      ) : view === "error" ? (
+        <LoadErrorState onRetry={community.retry} />
+      ) : view === "empty" ? (
         <EmptyState
           icon={<MessageSquareText size={20} />}
           title={t("myPosts.empty")}

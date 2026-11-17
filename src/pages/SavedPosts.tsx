@@ -1,3 +1,8 @@
+import { useAuth } from "../context/AuthContext";
+import { useRealCommunity } from "../context/RealCommunityContext";
+import { listView } from "../lib/loadStatus";
+import { LoadErrorState, StaleDataNotice } from "../components/ui/LoadStates";
+import { GolfMeLoader } from "../components/loading/GolfMeLoader";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Bookmark } from "lucide-react";
 import { useData } from "../context/DataContext";
@@ -11,6 +16,10 @@ export function SavedPosts() {
   const { savedPostsList } = useData();
   const navigate = useNavigate();
   const { t } = useLocale();
+
+  const { isDemo } = useAuth();
+  const community = useRealCommunity();
+  const view = listView({ count: savedPostsList.length, isDemo, hasLoaded: community.hasLoaded, loadError: community.loadError, isLoading: community.isLoading });
 
   return (
     <div className="flex flex-col gap-5 pb-6">
@@ -26,7 +35,12 @@ export function SavedPosts() {
         <p className="text-sm text-slate-500">{t("savedPosts.subtitle")}</p>
       </div>
 
-      {savedPostsList.length === 0 ? (
+      {!isDemo && community.refreshFailed && <StaleDataNotice onRetry={community.retry} />}
+      {view === "loading" ? (
+        <GolfMeLoader className="py-12" />
+      ) : view === "error" ? (
+        <LoadErrorState onRetry={community.retry} />
+      ) : view === "empty" ? (
         <EmptyState
           icon={<Bookmark size={20} />}
           title={t("savedPosts.emptyTitle")}
