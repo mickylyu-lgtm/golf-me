@@ -1,3 +1,13 @@
+## November 17: approved icon-only share placement
+
+Micky explicitly requested the share icon beside the bookmark and approved auto-pushing/shipping this fix. The share control now sits immediately after Save in the existing Community action row, with no visible text, background or border. Icon size matches the bookmark; the invisible minimum 44px target, translated accessible label, focus outline and busy guard remain. Round sharing is unchanged. Full check passed: TypeScript/lint, 1,660 tests (six optional ffmpeg skips), production build and prerender. Physical-iPhone and full-app browser checks remain unverified.
+
+## November 17: icon-only Community share button (local, not pushed)
+
+Micky requested removing the visible “Share post” wording. The existing Share2 icon now stands alone in a minimum 44×44 target; translated aria-label, disabled/busy guard, propagation isolation and sharing behavior are unchanged. Round sharing is unchanged.
+
+Validation: full `npm run check` passes TypeScript, lint, 1,659 tests (six optional ffmpeg skips), production build and prerender. Added icon-only/accessibility regression. Local component browser harness is included but Chromium aborts on socket permission even in the approved escalation attempt; no screenshot or physical-iPhone verification claimed. Next: explicit push approval and exact-commit CI/deployment verification.
+
 ## November 16: approved host, browse and Community reliability release
 
 Micky approved fixing and pushing the six findings. Integrated the optional booking-proof deadline, travel-area distance consistency, temporary Match Preferences ranking, visible-only Community search, older-page loading and account-scoped Community drafts on release 8dbcc888. Account transitions remount the composer; late async completion cannot publish after preparation, clear a draft or navigate the next account. Legacy unowned draft bytes are preserved but not automatically adopted, because ownership cannot be safely inferred. No database, policy or production-data changes.

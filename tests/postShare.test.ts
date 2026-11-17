@@ -49,3 +49,20 @@ test("targeted post lookup uses only ordinary RLS-filtered reads and fails close
  await assert.rejects(readSharedCommunityPost(makeClient(null,new Error("offline")) as never,id),/offline/);
  calls.length=0;assert.equal(await readSharedCommunityPost(makeClient(row) as never,"invalid"),null);assert.deepEqual(calls,[]);
 });
+
+
+test("post share is icon-only with an accessible name and 44px target", () => {
+ const src = readFileSync(new URL("../src/components/community/PostShareButton.tsx", import.meta.url), "utf8");
+ assert.ok(src.includes('aria-label={t("share.sharePost")}'));
+ assert.ok(src.includes('min-h-11 min-w-11'));
+ assert.match(src, /<Share2 size=\{13\} aria-hidden="true" \/>\s*<\/button>/);
+});
+
+test("share icon sits directly after the bookmark in the same action row", () => {
+ const src = readFileSync(new URL("../src/components/community/PostCard.tsx", import.meta.url), "utf8");
+ assert.match(src, /<Bookmark[^]*?<\/button>\s*<PostShareButton postId=\{post.id\} \/>/);
+ assert.equal((src.match(/<PostShareButton/g) ?? []).length, 1);
+ const button = readFileSync(new URL("../src/components/community/PostShareButton.tsx", import.meta.url), "utf8");
+ assert.equal(button.includes("border-fairway"), false);
+ assert.equal(button.includes("bg-fairway"), false);
+});

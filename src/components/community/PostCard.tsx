@@ -725,10 +725,9 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
           >
             <Bookmark size={13} fill={saved ? "currentColor" : "none"} />
           </button>
+          <PostShareButton postId={post.id} />
         </div>
       </div>
-
-      <div className="flex justify-end" onClick={stop}><PostShareButton postId={post.id} /></div>
 
       {mediaLightboxIndex !== null && displayMedia.length > 0 && (
         <div onClick={stop}>
