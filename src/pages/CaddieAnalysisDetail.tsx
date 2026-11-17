@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
-import { AlertCircle, ArrowLeft, ArrowUpRight, Bookmark, BookmarkCheck, Check, Languages, Loader2, Share2, Trash2, Video } from "lucide-react";
+import { AlertCircle, ArrowLeft, ArrowUpRight, Bookmark, BookmarkCheck, Languages, Loader2, Share2, Trash2, Video } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { canSaveAnalysis } from "../lib/caddieSaved";
 import { TipList } from "../components/caddie/FilmingTips";
@@ -594,11 +594,11 @@ export function CaddieAnalysisDetail() {
       {analysis.status === "complete" && details && (
         <Button
           variant="outline"
-          icon={feedbackShared ? <Check size={15} /> : sharingFeedback ? <Loader2 size={15} className="animate-spin" /> : <Share2 size={15} />}
+          icon={sharingFeedback ? <Loader2 size={15} className="animate-spin" /> : <Share2 size={15} />}
           onClick={shareFeedback}
           disabled={sharingFeedback || (isDemo && feedbackShared)}
         >
-          {feedbackShared ? t("caddie.checkFeedbackShare") : t("caddie.shareFeedback")}
+          {t("caddie.shareFeedback")}
         </Button>
       )}
 

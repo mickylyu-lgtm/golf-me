@@ -112,3 +112,15 @@ test("existing and moderated outcomes are distinct, with no recreated post", asy
     assert.deepEqual(await shareFeedbackAtomically(async () => ({data: outcome, error: null}), () => false), outcome);
   }
 });
+
+// The button must keep its familiar action label regardless of prior shares.
+// Already-posted reminders belong to the server-confirmed tap result, not the label.
+test("feedback button keeps original label and tap-time duplicate reminder", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const page = await readFile(new URL("../src/pages/CaddieAnalysisDetail.tsx", import.meta.url), "utf8");
+  assert.match(page, /onClick=\{shareFeedback\}[\s\S]*?\{t\("caddie.shareFeedback"\)\}/);
+  assert.doesNotMatch(page, /caddie\.checkFeedbackShare/);
+  assert.doesNotMatch(page, /feedbackShared \? <Check/);
+  assert.match(page, /shareResult.outcome === "existing"[\s\S]*?caddie.feedbackAlreadyShared/);
+  assert.match(page, /disabled=\{sharingFeedback \|\| \(isDemo && feedbackShared\)\}/);
+});

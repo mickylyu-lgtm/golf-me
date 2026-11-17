@@ -33,24 +33,24 @@ try {
  await page.getByRole('button',{name:'Share Caddie Feedback',exact:true}).click();
  await page.getByText('Shared to Community',{exact:true}).waitFor();
  assert.equal(calls.length,1);
- await page.getByRole('button',{name:'Check / share feedback',exact:true}).waitFor();
+ await page.getByRole('button',{name:'Share Caddie Feedback',exact:true}).waitFor();
  outcome='existing';
- await page.getByRole('button',{name:'Check / share feedback',exact:true}).click();
+ await page.getByRole('button',{name:'Share Caddie Feedback',exact:true}).click();
  await page.getByText('Your feedback is already shared. No new post was created.',{exact:true}).waitFor();
  outcome='unavailable';
- await page.getByRole('button',{name:'Check / share feedback',exact:true}).click();
+ await page.getByRole('button',{name:'Share Caddie Feedback',exact:true}).click();
  await page.getByText('This feedback post is unavailable. It cannot be shared again.',{exact:true}).waitFor();
  const beforeCancel=calls.length; outcome='legacy'; page.once('dialog',dialog=>dialog.dismiss());
- await page.getByRole('button',{name:'Check / share feedback',exact:true}).click();
+ await page.getByRole('button',{name:'Share Caddie Feedback',exact:true}).click();
  await page.waitForTimeout(250); const cancelledCalls=calls.length; assert.equal(cancelledCalls,beforeCancel+1);
  await page.waitForFunction(()=>![...document.querySelectorAll('p')].some(e=>e.textContent==='Shared to Community')); page.once('dialog',dialog=>dialog.accept());
- await page.getByRole('button',{name:'Check / share feedback',exact:true}).click();
+ await page.getByRole('button',{name:'Share Caddie Feedback',exact:true}).click();
  await page.getByText('Shared to Community',{exact:true}).waitFor();
  assert.equal(calls.length,cancelledCalls+2); assert.equal(calls.at(-1).p_confirm_legacy,true);
  // Simulate a deletion/refetch while mounted: the enabled stale-shared button
  // must still call the RPC, allowing its authoritative created response.
  await page.waitForFunction(()=>![...document.querySelectorAll('p')].some(e=>e.textContent==='Shared to Community')); const beforeReshare=calls.length; outcome='created'; analysis.shared_to_community=false;
- await page.getByRole('button',{name:'Check / share feedback',exact:true}).click();
+ await page.getByRole('button',{name:'Share Caddie Feedback',exact:true}).click();
  await page.getByText('Shared to Community',{exact:true}).waitFor();
  assert.equal(calls.length,beforeReshare+1); await page.screenshot({path:'reshare-success.png',fullPage:true}); await page.getByRole('button',{name:'Share swing video',exact:true}).click();
  await page.waitForURL('**/community/new');
