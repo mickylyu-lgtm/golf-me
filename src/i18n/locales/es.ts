@@ -1722,6 +1722,8 @@ export const es: Record<TranslationKey, string> = {
   "matchTier.lowForYou": "Coincidencia limitada para ti",
   "golfCallDetail.approveRequest": "Aprobar a {name}",
   "golfCallDetail.declineRequest": "Rechazar a {name}",
+  "joinConfirm.attendanceTitle": "Recordatorio rápido",
+  "joinConfirm.attendanceReminder": "Únete solo si puedes asistir. Revisa la fecha, la hora y el lugar antes de unirte o solicitar una plaza. Si cambian tus planes, avisa al anfitrión y abandona la ronda para que otra persona pueda unirse.",
   "joinConfirm.title": "Te vas a unir",
   "joinConfirm.confirmJoin": "Confirmar unión",
   "joinConfirm.confirmRequest": "Confirmar solicitud",

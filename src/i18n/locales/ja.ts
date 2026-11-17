@@ -1722,6 +1722,8 @@ export const ja: Record<TranslationKey, string> = {
   "matchTier.lowForYou": "相性は限定的",
   "golfCallDetail.approveRequest": "{name}さんを承認",
   "golfCallDetail.declineRequest": "{name}さんを辞退",
+  "joinConfirm.attendanceTitle": "ひとことリマインダー",
+  "joinConfirm.attendanceReminder": "参加できる場合のみ申し込みましょう。参加や申請の前に、日時と場所を確認してください。予定が変わった場合は、主催者に連絡してラウンドを退出し、他の方に枠を譲りましょう。",
   "joinConfirm.title": "参加するラウンド",
   "joinConfirm.confirmJoin": "参加を確定",
   "joinConfirm.confirmRequest": "リクエストを送信",

@@ -1722,6 +1722,8 @@ export const zhCN: Record<TranslationKey, string> = {
   "matchTier.lowForYou": "匹配度有限",
   "golfCallDetail.approveRequest": "批准 {name}",
   "golfCallDetail.declineRequest": "拒绝 {name}",
+  "joinConfirm.attendanceTitle": "温馨提醒",
+  "joinConfirm.attendanceReminder": "请仅在确认能参加时加入。加入或申请名额前，请确认日期、时间和地点。如果计划有变，请告知组织者并退出球局，让其他人有机会加入。",
   "joinConfirm.title": "你即将加入",
   "joinConfirm.confirmJoin": "确认加入",
   "joinConfirm.confirmRequest": "确认申请",

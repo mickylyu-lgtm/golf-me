@@ -1,3 +1,13 @@
+## November 17: share outline matches neighboring actions
+
+Micky requested the icon-only share control retain the same outline as the other action buttons. Matched the bookmark’s rounded slate border, padding, 13px icon, extended vertical hit area and hover treatment, still immediately beside it. Accessible name, focus outline, busy guard and sharing behavior are unchanged. Supersedes the borderless styling noted below. Publication is approved under the current share fix. Full npm run check passed TypeScript, lint, 1,660 tests (six optional ffmpeg skips), production build and prerender. Physical-device/browser layout remains unverified; source regressions cover the outline, icon-only label and adjacent placement.
+
+## November 17: local join-attendance reminder
+
+Micky requested reminding people to join hosted rounds only if they can attend. The existing shared confirmation sheet now includes a short attendance notice immediately above the booking disclaimer, covering both card/detail entry points and instant/request-to-join rounds. All six locales are translated. No new dialog, checkbox, join gate, backend change, or joining behavior change.
+
+Validation: focused coverage checks shared placement, unchanged confirm/close behavior, no extra gate, preserved booking disclaimer and all six translations. Full check passed: TypeScript, lint, 1,663 tests with six optional ffmpeg skips, production build and prerender. Physical-device and visual browser validation are not claimed. Micky approved publication and requested the neutral “Quick Reminder” heading; exact-commit CI and production deployment must be verified after push.
+
 ## November 17: approved icon-only share placement
 
 Micky explicitly requested the share icon beside the bookmark and approved auto-pushing/shipping this fix. The share control now sits immediately after Save in the existing Community action row, with no visible text, background or border. Icon size matches the bookmark; the invisible minimum 44px target, translated accessible label, focus outline and busy guard remain. Round sharing is unchanged. Full check passed: TypeScript/lint, 1,660 tests (six optional ffmpeg skips), production build and prerender. Physical-iPhone and full-app browser checks remain unverified.

@@ -1772,6 +1772,8 @@ export const en = {
   "matchTier.lowForYou": "Limited Match for you",
   "golfCallDetail.approveRequest": "Approve {name}",
   "golfCallDetail.declineRequest": "Decline {name}",
+  "joinConfirm.attendanceTitle": "Quick Reminder",
+  "joinConfirm.attendanceReminder": "Only join if you can make it. Check the date, time and location before joining or requesting a spot. If plans change, let the host know and leave the round so someone else can join.",
   "joinConfirm.title": "You're joining",
   "joinConfirm.confirmJoin": "Confirm Join",
   "joinConfirm.confirmRequest": "Confirm Request",

@@ -32,8 +32,8 @@ function RosterMember({ golfer }: { golfer: GolferProfile }) {
   );
 }
 
-// Lightweight reassurance before committing to a round — not a safety
-// warning, just "here's who you'd be playing with."
+// Shared confirmation for cards and round details: show the group and
+// remind players to check attendance before committing.
 export function ConfirmJoinModal({ call, onClose, onConfirm }: ConfirmJoinModalProps) {
   const { getGolfer } = useData();
   const { t, locale } = useLocale();
@@ -96,6 +96,11 @@ export function ConfirmJoinModal({ call, onClose, onConfirm }: ConfirmJoinModalP
           <p className="mt-1 text-sm font-semibold text-slate-700">
             {t("booking.label")}: {booking.showClaim ? t(booking.labelKey) : t("booking.notProvided")}
           </p>
+        </div>
+
+        <div className="rounded-xl border border-fairway-100 bg-fairway-50/60 p-3">
+          <p className="text-sm font-semibold text-fairway-900">{t("joinConfirm.attendanceTitle")}</p>
+          <p className="mt-1 text-xs leading-relaxed text-fairway-800">{t("joinConfirm.attendanceReminder")}</p>
         </div>
 
         {/* Joining is GolfMe-group membership only (join_golf_call touches

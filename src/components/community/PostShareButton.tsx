@@ -23,7 +23,7 @@ export function PostShareButton({ postId }: { postId: string }) {
     } finally { busy.current = false; setSharing(false); }
   }
   return <button type="button" disabled={sharing} aria-label={t("share.sharePost")} onClick={(e) => { e.stopPropagation(); void share(); }}
-    className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full p-0 text-slate-600 transition-colors hover:text-fairway-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fairway-500 disabled:opacity-60">
+    className="relative flex items-center justify-center rounded-full border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 after:absolute after:inset-x-0 after:-inset-y-2 transition-all duration-200 ease-out hover:border-sun-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fairway-500 disabled:opacity-60">
     <Share2 size={13} aria-hidden="true" />
   </button>;
 }

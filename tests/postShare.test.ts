@@ -51,10 +51,12 @@ test("targeted post lookup uses only ordinary RLS-filtered reads and fails close
 });
 
 
-test("post share is icon-only with an accessible name and 44px target", () => {
+test("post share is icon-only with an accessible name and matching action outline", () => {
  const src = readFileSync(new URL("../src/components/community/PostShareButton.tsx", import.meta.url), "utf8");
  assert.ok(src.includes('aria-label={t("share.sharePost")}'));
- assert.ok(src.includes('min-h-11 min-w-11'));
+ assert.ok(src.includes('rounded-full border border-slate-200 px-2.5 py-1'));
+ assert.ok(src.includes('after:absolute after:inset-x-0 after:-inset-y-2'));
+ assert.ok(src.includes('hover:border-sun-300'));
  assert.match(src, /<Share2 size=\{13\} aria-hidden="true" \/>\s*<\/button>/);
 });
 

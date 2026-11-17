@@ -1722,6 +1722,8 @@ export const ko: Record<TranslationKey, string> = {
   "matchTier.lowForYou": "잘 맞지 않을 수 있어요",
   "golfCallDetail.approveRequest": "{name} 님 승인",
   "golfCallDetail.declineRequest": "{name} 님 거절",
+  "joinConfirm.attendanceTitle": "잠깐 확인해 주세요",
+  "joinConfirm.attendanceReminder": "참석할 수 있을 때만 참가하세요. 참가하거나 자리를 신청하기 전에 날짜, 시간과 장소를 확인하세요. 일정이 바뀌면 호스트에게 알리고 라운드에서 나와 다른 사람이 참가할 수 있도록 해 주세요.",
   "joinConfirm.title": "참가할 라운드",
   "joinConfirm.confirmJoin": "참가 확정",
   "joinConfirm.confirmRequest": "요청 보내기",
