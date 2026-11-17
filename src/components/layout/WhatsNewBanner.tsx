@@ -9,17 +9,22 @@ import { CURRENT_WHATS_NEW, readDismissedWhatsNew, shouldShowWhatsNew, splitBold
 // device, so it stays closed until the next announcement.
 export function WhatsNewBanner() {
   const { currentUser } = useData();
+  if (!currentUser) return null;
+  return <AccountWhatsNewBanner key={currentUser.id} accountId={currentUser.id} memberSince={currentUser.memberSince} />;
+}
+
+function AccountWhatsNewBanner({ accountId, memberSince }: { accountId: string; memberSince?: string | null }) {
   const { t } = useLocale();
   const entry = CURRENT_WHATS_NEW;
-  const [dismissedId, setDismissedId] = useState(readDismissedWhatsNew);
+  const [dismissedId, setDismissedId] = useState(() => readDismissedWhatsNew(accountId));
   // Fixed when the screen first renders, so it never vanishes mid-read.
   const [now] = useState(() => Date.now());
 
-  if (!entry || !shouldShowWhatsNew(entry, { dismissedId, now, memberSince: currentUser?.memberSince })) return null;
+  if (!entry || !shouldShowWhatsNew(entry, { dismissedId, now, memberSince })) return null;
 
   function close() {
     if (!entry) return;
-    storeDismissedWhatsNew(entry.id);
+    storeDismissedWhatsNew(entry.id, accountId);
     setDismissedId(entry.id);
   }
 
@@ -30,7 +35,7 @@ export function WhatsNewBanner() {
         className="relative w-full rounded-2xl border border-fairway-200 bg-fairway-50 py-3.5 pl-4 pr-11"
       >
         <h2 id="whats-new-title" className="text-sm font-bold text-fairway-900">
-          {t("whatsNew.title")}
+          {t(entry.title ?? "whatsNew.title")}
         </h2>
         <ul className="mt-1.5 flex flex-col gap-1">
           {entry.items.map((key) => (
