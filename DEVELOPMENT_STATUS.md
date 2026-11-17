@@ -1,3 +1,11 @@
+## November 17: root-tab clipping and Home round-strip gestures
+
+Micky reported text fragments at the left of Chat after returning from a conversation. Home's mobile round strip extends 16px beyond its page through `-mx-4`; clipping only the overall five-page track lets the neighboring Home strip paint inside Chat. Each persistent root-tab panel now clips its own horizontal overflow. The Home strip also opts out of root-tab swipe detection with `data-no-swipe` and contains horizontal overscroll, so dragging round cards scrolls that strip rather than changing tabs. Native vertical scrolling and card taps remain enabled.
+
+No DM swipe/keyboard/composer implementation, route motion, page mounting, vertical sizing, database or fixed-overlay containing-block changes. Actual-carousel render regressions preserve panel mounting/positions and require per-panel clipping; a Home source guard checks gesture ownership without touch-pan-x/touch-none.
+
+MGPC Chromium checks reproduced the original root-tab navigation when swiping the unpatched Home strip. The real RootTabCarousel controller with synthetic Home cards passed horizontal scrolling, reverse/edge drags, card taps, vertical scrolling and outside-strip tab navigation after both production changes. Separate synthetic pixel checks at 375/390/430px reproduced neighboring-card paint at Chat's left edge before clipping and its absence afterward, with viewport-fixed overlays and Home scrolling preserved. No customer data or messages were used. These are Chromium fixture checks, not a full signed-in production flow or physical-iPhone/WKWebView verification. Full combined `npm run check` passed TypeScript, lint, 1,682 tests (six existing optional ffmpeg skips), production build and landing prerender. Independent review found no blockers.
+
 ## November 17: personal post lists distinguish failed loads from empty lists
 
 Daily QA reproduced Saved Posts and Me > Posts displaying their normal empty-state message during initial loading and after a failed Community fetch, without an in-page retry. Both now use the existing shared list-state decision, loader, error/retry component and refresh-failed notice. Previously loaded posts remain visible after a failed refresh, and demo mode keeps its local behavior. No provider, data, permissions, Caddie or sharing changes.

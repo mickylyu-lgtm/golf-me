@@ -278,7 +278,10 @@ export function Home() {
           )}
         </div>
         {stripRounds.rounds.length > 0 ? (
-          <div className="-mx-4 flex snap-x scroll-px-4 gap-2.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:scroll-px-0 sm:px-0">
+          <div
+            data-no-swipe
+            className="-mx-4 flex snap-x scroll-px-4 gap-2.5 overflow-x-auto overscroll-x-contain px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:scroll-px-0 sm:px-0"
+          >
             {stripRounds.rounds.map((call) => (
               <RoundStripCard key={call.id} call={call} />
             ))}

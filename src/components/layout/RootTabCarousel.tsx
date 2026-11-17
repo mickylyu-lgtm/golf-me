@@ -289,7 +289,11 @@ export function RootTabCarousel({ activePath }: { activePath: string }) {
                 panelRefs.current[i] = el;
               }}
               style={{ width: `${100 / PANELS.length}%` }}
-              className="min-w-0 shrink-0"
+              // Clip each page, not just the whole track: Home's -mx-4 round
+              // strip otherwise paints 16px into the adjacent Chat panel.
+              // X-only clip adds no scroll container/transform, so fixed
+              // overlays remain viewport-relative and vertical layout is unchanged.
+              className="min-w-0 shrink-0 overflow-x-clip"
             >
               <Panel render={render} active={i === activeIndex} />
             </div>
