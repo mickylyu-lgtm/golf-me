@@ -1,3 +1,4 @@
+import { RoundShareButton } from "../components/golfcall/RoundShareButton";
 import { useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Pencil, Share2, X } from "lucide-react";
@@ -64,6 +65,7 @@ export function DevFirstRoundHarness() {
       {view === "share" && (
         <>
           <h1 className="text-2xl font-extrabold text-slate-900">{SAMPLE_ROUND.course}</h1>
+          <RoundShareButton call={SAMPLE_ROUND} />
           <div className="flex items-center gap-3 rounded-2xl border border-fairway-100 bg-fairway-50/70 p-4">
             <span className="min-w-0 flex-1">
               <span className="block text-sm font-bold text-slate-900">{t("share.justHostedTitle")}</span>
@@ -77,9 +79,6 @@ export function DevFirstRoundHarness() {
             </button>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" variant="outline" icon={<Share2 size={13} />} onClick={() => void shareRound(SAMPLE_ROUND)}>
-              {t("share.shareRound")}
-            </Button>
             <Button size="sm" variant="outline" icon={<Pencil size={13} />}>
               {t("golfCallDetail.editTeeTime")}
             </Button>

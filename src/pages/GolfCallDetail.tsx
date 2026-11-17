@@ -1,3 +1,4 @@
+import { RoundShareButton } from "../components/golfcall/RoundShareButton";
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
@@ -237,6 +238,8 @@ export function GolfCallDetail() {
         </p>
       </div>
 
+      {!isDemo && isHost && !isCompleted && !isCancelled && <RoundShareButton call={call} />}
+
       {tier && (
         <div className="rounded-2xl bg-fairway-50/70 p-4">
           <p className="flex items-center gap-1.5 text-sm font-bold text-fairway-800">
@@ -319,9 +322,6 @@ export function GolfCallDetail() {
 
       {!isDemo && isHost && !isCompleted && !isCancelled && (
         <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" variant="outline" icon={<Share2 size={13} />} onClick={() => void shareRound(call)}>
-            {t("share.shareRound")}
-          </Button>
           <Button size="sm" variant="outline" icon={<Pencil size={13} />} onClick={() => setEditTeeTimeOpen(true)}>
             {t("golfCallDetail.editTeeTime")}
           </Button>

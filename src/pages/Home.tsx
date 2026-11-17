@@ -27,6 +27,7 @@ import { HostReminderCard } from "../components/onboarding/HostReminderCard";
 import { useFirstRoundPrompt } from "../context/FirstRoundPromptContext";
 import { clubLabel } from "../lib/clubLabel";
 import { useShareActions } from "../lib/useShareActions";
+import { RoundShareButton } from "../components/golfcall/RoundShareButton";
 import { homeFocus, readOnboardingIntents } from "../lib/onboardingIntent";
 import { feedCutoff } from "../lib/followingFeed";
 import type { CommunityPost, GolfCall, GolferProfile } from "../types";
@@ -55,12 +56,16 @@ type FeedItem =
 function RoundStripCard({ call }: { call: GolfCall }) {
   const { t, locale } = useLocale();
   const navigate = useNavigate();
+  const { currentUser } = useData();
+  const { isDemo } = useAuth();
+  const canShare = !isDemo && call.hostId === currentUser.id && call.status !== "completed" && call.status !== "cancelled";
   const openSpots = call.totalSpots - call.joinedGolferIds.length;
   return (
+    <div className={`flex w-56 shrink-0 snap-start flex-col ${CLICKABLE_CARD_CLASS}`}>
     <button
       type="button"
       onClick={() => navigate(`/golf-calls/${call.id}`)}
-      className={`flex w-56 shrink-0 snap-start flex-col gap-1.5 p-3.5 text-left ${CLICKABLE_CARD_CLASS}`}
+      className="flex flex-1 flex-col gap-1.5 rounded-2xl p-3.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400"
     >
       <span className="line-clamp-1 text-sm font-bold text-slate-900">{call.course}</span>
       <span className="text-xs font-medium text-slate-500">
@@ -75,6 +80,8 @@ function RoundStripCard({ call }: { call: GolfCall }) {
         )}
       </span>
     </button>
+    {canShare && <div className="px-3.5 pb-3.5"><RoundShareButton call={call} /></div>}
+    </div>
   );
 }
 
