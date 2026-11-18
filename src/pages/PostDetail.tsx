@@ -204,7 +204,7 @@ export function PostDetail() {
         }
         style={composerDocked ? { bottom: `${keyboardHeight}px` } : undefined}
       >
-        <div ref={composerRef} className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2 py-1.5">
+        <div ref={composerRef} className="gm-comment-composer flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2 py-1.5">
           <Avatar golfer={currentUser} size="xs" />
           <input
             id="comment-composer-input"
