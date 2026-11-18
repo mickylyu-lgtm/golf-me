@@ -6,6 +6,10 @@ import { useData } from "../../context/DataContext";
 import { useAuth } from "../../context/AuthContext";
 import { useLocale } from "../../i18n/LocaleContext";
 import { Avatar } from "../ui/Avatar";
+import { courseTileSource } from "../../lib/courseImagery";
+import { FittedSatelliteTiles } from "../courses/SatelliteTiles";
+import { SatelliteAttribution } from "../courses/CourseThumb";
+import { POINT_THUMB_ZOOM } from "../../../supabase/functions/_shared/courseBounds.ts";
 import { GenericCourseIllustration } from "../courses/CourseHero";
 import { CLICKABLE_CARD_CLASS } from "../ui/cardStyles";
 import { matchHandpickedCourse } from "../../lib/handpickedCourses";
@@ -29,6 +33,15 @@ export function RoundStripCard({ call }: { call: GolfCall }) {
   const showImage = Boolean(imageUrl);
   const showingPhoto = Boolean(photo && imageUrl === photo.url);
   const imageCredit = showingPhoto ? photo!.credit : course?.heroImageCredit;
+  // Only stored public course coordinates, never viewer/host location or a
+  // guessed geocode. Existing tile component retains lazy loading and budget.
+  const lat = call.courseLat;
+  const lng = call.courseLng;
+  const hasCoords = typeof lat === "number" && typeof lng === "number" && Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
+  const tileSource = hasCoords ? courseTileSource({ lat, lng }) : null;
+  const tileKey = `${tileSource?.id}:${lat}:${lng}`;
+  const [failedTiles, setFailedTiles] = useState<string | null>(null);
+  const showTiles = !showImage && hasCoords && tileSource !== null && failedTiles !== tileKey;
   const booking = bookingStatusView(call);
   const openSpots = Math.max(0, call.totalSpots - call.joinedGolferIds.length);
   const participants = [...new Set(call.joinedGolferIds)].filter((id) => id !== call.hostId).map(getGolfer).filter((g) => Boolean(g));
@@ -42,7 +55,7 @@ export function RoundStripCard({ call }: { call: GolfCall }) {
         className="flex flex-1 flex-col rounded-2xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-fairway-400"
       >
         <span className="relative block h-28 w-full overflow-hidden bg-fairway-50" aria-hidden="true">
-          {showImage ? <img src={imageUrl} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" onError={() => setFailedImages((failed) => [...failed, imageUrl!])} /> : <GenericCourseIllustration />}
+          {showImage ? <img src={imageUrl} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" onError={() => setFailedImages((failed) => [...failed, imageUrl!])} /> : showTiles && tileSource ? <FittedSatelliteTiles key={tileKey} source={tileSource} lat={lat!} lng={lng!} fallbackZoom={POINT_THUMB_ZOOM} onError={() => setFailedTiles(tileKey)} /> : <GenericCourseIllustration />}
         </span>
         <span className="flex w-full flex-1 flex-col gap-2 p-3.5">
           {showImage && imageCredit && <span className="text-[10px] leading-tight text-slate-500">{imageCredit}</span>}
@@ -69,6 +82,7 @@ export function RoundStripCard({ call }: { call: GolfCall }) {
         </span>
       </button>
       {canShare && <div className="px-3.5 pb-3.5"><RoundShareButton call={call} /></div>}
+      {showTiles && <div className="px-3.5 pb-3"><SatelliteAttribution /></div>}
       {showingPhoto && photo && <p className="px-3.5 pb-3 text-[10px] text-slate-500">
         <a href={photo.sourceUrl} target="_blank" rel="noreferrer" className="underline underline-offset-2">Wikimedia Commons</a>
         {" · "}<a href={photo.licenseUrl} target="_blank" rel="noreferrer" className="underline underline-offset-2">CC BY-SA 4.0</a>

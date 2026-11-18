@@ -1,3 +1,9 @@
+## November 18: coordinate aerial fallback for Home rounds (local only)
+
+Los Feliz showed illustration because Home only checked two manually approved course images. Added existing FittedSatelliteTiles/courseTileSource as the next fallback after a verified photo and known aerial asset. Uses only stored public venue coordinates, validated for finite/range; never viewer/host location or name-only geocoding. Retains existing USGS/optional MapTiler providers, shared tile request cap, lazy images, attribution, and illustration on unavailable coverage or loading failure. No new backend/API request or database change.
+
+Final npm run check passed: TypeScript, lint, 1,709 tests (six optional skips), build and prerender. Read-only investigation confirmed the existing Los Feliz round has canonical coordinates. Actual Home browser fixtures using those coordinates successfully load real USGS imagery at 390px and 1100px; navigation, overflow, credits, photo priority, invalid/missing/unsupported coordinates, and tile failures tested. Synthetic round details only in screenshots. Physical iPhone testing remains pending. This new change is local and requires per-change push approval.
+
 ## November 18: approved Home round discovery cards
 
 Micky approved the real-photo, overhead-fallback, illustration hierarchy and explicitly requested push. Isolated branch based on current main. Extracted the Home round card, retaining its existing detail navigation, horizontal strip and authorized host sharing. Cards now show attributed existing course imagery (or a generic fallback), full course/date/time, existing area and optional distance, holes, approximate price, known host/participant avatars and open spots. Booking status uses existing truthful labels, not inferred confirmation. No new APIs, production records, policies or deployments. No dummy filter controls.
