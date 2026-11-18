@@ -2310,3 +2310,10 @@ Supersedes the earlier followers rollout status above. The user manually applied
 - No schema, auth, Caddie, message-editing or native-player implementation changes.
 - Verification: `npm run check` passes (1,701 passed, 6 optional skips; TypeScript, lint zero errors, production build + landing prerender). Eight added coordinator regression tests. Synthetic real-video Chromium runs at 390px and 1100px cover autoplay/mute, slide changes, offscreen handoff, fullscreen refusal/close, unmount; autoplay refusal retains manual fallback.
 - Physical iPhone Safari/WKWebView and Low Power Mode remain manual tests, not marked passed. No push/deploy: waiting for explicit approval for this round of changes.
+
+
+## 2026-11-18: Home empty-round prompt simplification (local candidate)
+
+Removed only the Invite a friend button from Home's Open rounds empty state and its unused share hook/icon. Existing empty-state copy and Host a Round action remain unchanged. No populated-round behavior, other invite surfaces, database or message editing changes. Awaiting per-round push/deploy approval.
+
+Verification: full `npm run check` passed (1,702 tests passed, 6 optional skips), including TypeScript, lint, production build and landing prerender. Real Home with synthetic empty-round data passed Chromium checks at 390px and 1100px: no Invite a friend button; original host copy present; Host a Round navigates correctly. Physical iPhone not tested.

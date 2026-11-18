@@ -9,3 +9,11 @@ test('Home rounds strip owns horizontal gestures without blocking native vertica
  assert.doesNotMatch(strip[1],/touch-pan-x|touch-none/);
  assert.match(source,/stripRounds\.rounds\.map\(\(call\) => \(\s*<RoundStripCard key=\{call.id\} call=\{call\}/);
 });
+
+test('Home empty rounds keeps its host prompt without an invite-friend action',()=>{
+ const source=readFileSync(new URL('../src/pages/Home.tsx',import.meta.url),'utf8');
+ assert.match(source,/t\("home.noRoundsYetTitle"\)/);
+ assert.match(source,/t\("home.noRoundsYetBody"\)/);
+ assert.match(source,/t\("home.hostRound"\)/);
+ assert.doesNotMatch(source,/common.inviteFriend|shareApp|useShareActions/);
+});

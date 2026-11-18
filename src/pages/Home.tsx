@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { ReactNode } from "react";
-import { Activity, ArrowRight, ChevronRight, Flag, Plus, Share2, SlidersHorizontal, Users } from "lucide-react";
+import { Activity, ArrowRight, ChevronRight, Flag, Plus, SlidersHorizontal, Users } from "lucide-react";
 import { useData } from "../context/DataContext";
 import { useRealCommunity } from "../context/RealCommunityContext";
 import { listView } from "../lib/loadStatus";
@@ -26,7 +26,6 @@ import { findTabPath } from "../lib/findTab";
 import { HostReminderCard } from "../components/onboarding/HostReminderCard";
 import { useFirstRoundPrompt } from "../context/FirstRoundPromptContext";
 import { clubLabel } from "../lib/clubLabel";
-import { useShareActions } from "../lib/useShareActions";
 import { RoundShareButton } from "../components/golfcall/RoundShareButton";
 import { homeFocus, readOnboardingIntents } from "../lib/onboardingIntent";
 import { feedCutoff } from "../lib/followingFeed";
@@ -107,7 +106,6 @@ export function Home() {
   const { start: startTutorial } = useTutorial();
   const { eligible: tutorialEligible } = useTutorialEligibility();
   const { showReminderCard: showHostReminder, startHosting } = useFirstRoundPrompt();
-  const { shareApp } = useShareActions();
   // What a brand-new golfer told Ready they're here for (first week only,
   // this device): picks which way the empty feed points first.
   const intentOwner = isDemo ? "demo" : authUser?.id;
@@ -291,11 +289,6 @@ export function Home() {
             <span className="min-w-0">
               <span className="block text-sm font-bold text-slate-900">{t("home.noRoundsYetTitle")}</span>
               <span className="block text-xs text-slate-500">{t("home.noRoundsYetBody")}</span>
-            </span>
-            <span className="flex flex-wrap items-center gap-2">
-              <Button size="sm" variant="outline" icon={<Share2 size={14} />} onClick={() => void shareApp()}>
-                {t("common.inviteFriend")}
-              </Button>
             </span>
           </div>
         )}
