@@ -1,3 +1,7 @@
+## November 18: rounded comment composer focus
+
+Replaced the square input outline with a subtle rounded whole-composer treatment. Retains a clear keyboard-focus outline and forced-colors support. No native keyboard, scroll, posting or moderation changes. Scoped production-main patch. Full npm run check passed: TypeScript, lint, 1,685 tests with six optional skips, production build and prerender. No physical-iPhone verification claimed. Verify exact-commit CI and live CSS after push.
+
 ## November 17: friendly golf-focused Community notice
 
 Micky requested publishing another notice to all GolfMe users encouraging golf-relevant posts without targeting anyone or removing a post. The existing dismissible all-user banner has a new announcement ID, Quick Reminder heading, and friendly examples in all six locales. It reaches existing and future members, including those who dismissed the previous reminder, until they dismiss this version or it is replaced. No push notifications, DMs, database edits or user-post changes.

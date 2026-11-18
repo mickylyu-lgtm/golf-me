@@ -769,6 +769,29 @@ select {
   outline-offset: 2px;
 }
 
+/* The input belongs to one rounded composer, not a second box.
+   Preserve visible keyboard focus without a square input ring. */
+.gm-comment-composer:focus-within {
+  border-color: var(--color-fairway-600);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-fairway-500) 12%, transparent);
+}
+
+.gm-comment-composer:has(input:focus-visible) {
+  outline: 2px solid var(--color-fairway-700);
+  outline-offset: 2px;
+}
+
+.gm-comment-composer input:focus-visible {
+  outline: none;
+}
+
+@media (forced-colors: active) {
+  .gm-comment-composer:has(input:focus) {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+}
+
 /* Unlayered, like the baseline above: Tailwind utility-layer outline colors
    cannot override that baseline. Keep the photo viewer neutral and retain
    a high-contrast keyboard cue without a ring after ordinary touch/click.
