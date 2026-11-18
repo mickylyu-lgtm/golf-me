@@ -1,3 +1,9 @@
+## November 18: Home round discovery card preview (local only)
+
+Isolated preview branch based on current main. Extracted the Home round card, retaining its existing detail navigation, horizontal strip and authorized host sharing. Cards now show attributed existing course imagery (or a generic fallback), full course/date/time, existing area and optional distance, holes, approximate price, known host/participant avatars and open spots. Booking status uses existing truthful labels, not inferred confirmation. No new APIs, production records, policies or deployments. No dummy filter controls.
+
+Validation: final npm run check passed TypeScript, lint, 1,707 tests (six optional skips), production build and prerender. Component regressions cover real/unknown course, missing profile/cost, sharing and capacity. Actual Home browser fixture uses synthetic data and checks 390px/1100px overflow, navigation, booking truth and empty states. Screenshots are synthetic local previews. Physical iPhone/WKWebView testing and user design approval remain pending. Do not push without approval.
+
 ## November 18: post and hosted-round share thumbnails
 
 Micky approved implementing and publishing rich share-link thumbnails. Share controls prepare unguessable 30-day bearer links in memory; only an explicit share action distributes them. Posts show their first public Community image/video poster with GolfMe's mark in the top-right corner. Hosted rounds show course, place, date and tee time. Full detail routes retain existing sign-in/access rules. Text-only/no-eligible-cover posts use a branded Community fallback.

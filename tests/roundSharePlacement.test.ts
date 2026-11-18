@@ -11,8 +11,7 @@ test("detail invitation is a prominent action before match and booking informati
 });
 
 test("Home card keeps navigation and sharing as sibling controls, not nested buttons", () => {
-  const home = read("pages/Home.tsx");
-  const card = home.slice(home.indexOf('function RoundStripCard'), home.indexOf('// A small one-line'));
+  const card = read("components/golfcall/RoundStripCard.tsx");
   assert.match(card, /!isDemo && call.hostId === currentUser.id && call.status !== "completed" && call.status !== "cancelled"/);
   assert.match(card, /<\/button>\s*\{canShare && <div[^>]*><RoundShareButton call=\{call\}/);
   assert.match(card, /navigate\(`\/golf-calls\/\$\{call.id\}`\)/);

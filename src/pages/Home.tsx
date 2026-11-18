@@ -18,15 +18,14 @@ import { Button } from "../components/ui/Button";
 import { CLICKABLE_CARD_CLASS } from "../components/ui/cardStyles";
 import { firstName, greetingKeyForHour, isThisWeekend } from "../lib/greeting";
 import { MIN_PREFERENCES_FOR_AUTO_MATCH, selectedPreferenceCount } from "../lib/preferenceMatch";
-import { formatCompactDay, formatShortDate } from "../lib/format";
-import { roundedMiles } from "../lib/geo";
+import { formatShortDate } from "../lib/format";
 import { isPastRound } from "../lib/golfCall";
 import { COMMUNITY_TUTORIAL_ID } from "../lib/tutorialSteps";
 import { findTabPath } from "../lib/findTab";
 import { HostReminderCard } from "../components/onboarding/HostReminderCard";
 import { useFirstRoundPrompt } from "../context/FirstRoundPromptContext";
 import { clubLabel } from "../lib/clubLabel";
-import { RoundShareButton } from "../components/golfcall/RoundShareButton";
+import { RoundStripCard } from "../components/golfcall/RoundStripCard";
 import { homeFocus, readOnboardingIntents } from "../lib/onboardingIntent";
 import { feedCutoff } from "../lib/followingFeed";
 import type { CommunityPost, GolfCall, GolferProfile } from "../types";
@@ -50,39 +49,6 @@ const PRIMARY_ACTION_CLASS =
 type FeedItem =
   | { kind: "post"; key: string; at: string; post: CommunityPost }
   | { kind: "round"; key: string; at: string; call: GolfCall; actor: GolferProfile; hosting: boolean };
-
-// A compact card for the horizontal "rounds near you" strip.
-function RoundStripCard({ call }: { call: GolfCall }) {
-  const { t, locale } = useLocale();
-  const navigate = useNavigate();
-  const { currentUser } = useData();
-  const { isDemo } = useAuth();
-  const canShare = !isDemo && call.hostId === currentUser.id && call.status !== "completed" && call.status !== "cancelled";
-  const openSpots = call.totalSpots - call.joinedGolferIds.length;
-  return (
-    <div className={`flex w-56 shrink-0 snap-start flex-col ${CLICKABLE_CARD_CLASS}`}>
-    <button
-      type="button"
-      onClick={() => navigate(`/golf-calls/${call.id}`)}
-      className="flex flex-1 flex-col gap-1.5 rounded-2xl p-3.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-fairway-400"
-    >
-      <span className="line-clamp-1 text-sm font-bold text-slate-900">{call.course}</span>
-      <span className="text-xs font-medium text-slate-500">
-        {formatCompactDay(call.dateISO, locale, t)} · {call.timeLabel}
-      </span>
-      <span className="mt-auto flex items-center justify-between gap-2 pt-1 text-xs">
-        <span className="font-semibold text-fairway-700">
-          {openSpots === 1 ? t("golfCallCard.spotsRemainingSingular", { count: openSpots }) : t("golfCallCard.spotsRemainingPlural", { count: openSpots })}
-        </span>
-        {call.distanceMiles !== undefined && (
-          <span className="shrink-0 text-slate-400">{t("golfCallCard.miAway", { miles: roundedMiles(call.distanceMiles) })}</span>
-        )}
-      </span>
-    </button>
-    {canShare && <div className="px-3.5 pb-3.5"><RoundShareButton call={call} /></div>}
-    </div>
-  );
-}
 
 // A small one-line prompt (profile completion, latest Caddie result).
 function SmallPrompt({ icon, title, detail, onClick }: { icon: ReactNode; title: string; detail?: string; onClick: () => void }) {
