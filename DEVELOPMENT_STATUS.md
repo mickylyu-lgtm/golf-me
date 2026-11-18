@@ -1,3 +1,13 @@
+## November 18: post and hosted-round share thumbnails
+
+Micky approved implementing and publishing rich share-link thumbnails. Share controls prepare unguessable 30-day bearer links in memory; only an explicit share action distributes them. Posts show their first public Community image/video poster with GolfMe's mark in the top-right corner. Hosted rounds show course, place, date and tee time. Full detail routes retain existing sign-in/access rules. Text-only/no-eligible-cover posts use a branded Community fallback.
+
+The private token table has RLS and no direct client grants. Authenticated creation checks post eligibility or round ownership; anonymous resolution returns only preview fields and rechecks removal, deletion, suspension/bans, creator blocks/hidden posts, round activity, expiry and revocation. No host/participant identity, post text, private Caddie media, notes or booking data is exposed. Any holder of a shared preview link can see its minimal preview; third-party cached thumbnails cannot be recalled. Old /community and /golf-calls links retain their generic previews; use the Share action again for the new /s link.
+
+Vercel renders server-side OG HTML and bounded same-origin Community image thumbnails, with no-store responses, no arbitrary URL fetches and escaped text. Account/target-scoped preparation happens before tapping, so the native share API runs synchronously from the tap. A localized retry prompt handles not-yet-ready links instead of silently falling back because of an expired gesture. Stale/backgrounded controls refresh, and demo mode preserves its original generic share behavior. Physical iPhone/iMessage visual verification is not claimed.
+
+Validation: full TypeScript/lint/test/build/prerender check passed (1,693 tests, six optional skips), including eight focused metadata/image tests and standalone API type checking. SQL security regression suite passed in disposable PGlite including real anon/authenticated grants. Additive production migration applied and direct-table/mint/resolver grants verified. Exact commit deployment/live endpoint checks remain to be verified at release.
+
 ## November 18: rounded comment composer focus
 
 Replaced the square input outline with a subtle rounded whole-composer treatment. Retains a clear keyboard-focus outline and forced-colors support. No native keyboard, scroll, posting or moderation changes. Scoped production-main patch. Full npm run check passed: TypeScript, lint, 1,685 tests with six optional skips, production build and prerender. No physical-iPhone verification claimed. Verify exact-commit CI and live CSS after push.

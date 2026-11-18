@@ -1,15 +1,36 @@
 {
   "functions": {
-    "api/chat-video.ts": { "maxDuration": 300 }
+    "api/chat-video.ts": {
+      "maxDuration": 300
+    },
+    "api/share-preview.ts": {
+      "maxDuration": 30,
+      "includeFiles": "public/icon-source.svg"
+    }
   },
   "headers": [
     {
       "source": "/.well-known/apple-app-site-association",
       "headers": [
-        { "key": "Content-Type", "value": "application/json" },
-        { "key": "Cache-Control", "value": "public, max-age=3600" }
+        {
+          "key": "Content-Type",
+          "value": "application/json"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600"
+        }
       ]
     }
   ],
-  "rewrites": [{ "source": "/((?!\\.well-known/).*)", "destination": "/index.html" }]
+  "rewrites": [
+    {
+      "source": "/s/:token",
+      "destination": "/api/share-preview?token=:token"
+    },
+    {
+      "source": "/((?!\\.well-known/).*)",
+      "destination": "/index.html"
+    }
+  ]
 }

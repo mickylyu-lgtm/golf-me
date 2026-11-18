@@ -8,7 +8,7 @@ import { Button } from "../ui/Button";
 // invite. This action never joins a round or posts to Community.
 export function RoundShareButton({ call }: { call: Pick<GolfCall, "id" | "course" | "dateISO" | "timeLabel"> }) {
   const { t } = useLocale();
-  const { shareRound } = useShareActions();
+  const { shareRound } = useShareActions(call.id);
   return (
     <Button type="button" fullWidth className="min-h-11" icon={<Share2 size={18} aria-hidden="true" />} onClick={() => void shareRound(call)}>
       {t("share.shareRoundButton")}

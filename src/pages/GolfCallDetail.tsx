@@ -83,7 +83,7 @@ export function GolfCallDetail() {
   const { isDemo } = useAuth();
   const { hasLoaded: roundsLoaded, loadError: roundsLoadError, isLoading: roundsLoading, retry: retryRounds } = useRealRounds();
   const { hasLoaded: socialLoaded } = useRealSocial();
-  const { shareRound } = useShareActions();
+  const { shareRound } = useShareActions(id);
   const location = useLocation();
   // Set by CreateGolfCall right after a successful host: offer sharing once.
   // Cleared from history so a refresh/back doesn't show it again.

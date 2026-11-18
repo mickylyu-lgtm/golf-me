@@ -3,6 +3,7 @@ import { useLocale } from "../i18n/LocaleContext";
 import { useToast } from "../context/ToastContext";
 import { track } from "./analytics";
 import { shareOrCopy } from "./share";
+import { usePreparedShare } from "./usePreparedShare";
 import { buildAppShare, buildRoundShare, isShareableRoundId, shareOrigin } from "./shareLinks";
 import { roundCalendarDay } from "./golfCall";
 import type { GolfCall } from "../types";
@@ -10,7 +11,8 @@ import type { GolfCall } from "../types";
 // Share a round / the app with the native sheet, or copy the link with a
 // toast. Only the round's id, course name, date and time are handed to the
 // builder -- never the host, participants or anything else on the round.
-export function useShareActions() {
+export function useShareActions(roundId?: string) {
+  const { url, prepare, isDemo, failed } = usePreparedShare("round", roundId);
   const { t, locale } = useLocale();
   const { showToast } = useToast();
 
@@ -35,9 +37,12 @@ export function useShareActions() {
         { title: t("share.roundTitle"), text: t("share.roundText") },
         shareOrigin(typeof window !== "undefined" ? window.location.origin : null),
       );
-      report(await shareOrCopy(payload), "round_shared");
+      try {
+        if ((!url || call.id !== roundId) && !isDemo) { prepare(); showToast(t(failed ? "share.failedToast" : "share.preparingToast"), failed ? "warning" : "info"); return; }
+        report(await shareOrCopy({ ...payload, url: url || payload.url }), "round_shared");
+      } catch { showToast(t("share.failedToast"), "warning"); }
     },
-    [locale, t, report, showToast],
+    [locale, t, report, showToast, url, roundId, prepare, isDemo, failed],
   );
 
   const shareApp = useCallback(async () => {

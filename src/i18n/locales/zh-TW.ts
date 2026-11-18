@@ -1710,6 +1710,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "share.roundText": "加入我在{course}的球局：{date} {time}。",
   "share.appTitle": "GolfMe",
   "share.appText": "在 GolfMe 找到附近的球友和球局。",
+  "share.preparingToast": "正在準備連結，請稍後再次點擊分享。",
   "share.copiedToast": "連結已複製。",
   "share.failedToast": "暫時無法分享連結，請再試一次。",
   "share.shareRound": "分享",

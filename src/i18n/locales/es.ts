@@ -1710,6 +1710,7 @@ export const es: Record<TranslationKey, string> = {
   "share.roundText": "Únete a mi ronda en {course} el {date}, {time}.",
   "share.appTitle": "GolfMe",
   "share.appText": "Encuentra compañeros y rondas de golf cerca de ti en GolfMe.",
+  "share.preparingToast": "Preparando tu enlace. Vuelve a tocar Compartir en un momento.",
   "share.copiedToast": "Enlace copiado.",
   "share.failedToast": "No se pudo compartir el enlace. Inténtalo de nuevo.",
   "share.shareRound": "Compartir",

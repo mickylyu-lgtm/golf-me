@@ -1710,6 +1710,7 @@ export const ko: Record<TranslationKey, string> = {
   "share.roundText": "{course}에서 {date} {time}에 열리는 제 라운드에 함께해요.",
   "share.appTitle": "GolfMe",
   "share.appText": "GolfMe에서 근처의 골프 파트너와 라운드를 찾아보세요.",
+  "share.preparingToast": "링크를 준비 중입니다. 잠시 후 공유를 다시 눌러 주세요.",
   "share.copiedToast": "링크가 복사되었습니다.",
   "share.failedToast": "링크를 공유하지 못했어요. 다시 시도해 주세요.",
   "share.shareRound": "공유",

@@ -26,7 +26,7 @@ export function DevFirstRoundHarness() {
   const view = params.get("view") ?? "popup";
   const lang = params.get("lang") as Locale | null;
   const { t, locale, setLocale } = useLocale();
-  const { shareRound } = useShareActions();
+  const { shareRound } = useShareActions(SAMPLE_ROUND.id);
   const ranFallback = useRef(false);
 
   useEffect(() => {

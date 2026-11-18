@@ -1710,6 +1710,7 @@ export const ja: Record<TranslationKey, string> = {
   "share.roundText": "{course}でのラウンドに参加しませんか：{date} {time}",
   "share.appTitle": "GolfMe",
   "share.appText": "GolfMeで近くのゴルフ仲間とラウンドを見つけよう。",
+  "share.preparingToast": "リンクを準備しています。少し待ってから、もう一度共有をタップしてください。",
   "share.copiedToast": "リンクをコピーしました。",
   "share.failedToast": "リンクを共有できませんでした。もう一度お試しください。",
   "share.shareRound": "共有",

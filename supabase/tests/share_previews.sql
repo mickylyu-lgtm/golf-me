@@ -1,0 +1,92 @@
+-- Disposable fixture only; no real accounts, no network.
+begin;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',true);
+set local role authenticated;
+do $$ declare t text; r jsonb; begin
+ t:=public.create_share_preview('post','00000000-0000-0000-0000-000000000010');
+ assert t=public.create_share_preview('post','00000000-0000-0000-0000-000000000010'),'active token not stable';
+ perform set_config('test.post_token',t,true);
+ r:=public.resolve_share_preview(t);
+ assert r->>'kind'='post'; assert r->>'image_url' like '%/photo.jpg';
+ assert not (r ? 'author_id') and not(r ? 'text');
+ begin
+ perform public.create_share_preview('round','00000000-0000-0000-0000-000000000099');
+ raise exception 'missing round allowed';
+ exception when insufficient_privilege then null; end;
+ t:=public.create_share_preview('round','00000000-0000-0000-0000-000000000020');
+ perform set_config('test.round_token',t,true);
+ r:=public.resolve_share_preview(t);
+ assert r->>'course'='Test Course' and r->>'place'='Test City' and r->>'time'='7:00 AM';
+ assert not(r ? 'host_user_id') and not(r ? 'notes');
+ begin perform 1 from private.share_previews; raise exception 'table readable';
+ exception when insufficient_privilege then null; end;
+end $$;
+reset role;
+select set_config('request.jwt.claim.sub','',true);
+set local role anon;
+do $$ begin
+ assert public.resolve_share_preview(current_setting('test.post_token'))->>'kind'='post';
+ assert public.resolve_share_preview('bad') is null;
+ assert public.resolve_share_preview(null) is null;
+ assert public.resolve_share_preview('00000000-0000-0000-0000-000000000099') is null;
+ begin perform public.create_share_preview('post','00000000-0000-0000-0000-000000000010');
+ raise exception 'anon mint allowed'; exception when insufficient_privilege then null; end;
+end $$;
+reset role;
+do $$ declare t text:=current_setting('test.post_token'); r text:=current_setting('test.round_token'); begin
+ update community_posts set removed_at=now();
+ assert public.resolve_share_preview(t) is null; update community_posts set removed_at=null;
+ insert into blocks values('00000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000001');
+ assert public.resolve_share_preview(t) is null; delete from blocks;
+ insert into hidden_posts values('00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000010');
+ assert public.resolve_share_preview(t) is null; delete from hidden_posts;
+ update auth.users set banned_until=now()+interval '1 day' where id='00000000-0000-0000-0000-000000000002';
+ assert public.resolve_share_preview(t) is null; update auth.users set banned_until=null;
+ insert into private.user_suspensions values('00000000-0000-0000-0000-000000000001',null);
+ assert public.resolve_share_preview(t) is null and public.resolve_share_preview(r) is null;
+ delete from private.user_suspensions;
+ update auth.users set banned_until=now()+interval '1 day' where id='00000000-0000-0000-0000-000000000001';
+ assert public.resolve_share_preview(t) is null and public.resolve_share_preview(r) is null;
+ update auth.users set banned_until=null;
+ update community_posts set image_url='https://evil.example/storage/v1/object/public/community-media/a/photo.jpg';
+ assert public.resolve_share_preview(t)->>'image_url' is null;
+ update community_posts set image_url='https://adokdenbmpshqgjbzshb.supabase.co/storage/v1/object/sign/caddie-private/private.jpg?token=secret';
+ assert public.resolve_share_preview(t)->>'image_url' is null;
+ insert into community_post_media values('00000000-0000-0000-0000-000000000030','00000000-0000-0000-0000-000000000010',0,'video','https://adokdenbmpshqgjbzshb.supabase.co/storage/v1/object/public/community-media/a/video.mp4','https://adokdenbmpshqgjbzshb.supabase.co/storage/v1/object/public/community-media/a/poster.jpg');
+ assert public.resolve_share_preview(t)->>'image_url' like '%/poster.jpg';
+ update community_post_media set thumbnail_url=null;
+ assert public.resolve_share_preview(t)->>'image_url' is null;
+ update golf_calls set status='cancelled'; assert public.resolve_share_preview(r) is null;
+ update golf_calls set status='open';
+ update private.share_previews set revoked_at=now() where token=r;
+ assert public.resolve_share_preview(r) is null;
+ update private.share_previews set expires_at=now()-interval '1 day' where token=t;
+ assert public.resolve_share_preview(t) is null;
+end $$;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',true);
+set local role authenticated;
+do $$ declare t text; begin
+ t:=public.create_share_preview('post','00000000-0000-0000-0000-000000000010');
+ assert t<>current_setting('test.post_token'),'expired token not rotated';
+ perform set_config('test.post_token',t,true);
+end $$;
+reset role;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000003',true);
+set local role authenticated;
+do $$ begin
+ begin perform public.create_share_preview('round','00000000-0000-0000-0000-000000000020');
+ raise exception 'nonhost mint allowed'; exception when insufficient_privilege then null; end;
+end $$;
+reset role;
+update auth.users set banned_until=now()+interval '1 day' where id='00000000-0000-0000-0000-000000000003';
+set local role authenticated;
+do $$ begin
+ assert public.resolve_share_preview(current_setting('test.post_token')) is null;
+ begin perform public.create_share_preview('post','00000000-0000-0000-0000-000000000010');
+ raise exception 'banned mint allowed'; exception when insufficient_privilege then null; end;
+end $$;
+reset role;
+select set_config('request.jwt.claim.sub','',true);
+delete from community_posts;
+do $$ begin assert public.resolve_share_preview(current_setting('test.post_token')) is null; end $$;
+rollback;

@@ -1760,6 +1760,7 @@ export const en = {
   "share.roundText": "Join my round at {course} on {date}, {time}.",
   "share.appTitle": "GolfMe",
   "share.appText": "Find golf partners and rounds near you on GolfMe.",
+  "share.preparingToast": "Preparing your link. Tap Share again in a moment.",
   "share.copiedToast": "Link copied.",
   "share.failedToast": "Couldn't share the link. Please try again.",
   "share.shareRound": "Share",
