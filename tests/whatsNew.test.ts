@@ -91,3 +91,13 @@ test("dismissal keys isolate accounts and encode unsafe characters", () => {
     else Reflect.deleteProperty(globalThis, "window");
   }
 });
+
+test("new golf-focused notice reaches members who dismissed the previous reminder", () => {
+  assert.equal(CURRENT_WHATS_NEW?.id, "2026-11-17-golf-focused-community-reminder");
+  assert.equal(CURRENT_WHATS_NEW?.audience, "all");
+  assert.equal(shouldShowWhatsNew(CURRENT_WHATS_NEW, {
+    dismissedId: "2026-11-16-community-reminder",
+    now: Date.parse("2026-11-18"),
+    memberSince: "2026-11-18",
+  }), true);
+});

@@ -1,3 +1,9 @@
+## November 17: friendly golf-focused Community notice
+
+Micky requested publishing another notice to all GolfMe users encouraging golf-relevant posts without targeting anyone or removing a post. The existing dismissible all-user banner has a new announcement ID, Quick Reminder heading, and friendly examples in all six locales. It reaches existing and future members, including those who dismissed the previous reminder, until they dismiss this version or it is replaced. No push notifications, DMs, database edits or user-post changes.
+
+Validation after integration onto ecafb082: TypeScript, lint, 1,683 tests passed with six optional ffmpeg skips, production build and prerender passed. Publication authorized for this notice; verify exact-commit CI and production deployment. Physical-device visual verification is not claimed.
+
 ## November 17: root-tab clipping and Home round-strip gestures
 
 Micky reported text fragments at the left of Chat after returning from a conversation. Home's mobile round strip extends 16px beyond its page through `-mx-4`; clipping only the overall five-page track lets the neighboring Home strip paint inside Chat. Each persistent root-tab panel now clips its own horizontal overflow. The Home strip also opts out of root-tab swipe detection with `data-no-swipe` and contains horizontal overscroll, so dragging round cards scrolls that strip rather than changing tabs. Native vertical scrolling and card taps remain enabled.
