@@ -1,5 +1,8 @@
+/// <reference types="node" />
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+
+
 
 const css = readFileSync(new URL("../index.css", import.meta.url), "utf8");
 const page = readFileSync(new URL("../pages/PostDetail.tsx", import.meta.url), "utf8");
