@@ -23,9 +23,12 @@ export function RoundStripCard({ call }: { call: GolfCall }) {
   const { isDemo } = useAuth();
   const host = getGolfer(call.hostId);
   const course = matchHandpickedCourse(call.course);
-  const [failedImage, setFailedImage] = useState<string | null>(null);
-  const imageUrl = course?.heroImageUrl;
-  const showImage = Boolean(imageUrl && failedImage !== imageUrl);
+  const [failedImages, setFailedImages] = useState<string[]>([]);
+  const photo = course?.roundPhoto;
+  const imageUrl = [photo?.url, course?.heroImageUrl].find((url) => url && !failedImages.includes(url));
+  const showImage = Boolean(imageUrl);
+  const showingPhoto = Boolean(photo && imageUrl === photo.url);
+  const imageCredit = showingPhoto ? photo!.credit : course?.heroImageCredit;
   const booking = bookingStatusView(call);
   const openSpots = Math.max(0, call.totalSpots - call.joinedGolferIds.length);
   const participants = [...new Set(call.joinedGolferIds)].filter((id) => id !== call.hostId).map(getGolfer).filter((g) => Boolean(g));
@@ -39,10 +42,10 @@ export function RoundStripCard({ call }: { call: GolfCall }) {
         className="flex flex-1 flex-col rounded-2xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-fairway-400"
       >
         <span className="relative block h-28 w-full overflow-hidden bg-fairway-50" aria-hidden="true">
-          {showImage ? <img src={imageUrl} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" onError={() => setFailedImage(imageUrl!)} /> : <GenericCourseIllustration />}
+          {showImage ? <img src={imageUrl} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" onError={() => setFailedImages((failed) => [...failed, imageUrl!])} /> : <GenericCourseIllustration />}
         </span>
         <span className="flex w-full flex-1 flex-col gap-2 p-3.5">
-          {showImage && course?.heroImageCredit && <span className="text-[10px] leading-tight text-slate-500">{course.heroImageCredit}</span>}
+          {showImage && imageCredit && <span className="text-[10px] leading-tight text-slate-500">{imageCredit}</span>}
           {booking.visible && <span className="self-start rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600">{t(booking.labelKey)}</span>}
           <span className="break-words text-base font-bold leading-snug text-slate-900">{call.course}</span>
           <span className="break-words text-sm font-semibold text-fairway-700">{formatDate(call.dateISO, locale, t)} · {call.timeLabel}</span>
@@ -66,6 +69,10 @@ export function RoundStripCard({ call }: { call: GolfCall }) {
         </span>
       </button>
       {canShare && <div className="px-3.5 pb-3.5"><RoundShareButton call={call} /></div>}
+      {showingPhoto && photo && <p className="px-3.5 pb-3 text-[10px] text-slate-500">
+        <a href={photo.sourceUrl} target="_blank" rel="noreferrer" className="underline underline-offset-2">Wikimedia Commons</a>
+        {" · "}<a href={photo.licenseUrl} target="_blank" rel="noreferrer" className="underline underline-offset-2">CC BY-SA 4.0</a>
+      </p>}
     </article>
   );
 }

@@ -27,8 +27,9 @@ try{
  await mkdir('artifacts.local',{recursive:true});
  for(const width of [390,1100]){
   const page=await browser.newPage({viewport:{width,height:950}});
+  let failPhoto=false,failAerial=false;
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
-  await page.route('**/*',r=>r.request().url().startsWith(origin+'/')||r.request().url().startsWith('data:')?r.continue():r.abort());
+  await page.route('**/*',r=>{const url=r.request().url();if((failPhoto&&url.endsWith('/skyway-round-photo.webp'))||(failAerial&&url.endsWith('/skyway-aerial.jpg')))return r.abort();return url.startsWith(origin+'/')||url.startsWith('data:')?r.continue():r.abort();});
   async function open(scenario){await page.goto(origin+'/home?scenario='+scenario+'&version=Round-card-preview');await page.locator('#home-rounds-strip').waitFor();}
   await open('mixed');
   const card=page.locator('article').first();
@@ -41,7 +42,11 @@ try{
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   await page.locator('article img').evaluateAll(async imgs => { await Promise.all(imgs.map(img => img.decode().catch(() => {}))); });
   await page.screenshot({path:'artifacts.local/home-round-preview-'+width+'.png',fullPage:false});
+  assert.equal(await card.getByRole('link',{name:'CC BY-SA 4.0',exact:true}).getAttribute('href'),'https://creativecommons.org/licenses/by-sa/4.0/');
+  assert.ok((await card.locator('img').getAttribute('src')).endsWith('skyway-round-photo.webp'));
   await card.getByRole('button').click();assert.ok(page.url().endsWith('/golf-calls/preview-round'));
+  failPhoto=true;await open('mixed');await card.locator('img[src="/courses/skyway-aerial.jpg"]').waitFor();assert.ok((await card.innerText()).includes('Aerial: USGS'));assert.equal(await card.getByRole('link').count(),0);
+  failAerial=true;await open('mixed');await card.getByRole('img',{name:'Golf course illustration',includeHidden:true}).waitFor();assert.equal(await card.locator('img').count(),0);failPhoto=false;failAerial=false;
   await open('fallback');
   assert.equal(await card.locator('img').count(),0);
   assert.ok((await card.innerText()).includes('Without A Verified Photo'));
