@@ -55,7 +55,8 @@ export function RoundStripCard({ call }: { call: GolfCall }) {
         className="flex flex-1 flex-col rounded-2xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-fairway-400"
       >
         <span className="relative block h-28 w-full overflow-hidden bg-fairway-50" aria-hidden="true">
-          {showImage ? <img src={imageUrl} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" onError={() => setFailedImages((failed) => [...failed, imageUrl!])} /> : showTiles && tileSource ? <FittedSatelliteTiles key={tileKey} source={tileSource} lat={lat!} lng={lng!} fallbackZoom={POINT_THUMB_ZOOM} onError={() => setFailedTiles(tileKey)} /> : <GenericCourseIllustration />}
+          <GenericCourseIllustration />
+          {showImage ? <img src={imageUrl} alt="" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover" onError={() => setFailedImages((failed) => [...failed, imageUrl!])} /> : showTiles && tileSource ? <FittedSatelliteTiles key={tileKey} source={tileSource} lat={lat!} lng={lng!} fallbackZoom={POINT_THUMB_ZOOM} onError={() => setFailedTiles(tileKey)} /> : null}
         </span>
         <span className="flex w-full flex-1 flex-col gap-2 p-3.5">
           {showImage && imageCredit && <span className="text-[10px] leading-tight text-slate-500">{imageCredit}</span>}

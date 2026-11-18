@@ -49,9 +49,14 @@ test("missing profiles and overfull data render without invented participants or
 });
 
 test("Los Feliz stored venue coordinates get aerial fallback, not another course photo",()=>{
- const html=render({course:"Los Feliz 3-Par Golf Course",courseLat:34.1246158,courseLng:-118.2703437});assert.match(html,/data-aerial/);assert.match(html,/USGS aerial credit/);assert.doesNotMatch(html,/verified.jpg|data-fallback/);
+ const html=render({course:"Los Feliz 3-Par Golf Course",courseLat:34.1246158,courseLng:-118.2703437});assert.match(html,/data-aerial/);assert.match(html,/USGS aerial credit/);assert.doesNotMatch(html,/verified.jpg/);
 });
 test("missing, invalid and unsupported coordinates stay honest; photos keep priority",()=>{
  for(const pair of [[undefined,undefined],[NaN,-118],[91,-118],[34,-181],[51,0]])assert.match(render({course:"Other",courseLat:pair[0],courseLng:pair[1]}),/data-fallback/);
  assert.doesNotMatch(render({courseLat:34.1246158,courseLng:-118.2703437}),/data-aerial/);
+});
+
+test("illustration remains under images throughout loading and unavailable coverage",()=>{
+ assert.match(source, /<GenericCourseIllustration \/>\s*\{showImage/);
+ assert.match(source, /absolute inset-0 h-full w-full object-cover/);
 });

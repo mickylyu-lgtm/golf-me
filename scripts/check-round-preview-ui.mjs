@@ -33,6 +33,7 @@ try{
   async function open(scenario){await page.goto(origin+'/home?scenario='+scenario+'&version=Round-card-preview');await page.locator('#home-rounds-strip').waitFor();}
   await open('mixed');
   const card=page.locator('article').first();
+  assert.equal(await card.locator('svg[aria-label="Golf course illustration"]').count(),1);
   await card.getByText('Skyway Golf Course',{exact:true}).waitFor();
   assert.ok((await card.innerText()).includes('Booking status not provided'));
   assert.ok((await card.innerText()).includes('1:30 PM'));
@@ -46,7 +47,7 @@ try{
   assert.ok((await card.locator('img').getAttribute('src')).endsWith('skyway-round-photo.webp'));
   await card.getByRole('button').click();assert.ok(page.url().endsWith('/golf-calls/preview-round'));
   failPhoto=true;await open('mixed');await card.locator('img[src="/courses/skyway-aerial.jpg"]').waitFor();assert.ok((await card.innerText()).includes('Aerial: USGS'));assert.equal(await card.getByRole('link').count(),0);
-  failAerial=true;await open('mixed');await card.getByRole('img',{name:'Golf course illustration',includeHidden:true}).waitFor();assert.equal(await card.locator('img').count(),0);failPhoto=false;failAerial=false;
+  failAerial=true;await open('mixed');await card.getByRole('img',{name:'Golf course illustration',includeHidden:true}).waitFor();await page.waitForFunction(()=>document.querySelectorAll('article img').length===0);assert.equal(await card.locator('img').count(),0);failPhoto=false;failAerial=false;
   await open('fallback');
   assert.equal(await card.locator('img').count(),0);
   assert.ok((await card.innerText()).includes('Without A Verified Photo'));
@@ -59,7 +60,7 @@ try{
   assert.ok((await card.innerText()).includes('Los Feliz 3-Par Golf Course'));assert.ok((await card.innerText()).includes('USGS The National Map'));
   assert.ok(tilesRequested>0 && tilesRequested<=6);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   await page.screenshot({path:'artifacts.local/los-feliz-aerial-'+width+'.png',fullPage:false});
-  failTiles=true;await open('aerial');await card.getByRole('img',{name:'Golf course illustration',includeHidden:true}).waitFor();assert.equal(await card.locator('img').count(),0);
+  failTiles=true;await open('aerial');await card.getByRole('img',{name:'Golf course illustration',includeHidden:true}).waitFor();await page.waitForFunction(()=>document.querySelectorAll('article img').length===0);assert.equal(await card.locator('img').count(),0);
   await open('empty');assert.equal(await page.locator('article').count(),0);assert.equal(await page.getByText('No rounds yet',{exact:true}).count(),1);
   assert.deepEqual(errors,[]);await page.close();
  }
