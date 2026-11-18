@@ -1,6 +1,6 @@
 import { PostShareButton } from "./PostShareButton";
 import { OfficialPostBadge } from "./OfficialPostBadge";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
 import {
@@ -37,6 +37,8 @@ import { ReportModal } from "../trust/ReportModal";
 import { CLICKABLE_CARD_CLASS } from "../ui/cardStyles";
 import { GolfCallCard } from "../golfcall/GolfCallCard";
 import { SwingAnalysisPanel } from "./SwingAnalysisPanel";
+import { useFeedVideoAutoplay, useBlockFeedAutoplay } from "./useFeedVideoAutoplay";
+import { feedVideoAutoplay } from "../../lib/feedVideoAutoplay";
 import { MediaCarousel } from "./MediaCarousel";
 import { VideoStatusOverlay } from "./VideoStatusOverlay";
 import { useVideoPlayback } from "./useVideoPlayback";
@@ -46,7 +48,6 @@ import { formatRelativeTime } from "../../lib/format";
 import { postCategoryLabel } from "../../lib/enumLabels";
 import { areaForCourse } from "../../lib/courses";
 import { useNativeCommunityVideo } from "./useNativeCommunityVideo";
-import { activeNativeVideo } from "../../lib/nativeVideoPlayer";
 import { isStaleProcessing, usePeriodicRerender } from "../../lib/caddieAnalysis";
 import { FAILURE_KIND_KEYS, analysisFailure } from "../../lib/caddieFailure";
 import { caddieErrorText } from "../../lib/caddieErrorText";
@@ -137,7 +138,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
   const playback = useVideoPlayback(post.type === "swing" ? videoSrc : undefined, { playOnRetry: true });
   // Feed autoplay was refused: show a play badge so the paused video reads
   // as tappable rather than broken.
-  const [autoplayBlocked, setAutoplayBlocked] = useState(false);
+  const [autoplayBlocked, setAutoplayBlocked] = useState(true);
   const [framePoster, setFramePoster] = useState<string | undefined>(undefined);
   // For a black thumbnail: the first decoded frame that isn't black, as a
   // JPEG, so the card shows the swing before anyone plays it.
@@ -188,7 +189,8 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
     if (backdrop.bars || (!thumbBackdrop && !frameBackdrop)) setFrameBackdrop(backdrop);
   }
   const nativeVideo = useNativeCommunityVideo(videoRef, videoSrc);
-  const feedVisibleRef = useRef(false);
+  useFeedVideoAutoplay(videoRef, videoSrc);
+  useBlockFeedAutoplay(mediaLightboxIndex !== null);
   const pressRef = useRef<{ x: number; y: number; moved: boolean } | null>(null);
 
   // Tap vs drag, for every tap target on the card that has no native
@@ -231,8 +233,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
         setFeedMuted(true);
         const video = videoRef.current;
         if (!video) return;
-        if (feedVisibleRef.current) void video.play().catch(() => setAutoplayBlocked(true));
-        else video.pause();
+        feedVideoAutoplay.refresh();
       },
     );
   }
@@ -243,37 +244,6 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
     if (el) el.muted = !el.muted;
     setFeedMuted((m) => !m);
   }
-
-  // Feed/Reels-style autoplay: the video itself plays/pauses based on
-  // whether it's actually on-screen, not on a manual tap-to-start — matches
-  // the brief's explicit "like on Instagram" request. Starts muted (the
-  // only way browsers allow unattended autoplay anyway) and stays muted
-  // until the golfer taps it; each card gets its own observer since Community
-  // renders many of these in a single scrolling list.
-  useEffect(() => {
-    const el = videoRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        feedVisibleRef.current = entry.isIntersecting;
-        if (activeNativeVideo() === el) return; // rotation/OS presentation must not pause the player
-        if (entry.isIntersecting && mediaLightboxIndex === null) {
-          el.play().catch(() => {
-            // Autoplay can still be blocked in some embedded contexts even
-            // when muted — not an error state, just leaves it paused with
-            // its poster frame (and a play badge) showing until the golfer
-            // taps play.
-            setAutoplayBlocked(true);
-          });
-        } else {
-          el.pause();
-        }
-      },
-      { threshold: 0.6 },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [post.videoUrl, mediaLightboxIndex]);
 
   // Re-checks the Ask-Caddie row's stale mark below as time passes.
   usePeriodicRerender(caddieAnalyses.some((a) => a.sourcePostId === post.id && a.status === "processing"));
@@ -556,7 +526,7 @@ export function PostCard({ post, linkToDetail = true }: PostCardProps) {
               onError={playback.handlers.onError}
               onPlay={playback.handlers.onPlay}
               onWaiting={playback.handlers.onWaiting}
-              onPause={playback.handlers.onPause}
+              onPause={() => { setAutoplayBlocked(true); playback.handlers.onPause(); }}
               onPlaying={(e) => {
                 setAutoplayBlocked(false);
                 playback.handlers.onPlaying();

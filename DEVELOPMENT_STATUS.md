@@ -2300,3 +2300,13 @@ Supersedes the earlier followers rollout status above. The user manually applied
 - After explicit session-use permission, the exact reviewed fetchFollowerCount/fetchProfileFollowers and parseFollowerPage source passed against real Auth/PostgREST using the existing test session in memory only. Counts, mapped unique rows, empty end-page totals, generic denial propagation and malformed-response rejection passed. Only six approved read requests were made; no tokens were displayed or saved. Real new-UI rendering with that account, cross-account state changes, full-schema Supabase staging and physical-device testing remain unverified.
 - No migration-history row exists for 20261111010730. Do not replay the installer, run CLI db push or repair history without separately authorized reconciliation on the correct project. Frontend integration does not require a new backend action.
 - Next: recheck current main before the user-approved frontend push, then verify that exact deployment and smoke-test the UI. The new endpoint limits its own list/count exposure; broad legacy profiles/follows APIs remain separate work.
+
+
+## 2026-11-18: Community feed video autoplay (local candidate)
+
+- Ordinary media posts previously rendered paused CardVideo previews with no autoplay; swing posts alone had a separate visibility observer.
+- Both now share a single visible-preview coordinator: starts muted, loops, plays only the most-visible eligible video (60% visible), pauses offscreen/inactive carousel slides/background tabs/unmounted previews. Photo slides stop the preceding video.
+- Preserved tap-to-native/fullscreen playback and retry UI. Feed playback yields to native-player ownership and in-app viewers; returning restores the eligible preview. Ordinary previews have a mute button; the play badge appears only while paused, including refused autoplay.
+- No schema, auth, Caddie, message-editing or native-player implementation changes.
+- Verification: `npm run check` passes (1,701 passed, 6 optional skips; TypeScript, lint zero errors, production build + landing prerender). Eight added coordinator regression tests. Synthetic real-video Chromium runs at 390px and 1100px cover autoplay/mute, slide changes, offscreen handoff, fullscreen refusal/close, unmount; autoplay refusal retains manual fallback.
+- Physical iPhone Safari/WKWebView and Low Power Mode remain manual tests, not marked passed. No push/deploy: waiting for explicit approval for this round of changes.

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type React from "react";
-import { Play } from "lucide-react";
+import { Play, Volume2, VolumeX } from "lucide-react";
 import type { PostMediaItem } from "../../types";
 import { useNativeCommunityVideo } from "./useNativeCommunityVideo";
 import { useLocale } from "../../i18n/LocaleContext";
@@ -9,6 +9,7 @@ import { ZoomableImage } from "./ZoomableImage";
 import { resolveCommunityMediaUrl, withFirstFrameHint } from "../../lib/videoPlayback";
 import { VideoStatusOverlay } from "./VideoStatusOverlay";
 import { useVideoPlayback } from "./useVideoPlayback";
+import { useFeedVideoAutoplay } from "./useFeedVideoAutoplay";
 
 interface MediaCarouselProps {
   media: PostMediaItem[];
@@ -210,6 +211,7 @@ export function MediaCarousel({ media, variant, onItemClick, initialIndex = 0, o
                 key={item.id}
                 src={resolveCommunityMediaUrl(item.url) ?? item.url}
                 poster={item.thumbnailUrl}
+                active={i === activeIndex}
                 className={itemClass}
                 fit={wide ? "contain" : "cover"}
                 onOpen={() => onItemClick?.(i)}
@@ -309,18 +311,22 @@ function CardImage({ src, className, fit, onClick }: { src: string; className: s
   );
 }
 
-function CardVideo({ src, poster, className, fit, onOpen }: {
+function CardVideo({ src, poster, className, fit, onOpen, active }: {
   src: string;
   poster?: string;
   className: string;
   fit: "cover" | "contain";
   onOpen: () => void;
+  active: boolean;
 }) {
   const { t } = useLocale();
   const scan = useBlurredBackdrop(poster);
   const playback = useVideoPlayback(src);
   const videoRef = useRef<HTMLVideoElement>(null);
   const nativeVideo = useNativeCommunityVideo(videoRef, src);
+  const [playing, setPlaying] = useState(false);
+  const [muted, setMuted] = useState(true);
+  useFeedVideoAutoplay(videoRef, src, active);
   const posterUsable = !!poster && thumbResults.get(poster) !== "load-error";
   return (
     <BarCropBox className={className} bars={fit === "cover" ? (scan?.bars ?? null) : null} aspect={scan?.aspect ?? null}>
@@ -336,6 +342,11 @@ function CardVideo({ src, poster, className, fit, onOpen }: {
             className={style ? "bg-black" : `h-full w-full ${fit === "cover" ? "object-cover" : "object-contain"} bg-black`}
             ref={(el) => { videoRef.current = el; playback.ref(el); }}
             {...playback.handlers}
+            muted={muted}
+            loop
+            onPlaying={() => { setPlaying(true); playback.handlers.onPlaying(); }}
+            onPause={() => { setPlaying(false); playback.handlers.onPause(); }}
+            onVolumeChange={(e) => setMuted(e.currentTarget.muted)}
           />
           <button
             type="button"
@@ -343,11 +354,16 @@ function CardVideo({ src, poster, className, fit, onOpen }: {
             onClick={() => nativeVideo.open(onOpen, () => videoRef.current?.pause())}
             className="absolute inset-0 flex items-center justify-center focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-white"
           >
-            {playback.status.phase === "ok" && (
+            {!playing && playback.status.phase === "ok" && (
               <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/40 text-white">
                 <Play size={20} fill="currentColor" aria-hidden="true" />
               </span>
             )}
+          </button>
+          <button type="button" aria-label={muted ? "Unmute" : "Mute"}
+            className="absolute bottom-3 right-3 flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white"
+            onClick={(e) => { e.stopPropagation(); const el = videoRef.current; if (el) { el.muted = !el.muted; setMuted(el.muted); } }}>
+            {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
           </button>
           <VideoStatusOverlay status={playback.status} onRetry={playback.retry} />
         </div>
