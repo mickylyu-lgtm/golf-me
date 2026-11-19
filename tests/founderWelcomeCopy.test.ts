@@ -11,7 +11,7 @@ test("founder welcome adds explicit purpose and encouraging Community guidance a
 });
 test("only message copy changes; trigger guards, English-only strategy and privileges unchanged", () => {
   const definition = (sql: string) => sql.slice(sql.indexOf("create or replace function"));
-  assert.equal(definition(after).replace(added + " ", ""), definition(before));
+  assert.equal(definition(after).replace(added + " ", "").replace("GolfMe’s founder. Glad", "GolfMe’s founder 👋 Glad").replace("Message me here anytime.'", "Message me here anytime. ⛳'"), definition(before));
   assert.ok(after.includes("kept English-only"));
   assert.ok(after.includes("revoke execute on function public.notify_founder_welcome() from public, anon, authenticated"));
 });
@@ -19,3 +19,5 @@ test("candidate defines future trigger behavior only, with no backfill or direct
   const outsideBody = after.replace(/as \$function\$[\s\S]*?\$function\$;/, "");
   assert.doesNotMatch(outsideBody, /(?:insert into|update public|delete from|select public\.notify_founder_welcome)/i);
 });
+
+test("approved welcome contains no emoji", () => { assert.doesNotMatch(after, /[\p{Extended_Pictographic}]/u); });
