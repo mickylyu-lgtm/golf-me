@@ -1,3 +1,7 @@
+## November 19: explicit founder welcome purpose (local candidate only)
+
+Canonical surface is the one-time English-only founder DM inserted by notify_founder_welcome() on onboarding completion, not the general notice or translated tutorial. Added exactly “GolfMe is for finding people to golf with. It is not a dating app.” after “Glad you’re here.” Rest of copy and trigger definition unchanged. New migration is unapplied; no historical messages edited or sent. Production application requires separate approval and current function-drift check.
+
 ## November 18: coordinate aerial fallback for Home rounds (local only)
 
 Los Feliz showed illustration because Home only checked two manually approved course images. Added existing FittedSatelliteTiles/courseTileSource as the next fallback after a verified photo and known aerial asset. Uses only stored public venue coordinates, validated for finite/range; never viewer/host location or name-only geocoding. Retains existing USGS/optional MapTiler providers, shared tile request cap, lazy images, attribution, and illustration on unavailable coverage or loading failure. No new backend/API request or database change.
