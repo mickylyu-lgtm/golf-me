@@ -1,6 +1,6 @@
 ## November 19: explicit founder welcome purpose (local candidate only)
 
-Canonical surface is the one-time English-only founder DM inserted by notify_founder_welcome() on onboarding completion, not the general notice or translated tutorial. Added exactly “GolfMe is for finding people to golf with. It is not a dating app.” after “Glad you’re here.” Rest of copy and trigger definition unchanged. New migration is unapplied; no historical messages edited or sent. Production application requires separate approval and current function-drift check.
+Canonical surface is the one-time English-only founder DM inserted by notify_founder_welcome() on onboarding completion, not the general notice or translated tutorial. Added exactly “GolfMe is for finding people to golf with. It is not a dating app.” after “Glad you’re here.” Then added “Keep Community posts appropriate and respectful. We’d love to see more golf content, like round invites, swing clips, and course photos.” per follow-up; golf content is encouraged, not required. Rest of copy and trigger definition unchanged. New migration is unapplied; no historical messages edited or sent. Production application requires separate approval and current function-drift check.
 
 ## November 18: coordinate aerial fallback for Home rounds (local only)
 

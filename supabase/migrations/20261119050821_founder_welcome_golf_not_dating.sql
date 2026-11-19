@@ -48,7 +48,7 @@ begin
   insert into public.messages (conversation_id, sender_id, text) values (
     v_conversation_id,
     v_founder,
-    'Hey! I’m Micky, GolfMe’s founder 👋 Glad you’re here. GolfMe is for finding people to golf with. It is not a dating app. Best way to start: host your first round in Play, and I’ll help fill it. Or film a swing in Caddie AI for a free score and tips. Questions or ideas? Message me here anytime. ⛳'
+    'Hey! I’m Micky, GolfMe’s founder 👋 Glad you’re here. GolfMe is for finding people to golf with. It is not a dating app. Keep Community posts appropriate and respectful. We’d love to see more golf content, like round invites, swing clips, and course photos. Best way to start: host your first round in Play, and I’ll help fill it. Or film a swing in Caddie AI for a free score and tips. Questions or ideas? Message me here anytime. ⛳'
   );
 
   return new;
