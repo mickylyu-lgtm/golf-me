@@ -1,0 +1,60 @@
+// Run with react-test-renderer matching React installed in an isolated test prefix:
+// RENDERER_PREFIX=/tmp/avatar-functional-deps node tests/avatarFallback.functional.mjs
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import ts from 'typescript';
+const req = createRequire(import.meta.url);
+const testing = process.env.RENDERER_PREFIX ? createRequire(process.env.RENDERER_PREFIX + '/package.json') : req;
+const React = testing('react');
+const { create, act } = testing('react-test-renderer');
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+const timers = new Map();
+let nextTimer = 0;
+globalThis.window = { setTimeout: fn => { timers.set(++nextTimer, fn); return nextTimer; }, clearTimeout: id => timers.delete(id), addEventListener() {}, removeEventListener() {} };
+globalThis.document = { body: {} };
+function load(file, overrides = {}) {
+ const source = readFileSync(new URL('../src/components/ui/' + file, import.meta.url), 'utf8');
+ const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText;
+ const module = { exports: {} };
+ new Function('require','exports','module',js)(id => overrides[id] ?? (id.startsWith('react') ? testing(id) : req(id)), module.exports, module);
+ return module.exports;
+}
+const { AvatarViewer } = load('AvatarViewer.tsx', { 'react-dom': { createPortal: node => node } });
+const { Avatar } = load('Avatar.tsx', { './AvatarViewer': { AvatarViewer }, 'lucide-react': { ShieldCheck: () => null }, '@capacitor/core': { Capacitor: { isNativePlatform: () => false } }, '@capacitor/haptics': { Haptics: {}, ImpactStyle: {} } });
+const profile = { avatarInitials: 'TG', avatarColor: 'bg-green-500', verification: { verifiedGolfer: false } };
+let renderer;
+const update = async url => act(() => renderer.update(React.createElement(Avatar,{golfer:{...profile,photoUrl:url}, magnifyOnTap:true})));
+const images = () => renderer.root.findAllByType('img');
+const dialogs = () => renderer.root.findAll(x => x.props.role === 'dialog');
+const wrapper = () => renderer.root.findAllByType('div').find(x => x.props.className?.includes('relative inline-flex'));
+await act(() => { renderer = create(React.createElement(Avatar,{golfer:{...profile,photoUrl:'/synthetic-a.jpg'},magnifyOnTap:true})); });
+await act(() => images()[0].props.onError());
+assert.equal(images()[0].props.hidden,true);
+assert.ok(JSON.stringify(renderer.toJSON()).includes('TG'));
+assert.equal(wrapper().props.onClick,undefined);
+await update('/synthetic-b.jpg');
+assert.equal(images()[0].props.hidden,false);
+assert.equal(JSON.stringify(renderer.toJSON()).includes('TG'),false);
+await act(() => wrapper().props.onClick({stopPropagation(){}}));
+assert.equal(dialogs().length,1);
+await act(() => dialogs()[0].findByType('img').props.onError());
+assert.equal(dialogs().length,0);
+// A transient viewer failure must not poison an already-loaded thumbnail.
+assert.equal(images()[0].props.hidden,false);
+await act(() => images()[0].props.onError());
+assert.equal(images()[0].props.hidden,true);
+await act(() => images()[0].props.onLoad());
+assert.equal(images()[0].props.hidden,false);
+assert.equal(dialogs().length,0);
+await act(() => wrapper().props.onPointerDown({pointerType:'touch',clientX:0,clientY:0}));
+assert.equal(timers.size,1);
+await act(() => images()[0].props.onError());
+assert.equal(timers.size,0);
+await update(undefined);
+assert.equal(images().length,0);
+assert.ok(JSON.stringify(renderer.toJSON()).includes('TG'));
+await update('/synthetic-a.jpg');
+assert.equal(images()[0].props.hidden,false);
+await act(() => renderer.unmount());
+console.log('PASS: actual React component failure, initials, disabled magnify, URL reset, viewer failure, same-URL load recovery, pending press cleanup, and missing URL.');

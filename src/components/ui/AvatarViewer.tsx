@@ -24,6 +24,7 @@ export function AvatarViewer({ photoUrl, onClose }: { photoUrl: string; onClose:
       <img
         src={photoUrl}
         alt=""
+        onError={onClose}
         draggable={false}
         className="aspect-square w-[min(78vw,22rem)] animate-[avatar-grow_0.28s_cubic-bezier(0.34,1.4,0.64,1)] select-none rounded-full object-cover shadow-2xl shadow-black/40 [-webkit-touch-callout:none] motion-reduce:animate-none"
       />

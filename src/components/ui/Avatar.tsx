@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type React from "react";
 import { ShieldCheck } from "lucide-react";
 import { Capacitor } from "@capacitor/core";
@@ -33,6 +33,12 @@ function useMagnify(photoUrl: string | undefined, magnifyOnTap: boolean) {
   const timerRef = useRef<number | null>(null);
   const startRef = useRef<{ x: number; y: number } | null>(null);
 
+  useEffect(() => {
+    // Cancel a pending long press when the image fails, changes or unmounts.
+    const timer = timerRef;
+    return () => { if (timer.current !== null) window.clearTimeout(timer.current); };
+  }, [photoUrl]);
+
   function cancel() {
     if (timerRef.current !== null) window.clearTimeout(timerRef.current);
     timerRef.current = null;
@@ -48,8 +54,10 @@ function useMagnify(photoUrl: string | undefined, magnifyOnTap: boolean) {
     window.setTimeout(() => window.removeEventListener("click", swallow, { capture: true }), 600);
   }
 
-  if (!photoUrl) return { handlers: {}, viewer: null };
+  const close = () => { cancel(); setOpen(false); };
+  if (!photoUrl) return { handlers: {}, viewer: null, close };
   return {
+    close,
     handlers: {
       onPointerDown: (e: React.PointerEvent) => {
         // Events inside the open viewer bubble here through the portal.
@@ -84,19 +92,30 @@ function useMagnify(photoUrl: string | undefined, magnifyOnTap: boolean) {
 }
 
 export function Avatar({ golfer, size = "md", showVerified = true, magnifyOnTap = false }: AvatarProps) {
+  // A different URL starts fresh, including when a failed photo is replaced.
+  return <AvatarImage key={golfer.photoUrl || "no-photo"} golfer={golfer} size={size} showVerified={showVerified} magnifyOnTap={magnifyOnTap} />;
+}
+
+function AvatarImage({ golfer, size = "md", showVerified = true, magnifyOnTap = false }: AvatarProps) {
+  const [failed, setFailed] = useState(false);
+  const photoUrl = failed ? undefined : golfer.photoUrl;
   const badgeSize = size === "xl" ? 22 : size === "lg" ? 18 : size === "md" ? 14 : 11;
-  const { handlers, viewer } = useMagnify(golfer.photoUrl, magnifyOnTap);
+  const { handlers, viewer, close } = useMagnify(photoUrl, magnifyOnTap);
   return (
-    <div className={`relative inline-flex shrink-0 ${magnifyOnTap && golfer.photoUrl ? "cursor-zoom-in" : ""}`} {...handlers}>
+    <div className={`relative inline-flex shrink-0 ${magnifyOnTap && photoUrl ? "cursor-zoom-in" : ""}`} {...handlers}>
       {viewer}
       {golfer.photoUrl ? (
         <img
           src={golfer.photoUrl}
           alt=""
+          onError={() => { close(); setFailed(true); }}
+          onLoad={() => setFailed(false)}
+          hidden={failed}
           draggable={false}
           className={`select-none rounded-full object-cover [-webkit-touch-callout:none] ${SIZE_CLASSES[size]}`}
         />
-      ) : (
+      ) : null}
+      {!photoUrl && (
         <div
           className={`flex items-center justify-center rounded-full bg-gradient-to-br font-bold text-white ${golfer.avatarColor} ${SIZE_CLASSES[size]}`}
         >
