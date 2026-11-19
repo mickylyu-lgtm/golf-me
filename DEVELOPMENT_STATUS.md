@@ -1,3 +1,7 @@
+## November 19: founder welcome keyword emphasis (local, unreleased)
+
+New local presentation component formats only the exact approved emoji-free plain welcome text from the official founder ID. Real strong elements emphasize “not a dating app”, “appropriate and respectful”, and “golf content”. Other senders, historical/modified messages and HTML/Markdown-like input remain ordinary escaped React text. Stored message, copy and previews stay plain; no generic rich-text renderer. DirectMessageThread edits limited to import and text branch. Independent review and eight focused tests passed. No browser/physical-device visual check claimed. Revised production release scope awaits approval; no migration applied, no sends, no push.
+
 ## November 19: explicit founder welcome purpose (local candidate only)
 
 Canonical surface is the one-time English-only founder DM inserted by notify_founder_welcome() on onboarding completion, not the general notice or translated tutorial. Added exactly “GolfMe is for finding people to golf with. It is not a dating app.” after “Glad you’re here.” Then added “Keep Community posts appropriate and respectful. We’d love to see more golf content, like round invites, swing clips, and course photos.” per follow-up; golf content is encouraged, not required. Rest of copy and trigger definition unchanged. New migration is unapplied; no historical messages edited or sent. Production application requires separate approval and current function-drift check.

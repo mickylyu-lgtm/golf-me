@@ -9,6 +9,7 @@ import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 import { ReportModal } from "../components/trust/ReportModal";
 import { PausedChatComposer } from "../components/chat/PausedChatComposer";
 import { ChatComposer } from "../components/chat/ChatComposer";
+import { FounderWelcomeText } from "../components/chat/FounderWelcomeText";
 import { FounderBadge } from "../components/golfer/TrustBadges";
 import { dmDraftKey, loadChatDraft, saveChatDraft } from "../lib/chatDraft";
 import { useKeyboardHeight } from "../lib/useKeyboardHeight";
@@ -1012,7 +1013,7 @@ export function DirectMessageThread() {
                       />
                     ) : (
                       <>
-                        {m.text}
+                        <FounderWelcomeText senderId={m.senderId} text={m.text} />
                         {m.editedAt && <EditedMark isMe={isMe} label={t("chat.edited")} />}
                       </>
                     )}
