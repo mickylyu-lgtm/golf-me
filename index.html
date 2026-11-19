@@ -245,6 +245,47 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Independent of the module/CSS bundle: a failed entry download cannot
+         reach React's loader or error boundary. Offer an explicit retry, never
+         an automatic reload (which could interrupt a sign-in callback). -->
+    <script id="golfme-boot-recovery">
+      (function () {
+        var root = document.getElementById("root");
+        var recovery = null;
+        var observer;
+        var timer;
+        function mounted() { return root && root.childElementCount > 0; }
+        function finish() {
+          clearTimeout(timer);
+          if (observer) observer.disconnect();
+          if (recovery) recovery.remove();
+        }
+        if (!root || mounted()) return;
+        observer = new MutationObserver(function () { if (mounted()) finish(); });
+        observer.observe(root, { childList: true });
+        timer = setTimeout(function () {
+          if (mounted()) { finish(); return; }
+          var cls = document.documentElement.classList;
+          // Keep the working prerendered public landing page untouched.
+          if (!cls.contains("gm-app") && !cls.contains("gm-entry-boot")) { finish(); return; }
+          cls.remove("gm-entry-boot");
+          recovery = document.createElement("section");
+          recovery.setAttribute("role", "alert");
+          recovery.style.cssText = "position:fixed;inset:0;z-index:200;background:#faf9f6;color:#143822;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;font:17px system-ui";
+          var title = document.createElement("h1");
+          title.textContent = "GolfMe is taking longer to open";
+          var detail = document.createElement("p");
+          detail.textContent = "Check your connection, then try again.";
+          var retry = document.createElement("button");
+          retry.type = "button";
+          retry.textContent = "Try again";
+          retry.style.cssText = "padding:14px 24px;border:0;border-radius:12px;background:#143822;color:white;font:inherit;cursor:pointer";
+          retry.onclick = function () { location.reload(); };
+          recovery.append(title, detail, retry);
+          document.body.appendChild(recovery);
+        }, 12000);
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

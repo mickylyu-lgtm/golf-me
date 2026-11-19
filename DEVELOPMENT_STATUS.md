@@ -1,3 +1,9 @@
+## November 19: startup failsafe release candidate (not deployed)
+
+Ported only startup candidate 235ad9e onto verified main ffd8164. If the HTML loads but the application root stays empty for 12 seconds, independent inline code offers explicit Try again rather than an indefinite green entry background. No automatic reload, auth/session/storage edits, native build/config, DB or route changes. Healthy or late mounts cancel/remove recovery; prerendered public landing remains intact. This improves one failure mode, not a verified diagnosis of the earlier physical iPhone incident; HTML-not-loaded/offline/DNS and native-webview failures remain outside this web-only scope.
+
+Six focused executable VM tests passed. Full check passed TypeScript, lint, 1,724 tests (six optional skips), build and prerender. Built HTML retains exactly one recovery script and the separate public prerender/root. Independent review found no blockers. Awaiting root release approval. No push/deploy yet. Physical iPhone cold-launch/offline/reconnect and browser integration verification are not claimed; Chromium in this executor has a socket restriction.
+
 ## November 19: avatar load-error fallback (local candidate only)
 
 Shared Avatar now falls back to the existing initials if an image fails, disables magnification for failed photos, and closes a viewer whose image fails. A URL change remounts only avatar image state; a later successful load can recover the same URL without reopening a stale viewer. Pending long presses are cancelled on failure/change/unmount. No profile records, storage objects, navigation routes, or verification rules changed. Tests use synthetic data only.
