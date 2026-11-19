@@ -1,3 +1,15 @@
+## November 19: local hosted-round venue banner candidate
+
+Added a shallow static banner directly below Back, leaving round name/time/spots unchanged. Uses existing course-ID-keyed attributed photo service; verified outline-only labeled satellite fallback and abstract illustration for unknown or exhausted imagery. Never uses round/town coordinates or name-only matching. Photo failure falls through to validated satellite; tile failure falls through to illustration. Identity-keyed remount prevents old venue imagery sticking on navigation. Existing fitted satellite renderer measures actual viewport; no autoplay, map controls or new image provider.
+
+Current schema has neither simulator rounds nor verified drone-still assets, so no invented simulator imagery or drone claim is introduced. No database/policy change. Local tests cover actual React failure/identity/attribution and pure identity/outline safety. Final aggregate passed TypeScript/lint, 1,726 tests with six skips, production build/prerender; actual React DOM failure/fallback tests also passed. Physical iPhone and authenticated live imagery remain unverified. Do not release this entry without root review.
+
+## November 19: Home round strip snap candidate (not deployed)
+
+Replaced proximity-only resting behavior with mandatory snapping plus a Home-only touch pager. Intentional horizontal drags of 15px move one measured card; smaller claimed drags return to the starting card. Native vertical scrolling and pinch zoom stay available; card taps, parent-tab gesture exclusion, keyboard/trackpad fallback and reduced-motion behavior are retained. Touch-end coordinates handle browsers that coalesce tiny move events, preventing accidental card navigation. No round data, database, routes or native build changes.
+
+Local controller/Home regression coverage exercises 15px light/long/reverse swipes, 8–14px snapback, coalesced events, vertical intent, cancellation/multitouch, endpoints, reduced motion and cleanup. Final aggregate and independent synthetic mobile Chromium evidence are reported with the candidate; physical iPhone/WKWebView validation is not claimed. Awaiting root review/publication.
+
 ## November 19: startup failsafe release candidate (not deployed)
 
 Ported only startup candidate 235ad9e onto verified main ffd8164. If the HTML loads but the application root stays empty for 12 seconds, independent inline code offers explicit Try again rather than an indefinite green entry background. No automatic reload, auth/session/storage edits, native build/config, DB or route changes. Healthy or late mounts cancel/remove recovery; prerendered public landing remains intact. This improves one failure mode, not a verified diagnosis of the earlier physical iPhone incident; HTML-not-loaded/offline/DNS and native-webview failures remain outside this web-only scope.

@@ -30,6 +30,8 @@ import { homeFocus, readOnboardingIntents } from "../lib/onboardingIntent";
 import { feedCutoff } from "../lib/followingFeed";
 import type { CommunityPost, GolfCall, GolferProfile } from "../types";
 
+import { attachRoundStripSnap } from "../lib/roundStripSnap";
+
 const HOME_RADIUS_MILES = 25;
 // The "rounds near you" strip stays short: Play has the full list.
 const ROUND_STRIP_COUNT = 6;
@@ -126,6 +128,11 @@ export function Home() {
     const nearby = openCalls.filter((c) => c.distanceMiles !== undefined && c.distanceMiles <= HOME_RADIUS_MILES);
     return { nearby: nearby.length > 0, rounds: nearby.length > 0 ? newest(nearby) : newest(openCalls) };
   }, [openCalls]);
+
+  const roundStripRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (roundStripRef.current) return attachRoundStripSnap(roundStripRef.current);
+  }, [stripRounds.rounds.length]);
 
   // One authoritative provider owns pages, author/media hydration and refreshes.
   // Following only selects round activity; every eligible post joins this feed.
@@ -244,7 +251,8 @@ export function Home() {
         {stripRounds.rounds.length > 0 ? (
           <div
             data-no-swipe
-            className="-mx-4 flex snap-x scroll-px-4 gap-2.5 overflow-x-auto overscroll-x-contain px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:scroll-px-0 sm:px-0"
+            ref={roundStripRef}
+            className="-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-2.5 overflow-x-auto overscroll-x-contain px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:scroll-px-0 sm:px-0"
           >
             {stripRounds.rounds.map((call) => (
               <RoundStripCard key={call.id} call={call} />

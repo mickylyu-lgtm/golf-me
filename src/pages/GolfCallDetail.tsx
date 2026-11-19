@@ -1,3 +1,4 @@
+import { RoundVenueBanner } from '../components/courses/RoundVenueBanner';
 import { RoundShareButton } from "../components/golfcall/RoundShareButton";
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
@@ -209,6 +210,8 @@ export function GolfCallDetail() {
           </div>
         )}
       </div>
+
+      <RoundVenueBanner courseId={call.courseId} name={call.course} />
 
       <div>
         <div className="mb-1.5 flex flex-wrap items-center gap-2">
