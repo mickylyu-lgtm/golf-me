@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 const read = (name: string) => readFileSync(new URL(`../supabase/migrations/${name}`, import.meta.url), "utf8");
 const before = read("20261104140000_update_founder_welcome_copy_host_caddie.sql");
-const after = read("20261119050821_founder_welcome_golf_not_dating.sql");
+const after = read("20261119052955_founder_welcome_golf_not_dating.sql");
 const added = "GolfMe is for finding people to golf with. It is not a dating app. Keep Community posts appropriate and respectful. We’d love to see more golf content, like round invites, swing clips, and course photos.";
 test("founder welcome adds explicit purpose and encouraging Community guidance after greeting", () => {
   assert.equal(after.split(added).length - 1, 1);

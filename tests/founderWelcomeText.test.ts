@@ -17,7 +17,7 @@ test("only approved founder welcome renders exactly three semantic bold spans", 
   const html = render(copy);
   assert.deepEqual([...html.matchAll(/<strong[^>]*>(.*?)<\/strong>/g)].map(m => m[1]), ["not a dating app", "appropriate and respectful", "golf content"]);
   assert.equal(html.replace(/<[^>]+>/g, "").replaceAll("&#x27;", "'"), copy);
-  const sql = readFileSync(new URL("../supabase/migrations/20261119050821_founder_welcome_golf_not_dating.sql", import.meta.url), "utf8");
+  const sql = readFileSync(new URL("../supabase/migrations/20261119052955_founder_welcome_golf_not_dating.sql", import.meta.url), "utf8");
   assert.ok(sql.includes("'" + copy + "'"));
 });
 test("other senders cannot trigger welcome styling, even with identical text", () => {

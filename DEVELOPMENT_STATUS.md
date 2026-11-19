@@ -1,3 +1,7 @@
+## November 19: approved founder welcome released
+
+Micky approved the exact emoji-free welcome, three bold phrases, and publication. Frontend c5c3773 passed GitHub CI and reached production; live JS verified the exact-text founder-only renderer. Then live function drift was checked and only the copy migration applied (recorded version 20261119052955); local filename matches this record. Read-back confirmed exact copy, same function body/trigger behavior and no anon/authenticated execute permission. No historical messages modified, no resend/backfill or production test onboarding. Local full check: 1,718 passed, six optional skips; independent copy and formatting reviews found no blockers. Physical-device verification not claimed.
+
 ## November 19: founder welcome keyword emphasis (local, unreleased)
 
 New local presentation component formats only the exact approved emoji-free plain welcome text from the official founder ID. Real strong elements emphasize “not a dating app”, “appropriate and respectful”, and “golf content”. Other senders, historical/modified messages and HTML/Markdown-like input remain ordinary escaped React text. Stored message, copy and previews stay plain; no generic rich-text renderer. DirectMessageThread edits limited to import and text branch. Independent review and eight focused tests passed. No browser/physical-device visual check claimed. Revised production release scope awaits approval; no migration applied, no sends, no push.
