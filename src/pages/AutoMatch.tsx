@@ -20,6 +20,7 @@ import { listView } from "../lib/loadStatus";
 import { useAutoMatchPresentation } from "../lib/useAutoMatchPresentation";
 import { SharedPreferencesBadge } from "../components/golfcall/SharedPreferencesBadge";
 import { rankCallsWithPreferences } from "../lib/autoMatch";
+import { nextAutoMatchResultIndex, visibleAutoMatchResultIndex } from "../lib/autoMatchResultIndex";
 import { effectiveNewPreferences } from "../lib/matchPreferences";
 import { effectiveLocation, isTemporaryLocation, locationOverride, locationParams } from "../lib/travelLocation";
 import { resolveCallDistanceMiles } from "../lib/courseSearch";
@@ -215,7 +216,8 @@ export function AutoMatch() {
   );
 
   const results = plan.kind === "rounds" ? plan.rounds : [];
-  const current = results[Math.min(resultIndex, Math.max(results.length - 1, 0))];
+  const visibleResultIndex = visibleAutoMatchResultIndex(resultIndex, results.length);
+  const current = results[visibleResultIndex];
   const currentIsStrong = Boolean(current) && current.preferenceMatchedCount >= MIN_PREFERENCES_FOR_AUTO_MATCH;
   // A preference match (how many Match Preferences the round meets), named
   // as such: the round's own match rating is the compatibility score.
@@ -390,7 +392,7 @@ export function AutoMatch() {
             {preferenceHeaderKey && <p className="mt-0.5 text-xs text-slate-500">{t("autoMatch.preferenceTierHint")}</p>}
             {results.length > 1 && (
               <p className="mt-0.5 text-xs font-semibold text-slate-400">
-                {t("autoMatch.position", { n: Math.min(resultIndex, results.length - 1) + 1, total: results.length })}
+                {t("autoMatch.position", { n: visibleResultIndex + 1, total: results.length })}
               </p>
             )}
           </div>
@@ -409,7 +411,7 @@ export function AutoMatch() {
 
           <div className="flex flex-wrap gap-2">
             {results.length > 1 && (
-              <Button variant="outline" size="sm" className="min-h-11" onClick={() => setResultIndex((i) => (i + 1) % results.length)}>
+              <Button variant="outline" size="sm" className="min-h-11" onClick={() => setResultIndex((i) => nextAutoMatchResultIndex(i, results.length))}>
                 {t("autoMatch.showAnother")}
               </Button>
             )}

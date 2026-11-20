@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { nextAutoMatchResultIndex, visibleAutoMatchResultIndex } from "../src/lib/autoMatchResultIndex.ts";
 import { listView } from "../src/lib/loadStatus.ts";
 
 const read = (path: string) => readFileSync(new URL("../" + path, import.meta.url), "utf8");
@@ -74,7 +75,6 @@ test("matching motion uses only transform and opacity and cannot intercept input
 test("results animate on entry without remounting cards or disabling their controls", () => {
   assert.equal(page.match(/gm-automatch-results flex flex-col gap-4/g)?.length, 2);
   assert.match(page, /<GolfCallCard call=\{current.call\} showSharedPreferences=\{false\} \/>/);
-  assert.match(page, /setResultIndex\(\(i\) => \(i \+ 1\) % results.length\)/);
   assert.doesNotMatch(page, /key=\{current.call.id\}|disabled=\{.*animat/i);
 });
 
@@ -83,4 +83,20 @@ test("the header preserves full-width subtitle copy and wraps long localized tit
   const heading = page.indexOf('<h1 className="min-w-0');
   const subtitle = page.indexOf('when && plan.kind === "rounds" && plan.widened.date === null', heading);
   assert.ok(page.slice(heading, subtitle).includes("</h1>\n        </div>"), "subtitle is outside the icon/title flex row");
+});
+
+test("Show Another advances from the displayed result when a live list shrinks", () => {
+  const stored = 4; // Fifth of five, before two results disappear.
+  assert.equal(visibleAutoMatchResultIndex(stored, 5), 4);
+  assert.equal(visibleAutoMatchResultIndex(stored, 3), 2);
+  const firstTap = nextAutoMatchResultIndex(stored, 3);
+  assert.equal(firstTap, 0);
+  assert.equal(nextAutoMatchResultIndex(firstTap, 3), 1);
+  assert.equal(nextAutoMatchResultIndex(1, 3), 2);
+  assert.equal(nextAutoMatchResultIndex(2, 3), 0);
+  assert.equal(nextAutoMatchResultIndex(stored, 1), 0);
+  assert.equal(nextAutoMatchResultIndex(stored, 0), 0);
+  assert.match(page, /results\[visibleResultIndex\]/);
+  assert.match(page, /autoMatch\.position", \{ n: visibleResultIndex \+ 1/);
+  assert.match(page, /setResultIndex\(\(i\) => nextAutoMatchResultIndex\(i, results\.length\)\)/);
 });
