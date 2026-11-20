@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 // Run: npm run test:caddie  (node --test, built-in type stripping)
 // The processing screen's truthful progress (src/lib/caddieProgress.ts) and
 // the bounded history read RealCaddieContext relies on (supabase-js's
@@ -66,4 +67,18 @@ test("a hung history read is ended by abortSignal (the lock can't be held foreve
   assert.equal(data, null);
   assert.ok(error, "the read settles with an error instead of hanging");
   assert.ok(Date.now() - started < 2_000);
+});
+
+test("the progress artwork reuses the Caddie nav mascot without changing accessible status", () => {
+  const scene = readFileSync(new URL("../src/components/caddie/CaddieWaitScene.tsx", import.meta.url), "utf8");
+  const processing = readFileSync(new URL("../src/components/caddie/CaddieThinking.tsx", import.meta.url), "utf8");
+  assert.match(scene, /from "..\/icons\/CaddieNavIcon"/);
+  assert.match(scene, /aria-hidden="true"/);
+  assert.match(scene, /<CaddieNavIcon size=\{76\}/);
+  assert.doesNotMatch(scene, /caddieSwingLoop|animate|CaddieProgressStep/);
+  assert.match(processing, /<CaddieWaitScene \/>/);
+  assert.match(processing, /aria-live="polite" aria-atomic="true"/);
+  assert.match(processing, /formatElapsed\(progress.elapsedSeconds\)/);
+  assert.match(processing, /<StepRail step=\{progress.step\} reducedMotion=\{reducedMotion\}/);
+  assert.match(processing, /reducedMotion \? "" : "gm-wait-tip"/);
 });

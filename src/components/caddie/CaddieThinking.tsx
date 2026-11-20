@@ -39,9 +39,8 @@ function usePrefersReducedMotion(): boolean {
 }
 
 // The Caddie processing card, for the Roboflow+Gemini pipeline's 60-130 s.
-// The picture (CaddieWaitScene) is a face-on swing drawn like Caddie's pose
-// overlay, with a quiet overlay for whichever step the server last saved;
-// under it, a short golf tip that changes every ten seconds.
+// The artwork uses the existing Caddie mascot, with the persisted status
+// and a short golf tip underneath.
 //
 // 2026-11-08: given the job row (`job`), the status line is the step the
 // server last PERSISTED (caddieProgress), with the attempt's elapsed time,
@@ -49,9 +48,8 @@ function usePrefersReducedMotion(): boolean {
 // "retrying automatically" only when the server is known to be on a retry,
 // then "checking on it" with a Check again button). It still never says
 // "failed": only the row's status does. Without `job` (no row yet, or the
-// demo account) it keeps the old decorative rotation and the scene shows no
-// step. Nothing here estimates how far along a run is: the step rail is the
-// persisted step's place in the pipeline's fixed order, not a percentage.
+// demo account) it keeps the rotating status copy. Nothing estimates how far
+// along a run is: the rail shows the persisted step, not a percentage.
 const STEP_KEYS: Record<CaddieProgressStep, TranslationKey> = {
   preparing: "caddie.progress.preparing",
   pose: "caddie.progress.pose",
@@ -117,7 +115,7 @@ export function CaddieThinking({ job, onCheckAgain }: { job?: Parameters<typeof 
   return (
     <div className="flex flex-col gap-3">
       <div className="overflow-hidden rounded-xl bg-brand-forest-deep shadow-sm ring-1 ring-black/5 dark:ring-white/10">
-        <CaddieWaitScene stage={progress?.step} reducedMotion={reducedMotion} />
+        <CaddieWaitScene />
       </div>
       <div className="min-w-0">
         <p className="text-sm font-semibold text-slate-700">{t("swingAnalysis.processingTitle")}</p>
