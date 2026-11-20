@@ -252,7 +252,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "caddie.myCaddie": "我的球童",
   "caddie.recentAnalyses": "最近的分析",
   "caddie.emptyTitle": "暂无分析记录",
-  "caddie.emptyDescription": "上传一段挥杆视频，或在社区的挥杆动态中向球童提问。",
+  "caddie.emptyDescription": "在球童中上传挥杆视频，获取反馈。",
   "caddie.viewAnalysis": "查看分析",
   "caddie.analyzing": "球童正在查看...",
   "caddie.thinking1": "正在读取你的挥杆...",

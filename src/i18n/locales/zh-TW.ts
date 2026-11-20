@@ -252,7 +252,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "caddie.myCaddie": "我的球僮",
   "caddie.recentAnalyses": "最近的分析",
   "caddie.emptyTitle": "暫無分析記錄",
-  "caddie.emptyDescription": "上傳一段揮桿影片，或在社區的揮桿動態中向球僮提問。",
+  "caddie.emptyDescription": "在球僮中上傳揮桿影片，取得回饋。",
   "caddie.viewAnalysis": "查看分析",
   "caddie.analyzing": "球僮正在查看...",
   "caddie.thinking1": "正在讀取你的揮桿...",

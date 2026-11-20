@@ -252,7 +252,7 @@ export const ja: Record<TranslationKey, string> = {
   "caddie.myCaddie": "マイキャディ",
   "caddie.recentAnalyses": "最近の分析",
   "caddie.emptyTitle": "まだ分析がありません",
-  "caddie.emptyDescription": "スイング動画をアップロードするか、コミュニティのスイング投稿でキャディに質問しましょう。",
+  "caddie.emptyDescription": "キャディでスイング動画をアップロードして、フィードバックを受けましょう。",
   "caddie.viewAnalysis": "分析を見る",
   "caddie.analyzing": "キャディが確認しています...",
   "caddie.thinking1": "スイングを読み取っています...",

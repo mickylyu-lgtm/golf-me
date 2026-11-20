@@ -149,6 +149,7 @@ const REQUEST_ERROR_KEYS: Record<string, TranslationKey> = {
   already_running: "caddie.error.alreadyRunning",
   not_authenticated: "caddie.error.signedOut",
   forbidden: "caddie.error.ownPostsOnly",
+  community_source_disabled: "caddie.emptyDescription",
   cant_analyze: "caddie.error.videoUnusable",
   bad_request: "caddie.error.videoUnusable",
   not_found: "caddie.error.analysisNotFound",

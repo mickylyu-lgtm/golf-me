@@ -245,6 +245,8 @@ export function CaddieAnalysisDetail() {
   const legacy = demoLegacyFeedback(analysis, t);
   const failure = analysisFailure(analysis.errorMessage, isStaleProcessing(analysis), analysis.failureCategory, analysis.attempt);
   const failureKeys = FAILURE_KIND_KEYS[failure.kind];
+  const fromCommunity = analysis.sourceType === "community_post";
+  const canRetryAnalysis = failure.canRetry && !fromCommunity;
 
   function shareToCommunity() {
     if (!analysis) return;
@@ -289,7 +291,7 @@ export function CaddieAnalysisDetail() {
   }
 
   async function retry() {
-    if (!analysis || retrying) return;
+    if (!analysis || !canRetryAnalysis || retrying) return;
     setRetrying(true);
     try {
       // Re-runs THIS row server-side (same id, attempt + 1, same trim
@@ -556,7 +558,9 @@ export function CaddieAnalysisDetail() {
       ) : analysis.status === "failed" || isStaleProcessing(analysis) ? (
         <div className="flex flex-col items-start gap-2.5 rounded-2xl border border-red-100 bg-red-50/60 px-4 py-3.5">
           <p className="text-sm font-semibold text-red-700">{t(failureKeys.title)}</p>
-          {failure.canRetry ? (
+          {fromCommunity ? (
+            <p className="text-sm text-red-700/90">{t("caddie.emptyDescription")}</p>
+          ) : failure.canRetry ? (
             failureKeys.body && <p className="text-sm text-red-700/90">{t(failureKeys.body)}</p>
           ) : (
             <p className="text-sm text-red-700/90">{t("caddie.error.retryCap")}</p>
@@ -571,14 +575,14 @@ export function CaddieAnalysisDetail() {
           {/* Only a delivered analysis uses an allowance slot (20261107140000). */}
           {!isDemo && <p className="text-xs text-red-700/70">{t("caddie.failure.noCharge")}</p>}
           <div className="flex flex-wrap gap-2">
-            {failure.canRetry && (
+            {canRetryAnalysis && (
               <Button variant="outline" size="sm" onClick={retry} disabled={retrying} icon={retrying ? <Loader2 size={14} className="animate-spin" /> : undefined}>
                 {t("caddie.tryAgain")}
               </Button>
             )}
-            {failure.kind === "poseNotFound" && (
+            {(fromCommunity || failure.kind === "poseNotFound") && (
               <Button variant="outline" size="sm" onClick={() => navigate("/caddie/analyze")} icon={<Video size={14} />}>
-                {t("caddie.failure.pickAnother")}
+                {t(fromCommunity ? "caddie.analyzeSwing" : "caddie.failure.pickAnother")}
               </Button>
             )}
           </div>

@@ -252,7 +252,7 @@ export const ko: Record<TranslationKey, string> = {
   "caddie.myCaddie": "마이 캐디",
   "caddie.recentAnalyses": "최근 분석",
   "caddie.emptyTitle": "아직 분석이 없습니다",
-  "caddie.emptyDescription": "스윙 영상을 업로드하거나 커뮤니티 스윙 게시물에서 캐디에게 물어보세요.",
+  "caddie.emptyDescription": "캐디에서 스윙 영상을 업로드하고 피드백을 받아보세요.",
   "caddie.viewAnalysis": "분석 보기",
   "caddie.analyzing": "캐디가 확인하고 있어요...",
   "caddie.thinking1": "스윙을 읽고 있어요...",

@@ -36,7 +36,7 @@ type Attachment = "none" | "photo" | "course" | "round" | "swing";
 
 const COMMUNITY_MEDIA_BUCKET = "community-media";
 const MAX_SWING_VIDEO_BYTES = 200 * 1024 * 1024; // matches the Storage bucket's own file_size_limit
-const MAX_SWING_VIDEO_SECONDS = 15; // Caddie's Roboflow pass calls once per sampled frame (~8fps) — a longer cap multiplies calls/latency per analysis, see analyze-swing's ANALYSIS_FPS comment
+const MAX_SWING_VIDEO_SECONDS = 15; // Existing Community swing clip limit.
 const MAX_POST_MEDIA_ITEMS = 10; // matches Instagram's own carousel cap — a sensible, familiar limit, not an arbitrary one
 
 // Caddie's "Share to Community" hands off here via navigate(..., { state }).
@@ -47,8 +47,8 @@ const MAX_POST_MEDIA_ITEMS = 10; // matches Instagram's own carousel cap — a s
 //    community-media (copyCaddieMediaToCommunity) so the post never points
 //    at the private original — and abandoning the share leaves nothing
 //    public.
-//  * Ask Caddie on a Community post (no privateVideoPath): swingVideoUrl is
-//    already a public community-media URL and is reused as-is.
+//  * Historical Caddie results stored in public community-media (no
+//    privateVideoPath): swingVideoUrl is already public and reused as-is.
 export interface CreatePostSwingPrefill {
   swingVideoUrl: string;
   videoThumbnailUrl?: string;
@@ -380,9 +380,7 @@ function CreatePostForOwner({ draftOwner, allowPrefill }: { draftOwner: string |
       showToast("That video is too large — please choose a shorter clip.", "warning");
       return;
     }
-    // A Swing Post's video is exactly what Ask Caddie later analyzes — same
-    // beta clip-length recommendation as Caddie's own direct-upload flow
-    // (AnalyzeSwing.tsx), enforced here too rather than only at analysis time.
+    // Preserve the existing Community swing clip limit.
     try {
       const duration = await readVideoDuration(file);
       if (duration > MAX_SWING_VIDEO_SECONDS) {

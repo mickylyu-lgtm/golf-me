@@ -42,6 +42,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { cleanCaddieFeedback, hasCompleteCaddieFeedback, CADDIE_FEEDBACK_CONTENT_RULE } from "../_shared/caddieFeedbackText.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { caddieRequestSource } from "../_shared/caddieRequestSource.ts";
 import {
   DAILY_LIMIT_PER_USER,
   MAX_ATTEMPTS,
@@ -100,7 +101,7 @@ const GEMINI_ACTIVE_WAIT_MAX_MS = 90_000;
 const GEMINI_ACTIVE_POLL_MS = 2500;
 const GEMINI_GENERATE_RESERVE_MS = 70_000;
 const MAX_TRIM_WINDOW_SECONDS = 10; // matches AnalyzeSwing.tsx's own MAX_SWING_VIDEO_SECONDS — a client-sent startSeconds/endSeconds window is validated against this, never trusted as-is
-const COMMUNITY_MEDIA_BUCKET = "community-media"; // public Community media — only ever READ here now (Ask Caddie on a post, legacy direct uploads)
+const COMMUNITY_MEDIA_BUCKET = "community-media"; // public Community media — only read here for historical jobs and legacy direct uploads
 const CADDIE_MEDIA_BUCKET = "caddie-media"; // PRIVATE (migration 20260925090000): direct uploads, their thumbnails and trimmed copies, `<owner uid>/<file>`
 const PIPELINE_SIGNED_URL_SECONDS = 60 * 60; // server-side signed URL for the pipeline's own fetches (trim-video, extract-frames x2) — comfortably longer than the 400s function budget
 
@@ -423,14 +424,11 @@ function devLog(event: string, fields: Record<string, unknown> = {}) {
 }
 
 interface RequestBody {
-  sourceType: "direct_upload" | "community_post";
-  sourcePostId?: string;
   // direct_upload: caddie-media object paths in the caller's own folder.
   sourceMediaPath?: string;
   thumbnailPath?: string;
   // Legacy direct_upload (a row still in public community-media) — must be
-  // the caller's own community-media object. Ignored for community_post:
-  // the post's own media is read server-side instead (P2-9).
+  // the caller's own community-media object.
   sourceMediaUrl?: string;
   thumbnailUrl?: string;
   swingType?: string;
@@ -717,6 +715,14 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: "Invalid request body.", code: "bad_request" }, 400);
   }
 
+  const requestSource = caddieRequestSource(body);
+  if (requestSource === "community_disabled") {
+    return jsonResponse({ error: "Upload a swing in Caddie to get feedback.", code: "community_source_disabled" }, 403);
+  }
+  if (requestSource === "invalid") {
+    return jsonResponse({ error: "Invalid sourceType.", code: "bad_request" }, 400);
+  }
+
   // Dead jobs first: any of this caller's own rows still 'processing' well
   // past the deadline lost their worker (memory/CPU/platform kill) before it
   // could write an outcome. The database marks them failed/worker_lost,
@@ -760,6 +766,12 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ analysis: current }, 200);
     }
     if (current.status !== "failed" && !staleProcessing) return jsonResponse({ error: "This swing video can't be analyzed.", code: "cant_analyze" }, 400);
+    // A cached Community card can still send a retry ID. Its persisted
+    // source, not the client-supplied source, determines whether a fresh
+    // attempt may start. Keep finished and already-running rows above.
+    if (current.source_type === "community_post") {
+      return jsonResponse({ error: "Upload a swing in Caddie to get feedback.", code: "community_source_disabled" }, 403);
+    }
     if (current.attempt >= MAX_ATTEMPTS) {
       return jsonResponse({ error: "Caddie has tried this swing several times. Please film a new clip.", code: "retry_cap" }, 429);
     }
@@ -798,6 +810,7 @@ Deno.serve(async (req: Request) => {
       })
       .eq("id", current.id)
       .eq("attempt", current.attempt)
+      .eq("source_type", "direct_upload")
       .in("status", ["failed", "processing"])
       .select()
       .maybeSingle();
@@ -814,26 +827,7 @@ Deno.serve(async (req: Request) => {
     }
     row = flipped as CaddieAnalysisRow;
   } else {
-  if (body.sourceType !== "direct_upload" && body.sourceType !== "community_post") {
-    return jsonResponse({ error: "Invalid sourceType.", code: "bad_request" }, 400);
-  }
-  if (body.sourceType === "community_post" && !body.sourcePostId) {
-    return jsonResponse({ error: "sourcePostId is required for a community_post analysis.", code: "bad_request" }, 400);
-  }
-
-  if (body.sourceType === "community_post") {
-    // The post's own media, never the client's copy of it. Same messages as
-    // the ownership trigger (20260817091500), which still runs on insert.
-    const { data: post } = await supabase
-      .from("community_posts")
-      .select("author_id, video_url, video_thumbnail_url")
-      .eq("id", body.sourcePostId!)
-      .maybeSingle();
-    if (!post) return jsonResponse({ error: "Source post not found.", code: "forbidden" }, 403);
-    if (post.author_id !== user.id) return jsonResponse({ error: "Ask Caddie is only available on your own posts.", code: "forbidden" }, 403);
-    mediaUrl = ownPublicCommunityMediaUrl(post.video_url, user.id, supabaseUrl);
-    thumbUrl = ownPublicCommunityMediaUrl(post.video_thumbnail_url, user.id, supabaseUrl);
-  } else if (body.sourceMediaPath !== undefined) {
+  if (body.sourceMediaPath !== undefined) {
     mediaPath = ownCaddiePath(body.sourceMediaPath, user.id);
     thumbPath = ownCaddiePath(body.thumbnailPath, user.id);
   } else {
@@ -908,11 +902,9 @@ Deno.serve(async (req: Request) => {
   const staleCutoff = new Date(Date.now() - STALE_PROCESSING_MS).toISOString();
   let inFlightQuery = supabase.from("caddie_analyses").select("*").eq("status", "processing").gte("attempt_started_at", staleCutoff);
   inFlightQuery =
-    body.sourceType === "community_post"
-      ? inFlightQuery.eq("source_post_id", body.sourcePostId!)
-      : mediaPath
-        ? inFlightQuery.eq("source_type", "direct_upload").eq("source_media_path", mediaPath)
-        : inFlightQuery.eq("source_type", "direct_upload").eq("source_media_url", mediaUrl!);
+    mediaPath
+      ? inFlightQuery.eq("source_type", "direct_upload").eq("source_media_path", mediaPath)
+      : inFlightQuery.eq("source_type", "direct_upload").eq("source_media_url", mediaUrl!);
   const { data: inFlightRows } = await inFlightQuery.limit(1);
   if (inFlightRows && inFlightRows.length > 0) {
     devLog("duplicate request, returning existing in-flight row", { id: inFlightRows[0].id });
@@ -920,19 +912,12 @@ Deno.serve(async (req: Request) => {
   }
 
   // Idempotency: reuse an already-COMPLETE analysis for the exact same
-  // source instead of re-spending Roboflow+Gemini credits on a rerun. The
-  // client's own community_post UI already avoids re-triggering this (it
-  // shows "View Analysis" once one exists), but this is a server-side
-  // backstop against any other path — e.g. re-selecting the identical
-  // file on the direct-upload screen — burning credits pointlessly on a
-  // swing Caddie has already analyzed.
+  // source instead of re-spending Roboflow+Gemini credits on a rerun.
   let completedQuery = supabase.from("caddie_analyses").select("*").eq("status", "complete").order("created_at", { ascending: false });
   completedQuery =
-    body.sourceType === "community_post"
-      ? completedQuery.eq("source_post_id", body.sourcePostId!)
-      : mediaPath
-        ? completedQuery.eq("source_type", "direct_upload").eq("source_media_path", mediaPath)
-        : completedQuery.eq("source_type", "direct_upload").eq("source_media_url", mediaUrl!);
+    mediaPath
+      ? completedQuery.eq("source_type", "direct_upload").eq("source_media_path", mediaPath)
+      : completedQuery.eq("source_type", "direct_upload").eq("source_media_url", mediaUrl!);
   const { data: completedRows } = await completedQuery.limit(1);
   if (completedRows && completedRows.length > 0) {
     devLog("already-complete analysis exists, reusing", { id: completedRows[0].id });
@@ -943,8 +928,8 @@ Deno.serve(async (req: Request) => {
     .from("caddie_analyses")
     .insert({
       owner_id: user.id,
-      source_type: body.sourceType,
-      source_post_id: body.sourceType === "community_post" ? body.sourcePostId : null,
+      source_type: "direct_upload",
+      source_post_id: null,
       source_media_url: mediaUrl,
       source_media_path: mediaPath,
       thumbnail_url: thumbUrl,
@@ -958,18 +943,12 @@ Deno.serve(async (req: Request) => {
     .select()
     .single();
   if (insertError || !inserted) {
-    // The ownership trigger (20260817091500) raises exactly this kind of
-    // message for a community_post the caller doesn't own — safe to
-    // forward verbatim, it was written to be client-facing.
     // The allowance/ceiling trigger (20261107140000) is the race-proof
     // backstop for the pre-check above — concurrent requests that all passed
     // it land here, identified by the error's hint.
     const message = insertError?.message ?? "Could not start this analysis.";
     const refusal = insertError?.hint ? TRIGGER_REFUSALS[insertError.hint] : undefined;
     if (refusal) return jsonResponse({ error: message, code: refusal.code }, refusal.status);
-    if (message.includes("only available on your own posts") || message.includes("Source post not found")) {
-      return jsonResponse({ error: message, code: "forbidden" }, 403);
-    }
     console.error("[analyze-swing] insert failed.", redactDetail(message, 160));
     return jsonResponse({ error: "Caddie is temporarily unavailable. Please try again.", code: "unavailable" }, 500);
   }

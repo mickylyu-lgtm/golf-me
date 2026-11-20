@@ -18,6 +18,7 @@ type T = (key: TranslationKey, vars?: Record<string, string | number>) => string
 // mean "the request was malformed" map to the generic line.
 const MESSAGE_KEYS: Record<string, TranslationKey> = {
   // analyze-swing
+  "Upload a swing in Caddie to get feedback.": "caddie.emptyDescription",
   "Caddie is busy right now. Please try again in a minute.": "caddie.failure.providerBusy.body",
   "Caddie isn't configured yet. Please try again later.": "caddie.error.unavailable",
   "Caddie is temporarily unavailable. Please try again.": "caddie.error.unavailable",

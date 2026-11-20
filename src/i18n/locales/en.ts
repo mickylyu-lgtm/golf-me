@@ -264,7 +264,7 @@ export const en = {
   "caddie.myCaddie": "My Caddie",
   "caddie.recentAnalyses": "Recent Analyses",
   "caddie.emptyTitle": "No analyses yet",
-  "caddie.emptyDescription": "Upload a swing or ask Caddie from a Community swing post.",
+  "caddie.emptyDescription": "Upload a swing in Caddie to get feedback.",
   "caddie.viewAnalysis": "View Analysis",
   "caddie.analyzing": "Caddie is taking a look...",
   "caddie.thinking1": "Reading your swing...",

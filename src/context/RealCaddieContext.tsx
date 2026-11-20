@@ -165,13 +165,8 @@ function rowToAnalysis(row: CaddieAnalysisRow, poseData: CaddiePoseData | undefi
 }
 
 export interface CreateAnalysisInput {
-  sourceType: CaddieSourceType;
-  sourcePostId?: string;
-  // A private direct upload sends its caddie-media object paths (the
-  // server re-checks they're in the caller's own folder and signs them
-  // itself). sourceMediaUrl is only for a Community post's public video
-  // (the server ignores it for community_post and reads the post's own
-  // media) or a legacy row that still lives in community-media.
+  sourceType: "direct_upload";
+  // Real analyses use private caddie-media paths; demo clips use a local URL.
   sourceMediaPath?: string;
   thumbnailPath?: string;
   sourceMediaUrl?: string;
@@ -664,7 +659,6 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
     (input: CreateAnalysisInput): Promise<CaddieAnalysis> =>
       invokeAnalyzeSwing({
         sourceType: input.sourceType,
-        sourcePostId: input.sourcePostId,
         sourceMediaPath: input.sourceMediaPath,
         thumbnailPath: input.thumbnailPath,
         sourceMediaUrl: input.sourceMediaUrl,
@@ -678,6 +672,9 @@ export function RealCaddieProvider({ children }: { children: ReactNode }) {
 
   const retryAnalysis = useCallback(
     (analysis: CaddieAnalysis): Promise<CaddieAnalysis> => {
+      if (analysis.sourceType === "community_post") {
+        return Promise.reject(new CaddieRequestError("Upload a swing in Caddie to get feedback.", 403, "community_source_disabled"));
+      }
       // The legacy fields ride along so an analyze-swing build from before
       // retryAnalysisId still works (it creates a new row from them, the old
       // behavior). A current build ignores them and re-runs this row.

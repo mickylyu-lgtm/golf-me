@@ -291,7 +291,6 @@ test("every server error sentence the Caddie functions send is mapped", () => {
     "Method not allowed",
     "Invalid request body.",
     "Invalid sourceType.",
-    "sourcePostId is required for a community_post analysis.",
     "analysisId is required.",
     "A supported locale is required.",
   ]);

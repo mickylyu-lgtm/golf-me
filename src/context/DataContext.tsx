@@ -2180,7 +2180,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
           id: generateId("caddie"),
           ownerId: currentUser.id,
           sourceType: input.sourceType,
-          sourcePostId: input.sourcePostId,
           sourceMediaUrl: input.sourceMediaUrl ?? "",
           thumbnailUrl: input.thumbnailUrl,
           swingType: input.swingType,
