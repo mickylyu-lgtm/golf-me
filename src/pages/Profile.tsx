@@ -285,7 +285,7 @@ export function Profile() {
       {/* Your own bio, shown the way other golfers see it. Empty: a quiet
           prompt that opens the same Edit Profile popup. */}
       {currentUser.bio?.trim() ? (
-        <p className="-mt-2 whitespace-pre-line break-words text-sm leading-relaxed text-slate-700 lg:max-w-2xl">{currentUser.bio}</p>
+        <p data-no-swipe className="-mt-2 select-text whitespace-pre-line break-words text-sm leading-relaxed text-slate-700 lg:max-w-2xl">{currentUser.bio}</p>
       ) : (
         <button onClick={startEditing} className="-mt-2 self-start text-sm font-semibold text-fairway-700 hover:underline">
           {t("profile.addBio")}

@@ -317,7 +317,7 @@ export function GolferProfilePage() {
       {/* No bio yet (a new golfer) means no empty card. */}
       {golfer.bio?.trim() && (
         <div className="rounded-2xl border border-slate-100 bg-white p-4">
-          <p className="text-sm leading-relaxed text-slate-600">{golfer.bio}</p>
+          <p className="select-text text-sm leading-relaxed text-slate-600">{golfer.bio}</p>
         </div>
       )}
 

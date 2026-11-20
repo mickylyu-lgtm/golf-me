@@ -1,3 +1,7 @@
+## November 20: selectable profile bio (local candidate)
+
+The displayed bio on another golfer's profile and the Me page now opts into the existing native mobile text selection and Copy callout. The Me bio also opts out of tab swiping so selection handles and horizontal drags on the text do not initiate tab navigation. No clipboard writes, content or visibility changes, editor changes, or global gesture changes. Native iPhone Safari and GolfMe WebView long-press behavior still requires a physical-device check.
+
 ## November 19: local hosted-round venue banner candidate
 
 Added a shallow static banner directly below Back, leaving round name/time/spots unchanged. Uses existing course-ID-keyed attributed photo service; verified outline-only labeled satellite fallback and abstract illustration for unknown or exhausted imagery. Never uses round/town coordinates or name-only matching. Photo failure falls through to validated satellite; tile failure falls through to illustration. Identity-keyed remount prevents old venue imagery sticking on navigation. Existing fitted satellite renderer measures actual viewport; no autoplay, map controls or new image provider.
