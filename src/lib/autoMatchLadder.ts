@@ -8,7 +8,8 @@
 // 50 mi), then the preference bar (strong, any overlap, none). Each wider
 // notch starts again from the narrower ones before it (a wider radius
 // tries the chosen day first). The first step with a round wins and the
-// page says what was widened.
+// page says what was widened. Sparse results then relax only the preference
+// bar in that SAME date/radius context, aiming for three options.
 //
 // Pure (no React, explicit .ts imports) so tests/autoMatchLadder.test.ts
 // runs under plain node --test. Preference ranking itself stays in
@@ -20,6 +21,7 @@ import type { WhenChoice } from "./roundSearchParams.ts";
 // The radii the ladder widens to after the golfer's own one.
 export const WIDEN_RADII_MILES = [25, 50] as const;
 export const WEEK_WINDOW_DAYS = 7;
+export const MIN_ROUND_OPTIONS = 3;
 // Up to this many golfers under the rounds, more when there are no rounds.
 export const GOLFERS_WITH_ROUNDS = 3;
 export const GOLFERS_WITHOUT_ROUNDS = 5;
@@ -270,9 +272,23 @@ export function planAutoMatch<C extends RoundCandidate, G extends GolferCandidat
   const eligible = input.rounds.filter((c) => isEligibleRound(c.call, input.eligibility));
   const steps = buildLadder(input);
   const strict = steps[0];
-  for (const step of steps) {
-    const rounds = roundsForStep(eligible, step, input.when, input.customDate, input.now);
+  for (const initialStep of steps) {
+    let step = initialStep;
+    let rounds = roundsForStep(eligible, step, input.when, input.customDate, input.now);
     if (rounds.length === 0) continue;
+    // Never widen dates/range just to fill the carousel. Try softer bars
+    // only in the first successful context, and retain the original count
+    // and score on each candidate (no inflated match labels).
+    for (const softer of steps) {
+      if (rounds.length >= MIN_ROUND_OPTIONS) break;
+      if (softer.date !== step.date || softer.radius !== step.radius || softer.minMatched >= step.minMatched) continue;
+      const expanded = roundsForStep(eligible, softer, input.when, input.customDate, input.now);
+      // Don't show a widening notice unless it actually adds an option.
+      if (expanded.length > rounds.length) {
+        step = softer;
+        rounds = expanded;
+      }
+    }
     const near = nearbyGolfers(input.golfers, input.radius, GOLFERS_WITH_ROUNDS, input.eligibility.isBlocked);
     return {
       kind: "rounds",

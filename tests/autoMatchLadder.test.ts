@@ -183,10 +183,10 @@ test("preference mismatch: the bar drops to any overlap, then none", () => {
   if (none.kind === "rounds") assert.equal(none.widened.prefs, "none");
 });
 
-test("stops at the first step: a strong far round beats a weak near one", () => {
+test("keeps the first context and strongest first while adding a softer option", () => {
   const plan = planAutoMatch(input({ rounds: [cand(call("near-weak"), 2, 0), cand(call("far-strong"), 20, 3)] }));
   assert.equal(plan.kind, "rounds");
-  if (plan.kind === "rounds") assert.deepEqual(plan.rounds.map((r) => r.call.id), ["far-strong"]);
+  if (plan.kind === "rounds") assert.deepEqual(plan.rounds.map((r) => r.call.id), ["far-strong", "near-weak"]);
 });
 
 test("ranking within a step: most preferences, then rank score, then distance", () => {
@@ -291,4 +291,60 @@ test("host prefill carries the golfer's preferences and day, and reads back", ()
     walkOrCart: null,
     skillLevel: null,
   });
+});
+
+test("sparse strict result gains overlapping options without widening context or changing scores", () => {
+  const rounds = [cand(call("strong"), 3, 3, 80), cand(call("two"), 5, 2, 50), cand(call("one"), 7, 1, 40), cand(call("zero"), 1, 0, 99), cand(call("far"), 11, 2), cand(call("tomorrow", { dateISO: dayIso(1) }), 2, 2)];
+  const original = structuredClone(rounds);
+  const plan = planAutoMatch(input({ rounds }));
+  assert.equal(plan.kind, "rounds");
+  if (plan.kind !== "rounds") return;
+  assert.deepEqual(plan.rounds.map(r => [r.call.id, r.matchedCount, r.rankScore]), [["strong", 3, 80], ["two", 2, 50], ["one", 1, 40]]);
+  assert.deepEqual(plan.widened, { date: null, radius: null, prefs: "overlap" });
+  assert.equal(plan.step.radius, 10);
+  assert.deepEqual(rounds, original);
+});
+
+test("sparse results can include zero overlap but never ineligible or unknown-distance rounds", () => {
+  const plan = planAutoMatch(input({
+    eligibility: { userId: ME, now: NOW, isBlocked: id => id === "blocked" },
+    rounds: [cand(call("strong"), 2), cand(call("zero"), 3, 0), cand(call("blocked", { hostId: "blocked" }), 1, 0), cand(call("full", { totalSpots: 1 }), 1, 0), cand(call("unknown"), undefined, 0), cand(call("pending", { pendingRequestIds: [ME] }), 1, 0)],
+  }));
+  assert.equal(plan.kind, "rounds");
+  if (plan.kind !== "rounds") return;
+  assert.deepEqual(plan.rounds.map(r => r.call.id), ["strong", "zero"]);
+  assert.equal(plan.widened.prefs, "none");
+});
+
+test("three strong options need no relaxation and no extra options means no misleading notice", () => {
+  const plan = planAutoMatch(input({ rounds: [cand(call("a"), 1), cand(call("b"), 2), cand(call("c"), 3), cand(call("weak"), 1, 1)] }));
+  assert.equal(plan.kind, "rounds");
+  if (plan.kind !== "rounds") return;
+  assert.deepEqual(plan.rounds.map(r => r.call.id), ["a", "b", "c"]);
+  assert.equal(plan.widened.prefs, null);
+  const sparse = planAutoMatch(input({ rounds: [cand(call("a"), 1), cand(call("other-day", { dateISO: dayIso(1) }), 1, 0)] }));
+  assert.equal(sparse.kind, "rounds");
+  if (sparse.kind === "rounds") assert.deepEqual(sparse.widened, { date: null, radius: null, prefs: null });
+});
+
+test("explicit advanced controls prefilter softer options too", () => {
+  const filters = { budgetMax: 80, skill: null, vibe: null, walk: null };
+  const rounds = [cand(call("strong"), 1), cand(call("affordable"), 2, 0), cand(call("expensive", { estimatedPricePerPerson: 120 }), 2, 1)]
+    .filter(r => matchesAdvancedFilters(r.call, filters));
+  const plan = planAutoMatch(input({ rounds }));
+  assert.equal(plan.kind, "rounds");
+  if (plan.kind === "rounds") assert.deepEqual(plan.rounds.map(r => r.call.id), ["strong", "affordable"]);
+});
+
+test("widened day context includes a weaker chosen-day option without false empty-day copy", async () => {
+  const plan = planAutoMatch(input({ rounds: [cand(call("week-strong", { dateISO: dayIso(2) }), 2), cand(call("today-weak"), 2, 1)] }));
+  assert.equal(plan.kind, "rounds");
+  if (plan.kind !== "rounds") return;
+  assert.deepEqual(plan.rounds.map(r => r.call.id), ["week-strong", "today-weak"]);
+  assert.deepEqual(plan.widened, { date: "week", radius: null, prefs: "overlap" });
+  const { readFileSync } = await import("node:fs");
+  const english = readFileSync(new URL("../src/i18n/locales/en.ts", import.meta.url), "utf8");
+  assert.match(english, /"autoMatch.widenedDateWeek": "Showing rounds from/);
+  assert.match(english, /"autoMatch.widenedDateAny": "Showing rounds on any upcoming day/);
+  assert.match(english, /"autoMatch.widenedRadius": "Search widened from/);
 });
