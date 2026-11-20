@@ -1,3 +1,7 @@
+## November 20: Home round carousel motion (local candidate)
+
+User recording shows the Open rounds strip moving horizontally while surrounding page stays put. Previously the touch controller re-enabled mandatory native snap and initiated smooth scrolling in the same release path, letting two mechanisms compete for the resting offset. Released touch drags now settle via a single frame-paced ease before CSS snapping returns at the exact card position. Drag writes coalesce per frame and a rapid next horizontal swipe starts at the current visual position while preserving the prior committed card as its anchor. Keeps 15px intentional paging, tiny snapback, tap, vertical scroll, pinch zoom, native desktop scrolling and reduced-motion behavior. No card content, imagery, backend or native changes. Physical iPhone/WebKit motion remains unverified.
+
 ## November 20: selectable profile bio (local candidate)
 
 The displayed bio on another golfer's profile and the Me page now opts into the existing native mobile text selection and Copy callout. The Me bio also opts out of tab swiping so selection handles and horizontal drags on the text do not initiate tab navigation. No clipboard writes, content or visibility changes, editor changes, or global gesture changes. Native iPhone Safari and GolfMe WebView long-press behavior still requires a physical-device check.
