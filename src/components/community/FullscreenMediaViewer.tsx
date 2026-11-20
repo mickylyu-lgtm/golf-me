@@ -7,6 +7,7 @@ import { MediaCarousel } from "./MediaCarousel";
 import { perfHudViewer } from "../../lib/perfHud";
 import { lockPageScroll } from "../../lib/scrollLock";
 import { pushModal } from "../../lib/modalStack";
+import { shouldDismissFullscreenMedia } from "../../lib/fullscreenMediaDismiss";
 
 // Track the opening gesture before the dialog mounts. Browser :focus-visible
 // can survive focus restoration and a subsequent click on the same opener.
@@ -32,8 +33,6 @@ interface FullscreenMediaViewerProps {
   action?: { label: string; onClick: () => void };
 }
 
-const DISMISS_DISTANCE_PX = 120;
-const DISMISS_VELOCITY = 0.5;
 // Below this, a touchmove is read as part of the carousel's own horizontal
 // swipe-between-items gesture, not a dismiss drag — avoids fighting the
 // scroll-snap track over which axis "owns" a mostly-diagonal drag.
@@ -217,9 +216,8 @@ export function FullscreenMediaViewer({ media, initialIndex = 0, onClose: onClos
     setDragging(false);
     if (!state || state.axis !== "vertical") return;
     const totalDy = state.lastY - state.startY;
-    const elapsedMs = Math.max(1, Date.now() - state.startTime);
-    const velocity = Math.abs(totalDy) / elapsedMs;
-    if (totalDy > DISMISS_DISTANCE_PX || (totalDy > 0 && velocity > DISMISS_VELOCITY)) {
+    const elapsedMs = Date.now() - state.startTime;
+    if (shouldDismissFullscreenMedia(totalDy, elapsedMs)) {
       onClose();
     } else {
       setDragY(0);
