@@ -13,6 +13,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "teeRatings.back": "后9洞",
   "teeRatings.course": "球场难度值",
   "teeRatings.slope": "坡度难度值",
+  "teeRatings.slopeScale": "55–155 · 标准值为 113",
   "teeRatings.explain": "评级反映所选发球台和球洞的难度，不是球友评价，也不预测你的成绩。",
   "teeRatings.noVerifiedMetrics": "此发球台和球洞暂无已核实的评级。",
   "teeRatings.partial": "未核实的评级不显示。",

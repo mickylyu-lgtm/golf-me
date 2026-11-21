@@ -14,6 +14,7 @@ export const en = {
   "teeRatings.back": "Back 9",
   "teeRatings.course": "Course Rating",
   "teeRatings.slope": "Slope Rating",
+  "teeRatings.slopeScale": "55–155 · 113 is standard",
   "teeRatings.explain": "These ratings describe how difficult the selected tee and holes are. They aren’t player reviews or a prediction of your score.",
   "teeRatings.noVerifiedMetrics": "No verified ratings for this tee and holes.",
   "teeRatings.partial": "Some ratings weren’t verified and aren’t shown.",

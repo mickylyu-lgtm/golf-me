@@ -64,7 +64,7 @@ export function TeeRatingsPanel({ data }: { data: Ratings }) {
     </div> : active ? <p className="text-sm font-semibold text-slate-600">{label(active)}</p> : null}
     {rating && (rating.course != null || rating.slope != null) && <div className={`grid gap-3 ${rating.course != null && rating.slope != null ? "grid-cols-2" : "grid-cols-1"}`}>
       {rating.course != null && <div className="rounded-2xl bg-fairway-50 p-4"><p className="text-xs font-medium text-slate-600">{t("teeRatings.course")}</p><p className="mt-1 text-3xl font-bold tabular-nums text-fairway-900">{format(rating.course, 1)}</p></div>}
-      {rating.slope != null && <div className="rounded-2xl bg-fairway-50 p-4"><p className="text-xs font-medium text-slate-600">{t("teeRatings.slope")}</p><p className="mt-1 text-3xl font-bold tabular-nums text-fairway-900">{format(rating.slope, 0)}</p></div>}
+      {rating.slope != null && <div className="rounded-2xl bg-fairway-50 p-4"><p className="text-xs font-medium text-slate-600">{t("teeRatings.slope")}</p><p className="mt-1 text-3xl font-bold tabular-nums text-fairway-900">{format(rating.slope, 0)}</p><p className="mt-1 text-xs leading-snug text-slate-600">{t("teeRatings.slopeScale")}</p></div>}
     </div>}
     {!rating && <p className="text-sm text-slate-500">{t("teeRatings.noVerifiedMetrics")}</p>}
     {rating && (rating.course == null || rating.slope == null) && <p className="text-xs text-slate-500">{t("teeRatings.partial")}</p>}

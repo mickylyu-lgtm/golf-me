@@ -13,6 +13,7 @@ export const ko: Record<TranslationKey, string> = {
   "teeRatings.back": "후반 9홀",
   "teeRatings.course": "코스 레이팅",
   "teeRatings.slope": "슬로프 레이팅",
+  "teeRatings.slopeScale": "55–155 · 표준은 113",
   "teeRatings.explain": "선택한 티와 홀의 난이도를 나타냅니다. 이용자 리뷰나 예상 스코어가 아닙니다.",
   "teeRatings.noVerifiedMetrics": "이 티와 홀에 확인된 레이팅이 없습니다.",
   "teeRatings.partial": "확인되지 않은 레이팅은 표시하지 않습니다.",

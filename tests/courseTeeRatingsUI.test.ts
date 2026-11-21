@@ -18,6 +18,12 @@ const render=(tees:any[], source?:{url:string;reviewedOn:string})=>renderToStati
 test("default total rating, available sections only, bogey collapsed",()=>{
  const html=render([tee]);assert.match(html,/72.4/);assert.match(html,/132/);assert.match(html,/18 holes/);assert.doesNotMatch(html,/Front 9|Back 9/);assert.match(html,/<details class=/);assert.doesNotMatch(html,/<details[^>]*open/);assert.match(html,/More details/);assert.match(html,/Bogey Rating/);
 });
+test("shows the slope scale and standard without implying a score out of 155",()=>{
+ const html=render([tee]);
+ assert.match(html,/Slope Rating<\/p>.*>132<\/p>.*55–155 · 113 is standard/);
+ assert.doesNotMatch(html,/132\s*\/\s*155/);
+ assert.doesNotMatch(render([{...tee,overall:{course:72.4,slope:null,bogey:null}}]),/113 is standard/);
+});
 test("standalone nine holes never mislabeled eighteen",()=>{
  const html=render([{...tee,holes:9}]);assert.match(html,/9 holes/);assert.doesNotMatch(html,/18 holes/);
 });

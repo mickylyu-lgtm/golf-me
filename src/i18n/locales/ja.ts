@@ -13,6 +13,7 @@ export const ja: Record<TranslationKey, string> = {
   "teeRatings.back": "後半9",
   "teeRatings.course": "コースレーティング",
   "teeRatings.slope": "スロープレーティング",
+  "teeRatings.slopeScale": "55〜155・標準は113",
   "teeRatings.explain": "選択したティーとホールの難易度を示します。口コミやあなたのスコアの予測ではありません。",
   "teeRatings.noVerifiedMetrics": "このティーとホールの確認済みレーティングはありません。",
   "teeRatings.partial": "確認できなかったレーティングは表示されません。",

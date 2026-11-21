@@ -13,6 +13,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "teeRatings.back": "後9洞",
   "teeRatings.course": "球場難度值",
   "teeRatings.slope": "坡度難度值",
+  "teeRatings.slopeScale": "55–155 · 標準值為 113",
   "teeRatings.explain": "評級反映所選發球台和球洞的難度，不是球友評價，也不預測你的成績。",
   "teeRatings.noVerifiedMetrics": "此發球台和球洞暫無已核實的評級。",
   "teeRatings.partial": "未核實的評級不顯示。",

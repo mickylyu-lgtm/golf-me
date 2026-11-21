@@ -13,6 +13,7 @@ export const es: Record<TranslationKey, string> = {
   "teeRatings.back": "Últimos 9",
   "teeRatings.course": "Valoración del campo",
   "teeRatings.slope": "Valoración Slope",
+  "teeRatings.slopeScale": "55–155 · 113 es el valor estándar",
   "teeRatings.explain": "Estas valoraciones describen la dificultad del tee y los hoyos seleccionados. No son reseñas ni predicen tu puntuación.",
   "teeRatings.noVerifiedMetrics": "No hay valoraciones verificadas para este tee y estos hoyos.",
   "teeRatings.partial": "No se muestran las valoraciones que no se pudieron verificar.",
