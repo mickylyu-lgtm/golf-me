@@ -5,6 +5,8 @@ import { useLocale } from "../../i18n/LocaleContext";
 import { formatDistanceMiles } from "../../lib/geo";
 import type { DisplayCourseResult } from "../../lib/useCourseSearch";
 import { CourseMedia } from "./CourseMedia";
+import { CourseTeeRatings } from "./CourseTeeRatings";
+import { useAuth } from "../../context/AuthContext";
 import { Button } from "../ui/Button";
 
 // The body of a course page — title, the course's pictures (drone overview,
@@ -14,6 +16,7 @@ import { Button } from "../ui/Button";
 export function CourseDetailContent({ course }: { course: DisplayCourseResult }) {
   const { t } = useLocale();
   const navigate = useNavigate();
+  const { isDemo } = useAuth();
 
   const hasCoords = course.lat != null && course.lng != null;
 
@@ -54,6 +57,8 @@ export function CourseDetailContent({ course }: { course: DisplayCourseResult })
       </div>
 
       <CourseMedia course={course} />
+
+      {import.meta.env.VITE_COURSE_TEE_RATINGS_ENABLED === "true" && !isDemo && course.id && <CourseTeeRatings key={course.id ?? course.name} courseId={course.id} enabled={!isDemo} />}
 
       <div className="flex flex-col gap-2.5">
         <Button fullWidth icon={<Flag size={15} />} onClick={hostHere}>

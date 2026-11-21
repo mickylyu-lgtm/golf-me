@@ -1,6 +1,30 @@
 import type { TranslationKey } from "./en";
 
 export const zhTW: Record<TranslationKey, string> = {
+  "teeRatings.title": "發球台評級",
+  "teeRatings.choose": "選擇發球台",
+  "teeRatings.men": "男子評級",
+  "teeRatings.women": "女子評級",
+  "teeRatings.holes": "球洞",
+  "teeRatings.eighteen": "18洞",
+  "teeRatings.nine": "9洞",
+  "teeRatings.overall": "全程",
+  "teeRatings.front": "前9洞",
+  "teeRatings.back": "後9洞",
+  "teeRatings.course": "球場難度值",
+  "teeRatings.slope": "坡度難度值",
+  "teeRatings.explain": "評級反映所選發球台和球洞的難度，不是球友評價，也不預測你的成績。",
+  "teeRatings.noVerifiedMetrics": "此發球台和球洞暫無已核實的評級。",
+  "teeRatings.partial": "未核實的評級不顯示。",
+  "teeRatings.scorecard": "官方來源",
+  "teeRatings.verified": "核實日期：{date}",
+  "teeRatings.more": "更多詳情",
+  "teeRatings.bogey": "柏忌難度值",
+  "teeRatings.unavailable": "暫未提供此球場的發球台評級。",
+  "teeRatings.loading": "正在載入發球台評級…",
+  "teeRatings.failed": "無法載入發球台評級，請重試。",
+  "teeRatings.retry": "重試",
+
   "composer.officialPostUncertain": "你的公告可能已發佈，但附件可能不完整。再次嘗試前，請先檢查貼文。",
   // Official Community announcements.
   "composer.postAsGolfMe": "以 GolfMe 官方身分發佈",

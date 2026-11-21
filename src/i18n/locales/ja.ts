@@ -1,6 +1,30 @@
 import type { TranslationKey } from "./en";
 
 export const ja: Record<TranslationKey, string> = {
+  "teeRatings.title": "ティーレーティング",
+  "teeRatings.choose": "ティーを選択",
+  "teeRatings.men": "男子レーティング",
+  "teeRatings.women": "女子レーティング",
+  "teeRatings.holes": "ホール",
+  "teeRatings.eighteen": "18ホール",
+  "teeRatings.nine": "9ホール",
+  "teeRatings.overall": "全体",
+  "teeRatings.front": "前半9",
+  "teeRatings.back": "後半9",
+  "teeRatings.course": "コースレーティング",
+  "teeRatings.slope": "スロープレーティング",
+  "teeRatings.explain": "選択したティーとホールの難易度を示します。口コミやあなたのスコアの予測ではありません。",
+  "teeRatings.noVerifiedMetrics": "このティーとホールの確認済みレーティングはありません。",
+  "teeRatings.partial": "確認できなかったレーティングは表示されません。",
+  "teeRatings.scorecard": "公式情報源",
+  "teeRatings.verified": "{date}確認",
+  "teeRatings.more": "詳細を見る",
+  "teeRatings.bogey": "ボギーレーティング",
+  "teeRatings.unavailable": "このコースのティーレーティングはまだ利用できません。",
+  "teeRatings.loading": "レーティングを読み込み中…",
+  "teeRatings.failed": "読み込めませんでした。もう一度お試しください。",
+  "teeRatings.retry": "再試行",
+
   "composer.officialPostUncertain": "お知らせが一部の添付ファイルなしで投稿された可能性があります。再試行する前に投稿を確認してください。",
   // Official Community announcements.
   "composer.postAsGolfMe": "GolfMe として投稿",

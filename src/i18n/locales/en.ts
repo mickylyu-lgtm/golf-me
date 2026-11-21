@@ -2,6 +2,30 @@
 // key. Every other locale file is typed against `keyof typeof en`, so a
 // missing key in any language is a compile error, not a silent fallback.
 export const en = {
+  "teeRatings.title": "Tee Ratings",
+  "teeRatings.choose": "Choose your tee",
+  "teeRatings.men": "Men’s ratings",
+  "teeRatings.women": "Women’s ratings",
+  "teeRatings.holes": "Holes",
+  "teeRatings.eighteen": "18 holes",
+  "teeRatings.nine": "9 holes",
+  "teeRatings.overall": "Overall",
+  "teeRatings.front": "Front 9",
+  "teeRatings.back": "Back 9",
+  "teeRatings.course": "Course Rating",
+  "teeRatings.slope": "Slope Rating",
+  "teeRatings.explain": "These ratings describe how difficult the selected tee and holes are. They aren’t player reviews or a prediction of your score.",
+  "teeRatings.noVerifiedMetrics": "No verified ratings for this tee and holes.",
+  "teeRatings.partial": "Some ratings weren’t verified and aren’t shown.",
+  "teeRatings.scorecard": "Official source",
+  "teeRatings.verified": "Checked {date}",
+  "teeRatings.more": "More details",
+  "teeRatings.bogey": "Bogey Rating",
+  "teeRatings.unavailable": "Tee ratings aren’t available for this course yet.",
+  "teeRatings.loading": "Loading tee ratings…",
+  "teeRatings.failed": "Couldn’t load tee ratings. Please try again.",
+  "teeRatings.retry": "Try again",
+
   "composer.officialPostUncertain": "Your announcement may have published without all attachments. Check the post before trying again.",
   // Official Community announcements.
   "composer.postAsGolfMe": "Post as GolfMe",

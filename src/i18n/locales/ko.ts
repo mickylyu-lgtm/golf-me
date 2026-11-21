@@ -1,6 +1,30 @@
 import type { TranslationKey } from "./en";
 
 export const ko: Record<TranslationKey, string> = {
+  "teeRatings.title": "티 레이팅",
+  "teeRatings.choose": "티 선택",
+  "teeRatings.men": "남자 레이팅",
+  "teeRatings.women": "여자 레이팅",
+  "teeRatings.holes": "홀",
+  "teeRatings.eighteen": "18홀",
+  "teeRatings.nine": "9홀",
+  "teeRatings.overall": "전체",
+  "teeRatings.front": "전반 9홀",
+  "teeRatings.back": "후반 9홀",
+  "teeRatings.course": "코스 레이팅",
+  "teeRatings.slope": "슬로프 레이팅",
+  "teeRatings.explain": "선택한 티와 홀의 난이도를 나타냅니다. 이용자 리뷰나 예상 스코어가 아닙니다.",
+  "teeRatings.noVerifiedMetrics": "이 티와 홀에 확인된 레이팅이 없습니다.",
+  "teeRatings.partial": "확인되지 않은 레이팅은 표시하지 않습니다.",
+  "teeRatings.scorecard": "공식 출처",
+  "teeRatings.verified": "확인 날짜: {date}",
+  "teeRatings.more": "상세 보기",
+  "teeRatings.bogey": "보기 레이팅",
+  "teeRatings.unavailable": "이 코스의 티 레이팅은 아직 제공되지 않습니다.",
+  "teeRatings.loading": "레이팅 불러오는 중…",
+  "teeRatings.failed": "레이팅을 불러오지 못했습니다. 다시 시도해 주세요.",
+  "teeRatings.retry": "다시 시도",
+
   "composer.officialPostUncertain": "일부 첨부 파일 없이 공지가 게시되었을 수 있습니다. 다시 시도하기 전에 게시물을 확인하세요.",
   // Official Community announcements.
   "composer.postAsGolfMe": "GolfMe 이름으로 게시",

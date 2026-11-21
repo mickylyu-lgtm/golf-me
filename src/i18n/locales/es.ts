@@ -1,6 +1,30 @@
 import type { TranslationKey } from "./en";
 
 export const es: Record<TranslationKey, string> = {
+  "teeRatings.title": "Valoraciones de tees",
+  "teeRatings.choose": "Elige tu tee",
+  "teeRatings.men": "Valoración masculina",
+  "teeRatings.women": "Valoración femenina",
+  "teeRatings.holes": "Hoyos",
+  "teeRatings.eighteen": "18 hoyos",
+  "teeRatings.nine": "9 hoyos",
+  "teeRatings.overall": "Total",
+  "teeRatings.front": "Primeros 9",
+  "teeRatings.back": "Últimos 9",
+  "teeRatings.course": "Valoración del campo",
+  "teeRatings.slope": "Valoración Slope",
+  "teeRatings.explain": "Estas valoraciones describen la dificultad del tee y los hoyos seleccionados. No son reseñas ni predicen tu puntuación.",
+  "teeRatings.noVerifiedMetrics": "No hay valoraciones verificadas para este tee y estos hoyos.",
+  "teeRatings.partial": "No se muestran las valoraciones que no se pudieron verificar.",
+  "teeRatings.scorecard": "Fuente oficial",
+  "teeRatings.verified": "Consultada el {date}",
+  "teeRatings.more": "Más detalles",
+  "teeRatings.bogey": "Valoración bogey",
+  "teeRatings.unavailable": "Aún no hay valoraciones de tees para este campo.",
+  "teeRatings.loading": "Cargando valoraciones…",
+  "teeRatings.failed": "No se pudieron cargar las valoraciones. Inténtalo de nuevo.",
+  "teeRatings.retry": "Reintentar",
+
   "composer.officialPostUncertain": "Es posible que el anuncio se haya publicado sin todos los archivos adjuntos. Revísalo antes de volver a intentarlo.",
   // Official Community announcements.
   "composer.postAsGolfMe": "Publicar como GolfMe",
