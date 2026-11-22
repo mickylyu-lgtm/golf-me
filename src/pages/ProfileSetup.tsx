@@ -17,7 +17,7 @@ import { lockPageScroll } from "../lib/scrollLock";
 import { initialsFromName, avatarColorForName } from "../lib/avatar";
 import type { GeoPoint } from "../lib/geo";
 import { track } from "../lib/analytics";
-import { clearOnboardingDraft, loadOnboardingDraft, saveOnboardingDraft } from "../lib/onboardingDraft";
+import { clearOnboardingDraft, loadOnboardingDraft, optionalHandicap, saveOnboardingDraft } from "../lib/onboardingDraft";
 import type { OnboardingDraft } from "../lib/onboardingDraft";
 import { isObjectionableContentError } from "../lib/objectionableContent";
 import { isGooglePhotoUrl, providerPhotoUrl } from "../lib/providerPhoto";
@@ -29,8 +29,7 @@ function draftDefaults(): OnboardingDraft {
     is18Plus: false,
     areaLabel: "",
     playingAreaCoords: undefined,
-    hasHandicap: true,
-    handicap: 15,
+    handicap: "",
   };
 }
 
@@ -60,7 +59,7 @@ export function ProfileSetup() {
   const { t } = useLocale();
   const [submitting, setSubmitting] = useState(false);
 
-  const initial = loadOnboardingDraft() ?? draftDefaults();
+  const [initial] = useState(() => loadOnboardingDraft() ?? draftDefaults());
 
   const [name, setName] = useState(initial.name);
   const [photoUrl, setPhotoUrl] = useState<string | undefined>(undefined);
@@ -73,7 +72,6 @@ export function ProfileSetup() {
   const [playingAreaCoords, setPlayingAreaCoords] = useState<GeoPoint | undefined>(initial.playingAreaCoords);
   const [locationPickerMode, setLocationPickerMode] = useState<"none" | "auto" | "manual">("none");
 
-  const [hasHandicap, setHasHandicap] = useState(initial.hasHandicap);
   const [handicap, setHandicap] = useState<number | "">(initial.handicap);
 
   // Pre-fill the name a sign-in provider already gave us (today only Sign in
@@ -102,8 +100,8 @@ export function ProfileSetup() {
   // image would bloat localStorage for a draft that might never be
   // finished; a golfer who abandons and returns just re-picks a photo).
   useEffect(() => {
-    saveOnboardingDraft({ name, is18Plus, areaLabel, playingAreaCoords, hasHandicap, handicap });
-  }, [name, is18Plus, areaLabel, playingAreaCoords, hasHandicap, handicap]);
+    saveOnboardingDraft({ name, is18Plus, areaLabel, playingAreaCoords, handicap });
+  }, [name, is18Plus, areaLabel, playingAreaCoords, handicap]);
 
   // Continue waits while a photo is uploading: finishing mid-upload saved
   // the profile without it and the late upload was lost.
@@ -112,7 +110,7 @@ export function ProfileSetup() {
 
   async function submit() {
     if (!formValid || submitting) return;
-    const finalHandicap = handicap === "" ? 15 : handicap;
+    const finalHandicap = optionalHandicap(handicap);
 
     setOnboardingFinishing(true);
     if (isDemo) {
@@ -122,7 +120,7 @@ export function ProfileSetup() {
         gender: DEFAULT_GENDER,
         areaLabel: areaLabel.trim(),
         playingAreaCoords,
-        handicap: hasHandicap ? finalHandicap : null,
+        handicap: finalHandicap,
         vibes: [...DEFAULT_VIBES],
         walkOrCart: DEFAULT_WALK_OR_CART,
         budgetMin: DEFAULT_BUDGET_MIN,
@@ -184,7 +182,9 @@ export function ProfileSetup() {
           area_label: areaLabel.trim(),
           playing_area_lat: playingAreaCoords?.lat ?? null,
           playing_area_lng: playingAreaCoords?.lng ?? null,
-          handicap: hasHandicap ? finalHandicap : null,
+          // Do not clear a handicap already on an older unfinished profile
+          // merely because its local Quick Profile draft was left blank.
+          ...(finalHandicap === null && row?.handicap != null ? {} : { handicap: finalHandicap }),
           ...preferenceDefaults,
           has_onboarded: true,
         });
@@ -348,36 +348,16 @@ export function ProfileSetup() {
             <FoundingSpotsNote enabled={!isDemo} />
           </div>
 
-          <div className="flex flex-col gap-3">
-            <div className="flex gap-2">
-              <button
-                onClick={() => setHasHandicap(true)}
-                className={`flex-1 rounded-xl border px-3 py-2.5 text-sm font-semibold transition-all duration-200 ${
-                  hasHandicap ? "border-fairway-400 bg-fairway-50 text-fairway-700" : "border-slate-200 text-slate-600"
-                }`}
-              >
-                {t("profileSetup.iHaveHandicap")}
-              </button>
-              <button
-                onClick={() => setHasHandicap(false)}
-                className={`flex-1 rounded-xl border px-3 py-2.5 text-sm font-semibold transition-all duration-200 ${
-                  !hasHandicap ? "border-fairway-400 bg-fairway-50 text-fairway-700" : "border-slate-200 text-slate-600"
-                }`}
-              >
-                {t("profileSetup.noHandicap")}
-              </button>
-            </div>
-            {hasHandicap && (
-              <div>
-                <label className={labelClass}>{t("profile.handicap")}</label>
-                <input
-                  type="number"
-                  className={inputClass}
-                  value={handicap}
-                  onChange={(e) => setHandicap(e.target.value === "" ? "" : Number(e.target.value))}
-                />
-              </div>
-            )}
+          <div>
+            <label htmlFor="profile-setup-handicap" className={labelClass}>{t("profile.handicap")}</label>
+            <input
+              id="profile-setup-handicap"
+              type="number"
+              className={inputClass}
+              placeholder={t("profile.noHandicapYet")}
+              value={handicap}
+              onChange={(e) => setHandicap(e.target.value === "" ? "" : e.target.valueAsNumber)}
+            />
           </div>
         </div>
       </div>
