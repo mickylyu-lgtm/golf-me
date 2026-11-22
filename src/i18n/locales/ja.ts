@@ -258,6 +258,7 @@ export const ja: Record<TranslationKey, string> = {
   "courseMedia.layoutUnmapped": "このコースのコース図はまだありません。",
   "courseMedia.layoutUnavailable": "コース図を読み込めませんでした。コース図をオフにしてからオンにすると再試行します。",
   "courseMedia.photoLabel": "写真:",
+  "coursePage.unavailable": "コースの詳細は現在表示できません。",
   "coursePage.hostHere": "ここでラウンドを主催",
   "coursePage.directions": "経路",
   "coursePage.findTeeTimes": "ティータイムを検索",

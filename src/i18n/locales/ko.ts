@@ -258,6 +258,7 @@ export const ko: Record<TranslationKey, string> = {
   "courseMedia.layoutUnmapped": "이 골프장의 코스 배치는 아직 제공되지 않아요.",
   "courseMedia.layoutUnavailable": "코스 배치를 불러오지 못했어요. 코스 배치를 껐다 켜면 다시 시도해요.",
   "courseMedia.photoLabel": "사진:",
+  "coursePage.unavailable": "지금은 코스 상세 정보를 볼 수 없습니다.",
   "coursePage.hostHere": "여기서 라운드 열기",
   "coursePage.directions": "길찾기",
   "coursePage.findTeeTimes": "티타임 검색",

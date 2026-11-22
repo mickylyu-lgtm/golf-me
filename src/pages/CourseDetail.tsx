@@ -8,9 +8,11 @@ import type { DisplayCourseResult } from "../lib/useCourseSearch";
 import { CourseDetailContent } from "../components/courses/CourseDetailContent";
 import { GolfMeLoader } from "../components/loading/GolfMeLoader";
 import { goBack } from "../lib/goBack";
+import { originatingRoundPath } from "../lib/roundCourseLink";
 
 export interface CourseDetailState {
-  course: DisplayCourseResult;
+  course?: DisplayCourseResult;
+  fromRoundId?: string;
 }
 
 // Course page for every nearby course. Micky, 2026-10-23: every course should open a page with at
@@ -59,18 +61,19 @@ export function CourseDetail() {
     };
   }, [course, courseId, isDemo]);
 
-  if (missing) return <Navigate to="/courses/nearby" replace />;
-  if (!course) return <GolfMeLoader size="sm" />;
+  const roundPath = originatingRoundPath(state?.fromRoundId);
+  if (missing && !roundPath) return <Navigate to="/courses/nearby" replace />;
+  if (!course && !missing) return <GolfMeLoader size="sm" />;
 
   return (
     <div className="flex flex-col gap-5 pb-6">
       <button
-        onClick={() => goBack(navigate, "/courses/nearby")}
+        onClick={() => goBack(navigate, roundPath ?? "/courses/nearby")}
         className="flex items-center gap-1.5 text-sm font-semibold text-slate-500 transition-colors duration-200 hover:text-slate-800"
       >
         <ArrowLeft size={16} /> {t("common.back")}
       </button>
-      <CourseDetailContent course={course} />
+      {course ? <CourseDetailContent course={course} /> : <p role="status" className="text-sm text-slate-500">{t("coursePage.unavailable")}</p>}
     </div>
   );
 }

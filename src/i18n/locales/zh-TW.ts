@@ -258,6 +258,7 @@ export const zhTW: Record<TranslationKey, string> = {
   "courseMedia.layoutUnmapped": "這座球場暫時還沒有球場佈局。",
   "courseMedia.layoutUnavailable": "無法載入球場佈局。關閉再開啟球場佈局即可重試。",
   "courseMedia.photoLabel": "照片：",
+  "coursePage.unavailable": "暫時無法查看球場詳情。",
   "coursePage.hostHere": "在這裡發起球局",
   "coursePage.directions": "路線",
   "coursePage.findTeeTimes": "搜尋開球時間",

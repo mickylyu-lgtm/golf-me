@@ -258,6 +258,7 @@ export const es: Record<TranslationKey, string> = {
   "courseMedia.layoutUnmapped": "El trazado de este campo aún no está disponible.",
   "courseMedia.layoutUnavailable": "No se pudo cargar el trazado. Desactiva y activa Trazado para intentarlo de nuevo.",
   "courseMedia.photoLabel": "Foto:",
+  "coursePage.unavailable": "La información del campo no está disponible en este momento.",
   "coursePage.hostHere": "Organiza una ronda aquí",
   "coursePage.directions": "Cómo llegar",
   "coursePage.findTeeTimes": "Buscar horarios",

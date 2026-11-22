@@ -258,6 +258,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "courseMedia.layoutUnmapped": "这个球场暂时还没有球场布局。",
   "courseMedia.layoutUnavailable": "无法加载球场布局。关闭再打开球场布局即可重试。",
   "courseMedia.photoLabel": "照片：",
+  "coursePage.unavailable": "暂时无法查看球场详情。",
   "coursePage.hostHere": "在这里发起球局",
   "coursePage.directions": "路线",
   "coursePage.findTeeTimes": "搜索开球时间",

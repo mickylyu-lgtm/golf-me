@@ -270,6 +270,7 @@ export const en = {
   "courseMedia.layoutUnmapped": "Course layout isn't available for this course yet.",
   "courseMedia.layoutUnavailable": "Couldn't load the course layout. Turn Layout off and on to try again.",
   "courseMedia.photoLabel": "Photo:",
+  "coursePage.unavailable": "Course details are unavailable right now.",
   "coursePage.hostHere": "Host a round here",
   "coursePage.directions": "Directions",
   "coursePage.findTeeTimes": "Search tee times",

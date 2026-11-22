@@ -1,4 +1,5 @@
 import { RoundVenueBanner } from '../components/courses/RoundVenueBanner';
+import { RoundCourseHeading } from "../components/golfcall/RoundCourseHeading";
 import { RoundShareButton } from "../components/golfcall/RoundShareButton";
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
@@ -233,7 +234,7 @@ export function GolfCallDetail() {
           )}
           <Badge tone="outline">{call.joinMode === "instant" ? t("golfCallDetail.instantJoin") : t("golfCallDetail.requestToJoinBadge")}</Badge>
         </div>
-        <h1 className="text-2xl font-extrabold text-slate-900">{call.course}</h1>
+        <RoundCourseHeading name={call.course} courseId={call.courseId} roundId={call.id} isDemo={isDemo} />
         <p className="flex items-center gap-1 text-sm text-slate-500">
           <MapPin size={13} />
           {call.distanceMiles !== undefined && `${t("golfCallCard.miAway", { miles: roundedMiles(call.distanceMiles) })} · `}
