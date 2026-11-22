@@ -7,6 +7,8 @@ import type { DisplayCourseResult } from "../../lib/useCourseSearch";
 import { CourseMedia } from "./CourseMedia";
 import { courseTeeRatingsSource } from "../../lib/bayonneOfficialTeeRatings";
 import { CourseTeeRatings } from "./CourseTeeRatings";
+import { GolfCoreTeeRatings } from "./GolfCoreTeeRatings";
+import { isGolfCoreTeePilotCourse } from "../../lib/golfCoreTeePilot";
 import { useAuth } from "../../context/AuthContext";
 import { Button } from "../ui/Button";
 
@@ -17,8 +19,9 @@ import { Button } from "../ui/Button";
 export function CourseDetailContent({ course }: { course: DisplayCourseResult }) {
   const { t } = useLocale();
   const navigate = useNavigate();
-  const { isDemo, isAuthenticated } = useAuth();
-  const ratingsSource = courseTeeRatingsSource(course.id, {
+  const { isDemo, isAuthenticated, authUser } = useAuth();
+  const golfCorePilot = isAuthenticated && !isDemo && !!authUser?.id && isGolfCoreTeePilotCourse(course.id);
+  const ratingsSource = golfCorePilot ? null : courseTeeRatingsSource(course.id, {
     signedIn: isAuthenticated,
     isDemo,
     bayonnePilot: import.meta.env.VITE_BAYONNE_OFFICIAL_TEE_RATINGS_ENABLED,
@@ -65,6 +68,7 @@ export function CourseDetailContent({ course }: { course: DisplayCourseResult })
 
       <CourseMedia course={course} />
 
+      {golfCorePilot && course.id && <GolfCoreTeeRatings key={authUser.id + ":" + course.id} courseId={course.id} />}
       {ratingsSource && course.id && <CourseTeeRatings key={course.id} courseId={course.id} enabled dataSource={ratingsSource} />}
 
       <div className="flex flex-col gap-2.5">

@@ -1,4 +1,4 @@
-import type { TranslationKey } from "./en";
+import type { TranslationKey } from "./en.js";
 
 export const zhCN: Record<TranslationKey, string> = {
   "teeRatings.title": "发球台评级",

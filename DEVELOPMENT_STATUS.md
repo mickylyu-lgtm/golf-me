@@ -1,3 +1,9 @@
+## November 22: matched GolfCore Tee Ratings pilot (release candidate)
+
+Course Details and the shared map sheet support nine existing courses with 42 independently matched 18-hole tee/category records. Exact GolfMe IDs only, real signed-in accounts, and no new provider calls, data migration, or native release. Existing Bayonne official figures and fallback provider configuration are unchanged. Unverified alternatives, nine-hole segments and Bogey are not included.
+
+Production readiness: supply the exact private snapshot via the non-VITE Vercel Production Secret `GOLFCORE_REVIEWED_TEE_SNAPSHOT`; never commit provider rows, put them in browser assets or offer them as a data API/export. The existing Supabase Auth token is verified without a service role. The single-course display is scriptless attributed HTML rendered only on demand, with no brokered raw provider payload, bulk/list response or browser cache. Missing/malformed configuration and snapshots outside the reviewed window (exclusive February 20, 2027 UTC) show unavailable. Confirm licensed use, private snapshot validity, exact function build, in-app attribution and signed-in WebView before treating the rollout as verified.
+
 ## November 21: read-only Course Tee Ratings (local preview only)
 
 A golfer can open Tee Ratings in the shared course detail page/map sheet for a signed-in real course; no background search/list requests. The synthetic preview does not demonstrate real course coverage. This is tee difficulty information, not handicap/GHIN, a hosted-round tee selection, a simulator change, or a reservation.
