@@ -14,8 +14,8 @@ import { courseImageryThrottle } from "./courseImageryThrottle.ts";
 //     servers only (overpass-api.de, z.overpass-api.de; maps.mail.ru is
 //     gone: it saw each viewer's IP).
 //   * A cold layout can take 20-110 s on the server: course-photos answers
-//     "pending" after 20 s and keeps looking; the page asks again every 8 s
-//     (up to 2.5 min) and keeps saying "Loading the course layout…".
+//     "pending" after 20 s and keeps looking; the page polls every 8 s for
+//     up to a hard 30 s. Turning Layout off/on can pick up a later result.
 // Nothing is asked until it's needed: the picture when the course page's
 // media shows, the layout only while the overview shows with Layout on.
 import { NAIP_GIVE_UP_MS, cornersOf, naipExportFor, validMercBox, type Corners, type MercBox } from "./naipExport.ts";
@@ -34,7 +34,7 @@ import type { CoursePhotosResponse } from "../../supabase/functions/_shared/cour
 
 // ---- course-photos, injectable (node tests pass a stub) ----
 
-export type DetailServer = (body: Record<string, unknown>) => Promise<CoursePhotosResponse | null>;
+export type DetailServer = (body: Record<string, unknown>, signal?: AbortSignal) => Promise<CoursePhotosResponse | null>;
 
 let server: DetailServer | null = null;
 
@@ -45,18 +45,19 @@ export function setDetailServer(fn: DetailServer | null) {
 
 class ImageryBudgetPause extends Error {}
 
-async function callServer(body: Record<string, unknown>): Promise<CoursePhotosResponse | null> {
+async function callServer(body: Record<string, unknown>, signal?: AbortSignal): Promise<CoursePhotosResponse | null> {
   if (courseImageryThrottle.active()) throw new ImageryBudgetPause("course imagery budget paused");
   const budgetScope = courseImageryThrottle.scope();
   try {
-    if (server) return await server(body);
+    if (server) return await server(body, signal);
     const { supabase } = await import("./supabase");
+    if (signal?.aborted) throw new Error("Layout request aborted");
     courseImageryThrottle.bindAuth(supabase.auth);
-    const { data, error } = await supabase.functions.invoke("course-photos", { body });
+    const { data, error } = await supabase.functions.invoke("course-photos", { body, signal });
     if (error) throw error;
     return (data ?? null) as CoursePhotosResponse | null;
   } catch (error) {
-    if (await courseImageryThrottle.record(error, Date.now(), budgetScope)) throw new ImageryBudgetPause("course imagery budget paused");
+    if (!signal?.aborted && await courseImageryThrottle.record(error, Date.now(), budgetScope)) throw new ImageryBudgetPause("course imagery budget paused");
     throw error;
   }
 }
@@ -165,7 +166,7 @@ const LAYOUT_TIMEOUT_MS = 100_000;
 // after 20 s and keeps going): ask again every 8 s, for up to 2.5 minutes,
 // while the page says "Loading the course layout…".
 export const LAYOUT_POLL_MS = 8_000;
-export const LAYOUT_POLL_BUDGET_MS = 150_000;
+export const LAYOUT_POLL_BUDGET_MS = 30_000;
 // Per device. A layout: 30 days. A course with nothing mapped: 7 days (OSM
 // volunteers keep mapping). A failure: not stored; this session waits a
 // couple of minutes before asking again, unless the golfer asks (Layout
@@ -248,11 +249,14 @@ export function writeLayoutCache(key: string, answer: LayoutAnswer, now: number)
 
 /** One endpoint, validated: an HTTP error, a non-JSON body or an error
  * remark is "invalid", never "unmapped". */
-async function askOverpass(endpoint: string, name: string, bounds: CourseBounds, timeoutMs: number): Promise<OverpassVerdict> {
+async function askOverpass(endpoint: string, name: string, bounds: CourseBounds, timeoutMs: number, signal: AbortSignal): Promise<OverpassVerdict> {
   const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
-  const timer = setTimeout(() => ctrl?.abort(), timeoutMs);
+  const cancel = () => ctrl?.abort();
+  const timer = setTimeout(cancel, timeoutMs);
+  signal.addEventListener("abort", cancel, { once: true });
   try {
-    const res = await fetch(`${endpoint}?data=${encodeURIComponent(layoutOverpassQuery(bounds))}`, { signal: ctrl?.signal });
+    if (signal.aborted) return { kind: "invalid", reason: "network/timeout" };
+    const res = await fetch(`${endpoint}?data=${encodeURIComponent(layoutOverpassQuery(bounds))}`, { signal: ctrl?.signal ?? signal });
     if (!res.ok) return { kind: "invalid", reason: `http ${res.status}` };
     let json: unknown;
     try {
@@ -265,14 +269,16 @@ async function askOverpass(endpoint: string, name: string, bounds: CourseBounds,
     return { kind: "invalid", reason: "network/timeout" };
   } finally {
     clearTimeout(timer);
+    signal.removeEventListener("abort", cancel);
   }
 }
 
 /** Demo / fallback: one ask, and one retry on FOSSGIS's other server. */
-async function directLayout(name: string, bounds: CourseBounds, timeoutMs = LAYOUT_TIMEOUT_MS, sleep?: (ms: number) => Promise<void>): Promise<LayoutAnswer | null> {
+async function directLayout(name: string, bounds: CourseBounds, signal: AbortSignal, timeoutMs = LAYOUT_TIMEOUT_MS, sleep?: (ms: number) => Promise<void>): Promise<LayoutAnswer | null> {
   const { verdict } = await askLayoutWithRetry({
     endpoints: LAYOUT_OVERPASS_ENDPOINTS,
-    ask: (endpoint, t) => askOverpass(endpoint, name, bounds, t),
+    ask: (endpoint, t) => askOverpass(endpoint, name, bounds, t, signal),
+    mayAsk: async () => !signal.aborted,
     budgetMs: timeoutMs,
     sleep,
   });
@@ -285,16 +291,18 @@ type ServerLayout = { kind: "answer"; answer: LayoutAnswer | null } | { kind: "o
 /** course-photos' layout, asking again while it says "pending" (a cold
  * lookup carries on server-side). "old" = a course-photos that doesn't
  * know layouts (or none reachable): the caller asks directly. */
-async function serverLayout(id: string, pollMs: number, budgetMs: number): Promise<ServerLayout> {
+async function serverLayout(id: string, pollMs: number, budgetMs: number, signal: AbortSignal): Promise<ServerLayout> {
   const started = Date.now();
   for (let ask = 0; ; ask++) {
+    if (signal.aborted) return { kind: "answer", answer: null };
     let res: CoursePhotosResponse | null;
     try {
-      res = await callServer({ courseIds: [id], layout: true });
+      res = await callServer({ courseIds: [id], layout: true }, signal);
+      if (signal.aborted) return { kind: "answer", answer: null };
     } catch (error) {
       // Down / not deployed: direct, unless an earlier ask already reached
       // a server that knows layouts (then a hiccup just ends this wait).
-      if (error instanceof ImageryBudgetPause) return { kind: "answer", answer: null };
+      if (signal.aborted || error instanceof ImageryBudgetPause) return { kind: "answer", answer: null };
       return ask === 0 ? { kind: "old" } : { kind: "answer", answer: null };
     }
     if (!res || !res.layouts || typeof res.layouts !== "object") return ask === 0 ? { kind: "old" } : { kind: "answer", answer: null };
@@ -304,6 +312,29 @@ async function serverLayout(id: string, pollMs: number, budgetMs: number): Promi
     if (!pending || Date.now() - started + pollMs > budgetMs) return { kind: "answer", answer: null };
     await new Promise((r) => setTimeout(r, pollMs));
   }
+}
+
+/** Abort transports where supported, but always settle even when a fetch,
+ * auth lookup or body read ignores its signal. Late results must never
+ * repopulate the cache or keep a retry attached to the old promise. */
+function withinLayoutDeadline(load: (signal: AbortSignal) => Promise<LayoutAnswer | null>, ms: number): Promise<LayoutAnswer | null> {
+  const controller = new AbortController();
+  const expiresAt = Date.now() + ms;
+  return new Promise((resolve) => {
+    const expire = () => {
+      resolve(null);
+      controller.abort();
+    };
+    const timer = setTimeout(expire, ms);
+    const finish = (answer: LayoutAnswer | null) => {
+      clearTimeout(timer);
+      // Backgrounded mobile browsers can delay timers; don't accept an
+      // already-expired response if its continuation runs before the timer.
+      if (Date.now() >= expiresAt) expire();
+      else resolve(answer);
+    };
+    void Promise.resolve().then(() => load(controller.signal)).then(finish, () => finish(null));
+  });
 }
 
 const layoutAsks = new Map<string, Promise<LayoutResult>>();
@@ -323,17 +354,20 @@ export function courseLayout(
   if (cached) return Promise.resolve(toResult(cached));
   const failedAt = layoutFailedAt.get(key);
   if (!opts.force && failedAt != null && Date.now() - failedAt < LAYOUT_RETRY_MS) return Promise.resolve({ status: "unavailable" });
-  const p = (async (): Promise<LayoutResult> => {
+  const budget = opts.pollBudgetMs ?? LAYOUT_POLL_BUDGET_MS;
+  const p = withinLayoutDeadline(async (signal) => {
     let answer: LayoutAnswer | null = null;
     let viaServer = false;
     if (opts.useServer && course.id) {
-      const s = await serverLayout(course.id, opts.pollMs ?? LAYOUT_POLL_MS, opts.pollBudgetMs ?? LAYOUT_POLL_BUDGET_MS);
+      const s = await serverLayout(course.id, opts.pollMs ?? LAYOUT_POLL_MS, budget, signal);
       if (s.kind === "answer") {
         viaServer = true;
         answer = s.answer;
       }
     }
-    if (!viaServer && !answer && course.bounds) answer = await directLayout(course.name, course.bounds, opts.timeoutMs, opts.sleep);
+    if (!signal.aborted && !viaServer && !answer && course.bounds) answer = await directLayout(course.name, course.bounds, signal, opts.timeoutMs, opts.sleep);
+    return answer;
+  }, budget).then((answer): LayoutResult => {
     if (answer) {
       writeLayoutCache(key, answer, Date.now());
       layoutFailedAt.delete(key);
@@ -341,7 +375,7 @@ export function courseLayout(
     }
     if (!courseImageryThrottle.active()) layoutFailedAt.set(key, Date.now());
     return { status: "unavailable" };
-  })();
+  });
   layoutAsks.set(key, p);
   // A failure isn't kept in this map either: the next ask (after the wait,
   // or forced) goes out again.

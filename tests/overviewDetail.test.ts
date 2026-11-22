@@ -212,7 +212,7 @@ test("real accounts: while course-photos says 'pending' the page keeps loading a
   assert.equal(asks, 3);
   assert.equal(calls.length, 0, "never Overpass from the browser");
   assert.equal(mod.LAYOUT_POLL_MS, 8000);
-  assert.ok(mod.LAYOUT_POLL_BUDGET_MS >= 120_000, "covers the server's 110 s lookup");
+  assert.equal(mod.LAYOUT_POLL_BUDGET_MS, 30_000, "client UI deadline; server can finish in the background");
 });
 
 test("real accounts: 'pending' past the wait budget ends as 'unavailable' (no direct fallback); a later hiccup too", async () => {
@@ -233,6 +233,84 @@ test("real accounts: 'pending' past the wait budget ends as 'unavailable' (no di
   });
   assert.equal((await b.mod.courseLayout({ id: ID, name: NAME, bounds: B }, { useServer: true, pollMs: 5 })).status, "unavailable");
   assert.equal(b.calls.length, 0, "the server knows layouts: no direct ask behind its back");
+});
+
+// Use mock time and manual provider settlement so these tests don't depend
+// on a wall-clock race against concurrently running test files.
+const liberty = {
+  id: ID, name: "Liberty National Golf Club",
+  bounds: { south: 40.685, west: -74.080, north: 40.705, east: -74.056 },
+};
+const layoutStatus = (result: { status: string } | null) =>
+  layoutUiStatus({ loaded: true, canLayout: true, layoutOn: true, result } as Parameters<typeof layoutUiStatus>[0]);
+
+test("Liberty scenario: a hung server invoke exits Loading at deadline and a fresh toggle can load the finished layout", async (t) => {
+  const { mod, calls, storage } = await client(() => json(VALID));
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  const response = { photos: {}, layouts: { [ID]: { status: "ok" as const, layout: (ok as Extract<OverpassVerdict, { kind: "ok" }>).layout } } };
+  let finish!: (value: typeof response) => void;
+  let abortSignal: AbortSignal | undefined;
+  let asks = 0;
+  mod.setDetailServer(async (_body, signal) => {
+    if (++asks > 1) return response;
+    abortSignal = signal;
+    return new Promise((resolve) => { finish = resolve; }); // ignores abort
+  });
+  assert.equal(layoutStatus(null), "loading");
+  const initial = mod.courseLayout(liberty, { useServer: true });
+  assert.equal(mod.courseLayout(liberty, { useServer: true }), initial, "concurrent view shares the current attempt");
+  await Promise.resolve();
+  t.mock.timers.tick(mod.LAYOUT_POLL_BUDGET_MS);
+  assert.equal(layoutStatus(await initial), "unavailable");
+  assert.equal(abortSignal?.aborted, true);
+  const key = mod.layoutCacheKey(liberty);
+  assert.equal(storage.getItem(key), null);
+  finish(response);
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(storage.getItem(key), null, "abandoned answer cannot write through");
+  const retried = await mod.courseLayout(liberty, { useServer: true, force: true });
+  assert.equal(retried.status, "ready");
+  assert.equal(layoutStatus(retried), "ready");
+  assert.equal(asks, 2);
+  assert.equal(calls.length, 0, "timeout never cascades to browser Overpass");
+});
+
+test("pending layout whose second poll hangs is still bounded, with no more polls after the deadline", async (t) => {
+  const { mod, calls } = await client(() => json(VALID));
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  let asks = 0;
+  let signal: AbortSignal | undefined;
+  mod.setDetailServer(async (_body, activeSignal) => {
+    signal = activeSignal;
+    if (++asks === 1) return { photos: {}, layouts: {}, layoutsPending: [ID] };
+    return new Promise(() => {});
+  });
+  const p = mod.courseLayout(liberty, { useServer: true });
+  for (let i = 0; i < 8; i++) await Promise.resolve();
+  t.mock.timers.tick(mod.LAYOUT_POLL_MS);
+  for (let i = 0; i < 8; i++) await Promise.resolve();
+  assert.equal(asks, 2);
+  t.mock.timers.tick(mod.LAYOUT_POLL_BUDGET_MS - mod.LAYOUT_POLL_MS);
+  assert.equal(layoutStatus(await p), "unavailable");
+  assert.equal(signal?.aborted, true);
+  assert.equal(calls.length, 0);
+  t.mock.timers.tick(mod.LAYOUT_POLL_MS * 3);
+  assert.equal(asks, 2);
+});
+
+test("direct fallback response body may hang despite abort; valid empty stays unmapped", async (t) => {
+  const { mod, calls } = await client(() => Promise.resolve({
+    ok: true, json: () => new Promise(() => {}),
+  }));
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
+  const p = mod.courseLayout(liberty, { useServer: false, sleep: noPause });
+  for (let i = 0; i < 8; i++) await Promise.resolve();
+  assert.equal(calls.length, 1);
+  t.mock.timers.tick(mod.LAYOUT_POLL_BUDGET_MS);
+  assert.equal(layoutStatus(await p), "unavailable");
+  const empty = await client(() => json({ elements: [] }));
+  assert.equal(layoutStatus(await empty.mod.courseLayout(liberty, { useServer: false, sleep: noPause })), "unmapped");
 });
 
 // ---- the picture ----
