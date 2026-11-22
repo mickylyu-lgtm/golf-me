@@ -57,7 +57,12 @@ export function saveOnboardingDraft(draft: OnboardingDraft): void {
 
 export function clearOnboardingDraft(): void {
   if (typeof window === "undefined") return;
-  window.localStorage.removeItem(DRAFT_KEY);
+  try {
+    window.localStorage.removeItem(DRAFT_KEY);
+  } catch {
+    // Draft cleanup is best-effort, like reading and writing the draft.
+    // A blocked storage operation must not interrupt a completed setup.
+  }
 }
 
 export function hasOnboardingDraft(): boolean {

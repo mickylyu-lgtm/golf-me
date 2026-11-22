@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
 import { jsx, jsxs } from "react/jsx-runtime";
-import { optionalHandicap } from "../src/lib/onboardingDraft.ts";
+import { clearOnboardingDraft, optionalHandicap } from "../src/lib/onboardingDraft.ts";
 import type { OnboardingDraft } from "../src/lib/onboardingDraft.ts";
 
 const component = ts.transpileModule(
@@ -23,9 +23,16 @@ function find(node: unknown, match: (props: Element["props"]) => boolean): Eleme
 
 // Execute the real ProfileSetup render, input handlers and Continue action,
 // with only hooks, clock and outbound persistence mocked. No real accounts.
-function setup(isDemo: boolean, draft: OnboardingDraft | null, existingHandicap: number | null = null) {
+function setup(
+  isDemo: boolean,
+  draft: OnboardingDraft | null,
+  existingHandicap: number | null = null,
+  clearDraft = () => {},
+) {
   const states: unknown[] = [];
   const writes: Record<string, unknown>[] = [];
+  const navigation: string[] = [];
+  const timers: (() => void)[] = [];
   let index = 0;
   const nop = () => {};
   const value = () => "";
@@ -41,23 +48,25 @@ function setup(isDemo: boolean, draft: OnboardingDraft | null, existingHandicap:
           return [states[i], (next: unknown) => { states[i] = typeof next === "function" ? next(states[i]) : next; }];
         },
       };
-      case "react-router-dom": return { useNavigate: () => nop };
+      case "react-router-dom": return { useNavigate: () => (path: string) => navigation.push(path) };
       case "../context/DataContext": return { useData: () => ({ signUpNewGolfer: write }) };
       case "../context/AuthContext": return {
         useAuth: () => ({ isDemo, profileRow: { handicap: existingHandicap, vibes: [], budget_min: 0, budget_max: 0 }, saveProfile: write }),
       };
       case "../context/ToastContext": return { useToast: () => ({ showToast: nop }) };
       case "../i18n/LocaleContext": return { useLocale: () => ({ t: (key: string) => key }) };
-      case "../lib/onboardingDraft": return { loadOnboardingDraft: () => draft, optionalHandicap, clearOnboardingDraft: nop };
+      case "../lib/onboardingDraft": return { loadOnboardingDraft: () => draft, optionalHandicap, clearOnboardingDraft: clearDraft };
       case "../lib/useKeyboardHeight": return { useKeyboardHeight: () => 0 };
       case "../lib/providerPhoto": return { providerPhotoUrl: nop };
       default: return new Proxy({}, { get: () => value });
     }
   };
   const exports: { ProfileSetup?: () => Element } = {};
-  new Function("require", "exports", "setTimeout", component)(resolve, exports, nop);
+  new Function("require", "exports", "setTimeout", component)(resolve, exports, (task: () => void) => timers.push(task));
   return {
     writes,
+    navigation,
+    runTimers() { for (const task of timers.splice(0)) task(); },
     render() {
       index = 0;
       const view = exports.ProfileSetup!();
@@ -98,4 +107,25 @@ test("a blank signup draft does not overwrite a handicap already on an unfinishe
   await page.render().next.onClick();
   assert.equal(page.writes.length, 1);
   assert.equal(Object.hasOwn(page.writes[0], "handicap"), false);
+});
+
+test("successful Quick Profile still reaches Ready when local draft cleanup is denied", async () => {
+  const original = Object.getOwnPropertyDescriptor(globalThis, "window");
+  let removals = 0;
+  try {
+    Object.defineProperty(globalThis, "window", { configurable: true, value: {
+      location: { pathname: "/profile-setup" },
+      localStorage: { removeItem() { removals++; throw new DOMException("Blocked", "SecurityError"); } },
+    } });
+    const page = setup(false, readyDraft, null, clearOnboardingDraft);
+    await page.render().next.onClick();
+    assert.equal(page.writes.length, 1);
+    assert.equal(page.writes[0].has_onboarded, true);
+    assert.equal(removals, 1);
+    page.runTimers();
+    assert.deepEqual(page.navigation, ["/ready"]);
+  } finally {
+    if (original) Object.defineProperty(globalThis, "window", original);
+    else Reflect.deleteProperty(globalThis, "window");
+  }
 });

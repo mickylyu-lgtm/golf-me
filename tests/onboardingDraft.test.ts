@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { loadOnboardingDraft, optionalHandicap, saveOnboardingDraft, type OnboardingDraft } from "../src/lib/onboardingDraft.ts";
+import { clearOnboardingDraft, loadOnboardingDraft, optionalHandicap, saveOnboardingDraft, type OnboardingDraft } from "../src/lib/onboardingDraft.ts";
 
 const draft: OnboardingDraft = {
   name: "Synthetic Golfer", is18Plus: true, areaLabel: "Synthetic Town",
@@ -12,6 +12,7 @@ test("onboarding draft resumes normally and storage failures never escape to the
   const values = new Map<string, string>();
   let blocked = false;
   const storage = {
+    removeItem(key: string) { values.delete(key); },
     getItem: (key: string) => values.get(key) ?? null,
     setItem(key: string, value: string) {
       if (blocked) throw new DOMException("Full", "QuotaExceededError");
@@ -28,13 +29,17 @@ test("onboarding draft resumes normally and storage failures never escape to the
     blocked = false;
     saveOnboardingDraft({ ...draft, name: "New name" });
     assert.equal(loadOnboardingDraft()?.name, "New name", "later writes recover");
+    clearOnboardingDraft();
+    assert.equal(loadOnboardingDraft(), null, "successful cleanup removes the draft");
     Object.defineProperty(globalThis, "window", { configurable: true, value: {
       get localStorage() { throw new DOMException("Blocked", "SecurityError"); },
     } });
     assert.doesNotThrow(() => saveOnboardingDraft(draft));
     assert.equal(loadOnboardingDraft(), null);
+    assert.doesNotThrow(() => clearOnboardingDraft());
     Reflect.deleteProperty(globalThis, "window");
     assert.doesNotThrow(() => saveOnboardingDraft(draft));
+    assert.doesNotThrow(() => clearOnboardingDraft());
   } finally {
     if (original) Object.defineProperty(globalThis, "window", original);
     else Reflect.deleteProperty(globalThis, "window");
