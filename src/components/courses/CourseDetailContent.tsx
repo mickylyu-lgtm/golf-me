@@ -5,6 +5,7 @@ import { useLocale } from "../../i18n/LocaleContext";
 import { formatDistanceMiles } from "../../lib/geo";
 import type { DisplayCourseResult } from "../../lib/useCourseSearch";
 import { CourseMedia } from "./CourseMedia";
+import { courseTeeRatingsSource } from "../../lib/bayonneOfficialTeeRatings";
 import { CourseTeeRatings } from "./CourseTeeRatings";
 import { useAuth } from "../../context/AuthContext";
 import { Button } from "../ui/Button";
@@ -16,7 +17,13 @@ import { Button } from "../ui/Button";
 export function CourseDetailContent({ course }: { course: DisplayCourseResult }) {
   const { t } = useLocale();
   const navigate = useNavigate();
-  const { isDemo } = useAuth();
+  const { isDemo, isAuthenticated } = useAuth();
+  const ratingsSource = courseTeeRatingsSource(course.id, {
+    signedIn: isAuthenticated,
+    isDemo,
+    bayonnePilot: import.meta.env.VITE_BAYONNE_OFFICIAL_TEE_RATINGS_ENABLED,
+    provider: import.meta.env.VITE_COURSE_TEE_RATINGS_ENABLED === "true",
+  });
 
   const hasCoords = course.lat != null && course.lng != null;
 
@@ -58,7 +65,7 @@ export function CourseDetailContent({ course }: { course: DisplayCourseResult })
 
       <CourseMedia course={course} />
 
-      {import.meta.env.VITE_COURSE_TEE_RATINGS_ENABLED === "true" && !isDemo && course.id && <CourseTeeRatings key={course.id ?? course.name} courseId={course.id} enabled={!isDemo} />}
+      {ratingsSource && course.id && <CourseTeeRatings key={course.id} courseId={course.id} enabled dataSource={ratingsSource} />}
 
       <div className="flex flex-col gap-2.5">
         <Button fullWidth icon={<Flag size={15} />} onClick={hostHere}>

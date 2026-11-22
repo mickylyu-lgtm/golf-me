@@ -1,9 +1,11 @@
+import { isBayonneOfficialCourse } from "./bayonneOfficialTeeRatings";
 import { supabase } from "./supabase";
 import type { CourseTeeRatings } from "../../supabase/functions/course-tee-ratings/contract";
 
 export type { CourseTeeRatings, CourseTeeRating, TeeRatingSet } from "../../supabase/functions/course-tee-ratings/contract";
 
 export async function loadCourseTeeRatings(courseId: string): Promise<CourseTeeRatings | null> {
+  if (isBayonneOfficialCourse(courseId)) return null;
   const { data, error } = await supabase.functions.invoke<CourseTeeRatings | null>("course-tee-ratings", {
     body: { courseId },
   });

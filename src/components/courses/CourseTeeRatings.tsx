@@ -3,6 +3,8 @@ import { ChevronDown, ChevronUp, Flag } from "lucide-react";
 import { useLocale } from "../../i18n/LocaleContext";
 import { loadCourseTeeRatings, type CourseTeeRatings as Ratings, type TeeRatingSet } from "../../lib/courseTeeRatings";
 
+import { bayonneOfficialTeeRatings } from "../../lib/bayonneOfficialTeeRatings";
+
 const available = (r: TeeRatingSet) => r.course != null || r.slope != null || r.bogey != null;
 type Segment = "overall" | "front" | "back";
 
@@ -74,26 +76,27 @@ export function TeeRatingsPanel({ data }: { data: Ratings }) {
   </div>;
 }
 
-export function CourseTeeRatings({ courseId, enabled }: { courseId?: string; enabled: boolean }) {
+export function CourseTeeRatings({ courseId, enabled, dataSource = "provider" }: { courseId?: string; enabled: boolean; dataSource?: "bayonne" | "provider" }) {
   const { t } = useLocale();
   const id = useId();
   const [open, setOpen] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [result, setResult] = useState<{ id: string; data: Ratings | null; failed: boolean } | null>(null);
   useEffect(() => {
-    if (!open || !enabled || !courseId) return;
+    if (!open || !enabled || !courseId || dataSource !== "provider") return;
     let cancelled = false;
     setResult(null);
     loadCourseTeeRatings(courseId).then((data) => { if (!cancelled) setResult({ id: courseId, data, failed: false }); }, () => { if (!cancelled) setResult({ id: courseId, data: null, failed: true }); });
     return () => { cancelled = true; };
-  }, [open, enabled, courseId, attempt]);
+  }, [open, enabled, courseId, attempt, dataSource]);
   const current = result?.id === courseId ? result : null;
+  const official = open && enabled && dataSource === "bayonne" ? bayonneOfficialTeeRatings(courseId) : null;
   return <section className="rounded-2xl border border-slate-200 bg-white p-4 dark:bg-slate-900">
     <button type="button" className="flex min-h-11 w-full items-center justify-between gap-3 text-left" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}>
       <span className="flex items-center gap-2 font-bold text-slate-900"><Flag size={18} className="text-fairway-700" />{t("teeRatings.title")}</span>{open ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
     </button>
     {open && <div id={id} className="mt-3" aria-live="polite">
-      {!enabled || !courseId ? <p className="text-sm text-slate-500">{t("teeRatings.unavailable")}</p> : !current ? <p role="status" className="text-sm text-slate-500">{t("teeRatings.loading")}</p> : current.data?.tees.length ? <TeeRatingsPanel key={courseId} data={current.data} /> : <div className="space-y-3"><p className="text-sm text-slate-500">{t(current.failed ? "teeRatings.failed" : "teeRatings.unavailable")}</p>{current.failed && <button type="button" className="min-h-11 rounded-xl border border-slate-200 px-4 font-semibold text-fairway-800" onClick={() => setAttempt((n) => n + 1)}>{t("teeRatings.retry")}</button>}</div>}
+      {!enabled || !courseId ? <p className="text-sm text-slate-500">{t("teeRatings.unavailable")}</p> : dataSource === "bayonne" ? official ? <TeeRatingsPanel key={courseId} data={official} /> : <p className="text-sm text-slate-500">{t("teeRatings.unavailable")}</p> : !current ? <p role="status" className="text-sm text-slate-500">{t("teeRatings.loading")}</p> : current.data?.tees.length ? <TeeRatingsPanel key={courseId} data={current.data} /> : <div className="space-y-3"><p className="text-sm text-slate-500">{t(current.failed ? "teeRatings.failed" : "teeRatings.unavailable")}</p>{current.failed && <button type="button" className="min-h-11 rounded-xl border border-slate-200 px-4 font-semibold text-fairway-800" onClick={() => setAttempt((n) => n + 1)}>{t("teeRatings.retry")}</button>}</div>}
     </div>}
   </section>;
 }
