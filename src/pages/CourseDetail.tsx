@@ -15,6 +15,8 @@ export interface CourseDetailState {
   fromRoundId?: string;
 }
 
+const COURSE_DETAIL_TIMEOUT_MS = 12_000;
+
 // Course page for every nearby course. Micky, 2026-10-23: every course should open a page with at
 // least an image. GolfMe has no booking link for these, so the page never
 // pretends to: Directions, a plain web search for tee times, and Host a
@@ -26,44 +28,65 @@ export interface CourseDetailState {
 // link is read back from public.courses by id.
 export function CourseDetail() {
   const { courseId } = useParams<{ courseId: string }>();
-  const { state } = useLocation() as { state: CourseDetailState | null };
-  const { t } = useLocale();
+  const { state, key } = useLocation() as { state: CourseDetailState | null; key: string };
   const { isDemo } = useAuth();
+  // React Router can reuse the same route when the ID or history entry changes.
+  // Never let the old title/actions or its in-flight result follow that navigation.
+  return <CourseDetailPage key={JSON.stringify([key, courseId, isDemo])} courseId={courseId} state={state} isDemo={isDemo} />;
+}
+
+function CourseDetailPage({ courseId, state, isDemo }: { courseId?: string; state: CourseDetailState | null; isDemo: boolean }) {
+  const { t } = useLocale();
   const navigate = useNavigate();
-  const [course, setCourse] = useState<DisplayCourseResult | null>(state?.course ?? null);
-  const [missing, setMissing] = useState(false);
+  const handedCourse = state?.course;
+  const [course, setCourse] = useState<DisplayCourseResult | null>(
+    handedCourse && (handedCourse.id ?? "demo") === courseId ? handedCourse : null,
+  );
+  const [status, setStatus] = useState<"loading" | "missing" | "failed">("loading");
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    if (course || isDemo || !courseId) {
-      if (!course) setMissing(true);
+    if (course) return;
+    if (isDemo || !courseId || courseId === "demo") {
+      setStatus("missing");
       return;
     }
-    let cancelled = false;
-    void Promise.resolve(
-      supabase.from("courses").select("id, name, city, region, country, latitude, longitude").eq("id", courseId).maybeSingle(),
-    ).then(({ data, error }) => {
-      if (cancelled) return;
-      if (error || !data) {
-        setMissing(true);
-        return;
-      }
-      setCourse({
-        id: data.id,
-        name: data.name,
-        area: [data.city, data.region].filter(Boolean).join(", ") || undefined,
-        country: data.country ?? undefined,
-        lat: data.latitude,
-        lng: data.longitude,
-      });
-    });
-    return () => {
-      cancelled = true;
+    const controller = new AbortController();
+    const expire = () => {
+      controller.abort();
+      setStatus("failed");
     };
-  }, [course, courseId, isDemo]);
+    const deadline = window.setTimeout(expire, COURSE_DETAIL_TIMEOUT_MS);
+    void (async () => {
+      try {
+        const { data, error } = await supabase.from("courses").select("id, name, city, region, country, latitude, longitude")
+          .eq("id", courseId).abortSignal(controller.signal).maybeSingle();
+        if (controller.signal.aborted) return;
+        if (error) setStatus("failed");
+        else if (!data) setStatus("missing");
+        else setCourse({
+          id: data.id,
+          name: data.name,
+          area: [data.city, data.region].filter(Boolean).join(", ") || undefined,
+          country: data.country ?? undefined,
+          lat: data.latitude,
+          lng: data.longitude,
+        });
+      } catch {
+        if (!controller.signal.aborted) setStatus("failed");
+      } finally {
+        window.clearTimeout(deadline);
+      }
+    })();
+    return () => {
+      window.clearTimeout(deadline);
+      controller.abort();
+    };
+  }, [course, courseId, isDemo, attempt]);
 
+  const missing = status === "missing";
   const roundPath = originatingRoundPath(state?.fromRoundId);
   if (missing && !roundPath) return <Navigate to="/courses/nearby" replace />;
-  if (!course && !missing) return <GolfMeLoader size="sm" />;
 
   return (
     <div className="flex flex-col gap-5 pb-6">
@@ -73,7 +96,13 @@ export function CourseDetail() {
       >
         <ArrowLeft size={16} /> {t("common.back")}
       </button>
-      {course ? <CourseDetailContent course={course} /> : <p role="status" className="text-sm text-slate-500">{t("coursePage.unavailable")}</p>}
+      {course ? <CourseDetailContent course={course} /> : status === "loading" ? <GolfMeLoader size="sm" /> : (
+        <div className="flex flex-col items-start gap-2">
+          <p role="status" className="text-sm text-slate-500">{t("coursePage.unavailable")}</p>
+          {status === "failed" && <button type="button" className="min-h-11 rounded-xl border border-slate-200 px-4 font-semibold text-fairway-800"
+            onClick={() => { setStatus("loading"); setAttempt((n) => n + 1); }}>{t("loading.retry")}</button>}
+        </div>
+      )}
     </div>
   );
 }
