@@ -249,7 +249,7 @@ export interface GolfCall {
   distanceMiles?: number; // undefined when the course's coordinates aren't known -- never fabricate a value
   dateISO: string; // date of the round
   timeLabel: string; // e.g. "10:00 AM" or "Morning (8-10 AM)"
-  estimatedPricePerPerson: number;
+  estimatedPricePerPerson: number | null;
   totalSpots: number; // total players including host
   joinedGolferIds: string[]; // includes host at index 0
   pendingRequestIds: string[];

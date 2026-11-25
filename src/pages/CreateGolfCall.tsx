@@ -376,7 +376,7 @@ export function CreateGolfCall() {
         distanceMiles: distanceMiles === "" ? 0 : distanceMiles,
         dateISO,
         timeLabel: timeLabel.trim(),
-        estimatedPricePerPerson: price === "" ? 0 : price,
+        estimatedPricePerPerson: price === "" ? null : price,
         totalSpots,
         joinMode,
         skillLevel: effectiveSkillLevel,

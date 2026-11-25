@@ -1,3 +1,5 @@
+import { realRoundToGolfCall } from "../src/lib/golfCall.ts";
+import type { RoundRow } from "../src/lib/golfCall.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -66,4 +68,15 @@ test("only actual satellite imagery receives the satellite badge",()=>{
  assert.doesNotMatch(render({course:"Unknown Course"}),/courseImage.satellite/);
  assert.match(render({course:"Aerial Course"}),/courseImage.satellite/);
  assert.match(render({course:"Los Feliz 3-Par Golf Course",courseLat:34.1246158,courseLng:-118.2703437}),/courseImage.satellite/);
+});
+
+test("a blank host estimate stays absent through real-round mapping and the Home card", () => {
+ const round = { id: "round", host_user_id: "friend", course_name: "Known Course", course_area_label: "Jersey City", date_iso: "2026-12-12", tee_time_label: "1:30 PM", holes: 9, total_spots: 4, status: "open" } as RoundRow;
+ for (const price of [null, 0, 52]) {
+  const mapped = realRoundToGolfCall({ ...round, estimated_price_per_person: price }, []);
+  assert.equal(mapped.estimatedPricePerPerson, price);
+  const html = render(mapped);
+  if (price === null) assert.doesNotMatch(html, /~[$]/);
+  else assert.ok(html.includes("~$" + price));
+ }
 });

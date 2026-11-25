@@ -46,7 +46,7 @@ export function RoundStripCard({ call }: { call: GolfCall }) {
   const openSpots = Math.max(0, call.totalSpots - call.joinedGolferIds.length);
   const participants = [...new Set(call.joinedGolferIds)].filter((id) => id !== call.hostId).map(getGolfer).filter((g) => Boolean(g));
   const canShare = !isDemo && call.hostId === currentUser.id && call.status !== "completed" && call.status !== "cancelled";
-  const price = Number.isFinite(call.estimatedPricePerPerson) && call.estimatedPricePerPerson >= 0 ? formatMoney(call.estimatedPricePerPerson) : null;
+  const price = call.estimatedPricePerPerson !== null && Number.isFinite(call.estimatedPricePerPerson) && call.estimatedPricePerPerson >= 0 ? formatMoney(call.estimatedPricePerPerson) : null;
   return (
     <article className={`flex w-[calc(100vw-3rem)] max-w-sm shrink-0 snap-start flex-col overflow-hidden sm:w-80 ${CLICKABLE_CARD_CLASS}`}>
       <button

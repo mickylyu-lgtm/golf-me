@@ -172,6 +172,7 @@ export const es: Record<TranslationKey, string> = {
   "distance.bucket.15_to_25": "A 15–25 mi",
   "distance.bucket.25_to_50": "A 25–50 mi",
   "distance.bucket.over_50": "A más de 50 mi",
+  "golfCallDetail.priceNotProvided": "El anfitrión no indicó un precio",
   "golfCallDetail.pricePerPerson": "{price}/persona",
   "trust.verifiedGolfer": "Golfista Verificado",
   "trust.founder": "Fundador",

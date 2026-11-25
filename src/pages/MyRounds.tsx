@@ -106,7 +106,7 @@ export function MyRounds() {
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     <Badge tone={VIBE_TONE[c.vibe]}>{vibeLabel(c.vibe, t)}</Badge>
-                    <Badge tone="outline">{t("golfCallDetail.pricePerPerson", { price: formatMoney(c.estimatedPricePerPerson) })}</Badge>
+                    <Badge tone="outline">{c.estimatedPricePerPerson === null ? t("golfCallDetail.priceNotProvided") : t("golfCallDetail.pricePerPerson", { price: formatMoney(c.estimatedPricePerPerson) })}</Badge>
                     <Badge tone="outline" icon={<Users size={11} />}>
                       {openSpots === 1
                         ? t("myGolf.oneMoreAndSet")

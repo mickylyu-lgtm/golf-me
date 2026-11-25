@@ -171,7 +171,7 @@ export function matchesAdvancedFilters(
   call: Pick<GolfCall, "estimatedPricePerPerson" | "skillLevel" | "vibe" | "walkOrCart">,
   f: AdvancedRoundFilters,
 ): boolean {
-  if (f.budgetMax !== null && call.estimatedPricePerPerson > f.budgetMax) return false;
+  if (f.budgetMax !== null && call.estimatedPricePerPerson !== null && call.estimatedPricePerPerson > f.budgetMax) return false;
   if (f.skill && call.skillLevel !== f.skill && call.skillLevel !== "Any Skill Level") return false;
   if (f.vibe && call.vibe !== f.vibe) return false;
   if (f.walk && f.walk !== "Either" && call.walkOrCart !== f.walk && call.walkOrCart !== "Either") return false;

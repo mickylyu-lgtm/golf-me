@@ -87,7 +87,7 @@ export function GolfCalls({ embedded = false }: GolfCallsProps) {
     if (when) list = list.filter((c) => matchesWhen(c, when, customDate));
 
     if (intent === "join") list = list.filter((c) => c.totalSpots - c.joinedGolferIds.length > 0);
-    if (budgetMax !== null) list = list.filter((c) => c.estimatedPricePerPerson <= budgetMax);
+    if (budgetMax !== null) list = list.filter((c) => c.estimatedPricePerPerson === null || c.estimatedPricePerPerson <= budgetMax);
     if (skill) list = list.filter((c) => c.skillLevel === skill || c.skillLevel === "Any Skill Level");
     if (vibeFilter) list = list.filter((c) => c.vibe === vibeFilter);
     if (walk && walk !== "Either") list = list.filter((c) => c.walkOrCart === walk || c.walkOrCart === "Either");

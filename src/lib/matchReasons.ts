@@ -75,12 +75,12 @@ export function callMatchReasons(call: GolfCall, breakdown: CompatibilityBreakdo
       positive: breakdown.skill >= 70,
       text: breakdown.skill >= 70 ? t("matchReason.similarSkill") : t("matchReason.differentSkill"),
     },
-    {
-      key: "budget",
+    ...(call.estimatedPricePerPerson === null ? [] : [{
+      key: "budget" as const,
       score: breakdown.budget,
       positive: breakdown.budget >= 70,
       text: breakdown.budget >= 70 ? t("matchReason.withinBudget") : t("matchReason.outsideBudget"),
-    },
+    }]),
     {
       key: "vibe",
       score: breakdown.vibe,

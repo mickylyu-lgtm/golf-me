@@ -172,6 +172,7 @@ export const ko: Record<TranslationKey, string> = {
   "distance.bucket.15_to_25": "15~25마일",
   "distance.bucket.25_to_50": "25~50마일",
   "distance.bucket.over_50": "50마일 이상",
+  "golfCallDetail.priceNotProvided": "호스트가 가격을 입력하지 않았습니다",
   "golfCallDetail.pricePerPerson": "{price}/인",
   "trust.verifiedGolfer": "인증된 골퍼",
   "trust.founder": "창업자",

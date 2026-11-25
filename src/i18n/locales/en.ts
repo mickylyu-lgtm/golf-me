@@ -184,6 +184,7 @@ export const en = {
   "distance.bucket.15_to_25": "15–25 mi",
   "distance.bucket.25_to_50": "25–50 mi",
   "distance.bucket.over_50": "50+ mi",
+  "golfCallDetail.priceNotProvided": "Not provided by host",
   "golfCallDetail.pricePerPerson": "{price}/person",
   "trust.verifiedGolfer": "Verified Golfer",
   "trust.founder": "Founder",

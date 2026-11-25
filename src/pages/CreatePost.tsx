@@ -783,7 +783,7 @@ function CreatePostForOwner({ draftOwner, allowPrefill }: { draftOwner: string |
             <div>
               <p className="font-semibold text-slate-800">{selectedCall.course}</p>
               <p className="text-xs text-slate-500">
-                {formatDate(selectedCall.dateISO, locale, t)} · {selectedCall.timeLabel} · {formatMoney(selectedCall.estimatedPricePerPerson)}
+                {formatDate(selectedCall.dateISO, locale, t)} · {selectedCall.timeLabel}{selectedCall.estimatedPricePerPerson !== null && ` · ${formatMoney(selectedCall.estimatedPricePerPerson)}`}
               </p>
             </div>
             <button onClick={removeRound} aria-label={t("composer.remove")} className="-m-1.5 rounded-full p-2.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
@@ -810,7 +810,7 @@ function CreatePostForOwner({ draftOwner, allowPrefill }: { draftOwner: string |
                   <div className="flex-1">
                     <p className="font-semibold text-slate-800">{c.course}</p>
                     <p className="text-xs text-slate-500">
-                      {formatDate(c.dateISO, locale, t)} · {c.timeLabel} · {formatMoney(c.estimatedPricePerPerson)}
+                      {formatDate(c.dateISO, locale, t)} · {c.timeLabel}{c.estimatedPricePerPerson !== null && ` · ${formatMoney(c.estimatedPricePerPerson)}`}
                     </p>
                   </div>
                 </button>

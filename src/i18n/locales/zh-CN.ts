@@ -172,6 +172,7 @@ export const zhCN: Record<TranslationKey, string> = {
   "distance.bucket.15_to_25": "15–25 英里",
   "distance.bucket.25_to_50": "25–50 英里",
   "distance.bucket.over_50": "50 英里以上",
+  "golfCallDetail.priceNotProvided": "发起人未提供价格",
   "golfCallDetail.pricePerPerson": "{price}/人",
   "trust.verifiedGolfer": "已认证球友",
   "trust.founder": "创始人",

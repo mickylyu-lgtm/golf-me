@@ -119,11 +119,8 @@ export function GolfCallCard({ call, showMatch = true, showSharedPreferences = t
         <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs font-medium text-slate-500">
           <span className={isSoon ? "font-bold text-fairway-700" : ""}>{formatCompactDay(call.dateISO, locale, t)}</span>
           <span>· {call.timeLabel}</span>
-          <span className="text-slate-300">·</span>
-          <span>
-            {call.distanceMiles !== undefined && `${t("golfCallCard.miAway", { miles: roundedMiles(call.distanceMiles) })} · `}~
-            {formatMoney(call.estimatedPricePerPerson)}
-          </span>
+          {call.distanceMiles !== undefined && <span>· {t("golfCallCard.miAway", { miles: roundedMiles(call.distanceMiles) })}</span>}
+          {call.estimatedPricePerPerson !== null && <span>· ~{formatMoney(call.estimatedPricePerPerson)}</span>}
         </p>
       </div>
 

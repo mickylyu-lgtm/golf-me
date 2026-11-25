@@ -267,9 +267,9 @@ export function GolfCallDetail() {
             <Wallet size={12} /> {t("golfCallDetail.estimatedPrice")}
           </p>
           <p className="mt-1 font-bold text-slate-800">
-            {t("golfCallDetail.pricePerPerson", { price: formatMoney(call.estimatedPricePerPerson) })}
+            {call.estimatedPricePerPerson === null ? t("golfCallDetail.priceNotProvided") : t("golfCallDetail.pricePerPerson", { price: formatMoney(call.estimatedPricePerPerson) })}
           </p>
-          <p className="text-sm text-slate-500">{t("golfCallDetail.payAtCourse")}</p>
+          {call.estimatedPricePerPerson !== null && <p className="text-sm text-slate-500">{t("golfCallDetail.payAtCourse")}</p>}
         </div>
       </div>
 

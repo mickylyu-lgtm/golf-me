@@ -210,7 +210,7 @@ export function realRoundToGolfCall(round: RoundRow, participants: ParticipantRo
     distanceMiles,
     dateISO: round.date_iso,
     timeLabel: round.tee_time_label,
-    estimatedPricePerPerson: round.estimated_price_per_person ?? 0,
+    estimatedPricePerPerson: round.estimated_price_per_person,
     totalSpots: round.total_spots,
     joinedGolferIds,
     pendingRequestIds: [], // request-to-join is deferred for real rounds this phase

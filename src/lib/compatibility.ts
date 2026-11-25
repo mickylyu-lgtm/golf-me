@@ -129,6 +129,7 @@ function callSkillScore(user: GolferProfile, call: GolfCall): number {
 
 function callBudgetScore(user: GolferProfile, call: GolfCall): number {
   if (user.noBudgetPreference) return 90;
+  if (call.estimatedPricePerPerson === null) return 50;
   if (call.estimatedPricePerPerson >= user.budgetMin && call.estimatedPricePerPerson <= user.budgetMax) return 100;
   const gap =
     call.estimatedPricePerPerson < user.budgetMin

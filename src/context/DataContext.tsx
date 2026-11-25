@@ -107,7 +107,7 @@ export interface CreateGolfCallInput {
   distanceMiles: number;
   dateISO: string;
   timeLabel: string;
-  estimatedPricePerPerson: number;
+  estimatedPricePerPerson: number | null;
   totalSpots: number;
   joinMode: JoinMode;
   skillLevel: SkillFilter;
