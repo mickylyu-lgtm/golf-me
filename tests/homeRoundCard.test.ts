@@ -22,7 +22,7 @@ const modules: Record<string, unknown> = {
  "../ui/Avatar": {Avatar:()=>createElement("span",{"data-avatar":true})},
  "../courses/CourseHero": {GenericCourseIllustration:()=>createElement("svg",{"data-fallback":true})},
  "../ui/cardStyles": {CLICKABLE_CARD_CLASS:"card"},
- "../../lib/handpickedCourses":{matchHandpickedCourse:(name:string)=>name==="Known Course"?{heroImageUrl:"/verified.jpg",heroImageCredit:"Verified credit"}:undefined},
+ "../../lib/handpickedCourses":{matchHandpickedCourse:(name:string)=>name==="Known Course"?{heroImageUrl:"/verified.jpg",heroImageCredit:"Verified credit",heroImageKind:"photo"}:name==="Aerial Course"?{heroImageUrl:"/aerial.jpg",heroImageCredit:"Aerial credit",heroImageKind:"satellite"}:undefined},
  "../../lib/bookingStatus":{bookingStatusView:(call:any)=>({visible:true,labelKey:call.bookingStatus==="booked"?"booked-host-reported":"not-provided"})},
  "../../lib/format":{formatDate:()=>"Saturday, Dec 12",formatMoney:(n:number)=>"$"+n},
  "../../lib/geo":{roundedMiles:(n:number)=>Math.round(n)},
@@ -59,4 +59,11 @@ test("missing, invalid and unsupported coordinates stay honest; photos keep prio
 test("illustration remains under images throughout loading and unavailable coverage",()=>{
  assert.match(source, /<GenericCourseIllustration \/>\s*\{showImage/);
  assert.match(source, /absolute inset-0 h-full w-full object-cover/);
+});
+
+test("only actual satellite imagery receives the satellite badge",()=>{
+ assert.doesNotMatch(render(),/courseImage.satellite/);
+ assert.doesNotMatch(render({course:"Unknown Course"}),/courseImage.satellite/);
+ assert.match(render({course:"Aerial Course"}),/courseImage.satellite/);
+ assert.match(render({course:"Los Feliz 3-Par Golf Course",courseLat:34.1246158,courseLng:-118.2703437}),/courseImage.satellite/);
 });

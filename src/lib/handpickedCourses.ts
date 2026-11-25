@@ -10,6 +10,7 @@ export interface HandpickedCourse {
   // after verifying a real source and its license. CourseHero falls back to
   // a generic illustration when this is absent, never a fake "photo".
   heroImageUrl?: string;
+  heroImageKind?: "photo" | "satellite";
   roundPhoto?: { url: string; credit: string; sourceUrl: string; licenseUrl: string };
   heroImageCredit?: string; // shown alongside the image, per its license's attribution requirement
 }
@@ -29,6 +30,7 @@ export const HANDPICKED_COURSES: HandpickedCourse[] = [
     // Real aerial: USGS NAIP orthoimagery, public domain (US federal work),
     // exported 2026-10-23 from imagery.nationalmap.gov.
     heroImageUrl: "/courses/skyway-aerial.jpg",
+    heroImageKind: "satellite",
     heroImageCredit: "Aerial: USGS NAIP (public domain)",
   },
   {
@@ -37,6 +39,7 @@ export const HANDPICKED_COURSES: HandpickedCourse[] = [
     // Wikidata Q5318678 P18: Wikimedia Commons file, CC BY-SA 3.0,
     // attributed to cjz208 on English Wikipedia.
     heroImageUrl: "https://upload.wikimedia.org/wikipedia/commons/b/b0/Dyker_Beach_Golf_Course.JPG",
+    heroImageKind: "photo",
     heroImageCredit: "Photo: cjz208 / Wikimedia Commons (CC BY-SA 3.0)",
   },
 ];

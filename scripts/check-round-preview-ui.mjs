@@ -12,12 +12,12 @@ const version=before?'before':'after';
 const base='0e8ce6adf0c1374c089732e25f6493a5469b0642';
 const original=before?execFileSync('git',['show',base+':src/pages/Home.tsx'],{encoding:'utf8'}):null;
 const oldEnglish=before?execFileSync('git',['show',base+':src/i18n/locales/en.ts'],{encoding:'utf8'}):null;
-const origin='http://127.0.0.1:5199';
+const origin='http://127.0.0.1:5256';
 const mock=resolve('scripts/round-preview-context.tsx');
 const server=await createServer({
  cacheDir:'.vite-home.local',
  resolve:{alias:[{find:/.*context\/(AuthContext|DataContext|ModerationContext|RealCommunityContext|TutorialContext|FirstRoundPromptContext)$/,replacement:mock},{find:/.*lib\/useFollowingFeed$/,replacement:mock}]},
- server:{host:'127.0.0.1',port:5199,strictPort:true,fs:{allow:[process.cwd(),await realpath('node_modules')]}},
+ server:{host:'127.0.0.1',port:5256,strictPort:true,fs:{allow:[process.cwd(),await realpath('node_modules')]}},
  plugins:[{name:'home-baseline',enforce:'pre',transform(source,id){if(original&&id.split('?')[0].endsWith('/src/pages/Home.tsx'))return original;if(oldEnglish&&id.split('?')[0].endsWith('/src/i18n/locales/en.ts'))return oldEnglish;}},{name:'home-fixture',configureServer(s){s.middlewares.use(async(req,res,next)=>{if(!req.url?.startsWith('/home?'))return next();res.setHeader('Content-Type','text/html');res.end(await s.transformIndexHtml(req.url,'<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><div id="root"></div><script type="module" src="/scripts/round-preview-fixture.tsx"></script></body></html>'));});}}]
 });
 await server.listen();
@@ -29,8 +29,8 @@ try{
   const page=await browser.newPage({viewport:{width,height:950}});
   let failPhoto=false,failAerial=false,failTiles=false;let tilesRequested=0;
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
-  await page.route('**/*',r=>{const url=r.request().url();if(url.startsWith('https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/')){tilesRequested++;return failTiles?r.abort():r.continue();}if((failPhoto&&url.endsWith('/skyway-round-photo.webp'))||(failAerial&&url.endsWith('/skyway-aerial.jpg')))return r.abort();return url.startsWith(origin+'/')||url.startsWith('data:')?r.continue():r.abort();});
-  async function open(scenario){await page.goto(origin+'/home?scenario='+scenario+'&version=Round-card-preview');await page.locator('#home-rounds-strip').waitFor();}
+  await page.route('**/*',r=>{const url=r.request().url();if(url.startsWith('https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/')){tilesRequested++;return failTiles?r.abort():r.fulfill({path:resolve('public/courses/skyway-aerial.jpg'),contentType:'image/jpeg'});}if((failPhoto&&url.endsWith('/skyway-round-photo.webp'))||(failAerial&&url.endsWith('/skyway-aerial.jpg')))return r.abort();return url.startsWith(origin+'/')||url.startsWith('data:')?r.continue():r.abort();});
+  async function open(scenario){await page.goto(origin+'/home?scenario='+scenario+'&version=Course%20Journal');await page.locator('#home-rounds-strip').waitFor();}
   await open('mixed');
   const card=page.locator('article').first();
   assert.equal(await card.locator('svg[aria-label="Golf course illustration"]').count(),1);
@@ -43,10 +43,12 @@ try{
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   await page.locator('article img').evaluateAll(async imgs => { await Promise.all(imgs.map(img => img.decode().catch(() => {}))); });
   await page.screenshot({path:'artifacts.local/home-round-preview-'+width+'.png',fullPage:false});
+  await card.screenshot({path:'artifacts.local/golfme-course-journal-card-'+width+'.png'});
+  assert.equal(await card.getByText('Satellite',{exact:true}).count(),0);
   assert.equal(await card.getByRole('link',{name:'CC BY-SA 4.0',exact:true}).getAttribute('href'),'https://creativecommons.org/licenses/by-sa/4.0/');
   assert.ok((await card.locator('img').getAttribute('src')).endsWith('skyway-round-photo.webp'));
   await card.getByRole('button').click();assert.ok(page.url().endsWith('/golf-calls/preview-round'));
-  failPhoto=true;await open('mixed');await card.locator('img[src="/courses/skyway-aerial.jpg"]').waitFor();assert.ok((await card.innerText()).includes('Aerial: USGS'));assert.equal(await card.getByRole('link').count(),0);
+  failPhoto=true;await open('mixed');await card.locator('img[src="/courses/skyway-aerial.jpg"]').waitFor();assert.ok((await card.innerText()).includes('Aerial: USGS'));await card.getByText('Satellite',{exact:true}).waitFor();assert.equal(await card.getByRole('link').count(),0);
   failAerial=true;await open('mixed');await card.getByRole('img',{name:'Golf course illustration',includeHidden:true}).waitFor();await page.waitForFunction(()=>document.querySelectorAll('article img').length===0);assert.equal(await card.locator('img').count(),0);failPhoto=false;failAerial=false;
   await open('fallback');
   assert.equal(await card.locator('img').count(),0);
@@ -57,7 +59,7 @@ try{
   await open('missing');assert.ok(!(await card.innerText()).includes('hosted by'));
   await open('aerial');await card.locator('img').first().waitFor();
   await card.locator('img').evaluateAll(async imgs=>Promise.all(imgs.map(img=>img.decode())));
-  assert.ok((await card.innerText()).includes('Los Feliz 3-Par Golf Course'));assert.ok((await card.innerText()).includes('USGS The National Map'));
+  assert.ok((await card.innerText()).includes('Los Feliz 3-Par Golf Course'));assert.ok((await card.innerText()).includes('USGS The National Map'));await card.getByText('Satellite',{exact:true}).waitFor();
   assert.ok(tilesRequested>0 && tilesRequested<=6);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   await page.screenshot({path:'artifacts.local/los-feliz-aerial-'+width+'.png',fullPage:false});
   failTiles=true;await open('aerial');await card.getByRole('img',{name:'Golf course illustration',includeHidden:true}).waitFor();await page.waitForFunction(()=>document.querySelectorAll('article img').length===0);assert.equal(await card.locator('img').count(),0);

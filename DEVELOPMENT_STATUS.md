@@ -1,3 +1,9 @@
+## November 24: Course Journal Home round cards
+
+Home's existing round strip uses the approved photo-first Course Journal layout: larger venue media, scannable date/time and course name, and a separate open-places and estimated-price row. Existing status, people, detail and host-sharing behavior is unchanged. Real photos remain preferred with attribution; aerial imagery is explicitly labeled, while the generic illustration never claims to show the venue. No new imagery API, backend, Simulator, or native build changes.
+
+Verified the actual Home and card components at 390 and 1100 px with synthetic round data, including tap routing, imagery attribution and fallbacks, booking labels and no horizontal page overflow. The physical iPhone remains untested.
+
 ## November 22: matched GolfCore Tee Ratings pilot (release candidate)
 
 Course Details and the shared map sheet support nine existing courses with 42 independently matched 18-hole tee/category records. Exact GolfMe IDs only, real signed-in accounts, and no new provider calls, data migration, or native release. Existing Bayonne official figures and fallback provider configuration are unchanged. Unverified alternatives, nine-hole segments and Bogey are not included.
