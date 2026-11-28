@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {simulatorCityForLocation,simulatorVenuesForCity,simulatorCapacities} from '../src/data/simulatorVenues.ts';
 import {createSimulatorSessions,simulatorStartInstant} from '../src/lib/simulatorSessions.ts';
-test('HK branches distinct; no cross-city or fallback',()=>{const hk=simulatorVenuesForCity('hk');assert.equal(hk.length,5);assert.equal(new Set(hk.map(v=>v.id)).size,5);assert.equal(simulatorVenuesForCity('nyc').length,2);assert.equal(simulatorCityForLocation('Hong Kong'),'hk');assert.equal(simulatorCityForLocation('London'),undefined);assert.deepEqual(simulatorVenuesForCity(undefined),[])});
+test('HK branches distinct; no cross-city or fallback',()=>{const hk=simulatorVenuesForCity('hk');assert.equal(hk.length,5);assert.equal(new Set(hk.map(v=>v.id)).size,5);assert.equal(simulatorVenuesForCity('nyc').length,8);assert.equal(simulatorCityForLocation('Hong Kong'),'hk');assert.equal(simulatorCityForLocation('London'),undefined);assert.deepEqual(simulatorVenuesForCity(undefined),[])});
 test('venue time conversion and DST rejection',()=>{assert.equal(simulatorStartInstant('2026-12-01','18:00','Asia/Hong_Kong'),'2026-12-01T10:00:00.000Z');assert.equal(simulatorStartInstant('2026-12-01','18:00','America/New_York'),'2026-12-01T23:00:00.000Z');assert.throws(()=>simulatorStartInstant('2027-03-14','02:30','America/New_York'),/nonexistent/);assert.throws(()=>simulatorStartInstant('2027-11-07','01:30','America/New_York'),/ambiguous/);});
 test('RPC transport preserves city, retry key and propagates errors',async()=>{const calls:unknown[]=[];const api=createSimulatorSessions(async(name,args)=>{calls.push([name,args]);return {data:[],error:null}});await api.list('hk');assert.deepEqual(calls[0],['list_simulator_sessions',{city:'hk'}]);const draft={requestId:'retry',venueId:'golfzon-tste',startsAt:'2026-12-01T10:00:00Z',durationMinutes:60 as const,capacity:2 as const,recoveryLabel:'blue-1' as const};await api.create(draft);await api.create(draft);assert.deepEqual(calls[1],calls[2]);const failed=createSimulatorSessions(async()=>({data:null,error:{message:'session_full'}}));await assert.rejects(()=>failed.join('s','green-2'),/session_full/);});
 
@@ -24,7 +24,13 @@ test('locationless Simulator copy asks users to set an area without interpolatin
   assert.match(dictionary['simulator.noVenues'],/\{area\}/);
  }
 });
-test('Flatiron six total capacity does not expand unverified venues',()=>{for(const venue of [...simulatorVenuesForCity('nyc'),...simulatorVenuesForCity('hk')])assert.deepEqual(simulatorCapacities(venue),venue.id==='flatiron'?[2,3,4,5,6]:[2,3,4]);});
+test('the NYC and HK catalogs preserve precise capacity and city limits',()=>{
+ const expected = {flatiron:6,herald:4,'five-iron-grand-central':6,'five-iron-upper-east-side':6,'five-iron-long-island-city':6,'golfzon-social-brooklyn':6,'x-golf-brooklyn':6,'bklyn-swing':2};
+ const nyc=simulatorVenuesForCity('nyc');
+ assert.deepEqual(Object.fromEntries(nyc.map(v=>[v.id,simulatorCapacities(v).at(-1)])),expected);
+ assert.ok(nyc.every(v=>v.timezone==='America/New_York' && v.url.startsWith('https://')));
+ for(const venue of simulatorVenuesForCity('hk'))assert.deepEqual(simulatorCapacities(venue),[2,3,4]);
+});
 test('cancel copy distinguishes GolfMe from venue reservations',()=>{assert.match(en['simulator.size'],/including you/);assert.match(en['simulator.confirmCancel'],/does not cancel a separately booked/);assert.match(en['simulator.cancelled'],/bay booking is unchanged/);});
 
 import {confirmSimulatorReceipt,normalizedSimulatorReceipt,simulatorClientEnabled} from '../src/lib/simulatorSessions.ts';

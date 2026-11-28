@@ -75,6 +75,16 @@ try {
       assert.equal(await page.locator("#root").getAttribute("data-recovered-label"),"blue-1");
       await page.goto(origin+"/simulator-qa?flow");
       await page.getByRole("button",{name:/host a simulator session/i}).click();
+      const venuePicker=page.locator("form select").first();
+      const capacity=page.locator('select[name="capacity"]');
+      assert.equal(await venuePicker.locator("option").count(),8);
+      await venuePicker.selectOption("five-iron-long-island-city");
+      assert.deepEqual(await capacity.locator("option").evaluateAll(options=>options.map(option=>option.value)),["2","3","4","5","6"]);
+      await capacity.selectOption("6");
+      await venuePicker.selectOption("bklyn-swing");
+      assert.deepEqual(await capacity.locator("option").evaluateAll(options=>options.map(option=>option.value)),["2"]);
+      assert.equal(await capacity.inputValue(),"2");
+      await venuePicker.selectOption("flatiron");
       const future=new Date(Date.now()+7*86400000).toISOString().slice(0,10);
       await page.locator('input[type="date"]').fill(future);
       await page.locator('input[type="time"]').fill("13:00");
