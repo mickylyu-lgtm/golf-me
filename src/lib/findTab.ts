@@ -3,13 +3,13 @@
 // tap, swipe, Back) -- but "Find a Round", "View more" and the Back
 // fallback from a round page always mean Rounds, so they ask for it with
 // ?tab=rounds and the request beats the remembered tab.
-export type FindTab = "rounds" | "golfers" | "courses";
+export type FindTab = "rounds" | "golfers" | "courses" | "simulators";
 
 export const FIND_TAB_PARAM = "tab";
 export const FIND_TAB_STORAGE_KEY = "golfme:findTab";
 
 export function isFindTab(v: string | null | undefined): v is FindTab {
-  return v === "rounds" || v === "golfers" || v === "courses";
+  return v === "rounds" || v === "golfers" || v === "courses" || v === "simulators";
 }
 
 // The URL for Play opened on a specific sub-tab.

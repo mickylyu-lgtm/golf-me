@@ -22,7 +22,7 @@ test("all six languages explain golf-first purpose and unwanted-contact boundari
       if (locale !== "en") assert.notEqual(text, (en as Record<string, string>)[key], locale + " must not silently fall back to English");
     }
   }
-  assert.match(en["auth.welcome.subheadline"], /golf community, not a dating app/);
+  assert.equal(en["auth.welcome.subheadline"], "Join rounds and find playing partners.");
   assert.match(en["guidelines.unwantedContact"], /unwanted romantic or sexual messages/);
   assert.match(en["guidelines.unwantedContact"], /asks you to stop/);
   assert.match(en["guidelines.reporting"], /profile or in your chat/);

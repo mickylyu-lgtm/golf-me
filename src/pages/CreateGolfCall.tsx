@@ -1,3 +1,6 @@
+import { useSimulatorDiscoveryVisible } from "../lib/simulatorApiContext";
+import { effectiveLocation } from "../lib/travelLocation";
+import { SimulatorPilot } from "../components/find/SimulatorPilot";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, ArrowRight, ChevronDown, MapPin, Paperclip, Users } from "lucide-react";
@@ -102,7 +105,7 @@ function prefillDateFromWhen(when: string | null, dateParam: string | null): str
   return "";
 }
 
-export function CreateGolfCall() {
+function OutdoorGolfCall() {
   const navigate = useNavigate();
   const { currentUser, golfCalls, createGolfCall, visibleGolfers, circleGolfers, attachGolfCallToPost } = useData();
   const { isDemo, authUser } = useAuth();
@@ -997,4 +1000,32 @@ function FriendRow({
       {circle && <Badge tone="fairway">{circleLabel}</Badge>}
     </label>
   );
+}
+
+// The hosted Course flow remains the default; the simulator transport is off by default.
+export function CreateGolfCall() {
+  const {t}=useLocale();
+  const { currentUser } = useData();
+  const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
+  const { authUser } = useAuth();
+  const showSimulators = useSimulatorDiscoveryVisible();
+  const indoor = showSimulators && params.get("session") === "simulator";
+  const choose = (kind: "outdoor" | "simulator") => {
+    const next = new URLSearchParams(params);
+    if (kind === "simulator") next.set("session", kind);
+    else next.delete("session");
+    setParams(next, { replace: true });
+  };
+  // Keep the outdoor form mounted while discovery verifies in the background.
+  return <div className="space-y-5">
+    {showSimulators && <fieldset className="rounded-2xl border border-slate-200 bg-white p-3">
+      <legend className="px-2 text-xs font-semibold text-slate-500">{t("simulator.what")}</legend>
+      <div className="grid grid-cols-2 gap-2">
+        <button type="button" aria-pressed={!indoor} onClick={() => choose("outdoor")} className={`rounded-full px-3 py-3 text-sm font-semibold ${!indoor ? "bg-brand-forest text-white" : "text-slate-600"}`}>{t("simulator.course")}</button>
+        <button type="button" aria-pressed={indoor} onClick={() => choose("simulator")} className={`rounded-full px-3 py-3 text-sm font-semibold ${indoor ? "bg-brand-forest text-white" : "text-slate-600"}`}>{t("simulator.category")}</button>
+      </div>
+    </fieldset>}
+    {indoor ? <SimulatorPilot key={JSON.stringify([authUser?.id, effectiveLocation(currentUser, params).label])} locationLabel={effectiveLocation(currentUser, params).label} initialHosting onBack={() => { const next = new URLSearchParams(params); next.delete("session"); next.set("tab", "simulators"); navigate("/find?" + next.toString()); }} /> : <OutdoorGolfCall />}
+  </div>;
 }

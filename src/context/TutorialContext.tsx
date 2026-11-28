@@ -35,6 +35,9 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
   // Completion can race a lazy Home mount's already-queued auto-start effect.
   // Mark it synchronously, not only after React commits the state update.
   const completedUserRef = useRef<string | null>(null);
+  // Subroutes unmount Home; when the root tabs return, its auto-start
+  // effect can run again before this walkthrough has finished.
+  const runningUserRef = useRef<string | null>(null);
   const accountUserRef = useRef(selfId);
 
   useLayoutEffect(() => {
@@ -43,6 +46,7 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
     if (accountUserRef.current === selfId) return;
     accountUserRef.current = selfId;
     completedUserRef.current = null;
+    runningUserRef.current = null;
     setActiveUserId(null);
     setCompletedUserId(null);
     setStepIndex(0);
@@ -59,7 +63,8 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
   }, [selfId, saveProfile]);
 
   const begin = useCallback(() => {
-    if (!selfId || accountUserRef.current !== selfId) return;
+    if (!selfId || accountUserRef.current !== selfId || runningUserRef.current === selfId) return;
+    runningUserRef.current = selfId;
     setStepIndex(0);
     setActiveUserId(selfId);
     navigate(TUTORIAL_STEPS[0].route);
@@ -85,9 +90,10 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
   // fire from a discrete click (never rapid/concurrent calls where a stale
   // `stepIndex` closure would matter), so reading it directly is safe.
   const next = useCallback(() => {
-    if (!active || accountUserRef.current !== selfId) return;
+    if (!active || accountUserRef.current !== selfId || runningUserRef.current !== selfId) return;
     if (stepIndex >= TUTORIAL_LAST_INDEX) {
       completedUserRef.current = selfId ?? null;
+      runningUserRef.current = null;
       setActiveUserId(null);
       setCompletedUserId(selfId ?? null);
       void persistCompleted();
@@ -100,7 +106,7 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
   }, [active, selfId, stepIndex, navigate, persistCompleted]);
 
   const back = useCallback(() => {
-    if (!active || accountUserRef.current !== selfId) return;
+    if (!active || accountUserRef.current !== selfId || runningUserRef.current !== selfId) return;
     if (stepIndex <= 0) return;
     const prevIndex = stepIndex - 1;
     setStepIndex(prevIndex);
@@ -108,8 +114,9 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
   }, [active, selfId, stepIndex, navigate]);
 
   const skip = useCallback(() => {
-    if (!active || accountUserRef.current !== selfId) return;
+    if (!active || accountUserRef.current !== selfId || runningUserRef.current !== selfId) return;
     completedUserRef.current = selfId ?? null;
+    runningUserRef.current = null;
     setActiveUserId(null);
     setCompletedUserId(selfId ?? null);
     void persistCompleted();

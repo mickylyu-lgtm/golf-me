@@ -1,5 +1,11 @@
+import { SimulatorMembershipRecovery } from "../components/find/SimulatorMembershipRecovery";
+import { useAuth } from "../context/AuthContext";
+import { useSimulatorApi, useSimulatorDiscoveryVisible } from "../lib/simulatorApiContext";
+import { useData } from "../context/DataContext";
+import { effectiveLocation, locationParams } from "../lib/travelLocation";
+import { SimulatorPilot } from "../components/find/SimulatorPilot";
 import { useEffect } from "react";
-import { useLocation, useSearchParams } from "react-router-dom";
+import { useLocation, useSearchParams, useNavigate } from "react-router-dom";
 import { GolfCalls } from "./GolfCalls";
 import { Discover } from "./Discover";
 import { NearbyCourses } from "./NearbyCourses";
@@ -11,6 +17,11 @@ import type { FindTab } from "../lib/findTab";
 export function Find() {
   const [rememberedTab, setTab] = useSessionState<FindTab>(FIND_TAB_STORAGE_KEY, "rounds", isFindTab);
   const { t } = useLocale();
+  const { currentUser } = useData();
+  const { authUser } = useAuth();
+  const showSimulators = useSimulatorDiscoveryVisible();
+  const recoveryApi = useSimulatorApi("recovery");
+  const navigate = useNavigate();
   const { pathname } = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -19,7 +30,9 @@ export function Find() {
   const requestedTab = pathname === "/find" ? searchParams.get(FIND_TAB_PARAM) : null;
   // Derived during render (not only in the effect below) so an explicit
   // request never flashes the remembered tab for a frame first.
-  const tab = resolveFindTab(requestedTab, rememberedTab);
+  const resolvedTab = resolveFindTab(requestedTab, rememberedTab);
+  const tab = !showSimulators && resolvedTab === "simulators" ? "rounds" : resolvedTab;
+  const area = effectiveLocation(currentUser, searchParams);
 
   // Adopt the request as the remembered tab, then drop it from the URL
   // (replace, no new history entry). Left in place, Back from a golfer
@@ -79,9 +92,11 @@ export function Find() {
         >
           {t("find.tabCourses")}
         </button>
+        {showSimulators && <button onClick={() => setTab("simulators")} aria-pressed={tab === "simulators"} className={`flex-1 rounded-full py-2 text-sm font-semibold ${tab === "simulators" ? "bg-brand-forest text-white" : "text-slate-500"}`}>{t("simulator.title")}</button>}
       </div>
 
-      {tab === "rounds" ? <GolfCalls embedded /> : tab === "golfers" ? <Discover /> : <NearbyCourses embedded />}
+      {pathname === "/find" && recoveryApi && <SimulatorMembershipRecovery key={authUser?.id ?? "fixture"} api={recoveryApi} discoveryAvailable={showSimulators} />}
+      {tab === "simulators" ? <SimulatorPilot key={JSON.stringify([authUser?.id, area.label])} locationLabel={area.label} onHost={() => navigate("/golf-calls/new?" + new URLSearchParams({session: "simulator", ...locationParams(area)}).toString())} /> : tab === "rounds" ? <GolfCalls embedded /> : tab === "golfers" ? <Discover /> : <NearbyCourses embedded />}
     </div>
   );
 }

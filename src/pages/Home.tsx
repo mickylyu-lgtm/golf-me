@@ -79,8 +79,8 @@ export function Home() {
   const intentOwner = isDemo ? "demo" : authUser?.id;
   const focus = useMemo(() => homeFocus(readOnboardingIntents(intentOwner)), [intentOwner]);
 
-  // Home stays mounted for the whole session (RootTabCarousel keeps all 5
-  // root panels alive), so this only ever runs once per app load.
+  // Once per Home mount. Nested routes can remount the root tabs; the
+  // tutorial provider ignores repeat starts while a walkthrough is running.
   const tutorialStartedRef = useRef(false);
   useEffect(() => {
     if (tutorialStartedRef.current || !tutorialEligible) return;
