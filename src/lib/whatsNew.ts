@@ -21,12 +21,12 @@ export interface WhatsNewEntry {
 }
 
 export const CURRENT_WHATS_NEW: WhatsNewEntry | null = {
-  id: "2026-11-17-golf-focused-community-reminder",
-  publishedAt: "2026-11-17",
+  id: "2026-11-28-simulator-sessions",
+  publishedAt: "2026-11-28",
   showForDays: null,
   audience: "all",
-  title: "whatsNew.communityTitle",
-  items: ["whatsNew.item.communityGolf", "whatsNew.item.communityWelcome", "whatsNew.item.communityRespect"],
+  title: "whatsNew.simulatorTitle",
+  items: ["whatsNew.item.simulatorHost", "whatsNew.item.simulatorVenue"],
 };
 
 // Item copy marks key terms with **double asterisks** so people can skim
